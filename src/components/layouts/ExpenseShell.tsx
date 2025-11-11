@@ -49,8 +49,8 @@ export default function ExpenseShell({
   }, [pathname]);
 
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="icon">
+    <SidebarProvider suppressHydrationWarning>
+      <Sidebar>
         <SidebarHeader />
         <SidebarContent>
           <SidebarGroup>
@@ -78,11 +78,13 @@ export default function ExpenseShell({
         <SidebarRail />
       </Sidebar>
       <SidebarInset>
-        <div className="flex h-12 items-center gap-2 border-b px-4">
+        <div className="flex h-12 items-center gap-2 border-b px-4" suppressHydrationWarning>
           <SidebarTrigger />
           <div className="font-medium">{currentTitle}</div>
         </div>
-        <div className={cn("flex-1 p-4")}>{children}</div>
+        <div className={cn("flex-1 p-4")}>
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

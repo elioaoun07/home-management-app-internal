@@ -1,4 +1,5 @@
 import ExpenseShell from "@/components/layouts/ExpenseShell";
+import React from "react";
 
 export default function ExpenseLayout({
   children,

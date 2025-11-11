@@ -10,13 +10,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { CalendarDays } from "lucide-react";
 import { useEffect, useMemo, useState, type JSX } from "react";
 import { toast } from "sonner";
+import AccountBalance from "./AccountBalance";
 import AccountSelect from "./AccountSelect";
 import AddExpenseButton from "./AddExpenseButton";
 import AmountInput from "./AmountInput";
@@ -47,6 +50,13 @@ export default function ExpenseForm() {
   const [description, setDescription] = useState<string>("");
   const [pendingSentence, setPendingSentence] = useState<string | null>(null);
   const [date, setDate] = useState<Date>(new Date());
+
+  // Get accounts for balance display
+  const { data: accounts = [] } = useAccounts();
+  const selectedAccount = accounts.find((a: any) => a.id === selectedAccountId);
+  
+  // Query client for invalidating balance
+  const queryClient = useQueryClient();
 
   const yyyyMmDd = (d: Date) => {
     const y = d.getFullYear();
@@ -155,6 +165,9 @@ export default function ExpenseForm() {
       console.log("Transaction created:", transaction);
 
       toast.success("Expense added successfully!");
+
+      // Invalidate balance query to refresh the display
+      queryClient.invalidateQueries({ queryKey: ["account-balance", selectedAccountId] });
 
       // Reset form
       setSelectedAccountId(undefined);
@@ -309,6 +322,11 @@ export default function ExpenseForm() {
           </Popover>
         </div>
       </header>
+      {/* Account Balance Display */}
+      <AccountBalance 
+        accountId={selectedAccountId} 
+        accountName={selectedAccount?.name}
+      />
       {sectionOrderLoading ? (
         <div>Loading preferences...</div>
       ) : (

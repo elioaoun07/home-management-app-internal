@@ -107,6 +107,49 @@ export async function POST(_req: NextRequest) {
       );
     }
 
+    // Update account balance after successful transaction
+    try {
+      // Get current balance
+      const { data: currentBalance } = await supabase
+        .from("account_balances")
+        .select("balance")
+        .eq("account_id", account_id)
+        .single();
+
+      const current = currentBalance?.balance || 0;
+      
+      // Get account type to determine if we add or subtract
+      const { data: accountData } = await supabase
+        .from("accounts")
+        .select("type")
+        .eq("id", account_id)
+        .single();
+
+      // For expense accounts, subtract the amount
+      // For income accounts, add the amount
+      const newBalance = accountData?.type === "expense" 
+        ? Number(current) - Number(amount)
+        : Number(current) + Number(amount);
+
+      // Update balance
+      await supabase
+        .from("account_balances")
+        .upsert(
+          {
+            account_id: account_id,
+            user_id: user.id,
+            balance: newBalance,
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "account_id",
+          }
+        );
+    } catch (balanceError) {
+      console.error("Error updating balance:", balanceError);
+      // Don't fail the transaction if balance update fails
+    }
+
     return NextResponse.json(data, {
       headers: { "Cache-Control": "no-store" },
     });
