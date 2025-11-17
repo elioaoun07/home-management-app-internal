@@ -6,9 +6,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  MOBILE_NAV_BOTTOM_GAP,
+  MOBILE_NAV_HEIGHT,
+  TAGS_BAR_GAP,
+  TAGS_BAR_HEIGHT,
+} from "@/constants/layout";
 import { format, subDays } from "date-fns";
 import { CalendarIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 
 interface ExpenseTagsBarProps {
   selectedAccount: { id: string; name: string } | undefined;
@@ -115,105 +121,125 @@ export default function ExpenseTagsBar({
 
   const colors = themeColors[theme];
 
+  const wrapperStyles: CSSProperties = {
+    bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_BOTTOM_GAP + MOBILE_NAV_HEIGHT + TAGS_BAR_GAP}px)`,
+  };
+
+  const barStyles: CSSProperties = {
+    minHeight: `${TAGS_BAR_HEIGHT}px`,
+  };
+
   return (
     <div
-      className={`fixed bottom-16 left-0 right-0 border-t ${colors.border} ${colors.bg} px-3 py-2.5 shadow-2xl z-40 min-h-[60px] slide-in-from-bottom backdrop-blur-md`}
+      className="fixed left-0 right-0 z-40 px-4 pointer-events-none"
+      style={wrapperStyles}
     >
-      <div className="flex flex-wrap gap-1.5">
-        {selectedAccount && (
-          <button
-            onClick={onAccountClick}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card ${colors.accountBorder} ${colors.accountBg} ${colors.accountHover} hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in`}
-          >
-            <span className={`text-[10px] ${colors.labelText}`}>Account</span>
-            <span className={`font-semibold text-xs ${colors.accountText}`}>
-              {selectedAccount.name}
-            </span>
-          </button>
-        )}
-
-        {amount && (
-          <button
-            onClick={onAmountClick}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card ${colors.amountBorder} ${colors.amountBg} ${colors.amountHover} hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in`}
-          >
-            <span className={`text-[10px] ${colors.labelText}`}>Amount</span>
-            <span className={`font-bold text-xs ${colors.amountText}`}>
-              ${amount}
-            </span>
-          </button>
-        )}
-
-        {selectedCategory && (
-          <button
-            onClick={onCategoryClick}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card ${colors.categoryBorder} ${colors.categoryBg} ${colors.categoryHover} hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in`}
-          >
-            <span className={`text-[10px] ${colors.labelText}`}>Category</span>
-            <span className={`font-semibold text-xs ${colors.categoryText}`}>
-              {selectedCategory.icon} {selectedCategory.name}
-            </span>
-          </button>
-        )}
-
-        {selectedSubcategory && (
-          <button
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card ${colors.subcategoryBorder} ${colors.subcategoryBg} cursor-default quick-scale-in`}
-          >
-            <span className={`text-[10px] ${colors.labelText}`}>
-              Subcategory
-            </span>
-            <span className={`font-semibold text-xs ${colors.subcategoryText}`}>
-              {selectedSubcategory.name}
-            </span>
-          </button>
-        )}
-
-        <Popover>
-          <PopoverTrigger asChild>
+      <div
+        className={`mx-auto max-w-[520px] pointer-events-auto rounded-[26px] border ${colors.border} ${colors.bg} px-3 py-2.5 shadow-2xl slide-in-from-bottom backdrop-blur-xl`}
+        style={barStyles}
+      >
+        <div className="flex flex-wrap gap-1.5">
+          {selectedAccount && (
             <button
-              suppressHydrationWarning
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card ${colors.dateBorder} ${colors.dateBg} ${colors.dateHover} hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in`}
+              onClick={onAccountClick}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card ${colors.accountBorder} ${colors.accountBg} ${colors.accountHover} hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in`}
             >
-              <CalendarIcon className={`w-3.5 h-3.5 ${colors.dateIcon}`} />
-              <span className={`text-[10px] ${colors.labelText}`}>Date</span>
-              <span className={`font-semibold text-xs ${colors.dateIcon}`}>
-                {format(date, "MMM d")}
+              <span className={`text-[10px] ${colors.labelText}`}>Account</span>
+              <span className={`font-semibold text-xs ${colors.accountText}`}>
+                {selectedAccount.name}
               </span>
             </button>
-          </PopoverTrigger>
-          <PopoverContent
-            className={`w-auto p-0 ${colors.popoverBg} ${colors.popoverBorder}`}
-            align="start"
-          >
-            <div className={`p-2 space-y-1.5 border-b ${colors.popoverBorder}`}>
-              <button
-                onClick={() => {
-                  const today = new Date();
-                  onDateChange(today);
-                }}
-                className={`w-full px-2.5 py-1.5 text-xs rounded-lg neo-card ${colors.buttonBg} ${colors.buttonBorder} ${colors.buttonText} ${colors.buttonHover} transition-all`}
+          )}
+
+          {amount && (
+            <button
+              onClick={onAmountClick}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card ${colors.amountBorder} ${colors.amountBg} ${colors.amountHover} hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in`}
+            >
+              <span className={`text-[10px] ${colors.labelText}`}>Amount</span>
+              <span className={`font-bold text-xs ${colors.amountText}`}>
+                ${amount}
+              </span>
+            </button>
+          )}
+
+          {selectedCategory && (
+            <button
+              onClick={onCategoryClick}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card ${colors.categoryBorder} ${colors.categoryBg} ${colors.categoryHover} hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in`}
+            >
+              <span className={`text-[10px] ${colors.labelText}`}>
+                Category
+              </span>
+              <span className={`font-semibold text-xs ${colors.categoryText}`}>
+                {selectedCategory.icon} {selectedCategory.name}
+              </span>
+            </button>
+          )}
+
+          {selectedSubcategory && (
+            <button
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card ${colors.subcategoryBorder} ${colors.subcategoryBg} cursor-default quick-scale-in`}
+            >
+              <span className={`text-[10px] ${colors.labelText}`}>
+                Subcategory
+              </span>
+              <span
+                className={`font-semibold text-xs ${colors.subcategoryText}`}
               >
-                Today
-              </button>
+                {selectedSubcategory.name}
+              </span>
+            </button>
+          )}
+
+          <Popover>
+            <PopoverTrigger asChild>
               <button
-                onClick={() => {
-                  const yesterday = subDays(new Date(), 1);
-                  onDateChange(yesterday);
-                }}
-                className={`w-full px-2.5 py-1.5 text-xs rounded-lg neo-card ${colors.buttonBg} ${colors.buttonBorder} ${colors.buttonText} ${colors.buttonHover} transition-all`}
+                suppressHydrationWarning
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card ${colors.dateBorder} ${colors.dateBg} ${colors.dateHover} hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in`}
               >
-                Yesterday
+                <CalendarIcon className={`w-3.5 h-3.5 ${colors.dateIcon}`} />
+                <span className={`text-[10px] ${colors.labelText}`}>Date</span>
+                <span className={`font-semibold text-xs ${colors.dateIcon}`}>
+                  {format(date, "MMM d")}
+                </span>
               </button>
-            </div>
-            <Calendar
-              mode="single"
-              selected={date}
-              onSelect={(newDate) => newDate && onDateChange(newDate)}
-              className="rounded-md border-0"
-            />
-          </PopoverContent>
-        </Popover>
+            </PopoverTrigger>
+            <PopoverContent
+              className={`w-auto p-0 ${colors.popoverBg} ${colors.popoverBorder}`}
+              align="start"
+            >
+              <div
+                className={`p-2 space-y-1.5 border-b ${colors.popoverBorder}`}
+              >
+                <button
+                  onClick={() => {
+                    const today = new Date();
+                    onDateChange(today);
+                  }}
+                  className={`w-full px-2.5 py-1.5 text-xs rounded-lg neo-card ${colors.buttonBg} ${colors.buttonBorder} ${colors.buttonText} ${colors.buttonHover} transition-all`}
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => {
+                    const yesterday = subDays(new Date(), 1);
+                    onDateChange(yesterday);
+                  }}
+                  className={`w-full px-2.5 py-1.5 text-xs rounded-lg neo-card ${colors.buttonBg} ${colors.buttonBorder} ${colors.buttonText} ${colors.buttonHover} transition-all`}
+                >
+                  Yesterday
+                </button>
+              </div>
+              <Calendar
+                mode="single"
+                selected={date}
+                onSelect={(newDate) => newDate && onDateChange(newDate)}
+                className="rounded-md border-0"
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
     </div>
   );

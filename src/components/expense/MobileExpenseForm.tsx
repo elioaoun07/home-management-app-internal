@@ -7,6 +7,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MOBILE_CONTENT_BOTTOM_OFFSET } from "@/constants/layout";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Calculator, Check, ChevronLeft, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 import AccountBalance from "./AccountBalance";
 import CalculatorDialog from "./CalculatorDialog";
@@ -225,6 +226,10 @@ export default function MobileExpenseForm() {
     return null;
   };
 
+  const contentAreaStyles: CSSProperties = {
+    bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_CONTENT_BOTTOM_OFFSET}px)`,
+  };
+
   return (
     <div className="fixed inset-0 bg-[#0a1628] flex flex-col">
       {!isInitialized ? (
@@ -279,9 +284,10 @@ export default function MobileExpenseForm() {
             className={cn(
               "fixed left-0 right-0 overflow-y-auto px-3 py-3 bg-[#0a1628]",
               selectedAccountId && step === "amount"
-                ? "top-[140px] bottom-[124px]"
-                : "top-[75px] bottom-[124px]"
+                ? "top-[140px]"
+                : "top-[75px]"
             )}
+            style={contentAreaStyles}
           >
             {step === "amount" && (
               <div key="amount-step" className="space-y-3 step-slide-in">
