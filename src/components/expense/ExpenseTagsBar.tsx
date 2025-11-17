@@ -7,7 +7,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  MOBILE_NAV_BOTTOM_GAP,
   MOBILE_NAV_HEIGHT,
   TAGS_BAR_GAP,
   TAGS_BAR_HEIGHT,
@@ -122,7 +121,7 @@ export default function ExpenseTagsBar({
   const colors = themeColors[theme];
 
   const wrapperStyles: CSSProperties = {
-    bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_BOTTOM_GAP + MOBILE_NAV_HEIGHT + TAGS_BAR_GAP}px)`,
+    bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT + TAGS_BAR_GAP}px)`,
   };
 
   const barStyles: CSSProperties = {
