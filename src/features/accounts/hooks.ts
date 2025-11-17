@@ -85,3 +85,28 @@ export function useCreateAccount() {
     },
   });
 }
+
+// Set default account mutation
+async function setDefaultAccount(accountId: string): Promise<void> {
+  const res = await fetch(`/api/accounts/${accountId}/default`, {
+    method: "PATCH",
+  });
+  if (!res.ok) {
+    let msg = "Failed to set default account";
+    try {
+      const j = await res.json();
+      if (j?.error) msg = j.error;
+    } catch {}
+    throw new Error(msg);
+  }
+}
+
+export function useSetDefaultAccount() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: setDefaultAccount,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.accounts() });
+    },
+  });
+}

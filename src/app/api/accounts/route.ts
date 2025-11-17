@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest) {
 
   const { data, error } = await supabase
     .from("accounts")
-    .select("id,user_id,name,type,inserted_at")
+    .select("id,user_id,name,type,is_default,inserted_at")
     .eq("user_id", user.id)
     .order("inserted_at", { ascending: false });
 

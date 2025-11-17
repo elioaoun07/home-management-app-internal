@@ -203,7 +203,11 @@ export default function SubcategoryGrid({
                   key={cat.id}
                   variant={active ? "default" : "outline"}
                   type="button"
-                  className="justify-start gap-2"
+                  className={`justify-start gap-2 transition-all duration-150 hover:scale-105 ${
+                    active
+                      ? "ring-2 ring-primary/50 shadow-md"
+                      : "hover:shadow-sm"
+                  }`}
                   onClick={() => onSubcategorySelect?.(cat.id)}
                   style={{
                     backgroundColor: active

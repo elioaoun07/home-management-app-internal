@@ -1,4 +1,4 @@
-import ExpenseForm from "@/components/expense/ExpenseForm";
+import MobileExpenseForm from "@/components/expense/MobileExpenseForm";
 import { supabaseServerRSC } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -14,8 +14,8 @@ export default async function ExpensePage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <ExpenseForm />
+    <main className="h-screen overflow-hidden">
+      <MobileExpenseForm />
     </main>
   );
 }

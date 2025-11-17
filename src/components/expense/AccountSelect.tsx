@@ -92,7 +92,9 @@ export default function AccountSelect({ value, onChange }: Props) {
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="account">Account</Label>
+      <Label htmlFor="account" className="text-base font-semibold">
+        Account
+      </Label>
       <Select
         value={selected}
         onValueChange={(val) => {
@@ -101,71 +103,103 @@ export default function AccountSelect({ value, onChange }: Props) {
         }}
         disabled={isError}
       >
-        <SelectTrigger id="account" className="w-full">
+        <SelectTrigger
+          id="account"
+          className="w-full h-12 text-base transition-all focus:ring-2 focus:ring-primary/20"
+        >
           <SelectValue placeholder={PLACEHOLDER} />
         </SelectTrigger>
         <SelectContent>
           {accounts.map((a) => (
-            <SelectItem key={a.id} value={a.id}>
-              {a.name}
+            <SelectItem key={a.id} value={a.id} className="text-base py-3">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-primary" />
+                {a.name}
+              </div>
             </SelectItem>
           ))}
           {!isLoading && accounts.length === 0 && (
-            <SelectItem value="__none" disabled>
+            <SelectItem value="__none" disabled className="text-base">
               No accounts found
             </SelectItem>
           )}
-          <SelectItem value="__add__">+ Add Account</SelectItem>
+          <SelectItem
+            value="__add__"
+            className="text-primary font-medium text-base py-3"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-lg">+</span>
+              Add Account
+            </div>
+          </SelectItem>
         </SelectContent>
       </Select>
 
       {isLoading && (
-        <p className="text-sm text-muted-foreground">Loading accounts…</p>
+        <p className="text-sm text-muted-foreground animate-pulse">
+          Loading accounts…
+        </p>
       )}
       {isError && (
-        <p className="text-sm text-red-500">
+        <p className="text-sm text-destructive">
           Failed to load accounts:{" "}
           {error instanceof Error ? error.message : "Unknown"}{" "}
-          <button type="button" className="underline" onClick={() => refetch()}>
+          <button
+            type="button"
+            className="underline hover:no-underline"
+            onClick={() => refetch()}
+          >
             Retry
           </button>
         </p>
       )}
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Account</DialogTitle>
+            <DialogTitle className="text-xl">Add New Account</DialogTitle>
           </DialogHeader>
-          <form className="space-y-4" onSubmit={onAddAccount}>
+          <form className="space-y-5" onSubmit={onAddAccount}>
             <div>
-              <Label>Account Name</Label>
+              <Label className="text-sm font-medium">Account Name</Label>
               <Input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 autoFocus
                 required
+                placeholder="e.g., Checking, Savings"
+                className="mt-1.5 h-11"
                 disabled={createAccount.isPending}
               />
             </div>
             <div>
-              <Label>Type</Label>
+              <Label className="text-sm font-medium">Type</Label>
               <RadioGroup
                 value={newType}
                 onValueChange={(v: AccountType) => setNewType(v)}
-                className="flex gap-6 mt-2"
+                className="flex gap-6 mt-3"
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="expense" id="type-expense" />
-                  <Label htmlFor="type-expense">Expense</Label>
+                  <Label
+                    htmlFor="type-expense"
+                    className="cursor-pointer font-normal"
+                  >
+                    Expense
+                  </Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="income" id="type-income" />
-                  <Label htmlFor="type-income">Income</Label>
+                  <Label
+                    htmlFor="type-income"
+                    className="cursor-pointer font-normal"
+                  >
+                    Income
+                  </Label>
                 </div>
               </RadioGroup>
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-2">
               <Button
                 type="button"
                 variant="outline"
@@ -175,7 +209,14 @@ export default function AccountSelect({ value, onChange }: Props) {
                 Cancel
               </Button>
               <Button type="submit" disabled={createAccount.isPending}>
-                {createAccount.isPending ? "Saving..." : "Save"}
+                {createAccount.isPending ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                    Saving...
+                  </span>
+                ) : (
+                  "Create Account"
+                )}
               </Button>
             </div>
           </form>

@@ -2,8 +2,11 @@
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { loadCredentials, saveCredentials } from "@/lib/auth/credentials";
+import { ArrowRight, KeyRound, Mail } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { Suspense, useEffect, useState } from "react";
@@ -12,7 +15,13 @@ import { toast } from "sonner";
 // Page component: wraps the part that reads search params in <Suspense>
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen" aria-busy="true" />}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-background to-muted/20">
+          <div className="w-full max-w-md p-8 rounded-2xl bg-card/50 backdrop-blur-sm animate-pulse" />
+        </div>
+      }
+    >
       <LoginContent />
     </Suspense>
   );
@@ -22,9 +31,20 @@ export default function LoginPage() {
 function LoginContent() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const searchParams = useSearchParams();
   const errorParam = searchParams.get("error");
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    const saved = loadCredentials();
+    if (saved) {
+      setUsername(saved.username);
+      setRememberMe(saved.rememberMe);
+    }
+  }, []);
 
   useEffect(() => {
     if (!errorParam) return;
@@ -43,65 +63,150 @@ function LoginContent() {
       toast.error("Please enter username and password");
       return;
     }
+
+    // Save credentials if "Remember Me" is checked
+    saveCredentials(username, rememberMe);
+    setIsLoading(true);
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <Card className="w-full max-w-md p-6">
-        <h2 className="text-lg font-semibold mb-4">Sign in</h2>
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-background to-muted/20 p-4">
+      <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4 ring-8 ring-primary/5">
+            <KeyRound className="w-8 h-8 text-primary" />
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
+          <p className="text-muted-foreground">
+            Sign in to your account to continue
+          </p>
+        </div>
 
-        {errorParam && (
-          <div
-            role="alert"
-            className="mb-4 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700"
+        {/* Main Card */}
+        <Card className="p-8 shadow-2xl border-border/50 backdrop-blur-sm bg-card/95">
+          {errorParam && (
+            <div
+              role="alert"
+              className="mb-6 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive animate-in fade-in slide-in-from-top-2 duration-300"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
+                <span>
+                  {errorParam === "missing" &&
+                    "Please enter email and password."}
+                  {errorParam === "invalid" && "Invalid email or password."}
+                  {errorParam === "internal" &&
+                    "Something went wrong. Please try again."}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <form
+            onSubmit={submit}
+            action="/api/auth/login"
+            method="post"
+            className="space-y-5"
           >
-            {errorParam === "missing" && "Please enter email and password."}
-            {errorParam === "invalid" && "Invalid email or password."}
-            {errorParam === "internal" &&
-              "Something went wrong. Please try again."}
-          </div>
-        )}
+            {/* Email Field */}
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-sm font-medium">
+                Email
+              </Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="username"
+                  name="username"
+                  type="email"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="you@example.com"
+                  className="pl-10 h-11 transition-all focus:ring-2 focus:ring-primary/20"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
 
-        <form
-          onSubmit={submit}
-          action="/api/auth/login"
-          method="post"
-          className="space-y-4"
-        >
-          <div>
-            <Label htmlFor="username">Username</Label>
-            <Input
-              id="username"
-              name="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="username"
-            />
-          </div>
-          <div>
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="password"
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex gap-3">
-              <Button asChild variant="link" size="sm">
-                <Link href="/signup">Sign up</Link>
-              </Button>
-              <Button asChild variant="link" size="sm">
+            {/* Password Field */}
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium">
+                Password
+              </Label>
+              <div className="relative">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="pl-10 h-11 transition-all focus:ring-2 focus:ring-primary/20"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+
+            {/* Remember Me & Forgot Password */}
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="remember"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) =>
+                    setRememberMe(checked as boolean)
+                  }
+                  disabled={isLoading}
+                />
+                <Label
+                  htmlFor="remember"
+                  className="text-sm font-normal cursor-pointer select-none"
+                >
+                  Remember me
+                </Label>
+              </div>
+              <Button asChild variant="link" size="sm" className="px-0 h-auto">
                 <Link href="/reset-password">Forgot password?</Link>
               </Button>
             </div>
-            <Button type="submit">Sign in</Button>
-          </div>
-        </form>
-      </Card>
+
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              className="w-full h-11 text-base font-medium group"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                  Signing in...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  Sign in
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                </span>
+              )}
+            </Button>
+          </form>
+        </Card>
+
+        {/* Sign Up Link */}
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">
+            Don't have an account?{" "}
+            <Button
+              asChild
+              variant="link"
+              className="px-1 h-auto text-sm font-medium"
+            >
+              <Link href="/signup">Sign up for free</Link>
+            </Button>
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

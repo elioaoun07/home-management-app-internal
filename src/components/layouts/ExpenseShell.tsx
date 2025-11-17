@@ -62,9 +62,10 @@ export default function ExpenseShell({
                       asChild
                       isActive={pathname.startsWith(item.href)}
                       tooltip={item.title}
+                      className="transition-all duration-200 hover:translate-x-1"
                     >
                       <Link href={item.href} className="flex items-center">
-                        <item.icon className="size-4" />
+                        <item.icon className="size-4 transition-transform duration-200 group-hover:scale-110" />
                         <span>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -78,13 +79,14 @@ export default function ExpenseShell({
         <SidebarRail />
       </Sidebar>
       <SidebarInset>
-        <div className="flex h-12 items-center gap-2 border-b px-4" suppressHydrationWarning>
-          <SidebarTrigger />
+        <div
+          className="flex h-12 items-center gap-2 border-b px-4 transition-colors duration-200"
+          suppressHydrationWarning
+        >
+          <SidebarTrigger className="transition-transform duration-200 hover:scale-110" />
           <div className="font-medium">{currentTitle}</div>
         </div>
-        <div className={cn("flex-1 p-4")}>
-          {children}
-        </div>
+        <div className={cn("flex-1 p-4 page-transition")}>{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

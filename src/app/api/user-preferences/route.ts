@@ -69,6 +69,14 @@ export async function PATCH(_req: NextRequest) {
   // Build upsert payload with provided fields only
   const payload: Record<string, any> = { user_id: user.id };
   if (section_order !== undefined) payload.section_order = section_order;
+
+  // Handle theme (blue/pink)
+  if (theme === "blue" || theme === "pink") {
+    payload.theme = theme;
+  } else if (theme === null) {
+    payload.theme = null;
+  }
+
   if (
     theme === "light" ||
     theme === "dark" ||

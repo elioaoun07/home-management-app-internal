@@ -82,14 +82,19 @@ export default function WelcomeClient() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-lg p-6">
-      <h1 className="text-2xl font-semibold mb-2">Welcome</h1>
-      <p className="text-muted-foreground mb-6">
+    <main className="mx-auto w-full max-w-lg p-6 page-transition">
+      <h1 className="text-2xl font-semibold mb-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        Welcome
+      </h1>
+      <p
+        className="text-muted-foreground mb-6 animate-in fade-in slide-in-from-bottom-4 duration-500"
+        style={{ animationDelay: "0.1s" }}
+      >
         Choose how you want to use the app. You can switch later in Settings.
       </p>
 
       {error ? (
-        <div className="text-sm text-red-600 mb-4">
+        <div className="text-sm text-red-600 mb-4 animate-in fade-in slide-in-from-top-2 duration-300">
           {error}
           {/Unauthorized/i.test(error) ? (
             <>
@@ -107,18 +112,28 @@ export default function WelcomeClient() {
       ) : null}
 
       {/* Individual option */}
-      <section className="rounded-md border p-4 mb-4">
+      <section
+        className="rounded-md border p-4 mb-4 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 animate-in fade-in slide-in-from-bottom-4"
+        style={{ animationDelay: "0.2s", animationDuration: "0.5s" }}
+      >
         <h3 className="font-medium mb-2">Use as an Individual</h3>
         <p className="text-sm text-muted-foreground mb-3">
           Keep things simple with a personal account.
         </p>
-        <Button onClick={chooseIndividual} disabled={submitting}>
+        <Button
+          onClick={chooseIndividual}
+          disabled={submitting}
+          className="transition-all hover:scale-105"
+        >
           Continue as individual
         </Button>
       </section>
 
       {/* Household option */}
-      <section className="rounded-md border p-4 space-y-6">
+      <section
+        className="rounded-md border p-4 space-y-6 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 animate-in fade-in slide-in-from-bottom-4"
+        style={{ animationDelay: "0.3s", animationDuration: "0.5s" }}
+      >
         <h3 className="font-medium">Use as a Household</h3>
 
         <div className="space-y-3">

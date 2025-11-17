@@ -37,6 +37,20 @@ export default function DashboardClient({ rows, start, end, showUser }: Props) {
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
 
   const dirtyIds = useMemo(() => new Set(Object.keys(pending)), [pending]);
+
+  // Apply theme class to container
+  useEffect(() => {
+    const colorTheme = localStorage.getItem("color-theme") || "blue";
+    document.body.setAttribute("data-theme", colorTheme);
+  }, []);
+
+  // Get current theme for dynamic styling
+  const [currentTheme, setCurrentTheme] = useState<string>("blue");
+  useEffect(() => {
+    const colorTheme = localStorage.getItem("color-theme") || "blue";
+    setCurrentTheme(colorTheme);
+  }, []);
+
   // Listen for quick view range changes and filter locally without reload
   useEffect(() => {
     function onSetRange(e: Event) {
@@ -253,7 +267,7 @@ export default function DashboardClient({ rows, start, end, showUser }: Props) {
 
       {/* Sticky save bar */}
       {dirtyIds.size > 0 && (
-        <div className="sticky bottom-0 z-20 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="sticky bottom-0 z-20 border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 p-3">
             <div className="text-sm text-muted-foreground">
               {dirtyIds.size} pending change{dirtyIds.size > 1 ? "s" : ""}

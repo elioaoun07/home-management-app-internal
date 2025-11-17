@@ -3,11 +3,13 @@
 ## ✅ Fixed Issues
 
 ### 1. Hydration Error - FIXED
+
 - Added `suppressHydrationWarning` to `SidebarProvider` component
 - Added `suppressHydrationWarning` to the header div containing the SidebarTrigger
 - This prevents React from complaining about browser extensions adding attributes like `fdprocessedid`
 
 ### 2. Account Balance Display - IMPLEMENTED
+
 - Created `AccountBalance` component that shows at the top of the expense form
 - Component appears after you select an account
 - Shows current balance with edit functionality
@@ -43,6 +45,7 @@ psql "YOUR_CONNECTION_STRING" -f migrations/add_account_balances.sql
 Once the migration is run:
 
 ### Setting Your Weekly Budget:
+
 1. Go to `/expense` page
 2. Select an account (e.g., "Wallet") from the dropdown
 3. You'll see the "Account Balance" card appear below the date
@@ -51,11 +54,13 @@ Once the migration is run:
 6. Press Enter or click the checkmark
 
 ### Tracking Expenses:
+
 - Add expenses normally
 - The balance automatically decreases with each transaction
 - You can see exactly how much is left
 
 ### Weekly Reconciliation:
+
 - At week's end, compare your actual wallet with the displayed balance
 - If they don't match, you know you forgot to record something
 - Click edit to reset the balance for next week
@@ -75,15 +80,18 @@ After running the migration:
 ## ⚠️ Troubleshooting
 
 ### "Database table not found" warning appears:
+
 - The migration hasn't been run yet
 - Follow the setup steps above
 
 ### Balance card doesn't appear:
+
 - Make sure you've selected an account
 - Check browser console (F12) for errors
 - Verify the migration ran successfully
 
 ### Balance doesn't update after adding transaction:
+
 - Check browser console for API errors
 - Verify RLS policies are set correctly in Supabase
 - Try refreshing the page

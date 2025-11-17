@@ -9,13 +9,16 @@ import { ThemeProvider } from "../components/theme-provider";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
 
-const RQ_PERSIST_KEY = "hm-rq-cache-v1";
+const RQ_PERSIST_KEY = "hm-rq-cache-v2";
 const STABLE_KEYS = new Set([
   "accounts",
   "categories",
   "section-order",
   "templates",
-]); // (subcategories is nested under categories key)
+  "user-categories",
+  "subcategories",
+  "account-balance",
+]); // Enhanced caching for all stable data
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = useMemo(
@@ -23,14 +26,17 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: Infinity, // stable lookups never become stale
-            refetchOnWindowFocus: true, // won't refetch because never stale
+            staleTime: 1000 * 60 * 60, // 1 hour for stable data
+            gcTime: 1000 * 60 * 60 * 24, // 24 hours garbage collection
+            refetchOnWindowFocus: false, // Don't refetch on focus for better mobile UX
             refetchOnReconnect: true,
             retry: 2,
+            retryDelay: (attemptIndex) =>
+              Math.min(1000 * 2 ** attemptIndex, 30000),
           },
           mutations: {
             retry: 1,
-            // networkMode: "offlineFirst", // uncomment later for full offline UX
+            // Optimistic updates for better perceived performance
           },
         },
       }),
@@ -50,8 +56,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     persistQueryClient({
       queryClient,
       persister,
-      maxAge: 1000 * 60 * 60 * 24, // 24h
-      buster: "hm-v1",
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days for better offline support
+      buster: "hm-v2",
       dehydrateOptions: {
         // only persist successful stable keys
         shouldDehydrateQuery: (q) =>

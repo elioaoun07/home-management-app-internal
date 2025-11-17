@@ -1,6 +1,9 @@
 "use client";
 
-import { useSectionOrder } from "@/features/preferences/useSectionOrder";
+import {
+  useSectionOrder,
+  type SectionKey,
+} from "@/features/preferences/useSectionOrder";
 import TemplateQuickEntryButton, { Template } from "./TemplateQuickEntryButton";
 
 import { Button } from "@/components/ui/button";
@@ -28,21 +31,12 @@ import DescriptionField from "./DescriptionField";
 import SubcategoryGrid from "./SubcategoryGrid";
 import VoiceEntryButton from "./VoiceEntryButton";
 
-const SECTION_KEYS = [
-  "account",
-  "category",
-  "subcategory",
-  "amount",
-  "description",
-] as const;
-type SectionKey = (typeof SECTION_KEYS)[number];
-
 export default function ExpenseForm() {
   const { data: sectionOrderRaw, isLoading: sectionOrderLoading } =
     useSectionOrder();
   const sectionOrder: SectionKey[] = Array.isArray(sectionOrderRaw)
-    ? sectionOrderRaw.filter((s): s is SectionKey => SECTION_KEYS.includes(s))
-    : SECTION_KEYS.slice();
+    ? sectionOrderRaw
+    : ["account", "category", "subcategory", "amount"];
   const [selectedAccountId, setSelectedAccountId] = useState<string>();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>();
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string>();
@@ -54,7 +48,7 @@ export default function ExpenseForm() {
   // Get accounts for balance display
   const { data: accounts = [] } = useAccounts();
   const selectedAccount = accounts.find((a: any) => a.id === selectedAccountId);
-  
+
   // Query client for invalidating balance
   const queryClient = useQueryClient();
 
@@ -167,7 +161,9 @@ export default function ExpenseForm() {
       toast.success("Expense added successfully!");
 
       // Invalidate balance query to refresh the display
-      queryClient.invalidateQueries({ queryKey: ["account-balance", selectedAccountId] });
+      queryClient.invalidateQueries({
+        queryKey: ["account-balance", selectedAccountId],
+      });
 
       // Reset form
       setSelectedAccountId(undefined);
@@ -323,8 +319,8 @@ export default function ExpenseForm() {
         </div>
       </header>
       {/* Account Balance Display */}
-      <AccountBalance 
-        accountId={selectedAccountId} 
+      <AccountBalance
+        accountId={selectedAccountId}
         accountName={selectedAccount?.name}
       />
       {sectionOrderLoading ? (

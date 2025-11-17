@@ -1,12 +1,14 @@
 {
-  "name": "Home Manager",
-  "short_name": "HomeManager",
-  "description": "Track expenses, recipes, and manage your home in one place.",
-  "start_url": "/login",
+  "name": "Budget Manager - Smart Expense Tracking",
+  "short_name": "Budget",
+  "description": "Track expenses, manage budgets, and gain insights into spending habits.",
+  "start_url": "/expense",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "orientation": "portrait",
+  "background_color": "#fafafa",
+  "theme_color": "#6366f1",
+  "categories": ["finance", "productivity", "lifestyle"],
   "icons": [
     {
       "src": "/appicon-192.png",
@@ -29,10 +31,19 @@
   ],
   "shortcuts": [
     {
-      "name": "Quick Expense",
-      "short_name": "Quick Expense",
-      "url": "/quick-expense",
-      "description": "Add an expense quickly",
+      "name": "Add Expense",
+      "short_name": "Expense",
+      "url": "/expense",
+      "description": "Quickly add an expense",
+      "icons": [
+        { "src": "/appicon-192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/dashboard",
+      "description": "View expense dashboard",
       "icons": [
         { "src": "/appicon-192.png", "sizes": "192x192", "type": "image/png" }
       ]

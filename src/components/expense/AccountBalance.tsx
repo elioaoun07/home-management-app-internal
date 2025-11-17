@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,19 +19,28 @@ interface Balance {
   updated_at: string;
 }
 
-export default function AccountBalance({ accountId, accountName }: AccountBalanceProps) {
+export default function AccountBalance({
+  accountId,
+  accountName,
+}: AccountBalanceProps) {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
 
   // Fetch balance
-  const { data: balance, isLoading, error } = useQuery<Balance>({
+  const {
+    data: balance,
+    isLoading,
+    error,
+  } = useQuery<Balance>({
     queryKey: ["account-balance", accountId],
     queryFn: async () => {
       if (!accountId) return null;
       const res = await fetch(`/api/accounts/${accountId}/balance`);
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to fetch balance' }));
+        const errorData = await res
+          .json()
+          .catch(() => ({ error: "Failed to fetch balance" }));
         throw new Error(errorData.error || "Failed to fetch balance");
       }
       return res.json();
@@ -54,12 +62,16 @@ export default function AccountBalance({ accountId, accountName }: AccountBalanc
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["account-balance", accountId] });
+      queryClient.invalidateQueries({
+        queryKey: ["account-balance", accountId],
+      });
       toast.success("Balance updated successfully");
       setIsEditing(false);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Failed to update balance");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update balance"
+      );
     },
   });
 
@@ -88,49 +100,50 @@ export default function AccountBalance({ accountId, accountName }: AccountBalanc
 
   if (error) {
     return (
-      <Card className="p-4 mb-6 border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-900">
+      <div className="neo-card bg-[#1a2942] border-yellow-500/20 p-4 mb-4">
         <div className="flex items-start gap-2">
           <div className="flex-1">
-            <Label className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+            <Label className="text-sm font-medium text-yellow-400">
               Account Balance - Setup Required
             </Label>
-            <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-              Database table not found. Please run the migration script to enable balance tracking.
+            <p className="text-xs text-yellow-300/70 mt-1">
+              Database table not found. Please run the migration script to
+              enable balance tracking.
             </p>
           </div>
         </div>
-      </Card>
+      </div>
     );
   }
 
   if (isLoading) {
     return (
-      <Card className="p-4 mb-6">
+      <div className="neo-card bg-[#1a2942] p-4 mb-4">
         <div className="animate-pulse">
-          <div className="h-4 bg-muted rounded w-24 mb-2"></div>
-          <div className="h-8 bg-muted rounded w-32"></div>
+          <div className="h-4 bg-[#3b82f6]/20 rounded w-24 mb-2"></div>
+          <div className="h-8 bg-[#3b82f6]/20 rounded w-32"></div>
         </div>
-      </Card>
+      </div>
     );
   }
 
   const currentBalance = balance?.balance || 0;
 
   return (
-    <Card className="p-4 mb-6">
+    <div className="neo-card bg-gradient-to-br from-[#1a2942] to-[#0f1d2e] border-[#06b6d4]/30 p-2.5 shadow-lg">
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <Label className="text-sm text-muted-foreground">
+          <Label className="text-[10px] text-[#06b6d4] font-medium uppercase tracking-wider">
             {accountName || "Account"} Balance
           </Label>
           {isEditing ? (
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1.5">
               <Input
                 type="number"
                 step="0.01"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
-                className="h-10 w-32"
+                className="h-8 w-32 text-lg font-bold bg-[#0a1628] border-[#3b82f6]/30 text-white focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSave();
@@ -140,49 +153,46 @@ export default function AccountBalance({ accountId, accountName }: AccountBalanc
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-8 w-8"
+                className="h-8 w-8 bg-[#14b8a6]/20 hover:bg-[#14b8a6]/30 border border-[#14b8a6]/30"
                 onClick={handleSave}
                 disabled={updateBalanceMutation.isPending}
               >
-                <Save className="h-4 w-4" />
+                <Save className="h-4 w-4 text-[#14b8a6]" />
               </Button>
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-8 w-8"
+                className="h-8 w-8 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30"
                 onClick={handleCancel}
                 disabled={updateBalanceMutation.isPending}
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4 text-red-400" />
               </Button>
             </div>
           ) : (
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-bold tabular-nums">
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xl font-bold tabular-nums text-white">
                 ${currentBalance.toFixed(2)}
               </span>
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-6 w-6"
+                className="h-7 w-7 bg-[#3b82f6]/20 hover:bg-[#3b82f6]/30 border border-[#3b82f6]/30 rounded-lg active:scale-95 transition-all"
                 onClick={handleEdit}
               >
-                <Edit2 className="h-3 w-3" />
+                <Edit2 className="h-3.5 w-3.5 text-[#38bdf8]" />
               </Button>
             </div>
           )}
         </div>
         {!isEditing && balance?.updated_at && (
-          <div className="text-xs text-muted-foreground">
-            Updated: {new Date(balance.updated_at).toLocaleDateString()}
+          <div className="text-[10px] text-[hsl(var(--text-muted-light)/0.5)] text-right">
+            Updated
+            <br />
+            {new Date(balance.updated_at).toLocaleDateString()}
           </div>
         )}
       </div>
-      {!isEditing && currentBalance !== 0 && (
-        <p className="text-xs text-muted-foreground mt-2">
-          This is your reconciliation balance. Transactions will be deducted from this amount.
-        </p>
-      )}
-    </Card>
+    </div>
   );
 }

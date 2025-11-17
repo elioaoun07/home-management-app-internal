@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calculator } from "lucide-react";
+import { Calculator, DollarSign } from "lucide-react";
 import { ReactNode, useState } from "react";
 import CalculatorDialog from "./CalculatorDialog";
 
@@ -18,24 +18,37 @@ export default function AmountInput({ value, onChange, rightExtra }: Props) {
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="amount">Amount</Label>
+      <Label
+        htmlFor="amount"
+        className="text-base font-semibold flex items-center gap-2"
+      >
+        <DollarSign className="h-4 w-4" />
+        Amount
+      </Label>
       <div className="flex items-center gap-2">
-        <Input
-          id="amount"
-          type="number"
-          inputMode="decimal"
-          placeholder="0.00"
-          value={value}
-          onChange={(e) => onChange?.(e.target.value)}
-          className="flex-1"
-        />
+        <div className="relative flex-1">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">
+            $
+          </span>
+          <Input
+            id="amount"
+            type="number"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={value}
+            onChange={(e) => onChange?.(e.target.value)}
+            className="pl-8 h-12 text-lg font-semibold transition-all focus:ring-2 focus:ring-primary/20"
+          />
+        </div>
         <Button
           type="button"
           variant="outline"
+          size="icon"
+          className="h-12 w-12 hover:bg-primary/10 hover:text-primary transition-all"
           aria-label="Open calculator"
           onClick={() => setCalcOpen(true)}
         >
-          <Calculator className="h-4 w-4" />
+          <Calculator className="h-5 w-5" />
         </Button>
         {rightExtra}
       </div>

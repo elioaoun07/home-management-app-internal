@@ -74,27 +74,28 @@ export default function CategoryGrid({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <Label>Category</Label>
+        <Label className="text-base font-semibold">Category</Label>
         {accountId && (
           <button
             type="button"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted/50"
             onClick={() => setManageOpen(true)}
             aria-label="Manage categories"
             title="Manage categories"
           >
             <Pencil className="h-4 w-4" />
+            <span>Manage</span>
           </button>
         )}
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {isLoading
           ? Array.from({ length: 8 }).map((_, i) => (
               <Button
                 key={i}
                 variant="outline"
                 type="button"
-                className="justify-start opacity-50"
+                className="justify-start h-14 opacity-50 animate-pulse"
                 disabled
               >
                 Loading...
@@ -107,7 +108,11 @@ export default function CategoryGrid({
                   key={cat.id}
                   variant={active ? "default" : "outline"}
                   type="button"
-                  className="justify-start gap-2"
+                  className={`justify-start gap-2 h-14 text-left transition-all hover:scale-105 ${
+                    active
+                      ? "ring-2 ring-primary/50 shadow-lg"
+                      : "hover:shadow-md"
+                  }`}
                   onClick={() => onCategorySelect?.(cat.id)}
                   style={{
                     backgroundColor: active
@@ -116,8 +121,8 @@ export default function CategoryGrid({
                     borderColor: cat.color ?? undefined,
                   }}
                 >
-                  {cat.icon && <span className="text-lg">{cat.icon}</span>}
-                  <span>{cat.name}</span>
+                  {cat.icon && <span className="text-xl">{cat.icon}</span>}
+                  <span className="font-medium">{cat.name}</span>
                 </Button>
               );
             })}
@@ -125,10 +130,11 @@ export default function CategoryGrid({
         <Button
           variant="secondary"
           type="button"
-          className="justify-start"
+          className="justify-start h-14 hover:bg-primary/10 hover:text-primary transition-all hover:scale-105"
           onClick={() => setAddDialogOpen(true)}
         >
-          + Add Category
+          <span className="text-xl mr-2">+</span>
+          <span className="font-medium">Add Category</span>
         </Button>
         <AddCategoryDialog
           open={addDialogOpen}

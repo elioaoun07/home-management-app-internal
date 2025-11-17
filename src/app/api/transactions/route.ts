@@ -83,8 +83,8 @@ export async function POST(_req: NextRequest) {
     const transactionData = {
       user_id: user.id,
       date: txDate, // YYYY-MM-DD
-      category: categoryData.name,
-      subcategory: subcategoryName,
+      category_id: category_id,
+      subcategory_id: subcategory_id || null,
       amount: parseFloat(amount),
       description: description || "",
       account_id: account_id,
@@ -117,7 +117,7 @@ export async function POST(_req: NextRequest) {
         .single();
 
       const current = currentBalance?.balance || 0;
-      
+
       // Get account type to determine if we add or subtract
       const { data: accountData } = await supabase
         .from("accounts")
@@ -127,24 +127,23 @@ export async function POST(_req: NextRequest) {
 
       // For expense accounts, subtract the amount
       // For income accounts, add the amount
-      const newBalance = accountData?.type === "expense" 
-        ? Number(current) - Number(amount)
-        : Number(current) + Number(amount);
+      const newBalance =
+        accountData?.type === "expense"
+          ? Number(current) - Number(amount)
+          : Number(current) + Number(amount);
 
       // Update balance
-      await supabase
-        .from("account_balances")
-        .upsert(
-          {
-            account_id: account_id,
-            user_id: user.id,
-            balance: newBalance,
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "account_id",
-          }
-        );
+      await supabase.from("account_balances").upsert(
+        {
+          account_id: account_id,
+          user_id: user.id,
+          balance: newBalance,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "account_id",
+        }
+      );
     } catch (balanceError) {
       console.error("Error updating balance:", balanceError);
       // Don't fail the transaction if balance update fails
@@ -244,35 +243,21 @@ export async function PATCH(req: NextRequest) {
 
     if (category_id !== undefined) {
       if (category_id === null || category_id === "") {
-        updateFields.category = "";
+        updateFields.category_id = null;
         // When clearing category, also clear subcategory if not explicitly set
-        if (subcategory_id === undefined) updateFields.subcategory = "";
+        if (subcategory_id === undefined) updateFields.subcategory_id = null;
       } else {
-        const name = await resolveCategoryName(String(category_id));
-        if (!name) {
-          return NextResponse.json(
-            { error: "Invalid category_id" },
-            { status: 400 }
-          );
-        }
-        updateFields.category = name;
+        updateFields.category_id = String(category_id);
         // If category changes and subcategory not provided, clear subcategory as it may no longer be valid
-        if (subcategory_id === undefined) updateFields.subcategory = "";
+        if (subcategory_id === undefined) updateFields.subcategory_id = null;
       }
     }
 
     if (subcategory_id !== undefined) {
       if (subcategory_id === null || subcategory_id === "") {
-        updateFields.subcategory = "";
+        updateFields.subcategory_id = null;
       } else {
-        const name = await resolveCategoryName(String(subcategory_id));
-        if (!name) {
-          return NextResponse.json(
-            { error: "Invalid subcategory_id" },
-            { status: 400 }
-          );
-        }
-        updateFields.subcategory = name;
+        updateFields.subcategory_id = String(subcategory_id);
       }
     }
 

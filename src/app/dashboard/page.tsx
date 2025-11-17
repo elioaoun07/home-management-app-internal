@@ -1,11 +1,6 @@
-import DateSettings from "@/components/dashboard/DateSettings";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import EnhancedMobileDashboard from "@/components/dashboard/EnhancedMobileDashboard";
 import { supabaseServerRSC } from "@/lib/supabase/server";
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import DashboardClient from "./DashboardClient";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,6 +16,8 @@ type Tx = {
   inserted_at: string;
   user_id?: string;
   user_name?: string;
+  account_name?: string;
+  category_icon?: string;
 };
 
 function fmtDate(d: Date): string {
@@ -128,7 +125,10 @@ export default async function DashboardPage({
   let query = supabase
     .from("transactions")
     .select(
-      "id, date, category, subcategory, amount, description, account_id, inserted_at, user_id"
+      `id, date, category_id, subcategory_id, amount, description, account_id, inserted_at, user_id,
+      accounts(name),
+      category:user_categories!transactions_category_fk(name, icon),
+      subcategory:user_categories!transactions_subcategory_fk(name)`
     )
     .gte("date", start)
     .lte("date", end)
@@ -153,64 +153,50 @@ export default async function DashboardPage({
   const meName =
     (meMeta.full_name as string | undefined) ||
     (meMeta.name as string | undefined) ||
-    (user.email as string | undefined) ||
-    undefined;
+    "Me";
   let partnerName: string | undefined = undefined;
   if (partnerId && link) {
-    partnerName =
+    // Try to get partner's display name from metadata first, fallback to email
+    const partnerEmail =
       link.owner_user_id === partnerId
         ? (link.owner_email as string | undefined)
         : (link.partner_email as string | undefined);
-    if (!partnerName) partnerName = "Partner";
+    // Extract name from email if available (e.g., "john.doe@example.com" -> "John Doe")
+    if (partnerEmail) {
+      const emailName = partnerEmail.split("@")[0].replace(/[._-]/g, " ");
+      partnerName = emailName
+        .split(" ")
+        .map(
+          (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        )
+        .join(" ");
+    } else {
+      partnerName = "Partner";
+    }
   }
 
   const rows: Tx[] = (rawRows || []).map((r: any) => ({
     id: r.id,
     date: r.date,
-    category: r.category,
-    subcategory: r.subcategory,
+    category: r.category?.name || null,
+    subcategory: r.subcategory?.name || null,
     amount: r.amount,
     description: r.description,
     account_id: r.account_id,
     inserted_at: r.inserted_at,
     user_id: r.user_id,
-    user_name:
-      r.user_id === user.id
-        ? meName || user.email || "Me"
-        : partnerName || "Partner",
+    user_name: r.user_id === user.id ? meName : partnerName || "Partner",
+    account_name: r.accounts?.name || "Unknown",
+    category_icon: r.category?.icon || "📝",
   }));
 
+  const totalSpent = rows.reduce((sum, r) => sum + r.amount, 0);
+
   return (
-    <main className="mx-auto w-full max-w-5xl p-6">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-
-        {/* Date filter (GET form) */}
-        <form method="get" className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col">
-            <Label htmlFor="start">From</Label>
-            <Input id="start" name="start" type="date" defaultValue={start} />
-          </div>
-          <div className="flex flex-col">
-            <Label htmlFor="end">To</Label>
-            <Input id="end" name="end" type="date" defaultValue={end} />
-          </div>
-          <Button type="submit">Filter</Button>
-          {/* Reset link to clear query params */}
-          <Button type="button" variant="ghost" asChild>
-            <Link href="/dashboard">Reset</Link>
-          </Button>
-          {/* Date settings icon */}
-          <DateSettings />
-        </form>
-      </div>
-
-      <DashboardClient
-        rows={rows}
-        start={start}
-        end={end}
-        showUser={onboarding?.account_type === "household"}
-      />
-    </main>
+    <EnhancedMobileDashboard
+      transactions={rows}
+      startDate={start}
+      endDate={end}
+    />
   );
 }

@@ -77,13 +77,16 @@ export default function TemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {initial?.id ? "Edit Template" : "New Template"}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSave} className="space-y-4">
+        <form
+          onSubmit={handleSave}
+          className="space-y-4 overflow-y-auto flex-1 px-1"
+        >
           <div>
             <Label>Name</Label>
             <Input

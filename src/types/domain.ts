@@ -9,6 +9,7 @@ export type Account = {
   user_id: UUID;
   name: string;
   type: AccountType;
+  is_default?: boolean;
   inserted_at: string; // ISO
 };
 

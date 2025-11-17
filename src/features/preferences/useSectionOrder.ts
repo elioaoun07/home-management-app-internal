@@ -5,13 +5,7 @@ import { qk } from "@/lib/queryKeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-const DEFAULT_ORDER = [
-  "account",
-  "category",
-  "subcategory",
-  "amount",
-  "description",
-] as const;
+const DEFAULT_ORDER = ["account", "category", "subcategory", "amount"] as const;
 
 export type SectionKey = (typeof DEFAULT_ORDER)[number];
 

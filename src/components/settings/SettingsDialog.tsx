@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAccounts, useSetDefaultAccount } from "@/features/accounts/hooks";
 import { usePreferences } from "@/features/preferences/usePreferences";
 import {
   useSectionOrder,
@@ -41,6 +42,7 @@ import {
 } from "@dnd-kit/sortable";
 import { RotateCcw, Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { SortableItem } from "./SortableItem";
 
 type Props = {
@@ -49,11 +51,10 @@ type Props = {
 };
 
 const SECTION_LABELS: Record<SectionKey, string> = {
-  account: "Account",
-  category: "Category",
-  subcategory: "Subcategory",
-  amount: "Amount",
-  description: "Description",
+  amount: "Amount Entry",
+  category: "Category Selection",
+  subcategory: "Subcategory & Note",
+  account: "Account Selection",
 };
 
 export function SettingsDialog({ open, onOpenChange }: Props) {
@@ -150,70 +151,149 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[640px]">
-        <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="sm:max-w-[640px] max-h-[85vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
+          <DialogTitle className="text-xl font-bold">Settings</DialogTitle>
+          <DialogDescription className="text-sm">
             Personalize your appearance and layout preferences.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="appearance" className="mt-2">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="appearance">Appearance</TabsTrigger>
-            <TabsTrigger value="layout">Layout</TabsTrigger>
-            <TabsTrigger value="household">Household</TabsTrigger>
+        <Tabs
+          defaultValue="appearance"
+          className="flex-1 flex flex-col overflow-hidden"
+        >
+          <TabsList className="grid w-full grid-cols-4 bg-[hsl(var(--header-bg)/0.5)] border border-[hsl(var(--header-border)/0.3)] rounded-xl p-1 flex-shrink-0">
+            <TabsTrigger
+              value="appearance"
+              className="data-[state=active]:bg-[hsl(var(--nav-text-primary)/0.2)] data-[state=active]:text-[hsl(var(--nav-text-primary))] data-[state=active]:neo-glow-sm rounded-lg transition-all"
+            >
+              Theme
+            </TabsTrigger>
+            <TabsTrigger
+              value="accounts"
+              className="data-[state=active]:bg-[hsl(var(--nav-text-primary)/0.2)] data-[state=active]:text-[hsl(var(--nav-text-primary))] data-[state=active]:neo-glow-sm rounded-lg transition-all"
+            >
+              Accounts
+            </TabsTrigger>
+            <TabsTrigger
+              value="steps"
+              className="data-[state=active]:bg-[hsl(var(--nav-text-primary)/0.2)] data-[state=active]:text-[hsl(var(--nav-text-primary))] data-[state=active]:neo-glow-sm rounded-lg transition-all"
+            >
+              Steps
+            </TabsTrigger>
+            <TabsTrigger
+              value="household"
+              className="data-[state=active]:bg-[hsl(var(--nav-text-primary)/0.2)] data-[state=active]:text-[hsl(var(--nav-text-primary))] data-[state=active]:neo-glow-sm rounded-lg transition-all"
+            >
+              Household
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="appearance" className="mt-4">
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-medium">Theme</h3>
-                <p className="text-xs text-muted-foreground">
-                  Choose how the app looks on your device.
+          <TabsContent
+            value="appearance"
+            className="mt-4 flex-1 overflow-y-auto"
+          >
+            <div className="space-y-4 h-[400px] flex flex-col">
+              <div className="flex-shrink-0">
+                <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
+                  Color Theme
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Choose your preferred color scheme
                 </p>
               </div>
-              <RadioGroup
-                value={theme}
-                onValueChange={(v) => updateTheme(v as any)}
-                className="grid grid-cols-3 gap-3"
-              >
-                {[
-                  { value: "light", label: "Light" },
-                  { value: "dark", label: "Dark" },
-                  { value: "system", label: "System" },
-                ].map((opt) => (
-                  <div
-                    key={opt.value}
-                    className="flex items-center gap-2 rounded-md border p-3"
-                  >
-                    <RadioGroupItem
-                      id={`theme-${opt.value}`}
-                      value={opt.value}
-                    />
-                    <Label htmlFor={`theme-${opt.value}`}>{opt.label}</Label>
-                  </div>
-                ))}
-              </RadioGroup>
+              <div className="grid grid-cols-2 gap-4 flex-1">
+                <button
+                  onClick={async () => {
+                    document.body.setAttribute("data-theme", "blue");
+                    localStorage.setItem("color-theme", "blue");
+                    try {
+                      await fetch("/api/user-preferences", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ theme: "blue" }),
+                      });
+                    } catch (e) {
+                      console.error("Failed to save theme to server", e);
+                    }
+                    toast.success("🎨 Theme updated to Blue!");
+                    setTimeout(() => window.location.reload(), 300);
+                  }}
+                  className="neo-card flex flex-col items-center justify-center gap-3 rounded-xl p-6 hover:neo-glow-sm transition-all active:scale-[0.98] h-full"
+                >
+                  <div className="w-16 h-16 rounded-full neo-glow bg-gradient-to-br from-[#3b82f6] via-[#06b6d4] to-[#14b8a6] shadow-lg"></div>
+                  <span className="text-base font-semibold">Blue Ocean</span>
+                  <span className="text-xs text-muted-foreground">
+                    Cool & Professional
+                  </span>
+                </button>
+                <button
+                  onClick={async () => {
+                    document.body.setAttribute("data-theme", "pink");
+                    localStorage.setItem("color-theme", "pink");
+                    try {
+                      await fetch("/api/user-preferences", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ theme: "pink" }),
+                      });
+                    } catch (e) {
+                      console.error("Failed to save theme to server", e);
+                    }
+                    toast.success("🎨 Theme updated to Pink!");
+                    setTimeout(() => window.location.reload(), 300);
+                  }}
+                  className="neo-card flex flex-col items-center justify-center gap-3 rounded-xl p-6 hover:neo-glow-sm transition-all active:scale-[0.98] h-full"
+                >
+                  <div className="w-16 h-16 rounded-full neo-glow bg-gradient-to-br from-[#ec4899] via-[#f472b6] to-[#fbbf24] shadow-lg"></div>
+                  <span className="text-base font-semibold">Pink Sunset</span>
+                  <span className="text-xs text-muted-foreground">
+                    Warm & Vibrant
+                  </span>
+                </button>
+              </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="household" className="mt-4">
-            <HouseholdPanel />
+          <TabsContent value="accounts" className="mt-4 flex-1 overflow-y-auto">
+            <div className="h-[400px]">
+              <AccountsPanel />
+            </div>
           </TabsContent>
 
-          <TabsContent value="layout" className="mt-4">
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-medium">Expense form order</h3>
-                <p className="text-xs text-muted-foreground">
-                  Drag and drop sections to reorder your expense form layout.
+          <TabsContent
+            value="household"
+            className="mt-4 flex-1 overflow-y-auto"
+          >
+            <div className="h-[400px]">
+              <HouseholdPanel />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="steps" className="mt-4 flex-1 overflow-y-auto">
+            <div className="space-y-4 h-[400px] flex flex-col">
+              <div className="flex-shrink-0">
+                <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
+                  Expense Walkthrough Steps
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Customize the order of steps in your expense entry
+                  walkthrough. Drag to reorder.
                 </p>
+                <div className="mt-2 p-3 neo-card rounded-lg border border-[hsl(var(--nav-text-primary)/0.2)] bg-[hsl(var(--header-bg)/0.5)]">
+                  <p className="text-xs text-muted-foreground">
+                    <strong className="text-[hsl(var(--nav-text-primary))]">
+                      Note:
+                    </strong>{" "}
+                    The walkthrough guides you through each step. If you have a
+                    default account, the Account step is automatically skipped.
+                    Subcategory only appears when a category has subcategories.
+                  </p>
+                </div>
               </div>
 
-              <Separator className="my-4" />
-
-              <div className="relative h-[280px] border rounded-md">
+              <div className="flex-1 neo-card rounded-xl border border-[hsl(var(--header-border)/0.3)] overflow-hidden">
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -233,7 +313,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                           items={order}
                           strategy={verticalListSortingStrategy}
                         >
-                          <ul className="space-y-3">
+                          <ul className="space-y-2">
                             {order.map((key) => (
                               <SortableItem key={key} id={key}>
                                 {SECTION_LABELS[key]}
@@ -244,25 +324,26 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                       )}
                     </div>
                   </ScrollArea>
-                  {/* DragOverlay removed. Using modifiers to constrain drag within the container. */}
                 </DndContext>
               </div>
 
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between flex-shrink-0">
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                   onClick={resetToDefault}
+                  className="neo-card hover:neo-glow-sm"
                 >
-                  <RotateCcw className="mr-2 h-4 w-4" /> Reset order
+                  <RotateCcw className="mr-2 h-4 w-4" /> Reset
                 </Button>
                 <Button
                   type="button"
                   onClick={handleSave}
                   disabled={!canSave || updatePreferences.isPending}
+                  className="neo-gradient text-white hover:opacity-90"
                 >
                   <Save className="mr-2 h-4 w-4" />
-                  {updatePreferences.isPending ? "Saving..." : "Save changes"}
+                  {updatePreferences.isPending ? "Saving..." : "Save"}
                 </Button>
               </div>
             </div>
@@ -274,6 +355,74 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
 }
 
 export default SettingsDialog;
+
+function AccountsPanel() {
+  const { data: accounts = [] } = useAccounts();
+  const setDefaultMutation = useSetDefaultAccount();
+  const defaultAccount = accounts.find((a: any) => a.is_default);
+
+  const handleSetDefault = async (accountId: string) => {
+    try {
+      await setDefaultMutation.mutateAsync(accountId);
+      toast.success("Default account updated!");
+    } catch (error) {
+      console.error("Failed to set default account:", error);
+      toast.error("Failed to set default account");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
+          Default Account
+        </h3>
+        <p className="text-sm text-muted-foreground mt-1">
+          Select your default account for quick expense entry
+        </p>
+      </div>
+
+      <RadioGroup
+        value={defaultAccount?.id || ""}
+        onValueChange={handleSetDefault}
+        className="space-y-2"
+      >
+        {accounts.map((account: any) => (
+          <div
+            key={account.id}
+            className="neo-card flex items-center gap-3 rounded-xl p-3 hover:neo-glow-sm transition-all cursor-pointer"
+          >
+            <RadioGroupItem
+              id={`account-${account.id}`}
+              value={account.id}
+              className="flex-shrink-0"
+            />
+            <Label
+              htmlFor={`account-${account.id}`}
+              className="flex-1 cursor-pointer"
+            >
+              <div className="text-sm font-semibold">{account.name}</div>
+              <div className="text-xs text-muted-foreground capitalize">
+                {account.type}
+              </div>
+            </Label>
+            {account.is_default && (
+              <span className="text-xs bg-[hsl(var(--nav-text-primary)/0.2)] text-[hsl(var(--nav-text-primary))] px-2 py-1 rounded-full font-medium">
+                Default
+              </span>
+            )}
+          </div>
+        ))}
+      </RadioGroup>
+
+      {accounts.length === 0 && (
+        <div className="text-sm text-muted-foreground text-center py-12 neo-card rounded-xl">
+          No accounts found
+        </div>
+      )}
+    </div>
+  );
+}
 
 function HouseholdPanel() {
   const [loading, setLoading] = useState(true);
@@ -299,81 +448,118 @@ function HouseholdPanel() {
   }, []);
 
   if (loading)
-    return <div className="text-sm text-muted-foreground">Loading…</div>;
-  if (error) return <div className="text-sm text-red-600">{error}</div>;
+    return (
+      <div className="text-sm text-muted-foreground py-12 text-center">
+        Loading…
+      </div>
+    );
+  if (error)
+    return (
+      <div className="text-sm text-red-600 neo-card p-4 rounded-xl">
+        {error}
+      </div>
+    );
 
   if (!link)
     return (
-      <div className="space-y-3">
-        <div className="text-sm text-muted-foreground">
-          No household linked yet.
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
+            Household Link
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            No household linked yet. Create a code to link with your partner.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            onClick={async () => {
-              setError(null);
-              setLoading(true);
-              try {
-                const res = await fetch("/api/onboarding", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ account_type: "household" }),
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data?.error || "Failed");
-                // Refresh from /api/household to get full link row
-                const res2 = await fetch("/api/household", {
-                  cache: "no-store",
-                });
-                const d2 = await res2.json();
-                setLink(d2?.link ?? { code: data?.code });
-              } catch (e: any) {
-                setError(e?.message || "Failed to generate code");
-              } finally {
-                setLoading(false);
-              }
-            }}
-          >
-            Create household code
-          </Button>
-          <span className="text-sm text-muted-foreground self-center">
-            Or use the avatar menu → Link household to enter a code.
-          </span>
-        </div>
-        {error ? <div className="text-sm text-red-600">{error}</div> : null}
+        <Button
+          type="button"
+          onClick={async () => {
+            setError(null);
+            setLoading(true);
+            try {
+              const res = await fetch("/api/onboarding", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ account_type: "household" }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data?.error || "Failed");
+              const res2 = await fetch("/api/household", {
+                cache: "no-store",
+              });
+              const d2 = await res2.json();
+              setLink(d2?.link ?? { code: data?.code });
+            } catch (e: any) {
+              setError(e?.message || "Failed to generate code");
+            } finally {
+              setLoading(false);
+            }
+          }}
+          className="neo-gradient text-white hover:opacity-90"
+        >
+          Create Household Code
+        </Button>
+        <p className="text-sm text-muted-foreground">
+          Or use the avatar menu → Link household to enter a code.
+        </p>
+        {error ? (
+          <div className="text-sm text-red-600 neo-card p-4 rounded-xl">
+            {error}
+          </div>
+        ) : null}
       </div>
     );
 
   const isLinked = Boolean(link.partner_user_id);
   return (
-    <div className="space-y-3">
-      <div className="text-sm">
-        Status:{" "}
-        {isLinked ? (
-          <span className="text-green-600">Linked</span>
-        ) : (
-          <span className="text-yellow-600">Awaiting partner</span>
-        )}
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
+          Household Status
+        </h3>
+        <p className="text-sm text-muted-foreground mt-1">
+          Manage your household connection
+        </p>
       </div>
-      <div className="text-sm">
-        Owner:{" "}
-        <span className="font-medium">
-          {link.owner_email || link.owner_user_id}
-        </span>
-      </div>
-      <div className="text-sm">
-        Partner:{" "}
-        <span className="font-medium">
-          {link.partner_email || link.partner_user_id || "—"}
-        </span>
-      </div>
-      {!isLinked && link.code ? (
-        <div className="rounded-md border p-3">
-          <div className="text-xs text-muted-foreground mb-1">
-            Share this code with your partner:
+
+      <div className="neo-card p-4 rounded-xl space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">Status</span>
+          {isLinked ? (
+            <span className="text-sm font-semibold text-green-500">
+              ✓ Linked
+            </span>
+          ) : (
+            <span className="text-sm font-semibold text-yellow-500">
+              ⏳ Awaiting Partner
+            </span>
+          )}
+        </div>
+        <Separator />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Owner</span>
+            <span className="text-sm font-medium">
+              {link.owner_email || link.owner_user_id}
+            </span>
           </div>
-          <div className="font-mono tracking-widest text-lg">{link.code}</div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Partner</span>
+            <span className="text-sm font-medium">
+              {link.partner_email || link.partner_user_id || "—"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {!isLinked && link.code ? (
+        <div className="neo-card p-4 rounded-xl space-y-2">
+          <div className="text-sm font-medium text-[hsl(var(--nav-text-primary))]">
+            Share this code:
+          </div>
+          <div className="font-mono tracking-widest text-2xl font-bold text-center py-3 bg-[hsl(var(--header-bg)/0.5)] rounded-lg">
+            {link.code}
+          </div>
         </div>
       ) : null}
     </div>
