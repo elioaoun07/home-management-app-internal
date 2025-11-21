@@ -12,6 +12,7 @@ type Transaction = {
   subcategory: string | null;
   amount: number;
   description: string | null;
+  account_id: string;
   account_name?: string;
   category_icon?: string;
   user_theme?: string;
