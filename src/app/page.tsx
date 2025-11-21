@@ -1,8 +1,20 @@
 import { Button } from "@/components/ui/button";
+import { supabaseServerRSC } from "@/lib/supabase/server";
 import { ArrowRight, BarChart3, Clock, Shield, Zap } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+export default async function Home() {
+  // Check if user is already logged in
+  const supabase = await supabaseServerRSC();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // If already authenticated, redirect to dashboard
+  if (user) {
+    redirect("/dashboard");
+  }
   return (
     <div className="min-h-screen bg-linear-to-br from-background via-background to-muted/20">
       {/* Hero Section */}

@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!username || !password) {
+      console.log("Login attempt with missing credentials");
       // Redirect back to login with error
       return NextResponse.redirect(
         new URL("/login?error=missing", req.url),
@@ -30,21 +31,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    console.log("Attempting login for email:", username);
+
     const supabase = await supabaseServer(await cookies());
 
     // Use Supabase server client to sign in and set cookies
     const { data, error } = await supabase.auth.signInWithPassword({
       email: username,
       password,
-    } as any);
+    });
 
     if (error) {
-      console.error("Supabase sign-in error", error);
+      console.error("Supabase sign-in error:", {
+        error: error.message,
+        code: error.status,
+        email: username,
+      });
       return NextResponse.redirect(
         new URL("/login?error=invalid", req.url),
         303
       );
     }
+
+    if (!data.session) {
+      console.error("No session returned from Supabase");
+      return NextResponse.redirect(
+        new URL("/login?error=invalid", req.url),
+        303
+      );
+    }
+
+    console.log("Login successful for:", username);
 
     // On success the @supabase/ssr client will have set cookies; redirect to /expense
     return NextResponse.redirect(new URL("/expense", req.url), 303);

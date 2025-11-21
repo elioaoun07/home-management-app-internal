@@ -42,9 +42,17 @@ export async function POST(req: NextRequest) {
     } as any);
 
     if (error) {
-      console.error("Signup error", error);
+      console.error("Signup error:", {
+        message: error.message,
+        status: error.status,
+        email,
+      });
+      // Provide user-friendly error message
+      const errorMsg = error.message.includes("already registered")
+        ? "email_exists"
+        : "signup_failed";
       return NextResponse.redirect(
-        new URL(`/signup?error=${encodeURIComponent(error.message)}`, req.url),
+        new URL(`/signup?error=${errorMsg}`, req.url),
         303
       );
     }
