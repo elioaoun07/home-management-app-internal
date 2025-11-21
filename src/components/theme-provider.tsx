@@ -7,14 +7,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Load user's color theme preference
     const colorTheme = localStorage.getItem("color-theme") || "blue";
     document.documentElement.setAttribute("data-theme", colorTheme);
-    
+
     // Listen for storage changes
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "color-theme" && e.newValue) {
         document.documentElement.setAttribute("data-theme", e.newValue);
       }
     };
-    
+
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);

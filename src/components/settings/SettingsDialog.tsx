@@ -208,10 +208,12 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   onClick={async () => {
                     document.documentElement.setAttribute("data-theme", "blue");
                     localStorage.setItem("color-theme", "blue");
-                    window.dispatchEvent(new StorageEvent("storage", {
-                      key: "color-theme",
-                      newValue: "blue",
-                    }));
+                    window.dispatchEvent(
+                      new StorageEvent("storage", {
+                        key: "color-theme",
+                        newValue: "blue",
+                      })
+                    );
                     try {
                       await fetch("/api/user-preferences", {
                         method: "PATCH",
@@ -236,10 +238,12 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   onClick={async () => {
                     document.documentElement.setAttribute("data-theme", "pink");
                     localStorage.setItem("color-theme", "pink");
-                    window.dispatchEvent(new StorageEvent("storage", {
-                      key: "color-theme",
-                      newValue: "pink",
-                    }));
+                    window.dispatchEvent(
+                      new StorageEvent("storage", {
+                        key: "color-theme",
+                        newValue: "pink",
+                      })
+                    );
                     try {
                       await fetch("/api/user-preferences", {
                         method: "PATCH",
