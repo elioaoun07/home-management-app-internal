@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import AccountBalance from "./AccountBalance";
 import CalculatorDialog from "./CalculatorDialog";
 import { useExpenseForm } from "./ExpenseFormContext";
+import VoiceEntryButton from "./VoiceEntryButton";
 
 type Step = SectionKey | "confirm";
 
@@ -72,6 +73,7 @@ export default function MobileExpenseForm() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
 
   const { data: categories = [] } = useCategories(selectedAccountId);
   const queryClient = useQueryClient();
@@ -110,6 +112,9 @@ export default function MobileExpenseForm() {
   );
 
   const canSubmit = amount && selectedAccountId && selectedCategoryId;
+  const isAmountStep = step === "amount";
+  const closeDisabled =
+    isAmountStep && (!amount || Number.parseFloat(amount) <= 0);
 
   const handleSubmit = async () => {
     if (!canSubmit || isSubmitting) return;
@@ -126,6 +131,7 @@ export default function MobileExpenseForm() {
           amount: amount,
           description: description || null,
           date: format(date, "yyyy-MM-dd"),
+          is_private: isPrivate,
         }),
       });
 
@@ -178,6 +184,7 @@ export default function MobileExpenseForm() {
       setSelectedCategoryId(undefined);
       setSelectedSubcategoryId(undefined);
       setDescription("");
+      setIsPrivate(false);
       const newDefaultAccount = accounts.find((a: any) => a.is_default);
       if (newDefaultAccount) {
         setSelectedAccountId(newDefaultAccount.id);
@@ -231,12 +238,12 @@ export default function MobileExpenseForm() {
   };
 
   return (
-    <div className="fixed inset-0 bg-[#0a1628] flex flex-col">
+    <div className="fixed inset-0 top-14 bg-[#0a1628] flex flex-col">
       {!isInitialized ? (
-        <div className="fixed inset-0 bg-[#0a1628] loading-fade" />
+        <div className="fixed inset-0 top-14 bg-[#0a1628] loading-fade" />
       ) : (
         <>
-          <div className="fixed top-0 left-0 right-0 z-30 bg-gradient-to-b from-[#1a2942] to-[#0f1d2e] border-b border-[#3b82f6]/20 px-3 pt-3 pb-2 shadow-lg slide-in-top">
+          <div className="fixed top-14 left-0 right-0 z-30 bg-gradient-to-b from-[#1a2942] to-[#0f1d2e] border-b border-[#3b82f6]/20 px-3 pt-3 pb-2 shadow-lg slide-in-top">
             <div className="flex items-center justify-between mb-2">
               {step !== firstValidStep ? (
                 <button
@@ -251,15 +258,25 @@ export default function MobileExpenseForm() {
               )}
               <h1 className="text-sm font-semibold text-white">New Expense</h1>
               <button
-                onClick={() => {
-                  setAmount("");
-                  setSelectedCategoryId(undefined);
-                  setSelectedSubcategoryId(undefined);
-                  setDescription("");
-                  setStep(firstValidStep);
-                }}
+                onClick={
+                  closeDisabled
+                    ? undefined
+                    : () => {
+                        setAmount("");
+                        setSelectedCategoryId(undefined);
+                        setSelectedSubcategoryId(undefined);
+                        setDescription("");
+                        setStep(firstValidStep);
+                      }
+                }
                 suppressHydrationWarning
-                className="p-1.5 -mr-2 rounded-lg bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 active:scale-95 transition-all border border-[#3b82f6]/20"
+                disabled={closeDisabled}
+                className={cn(
+                  "p-1.5 -mr-2 rounded-lg",
+                  closeDisabled
+                    ? "bg-[#3b82f6]/6 border border-[#3b82f6]/10 opacity-50 cursor-not-allowed"
+                    : "bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 active:scale-95 transition-all border border-[#3b82f6]/20"
+                )}
               >
                 <X className="w-5 h-5 text-[#38bdf8]" />
               </button>
@@ -284,8 +301,8 @@ export default function MobileExpenseForm() {
             className={cn(
               "fixed left-0 right-0 overflow-y-auto px-3 py-3 bg-[#0a1628]",
               selectedAccountId && step === "amount"
-                ? "top-[140px]"
-                : "top-[75px]"
+                ? "top-[229px]"
+                : "top-[131px]"
             )}
             style={contentAreaStyles}
           >
@@ -309,13 +326,38 @@ export default function MobileExpenseForm() {
                       className="text-3xl font-bold h-16 pl-10 pr-14 border-2 text-center bg-[#1a2942] border-[hsl(var(--header-border)/0.3)] text-white placeholder:text-[hsl(var(--input-placeholder)/0.3)] focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20 focus:scale-[1.02] transition-all duration-200 neo-card bounce-in"
                       autoFocus
                     />
-                    <button
-                      onClick={() => setShowCalculator(true)}
-                      suppressHydrationWarning
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg neo-card bg-[#06b6d4]/10 border border-[#06b6d4]/30 hover:bg-[#06b6d4]/20 active:scale-95 transition-all"
-                    >
-                      <Calculator className="w-5 h-5 text-[#06b6d4]" />
-                    </button>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                      <button
+                        onClick={() => setShowCalculator(true)}
+                        suppressHydrationWarning
+                        className="p-2 rounded-lg neo-card bg-[#06b6d4]/10 border border-[#06b6d4]/30 hover:bg-[#06b6d4]/20 active:scale-95 transition-all"
+                      >
+                        <Calculator className="w-5 h-5 text-[#06b6d4]" />
+                      </button>
+                      <VoiceEntryButton
+                        categories={categories}
+                        accountId={selectedAccountId}
+                        onPreviewChange={() => {}}
+                        onParsed={({
+                          sentence,
+                          amount: voiceAmount,
+                          categoryId,
+                          subcategoryId,
+                        }) => {
+                          if (voiceAmount != null && !isNaN(voiceAmount))
+                            setAmount(String(voiceAmount));
+                          if (categoryId) setSelectedCategoryId(categoryId);
+                          if (subcategoryId)
+                            setSelectedSubcategoryId(subcategoryId);
+                        }}
+                        onDraftCreated={() => {
+                          toast.success(
+                            "Voice entry saved! Check drafts to confirm."
+                          );
+                        }}
+                        className="p-2 rounded-lg neo-card bg-[#06b6d4]/10 border border-[#06b6d4]/30 hover:bg-[#06b6d4]/20 active:scale-95 transition-all"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -350,6 +392,54 @@ export default function MobileExpenseForm() {
                 </Button>
               </div>
             )}
+
+            {/* Private/Public Lock Icon */}
+            <div className="flex items-center justify-between px-1 py-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-[#06b6d4]/80">
+                  Private Transaction
+                </span>
+                <span className="text-xs text-[#38bdf8]/60">
+                  (Hidden from household)
+                </span>
+              </div>
+              <button
+                onClick={() => setIsPrivate(!isPrivate)}
+                className={cn(
+                  "neo-card p-3 rounded-lg border transition-all duration-300 active:scale-95",
+                  isPrivate
+                    ? "border-[#06b6d4]/60 bg-[#06b6d4]/25 neo-glow"
+                    : "border-[#3b82f6]/20 bg-[#1a2942] hover:border-[#3b82f6]/30"
+                )}
+              >
+                <svg
+                  className={cn(
+                    "w-5 h-5 transition-all duration-500",
+                    isPrivate
+                      ? "text-[#06b6d4] animate-pulse"
+                      : "text-[#38bdf8]/60"
+                  )}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  {isPrivate ? (
+                    // Locked icon
+                    <>
+                      <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </>
+                  ) : (
+                    // Unlocked icon
+                    <>
+                      <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                    </>
+                  )}
+                </svg>
+              </button>
+            </div>
 
             {step === "account" && (
               <div key="account-step" className="space-y-3 step-slide-in">

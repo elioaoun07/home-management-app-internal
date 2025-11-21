@@ -9,6 +9,10 @@ export type ParsedExpense = {
   amount?: number; // Net amount after change/refund, if detected
   categoryId?: string;
   subcategoryId?: string;
+  categoryName?: string; // Name for display
+  subcategoryName?: string; // Name for display
+  confidenceScore?: number; // 0-1 confidence in category match
+  date?: string; // ISO date string (YYYY-MM-DD) if detected
   notes?: string[]; // optional reasons/debug
 };
 
@@ -57,13 +61,140 @@ const CHANGE_WORDS = [
 ];
 const SEP_REGEX = /[\s,]+/g;
 
+// Date parsing helpers
+function parseRelativeDate(sentence: string): Date | null {
+  const today = new Date();
+  const normalized = normalize(sentence);
+
+  // Yesterday
+  if (/\byesterday\b/.test(normalized)) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - 1);
+    return date;
+  }
+
+  // Last [day of week] - finds the most recent occurrence
+  const dayMatch = normalized.match(
+    /\blast\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/
+  );
+  if (dayMatch) {
+    const dayNames = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+    const targetDay = dayNames.indexOf(dayMatch[1]);
+    const currentDay = today.getDay();
+    let daysAgo = currentDay - targetDay;
+    if (daysAgo <= 0) daysAgo += 7; // Go to previous week
+    const date = new Date(today);
+    date.setDate(date.getDate() - daysAgo);
+    return date;
+  }
+
+  // Last business day (Monday-Friday, excluding weekends)
+  if (
+    /\blast\s+business\s+day\b/.test(normalized) ||
+    /\blast\s+working\s+day\b/.test(normalized)
+  ) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - 1);
+    // If it's a weekend, go back to Friday
+    if (date.getDay() === 0)
+      date.setDate(date.getDate() - 2); // Sunday -> Friday
+    else if (date.getDay() === 6) date.setDate(date.getDate() - 1); // Saturday -> Friday
+    return date;
+  }
+
+  // Last week
+  if (/\blast\s+week\b/.test(normalized)) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - 7);
+    return date;
+  }
+
+  // Last month
+  if (/\blast\s+month\b/.test(normalized)) {
+    const date = new Date(today);
+    date.setMonth(date.getMonth() - 1);
+    return date;
+  }
+
+  // X days ago
+  const daysAgoMatch = normalized.match(
+    /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?\s+ago\b/
+  );
+  if (daysAgoMatch) {
+    const daysWord = daysAgoMatch[1];
+    const days = NUM_WORDS[daysWord] || parseInt(daysWord);
+    if (!isNaN(days)) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - days);
+      return date;
+    }
+  }
+
+  return null;
+}
+
+// Math expression parsing
+function parseMathExpression(sentence: string): number | null {
+  const normalized = normalize(sentence);
+
+  // Pattern: "X minus Y" or "X - Y" - handle numbers with commas
+  const minusMatch = normalized.match(
+    /(\d+(?:[,\s]\d+)*(?:\.\d+)?)\s*(?:minus|-|and got back)\s*(\d+(?:[,\s]\d+)*(?:\.\d+)?)/
+  );
+  if (minusMatch) {
+    const a = parseFloat(minusMatch[1].replace(/[,\s]/g, ""));
+    const b = parseFloat(minusMatch[2].replace(/[,\s]/g, ""));
+    return a - b;
+  }
+
+  // Pattern: "X plus Y" or "X + Y"
+  const plusMatch = normalized.match(
+    /(\d+(?:[,\s]\d+)*(?:\.\d+)?)\s*(?:plus|\+)\s*(\d+(?:[,\s]\d+)*(?:\.\d+)?)/
+  );
+  if (plusMatch) {
+    const a = parseFloat(plusMatch[1].replace(/[,\s]/g, ""));
+    const b = parseFloat(plusMatch[2].replace(/[,\s]/g, ""));
+    return a + b;
+  }
+
+  // Pattern: "X times Y" or "X * Y"
+  const timesMatch = normalized.match(
+    /(\d+(?:[,\s]\d+)*(?:\.\d+)?)\s*(?:times|\*|x)\s*(\d+(?:[,\s]\d+)*(?:\.\d+)?)/
+  );
+  if (timesMatch) {
+    const a = parseFloat(timesMatch[1].replace(/[,\s]/g, ""));
+    const b = parseFloat(timesMatch[2].replace(/[,\s]/g, ""));
+    return a * b;
+  }
+
+  // Pattern: "X divided by Y" or "X / Y"
+  const divideMatch = normalized.match(
+    /(\d+(?:[,\s]\d+)*(?:\.\d+)?)\s*(?:divided by|\/)\s*(\d+(?:[,\s]\d+)*(?:\.\d+)?)/
+  );
+  if (divideMatch) {
+    const a = parseFloat(divideMatch[1].replace(/[,\s]/g, ""));
+    const b = parseFloat(divideMatch[2].replace(/[,\s]/g, ""));
+    return b !== 0 ? a / b : null;
+  }
+
+  return null;
+}
+
 function normalize(s: string) {
   return s
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "") // accents
     .replace(/[$€£]|dollars?|euros?|pounds?/g, "")
-    .replace(/[^a-z0-9\s&-]/g, " ")
+    .replace(/[^a-z0-9\s&,.-]/g, " ") // Keep commas and periods for numbers
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -100,10 +231,13 @@ function parseNumbers(sentence: string) {
   const tokens = tokenize(sentence);
   const numbers: { index: number; value: number }[] = [];
 
-  // digit numbers
+  // digit numbers - handle commas in thousands
   tokens.forEach((tok, i) => {
-    const m = tok.match(/^\d+(?:\.\d+)?$/);
-    if (m) numbers.push({ index: i, value: parseFloat(m[0]!) });
+    const m = tok.match(/^[\d,]+(?:\.\d+)?$/);
+    if (m) {
+      const cleaned = m[0].replace(/,/g, "");
+      numbers.push({ index: i, value: parseFloat(cleaned) });
+    }
   });
 
   // word numbers (support simple combos: "fifty five", "one hundred", etc.)
@@ -238,27 +372,64 @@ export function parseSpeechExpense(
     parentBySubId,
   } = flattenCategories(categories);
 
+  // Try math expression first
+  const mathResult = parseMathExpression(sentence);
+
   const { pay, change } = classifyAmounts(sentence);
   let amount: number | undefined = undefined;
-  if (typeof pay === "number") {
+
+  // Prioritize math expression result
+  if (mathResult !== null && mathResult > 0) {
+    amount = mathResult;
+    notes.push(`calculated=${amount}`);
+  } else if (typeof pay === "number") {
     amount = pay - (change ?? 0);
     if (amount < 0) amount = Math.abs(amount); // avoid negative due to parsing flip
   }
   if (amount != null) notes.push(`amount=${amount}`);
 
-  // Prefer subcategory matches first
-  const subBest = chooseBest(sentence, subs, 0.75);
+  // Parse relative date
+  const parsedDate = parseRelativeDate(sentence);
+  const date = parsedDate?.toISOString().split("T")[0];
+  if (date) notes.push(`date=${date}`);
+
+  // Prefer subcategory matches first (with improved threshold)
+  const subBest = chooseBest(sentence, subs, 0.65); // Lower threshold for better matches
   let categoryId: string | undefined;
   let subcategoryId: string | undefined;
+  let categoryName: string | undefined;
+  let subcategoryName: string | undefined;
+  let confidenceScore: number | undefined;
+
   if (subBest.id) {
     subcategoryId = subBest.id;
     categoryId = parentBySubId.get(subBest.id);
+    const subcat = subs.find((s) => s.id === subBest.id);
+    subcategoryName = subcat?.name;
+    const cat = cats.find((c) => c.id === categoryId);
+    categoryName = cat?.name;
+    confidenceScore = subBest.score;
   } else {
-    const catBest = chooseBest(sentence, cats, 0.8);
-    if (catBest.id) categoryId = catBest.id;
+    const catBest = chooseBest(sentence, cats, 0.7); // Lower threshold for better matches
+    if (catBest.id) {
+      categoryId = catBest.id;
+      const cat = cats.find((c) => c.id === catBest.id);
+      categoryName = cat?.name;
+      confidenceScore = catBest.score;
+    }
   }
 
-  const description = `[Speech] ${sentence.trim()}`;
+  const description = sentence.trim();
 
-  return { description, amount, categoryId, subcategoryId, notes };
+  return {
+    description,
+    amount,
+    categoryId,
+    subcategoryId,
+    categoryName,
+    subcategoryName,
+    confidenceScore,
+    date,
+    notes,
+  };
 }

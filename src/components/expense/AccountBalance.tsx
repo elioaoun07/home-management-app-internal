@@ -17,6 +17,9 @@ interface Balance {
   account_id: string;
   balance: number;
   updated_at: string;
+  balance_set_at?: string;
+  pending_drafts?: number;
+  draft_count?: number;
 }
 
 export default function AccountBalance({
@@ -170,26 +173,41 @@ export default function AccountBalance({
               </Button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xl font-bold tabular-nums text-white">
-                ${currentBalance.toFixed(2)}
-              </span>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 bg-[#3b82f6]/20 hover:bg-[#3b82f6]/30 border border-[#3b82f6]/30 rounded-lg active:scale-95 transition-all"
-                onClick={handleEdit}
+            <div className="flex flex-col gap-0.5 mt-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xl font-bold tabular-nums text-white">
+                  ${currentBalance.toFixed(2)}
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 bg-[#3b82f6]/20 hover:bg-[#3b82f6]/30 border border-[#3b82f6]/30 rounded-lg active:scale-95 transition-all"
+                  onClick={handleEdit}
+                >
+                  <Edit2 className="h-3.5 w-3.5 text-[#38bdf8]" />
+                </Button>
+              </div>
+              <span
+                className={
+                  balance?.pending_drafts && balance.pending_drafts > 0
+                    ? "text-xs text-orange-400/70"
+                    : "text-xs text-[hsl(var(--text-muted)/0.6)]"
+                }
               >
-                <Edit2 className="h-3.5 w-3.5 text-[#38bdf8]" />
-              </Button>
+                {String(balance?.draft_count ?? 0)} pending draft
+                {Number(balance?.draft_count ?? 0) !== 1 ? "s" : ""}
+                {balance?.pending_drafts && balance.pending_drafts > 0
+                  ? ` ($${balance.pending_drafts.toFixed(2)})`
+                  : ""}
+              </span>
             </div>
           )}
         </div>
-        {!isEditing && balance?.updated_at && (
+        {!isEditing && balance?.balance_set_at && (
           <div className="text-[10px] text-[hsl(var(--text-muted-light)/0.5)] text-right">
-            Updated
+            Set on
             <br />
-            {new Date(balance.updated_at).toLocaleDateString()}
+            {new Date(balance.balance_set_at).toLocaleDateString()}
           </div>
         )}
       </div>

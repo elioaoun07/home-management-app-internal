@@ -4,6 +4,254 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+export async function GET(req: NextRequest) {
+  const supabase = await supabaseServer(await cookies());
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const start = searchParams.get("start");
+    const end = searchParams.get("end");
+    const limit = parseInt(searchParams.get("limit") || "200");
+
+    // Determine if user has a household link to include partner transactions
+    const { data: link } = await supabase
+      .from("household_links")
+      .select(
+        "owner_user_id, owner_email, partner_user_id, partner_email, active"
+      )
+      .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
+      .eq("active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const partnerId = link
+      ? link.owner_user_id === user.id
+        ? link.partner_user_id
+        : link.owner_user_id
+      : null;
+
+    // Build query with proper joins
+    let query = supabase
+      .from("transactions")
+      .select(
+        `id, date, category_id, subcategory_id, amount, description, account_id, inserted_at, user_id, is_private,
+        category:user_categories!transactions_category_fk(name, icon),
+        subcategory:user_categories!transactions_subcategory_fk(name)`
+      )
+      .order("inserted_at", { ascending: false })
+      .limit(limit);
+
+    // Apply date filters if provided
+    if (start) query = query.gte("date", start);
+    if (end) query = query.lte("date", end);
+
+    // Filter by user + partner if household linked
+    if (partnerId) {
+      query = query.in("user_id", [user.id, partnerId]);
+    } else {
+      query = query.eq("user_id", user.id);
+    }
+
+    const { data: rawRows, error } = (await query) as any;
+
+    if (error) {
+      console.error("Failed to fetch transactions:", error);
+      return NextResponse.json(
+        { error: "Failed to fetch transactions" },
+        { status: 500 }
+      );
+    }
+
+    // Fetch account names for all account IDs (including partner's accounts)
+    const accountIds = [
+      ...new Set((rawRows || []).map((r: any) => r.account_id).filter(Boolean)),
+    ];
+    let accountNamesMap: Record<string, string> = {};
+
+    if (accountIds.length > 0) {
+      // Fetch accounts for current user
+      const { data: myAccounts } = await supabase
+        .from("accounts")
+        .select("id, name")
+        .in("id", accountIds);
+
+      if (myAccounts) {
+        myAccounts.forEach((acc: any) => {
+          accountNamesMap[acc.id] = acc.name;
+        });
+      }
+
+      // If household linked, fetch partner's account names
+      if (partnerId) {
+        const { data: partnerAccounts } = await supabase
+          .from("accounts")
+          .select("id, name")
+          .eq("user_id", partnerId)
+          .in("id", accountIds);
+
+        if (partnerAccounts) {
+          partnerAccounts.forEach((acc: any) => {
+            accountNamesMap[acc.id] = acc.name;
+          });
+        }
+      }
+    }
+
+    // Fetch category names for partner's categories
+    const categoryIds = [
+      ...new Set(
+        (rawRows || []).map((r: any) => r.category_id).filter(Boolean)
+      ),
+    ];
+    const subcategoryIds = [
+      ...new Set(
+        (rawRows || []).map((r: any) => r.subcategory_id).filter(Boolean)
+      ),
+    ];
+    let categoryNamesMap: Record<string, { name: string; icon?: string }> = {};
+
+    if (categoryIds.length > 0 || subcategoryIds.length > 0) {
+      const allCatIds = [...categoryIds, ...subcategoryIds];
+
+      // Fetch categories for current user
+      const { data: myCategories } = await supabase
+        .from("user_categories")
+        .select("id, name, icon")
+        .in("id", allCatIds);
+
+      if (myCategories) {
+        myCategories.forEach((cat: any) => {
+          categoryNamesMap[cat.id] = { name: cat.name, icon: cat.icon };
+        });
+      }
+
+      // If household linked, fetch partner's category names
+      if (partnerId) {
+        const { data: partnerCategories } = await supabase
+          .from("user_categories")
+          .select("id, name, icon")
+          .eq("user_id", partnerId)
+          .in("id", allCatIds);
+
+        if (partnerCategories) {
+          partnerCategories.forEach((cat: any) => {
+            categoryNamesMap[cat.id] = { name: cat.name, icon: cat.icon };
+          });
+        }
+      }
+    }
+
+    if (error) {
+      console.error("Failed to fetch transactions:", error);
+      return NextResponse.json(
+        { error: "Failed to fetch transactions" },
+        { status: 500 }
+      );
+    }
+
+    // Filter out private transactions from partner's view
+    const filteredRows = (rawRows || []).filter((r: any) => {
+      // If it's the user's own transaction, show it (even if private)
+      if (r.user_id === user.id) return true;
+      // If it's partner's transaction and it's private, hide it
+      if (r.is_private === true) return false;
+      return true;
+    });
+
+    // Fetch user theme preferences for color coding
+    const { data: myPrefs } = await supabase
+      .from("user_preferences")
+      .select("theme")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    let partnerTheme: string | null = null;
+    if (partnerId) {
+      const { data: partnerPrefs } = await supabase
+        .from("user_preferences")
+        .select("theme")
+        .eq("user_id", partnerId)
+        .maybeSingle();
+      partnerTheme = partnerPrefs?.theme || null;
+    }
+
+    // Compute display names for household
+    const meMeta = (user.user_metadata ?? {}) as Record<string, unknown>;
+    const meName =
+      (meMeta.full_name as string | undefined) ||
+      (meMeta.name as string | undefined) ||
+      "Me";
+
+    let partnerName: string | undefined = undefined;
+    if (partnerId && link) {
+      const partnerEmail =
+        link.owner_user_id === partnerId
+          ? (link.owner_email as string | undefined)
+          : (link.partner_email as string | undefined);
+      if (partnerEmail) {
+        const emailName = partnerEmail.split("@")[0].replace(/[._-]/g, " ");
+        partnerName = emailName
+          .split(" ")
+          .map(
+            (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          )
+          .join(" ");
+      } else {
+        partnerName = "Partner";
+      }
+    }
+
+    const transactions = (filteredRows || []).map((r: any) => ({
+      id: r.id,
+      date: r.date,
+      category:
+        categoryNamesMap[r.category_id]?.name || r.category?.name || null,
+      subcategory:
+        categoryNamesMap[r.subcategory_id]?.name || r.subcategory?.name || null,
+      amount: r.amount,
+      description: r.description,
+      account_id: r.account_id,
+      category_id: r.category_id,
+      subcategory_id: r.subcategory_id,
+      inserted_at: r.inserted_at,
+      user_id: r.user_id,
+      user_name: r.user_id === user.id ? meName : partnerName || "Partner",
+      account_name: accountNamesMap[r.account_id] || "Unknown",
+      category_icon:
+        categoryNamesMap[r.category_id]?.icon || r.category?.icon || "📝",
+      is_private: r.is_private || false,
+      is_owner: r.user_id === user.id,
+      user_theme:
+        r.user_id === user.id
+          ? myPrefs?.theme || "blue"
+          : // Reverse theme for partner: if I'm blue, partner is pink; if I'm pink, partner is blue
+            myPrefs?.theme === "pink"
+            ? "blue"
+            : "pink",
+    }));
+
+    return NextResponse.json(transactions, {
+      headers: {
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+      },
+    });
+  } catch (error) {
+    console.error("Failed to fetch transactions:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch transactions" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(_req: NextRequest) {
   // Use SSR client to access the authenticated user via cookies
   const supabase = await supabaseServer(await cookies());
@@ -23,6 +271,7 @@ export async function POST(_req: NextRequest) {
       amount,
       description,
       date,
+      is_private,
     } = body;
 
     // Validate required fields
@@ -88,6 +337,7 @@ export async function POST(_req: NextRequest) {
       amount: parseFloat(amount),
       description: description || "",
       account_id: account_id,
+      is_private: is_private || false,
       // inserted_at is handled by the database default
     };
 
@@ -105,48 +355,6 @@ export async function POST(_req: NextRequest) {
         { error: "Failed to create transaction" },
         { status: 500 }
       );
-    }
-
-    // Update account balance after successful transaction
-    try {
-      // Get current balance
-      const { data: currentBalance } = await supabase
-        .from("account_balances")
-        .select("balance")
-        .eq("account_id", account_id)
-        .single();
-
-      const current = currentBalance?.balance || 0;
-
-      // Get account type to determine if we add or subtract
-      const { data: accountData } = await supabase
-        .from("accounts")
-        .select("type")
-        .eq("id", account_id)
-        .single();
-
-      // For expense accounts, subtract the amount
-      // For income accounts, add the amount
-      const newBalance =
-        accountData?.type === "expense"
-          ? Number(current) - Number(amount)
-          : Number(current) + Number(amount);
-
-      // Update balance
-      await supabase.from("account_balances").upsert(
-        {
-          account_id: account_id,
-          user_id: user.id,
-          balance: newBalance,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: "account_id",
-        }
-      );
-    } catch (balanceError) {
-      console.error("Error updating balance:", balanceError);
-      // Don't fail the transaction if balance update fails
     }
 
     return NextResponse.json(data, {

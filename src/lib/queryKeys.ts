@@ -15,4 +15,7 @@ export const qk = {
 
   // User-scoped templates
   templates: (userId?: string) => ["templates", { userId }] as const,
+
+  // Draft transactions
+  drafts: () => ["drafts"] as const,
 };

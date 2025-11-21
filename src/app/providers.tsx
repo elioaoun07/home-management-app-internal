@@ -1,6 +1,7 @@
 // src/app/providers.tsx
 "use client";
 
+import { TabProvider } from "@/contexts/TabContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useEffect, useMemo } from "react";
@@ -18,6 +19,9 @@ const STABLE_KEYS = new Set([
   "user-categories",
   "subcategories",
   "account-balance",
+  "transactions",
+  "dashboard-stats",
+  "user-preferences",
 ]); // Enhanced caching for all stable data
 
 export default function Providers({ children }: { children: React.ReactNode }) {
@@ -26,10 +30,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 1000 * 60 * 60, // 1 hour for stable data
+            staleTime: 1000 * 60 * 120, // 2 hours for stable data - instant tab switching
             gcTime: 1000 * 60 * 60 * 24, // 24 hours garbage collection
             refetchOnWindowFocus: false, // Don't refetch on focus for better mobile UX
             refetchOnReconnect: true,
+            refetchOnMount: false, // Don't refetch if data is fresh
             retry: 2,
             retryDelay: (attemptIndex) =>
               Math.min(1000 * 2 ** attemptIndex, 30000),
@@ -100,11 +105,13 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        {children}
-        <ReactQueryDevtools
-          initialIsOpen={false}
-          buttonPosition="bottom-right"
-        />
+        <TabProvider>
+          {children}
+          <ReactQueryDevtools
+            initialIsOpen={false}
+            buttonPosition="bottom-right"
+          />
+        </TabProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

@@ -1,6 +1,7 @@
-import UserMenu from "@/components/auth/UserMenu";
+import ConditionalHeader from "@/components/layouts/ConditionalHeader";
 import MobileNav from "@/components/layouts/MobileNav";
 import { Toaster } from "@/components/ui/sonner";
+import { supabaseServerRSC } from "@/lib/supabase/server";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Providers from "./providers";
@@ -38,11 +39,30 @@ export const viewport: Viewport = {
   themeColor: "#6366f1",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Fetch user data in server component
+  const supabase = await supabaseServerRSC();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const userName = user
+    ? ((user.user_metadata?.full_name as string | undefined) ??
+      (user.user_metadata?.name as string | undefined) ??
+      user.email ??
+      "User")
+    : "Guest";
+
+  const userEmail = user?.email ?? "";
+  const avatarUrl = user
+    ? ((user.user_metadata?.avatar_url as string | undefined) ??
+      (user.user_metadata?.picture as string | undefined))
+    : undefined;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
@@ -74,13 +94,14 @@ export default function RootLayout({
           }}
         />
         <Providers>
-          {/* Fixed Global Header with UserMenu on top-right */}
-          <div className="fixed top-0 left-0 right-0 h-14 bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-md border-b border-[hsl(var(--header-border)/0.2)] flex items-center justify-between px-4 z-50">
-            <h1 className="text-base font-bold text-white/90">
-              Budget Manager
-            </h1>
-            <UserMenu />
-          </div>
+          {/* Conditional header - hidden on expense page */}
+          {user && (
+            <ConditionalHeader
+              userName={userName}
+              userEmail={userEmail}
+              avatarUrl={avatarUrl}
+            />
+          )}
           {children}
           <MobileNav />
           <Toaster

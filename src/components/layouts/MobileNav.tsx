@@ -7,35 +7,70 @@
 import type { Template } from "@/components/expense/TemplateDrawer";
 import TemplateDrawer from "@/components/expense/TemplateDrawer";
 import { MOBILE_NAV_HEIGHT } from "@/constants/layout";
+import { useTab } from "@/contexts/TabContext";
+import { prefetchDashboardData } from "@/features/dashboard/prefetchDashboard";
+import { useDraftCount } from "@/features/drafts/useDrafts";
+import {
+  prefetchAllTabs,
+  prefetchExpenseData,
+} from "@/features/navigation/prefetchTabs";
 import { cn } from "@/lib/utils";
-import { BarChart3, Plus, Settings } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { type CSSProperties, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { BarChart3, FileText, Plus } from "lucide-react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 
-const navItems = [
-  { href: "/dashboard", icon: BarChart3, label: "Dashboard" },
-  { href: "/expense", icon: Plus, label: "Add", primary: true },
-  { href: "/settings", icon: Settings, label: "Settings" },
+type TabId = "dashboard" | "expense" | "drafts";
+
+const navItems: Array<{
+  id: TabId;
+  icon: any;
+  label: string;
+  primary?: boolean;
+}> = [
+  { id: "dashboard", icon: BarChart3, label: "Dashboard" },
+  { id: "expense", icon: Plus, label: "Add", primary: true },
+  { id: "drafts", icon: FileText, label: "Drafts" },
 ];
 
 export default function MobileNav() {
-  const pathname = usePathname();
-  const router = useRouter();
+  const { activeTab, setActiveTab } = useTab();
+  const queryClient = useQueryClient();
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
+  const draftCount = useDraftCount(); // Use hook instead of local state
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isLongPress, setIsLongPress] = useState(false);
+  const prefetchedRef = useRef({
+    dashboard: false,
+    expense: false,
+    all: false,
+  });
 
-  // Hide on auth pages
-  if (
-    pathname === "/login" ||
-    pathname === "/signup" ||
-    pathname === "/reset-password" ||
-    pathname === "/welcome" ||
-    pathname === "/"
-  ) {
-    return null;
-  }
+  // Prefetch all tabs on initial mount for instant switching
+  useEffect(() => {
+    if (!prefetchedRef.current.all) {
+      prefetchedRef.current.all = true;
+      // Prefetch in the background after mount
+      setTimeout(() => {
+        prefetchAllTabs(queryClient);
+      }, 1000);
+    }
+  }, [queryClient]);
+
+  // Prefetch dashboard data on hover/touch for instant navigation
+  const handleDashboardPrefetch = () => {
+    if (!prefetchedRef.current.dashboard) {
+      prefetchedRef.current.dashboard = true;
+      prefetchDashboardData(queryClient);
+    }
+  };
+
+  // Prefetch expense data on hover/touch for instant navigation
+  const handleExpensePrefetch = () => {
+    if (!prefetchedRef.current.expense) {
+      prefetchedRef.current.expense = true;
+      prefetchExpenseData(queryClient);
+    }
+  };
 
   const handleTouchStart = () => {
     setIsLongPress(false);
@@ -51,18 +86,16 @@ export default function MobileNav() {
       clearTimeout(longPressTimer.current);
     }
     if (!isLongPress) {
-      // Normal tap - navigate to expense page
-      router.push("/expense");
+      // Normal tap - switch to expense tab
+      setActiveTab("expense");
     }
     e.preventDefault();
   };
 
   const handleTemplateSelect = (template: Template) => {
-    // Navigate to expense page with template data
-    const params = new URLSearchParams({
-      template: template.id,
-    });
-    router.push(`/expense?${params.toString()}`);
+    // Switch to expense tab with template data
+    // TODO: Pass template to expense form context
+    setActiveTab("expense");
   };
 
   const navSurfaceStyles: CSSProperties = {
@@ -78,14 +111,19 @@ export default function MobileNav() {
       >
         <div className="flex items-center justify-around gap-2 px-4 h-full">
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = activeTab === item.id;
             const Icon = item.icon;
 
             if (item.primary) {
               return (
-                <div
-                  key={item.href}
-                  onTouchStart={handleTouchStart}
+                <button
+                  key={item.id}
+                  type="button"
+                  onMouseEnter={handleExpensePrefetch}
+                  onTouchStart={(e) => {
+                    handleExpensePrefetch();
+                    handleTouchStart();
+                  }}
                   onTouchEnd={handleTouchEnd}
                   onTouchCancel={() => {
                     if (longPressTimer.current) {
@@ -101,14 +139,21 @@ export default function MobileNav() {
                   <span className="text-[10px] font-semibold text-[hsl(var(--nav-text-primary))] whitespace-nowrap">
                     {item.label}
                   </span>
-                </div>
+                </button>
               );
             }
 
             return (
-              <Link
-                key={item.href}
-                href={item.href}
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveTab(item.id)}
+                onMouseEnter={
+                  item.id === "dashboard" ? handleDashboardPrefetch : undefined
+                }
+                onTouchStart={
+                  item.id === "dashboard" ? handleDashboardPrefetch : undefined
+                }
                 suppressHydrationWarning
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-2xl transition-all min-w-[68px]",
@@ -118,11 +163,18 @@ export default function MobileNav() {
                     : "text-[hsl(var(--nav-text-secondary)/0.75)] hover:text-[hsl(var(--nav-text-secondary))]"
                 )}
               >
-                <Icon className="w-5 h-5" />
+                <div className="relative">
+                  <Icon className="w-5 h-5" />
+                  {item.id === "drafts" && draftCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-[#06b6d4] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                      {draftCount}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] font-medium whitespace-nowrap">
                   {item.label}
                 </span>
-              </Link>
+              </button>
             );
           })}
         </div>

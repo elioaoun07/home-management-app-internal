@@ -213,6 +213,7 @@ export default function ExpenseForm() {
           rightExtra={
             <VoiceEntryButton
               categories={categories}
+              accountId={selectedAccountId}
               onPreviewChange={() => {}}
               onParsed={({ sentence, amount, categoryId, subcategoryId }) => {
                 setDescription(`[Speech] ${sentence}`);
@@ -221,6 +222,10 @@ export default function ExpenseForm() {
                 if (subcategoryId) setSelectedSubcategoryId(subcategoryId);
                 // If nothing matched, queue re-parse once categories ready
                 if (!categoryId && !subcategoryId) setPendingSentence(sentence);
+              }}
+              onDraftCreated={() => {
+                // Optionally clear form or provide feedback
+                toast.success("Voice entry saved! Check drafts to confirm.");
               }}
               variant="icon"
             />

@@ -3,18 +3,22 @@
 import { Button } from "@/components/ui/button";
 import type { UICategory } from "@/features/categories/useCategoriesQuery";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
+import { qk } from "@/lib/queryKeys";
+import { useQueryClient } from "@tanstack/react-query";
 import { Mic, Square } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type Props = {
   categories: UICategory[];
+  accountId?: string; // Current account for draft creation
   onParsed: (res: {
     sentence: string;
     amount?: number;
     categoryId?: string;
     subcategoryId?: string;
   }) => void;
+  onDraftCreated?: () => void; // Callback when draft is saved
   onPreviewChange?: (text: string) => void;
   className?: string;
   // Optional UI variant flag retained for backward compatibility; currently unused
@@ -23,10 +27,13 @@ type Props = {
 
 export default function VoiceEntryButton({
   categories,
+  accountId,
   onParsed,
+  onDraftCreated,
   onPreviewChange,
   className,
 }: Props) {
+  const queryClient = useQueryClient();
   const [recording, setRecording] = useState(false);
   const [supported, setSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -105,7 +112,7 @@ export default function VoiceEntryButton({
     }
   };
 
-  const commit = (textOverride?: string) => {
+  const commit = async (textOverride?: string) => {
     const sentence = (textOverride ?? transcriptRef.current ?? preview).trim();
     if (!sentence) {
       toast.message("No speech captured yet");
@@ -114,12 +121,50 @@ export default function VoiceEntryButton({
     if (lastCommittedRef.current === sentence) return;
     lastCommittedRef.current = sentence;
     const parsed = parseSpeechExpense(sentence, categories);
-    onParsed({
-      sentence,
-      amount: parsed.amount,
-      categoryId: parsed.categoryId,
-      subcategoryId: parsed.subcategoryId,
-    });
+
+    // Save as draft if we have account and amount
+    if (accountId && parsed.amount) {
+      try {
+        const response = await fetch("/api/drafts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            account_id: accountId,
+            amount: parsed.amount,
+            category_id: parsed.categoryId || null,
+            subcategory_id: parsed.subcategoryId || null,
+            description: sentence, // Always save original voice transcript
+            voice_transcript: sentence,
+            confidence_score: parsed.confidenceScore || null,
+            date: parsed.date || new Date().toISOString().split("T")[0], // Use parsed date or today
+          }),
+        });
+
+        if (response.ok) {
+          toast.success("Voice entry saved as draft", {
+            description: "Review and confirm in draft transactions",
+          });
+          // Invalidate drafts query to update UI
+          queryClient.invalidateQueries({ queryKey: qk.drafts() });
+          queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+          onDraftCreated?.();
+        } else {
+          const data = await response.json();
+          toast.error(data.error || "Failed to save draft");
+        }
+      } catch (error) {
+        console.error("Failed to save draft:", error);
+        toast.error("Failed to save voice entry as draft");
+      }
+    } else {
+      // Fallback to old behavior if no accountId
+      onParsed({
+        sentence,
+        amount: parsed.amount,
+        categoryId: parsed.categoryId,
+        subcategoryId: parsed.subcategoryId,
+      });
+    }
     setPreview("");
   };
 
@@ -134,11 +179,12 @@ export default function VoiceEntryButton({
           disabled={!supported}
           aria-label={recording ? "Stop voice input" : "Start voice input"}
           title={recording ? "Stop voice input" : "Start voice input"}
+          className="h-12 w-12 hover:bg-primary/10 hover:text-primary transition-all"
         >
           {recording ? (
-            <Square className="h-4 w-4" />
+            <Square className="h-5 w-5" />
           ) : (
-            <Mic className="h-4 w-4" />
+            <Mic className="h-5 w-5" />
           )}
         </Button>
 
