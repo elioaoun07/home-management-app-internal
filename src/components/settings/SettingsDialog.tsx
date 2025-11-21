@@ -206,8 +206,12 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
               <div className="grid grid-cols-2 gap-4 flex-1">
                 <button
                   onClick={async () => {
-                    document.body.setAttribute("data-theme", "blue");
+                    document.documentElement.setAttribute("data-theme", "blue");
                     localStorage.setItem("color-theme", "blue");
+                    window.dispatchEvent(new StorageEvent("storage", {
+                      key: "color-theme",
+                      newValue: "blue",
+                    }));
                     try {
                       await fetch("/api/user-preferences", {
                         method: "PATCH",
@@ -230,8 +234,12 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                 </button>
                 <button
                   onClick={async () => {
-                    document.body.setAttribute("data-theme", "pink");
+                    document.documentElement.setAttribute("data-theme", "pink");
                     localStorage.setItem("color-theme", "pink");
+                    window.dispatchEvent(new StorageEvent("storage", {
+                      key: "color-theme",
+                      newValue: "pink",
+                    }));
                     try {
                       await fetch("/api/user-preferences", {
                         method: "PATCH",
