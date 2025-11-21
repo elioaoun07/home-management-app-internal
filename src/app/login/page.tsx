@@ -8,18 +8,16 @@ import { Label } from "@/components/ui/label";
 import { loadCredentials, saveCredentials } from "@/lib/auth/credentials";
 import { ArrowRight, KeyRound, Mail } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import React, { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import React, { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { loginAction } from "./actions";
 
-// Page component: wraps the part that reads search params in <Suspense>
 export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-background to-muted/20">
-          <div className="w-full max-w-md p-8 rounded-2xl bg-card/50 backdrop-blur-sm animate-pulse" />
-        </div>
+        <div className="min-h-screen flex items-center justify-center" />
       }
     >
       <LoginContent />
@@ -27,59 +25,52 @@ export default function LoginPage() {
   );
 }
 
-// Inner component: actually uses useSearchParams (now inside Suspense)
 function LoginContent() {
-  const router = useRouter();
-  const formRef = useRef<HTMLFormElement>(null);
-  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [savedUsername, setSavedUsername] = useState("");
-
+  const [rememberMe, setRememberMe] = useState(false);
+  const [savedEmail, setSavedEmail] = useState("");
   const searchParams = useSearchParams();
   const errorParam = searchParams.get("error");
 
-  // Load saved credentials on mount
   useEffect(() => {
     const saved = loadCredentials();
     if (saved) {
-      setSavedUsername(saved.username);
+      setSavedEmail(saved.username);
       setRememberMe(saved.rememberMe);
     }
   }, []);
 
   useEffect(() => {
-    if (!errorParam) return;
-    const message =
-      errorParam === "missing"
-        ? "Please enter email and password."
-        : errorParam === "invalid"
-          ? "Invalid email or password."
-          : errorParam === "not_confirmed"
-            ? "Please confirm your email address. Check your inbox for a confirmation link."
-            : "Something went wrong. Please try again.";
-    toast.error(message);
-    setIsLoading(false);
+    if (errorParam) {
+      toast.error(
+        errorParam === "missing"
+          ? "Please enter email and password"
+          : "Invalid email or password"
+      );
+    }
   }, [errorParam]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setIsLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("username") as string;
-    const pass = formData.get("password") as string;
+    const email = formData.get("email") as string;
 
-    if (!email?.trim() || !pass) {
-      toast.error("Please enter email and password");
-      return;
-    }
-
-    setIsLoading(true);
     saveCredentials(email, rememberMe);
 
-    // Submit form directly to the API route
-    e.currentTarget.action = "/api/auth/login";
-    e.currentTarget.method = "POST";
-    e.currentTarget.submit();
+    try {
+      const result = await loginAction(formData);
+      if (result?.error) {
+        toast.error(result.error);
+        setIsLoading(false);
+      }
+      // If successful, loginAction will redirect
+    } catch (error) {
+      console.error("Login failed:", error);
+      toast.error("Login failed. Please try again.");
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -118,28 +109,27 @@ function LoginContent() {
             </div>
           )}
 
-          <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
-            {/* Email Field */}
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="username" className="text-sm font-medium">
+              <Label htmlFor="email" className="text-sm font-medium">
                 Email
               </Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
-                  id="username"
-                  name="username"
+                  id="email"
+                  name="email"
                   type="email"
-                  defaultValue={savedUsername}
+                  defaultValue={savedEmail}
                   placeholder="you@example.com"
                   className="pl-10 h-11 transition-all focus:ring-2 focus:ring-primary/20"
                   disabled={isLoading}
                   required
+                  autoComplete="email"
                 />
               </div>
             </div>
 
-            {/* Password Field */}
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm font-medium">
                 Password
@@ -154,6 +144,7 @@ function LoginContent() {
                   className="pl-10 h-11 transition-all focus:ring-2 focus:ring-primary/20"
                   disabled={isLoading}
                   required
+                  autoComplete="current-password"
                 />
               </div>
             </div>
