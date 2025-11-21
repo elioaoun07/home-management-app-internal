@@ -57,7 +57,12 @@ export default function TemplateDrawer({
       // Fetch from API if no cache
       setLoading(true);
       try {
-        const res = await fetch("/api/transaction-templates");
+        const res = await fetch("/api/transaction-templates", {
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
         if (!res.ok) throw new Error("Failed to fetch templates");
         const data = await res.json();
         setTemplates(data || []);
