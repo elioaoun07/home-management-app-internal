@@ -2,8 +2,6 @@ import ConditionalHeader from "@/components/layouts/ConditionalHeader";
 import MobileNav from "@/components/layouts/MobileNav";
 import { Toaster } from "@/components/ui/sonner";
 import { supabaseServerRSC } from "@/lib/supabase/server";
-import "@/styles/theme-blue.css";
-import "@/styles/theme-pink.css";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Providers from "./providers";
