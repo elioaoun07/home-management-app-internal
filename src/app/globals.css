@@ -872,7 +872,8 @@
   }
 
   :root[data-theme="pink"] .bg-gradient-to-r.from-\[\#3b82f6\],
-  :root[data-theme="pink"] .bg-gradient-to-r.from-\[\#3b82f6\].via-\[\#06b6d4\] {
+  :root[data-theme="pink"]
+    .bg-gradient-to-r.from-\[\#3b82f6\].via-\[\#06b6d4\] {
     background: linear-gradient(to right, #ec4899, #f472b6, #fbbf24) !important;
   }
 

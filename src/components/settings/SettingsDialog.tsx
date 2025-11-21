@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useAccounts, useSetDefaultAccount } from "@/features/accounts/hooks";
 import { usePreferences } from "@/features/preferences/usePreferences";
 import {
@@ -20,7 +21,6 @@ import {
   useUpdatePreferences,
   type SectionKey,
 } from "@/features/preferences/useSectionOrder";
-import { useTheme } from "@/contexts/ThemeContext";
 import {
   closestCenter,
   DndContext,
@@ -152,7 +152,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[640px] max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-[640px] max-h-[85vh] flex flex-col bg-[hsl(var(--card)/0.96)] backdrop-blur-sm shadow-2xl border border-[hsl(var(--header-border)/0.22)]">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="text-xl font-bold">Settings</DialogTitle>
           <DialogDescription className="text-sm">

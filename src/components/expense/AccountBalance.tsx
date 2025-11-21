@@ -203,11 +203,24 @@ export default function AccountBalance({
             </div>
           )}
         </div>
-        {!isEditing && balance?.balance_set_at && (
+        {!isEditing && (balance?.balance_set_at || balance?.updated_at) && (
           <div className="text-[10px] text-[hsl(var(--text-muted-light)/0.5)] text-right">
-            Set on
-            <br />
-            {new Date(balance.balance_set_at).toLocaleDateString()}
+            {balance?.balance_set_at && (
+              <>
+                <span className="font-medium">Set on</span>
+                <br />
+                <span>{new Date(balance.balance_set_at).toLocaleString()}</span>
+                {balance?.updated_at && <br />}
+              </>
+            )}
+
+            {balance?.updated_at && (
+              <>
+                <span className="font-medium">Updated</span>
+                <br />
+                <span>{new Date(balance.updated_at).toLocaleString()}</span>
+              </>
+            )}
           </div>
         )}
       </div>

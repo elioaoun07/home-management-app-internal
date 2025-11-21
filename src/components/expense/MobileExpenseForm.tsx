@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MOBILE_CONTENT_BOTTOM_OFFSET } from "@/constants/layout";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
@@ -28,6 +29,8 @@ import VoiceEntryButton from "./VoiceEntryButton";
 type Step = SectionKey | "confirm";
 
 export default function MobileExpenseForm() {
+  const { theme } = useTheme();
+
   const {
     step,
     setStep,
@@ -237,21 +240,60 @@ export default function MobileExpenseForm() {
     bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_CONTENT_BOTTOM_OFFSET}px)`,
   };
 
+  const themeColors = {
+    blue: {
+      bgMain: "bg-[#0a1628]",
+      bgGradientFrom: "from-[#1a2942]",
+      bgGradientTo: "to-[#0f1d2e]",
+      bgCard: "bg-[#1a2942]",
+      borderPrimary: "border-[#3b82f6]/20",
+      borderAccent: "border-[#3b82f6]/30",
+      bgButton: "bg-[#3b82f6]/10",
+      bgButtonHover: "hover:bg-[#3b82f6]/20",
+      textPrimary: "text-[#06b6d4]",
+      textSecondary: "text-[#38bdf8]",
+      gradientBar: "from-[#3b82f6] via-[#06b6d4] to-[#14b8a6]",
+      focusBorder: "focus:border-[#06b6d4]",
+      focusRing: "focus:ring-[#06b6d4]/20",
+      nextButton: "bg-gradient-to-r from-[#ec4899] via-[#f472b6] to-[#fb923c]",
+    },
+    pink: {
+      bgMain: "bg-[#1a0a14]",
+      bgGradientFrom: "from-[#3d2435]",
+      bgGradientTo: "to-[#2d1b29]",
+      bgCard: "bg-[#3d2435]",
+      borderPrimary: "border-[#ec4899]/20",
+      borderAccent: "border-[#ec4899]/30",
+      bgButton: "bg-[#ec4899]/10",
+      bgButtonHover: "hover:bg-[#ec4899]/20",
+      textPrimary: "text-[#f472b6]",
+      textSecondary: "text-[#f9a8d4]",
+      gradientBar: "from-[#ec4899] via-[#f472b6] to-[#fbbf24]",
+      focusBorder: "focus:border-[#f472b6]",
+      focusRing: "focus:ring-[#f472b6]/20",
+      nextButton: "bg-gradient-to-r from-[#ec4899] via-[#f472b6] to-[#fb923c]",
+    },
+  };
+
+  const colors = themeColors[theme];
+
   return (
-    <div className="fixed inset-0 top-14 bg-[#0a1628] flex flex-col">
+    <div className={`fixed inset-0 top-14 ${colors.bgMain} flex flex-col`}>
       {!isInitialized ? (
-        <div className="fixed inset-0 top-14 bg-[#0a1628] loading-fade" />
+        <div className={`fixed inset-0 top-14 ${colors.bgMain} loading-fade`} />
       ) : (
         <>
-          <div className="fixed top-14 left-0 right-0 z-30 bg-gradient-to-b from-[#1a2942] to-[#0f1d2e] border-b border-[#3b82f6]/20 px-3 pt-3 pb-2 shadow-lg slide-in-top">
+          <div
+            className={`fixed top-14 left-0 right-0 z-30 bg-gradient-to-b ${colors.bgGradientFrom} ${colors.bgGradientTo} border-b ${colors.borderPrimary} px-3 pt-3 pb-2 shadow-lg slide-in-top`}
+          >
             <div className="flex items-center justify-between mb-2">
               {step !== firstValidStep ? (
                 <button
                   onClick={goBack}
                   suppressHydrationWarning
-                  className="p-1.5 -ml-2 rounded-lg bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 active:scale-95 transition-all border border-[#3b82f6]/20"
+                  className={`p-1.5 -ml-2 rounded-lg ${colors.bgButton} ${colors.bgButtonHover} active:scale-95 transition-all border ${colors.borderPrimary}`}
                 >
-                  <ChevronLeft className="w-5 h-5 text-[#38bdf8]" />
+                  <ChevronLeft className={`w-5 h-5 ${colors.textSecondary}`} />
                 </button>
               ) : (
                 <div className="w-8" />
@@ -274,16 +316,18 @@ export default function MobileExpenseForm() {
                 className={cn(
                   "p-1.5 -mr-2 rounded-lg",
                   closeDisabled
-                    ? "bg-[#3b82f6]/6 border border-[#3b82f6]/10 opacity-50 cursor-not-allowed"
-                    : "bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 active:scale-95 transition-all border border-[#3b82f6]/20"
+                    ? `${colors.bgButton} border ${colors.borderPrimary} opacity-50 cursor-not-allowed`
+                    : `${colors.bgButton} ${colors.bgButtonHover} active:scale-95 transition-all border ${colors.borderPrimary}`
                 )}
               >
-                <X className="w-5 h-5 text-[#38bdf8]" />
+                <X className={`w-5 h-5 ${colors.textSecondary}`} />
               </button>
             </div>
-            <div className="h-0.5 bg-[#1a2942] rounded-full overflow-hidden relative">
+            <div
+              className={`h-0.5 ${colors.bgCard} rounded-full overflow-hidden relative`}
+            >
               <div
-                className="h-full bg-gradient-to-r from-[#3b82f6] via-[#06b6d4] to-[#14b8a6] transition-all duration-500 ease-out neo-glow-sm"
+                className={`h-full bg-gradient-to-r ${colors.gradientBar} transition-all duration-500 ease-out neo-glow-sm`}
                 style={{ width: `${progress()}%` }}
               />
             </div>
@@ -299,7 +343,7 @@ export default function MobileExpenseForm() {
 
           <div
             className={cn(
-              "fixed left-0 right-0 overflow-y-auto px-3 py-3 bg-[#0a1628]",
+              `fixed left-0 right-0 overflow-y-auto px-3 py-3 ${colors.bgMain}`,
               selectedAccountId && step === "amount"
                 ? "top-[229px]"
                 : "top-[131px]"
@@ -309,7 +353,9 @@ export default function MobileExpenseForm() {
             {step === "amount" && (
               <div key="amount-step" className="space-y-3 step-slide-in">
                 <div>
-                  <Label className="text-xs text-[#06b6d4] font-medium mb-1 block">
+                  <Label
+                    className={`text-xs ${colors.textPrimary} font-medium mb-1 block`}
+                  >
                     How much did you spend?
                   </Label>
                   <div className="mt-1 relative">
@@ -323,16 +369,18 @@ export default function MobileExpenseForm() {
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       suppressHydrationWarning
-                      className="text-3xl font-bold h-16 pl-10 pr-14 border-2 text-center bg-[#1a2942] border-[hsl(var(--header-border)/0.3)] text-white placeholder:text-[hsl(var(--input-placeholder)/0.3)] focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20 focus:scale-[1.02] transition-all duration-200 neo-card bounce-in"
+                      className={`text-3xl font-bold h-16 pl-10 pr-14 border-2 text-center ${colors.bgCard} border-[hsl(var(--header-border)/0.3)] text-white placeholder:text-[hsl(var(--input-placeholder)/0.3)] ${colors.focusBorder} focus:ring-2 ${colors.focusRing} focus:scale-[1.02] transition-all duration-200 neo-card bounce-in`}
                       autoFocus
                     />
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                       <button
                         onClick={() => setShowCalculator(true)}
                         suppressHydrationWarning
-                        className="p-2 rounded-lg neo-card bg-[#06b6d4]/10 border border-[#06b6d4]/30 hover:bg-[#06b6d4]/20 active:scale-95 transition-all"
+                        className={`p-2 rounded-lg neo-card ${colors.bgButton} border ${colors.borderAccent} ${colors.bgButtonHover} active:scale-95 transition-all`}
                       >
-                        <Calculator className="w-5 h-5 text-[#06b6d4]" />
+                        <Calculator
+                          className={`w-5 h-5 ${colors.textPrimary}`}
+                        />
                       </button>
                       <VoiceEntryButton
                         categories={categories}
@@ -393,53 +441,71 @@ export default function MobileExpenseForm() {
               </div>
             )}
 
-            {/* Private/Public Lock Icon */}
-            <div className="flex items-center justify-between px-1 py-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-[#06b6d4]/80">
-                  Private Transaction
-                </span>
-                <span className="text-xs text-[#38bdf8]/60">
-                  (Hidden from household)
-                </span>
+            {step === "amount" && (
+              <div>
+                {/* Private/Public Lock Icon (shown only on Amount step) */}
+                <div className="flex items-center justify-between px-1 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-[#06b6d4]/80">
+                      Private Transaction
+                    </span>
+                    <span className="text-xs text-[#38bdf8]/60">
+                      (Hidden from household)
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setIsPrivate(!isPrivate)}
+                    className={cn(
+                      "neo-card p-3 rounded-lg border transition-all duration-300 active:scale-95",
+                      isPrivate
+                        ? "border-[#06b6d4]/60 bg-[#06b6d4]/25 neo-glow"
+                        : "border-[#3b82f6]/20 bg-[#1a2942] hover:border-[#3b82f6]/30"
+                    )}
+                  >
+                    <svg
+                      className={cn(
+                        "w-5 h-5 transition-all duration-500",
+                        isPrivate
+                          ? "text-[#06b6d4] animate-pulse"
+                          : "text-[#38bdf8]/60"
+                      )}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      {isPrivate ? (
+                        // Locked icon
+                        <>
+                          <rect
+                            x="5"
+                            y="11"
+                            width="14"
+                            height="10"
+                            rx="2"
+                            ry="2"
+                          />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </>
+                      ) : (
+                        // Unlocked icon
+                        <>
+                          <rect
+                            x="5"
+                            y="11"
+                            width="14"
+                            height="10"
+                            rx="2"
+                            ry="2"
+                          />
+                          <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                        </>
+                      )}
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={() => setIsPrivate(!isPrivate)}
-                className={cn(
-                  "neo-card p-3 rounded-lg border transition-all duration-300 active:scale-95",
-                  isPrivate
-                    ? "border-[#06b6d4]/60 bg-[#06b6d4]/25 neo-glow"
-                    : "border-[#3b82f6]/20 bg-[#1a2942] hover:border-[#3b82f6]/30"
-                )}
-              >
-                <svg
-                  className={cn(
-                    "w-5 h-5 transition-all duration-500",
-                    isPrivate
-                      ? "text-[#06b6d4] animate-pulse"
-                      : "text-[#38bdf8]/60"
-                  )}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  {isPrivate ? (
-                    // Locked icon
-                    <>
-                      <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </>
-                  ) : (
-                    // Unlocked icon
-                    <>
-                      <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-                    </>
-                  )}
-                </svg>
-              </button>
-            </div>
+            )}
 
             {step === "account" && (
               <div key="account-step" className="space-y-3 step-slide-in">
