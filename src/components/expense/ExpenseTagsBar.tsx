@@ -45,10 +45,12 @@ export default function ExpenseTagsBar({
   useEffect(() => {
     const colorTheme = localStorage.getItem("color-theme") || "blue";
     setTheme(colorTheme as "blue" | "pink");
+    document.documentElement.setAttribute("data-theme", colorTheme);
 
     const handleThemeChange = () => {
       const newTheme = localStorage.getItem("color-theme") || "blue";
       setTheme(newTheme as "blue" | "pink");
+      document.documentElement.setAttribute("data-theme", newTheme);
     };
 
     window.addEventListener("storage", handleThemeChange);

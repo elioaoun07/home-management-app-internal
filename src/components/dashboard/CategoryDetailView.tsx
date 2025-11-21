@@ -40,6 +40,7 @@ export default function CategoryDetailView({
   useEffect(() => {
     const colorTheme = localStorage.getItem("color-theme") || "blue";
     setTheme(colorTheme as "blue" | "pink");
+    document.documentElement.setAttribute("data-theme", colorTheme);
   }, []);
 
   const handleBack = () => {

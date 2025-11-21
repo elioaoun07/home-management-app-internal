@@ -1,0 +1,82 @@
+/* Pink Theme */
+:root[data-theme="pink"] {
+  /* Primary colors - Pink */
+  --primary: 330 81% 60%;
+  --primary-foreground: 0 0% 100%;
+
+  /* Accent colors - Light pink */
+  --accent: 330 40% 96%;
+  --accent-foreground: 330 81% 25%;
+
+  /* Muted colors */
+  --muted: 330 40% 96%;
+  --muted-foreground: 330 16% 47%;
+
+  /* Border and ring - Pink */
+  --border: 330 32% 91%;
+  --ring: 330 81% 60%;
+
+  /* Card */
+  --card: 0 0% 100%;
+  --card-foreground: 330 84% 5%;
+
+  /* Background */
+  --background: 0 0% 100%;
+  --foreground: 330 84% 5%;
+
+  /* Destructive */
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Secondary - Soft pink */
+  --secondary: 330 40% 96%;
+  --secondary-foreground: 330 81% 25%;
+
+  /* Popover */
+  --popover: 0 0% 100%;
+  --popover-foreground: 330 84% 5%;
+
+  /* Input */
+  --input: 330 32% 91%;
+}
+
+:root[data-theme="pink"].dark {
+  /* Primary colors - Pink */
+  --primary: 330 81% 65%;
+  --primary-foreground: 330 84% 5%;
+
+  /* Accent colors - Dark pink */
+  --accent: 330 33% 18%;
+  --accent-foreground: 0 0% 98%;
+
+  /* Muted colors */
+  --muted: 330 33% 18%;
+  --muted-foreground: 330 20% 65%;
+
+  /* Border and ring */
+  --border: 330 33% 18%;
+  --ring: 330 76% 48%;
+
+  /* Card */
+  --card: 330 84% 5%;
+  --card-foreground: 0 0% 98%;
+
+  /* Background */
+  --background: 330 84% 5%;
+  --foreground: 0 0% 98%;
+
+  /* Destructive */
+  --destructive: 0 63% 31%;
+  --destructive-foreground: 0 0% 98%;
+
+  /* Secondary */
+  --secondary: 330 33% 18%;
+  --secondary-foreground: 0 0% 98%;
+
+  /* Popover */
+  --popover: 330 84% 5%;
+  --popover-foreground: 0 0% 98%;
+
+  /* Input */
+  --input: 330 33% 18%;
+}
