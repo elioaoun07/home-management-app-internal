@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("Attempting login for email:", username);
+    console.log("Supabase URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
 
     const supabase = await supabaseServer(await cookies());
 
@@ -45,10 +46,20 @@ export async function POST(req: NextRequest) {
       console.error("Supabase sign-in error:", {
         error: error.message,
         code: error.status,
+        name: error.name,
         email: username,
+        fullError: JSON.stringify(error),
       });
+
+      // Return more specific error message
+      const errorMessage = error.message.includes("Email not confirmed")
+        ? "not_confirmed"
+        : error.message.includes("Invalid login credentials")
+          ? "invalid"
+          : "internal";
+
       return NextResponse.redirect(
-        new URL("/login?error=invalid", req.url),
+        new URL(`/login?error=${errorMessage}`, req.url),
         303
       );
     }

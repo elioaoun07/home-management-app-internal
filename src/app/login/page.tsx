@@ -53,7 +53,9 @@ function LoginContent() {
         ? "Please enter email and password."
         : errorParam === "invalid"
           ? "Invalid email or password."
-          : "Something went wrong. Please try again.";
+          : errorParam === "not_confirmed"
+            ? "Please confirm your email address. Check your inbox for a confirmation link."
+            : "Something went wrong. Please try again.";
     toast.error(message);
   }, [errorParam]);
 
@@ -96,6 +98,8 @@ function LoginContent() {
                   {errorParam === "missing" &&
                     "Please enter email and password."}
                   {errorParam === "invalid" && "Invalid email or password."}
+                  {errorParam === "not_confirmed" &&
+                    "Please confirm your email address. Check your inbox for a confirmation link."}
                   {errorParam === "internal" &&
                     "Something went wrong. Please try again."}
                 </span>
