@@ -90,7 +90,7 @@ function LoginContent() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4 ring-8 ring-primary/5">
             <KeyRound className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome back!</h1>
           <p className="text-muted-foreground">
             Sign in to your account to continue
           </p>
