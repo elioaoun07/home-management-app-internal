@@ -7,7 +7,12 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-[hsl(var(--main-bg))] p-4">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">Settings</h1>
-        <SettingsDialog />
+        <SettingsDialog
+          open={false}
+          onOpenChange={function (open: boolean): void {
+            throw new Error("Function not implemented.");
+          }}
+        />
       </div>
     </div>
   );
