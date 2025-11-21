@@ -4,6 +4,7 @@ import TransactionsTable, {
   Tx,
 } from "@/components/dashboard/TransactionsTable";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useEffect, useMemo, useState } from "react";
 
 type Props = {
@@ -38,18 +39,8 @@ export default function DashboardClient({ rows, start, end, showUser }: Props) {
 
   const dirtyIds = useMemo(() => new Set(Object.keys(pending)), [pending]);
 
-  // Apply theme class to container
-  useEffect(() => {
-    const colorTheme = localStorage.getItem("color-theme") || "blue";
-    document.body.setAttribute("data-theme", colorTheme);
-  }, []);
-
   // Get current theme for dynamic styling
-  const [currentTheme, setCurrentTheme] = useState<string>("blue");
-  useEffect(() => {
-    const colorTheme = localStorage.getItem("color-theme") || "blue";
-    setCurrentTheme(colorTheme);
-  }, []);
+  const { theme: currentTheme } = useTheme();
 
   // Listen for quick view range changes and filter locally without reload
   useEffect(() => {

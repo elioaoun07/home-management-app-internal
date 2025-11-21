@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/contexts/ThemeContext";
 import { format } from "date-fns";
 import { ArrowLeft, Sparkles, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -34,14 +35,8 @@ export default function CategoryDetailView({
   onTransactionClick,
 }: Props) {
   const categoryIcon = transactions[0]?.category_icon || "📁";
-  const [theme, setTheme] = useState<"blue" | "pink">("blue");
+  const { theme } = useTheme();
   const [isExiting, setIsExiting] = useState(false);
-
-  useEffect(() => {
-    const colorTheme = localStorage.getItem("color-theme") || "blue";
-    setTheme(colorTheme as "blue" | "pink");
-    document.documentElement.setAttribute("data-theme", colorTheme);
-  }, []);
 
   const handleBack = () => {
     setIsExiting(true);

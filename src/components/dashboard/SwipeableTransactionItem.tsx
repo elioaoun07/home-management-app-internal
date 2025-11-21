@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/contexts/ThemeContext";
 import { format } from "date-fns";
 import { Edit2, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -52,14 +53,7 @@ export default function SwipeableTransactionItem({
   // Get current user's theme to determine border color logic
   // If I have pink theme: my transactions=pink border, partner's=blue border
   // If I have blue theme: my transactions=blue border, partner's=pink border
-  const [currentUserTheme, setCurrentUserTheme] = useState<string>("blue");
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const theme = localStorage.getItem("color-theme") || "blue";
-      setCurrentUserTheme(theme);
-    }
-  }, []);
+  const { theme: currentUserTheme } = useTheme();
 
   const SWIPE_THRESHOLD = 80; // pixels to trigger action
   const MAX_OFFSET = 120; // max swipe distance

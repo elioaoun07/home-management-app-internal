@@ -2,6 +2,7 @@
 "use client";
 
 import { TabProvider } from "@/contexts/TabContext";
+import { ThemeProvider as ColorThemeProvider } from "@/contexts/ThemeContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useEffect, useMemo } from "react";
@@ -105,13 +106,15 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <TabProvider>
-          {children}
-          <ReactQueryDevtools
-            initialIsOpen={false}
-            buttonPosition="bottom-right"
-          />
-        </TabProvider>
+        <ColorThemeProvider>
+          <TabProvider>
+            {children}
+            <ReactQueryDevtools
+              initialIsOpen={false}
+              buttonPosition="bottom-right"
+            />
+          </TabProvider>
+        </ColorThemeProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

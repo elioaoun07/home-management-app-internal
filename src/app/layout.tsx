@@ -85,9 +85,9 @@ export default async function RootLayout({
                     d.classList.remove('dark');
                   }
                   
-                  // Apply color theme (blue or pink)
-                  var colorTheme = localStorage.getItem('color-theme') || 'blue';
-                  document.body.setAttribute('data-theme', colorTheme);
+                // Apply color theme (blue or pink) - will be replaced by ThemeProvider
+                var colorTheme = localStorage.getItem('color-theme') || 'blue';
+                document.documentElement.setAttribute('data-theme', colorTheme);
                 } catch(e) {}
               })();
             `,

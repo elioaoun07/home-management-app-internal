@@ -11,9 +11,10 @@ import {
   TAGS_BAR_GAP,
   TAGS_BAR_HEIGHT,
 } from "@/constants/layout";
+import { useTheme } from "@/contexts/ThemeContext";
 import { format, subDays } from "date-fns";
 import { CalendarIcon } from "lucide-react";
-import { type CSSProperties, useEffect, useState } from "react";
+import { type CSSProperties } from "react";
 
 interface ExpenseTagsBarProps {
   selectedAccount: { id: string; name: string } | undefined;
@@ -40,22 +41,7 @@ export default function ExpenseTagsBar({
   onCategoryClick,
   onDateChange,
 }: ExpenseTagsBarProps) {
-  const [theme, setTheme] = useState<"blue" | "pink">("blue");
-
-  useEffect(() => {
-    const colorTheme = localStorage.getItem("color-theme") || "blue";
-    setTheme(colorTheme as "blue" | "pink");
-    document.documentElement.setAttribute("data-theme", colorTheme);
-
-    const handleThemeChange = () => {
-      const newTheme = localStorage.getItem("color-theme") || "blue";
-      setTheme(newTheme as "blue" | "pink");
-      document.documentElement.setAttribute("data-theme", newTheme);
-    };
-
-    window.addEventListener("storage", handleThemeChange);
-    return () => window.removeEventListener("storage", handleThemeChange);
-  }, []);
+  const { theme } = useTheme();
 
   const themeColors = {
     blue: {

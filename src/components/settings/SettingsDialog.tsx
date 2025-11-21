@@ -20,6 +20,7 @@ import {
   useUpdatePreferences,
   type SectionKey,
 } from "@/features/preferences/useSectionOrder";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   closestCenter,
   DndContext,
@@ -58,11 +59,11 @@ const SECTION_LABELS: Record<SectionKey, string> = {
 };
 
 export function SettingsDialog({ open, onOpenChange }: Props) {
-  const { theme, updateTheme } = usePreferences();
+  const { theme: darkLightTheme, updateTheme } = usePreferences();
+  const { theme: colorTheme, setTheme, isLoading: themeLoading } = useTheme();
 
   // Section order state
   const { data: serverOrderArray } = useSectionOrder();
-  // Theme is handled via usePreferences(); no separate theme query
   const initialOrder = Array.isArray(serverOrderArray) ? serverOrderArray : [];
   const [order, setOrder] = useState<SectionKey[]>(() =>
     initialOrder.length ? initialOrder : []
@@ -206,27 +207,11 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
               <div className="grid grid-cols-2 gap-4 flex-1">
                 <button
                   onClick={async () => {
-                    document.documentElement.setAttribute("data-theme", "blue");
-                    localStorage.setItem("color-theme", "blue");
-                    window.dispatchEvent(
-                      new StorageEvent("storage", {
-                        key: "color-theme",
-                        newValue: "blue",
-                      })
-                    );
-                    try {
-                      await fetch("/api/user-preferences", {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ theme: "blue" }),
-                      });
-                    } catch (e) {
-                      console.error("Failed to save theme to server", e);
-                    }
+                    await setTheme("blue");
                     toast.success("🎨 Theme updated to Blue!");
-                    setTimeout(() => window.location.reload(), 300);
                   }}
-                  className="neo-card flex flex-col items-center justify-center gap-3 rounded-xl p-6 hover:neo-glow-sm transition-all active:scale-[0.98] h-full"
+                  disabled={themeLoading}
+                  className="neo-card flex flex-col items-center justify-center gap-3 rounded-xl p-6 hover:neo-glow-sm transition-all active:scale-[0.98] h-full disabled:opacity-50"
                 >
                   <div className="w-16 h-16 rounded-full neo-glow bg-gradient-to-br from-[#3b82f6] via-[#06b6d4] to-[#14b8a6] shadow-lg"></div>
                   <span className="text-base font-semibold">Blue Ocean</span>
@@ -236,27 +221,11 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                 </button>
                 <button
                   onClick={async () => {
-                    document.documentElement.setAttribute("data-theme", "pink");
-                    localStorage.setItem("color-theme", "pink");
-                    window.dispatchEvent(
-                      new StorageEvent("storage", {
-                        key: "color-theme",
-                        newValue: "pink",
-                      })
-                    );
-                    try {
-                      await fetch("/api/user-preferences", {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ theme: "pink" }),
-                      });
-                    } catch (e) {
-                      console.error("Failed to save theme to server", e);
-                    }
+                    await setTheme("pink");
                     toast.success("🎨 Theme updated to Pink!");
-                    setTimeout(() => window.location.reload(), 300);
                   }}
-                  className="neo-card flex flex-col items-center justify-center gap-3 rounded-xl p-6 hover:neo-glow-sm transition-all active:scale-[0.98] h-full"
+                  disabled={themeLoading}
+                  className="neo-card flex flex-col items-center justify-center gap-3 rounded-xl p-6 hover:neo-glow-sm transition-all active:scale-[0.98] h-full disabled:opacity-50"
                 >
                   <div className="w-16 h-16 rounded-full neo-glow bg-gradient-to-br from-[#ec4899] via-[#f472b6] to-[#fbbf24] shadow-lg"></div>
                   <span className="text-base font-semibold">Pink Sunset</span>

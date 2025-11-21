@@ -128,13 +128,13 @@
   --neo-highlight: #38bdf8;
 }
 
-body[data-theme="blue"] {
+:root[data-theme="blue"] {
   --background: #0a1628;
   --card: #1a2942;
   --popover: #1a2942;
 }
 
-body[data-theme="pink"] {
+:root[data-theme="pink"] {
   --background: #1a0a14;
   --card: #2d1b29;
   --popover: #2d1b29;
@@ -148,16 +148,16 @@ body[data-theme="pink"] {
 }
 
 @layer utilities {
-  body[data-theme="pink"] .neo-gradient {
+  :root[data-theme="pink"] .neo-gradient {
     @apply bg-gradient-to-br from-pink-400 to-rose-500;
   }
-  body[data-theme="pink"] .neo-glow {
+  :root[data-theme="pink"] .neo-glow {
     box-shadow: 0 0 20px theme("colors.pink.500 / 50%");
   }
-  body[data-theme="pink"] .neo-glow-sm {
+  :root[data-theme="pink"] .neo-glow-sm {
     box-shadow: 0 0 8px theme("colors.pink.500 / 40%");
   }
-  body[data-theme="pink"] .neo-card {
+  :root[data-theme="pink"] .neo-card {
     @apply bg-pink-500/10 border border-pink-500/20;
   }
 }
@@ -821,7 +821,7 @@ body[data-theme="pink"] {
   }
 
   /* Pink Theme Overrides - Comprehensive */
-  body[data-theme="pink"] {
+  :root[data-theme="pink"] {
     --neo-navy: #1a0a14;
     --neo-indigo: #2d1b29;
     --neo-blue: #ec4899;
@@ -832,37 +832,37 @@ body[data-theme="pink"] {
   }
 
   /* Pink theme backgrounds and borders */
-  body[data-theme="pink"] .bg-\[\#0a1628\] {
+  :root[data-theme="pink"] .bg-\[\#0a1628\] {
     background-color: #1a0a14 !important;
   }
 
-  body[data-theme="pink"] .bg-\[\#0f1d2e\] {
+  :root[data-theme="pink"] .bg-\[\#0f1d2e\] {
     background-color: #2d1b29 !important;
   }
 
-  body[data-theme="pink"] .bg-\[\#1a2942\] {
+  :root[data-theme="pink"] .bg-\[\#1a2942\] {
     background-color: #3d2435 !important;
   }
 
-  body[data-theme="pink"] .border-\[\#3b82f6\]\/20,
-  body[data-theme="pink"] .border-\[\#3b82f6\]\/30,
-  body[data-theme="pink"] .border-\[\#3b82f6\]\/40 {
+  :root[data-theme="pink"] .border-\[\#3b82f6\]\/20,
+  :root[data-theme="pink"] .border-\[\#3b82f6\]\/30,
+  :root[data-theme="pink"] .border-\[\#3b82f6\]\/40 {
     border-color: rgba(236, 72, 153, 0.2) !important;
   }
 
   /* Pink theme text colors */
-  body[data-theme="pink"] .text-\[\#38bdf8\],
-  body[data-theme="pink"] .text-\[\#06b6d4\],
-  body[data-theme="pink"] .text-\[\#22d3ee\] {
+  :root[data-theme="pink"] .text-\[\#38bdf8\],
+  :root[data-theme="pink"] .text-\[\#06b6d4\],
+  :root[data-theme="pink"] .text-\[\#22d3ee\] {
     color: #f472b6 !important;
   }
 
-  body[data-theme="pink"] .text-\[\#14b8a6\] {
+  :root[data-theme="pink"] .text-\[\#14b8a6\] {
     color: #f9a8d4 !important;
   }
 
   /* Pink theme gradients */
-  body[data-theme="pink"] .neo-gradient {
+  :root[data-theme="pink"] .neo-gradient {
     background: linear-gradient(
       135deg,
       #ec4899 0%,
@@ -871,169 +871,169 @@ body[data-theme="pink"] {
     ) !important;
   }
 
-  body[data-theme="pink"] .bg-gradient-to-r.from-\[\#3b82f6\],
-  body[data-theme="pink"] .bg-gradient-to-r.from-\[\#3b82f6\].via-\[\#06b6d4\] {
+  :root[data-theme="pink"] .bg-gradient-to-r.from-\[\#3b82f6\],
+  :root[data-theme="pink"] .bg-gradient-to-r.from-\[\#3b82f6\].via-\[\#06b6d4\] {
     background: linear-gradient(to right, #ec4899, #f472b6, #fbbf24) !important;
   }
 
-  body[data-theme="pink"] .bg-gradient-to-b.from-\[\#1a2942\] {
+  :root[data-theme="pink"] .bg-gradient-to-b.from-\[\#1a2942\] {
     background: linear-gradient(to bottom, #3d2435, #2d1b29) !important;
   }
 
-  body[data-theme="pink"] .bg-gradient-to-br.from-\[\#1a2942\] {
+  :root[data-theme="pink"] .bg-gradient-to-br.from-\[\#1a2942\] {
     background: linear-gradient(to bottom right, #3d2435, #2d1b29) !important;
   }
 
   /* Pink theme card accents - all variations */
-  body[data-theme="pink"] .bg-\[\#3b82f6\]\/5,
-  body[data-theme="pink"] .bg-\[\#3b82f6\]\/10,
-  body[data-theme="pink"] .bg-\[\#3b82f6\]\/20 {
+  :root[data-theme="pink"] .bg-\[\#3b82f6\]\/5,
+  :root[data-theme="pink"] .bg-\[\#3b82f6\]\/10,
+  :root[data-theme="pink"] .bg-\[\#3b82f6\]\/20 {
     background-color: rgba(236, 72, 153, 0.1) !important;
   }
 
-  body[data-theme="pink"] .bg-\[\#06b6d4\]\/10,
-  body[data-theme="pink"] .bg-\[\#06b6d4\]\/20 {
+  :root[data-theme="pink"] .bg-\[\#06b6d4\]\/10,
+  :root[data-theme="pink"] .bg-\[\#06b6d4\]\/20 {
     background-color: rgba(244, 114, 182, 0.1) !important;
   }
 
-  body[data-theme="pink"] .bg-\[\#14b8a6\]\/10,
-  body[data-theme="pink"] .bg-\[\#14b8a6\]\/20 {
+  :root[data-theme="pink"] .bg-\[\#14b8a6\]\/10,
+  :root[data-theme="pink"] .bg-\[\#14b8a6\]\/20 {
     background-color: rgba(249, 168, 212, 0.1) !important;
   }
 
-  body[data-theme="pink"] .bg-\[\#22d3ee\]\/10 {
+  :root[data-theme="pink"] .bg-\[\#22d3ee\]\/10 {
     background-color: rgba(251, 191, 36, 0.1) !important;
   }
 
-  body[data-theme="pink"] .bg-\[\#38bdf8\]\/10 {
+  :root[data-theme="pink"] .bg-\[\#38bdf8\]\/10 {
     background-color: rgba(252, 231, 243, 0.1) !important;
   }
 
   /* Pink theme borders - specific */
-  body[data-theme="pink"] .border-\[\#14b8a6\]\/30 {
+  :root[data-theme="pink"] .border-\[\#14b8a6\]\/30 {
     border-color: rgba(249, 168, 212, 0.3) !important;
   }
 
-  body[data-theme="pink"] .border-\[\#22d3ee\]\/30 {
+  :root[data-theme="pink"] .border-\[\#22d3ee\]\/30 {
     border-color: rgba(251, 191, 36, 0.3) !important;
   }
 
-  body[data-theme="pink"] .border-\[\#38bdf8\]\/30 {
+  :root[data-theme="pink"] .border-\[\#38bdf8\]\/30 {
     border-color: rgba(252, 231, 243, 0.3) !important;
   }
 
-  body[data-theme="pink"] .border-\[\#06b6d4\]\/30,
-  body[data-theme="pink"] .border-\[\#06b6d4\]\/50 {
+  :root[data-theme="pink"] .border-\[\#06b6d4\]\/30,
+  :root[data-theme="pink"] .border-\[\#06b6d4\]\/50 {
     border-color: rgba(244, 114, 182, 0.3) !important;
   }
 
   /* Pink theme - Check icon colors */
-  body[data-theme="pink"] .text-\[\#06b6d4\]\/80,
-  body[data-theme="pink"] .text-\[\#38bdf8\]\/70,
-  body[data-theme="pink"] .text-\[\#38bdf8\]\/80 {
+  :root[data-theme="pink"] .text-\[\#06b6d4\]\/80,
+  :root[data-theme="pink"] .text-\[\#38bdf8\]\/70,
+  :root[data-theme="pink"] .text-\[\#38bdf8\]\/80 {
     color: rgba(244, 114, 182, 0.8) !important;
   }
 
   /* Pink theme - Chip backgrounds for different categories */
-  body[data-theme="pink"] .bg-\[\#3b82f6\]\/30 {
+  :root[data-theme="pink"] .bg-\[\#3b82f6\]\/30 {
     background-color: rgba(236, 72, 153, 0.3) !important;
   }
 
-  body[data-theme="pink"] .bg-\[\#8b5cf6\]\/10 {
+  :root[data-theme="pink"] .bg-\[\#8b5cf6\]\/10 {
     background-color: rgba(236, 72, 153, 0.1) !important;
   }
 
-  body[data-theme="pink"] .border-\[\#8b5cf6\]\/30 {
+  :root[data-theme="pink"] .border-\[\#8b5cf6\]\/30 {
     border-color: rgba(236, 72, 153, 0.3) !important;
   }
 
-  body[data-theme="pink"] .text-\[\#a78bfa\] {
+  :root[data-theme="pink"] .text-\[\#a78bfa\] {
     color: #fbbf24 !important;
   }
 
-  body[data-theme="pink"] .hover\:bg-\[\#8b5cf6\]\/20:hover {
+  :root[data-theme="pink"] .hover\:bg-\[\#8b5cf6\]\/20:hover {
     background-color: rgba(236, 72, 153, 0.2) !important;
   }
 
   /* Pink theme - neo-glow effect */
-  body[data-theme="pink"] .neo-glow {
+  :root[data-theme="pink"] .neo-glow {
     box-shadow:
       0 0 20px rgba(236, 72, 153, 0.4),
       0 0 40px rgba(244, 114, 182, 0.2) !important;
   }
 
-  body[data-theme="pink"] .neo-glow-sm {
+  :root[data-theme="pink"] .neo-glow-sm {
     box-shadow: 0 0 10px rgba(236, 72, 153, 0.3) !important;
   }
 
   /* Pink theme - focus states */
-  body[data-theme="pink"] .focus\:border-\[\#06b6d4\]:focus {
+  :root[data-theme="pink"] .focus\:border-\[\#06b6d4\]:focus {
     border-color: #f472b6 !important;
   }
 
-  body[data-theme="pink"] .focus\:ring-\[\#06b6d4\]\/20:focus {
+  :root[data-theme="pink"] .focus\:ring-\[\#06b6d4\]\/20:focus {
     --tw-ring-color: rgba(244, 114, 182, 0.2) !important;
   }
 
   /* Pink theme - Additional text color overrides */
-  body[data-theme="pink"] .text-primary {
+  :root[data-theme="pink"] .text-primary {
     color: #ec4899 !important;
   }
 
-  body[data-theme="pink"] .bg-primary\/10 {
+  :root[data-theme="pink"] .bg-primary\/10 {
     background-color: rgba(236, 72, 153, 0.1) !important;
   }
 
-  body[data-theme="pink"] .text-muted-foreground {
+  :root[data-theme="pink"] .text-muted-foreground {
     color: rgba(244, 114, 182, 0.7) !important;
   }
 
   /* Pink theme hover states */
-  body[data-theme="pink"] .hover\:bg-\[\#3b82f6\]\/10:hover,
-  body[data-theme="pink"] .hover\:bg-\[\#3b82f6\]\/20:hover {
+  :root[data-theme="pink"] .hover\:bg-\[\#3b82f6\]\/10:hover,
+  :root[data-theme="pink"] .hover\:bg-\[\#3b82f6\]\/20:hover {
     background-color: rgba(236, 72, 153, 0.2) !important;
   }
 
-  body[data-theme="pink"] .hover\:bg-\[\#06b6d4\]\/20:hover,
-  body[data-theme="pink"] .hover\:bg-\[\#06b6d4\]\/30:hover {
+  :root[data-theme="pink"] .hover\:bg-\[\#06b6d4\]\/20:hover,
+  :root[data-theme="pink"] .hover\:bg-\[\#06b6d4\]\/30:hover {
     background-color: rgba(244, 114, 182, 0.2) !important;
   }
 
-  body[data-theme="pink"] .hover\:bg-\[\#14b8a6\]\/20:hover,
-  body[data-theme="pink"] .hover\:bg-\[\#14b8a6\]\/30:hover {
+  :root[data-theme="pink"] .hover\:bg-\[\#14b8a6\]\/20:hover,
+  :root[data-theme="pink"] .hover\:bg-\[\#14b8a6\]\/30:hover {
     background-color: rgba(249, 168, 212, 0.2) !important;
   }
 
-  body[data-theme="pink"] .hover\:bg-\[\#22d3ee\]\/20:hover {
+  :root[data-theme="pink"] .hover\:bg-\[\#22d3ee\]\/20:hover {
     background-color: rgba(251, 191, 36, 0.2) !important;
   }
 
-  body[data-theme="pink"] .hover\:border-\[\#3b82f6\]\/30:hover,
-  body[data-theme="pink"] .hover\:border-\[\#3b82f6\]\/40:hover {
+  :root[data-theme="pink"] .hover\:border-\[\#3b82f6\]\/30:hover,
+  :root[data-theme="pink"] .hover\:border-\[\#3b82f6\]\/40:hover {
     border-color: rgba(236, 72, 153, 0.4) !important;
   }
 
   /* Pink theme ring colors */
-  body[data-theme="pink"] .ring-\[\#06b6d4\]\/30 {
+  :root[data-theme="pink"] .ring-\[\#06b6d4\]\/30 {
     --tw-ring-color: rgba(244, 114, 182, 0.3) !important;
   }
 
   /* Pink theme calendar */
-  body[data-theme="pink"] .rdp {
+  :root[data-theme="pink"] .rdp {
     --rdp-accent-color: #ec4899;
     --rdp-background-color: rgba(236, 72, 153, 0.1);
   }
 
-  body[data-theme="pink"] .rdp-day_today .rdp-day_button {
+  :root[data-theme="pink"] .rdp-day_today .rdp-day_button {
     color: #ec4899 !important;
     border-color: #ec4899;
   }
 
-  body[data-theme="pink"] .rdp-day_selected .rdp-day_button {
+  :root[data-theme="pink"] .rdp-day_selected .rdp-day_button {
     background-color: #ec4899 !important;
   }
 
-  body[data-theme="pink"] .rdp-weekday {
+  :root[data-theme="pink"] .rdp-weekday {
     color: #f472b6 !important;
   }
 }
