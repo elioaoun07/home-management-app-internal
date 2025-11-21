@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { loadCredentials, saveCredentials } from "@/lib/auth/credentials";
 import { ArrowRight, KeyRound, Mail } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import React, { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 // Page component: wraps the part that reads search params in <Suspense>
@@ -29,10 +29,11 @@ export default function LoginPage() {
 
 // Inner component: actually uses useSearchParams (now inside Suspense)
 function LoginContent() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [savedUsername, setSavedUsername] = useState("");
 
   const searchParams = useSearchParams();
   const errorParam = searchParams.get("error");
@@ -41,7 +42,7 @@ function LoginContent() {
   useEffect(() => {
     const saved = loadCredentials();
     if (saved) {
-      setUsername(saved.username);
+      setSavedUsername(saved.username);
       setRememberMe(saved.rememberMe);
     }
   }, []);
@@ -57,18 +58,28 @@ function LoginContent() {
             ? "Please confirm your email address. Check your inbox for a confirmation link."
             : "Something went wrong. Please try again.";
     toast.error(message);
+    setIsLoading(false);
   }, [errorParam]);
 
-  function submit(e: React.FormEvent<HTMLFormElement>) {
-    if (!username.trim() || !password) {
-      e.preventDefault();
-      toast.error("Please enter username and password");
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("username") as string;
+    const pass = formData.get("password") as string;
+
+    if (!email?.trim() || !pass) {
+      toast.error("Please enter email and password");
       return;
     }
 
-    // Save credentials if "Remember Me" is checked
-    saveCredentials(username, rememberMe);
     setIsLoading(true);
+    saveCredentials(email, rememberMe);
+
+    // Submit form directly to the API route
+    e.currentTarget.action = "/api/auth/login";
+    e.currentTarget.method = "POST";
+    e.currentTarget.submit();
   }
 
   return (
@@ -107,12 +118,7 @@ function LoginContent() {
             </div>
           )}
 
-          <form
-            onSubmit={submit}
-            action="/api/auth/login"
-            method="post"
-            className="space-y-5"
-          >
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
             {/* Email Field */}
             <div className="space-y-2">
               <Label htmlFor="username" className="text-sm font-medium">
@@ -124,11 +130,11 @@ function LoginContent() {
                   id="username"
                   name="username"
                   type="email"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  defaultValue={savedUsername}
                   placeholder="you@example.com"
                   className="pl-10 h-11 transition-all focus:ring-2 focus:ring-primary/20"
                   disabled={isLoading}
+                  required
                 />
               </div>
             </div>
@@ -144,11 +150,10 @@ function LoginContent() {
                   id="password"
                   name="password"
                   type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   className="pl-10 h-11 transition-all focus:ring-2 focus:ring-primary/20"
                   disabled={isLoading}
+                  required
                 />
               </div>
             </div>

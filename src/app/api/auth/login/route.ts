@@ -9,6 +9,8 @@ export async function POST(req: NextRequest) {
     let password: string | undefined;
 
     const contentType = req.headers.get("content-type") || "";
+    console.log("Content-Type:", contentType);
+
     if (contentType.includes("application/json")) {
       const body = (await req.json()) as {
         username?: string;
@@ -16,14 +18,23 @@ export async function POST(req: NextRequest) {
       };
       username = body.username;
       password = body.password;
+      console.log("JSON body received:", { username, hasPassword: !!password });
     } else {
       const form = await req.formData();
       username = form.get("username") as string | undefined;
       password = form.get("password") as string | undefined;
+      console.log("Form data received:", {
+        username,
+        hasPassword: !!password,
+        allFields: Array.from(form.keys()),
+      });
     }
 
     if (!username || !password) {
-      console.log("Login attempt with missing credentials");
+      console.log("Login attempt with missing credentials:", {
+        username,
+        hasPassword: !!password,
+      });
       // Redirect back to login with error
       return NextResponse.redirect(
         new URL("/login?error=missing", req.url),
