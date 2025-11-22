@@ -98,5 +98,28 @@ export async function prefetchAllTabs(queryClient: QueryClient) {
       },
       staleTime: 1000 * 60 * 60, // 1 hour
     }),
+
+    // Prefetch onboarding status
+    queryClient.prefetchQuery({
+      queryKey: ["onboarding"],
+      queryFn: async () => {
+        const response = await fetch("/api/onboarding");
+        if (!response.ok) throw new Error("Failed to fetch onboarding");
+        return response.json();
+      },
+      staleTime: 1000 * 60 * 60 * 24, // 24 hours
+    }),
+
+    // Prefetch recurring payments for badge
+    queryClient.prefetchQuery({
+      queryKey: ["recurring-payments", "due"],
+      queryFn: async () => {
+        const response = await fetch("/api/recurring-payments?due_only=true");
+        if (!response.ok) throw new Error("Failed to fetch recurring");
+        const data = await response.json();
+        return data.recurring_payments || [];
+      },
+      staleTime: 1000 * 60 * 30, // 30 minutes
+    }),
   ]);
 }

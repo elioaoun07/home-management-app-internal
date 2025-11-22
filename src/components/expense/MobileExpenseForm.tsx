@@ -174,7 +174,10 @@ export default function MobileExpenseForm() {
                 queryClient.invalidateQueries({
                   queryKey: ["account-balance", selectedAccountId],
                 }),
-                queryClient.invalidateQueries({ queryKey: ["transactions"] }),
+                queryClient.invalidateQueries({
+                  queryKey: ["transactions"],
+                  refetchType: "active",
+                }),
               ]);
 
               toast.success("Transaction deleted");
@@ -189,7 +192,10 @@ export default function MobileExpenseForm() {
         queryClient.invalidateQueries({
           queryKey: ["account-balance", selectedAccountId],
         }),
-        queryClient.invalidateQueries({ queryKey: ["transactions"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["transactions"],
+          refetchType: "active",
+        }),
       ]);
 
       setAmount("");
@@ -296,9 +302,9 @@ export default function MobileExpenseForm() {
       ) : (
         <>
           <div
-            className={`fixed top-0 left-0 right-0 z-30 bg-gradient-to-b ${colors.bgGradientFrom} ${colors.bgGradientTo} border-b ${colors.borderPrimary} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top shimmer`}
+            className={`fixed top-0 left-0 right-0 z-30 bg-gradient-to-b ${colors.bgGradientFrom} ${colors.bgGradientTo} border-b ${colors.borderPrimary} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top`}
           >
-            <div className="flex items-center justify-between mb-2 pt-3">
+            <div className="flex items-center justify-between mb-2 pt-16">
               {step !== firstValidStep ? (
                 <button
                   onClick={() => {
@@ -364,7 +370,7 @@ export default function MobileExpenseForm() {
             className={cn(
               `fixed left-0 right-0 overflow-y-auto px-3 py-3 ${colors.bgMain}`,
               selectedAccountId && step === "amount"
-                ? "top-[215px]"
+                ? "top-[205px]"
                 : "top-[80px]"
             )}
             style={contentAreaStyles}

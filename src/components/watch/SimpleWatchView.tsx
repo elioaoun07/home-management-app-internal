@@ -48,7 +48,9 @@ export default function SimpleWatchView() {
       return res.json();
     },
     enabled: !!defaultAccount?.id && mounted,
-    refetchInterval: 5000,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 
   // Fetch today's transactions

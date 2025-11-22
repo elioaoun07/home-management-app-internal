@@ -9,7 +9,7 @@ import { useViewMode } from "@/hooks/useViewMode";
 import { Suspense, lazy } from "react";
 
 // Lazy load pages to reduce bundle size
-const DraftsPage = lazy(() => import("@/app/expense/drafts/page"));
+const RecurringPage = lazy(() => import("@/app/recurring/page"));
 
 export default function TabContainer() {
   const { viewMode, isLoaded } = useViewMode();
@@ -66,8 +66,8 @@ export default function TabContainer() {
         </main>
       </div>
 
-      {/* Drafts: Add top padding for fixed header */}
-      <div className={activeTab === "drafts" ? "block pt-14" : "hidden"}>
+      {/* Recurring: Add top padding for fixed header */}
+      <div className={activeTab === "recurring" ? "block pt-14" : "hidden"}>
         <Suspense
           fallback={
             <div className="min-h-screen bg-[#0a1628] flex items-center justify-center">
@@ -75,7 +75,7 @@ export default function TabContainer() {
             </div>
           }
         >
-          <DraftsPage />
+          <RecurringPage />
         </Suspense>
       </div>
     </>

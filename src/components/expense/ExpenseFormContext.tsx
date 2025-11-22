@@ -19,6 +19,14 @@ interface ExpenseFormContextType {
   setDate: (date: Date) => void;
   description: string;
   setDescription: (desc: string) => void;
+  applyTemplate: (template: {
+    account_id: string;
+    category_id?: string;
+    subcategory_id?: string | null;
+    amount: string;
+    description?: string | null;
+  }) => void;
+  resetForm: () => void;
 }
 
 const ExpenseFormContext = createContext<ExpenseFormContextType | undefined>(
@@ -33,6 +41,31 @@ export function ExpenseFormProvider({ children }: { children: ReactNode }) {
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string>();
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date());
+
+  const applyTemplate = (template: {
+    account_id: string;
+    category_id?: string;
+    subcategory_id?: string | null;
+    amount: string;
+    description?: string | null;
+  }) => {
+    setSelectedAccountId(template.account_id);
+    setSelectedCategoryId(template.category_id);
+    setSelectedSubcategoryId(template.subcategory_id || undefined);
+    setAmount(template.amount);
+    setDescription(template.description || "");
+    setStep("confirm");
+  };
+
+  const resetForm = () => {
+    setAmount("");
+    setSelectedAccountId(undefined);
+    setSelectedCategoryId(undefined);
+    setSelectedSubcategoryId(undefined);
+    setDescription("");
+    setDate(new Date());
+    setStep("amount");
+  };
 
   return (
     <ExpenseFormContext.Provider
@@ -51,6 +84,8 @@ export function ExpenseFormProvider({ children }: { children: ReactNode }) {
         setDate,
         description,
         setDescription,
+        applyTemplate,
+        resetForm,
       }}
     >
       {children}

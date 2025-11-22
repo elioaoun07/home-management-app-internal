@@ -23,6 +23,8 @@ const STABLE_KEYS = new Set([
   "transactions",
   "dashboard-stats",
   "user-preferences",
+  "onboarding",
+  "recurring-payments",
 ]); // Enhanced caching for all stable data
 
 export default function Providers({ children }: { children: React.ReactNode }) {

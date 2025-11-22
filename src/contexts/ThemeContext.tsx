@@ -1,5 +1,6 @@
 "use client";
 
+import { useUserPreferences } from "@/features/preferences/useUserPreferences";
 import { createContext, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -16,28 +17,20 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("blue");
   const [isLoading, setIsLoading] = useState(false);
+  const { data: preferences } = useUserPreferences();
 
-  // Load theme on mount from user preferences API
+  // Apply theme from preferences
   useEffect(() => {
-    async function loadTheme() {
-      try {
-        const res = await fetch("/api/user-preferences");
-        if (res.ok) {
-          const data = await res.json();
-          const userTheme = data.theme as Theme;
-          if (userTheme === "blue" || userTheme === "pink") {
-            setThemeState(userTheme);
-            document.documentElement.setAttribute("data-theme", userTheme);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load theme:", error);
-        // Fallback to blue
-        document.documentElement.setAttribute("data-theme", "blue");
+    if (preferences?.theme) {
+      const userTheme = preferences.theme as Theme;
+      if (userTheme === "blue" || userTheme === "pink") {
+        setThemeState(userTheme);
+        document.documentElement.setAttribute("data-theme", userTheme);
       }
+    } else {
+      document.documentElement.setAttribute("data-theme", "blue");
     }
-    loadTheme();
-  }, []);
+  }, [preferences]);
 
   const setTheme = async (newTheme: Theme) => {
     setIsLoading(true);

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import TemplateDialog from "./TemplateDialog";
@@ -38,6 +39,7 @@ export default function TemplateQuickEntryButton({
   onEditTemplate: (template: Template) => void;
   selectedDate?: string; // YYYY-MM-DD
 }) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(false);
@@ -295,6 +297,16 @@ export default function TemplateQuickEntryButton({
                     toast.error(msg);
                     return;
                   }
+
+                  // Invalidate queries to update dashboard
+                  await queryClient.invalidateQueries({
+                    queryKey: ["transactions"],
+                    refetchType: "active",
+                  });
+                  await queryClient.invalidateQueries({
+                    queryKey: ["account-balance"],
+                  });
+
                   toast.success("Expense added");
                   // Close both dialogs on success
                   setQuickEdit(undefined);

@@ -1,6 +1,7 @@
 "use client";
 
 import EnhancedMobileDashboard from "@/components/dashboard/EnhancedMobileDashboard";
+import { useUserPreferences } from "@/features/preferences/useUserPreferences";
 import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
 import { getDefaultDateRange } from "@/lib/utils/date";
 import { useRouter } from "next/navigation";
@@ -9,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 export default function DashboardClientPage() {
   const router = useRouter();
   const [monthStartDay, setMonthStartDay] = useState(1);
+  const { data: preferences } = useUserPreferences();
 
   const defaultRange = useMemo(
     () => getDefaultDateRange(monthStartDay),
@@ -17,34 +19,21 @@ export default function DashboardClientPage() {
 
   const [dateRange, setDateRange] = useState(defaultRange);
 
-  // Load user preferences for month start day (non-blocking)
+  // Update month start day from preferences
   useEffect(() => {
-    const loadPreferences = async () => {
-      try {
-        const response = await fetch("/api/user-preferences");
-        if (response.ok) {
-          const prefs = await response.json();
-          const dateStart = prefs?.date_start;
-          if (dateStart && typeof dateStart === "string") {
-            const match = dateStart.match(/^(sun|mon)-(\d{1,2})$/);
-            if (match) {
-              const day = Number(match[2]);
-              if (day >= 1 && day <= 28) {
-                setMonthStartDay(day);
-                const range = getDefaultDateRange(day);
-                setDateRange(range);
-              }
-            }
-          }
+    if (preferences?.date_start) {
+      const dateStart = preferences.date_start;
+      const match = dateStart.match(/^(sun|mon)-(\d{1,2})$/);
+      if (match) {
+        const day = Number(match[2]);
+        if (day >= 1 && day <= 28) {
+          setMonthStartDay(day);
+          const range = getDefaultDateRange(day);
+          setDateRange(range);
         }
-      } catch (error) {
-        console.error("Failed to load user preferences:", error);
       }
-    };
-
-    // Load in background, don't block UI
-    loadPreferences();
-  }, []);
+    }
+  }, [preferences]);
 
   // Parse URL search params for date range
   useEffect(() => {

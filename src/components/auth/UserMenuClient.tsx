@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useOnboarding } from "@/features/preferences/useOnboarding";
 import { createClient } from "@supabase/supabase-js";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -37,31 +38,22 @@ export default function UserMenuClient({ name, email, avatarUrl }: Props) {
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const { data: onboarding } = useOnboarding();
 
   // Redirect to onboarding walkthrough for new users (except on auth/welcome routes)
   useEffect(() => {
-    let ignore = false;
-    (async () => {
-      if (
-        pathname === "/login" ||
-        pathname.startsWith("/reset-password") ||
-        pathname === "/welcome" ||
-        pathname.startsWith("/auth/")
-      ) {
-        return;
-      }
-      try {
-        const res = await fetch("/api/onboarding", { cache: "no-store" });
-        const data = await res.json().catch(() => ({}));
-        if (!ignore && data && data.completed === false) {
-          router.replace("/welcome");
-        }
-      } catch {}
-    })();
-    return () => {
-      ignore = true;
-    };
-  }, [pathname, router]);
+    if (
+      pathname === "/login" ||
+      pathname.startsWith("/reset-password") ||
+      pathname === "/welcome" ||
+      pathname.startsWith("/auth/")
+    ) {
+      return;
+    }
+    if (onboarding && onboarding.completed === false) {
+      router.replace("/welcome");
+    }
+  }, [pathname, router, onboarding]);
 
   // Never show the menu on auth pages
   if (pathname === "/login" || pathname.startsWith("/reset-password")) {

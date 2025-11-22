@@ -15,6 +15,7 @@ import {
   XIcon,
 } from "@/components/icons/FuturisticIcons";
 import { Card } from "@/components/ui/card";
+import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useQueryClient } from "@tanstack/react-query";
@@ -30,6 +31,7 @@ type Transaction = {
   amount: number;
   description: string | null;
   account_id: string;
+  inserted_at: string;
   account_name?: string;
   category_icon?: string;
   user_theme?: string;
@@ -45,7 +47,7 @@ type Props = {
 };
 
 type ViewMode = "widgets" | "list";
-type SortField = "date" | "amount" | "category";
+type SortField = "recent" | "date" | "amount" | "category";
 type SortOrder = "asc" | "desc";
 
 // Memoized component for instant rendering
@@ -58,7 +60,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   const [viewMode, setViewMode] = useState<ViewMode>("widgets");
   const [filterCategory, setFilterCategory] = useState<string>("");
   const [filterAccount, setFilterAccount] = useState<string>("");
-  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortField, setSortField] = useState<SortField>("recent");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTransaction, setSelectedTransaction] =
@@ -67,6 +69,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
   const queryClient = useQueryClient();
+  const deleteMutation = useDeleteTransaction();
 
   // Calculate summary stats with daily average
   const stats = useMemo(() => {
@@ -117,7 +120,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
 
     filtered.sort((a, b) => {
       let comparison = 0;
-      if (sortField === "date") {
+      if (sortField === "recent") {
+        // Sort by inserted_at timestamp (most recently added first)
+        comparison =
+          new Date(a.inserted_at).getTime() - new Date(b.inserted_at).getTime();
+      } else if (sortField === "date") {
         comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
       } else if (sortField === "amount") {
         comparison = a.amount - b.amount;
@@ -160,15 +167,8 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
 
   const handleDelete = async (id: string) => {
     try {
-      const response = await fetch(`/api/transactions/${id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) throw new Error("Failed to delete");
-
+      await deleteMutation.mutateAsync(id);
       toast.success("Transaction deleted");
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
     } catch (error) {
       toast.error("Failed to delete transaction");
     }
@@ -293,26 +293,28 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
 
             {/* Sort options */}
             <div className="flex gap-2 text-xs">
-              {(["date", "amount", "category"] as SortField[]).map((field) => (
-                <button
-                  key={field}
-                  onClick={() => toggleSort(field)}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg capitalize flex items-center gap-1 transition-all",
-                    sortField === field
-                      ? "bg-[#06b6d4]/20 text-[#06b6d4] border border-[#06b6d4]/40"
-                      : "neo-card text-[#38bdf8] hover:bg-[#3b82f6]/10"
-                  )}
-                >
-                  {field}
-                  {sortField === field &&
-                    (sortOrder === "asc" ? (
-                      <ArrowUpRightIcon className="w-3 h-3" />
-                    ) : (
-                      <ArrowDownRightIcon className="w-3 h-3" />
-                    ))}
-                </button>
-              ))}
+              {(["recent", "date", "amount", "category"] as SortField[]).map(
+                (field) => (
+                  <button
+                    key={field}
+                    onClick={() => toggleSort(field)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg capitalize flex items-center gap-1 transition-all",
+                      sortField === field
+                        ? "bg-[#06b6d4]/20 text-[#06b6d4] border border-[#06b6d4]/40"
+                        : "neo-card text-[#38bdf8] hover:bg-[#3b82f6]/10"
+                    )}
+                  >
+                    {field === "recent" ? "Last Added" : field}
+                    {sortField === field &&
+                      (sortOrder === "asc" ? (
+                        <ArrowUpRightIcon className="w-3 h-3" />
+                      ) : (
+                        <ArrowDownRightIcon className="w-3 h-3" />
+                      ))}
+                  </button>
+                )
+              )}
             </div>
 
             {/* Results count */}
@@ -441,7 +443,14 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
             {/* Recent Transactions Preview - Compact */}
             <Card className="neo-card p-3 border-[#3b82f6]/20">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-[#06b6d4]">Recent</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-[#06b6d4]">
+                    Recent
+                  </h3>
+                  <span className="text-[10px] text-[#38bdf8]/60 font-normal">
+                    Last added
+                  </span>
+                </div>
                 <button
                   onClick={() => setViewMode("list")}
                   className="text-xs text-[#38bdf8] hover:text-[#06b6d4] transition-colors"

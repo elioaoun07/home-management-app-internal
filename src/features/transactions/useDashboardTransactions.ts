@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export type Transaction = {
   id: string;
@@ -44,9 +44,9 @@ export function useDashboardTransactions({
       const data = await response.json();
       return data as Transaction[];
     },
-    staleTime: 1000 * 60 * 5, // Consider fresh for 5 minutes
+    staleTime: 0, // Always refetch when invalidated
     gcTime: 1000 * 60 * 60 * 24, // Keep in cache for 24 hours
-    refetchOnMount: false, // Use cached data first for instant load
+    refetchOnMount: true, // Refetch to show latest transactions
     refetchOnWindowFocus: false, // Don't refetch on window focus (better UX)
     refetchOnReconnect: true, // Refetch when reconnecting
     retry: 2,
@@ -71,5 +71,101 @@ export function prefetchDashboardTransactions(
       return response.json();
     },
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
+ * Delete a transaction with optimistic updates
+ */
+export function useDeleteTransaction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (transactionId: string) => {
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete transaction");
+      }
+
+      return transactionId;
+    },
+    onMutate: async (transactionId) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["transactions"] });
+
+      // Snapshot the previous value
+      const previousTransactions = queryClient.getQueriesData({
+        queryKey: ["transactions"],
+      });
+
+      // Optimistically update all transaction queries
+      queryClient.setQueriesData(
+        { queryKey: ["transactions"] },
+        (old: Transaction[] | undefined) => {
+          if (!old) return old;
+          return old.filter((t) => t.id !== transactionId);
+        }
+      );
+
+      return { previousTransactions };
+    },
+    onError: (err, transactionId, context) => {
+      // Rollback on error
+      if (context?.previousTransactions) {
+        context.previousTransactions.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: () => {
+      // Refetch to ensure consistency
+      queryClient.invalidateQueries({
+        queryKey: ["transactions"],
+        refetchType: "active",
+      });
+      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+    },
+  });
+}
+
+/**
+ * Add a transaction with automatic cache updates
+ */
+export function useAddTransaction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (transaction: {
+      date: string;
+      amount: number;
+      description?: string;
+      account_id: string;
+      category_id?: string | null;
+      subcategory_id?: string | null;
+      is_private?: boolean;
+    }) => {
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(transaction),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create transaction");
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate and refetch all transaction queries
+      queryClient.invalidateQueries({
+        queryKey: ["transactions"],
+        refetchType: "active",
+      });
+      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+    },
   });
 }

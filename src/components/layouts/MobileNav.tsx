@@ -8,23 +8,33 @@ import type { Template } from "@/components/expense/TemplateDrawer";
 import TemplateDrawer from "@/components/expense/TemplateDrawer";
 import {
   BarChart3Icon,
-  FileTextIcon,
+  CalendarClockIcon,
   PlusIcon,
 } from "@/components/icons/FuturisticIcons";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { MOBILE_NAV_HEIGHT } from "@/constants/layout";
 import { useTab } from "@/contexts/TabContext";
 import { prefetchDashboardData } from "@/features/dashboard/prefetchDashboard";
-import { useDraftCount } from "@/features/drafts/useDrafts";
 import {
   prefetchAllTabs,
   prefetchExpenseData,
 } from "@/features/navigation/prefetchTabs";
+import { useDuePaymentsCount } from "@/features/recurring/useRecurringPayments";
 import { useViewMode } from "@/hooks/useViewMode";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
-type TabId = "dashboard" | "expense" | "drafts";
+type TabId = "dashboard" | "expense" | "recurring";
 
 const navItems: Array<{
   id: TabId;
@@ -34,14 +44,20 @@ const navItems: Array<{
 }> = [
   { id: "dashboard", icon: BarChart3Icon, label: "Dashboard" },
   { id: "expense", icon: PlusIcon, label: "Add", primary: true },
-  { id: "drafts", icon: FileTextIcon, label: "Drafts" },
+  { id: "recurring", icon: CalendarClockIcon, label: "Recurring" },
 ];
 
 export default function MobileNav() {
   const { activeTab, setActiveTab } = useTab();
   const queryClient = useQueryClient();
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
-  const draftCount = useDraftCount(); // Use hook instead of local state
+  const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(
+    null
+  );
+  const [templateAmount, setTemplateAmount] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
+  const duePaymentsCount = useDuePaymentsCount();
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isLongPress, setIsLongPress] = useState(false);
   const { viewMode, isLoaded } = useViewMode();
@@ -99,9 +115,56 @@ export default function MobileNav() {
   };
 
   const handleTemplateSelect = (template: Template) => {
-    // Switch to expense tab with template data
-    // TODO: Pass template to expense form context
-    setActiveTab("expense");
+    setShowTemplateDrawer(false);
+    setSelectedTemplate(template);
+    setTemplateAmount(template.amount);
+    setTemplateDescription(template.description || "");
+  };
+
+  const handleConfirmTemplate = async () => {
+    if (!selectedTemplate) return;
+
+    setIsCreatingTemplate(true);
+
+    try {
+      const res = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          account_id: selectedTemplate.account_id,
+          category_id: selectedTemplate.category_id,
+          subcategory_id: selectedTemplate.subcategory_id,
+          amount: templateAmount,
+          description: templateDescription,
+          date: new Date().toISOString().split("T")[0],
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to create transaction");
+      }
+
+      // Invalidate queries to update dashboard
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["transactions"],
+          refetchType: "active",
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["account-balance"],
+        }),
+      ]);
+
+      toast.success("Transaction added!");
+      setSelectedTemplate(null);
+      setTemplateAmount("");
+      setTemplateDescription("");
+    } catch (error) {
+      console.error("Template transaction failed", error);
+      toast.error("Failed to create transaction");
+    } finally {
+      setIsCreatingTemplate(false);
+    }
   };
 
   const navSurfaceStyles: CSSProperties = {
@@ -115,6 +178,27 @@ export default function MobileNav() {
 
   return (
     <>
+      {/* Floating Due Payments Notification - Above Nav Bar */}
+      {duePaymentsCount > 0 && (
+        <div
+          className="fixed right-4 z-40 animate-in slide-in-from-bottom-4 duration-300"
+          style={{
+            bottom: `calc(${MOBILE_NAV_HEIGHT}px + env(safe-area-inset-bottom) + 12px)`,
+          }}
+        >
+          <button
+            onClick={() => {
+              if (navigator.vibrate) navigator.vibrate(10);
+              setActiveTab("recurring");
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#06b6d4] text-white shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all neo-glow"
+          >
+            <CalendarClockIcon className="w-3.5 h-3.5" />
+            <span className="text-xs font-semibold">{duePaymentsCount}</span>
+          </button>
+        </div>
+      )}
+
       {/* Bottom Navigation */}
       <nav
         className="fixed bottom-0 left-0 right-0 z-50 bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-md border-t border-[hsl(var(--header-border)/0.3)] pb-safe shadow-2xl"
@@ -182,9 +266,9 @@ export default function MobileNav() {
               >
                 <div className="relative">
                   <Icon className="w-5 h-5" />
-                  {item.id === "drafts" && draftCount > 0 && (
+                  {item.id === "recurring" && duePaymentsCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-[#06b6d4] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
-                      {draftCount}
+                      {duePaymentsCount}
                     </span>
                   )}
                 </div>
@@ -200,6 +284,80 @@ export default function MobileNav() {
           onOpenChange={setShowTemplateDrawer}
           onSelect={handleTemplateSelect}
         />
+
+        {/* Template Confirmation Dialog */}
+        <Dialog
+          open={!!selectedTemplate}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedTemplate(null);
+              setTemplateAmount("");
+              setTemplateDescription("");
+            }
+          }}
+        >
+          <DialogContent className="neo-card border-[#3b82f6]/30">
+            <DialogHeader>
+              <DialogTitle className="text-[#06b6d4]">
+                Confirm Transaction: {selectedTemplate?.name}
+              </DialogTitle>
+            </DialogHeader>
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleConfirmTemplate();
+              }}
+            >
+              <div>
+                <Label className="text-[#38bdf8]">Amount *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={templateAmount}
+                  onChange={(e) => setTemplateAmount(e.target.value)}
+                  required
+                  autoFocus
+                  className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                  disabled={isCreatingTemplate}
+                />
+              </div>
+              <div>
+                <Label className="text-[#38bdf8]">Description</Label>
+                <Input
+                  value={templateDescription}
+                  onChange={(e) => setTemplateDescription(e.target.value)}
+                  placeholder="Optional notes"
+                  className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                  disabled={isCreatingTemplate}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedTemplate(null);
+                    setTemplateAmount("");
+                    setTemplateDescription("");
+                  }}
+                  disabled={isCreatingTemplate}
+                  className="border-[#3b82f6]/30 text-[#38bdf8]"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isCreatingTemplate || !templateAmount}
+                  className="neo-gradient text-white"
+                >
+                  {isCreatingTemplate ? "Adding..." : "Add Transaction"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </nav>
     </>
   );

@@ -52,9 +52,9 @@ export default function AccountBalance({
     },
     enabled: !!accountId,
     retry: 1,
-    refetchOnMount: "always", // Always refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when user returns to tab
-    staleTime: 0, // Data is immediately stale, refetch on every access
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    staleTime: 1000 * 60 * 5, // 5 minutes - balance updated through mutations
   });
 
   // Handle errors with useEffect (new React Query pattern)

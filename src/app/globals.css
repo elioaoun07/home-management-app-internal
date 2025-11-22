@@ -1286,4 +1286,79 @@ body {
   :root[data-theme="pink"] .rdp-weekday {
     color: #f472b6 !important;
   }
+
+  /* Global dialog fixes - ensure solid backgrounds and readable text */
+  [data-slot="dialog-content"] {
+    background-color: #1a2942 !important;
+    opacity: 1 !important;
+    color: white !important;
+  }
+
+  [data-slot="dialog-content"] label,
+  [data-slot="dialog-content"] p,
+  [data-slot="dialog-content"] span:not([data-slot="dialog-close"] span),
+  [data-slot="dialog-content"] div {
+    color: white !important;
+  }
+
+  [data-slot="dialog-content"] input,
+  [data-slot="dialog-content"] textarea,
+  [data-slot="dialog-content"] select {
+    background-color: #0f1729 !important;
+    color: #38bdf8 !important;
+    border-color: #3b82f6 !important;
+  }
+
+  [data-slot="dialog-content"] input::placeholder,
+  [data-slot="dialog-content"] textarea::placeholder {
+    color: #38bdf8 !important;
+    opacity: 0.5 !important;
+  }
+
+  [data-slot="dialog-content"] button {
+    color: white !important;
+  }
+
+  [data-slot="dialog-overlay"] {
+    background-color: rgba(0, 0, 0, 0.7) !important;
+    opacity: 1 !important;
+  }
+
+  /* Ensure all text elements across the app use theme colors */
+  :root[data-theme="blue"] {
+    color-scheme: dark;
+  }
+
+  :root[data-theme="pink"] {
+    color-scheme: dark;
+  }
+
+  /* Force text readability on mobile */
+  @media (max-width: 768px) {
+    body,
+    div,
+    p,
+    span,
+    label,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      color: inherit;
+    }
+
+    [data-slot="dialog-content"] * {
+      color: white !important;
+    }
+
+    [data-slot="dialog-content"] [data-slot="dialog-title"] {
+      color: #06b6d4 !important;
+    }
+
+    [data-slot="dialog-content"] [data-slot="dialog-description"] {
+      color: rgba(56, 189, 248, 0.8) !important;
+    }
+  }
 }

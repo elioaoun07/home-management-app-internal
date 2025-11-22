@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
+import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ type Transaction = {
   amount: number;
   description: string | null;
   account_id: string;
+  inserted_at: string;
   account_name?: string;
   category_icon?: string;
   user_theme?: string;
@@ -51,6 +53,8 @@ export default function TransactionDetailModal({
     (!currentUserId ||
       !transaction.user_id ||
       transaction.user_id === currentUserId);
+
+  const deleteMutation = useDeleteTransaction();
 
   const [formData, setFormData] = useState({
     date: transaction.date,
@@ -99,12 +103,7 @@ export default function TransactionDetailModal({
 
     setDeleting(true);
     try {
-      const response = await fetch(`/api/transactions/${transaction.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) throw new Error("Failed to delete");
-
+      await deleteMutation.mutateAsync(transaction.id);
       toast.success("Transaction deleted");
       onDelete();
       onClose();
