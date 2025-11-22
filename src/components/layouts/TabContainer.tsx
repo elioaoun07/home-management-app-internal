@@ -2,8 +2,8 @@
 
 import DashboardClientPage from "@/app/dashboard/DashboardClientPage";
 import MobileExpenseForm from "@/components/expense/MobileExpenseForm";
+import SimpleWatchView from "@/components/watch/SimpleWatchView";
 import { WatchErrorBoundary } from "@/components/watch/WatchErrorBoundary";
-import WatchView from "@/components/watch/WatchView";
 import { useTab } from "@/contexts/TabContext";
 import { useViewMode } from "@/hooks/useViewMode";
 import { Suspense, lazy } from "react";
@@ -28,7 +28,7 @@ export default function TabContainer() {
   if (viewMode === "watch") {
     return (
       <WatchErrorBoundary>
-        <WatchView />
+        <SimpleWatchView />
       </WatchErrorBoundary>
     );
   }
