@@ -3,6 +3,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Prevent pull-to-refresh and overscroll globally */
+html,
+body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
 /* Custom z-index utilities */
 @layer utilities {
   .z-45 {
