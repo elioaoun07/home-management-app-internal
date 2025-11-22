@@ -2,6 +2,7 @@
 
 import DashboardClientPage from "@/app/dashboard/DashboardClientPage";
 import MobileExpenseForm from "@/components/expense/MobileExpenseForm";
+import { WatchErrorBoundary } from "@/components/watch/WatchErrorBoundary";
 import WatchView from "@/components/watch/WatchView";
 import { useTab } from "@/contexts/TabContext";
 import { useViewMode } from "@/hooks/useViewMode";
@@ -25,7 +26,11 @@ export default function TabContainer() {
 
   // Watch view replaces the entire interface
   if (viewMode === "watch") {
-    return <WatchView />;
+    return (
+      <WatchErrorBoundary>
+        <WatchView />
+      </WatchErrorBoundary>
+    );
   }
 
   // Web view - to be implemented later

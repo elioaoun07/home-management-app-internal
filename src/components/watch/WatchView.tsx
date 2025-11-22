@@ -15,19 +15,27 @@ interface Balance {
 }
 
 export default function WatchView() {
-  const { data: categories = [] } = useCategories();
-  const { data: accounts = [] } = useAccounts();
+  const { data: categories = [], isLoading: categoriesLoading } =
+    useCategories();
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
   const [previewText, setPreviewText] = useState("");
   const [currentScreen, setCurrentScreen] = useState<"main" | "insights">(
     "main"
   );
+  const [isMounted, setIsMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const isDragging = useRef(false);
 
+  // Ensure client-side only
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Get default account or first account
   const defaultAccount = useMemo(() => {
+    if (!accounts || accounts.length === 0) return null;
     const defAcc = accounts.find((a: any) => a.is_default);
     return defAcc || accounts[0];
   }, [accounts]);
@@ -43,33 +51,37 @@ export default function WatchView() {
       if (!res.ok) throw new Error("Failed to fetch balance");
       return res.json();
     },
-    enabled: !!defaultAccount?.id,
+    enabled: !!defaultAccount?.id && isMounted,
     refetchInterval: 5000,
   });
 
   // Prevent default browser swipe/back behavior
   useEffect(() => {
-    const preventSwipeBack = (e: TouchEvent | MouseEvent) => {
+    if (typeof window === "undefined") return;
+
+    const preventSwipeBack = (e: TouchEvent) => {
       if (isDragging.current) {
         e.preventDefault();
       }
     };
 
     // Disable browser back gesture
-    document.addEventListener("touchmove", preventSwipeBack, {
-      passive: false,
-    });
-    document.addEventListener("mousemove", preventSwipeBack, {
+    window.addEventListener("touchmove", preventSwipeBack, {
       passive: false,
     });
 
     // Prevent overscroll
-    document.body.style.overscrollBehavior = "none";
+    if (document.body) {
+      document.body.style.overscrollBehavior = "none";
+      document.body.style.overflow = "hidden";
+    }
 
     return () => {
-      document.removeEventListener("touchmove", preventSwipeBack);
-      document.removeEventListener("mousemove", preventSwipeBack);
-      document.body.style.overscrollBehavior = "";
+      window.removeEventListener("touchmove", preventSwipeBack);
+      if (document.body) {
+        document.body.style.overscrollBehavior = "";
+        document.body.style.overflow = "";
+      }
     };
   }, []);
 
@@ -118,6 +130,62 @@ export default function WatchView() {
     touchStartY.current = 0;
     isDragging.current = false;
   };
+
+  // Show loading state
+  if (!isMounted || categoriesLoading || accountsLoading) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
+        <div
+          className="relative"
+          style={{
+            width: "min(80vw, 80vh)",
+            height: "min(80vw, 80vh)",
+            maxWidth: "300px",
+            maxHeight: "300px",
+            borderRadius: "50%",
+            background:
+              "linear-gradient(135deg, #1e3a8a 0%, #3b0764 50%, #831843 100%)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "inset 0 0 60px rgba(0,0,0,0.5)",
+          }}
+        >
+          <div className="text-white text-lg">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if no accounts
+  if (!defaultAccount) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
+        <div
+          className="relative p-8"
+          style={{
+            width: "min(80vw, 80vh)",
+            height: "min(80vw, 80vh)",
+            maxWidth: "300px",
+            maxHeight: "300px",
+            borderRadius: "50%",
+            background:
+              "linear-gradient(135deg, #1e3a8a 0%, #3b0764 50%, #831843 100%)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "inset 0 0 60px rgba(0,0,0,0.5)",
+          }}
+        >
+          <div className="text-red-400 text-4xl mb-3">⚠️</div>
+          <div className="text-white text-sm text-center">
+            No account found. Please set up an account first.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -183,27 +251,29 @@ export default function WatchView() {
             </div>
 
             {/* Voice Entry Button */}
-            <div className="relative mb-4 scale-[2]">
-              <VoiceEntryButton
-                categories={categories}
-                accountId={defaultAccount?.id}
-                onParsed={(result) => console.log("Parsed:", result)}
-                onDraftCreated={() => {
-                  toast.success("Draft saved!");
-                }}
-                onPreviewChange={setPreviewText}
-                className=""
-              />
+            <div className="relative mb-4">
+              <div className="scale-[2]">
+                <VoiceEntryButton
+                  categories={categories || []}
+                  accountId={defaultAccount?.id}
+                  onParsed={(result) => console.log("Parsed:", result)}
+                  onDraftCreated={() => {
+                    toast.success("Saved!", { duration: 2000 });
+                  }}
+                  onPreviewChange={setPreviewText}
+                  className=""
+                />
+              </div>
             </div>
 
             {/* Preview Text */}
             {previewText && (
               <div
-                className="absolute bottom-16 left-4 right-4 p-3 rounded-2xl text-center animate-in fade-in backdrop-blur-xl"
+                className="absolute bottom-16 left-4 right-4 p-3 rounded-2xl text-center animate-in fade-in"
                 style={{
-                  background:
-                    "linear-gradient(135deg, rgba(30, 58, 138, 0.9) 0%, rgba(59, 7, 100, 0.9) 100%)",
+                  background: "rgba(30, 58, 138, 0.95)",
                   boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
                 }}
               >
                 <div className="text-[10px] text-cyan-300 mb-1 font-medium uppercase">
@@ -306,10 +376,9 @@ function QuickInsight({ accountId }: { accountId?: string }) {
     <div className="space-y-3">
       {/* Today's Spending */}
       <div
-        className="p-4 rounded-2xl text-center backdrop-blur-xl"
+        className="p-4 rounded-2xl text-center"
         style={{
-          background:
-            "linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(147, 51, 234, 0.3) 100%)",
+          background: "rgba(59, 130, 246, 0.4)",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
           border: "1px solid rgba(255, 255, 255, 0.1)",
         }}
@@ -332,10 +401,9 @@ function QuickInsight({ accountId }: { accountId?: string }) {
 
       {/* Transaction Count */}
       <div
-        className="p-4 rounded-2xl text-center backdrop-blur-xl"
+        className="p-4 rounded-2xl text-center"
         style={{
-          background:
-            "linear-gradient(135deg, rgba(6, 182, 212, 0.3) 0%, rgba(20, 184, 166, 0.3) 100%)",
+          background: "rgba(6, 182, 212, 0.4)",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
           border: "1px solid rgba(255, 255, 255, 0.1)",
         }}
@@ -359,10 +427,9 @@ function QuickInsight({ accountId }: { accountId?: string }) {
       {/* Last Transaction */}
       {todayTransactions && todayTransactions.length > 0 && (
         <div
-          className="p-4 rounded-2xl backdrop-blur-xl"
+          className="p-4 rounded-2xl"
           style={{
-            background:
-              "linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(5, 150, 105, 0.3) 100%)",
+            background: "rgba(16, 185, 129, 0.4)",
             boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
             border: "1px solid rgba(255, 255, 255, 0.1)",
           }}
