@@ -222,10 +222,13 @@ export default function SimpleWatchView() {
             boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
           }}
           onClick={() => {
-            // Switch to mobile mode first, then navigate to expense page
+            // Switch to mobile mode and force reload to ensure context is available
             if (typeof window !== "undefined" && localStorage) {
               localStorage.setItem("app-view-mode", "mobile");
-              window.location.href = "/expense";
+              // Use setTimeout to ensure localStorage is written before navigation
+              setTimeout(() => {
+                window.location.href = "/expense";
+              }, 100);
             }
           }}
         >

@@ -13,14 +13,24 @@ export default function ExpenseLayout({
   children: React.ReactNode;
 }) {
   const { activeTab } = useTab();
-  const { viewMode } = useViewMode();
+  const { viewMode, isLoaded } = useViewMode();
 
   // Only show tags bar when actively on the expense tab (not dashboard or drafts)
   const showTagsBar = activeTab === "expense";
 
-  // In watch mode, skip the shell wrapper entirely
+  // Wait for view mode to load before rendering
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-[#0a1628] flex items-center justify-center">
+        <div className="text-[#38bdf8]">Loading...</div>
+      </div>
+    );
+  }
+
+  // In watch mode, skip the shell wrapper entirely but still provide context
+  // (in case user is transitioning between modes)
   if (viewMode === "watch") {
-    return <>{children}</>;
+    return <ExpenseFormProvider>{children}</ExpenseFormProvider>;
   }
 
   return (
