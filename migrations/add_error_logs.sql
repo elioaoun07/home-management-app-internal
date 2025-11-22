@@ -17,6 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_error_logs_user_id ON error_logs(user_id);
 -- Enable RLS
 ALTER TABLE error_logs ENABLE ROW LEVEL SECURITY;
 
+
 -- Policy: Users can insert their own error logs
 CREATE POLICY "Users can insert own error logs"
   ON error_logs
