@@ -12,8 +12,8 @@ import { Suspense, lazy } from "react";
 const DraftsPage = lazy(() => import("@/app/expense/drafts/page"));
 
 export default function TabContainer() {
-  const { activeTab } = useTab();
   const { viewMode, isLoaded } = useViewMode();
+  const { activeTab } = useTab(); // Always call hooks at the top level
 
   // Show loading while view mode is being loaded from localStorage
   if (!isLoaded) {

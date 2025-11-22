@@ -23,6 +23,19 @@ export class WatchErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: any) {
     console.error("Watch view error:", error, errorInfo);
+    
+    // Log to database
+    fetch("/api/error-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        error_message: `[WatchErrorBoundary] ${error.message}`,
+        error_stack: error.stack || "",
+        component_name: "WatchErrorBoundary",
+        url: typeof window !== "undefined" ? window.location.href : "",
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      }),
+    }).catch((logErr) => console.error("Failed to log error:", logErr));
   }
 
   render() {

@@ -2,49 +2,79 @@
 
 import { useEffect, useState } from "react";
 
+async function logError(error: any, context: string) {
+  try {
+    await fetch("/api/error-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        error_message: `[SimpleWatchView - ${context}] ${error.message || String(error)}`,
+        error_stack: error.stack || String(error),
+        component_name: "SimpleWatchView",
+        url: typeof window !== "undefined" ? window.location.href : "",
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      }),
+    });
+  } catch (logErr) {
+    console.error("Failed to log error:", logErr);
+  }
+}
+
 export default function SimpleWatchView() {
   const [mounted, setMounted] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setMounted(true);
+    try {
+      setMounted(true);
 
-    // Fetch balance
-    const fetchBalance = async () => {
-      try {
-        const accountsRes = await fetch("/api/accounts");
-        if (!accountsRes.ok) {
-          throw new Error("Failed to fetch accounts");
+      // Fetch balance
+      const fetchBalance = async () => {
+        try {
+          const accountsRes = await fetch("/api/accounts");
+          if (!accountsRes.ok) {
+            const err = new Error(`Failed to fetch accounts: ${accountsRes.status}`);
+            logError(err, "fetchBalance");
+            throw err;
+          }
+          const accountsData = await accountsRes.json();
+          const accounts = accountsData.accounts || [];
+
+          if (accounts.length === 0) {
+            const err = new Error("No accounts found");
+            logError(err, "fetchBalance");
+            setError("No accounts");
+            return;
+          }
+
+          const defaultAccount =
+            accounts.find((a: any) => a.is_default) || accounts[0];
+
+          const balanceRes = await fetch(
+            `/api/accounts/${defaultAccount.id}/balance`
+          );
+          if (!balanceRes.ok) {
+            const err = new Error(`Failed to fetch balance: ${balanceRes.status}`);
+            logError(err, "fetchBalance");
+            throw err;
+          }
+          const balanceData = await balanceRes.json();
+          setBalance(balanceData.balance || 0);
+        } catch (err: any) {
+          logError(err, "fetchBalance");
+          setError(err.message || "Error loading data");
         }
-        const accountsData = await accountsRes.json();
-        const accounts = accountsData.accounts || [];
+      };
 
-        if (accounts.length === 0) {
-          setError("No accounts");
-          return;
-        }
+      fetchBalance();
+      const interval = setInterval(fetchBalance, 5000);
 
-        const defaultAccount =
-          accounts.find((a: any) => a.is_default) || accounts[0];
-
-        const balanceRes = await fetch(
-          `/api/accounts/${defaultAccount.id}/balance`
-        );
-        if (!balanceRes.ok) {
-          throw new Error("Failed to fetch balance");
-        }
-        const balanceData = await balanceRes.json();
-        setBalance(balanceData.balance || 0);
-      } catch (err: any) {
-        setError(err.message || "Error");
-      }
-    };
-
-    fetchBalance();
-    const interval = setInterval(fetchBalance, 5000);
-
-    return () => clearInterval(interval);
+      return () => clearInterval(interval);
+    } catch (err: any) {
+      logError(err, "useEffect");
+      setError(err.message || "Initialization error");
+    }
   }, []);
 
   if (!mounted) {
