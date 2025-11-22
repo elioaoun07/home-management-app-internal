@@ -1,7 +1,7 @@
+import { ErrorLogger } from "@/components/ErrorLogger";
 import ConditionalHeader from "@/components/layouts/ConditionalHeader";
 import MobileNav from "@/components/layouts/MobileNav";
 import { Toaster } from "@/components/ui/sonner";
-import { ErrorLogger } from "@/components/ErrorLogger";
 import { supabaseServerRSC } from "@/lib/supabase/server";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";

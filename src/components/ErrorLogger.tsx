@@ -17,6 +17,15 @@ export function ErrorLogger() {
 
     // Log unhandled promise rejections
     const handleRejection = (event: PromiseRejectionEvent) => {
+      // Ignore Next.js redirect errors (these are intentional)
+      const reason = String(event.reason);
+      if (
+        reason.includes("NEXT_REDIRECT") ||
+        reason.includes("NEXT_NOT_FOUND")
+      ) {
+        return;
+      }
+
       logError({
         error_message: `Unhandled Promise Rejection: ${event.reason}`,
         error_stack: event.reason?.stack || String(event.reason),

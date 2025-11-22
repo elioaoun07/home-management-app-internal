@@ -57,7 +57,9 @@ export default function ErrorLogsPage() {
 
         {logs.length === 0 ? (
           <div className="neo-card p-8 text-center">
-            <div className="text-[hsl(var(--text-muted))]">No errors logged yet</div>
+            <div className="text-[hsl(var(--text-muted))]">
+              No errors logged yet
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -101,7 +103,9 @@ export default function ErrorLogsPage() {
                     <summary className="cursor-pointer text-xs text-[hsl(var(--text-muted))] hover:underline">
                       User agent
                     </summary>
-                    <div className="mt-1 text-xs text-gray-400">{log.user_agent}</div>
+                    <div className="mt-1 text-xs text-gray-400">
+                      {log.user_agent}
+                    </div>
                   </details>
                 )}
               </div>

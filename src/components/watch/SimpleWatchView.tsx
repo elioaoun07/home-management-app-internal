@@ -34,7 +34,9 @@ export default function SimpleWatchView() {
         try {
           const accountsRes = await fetch("/api/accounts");
           if (!accountsRes.ok) {
-            const err = new Error(`Failed to fetch accounts: ${accountsRes.status}`);
+            const err = new Error(
+              `Failed to fetch accounts: ${accountsRes.status}`
+            );
             logError(err, "fetchBalance");
             throw err;
           }
@@ -55,7 +57,9 @@ export default function SimpleWatchView() {
             `/api/accounts/${defaultAccount.id}/balance`
           );
           if (!balanceRes.ok) {
-            const err = new Error(`Failed to fetch balance: ${balanceRes.status}`);
+            const err = new Error(
+              `Failed to fetch balance: ${balanceRes.status}`
+            );
             logError(err, "fetchBalance");
             throw err;
           }
@@ -218,7 +222,11 @@ export default function SimpleWatchView() {
             boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
           }}
           onClick={() => {
-            window.location.href = "/expense";
+            // Switch to mobile mode first, then navigate to expense page
+            if (typeof window !== "undefined" && localStorage) {
+              localStorage.setItem("app-view-mode", "mobile");
+              window.location.href = "/expense";
+            }
           }}
         >
           <div style={{ color: "white", fontSize: "32px" }}>🎤</div>

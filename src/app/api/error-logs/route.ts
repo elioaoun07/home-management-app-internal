@@ -9,7 +9,8 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     const body = await request.json();
-    const { error_message, error_stack, component_name, user_agent, url } = body;
+    const { error_message, error_stack, component_name, user_agent, url } =
+      body;
 
     // Insert error log
     const { error } = await supabase.from("error_logs").insert({
@@ -32,10 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Error logging endpoint failed:", err);
-    return NextResponse.json(
-      { error: "Logging failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Logging failed" }, { status: 500 });
   }
 }
 

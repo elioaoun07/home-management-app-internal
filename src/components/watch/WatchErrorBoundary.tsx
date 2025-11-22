@@ -23,7 +23,7 @@ export class WatchErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: any) {
     console.error("Watch view error:", error, errorInfo);
-    
+
     // Log to database
     fetch("/api/error-logs", {
       method: "POST",
