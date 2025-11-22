@@ -63,18 +63,12 @@ function LoginContent() {
 
     saveCredentials(email, rememberMe);
 
-    try {
-      const result = await loginAction(formData);
-      if (result?.error) {
-        toast.error(result.error);
-        setIsLoading(false);
-      }
-      // If successful, loginAction will redirect
-    } catch (error) {
-      console.error("Login failed:", error);
-      toast.error("Login failed. Please try again.");
+    const result = await loginAction(formData);
+    if (result?.error) {
+      toast.error(result.error);
       setIsLoading(false);
     }
+    // If successful, loginAction will redirect (no need for else/catch)
   }
 
   return (
