@@ -1,6 +1,6 @@
 import { supabaseServerRSC } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import DashboardClientPage from "./DashboardClientPage";
+import DashboardClientWrapper from "./DashboardClientWrapper";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -27,6 +27,5 @@ export default async function DashboardPage() {
     redirect("/welcome");
   }
 
-  // All data fetching now happens client-side with caching
-  return <DashboardClientPage />;
+  return <DashboardClientWrapper />;
 }

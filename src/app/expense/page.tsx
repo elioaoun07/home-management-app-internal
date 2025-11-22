@@ -1,6 +1,6 @@
-import MobileExpenseForm from "@/components/expense/MobileExpenseForm";
 import { supabaseServerRSC } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import ExpenseClientWrapper from "./ExpenseClientWrapper";
 
 export default async function ExpensePage() {
   const supabase = await supabaseServerRSC();
@@ -9,13 +9,8 @@ export default async function ExpensePage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    // Redirect unauthenticated users to login
     redirect("/login");
   }
 
-  return (
-    <main className="h-screen overflow-hidden">
-      <MobileExpenseForm />
-    </main>
-  );
+  return <ExpenseClientWrapper />;
 }

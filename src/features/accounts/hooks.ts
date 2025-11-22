@@ -19,6 +19,7 @@ export function useAccounts() {
   return useQuery({
     queryKey: qk.accounts(), // shared key
     queryFn: fetchAccounts,
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevents unnecessary refetches
   });
 }
 
