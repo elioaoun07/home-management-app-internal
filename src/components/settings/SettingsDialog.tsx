@@ -263,6 +263,11 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   toast.success(
                     `Switched to ${value.charAt(0).toUpperCase() + value.slice(1)} view`
                   );
+                  // Close dialog and reload for view change to take effect
+                  setTimeout(() => {
+                    onOpenChange(false);
+                    window.location.reload();
+                  }, 500);
                 }}
                 className="space-y-3 flex-1"
               >
