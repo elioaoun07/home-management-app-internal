@@ -2,43 +2,9 @@
 
 import EnhancedMobileDashboard from "@/components/dashboard/EnhancedMobileDashboard";
 import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
+import { getDefaultDateRange } from "@/lib/utils/date";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-
-function fmtDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function startOfCustomMonth(date: Date, monthStartDay: number) {
-  const d = new Date(date);
-  const currentDay = d.getDate();
-  const s = new Date(d);
-  if (currentDay >= monthStartDay) {
-    s.setDate(monthStartDay);
-  } else {
-    s.setMonth(s.getMonth() - 1);
-    s.setDate(monthStartDay);
-  }
-  s.setHours(0, 0, 0, 0);
-  return s;
-}
-
-function getDefaultDateRange(monthStartDay: number = 1) {
-  const now = new Date();
-  const sCustom = startOfCustomMonth(now, monthStartDay);
-  const nextPeriod = new Date(sCustom);
-  nextPeriod.setMonth(nextPeriod.getMonth() + 1);
-  nextPeriod.setDate(monthStartDay);
-  const endOfPeriod = new Date(nextPeriod);
-  endOfPeriod.setDate(endOfPeriod.getDate() - 1);
-  return {
-    start: fmtDate(sCustom),
-    end: fmtDate(endOfPeriod),
-  };
-}
 
 export default function DashboardClientPage() {
   const router = useRouter();
@@ -192,11 +158,13 @@ export default function DashboardClientPage() {
   }
 
   return (
-    <EnhancedMobileDashboard
-      transactions={transactions}
-      startDate={dateRange.start}
-      endDate={dateRange.end}
-      currentUserId={currentUserId}
-    />
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+      <EnhancedMobileDashboard
+        transactions={transactions}
+        startDate={dateRange.start}
+        endDate={dateRange.end}
+        currentUserId={currentUserId}
+      />
+    </div>
   );
 }

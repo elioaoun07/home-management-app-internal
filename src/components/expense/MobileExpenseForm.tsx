@@ -4,6 +4,12 @@
  */
 "use client";
 
+import {
+  CalculatorIcon,
+  CheckIcon,
+  ChevronLeftIcon,
+  XIcon,
+} from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,9 +22,12 @@ import {
   type SectionKey,
 } from "@/features/preferences/useSectionOrder";
 import { cn } from "@/lib/utils";
+import {
+  getCategoryGlowClass,
+  getCategoryIcon,
+} from "@/lib/utils/getCategoryIcon";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Calculator, Check, ChevronLeft, X } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 import AccountBalance from "./AccountBalance";
@@ -144,7 +153,7 @@ export default function MobileExpenseForm() {
 
       const newTransaction = await response.json();
 
-      toast.success("💰 Expense added!", {
+      toast.success("Expense added!", {
         description: `$${amount} for ${selectedCategory?.name}`,
         action: {
           label: "Undo",
@@ -203,6 +212,9 @@ export default function MobileExpenseForm() {
   };
 
   const goBack = () => {
+    if (navigator.vibrate) {
+      navigator.vibrate([5, 5, 5]); // Triple haptic pulse for premium feel
+    }
     const currentIndex = stepFlow.indexOf(step as Step);
     if (currentIndex <= 0) return;
 
@@ -284,16 +296,21 @@ export default function MobileExpenseForm() {
       ) : (
         <>
           <div
-            className={`fixed top-14 left-0 right-0 z-30 bg-gradient-to-b ${colors.bgGradientFrom} ${colors.bgGradientTo} border-b ${colors.borderPrimary} px-3 pt-3 pb-2 shadow-lg slide-in-top`}
+            className={`fixed top-0 left-0 right-0 z-30 bg-gradient-to-b ${colors.bgGradientFrom} ${colors.bgGradientTo} border-b ${colors.borderPrimary} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top shimmer`}
           >
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 pt-3">
               {step !== firstValidStep ? (
                 <button
-                  onClick={goBack}
+                  onClick={() => {
+                    if (navigator.vibrate) navigator.vibrate(5);
+                    goBack();
+                  }}
                   suppressHydrationWarning
-                  className={`p-1.5 -ml-2 rounded-lg ${colors.bgButton} ${colors.bgButtonHover} active:scale-95 transition-all border ${colors.borderPrimary}`}
+                  className={`p-1.5 -ml-2 rounded-lg ${colors.bgButton} ${colors.bgButtonHover} active:scale-95 transition-all duration-200 border ${colors.borderPrimary} hover:shadow-md`}
                 >
-                  <ChevronLeft className={`w-5 h-5 ${colors.textSecondary}`} />
+                  <ChevronLeftIcon
+                    className={`w-5 h-5 ${colors.textSecondary} drop-shadow-[0_0_6px_rgba(56,189,248,0.3)]`}
+                  />
                 </button>
               ) : (
                 <div className="w-8" />
@@ -320,14 +337,16 @@ export default function MobileExpenseForm() {
                     : `${colors.bgButton} ${colors.bgButtonHover} active:scale-95 transition-all border ${colors.borderPrimary}`
                 )}
               >
-                <X className={`w-5 h-5 ${colors.textSecondary}`} />
+                <XIcon
+                  className={`w-5 h-5 ${colors.textSecondary} drop-shadow-[0_0_6px_rgba(248,113,113,0.4)]`}
+                />
               </button>
             </div>
             <div
               className={`h-0.5 ${colors.bgCard} rounded-full overflow-hidden relative`}
             >
               <div
-                className={`h-full bg-gradient-to-r ${colors.gradientBar} transition-all duration-500 ease-out neo-glow-sm`}
+                className={`h-full bg-gradient-to-r ${colors.gradientBar} transition-all duration-500 ease-out neo-glow-sm glow-pulse-primary`}
                 style={{ width: `${progress()}%` }}
               />
             </div>
@@ -345,8 +364,8 @@ export default function MobileExpenseForm() {
             className={cn(
               `fixed left-0 right-0 overflow-y-auto px-3 py-3 ${colors.bgMain}`,
               selectedAccountId && step === "amount"
-                ? "top-[229px]"
-                : "top-[131px]"
+                ? "top-[215px]"
+                : "top-[80px]"
             )}
             style={contentAreaStyles}
           >
@@ -378,8 +397,8 @@ export default function MobileExpenseForm() {
                         suppressHydrationWarning
                         className={`p-2 rounded-lg neo-card ${colors.bgButton} border ${colors.borderAccent} ${colors.bgButtonHover} active:scale-95 transition-all`}
                       >
-                        <Calculator
-                          className={`w-5 h-5 ${colors.textPrimary}`}
+                        <CalculatorIcon
+                          className={`w-5 h-5 ${colors.textPrimary} drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]`}
                         />
                       </button>
                       <VoiceEntryButton
@@ -425,8 +444,9 @@ export default function MobileExpenseForm() {
 
                 <Button
                   size="lg"
-                  className="w-full h-12 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all active:scale-[0.98]"
+                  className="w-full h-12 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5 transition-all active:scale-[0.98] spring-bounce"
                   onClick={() => {
+                    if (navigator.vibrate) navigator.vibrate(10);
                     const next = getNextStep();
                     if (next) {
                       setStep(next);
@@ -444,24 +464,19 @@ export default function MobileExpenseForm() {
             {step === "amount" && (
               <div>
                 {/* Private/Public Lock Icon (shown only on Amount step) */}
-                <div className="flex items-center justify-between px-1 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-[#06b6d4]/80">
-                      Private Transaction
-                    </span>
-                    <span className="text-xs text-[#38bdf8]/60">
-                      (Hidden from household)
-                    </span>
-                  </div>
+                <div className="flex items-center justify-end px-1 py-2">
                   <button
                     onClick={() => setIsPrivate(!isPrivate)}
                     className={cn(
-                      "neo-card p-3 rounded-lg border transition-all duration-300 active:scale-95",
+                      "neo-card p-3 rounded-lg border transition-all duration-300 active:scale-95 flex items-center gap-2",
                       isPrivate
                         ? "border-[#06b6d4]/60 bg-[#06b6d4]/25 neo-glow"
                         : "border-[#3b82f6]/20 bg-[#1a2942] hover:border-[#3b82f6]/30"
                     )}
                   >
+                    <span className="text-sm font-medium text-[#06b6d4]/80">
+                      Private Transaction
+                    </span>
                     <svg
                       className={cn(
                         "w-5 h-5 transition-all duration-500",
@@ -543,7 +558,7 @@ export default function MobileExpenseForm() {
                           </div>
                         </div>
                         {selectedAccountId === account.id && (
-                          <Check className="w-5 h-5 text-[#06b6d4]" />
+                          <CheckIcon className="w-5 h-5 text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
                         )}
                       </div>
                     </button>
@@ -600,11 +615,20 @@ export default function MobileExpenseForm() {
                         )}
                       >
                         <div className="flex flex-col items-center justify-center gap-1 h-full">
-                          {category.icon && (
-                            <span className="text-2xl filter drop-shadow-lg">
-                              {category.icon}
-                            </span>
-                          )}
+                          {(() => {
+                            const IconComponent = getCategoryIcon(
+                              category.name,
+                              category.slug
+                            );
+                            return (
+                              <IconComponent
+                                className={cn(
+                                  "w-8 h-8 text-[#06b6d4]/80",
+                                  getCategoryGlowClass(category.color)
+                                )}
+                              />
+                            );
+                          })()}
                           <span className="font-semibold text-center text-xs text-white">
                             {category.name}
                           </span>

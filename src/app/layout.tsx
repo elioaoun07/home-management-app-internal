@@ -64,8 +64,8 @@ export default async function RootLayout({
     : undefined;
 
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="scroll-smooth">
+      <body suppressHydrationWarning className="overflow-x-hidden">
         {/* Early theme apply to avoid flash of incorrect theme */}
         <script
           dangerouslySetInnerHTML={{
@@ -113,14 +113,17 @@ export default async function RootLayout({
                 background: "hsl(var(--header-bg))",
                 border: "1px solid hsl(var(--header-border))",
                 color: "hsl(var(--foreground))",
+                backdropFilter: "blur(12px)",
               },
-              className: "neo-card",
+              className: "neo-card shadow-2xl",
               actionButtonStyle: {
                 background: "hsl(var(--nav-text-primary))",
                 color: "hsl(var(--background))",
                 border: "none",
                 fontWeight: "600",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
               },
+              duration: 3000,
             }}
           />
         </Providers>

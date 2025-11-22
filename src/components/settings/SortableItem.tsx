@@ -1,9 +1,9 @@
 "use client";
 
+import { GripVerticalIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
 
 export function SortableItem({
   id,
@@ -48,7 +48,7 @@ export function SortableItem({
         aria-label="Drag to reorder"
         className="cursor-grab active:cursor-grabbing"
       >
-        <GripVertical className="h-5 w-5 text-muted-foreground" />
+        <GripVerticalIcon className="h-5 w-5 text-muted-foreground drop-shadow-[0_0_4px_rgba(148,163,184,0.3)]" />
       </Button>
     </li>
   );

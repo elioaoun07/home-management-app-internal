@@ -277,7 +277,7 @@ export default function TransactionsTable({
         return;
       }
       const updated: Tx = await res.json();
-      toast.success("Updated");
+      toast.success("Transaction updated");
       if (onChange) onChange(updated);
       else {
         setDataRows((prev) =>
@@ -287,7 +287,7 @@ export default function TransactionsTable({
       setEditing(null);
     } catch (e) {
       console.error("Update failed", e);
-      toast.error("Failed to update");
+      toast.error("Failed to update transaction. Please try again.");
     } finally {
       setSaving(false);
     }

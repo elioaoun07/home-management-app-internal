@@ -1,5 +1,13 @@
 "use client";
 
+import {
+  ChevronDownIcon as ChevronDown,
+  ChevronRightIcon as ChevronRight,
+  GripVerticalIcon as GripVertical,
+  PencilIcon as Pencil,
+  StarIcon as Star,
+  Trash2Icon as Trash2,
+} from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,14 +45,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  ChevronDown,
-  ChevronRight,
-  GripVertical,
-  Pencil,
-  Star,
-  Trash2,
-} from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 

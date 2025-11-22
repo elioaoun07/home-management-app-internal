@@ -1,9 +1,9 @@
 "use client";
 
+import { PencilIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
-import { Pencil } from "lucide-react";
 import { useState } from "react";
 import AddCategoryDialog from "./AddCategoryDialog";
 import CategoryManagerDialog from "./CategoryManagerDialog";
@@ -83,7 +83,7 @@ export default function CategoryGrid({
             aria-label="Manage categories"
             title="Manage categories"
           >
-            <Pencil className="h-4 w-4" />
+            <PencilIcon className="h-4 w-4 drop-shadow-[0_0_6px_rgba(56,189,248,0.5)]" />
             <span>Manage</span>
           </button>
         )}

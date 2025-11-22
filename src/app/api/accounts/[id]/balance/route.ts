@@ -65,12 +65,28 @@ export async function GET(
   // Calculate current balance from initial balance and transactions since balance_set_at
   // For expense accounts: balance - SUM(transactions)
   // For income accounts: balance + SUM(transactions)
-  const { data: transactionsSum } = await supabase
+  //
+  // IMPORTANT: When user sets balance, they're saying "my wallet has $X RIGHT NOW"
+  // So we should count transactions from THE NEXT DAY forward, not from the same day.
+  //
+  // Example: User sets balance to $40 on Nov 21 at 7 PM
+  //   - This means: "I have $40 in my wallet right now (Nov 21, 7 PM)"
+  //   - Transactions from Nov 22 onward should be counted
+  //   - Transactions from Nov 21 should NOT be counted (they're before the baseline)
+  const balanceDate = new Date(balanceData.balance_set_at);
+  balanceDate.setDate(balanceDate.getDate() + 1); // Next day
+  const nextDay = balanceDate.toISOString().split("T")[0]; // YYYY-MM-DD
+
+  const { data: transactionsSum, error: transError } = await supabase
     .from("transactions")
     .select("amount")
     .eq("account_id", accountId)
     .eq("is_draft", false)
-    .gte("inserted_at", balanceData.balance_set_at);
+    .gte("date", nextDay); // Include transactions from next day onward
+
+  if (transError) {
+    console.error("Error fetching transactions for balance:", transError);
+  }
 
   const totalTransactions =
     transactionsSum?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;

@@ -1,11 +1,11 @@
 "use client";
 
+import { MicIcon, SquareIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import type { UICategory } from "@/features/categories/useCategoriesQuery";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
 import { qk } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
-import { Mic, Square } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -182,9 +182,9 @@ export default function VoiceEntryButton({
           className="h-12 w-12 hover:bg-primary/10 hover:text-primary transition-all"
         >
           {recording ? (
-            <Square className="h-5 w-5" />
+            <SquareIcon className="h-5 w-5 drop-shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
           ) : (
-            <Mic className="h-5 w-5" />
+            <MicIcon className="h-5 w-5 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
           )}
         </Button>
 

@@ -1,12 +1,16 @@
 "use client";
 
+import {
+  ArrowRightIcon,
+  KeyRoundIcon,
+  MailIcon,
+} from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loadCredentials, saveCredentials } from "@/lib/auth/credentials";
-import { ArrowRight, KeyRound, Mail } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { Suspense, useEffect, useState } from "react";
@@ -74,16 +78,22 @@ function LoginContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background via-background to-muted/20 p-4">
-      <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4 relative overflow-hidden">
+      {/* Animated background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 right-10 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-blob"></div>
+        <div className="absolute bottom-20 left-10 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
+      </div>
+
+      <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 relative z-10">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4 ring-8 ring-primary/5">
-            <KeyRound className="w-8 h-8 text-primary" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 mb-4 ring-8 ring-primary/10 shadow-2xl shadow-primary/20">
+            <KeyRoundIcon className="w-8 h-8 text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
           <p className="text-muted-foreground">
-            Sign in to your account to continue
+            Sign in to continue to your account
           </p>
         </div>
 
@@ -115,7 +125,7 @@ function LoginContent() {
                 Email
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground drop-shadow-[0_0_6px_rgba(148,163,184,0.4)]" />
                 <Input
                   id="email"
                   name="email"
@@ -135,7 +145,7 @@ function LoginContent() {
                 Password
               </Label>
               <div className="relative">
-                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <KeyRoundIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground drop-shadow-[0_0_6px_rgba(148,163,184,0.4)]" />
                 <Input
                   id="password"
                   name="password"
@@ -186,7 +196,7 @@ function LoginContent() {
               ) : (
                 <span className="flex items-center gap-2">
                   Sign in
-                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  <ArrowRightIcon className="w-4 h-4 transition-transform group-hover:translate-x-1 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
                 </span>
               )}
             </Button>

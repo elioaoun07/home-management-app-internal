@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  LogOutIcon as LogOut,
+  SettingsIcon,
+  UserIcon,
+} from "@/components/icons/FuturisticIcons";
 import SettingsDialog from "@/components/settings/SettingsDialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -12,11 +17,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createClient } from "@supabase/supabase-js";
-import {
-  LogOut,
-  Settings as SettingsIcon,
-  User as UserIcon,
-} from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LinkHouseholdDialog from "./LinkHouseholdDialog";

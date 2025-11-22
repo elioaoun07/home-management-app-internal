@@ -6,6 +6,11 @@
 
 import type { Template } from "@/components/expense/TemplateDrawer";
 import TemplateDrawer from "@/components/expense/TemplateDrawer";
+import {
+  BarChart3Icon,
+  FileTextIcon,
+  PlusIcon,
+} from "@/components/icons/FuturisticIcons";
 import { MOBILE_NAV_HEIGHT } from "@/constants/layout";
 import { useTab } from "@/contexts/TabContext";
 import { prefetchDashboardData } from "@/features/dashboard/prefetchDashboard";
@@ -14,9 +19,9 @@ import {
   prefetchAllTabs,
   prefetchExpenseData,
 } from "@/features/navigation/prefetchTabs";
+import { useViewMode } from "@/hooks/useViewMode";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, FileText, Plus } from "lucide-react";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 type TabId = "dashboard" | "expense" | "drafts";
@@ -27,9 +32,9 @@ const navItems: Array<{
   label: string;
   primary?: boolean;
 }> = [
-  { id: "dashboard", icon: BarChart3, label: "Dashboard" },
-  { id: "expense", icon: Plus, label: "Add", primary: true },
-  { id: "drafts", icon: FileText, label: "Drafts" },
+  { id: "dashboard", icon: BarChart3Icon, label: "Dashboard" },
+  { id: "expense", icon: PlusIcon, label: "Add", primary: true },
+  { id: "drafts", icon: FileTextIcon, label: "Drafts" },
 ];
 
 export default function MobileNav() {
@@ -39,6 +44,7 @@ export default function MobileNav() {
   const draftCount = useDraftCount(); // Use hook instead of local state
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isLongPress, setIsLongPress] = useState(false);
+  const { viewMode, isLoaded } = useViewMode();
   const prefetchedRef = useRef({
     dashboard: false,
     expense: false,
@@ -102,6 +108,11 @@ export default function MobileNav() {
     height: `${MOBILE_NAV_HEIGHT}px`,
   };
 
+  // Hide nav in watch/web mode - after all hooks are called
+  if (!isLoaded || viewMode === "watch" || viewMode === "web") {
+    return null;
+  }
+
   return (
     <>
       {/* Bottom Navigation */}
@@ -147,7 +158,13 @@ export default function MobileNav() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => {
+                  // Haptic feedback for professional feel
+                  if (navigator.vibrate) {
+                    navigator.vibrate(10);
+                  }
+                  setActiveTab(item.id);
+                }}
                 onMouseEnter={
                   item.id === "dashboard" ? handleDashboardPrefetch : undefined
                 }
@@ -156,7 +173,7 @@ export default function MobileNav() {
                 }
                 suppressHydrationWarning
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-2xl transition-all min-w-[68px]",
+                  "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-2xl transition-all min-w-[68px] hover:scale-105",
                   "active:scale-95",
                   isActive
                     ? "neo-card neo-glow-sm text-[hsl(var(--nav-icon-active))] bg-[hsl(var(--header-bg))]"

@@ -1,10 +1,15 @@
 "use client";
 
+import {
+  ArrowLeftIcon,
+  SparklesIcon,
+  ZapIcon,
+} from "@/components/icons/FuturisticIcons";
 import { Card } from "@/components/ui/card";
 import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format } from "date-fns";
-import { ArrowLeft, Sparkles, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type Transaction = {
@@ -34,7 +39,6 @@ export default function CategoryDetailView({
   onBack,
   onTransactionClick,
 }: Props) {
-  const categoryIcon = transactions[0]?.category_icon || "📁";
   const { theme } = useTheme();
   const [isExiting, setIsExiting] = useState(false);
 
@@ -107,7 +111,7 @@ export default function CategoryDetailView({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-50 bg-[#0a1628] overflow-hidden",
+        "min-h-screen bg-[#0a1628] relative",
         theme === "pink" && "bg-[#1a0a14]",
         isExiting ? "slide-out-blurred-left" : "slide-in-blurred-right"
       )}
@@ -121,48 +125,36 @@ export default function CategoryDetailView({
       }
     >
       {/* Futuristic Background Grid */}
-      <div className="absolute inset-0 opacity-10">
+      <div className="fixed inset-0 top-14 opacity-10 pointer-events-none z-0">
         <div
           className="absolute inset-0"
           style={{
             backgroundImage: `linear-gradient(${colors.primaryHex} 1px, transparent 1px), linear-gradient(90deg, ${colors.primaryHex} 1px, transparent 1px)`,
             backgroundSize: "50px 50px",
-            animation: "backgroundScroll 20s linear infinite",
           }}
         />
       </div>
 
-      <style jsx>{`
-        @keyframes backgroundScroll {
-          0% {
-            transform: translate(0, 0);
-          }
-          100% {
-            transform: translate(50px, 50px);
-          }
-        }
-      `}</style>
-
       {/* Header with Glass Morphism */}
       <div
         className={cn(
-          "sticky top-0 z-30 backdrop-blur-xl border-b px-3 py-4",
+          "sticky top-0 z-30 backdrop-blur-xl border-b px-3 py-15",
           theme === "blue"
-            ? "bg-[#1a2942]/80 border-cyan-500/20"
-            : "bg-[#2d1b29]/80 border-pink-500/20"
+            ? "bg-[#1a2942]/90 border-cyan-500/20"
+            : "bg-[#2d1b29]/90 border-pink-500/20"
         )}
       >
         <button
           onClick={handleBack}
           className={cn(
-            "flex items-center gap-2 mb-3 px-4 py-2 rounded-lg transition-all duration-300 group",
+            "flex items-center gap-2 mb-3 px-4 py-2.5 rounded-lg transition-all duration-300 group shadow-md hover:shadow-lg",
             theme === "blue"
-              ? "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
-              : "text-pink-400 hover:text-pink-300 hover:bg-pink-500/10"
+              ? "text-cyan-300 hover:text-cyan-200 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30"
+              : "text-pink-300 hover:text-pink-200 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30"
           )}
         >
-          <ArrowLeft className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
-          <span className="text-sm font-medium">Back to Dashboard</span>
+          <ArrowLeftIcon className="w-5 h-5 transition-transform group-hover:-translate-x-1 drop-shadow-[0_0_10px_rgba(56,189,248,0.7)]" />
+          <span className="text-sm font-semibold">Back to Dashboard</span>
         </button>
 
         <div className="flex items-center gap-4">
@@ -174,12 +166,17 @@ export default function CategoryDetailView({
               "border glow-pulse"
             )}
           >
-            <span className="text-5xl">{categoryIcon}</span>
-            <Sparkles
+            {(() => {
+              const IconComponent = getCategoryIcon(category);
+              return (
+                <IconComponent className="w-12 h-12 text-[#06b6d4] drop-shadow-[0_0_15px_rgba(6,182,212,0.7)]" />
+              );
+            })()}
+            <SparklesIcon
               className={cn(
                 "absolute -top-1 -right-1 w-4 h-4",
                 colors.textPrimary,
-                "animate-pulse"
+                "animate-pulse drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]"
               )}
             />
           </div>
@@ -195,7 +192,7 @@ export default function CategoryDetailView({
       </div>
 
       {/* Scrollable Content */}
-      <div className="overflow-y-auto h-[calc(100vh-140px)] p-3 space-y-4 pb-20">
+      <div className="relative z-10 p-3 space-y-4 pb-20">
         {/* Summary Cards with Stagger Animation */}
         <div className="grid grid-cols-2 gap-3">
           <Card
@@ -214,8 +211,12 @@ export default function CategoryDetailView({
               <p className={cn("text-2xl font-bold", colors.textPrimary)}>
                 ${totalAmount.toFixed(2)}
               </p>
-              <Zap
-                className={cn("w-5 h-5", colors.textPrimary, "animate-pulse")}
+              <ZapIcon
+                className={cn(
+                  "w-5 h-5",
+                  colors.textPrimary,
+                  "animate-pulse drop-shadow-[0_0_10px_rgba(6,182,212,0.6)]"
+                )}
               />
             </div>
           </Card>
@@ -255,7 +256,7 @@ export default function CategoryDetailView({
                 colors.textPrimary
               )}
             >
-              <Sparkles className="w-4 h-4" />
+              <SparklesIcon className="w-4 h-4 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
               By Subcategory
             </h3>
             <div className="space-y-2">
@@ -303,7 +304,7 @@ export default function CategoryDetailView({
               colors.textPrimary
             )}
           >
-            <Zap className="w-4 h-4" />
+            <ZapIcon className="w-4 h-4 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
             By Account
           </h3>
           <div className="space-y-2">
@@ -346,7 +347,7 @@ export default function CategoryDetailView({
               colors.textPrimary
             )}
           >
-            <Sparkles className="w-4 h-4 animate-pulse" />
+            <SparklesIcon className="w-4 h-4 animate-pulse drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
             All Transactions
           </h3>
           <div className="space-y-2">

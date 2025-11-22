@@ -1,10 +1,10 @@
 "use client";
 
+import { Edit2Icon, SaveIcon, XIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Edit2, Save, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -39,7 +39,9 @@ export default function AccountBalance({
     queryKey: ["account-balance", accountId],
     queryFn: async () => {
       if (!accountId) return null;
-      const res = await fetch(`/api/accounts/${accountId}/balance`);
+      const res = await fetch(`/api/accounts/${accountId}/balance`, {
+        cache: "no-store", // Always fetch fresh data
+      });
       if (!res.ok) {
         const errorData = await res
           .json()
@@ -50,6 +52,16 @@ export default function AccountBalance({
     },
     enabled: !!accountId,
     retry: 1,
+    refetchOnMount: "always", // Always refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    staleTime: 0, // Data is immediately stale, refetch on every access
+    onError: (error: Error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to load balance. Please refresh."
+      );
+    },
   });
 
   // Update balance mutation
@@ -160,7 +172,7 @@ export default function AccountBalance({
                 onClick={handleSave}
                 disabled={updateBalanceMutation.isPending}
               >
-                <Save className="h-4 w-4 text-[#14b8a6]" />
+                <SaveIcon className="h-4 w-4 text-[#14b8a6] drop-shadow-[0_0_6px_rgba(20,184,166,0.5)]" />
               </Button>
               <Button
                 size="icon"
@@ -169,7 +181,7 @@ export default function AccountBalance({
                 onClick={handleCancel}
                 disabled={updateBalanceMutation.isPending}
               >
-                <X className="h-4 w-4 text-red-400" />
+                <XIcon className="h-4 w-4 text-red-400 drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
               </Button>
             </div>
           ) : (
@@ -184,7 +196,7 @@ export default function AccountBalance({
                   className="h-7 w-7 bg-[#3b82f6]/20 hover:bg-[#3b82f6]/30 border border-[#3b82f6]/30 rounded-lg active:scale-95 transition-all"
                   onClick={handleEdit}
                 >
-                  <Edit2 className="h-3.5 w-3.5 text-[#38bdf8]" />
+                  <Edit2Icon className="h-3.5 w-3.5 text-[#38bdf8] drop-shadow-[0_0_6px_rgba(56,189,248,0.5)]" />
                 </Button>
               </div>
               <span

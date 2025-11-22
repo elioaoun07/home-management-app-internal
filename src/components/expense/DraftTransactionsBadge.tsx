@@ -1,8 +1,8 @@
 "use client";
 
 import DraftTransactionsDialog from "@/components/expense/DraftTransactionsDialog";
+import { MicIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
-import { Mic } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function DraftTransactionsBadge() {
@@ -38,7 +38,7 @@ export default function DraftTransactionsBadge() {
         className="fixed bottom-20 right-4 z-40 shadow-lg neo-glow"
         title="Review voice entry drafts"
       >
-        <Mic className="w-4 h-4 mr-2" />
+        <MicIcon className="w-4 h-4 mr-2 drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]" />
         {count} Draft{count !== 1 ? "s" : ""}
       </Button>
 

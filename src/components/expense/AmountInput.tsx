@@ -1,9 +1,12 @@
 "use client";
 
+import {
+  CalculatorIcon,
+  DollarSignIcon,
+} from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calculator, DollarSign } from "lucide-react";
 import { ReactNode, useState } from "react";
 import CalculatorDialog from "./CalculatorDialog";
 
@@ -22,7 +25,7 @@ export default function AmountInput({ value, onChange, rightExtra }: Props) {
         htmlFor="amount"
         className="text-base font-semibold flex items-center gap-2"
       >
-        <DollarSign className="h-4 w-4" />
+        <DollarSignIcon className="h-4 w-4 drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]" />
         Amount
       </Label>
       <div className="flex items-center gap-2">
@@ -48,7 +51,7 @@ export default function AmountInput({ value, onChange, rightExtra }: Props) {
           aria-label="Open calculator"
           onClick={() => setCalcOpen(true)}
         >
-          <Calculator className="h-5 w-5" />
+          <CalculatorIcon className="h-5 w-5 drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
         </Button>
         {rightExtra}
       </div>

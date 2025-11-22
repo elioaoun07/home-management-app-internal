@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, X } from "lucide-react";
+import { PlusIcon, XIcon } from "@/components/icons/FuturisticIcons";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import TemplateDialog from "./TemplateDialog";
@@ -157,7 +157,7 @@ export default function TemplateDrawer({
                   className="inline-flex items-center gap-2 px-6 py-3 neo-card rounded-full neo-glow cursor-pointer active:scale-95 transition-all"
                   onClick={() => setShowCreateDialog(true)}
                 >
-                  <Plus className="w-5 h-5 text-[hsl(var(--nav-text-primary))]" />
+                  <PlusIcon className="w-5 h-5 text-[hsl(var(--nav-text-primary))] drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]" />
                   <span className="text-sm font-semibold text-[hsl(var(--nav-text-primary))]">
                     Create Your First Template
                   </span>
@@ -259,7 +259,7 @@ export default function TemplateDrawer({
                     className="p-3 neo-card rounded-full hover:neo-glow-sm transition-all active:scale-95 shadow-lg"
                     title="Create Template"
                   >
-                    <Plus className="w-5 h-5 text-[hsl(var(--nav-text-primary))]" />
+                    <PlusIcon className="w-5 h-5 text-[hsl(var(--nav-text-primary))] drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]" />
                   </button>
                   <button
                     onClick={() => onOpenChange(false)}
@@ -267,7 +267,7 @@ export default function TemplateDrawer({
                     className="p-3 neo-card rounded-full hover:neo-glow-sm transition-all active:scale-95 shadow-lg"
                     title="Close"
                   >
-                    <X className="w-5 h-5 text-[hsl(var(--nav-text-primary))]" />
+                    <XIcon className="w-5 h-5 text-[hsl(var(--nav-text-primary))] drop-shadow-[0_0_6px_rgba(248,113,113,0.4)]" />
                   </button>
                 </div>
 

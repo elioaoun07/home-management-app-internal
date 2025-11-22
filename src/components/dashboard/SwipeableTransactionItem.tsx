@@ -1,9 +1,10 @@
 "use client";
 
+import { Edit2Icon, Trash2Icon } from "@/components/icons/FuturisticIcons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format } from "date-fns";
-import { Edit2, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 type Transaction = {
@@ -169,7 +170,7 @@ export default function SwipeableTransactionItem({
             offset > 30 ? "opacity-100" : "opacity-0"
           )}
         >
-          <Edit2 className="w-5 h-5 text-blue-400" />
+          <Edit2Icon className="w-5 h-5 text-blue-400 drop-shadow-[0_0_8px_rgba(96,165,250,0.6)]" />
           <span className="text-sm font-medium text-blue-400">Edit</span>
         </div>
 
@@ -181,7 +182,7 @@ export default function SwipeableTransactionItem({
           )}
         >
           <span className="text-sm font-medium text-red-400">Delete</span>
-          <Trash2 className="w-5 h-5 text-red-400" />
+          <Trash2Icon className="w-5 h-5 text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
         </div>
       </div>
 
@@ -218,9 +219,14 @@ export default function SwipeableTransactionItem({
           {/* Left: Icon + Category */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-xl">
-                {transaction.category_icon || "💰"}
-              </span>
+              {(() => {
+                const IconComponent = getCategoryIcon(
+                  transaction.category || undefined
+                );
+                return (
+                  <IconComponent className="w-5 h-5 text-[#06b6d4]/70 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+                );
+              })()}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white truncate">
                   {transaction.category || "Uncategorized"}

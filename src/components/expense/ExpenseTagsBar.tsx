@@ -1,5 +1,6 @@
 "use client";
 
+import { CalendarIcon } from "@/components/icons/FuturisticIcons";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -13,7 +14,6 @@ import {
 } from "@/constants/layout";
 import { useTheme } from "@/contexts/ThemeContext";
 import { format, subDays } from "date-fns";
-import { CalendarIcon } from "lucide-react";
 import { type CSSProperties } from "react";
 
 interface ExpenseTagsBarProps {

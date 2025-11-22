@@ -1,7 +1,7 @@
 "use client";
 
+import { CheckIcon, PlusIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
-import { Check, Plus } from "lucide-react";
 import { useState } from "react";
 
 type Props = {
@@ -43,12 +43,12 @@ export default function AddExpenseButton({ disabled = true, onSubmit }: Props) {
         </span>
       ) : showSuccess ? (
         <span className="flex items-center gap-2 animate-in fade-in">
-          <Check className="w-5 h-5" />
+          <CheckIcon className="w-5 h-5 drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]" />
           Added Successfully!
         </span>
       ) : (
         <span className="flex items-center gap-2">
-          <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
+          <PlusIcon className="w-5 h-5 transition-transform group-hover:rotate-90 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
           Add Expense
         </span>
       )}

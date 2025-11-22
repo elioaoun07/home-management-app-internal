@@ -1,4 +1,9 @@
 "use client";
+import {
+  PencilIcon,
+  PlusCircleIcon,
+  Trash2Icon,
+} from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -8,7 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil, PlusCircle, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import TemplateDialog from "./TemplateDialog";
@@ -86,7 +90,10 @@ export default function TemplateQuickEntryButton({
         aria-label="Quick Templates"
         style={{ borderRadius: "50%" }}
       >
-        <PlusCircle size={32} />
+        <PlusCircleIcon
+          size={32}
+          className="drop-shadow-[0_0_12px_rgba(6,182,212,0.6)]"
+        />
       </Button>
       {open && (
         <div
@@ -142,7 +149,10 @@ export default function TemplateQuickEntryButton({
                       }}
                       aria-label="Edit"
                     >
-                      <Pencil size={16} />
+                      <PencilIcon
+                        size={16}
+                        className="drop-shadow-[0_0_6px_rgba(56,189,248,0.5)]"
+                      />
                     </Button>
                     <Button
                       size="icon"
@@ -175,7 +185,10 @@ export default function TemplateQuickEntryButton({
                       }}
                       aria-label="Delete"
                     >
-                      <Trash2 size={16} />
+                      <Trash2Icon
+                        size={16}
+                        className="drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]"
+                      />
                     </Button>
                   </li>
                 ))}

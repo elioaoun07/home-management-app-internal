@@ -1,8 +1,8 @@
 "use client";
 
+import { FileTextIcon } from "@/components/icons/FuturisticIcons";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText } from "lucide-react";
 
 type Props = {
   value?: string;
@@ -16,7 +16,7 @@ export default function DescriptionField({ value, onChange }: Props) {
         htmlFor="description"
         className="text-base font-semibold flex items-center gap-2"
       >
-        <FileText className="h-4 w-4" />
+        <FileTextIcon className="h-4 w-4 drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]" />
         Description (Optional)
       </Label>
       <Textarea

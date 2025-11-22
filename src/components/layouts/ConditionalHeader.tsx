@@ -2,6 +2,7 @@
 
 import UserMenuClient from "@/components/auth/UserMenuClient";
 import { useTab } from "@/contexts/TabContext";
+import { useViewMode } from "@/hooks/useViewMode";
 
 type Props = {
   userName: string;
@@ -15,12 +16,25 @@ export default function ConditionalHeader({
   avatarUrl,
 }: Props) {
   const { activeTab } = useTab();
+  const { viewMode, isLoaded } = useViewMode();
+
+  // Hide header in watch/web mode - after all hooks are called
+  if (!isLoaded || viewMode === "watch" || viewMode === "web") {
+    return null;
+  }
 
   // Always show header with UserMenu on all tabs
   return (
-    <div className="fixed top-0 left-0 right-0 h-14 bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-md border-b border-[hsl(var(--header-border)/0.2)] flex items-center justify-between px-4 z-50">
-      <h1 className="text-base font-bold text-white/90">Budget Manager</h1>
+    <header className="fixed top-0 left-0 right-0 h-14 bg-[hsl(var(--header-bg)/0.98)] backdrop-blur-xl border-b border-[hsl(var(--header-border)/0.3)] flex items-center justify-between px-4 z-50 shadow-lg shadow-black/5">
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
+          <span className="text-white font-bold text-sm">B</span>
+        </div>
+        <h1 className="text-base font-bold bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
+          Budget Manager
+        </h1>
+      </div>
       <UserMenuClient name={userName} email={userEmail} avatarUrl={avatarUrl} />
-    </div>
+    </header>
   );
 }

@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  CheckIcon,
+  MicIcon,
+  PencilIcon,
+  Trash2Icon,
+  XIcon,
+} from "@/components/icons/FuturisticIcons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +23,6 @@ import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Check, Mic, Pencil, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -169,7 +175,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Mic className="w-5 h-5" />
+            <MicIcon className="w-5 h-5 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
             Voice Entry Drafts
           </DialogTitle>
           <DialogDescription>
@@ -184,7 +190,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
           </div>
         ) : drafts.length === 0 ? (
           <div className="text-center py-12">
-            <Mic className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+            <MicIcon className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50 drop-shadow-[0_0_10px_rgba(6,182,212,0.3)]" />
             <p className="text-muted-foreground">No draft transactions</p>
             <p className="text-sm text-muted-foreground mt-2">
               Use voice entry to create transactions that need review
@@ -206,7 +212,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
                   {/* Voice transcript if available */}
                   {draft.voice_transcript && (
                     <div className="flex items-start gap-2 text-sm bg-muted/50 p-2 rounded">
-                      <Mic className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                      <MicIcon className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]" />
                       <div className="flex-1">
                         <p className="italic text-muted-foreground">
                           &ldquo;{draft.voice_transcript}&rdquo;
@@ -348,7 +354,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
                           onClick={() => confirmDraft(draft.id)}
                           className="flex-1"
                         >
-                          <Check className="w-4 h-4 mr-2" />
+                          <CheckIcon className="w-4 h-4 mr-2 drop-shadow-[0_0_6px_rgba(20,184,166,0.5)]" />
                           Confirm & Save
                         </Button>
                         <Button
@@ -356,7 +362,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
                           variant="outline"
                           onClick={cancelEditing}
                         >
-                          <X className="w-4 h-4 mr-2" />
+                          <XIcon className="w-4 h-4 mr-2 drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
                           Cancel
                         </Button>
                       </div>
@@ -409,7 +415,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
                             onClick={() => startEditing(draft)}
                             title="Edit draft"
                           >
-                            <Pencil className="w-4 h-4" />
+                            <PencilIcon className="w-4 h-4 drop-shadow-[0_0_6px_rgba(56,189,248,0.5)]" />
                           </Button>
                           <Button
                             size="icon"
@@ -417,7 +423,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
                             onClick={() => deleteDraft(draft.id)}
                             title="Delete draft"
                           >
-                            <Trash2 className="w-4 h-4 text-destructive" />
+                            <Trash2Icon className="w-4 h-4 text-destructive drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
                           </Button>
                         </div>
                       </div>

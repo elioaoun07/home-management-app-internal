@@ -6,6 +6,7 @@ import {
 } from "@/features/preferences/useSectionOrder";
 import TemplateQuickEntryButton, { Template } from "./TemplateQuickEntryButton";
 
+import { CalendarIcon as CalendarDaysIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -17,9 +18,9 @@ import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
 import { cn } from "@/lib/utils";
+import { isToday, isYesterday, yyyyMmDd } from "@/lib/utils/date";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { CalendarDays } from "lucide-react";
 import { useEffect, useMemo, useState, type JSX } from "react";
 import { toast } from "sonner";
 import AccountBalance from "./AccountBalance";
@@ -52,23 +53,9 @@ export default function ExpenseForm() {
   // Query client for invalidating balance
   const queryClient = useQueryClient();
 
-  const yyyyMmDd = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  };
-
   const humanDate = (d: Date) => {
-    const today = new Date();
-    const tKey = yyyyMmDd(today);
-    const dKey = yyyyMmDd(d);
-    // Yesterday label
-    const yest = new Date();
-    yest.setDate(today.getDate() - 1);
-    const yKey = yyyyMmDd(yest);
-    if (dKey === tKey) return "Today";
-    if (dKey === yKey) return "Yesterday";
+    if (isToday(d)) return "Today";
+    if (isYesterday(d)) return "Yesterday";
     // Use a deterministic format to avoid locale-based hydration mismatches
     return format(d, "MMM d, yyyy");
   };
@@ -285,7 +272,7 @@ export default function ExpenseForm() {
                 )}
                 aria-label="Select date"
               >
-                <CalendarDays className="size-4" />
+                <CalendarDaysIcon className="size-4 drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]" />
                 {/* Show label only after mount to prevent SSR/CSR time/locale drift */}
                 <DateLabel value={date} formatter={humanDate} />
               </Button>

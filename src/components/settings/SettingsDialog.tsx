@@ -1,5 +1,6 @@
 "use client";
 
+import { RotateCcwIcon, SaveIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,6 +22,7 @@ import {
   useUpdatePreferences,
   type SectionKey,
 } from "@/features/preferences/useSectionOrder";
+import { useViewMode, ViewMode } from "@/hooks/useViewMode";
 import {
   closestCenter,
   DndContext,
@@ -41,7 +43,6 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { RotateCcw, Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SortableItem } from "./SortableItem";
@@ -61,6 +62,7 @@ const SECTION_LABELS: Record<SectionKey, string> = {
 export function SettingsDialog({ open, onOpenChange }: Props) {
   const { theme: darkLightTheme, updateTheme } = usePreferences();
   const { theme: colorTheme, setTheme, isLoading: themeLoading } = useTheme();
+  const { viewMode, updateViewMode } = useViewMode();
 
   // Section order state
   const { data: serverOrderArray } = useSectionOrder();
@@ -164,12 +166,18 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
           defaultValue="appearance"
           className="flex-1 flex flex-col overflow-hidden"
         >
-          <TabsList className="grid w-full grid-cols-4 bg-[hsl(var(--header-bg)/0.5)] border border-[hsl(var(--header-border)/0.3)] rounded-xl p-1 flex-shrink-0">
+          <TabsList className="grid w-full grid-cols-5 bg-[hsl(var(--header-bg)/0.5)] border border-[hsl(var(--header-border)/0.3)] rounded-xl p-1 flex-shrink-0">
             <TabsTrigger
               value="appearance"
               className="data-[state=active]:bg-[hsl(var(--nav-text-primary)/0.2)] data-[state=active]:text-[hsl(var(--nav-text-primary))] data-[state=active]:neo-glow-sm rounded-lg transition-all"
             >
               Theme
+            </TabsTrigger>
+            <TabsTrigger
+              value="view"
+              className="data-[state=active]:bg-[hsl(var(--nav-text-primary)/0.2)] data-[state=active]:text-[hsl(var(--nav-text-primary))] data-[state=active]:neo-glow-sm rounded-lg transition-all"
+            >
+              View
             </TabsTrigger>
             <TabsTrigger
               value="accounts"
@@ -208,7 +216,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                 <button
                   onClick={async () => {
                     await setTheme("blue");
-                    toast.success("🎨 Theme updated to Blue!");
+                    toast.success("Theme updated to Blue");
                   }}
                   disabled={themeLoading}
                   className="neo-card flex flex-col items-center justify-center gap-3 rounded-xl p-6 hover:neo-glow-sm transition-all active:scale-[0.98] h-full disabled:opacity-50"
@@ -222,7 +230,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                 <button
                   onClick={async () => {
                     await setTheme("pink");
-                    toast.success("🎨 Theme updated to Pink!");
+                    toast.success("Theme updated to Pink");
                   }}
                   disabled={themeLoading}
                   className="neo-card flex flex-col items-center justify-center gap-3 rounded-xl p-6 hover:neo-glow-sm transition-all active:scale-[0.98] h-full disabled:opacity-50"
@@ -233,6 +241,112 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                     Warm & Vibrant
                   </span>
                 </button>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="view" className="mt-4 flex-1 overflow-y-auto">
+            <div className="space-y-4 h-[400px] flex flex-col">
+              <div className="flex-shrink-0">
+                <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
+                  View Mode
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Switch between different platform views
+                </p>
+              </div>
+
+              <RadioGroup
+                value={viewMode}
+                onValueChange={(value) => {
+                  updateViewMode(value as ViewMode);
+                  toast.success(
+                    `Switched to ${value.charAt(0).toUpperCase() + value.slice(1)} view`
+                  );
+                }}
+                className="space-y-3 flex-1"
+              >
+                <div
+                  className={`neo-card flex items-center gap-3 rounded-xl p-4 hover:neo-glow-sm transition-all cursor-pointer ${
+                    viewMode === "mobile" ? "border-[#3b82f6] border-2" : ""
+                  }`}
+                >
+                  <RadioGroupItem
+                    id="view-mobile"
+                    value="mobile"
+                    className="flex-shrink-0"
+                  />
+                  <Label
+                    htmlFor="view-mobile"
+                    className="flex-1 cursor-pointer"
+                  >
+                    <div className="text-sm font-semibold">Mobile</div>
+                    <div className="text-xs text-muted-foreground">
+                      Optimized for phones with touch navigation
+                    </div>
+                  </Label>
+                  {viewMode === "mobile" && (
+                    <span className="text-xs bg-[hsl(var(--nav-text-primary)/0.2)] text-[hsl(var(--nav-text-primary))] px-2 py-1 rounded-full font-medium">
+                      Active
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  className={`neo-card flex items-center gap-3 rounded-xl p-4 hover:neo-glow-sm transition-all cursor-pointer ${
+                    viewMode === "web" ? "border-[#3b82f6] border-2" : ""
+                  }`}
+                >
+                  <RadioGroupItem
+                    id="view-web"
+                    value="web"
+                    className="flex-shrink-0"
+                  />
+                  <Label htmlFor="view-web" className="flex-1 cursor-pointer">
+                    <div className="text-sm font-semibold">Web</div>
+                    <div className="text-xs text-muted-foreground">
+                      Desktop layout with expanded features
+                    </div>
+                  </Label>
+                  {viewMode === "web" && (
+                    <span className="text-xs bg-[hsl(var(--nav-text-primary)/0.2)] text-[hsl(var(--nav-text-primary))] px-2 py-1 rounded-full font-medium">
+                      Active
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  className={`neo-card flex items-center gap-3 rounded-xl p-4 hover:neo-glow-sm transition-all cursor-pointer ${
+                    viewMode === "watch" ? "border-[#3b82f6] border-2" : ""
+                  }`}
+                >
+                  <RadioGroupItem
+                    id="view-watch"
+                    value="watch"
+                    className="flex-shrink-0"
+                  />
+                  <Label htmlFor="view-watch" className="flex-1 cursor-pointer">
+                    <div className="text-sm font-semibold">Watch</div>
+                    <div className="text-xs text-muted-foreground">
+                      Voice entry and quick balance overview
+                    </div>
+                  </Label>
+                  {viewMode === "watch" && (
+                    <span className="text-xs bg-[hsl(var(--nav-text-primary)/0.2)] text-[hsl(var(--nav-text-primary))] px-2 py-1 rounded-full font-medium">
+                      Active
+                    </span>
+                  )}
+                </div>
+              </RadioGroup>
+
+              <div className="flex-shrink-0 p-3 neo-card rounded-lg border border-[hsl(var(--nav-text-primary)/0.2)] bg-[hsl(var(--header-bg)/0.5)]">
+                <p className="text-xs text-muted-foreground">
+                  <strong className="text-[hsl(var(--nav-text-primary))]">
+                    Note:
+                  </strong>{" "}
+                  View preference is stored locally on this device. Web view is
+                  coming soon.
+                </p>
               </div>
             </div>
           </TabsContent>
@@ -315,7 +429,8 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   onClick={resetToDefault}
                   className="neo-card hover:neo-glow-sm"
                 >
-                  <RotateCcw className="mr-2 h-4 w-4" /> Reset
+                  <RotateCcwIcon className="mr-2 h-4 w-4 drop-shadow-[0_0_6px_rgba(248,113,113,0.4)]" />{" "}
+                  Reset
                 </Button>
                 <Button
                   type="button"
@@ -323,7 +438,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   disabled={!canSave || updatePreferences.isPending}
                   className="neo-gradient text-white hover:opacity-90"
                 >
-                  <Save className="mr-2 h-4 w-4" />
+                  <SaveIcon className="mr-2 h-4 w-4 drop-shadow-[0_0_6px_rgba(20,184,166,0.5)]" />
                   {updatePreferences.isPending ? "Saving..." : "Save"}
                 </Button>
               </div>

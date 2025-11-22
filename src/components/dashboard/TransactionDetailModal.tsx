@@ -1,12 +1,17 @@
 "use client";
 
+import {
+  SaveIcon,
+  Trash2Icon,
+  XIcon,
+} from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
-import { Save, Trash2, X } from "lucide-react";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -213,7 +218,7 @@ export default function TransactionDetailModal({
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-[#3b82f6]/10 transition-colors"
           >
-            <X className="w-5 h-5 text-[#38bdf8]" />
+            <XIcon className="w-5 h-5 text-[#38bdf8] drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]" />
           </button>
         </div>
 
@@ -222,9 +227,14 @@ export default function TransactionDetailModal({
           {/* Account / Category Selectors */}
           <Card className="neo-card p-3 border-[#06b6d4]/30">
             <div className="flex items-start gap-3">
-              <div className="text-3xl mt-1">
-                {transaction.category_icon || "💰"}
-              </div>
+              {(() => {
+                const IconComponent = getCategoryIcon(
+                  transaction.category || undefined
+                );
+                return (
+                  <IconComponent className="w-8 h-8 text-[#06b6d4]/70 mt-1 drop-shadow-[0_0_10px_rgba(6,182,212,0.6)]" />
+                );
+              })()}
               <div className="flex-1">
                 <div className="space-y-2">
                   <div>
@@ -373,7 +383,7 @@ export default function TransactionDetailModal({
               variant="outline"
               className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10"
             >
-              <Trash2 className="w-4 h-4 mr-2" />
+              <Trash2Icon className="w-4 h-4 mr-2 drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
               {deleting ? "Deleting..." : "Delete"}
             </Button>
             <Button
@@ -381,7 +391,7 @@ export default function TransactionDetailModal({
               disabled={saving}
               className="flex-1 neo-gradient"
             >
-              <Save className="w-4 h-4 mr-2" />
+              <SaveIcon className="w-4 h-4 mr-2 drop-shadow-[0_0_6px_rgba(20,184,166,0.5)]" />
               {saving ? "Saving..." : "Save"}
             </Button>
           </div>

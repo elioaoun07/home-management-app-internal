@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  CheckIcon,
+  MicIcon,
+  PencilIcon,
+  Trash2Icon,
+  XIcon,
+} from "@/components/icons/FuturisticIcons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +18,6 @@ import { qk } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Check, Mic, Pencil, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -135,7 +141,7 @@ export default function DraftsPage() {
       <div className="min-h-screen bg-[#0a1628] flex items-center justify-center p-6">
         <div className="text-center max-w-sm">
           <div className="w-20 h-20 mx-auto mb-6 bg-[#06b6d4]/10 rounded-full flex items-center justify-center">
-            <Mic className="w-10 h-10 text-[#06b6d4]" />
+            <MicIcon className="w-10 h-10 text-[#06b6d4] drop-shadow-[0_0_15px_rgba(6,182,212,0.6)]" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-3">
             No Draft Transactions
@@ -156,7 +162,7 @@ export default function DraftsPage() {
         <div className="flex items-center gap-3 mb-6">
           <div className="relative">
             <div className="w-10 h-10 bg-[#06b6d4]/20 rounded-full flex items-center justify-center">
-              <Mic className="w-5 h-5 text-[#06b6d4]" />
+              <MicIcon className="w-5 h-5 text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
             </div>
             <div className="absolute -top-1 -right-1 w-5 h-5 bg-[#06b6d4] rounded-full flex items-center justify-center">
               <span className="text-[10px] font-bold text-[#0a1628]">
@@ -189,7 +195,7 @@ export default function DraftsPage() {
               {/* Voice transcript */}
               {draft.voice_transcript && (
                 <div className="flex items-start gap-3 bg-[#0a1628]/70 p-4 rounded-xl border border-[#1e3a4f]">
-                  <Mic className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#06b6d4]" />
+                  <MicIcon className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#06b6d4] drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm italic text-[#94a3b8] leading-relaxed">
                       &ldquo;{draft.voice_transcript}&rdquo;
@@ -336,7 +342,7 @@ export default function DraftsPage() {
                       onClick={() => confirmDraft(draft.id)}
                       className="flex-1 h-12 bg-[#06b6d4] hover:bg-[#0891b2] text-white font-medium rounded-xl shadow-lg shadow-[#06b6d4]/25 transition-all"
                     >
-                      <Check className="w-5 h-5 mr-2" />
+                      <CheckIcon className="w-5 h-5 mr-2 drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]" />
                       Confirm & Save
                     </Button>
                     <Button
@@ -344,7 +350,7 @@ export default function DraftsPage() {
                       onClick={cancelEditing}
                       className="h-12 px-6 border-[#3b82f6]/30 text-[#94a3b8] hover:bg-[#1a2942] hover:text-white rounded-xl"
                     >
-                      <X className="w-5 h-5" />
+                      <XIcon className="w-5 h-5 drop-shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
                     </Button>
                   </div>
                 </div>
@@ -371,13 +377,13 @@ export default function DraftsPage() {
                           onClick={() => startEditing(draft)}
                           className="w-10 h-10 rounded-full bg-[#06b6d4]/10 hover:bg-[#06b6d4]/20 text-[#06b6d4] flex items-center justify-center transition-colors"
                         >
-                          <Pencil className="w-4 h-4" />
+                          <PencilIcon className="w-4 h-4 drop-shadow-[0_0_6px_rgba(56,189,248,0.5)]" />
                         </button>
                         <button
                           onClick={() => deleteDraft(draft.id)}
                           className="w-10 h-10 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-400 flex items-center justify-center transition-colors"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2Icon className="w-4 h-4 drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
                         </button>
                       </div>
                     </div>

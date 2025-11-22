@@ -3,18 +3,22 @@
 import CategoryDetailView from "@/components/dashboard/CategoryDetailView";
 import SwipeableTransactionItem from "@/components/dashboard/SwipeableTransactionItem";
 import TransactionDetailModal from "@/components/dashboard/TransactionDetailModal";
+import {
+  ArrowDownRightIcon,
+  ArrowUpRightIcon,
+  BarChart3Icon,
+  DollarSignIcon,
+  FilterIcon,
+  ListIcon,
+  StarIcon,
+  TrendingUpIcon,
+  XIcon,
+} from "@/components/icons/FuturisticIcons";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  DollarSign,
-  Filter,
-  TrendingUp,
-  X,
-} from "lucide-react";
 import { memo, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -201,29 +205,37 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   return (
     <div className="min-h-screen bg-[#0a1628] pb-20">
       {/* View Mode Toggle */}
-      <div className="sticky top-[60px] z-20 bg-gradient-to-b from-[#1a2942] to-[#0f1d2e] border-b border-[#3b82f6]/20 px-3 py-3">
+      <div className="sticky top-14 z-20 bg-gradient-to-b from-[#1a2942] to-[#0f1d2e] border-b border-[#3b82f6]/20 px-3 py-3 shimmer backdrop-blur-xl">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setViewMode("widgets")}
+            onClick={() => {
+              if (navigator.vibrate) navigator.vibrate(5);
+              setViewMode("widgets");
+            }}
             className={cn(
-              "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+              "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 hover:-translate-y-0.5",
               viewMode === "widgets"
-                ? "neo-gradient text-white shadow-lg"
-                : "neo-card text-[#38bdf8] hover:bg-[#3b82f6]/10"
+                ? "neo-gradient text-white shadow-lg spring-bounce"
+                : "neo-card text-[#38bdf8] hover:bg-[#3b82f6]/10 hover:shadow-md"
             )}
           >
-            📊 Overview
+            <BarChart3Icon className="w-4 h-4 inline-block mr-1.5 drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]" />
+            Overview
           </button>
           <button
-            onClick={() => setViewMode("list")}
+            onClick={() => {
+              if (navigator.vibrate) navigator.vibrate(5);
+              setViewMode("list");
+            }}
             className={cn(
-              "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+              "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 hover:-translate-y-0.5",
               viewMode === "list"
-                ? "neo-gradient text-white shadow-lg"
-                : "neo-card text-[#38bdf8] hover:bg-[#3b82f6]/10"
+                ? "neo-gradient text-white shadow-lg spring-bounce"
+                : "neo-card text-[#38bdf8] hover:bg-[#3b82f6]/10 hover:shadow-md"
             )}
           >
-            📝 List
+            <ListIcon className="w-4 h-4 inline-block mr-1.5 drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]" />
+            List
           </button>
 
           <button
@@ -234,7 +246,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               showFilters && "bg-[#3b82f6]/20"
             )}
           >
-            <Filter className="w-5 h-5 text-[#38bdf8]" />
+            <FilterIcon className="w-5 h-5 text-[#38bdf8] drop-shadow-[0_0_8px_rgba(56,189,248,0.6)]" />
             {hasActiveFilters && (
               <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#06b6d4] rounded-full animate-pulse" />
             )}
@@ -274,7 +286,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                   onClick={clearFilters}
                   className="p-2 rounded-lg neo-card hover:bg-red-500/10 transition-all"
                 >
-                  <X className="w-4 h-4 text-red-400" />
+                  <XIcon className="w-4 h-4 text-red-400 drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
                 </button>
               )}
             </div>
@@ -295,9 +307,9 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                   {field}
                   {sortField === field &&
                     (sortOrder === "asc" ? (
-                      <ArrowUpRight className="w-3 h-3" />
+                      <ArrowUpRightIcon className="w-3 h-3" />
                     ) : (
-                      <ArrowDownRight className="w-3 h-3" />
+                      <ArrowDownRightIcon className="w-3 h-3" />
                     ))}
                 </button>
               ))}
@@ -312,40 +324,61 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
       </div>
 
       {/* Content */}
-      <div className="px-3 py-4">
+      <div className="px-3 py-15">
         {viewMode === "widgets" && (
           <div className="space-y-3">
             {/* Compact Stats Grid */}
-            <div className="grid grid-cols-3 gap-2">
-              <Card className="neo-card p-3 border-[#3b82f6]/20">
-                <DollarSign className="w-5 h-5 text-[#06b6d4]/60 mb-1" />
-                <p className="text-xs text-[#38bdf8]/70">Total</p>
-                <p className="text-lg font-bold text-white truncate">
-                  ${stats.total.toFixed(0)}
-                </p>
+            <div className="grid grid-cols-3 gap-3">
+              <Card className="neo-card p-4 border-[#3b82f6]/20 hover:border-[#06b6d4]/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer">
+                <div className="flex flex-col items-center justify-center text-center">
+                  <DollarSignIcon className="w-6 h-6 text-[#06b6d4]/60 mb-2 drop-shadow-[0_0_10px_rgba(6,182,212,0.4)]" />
+                  <p className="text-[10px] text-[#38bdf8]/70 mb-1 font-medium uppercase tracking-wide">
+                    Total
+                  </p>
+                  <p className="text-2xl font-bold text-white truncate">
+                    ${stats.total.toFixed(0)}
+                  </p>
+                </div>
               </Card>
 
-              <Card className="neo-card p-3 border-[#3b82f6]/20">
-                <TrendingUp className="w-5 h-5 text-[#06b6d4]/60 mb-1" />
-                <p className="text-xs text-[#38bdf8]/70">Count</p>
-                <p className="text-lg font-bold text-white">{stats.count}</p>
+              <Card
+                className="neo-card p-4 border-[#3b82f6]/20 hover:border-[#06b6d4]/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer"
+                style={{ animationDelay: "100ms" }}
+              >
+                <div className="flex flex-col items-center justify-center text-center">
+                  <TrendingUpIcon className="w-6 h-6 text-[#06b6d4]/60 mb-2 drop-shadow-[0_0_10px_rgba(6,182,212,0.4)]" />
+                  <p className="text-[10px] text-[#38bdf8]/70 mb-1 font-medium uppercase tracking-wide">
+                    Count
+                  </p>
+                  <p className="text-2xl font-bold text-white">{stats.count}</p>
+                </div>
               </Card>
 
-              <Card className="neo-card p-3 border-[#3b82f6]/20">
-                <div className="w-5 h-5 text-[#06b6d4]/60 mb-1 text-lg">📊</div>
-                <p className="text-xs text-[#38bdf8]/70">Daily</p>
-                <p className="text-lg font-bold text-white truncate">
-                  ${stats.dailyAvg.toFixed(0)}
-                </p>
+              <Card
+                className="neo-card p-4 border-[#3b82f6]/20 hover:border-[#06b6d4]/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer"
+                style={{ animationDelay: "200ms" }}
+              >
+                <div className="flex flex-col items-center justify-center text-center">
+                  <BarChart3Icon className="w-6 h-6 text-[#06b6d4]/60 mb-2 drop-shadow-[0_0_10px_rgba(6,182,212,0.4)]" />
+                  <p className="text-[10px] text-[#38bdf8]/70 mb-1 font-medium uppercase tracking-wide">
+                    Daily
+                  </p>
+                  <p className="text-2xl font-bold text-white truncate">
+                    ${stats.dailyAvg.toFixed(0)}
+                  </p>
+                </div>
               </Card>
             </div>
 
             {/* Top Category - More visual */}
             {stats.topCategory && (
-              <Card className="neo-card p-3 border-[#06b6d4]/30 bg-gradient-to-br from-[#06b6d4]/5 to-transparent">
+              <Card
+                className="neo-card p-3 border-[#06b6d4]/30 bg-gradient-to-br from-[#06b6d4]/5 to-transparent hover:from-[#06b6d4]/10 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl glow-pulse-primary spring-bounce"
+                style={{ animationDelay: "300ms" }}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <div className="text-2xl">🏆</div>
+                    <StarIcon className="w-6 h-6 text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.6)]" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-[#38bdf8]/70">Top Spend</p>
                       <p className="text-sm font-semibold text-white truncate">
@@ -379,8 +412,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     return (
                       <button
                         key={cat}
-                        onClick={() => handleCategoryClick(cat)}
-                        className="w-full group"
+                        onClick={() => {
+                          if (navigator.vibrate) navigator.vibrate(5);
+                          handleCategoryClick(cat);
+                        }}
+                        className="w-full group hover:-translate-y-0.5 transition-transform duration-200"
                       >
                         <div className="flex items-center justify-between mb-0.5">
                           <span className="text-xs text-white truncate flex-1 text-left">
@@ -420,7 +456,14 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     onClick={() => setSelectedTransaction(tx)}
                     className="w-full flex items-center gap-2 p-2 rounded-lg bg-[#1a2942]/30 hover:bg-[#1a2942] border border-transparent hover:border-[#06b6d4]/30 transition-all"
                   >
-                    <span className="text-lg">{tx.category_icon || "💰"}</span>
+                    {(() => {
+                      const IconComponent = getCategoryIcon(
+                        tx.category || undefined
+                      );
+                      return (
+                        <IconComponent className="w-5 h-5 text-[#06b6d4]/60 drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
+                      );
+                    })()}
                     <div className="flex-1 min-w-0 text-left">
                       <p className="text-xs font-medium text-white truncate">
                         {tx.category}
