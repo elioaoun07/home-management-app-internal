@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 interface AccountBalanceProps {
@@ -55,14 +55,18 @@ export default function AccountBalance({
     refetchOnMount: "always", // Always refetch when component mounts
     refetchOnWindowFocus: true, // Refetch when user returns to tab
     staleTime: 0, // Data is immediately stale, refetch on every access
-    onError: (error: Error) => {
+  });
+
+  // Handle errors with useEffect (new React Query pattern)
+  useEffect(() => {
+    if (error) {
       toast.error(
         error instanceof Error
           ? error.message
           : "Failed to load balance. Please refresh."
       );
-    },
-  });
+    }
+  }, [error]);
 
   // Update balance mutation
   const updateBalanceMutation = useMutation({
