@@ -1,8 +1,8 @@
 "use client";
 
 import MobileExpenseForm from "@/components/expense/MobileExpenseForm";
-import SimpleWatchView from "@/components/watch/SimpleWatchView";
 import { WatchErrorBoundary } from "@/components/watch/WatchErrorBoundary";
+import WatchView from "@/components/watch/WatchView";
 import { useViewMode } from "@/hooks/useViewMode";
 
 export default function ExpenseClientWrapper() {
@@ -19,7 +19,7 @@ export default function ExpenseClientWrapper() {
   if (viewMode === "watch") {
     return (
       <WatchErrorBoundary>
-        <SimpleWatchView />
+        <WatchView />
       </WatchErrorBoundary>
     );
   }

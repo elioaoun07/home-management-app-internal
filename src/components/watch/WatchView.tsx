@@ -1,9 +1,11 @@
 "use client";
 
-import VoiceEntryButton from "@/components/expense/VoiceEntryButton";
 import { useAccounts } from "@/features/accounts/hooks";
-import { useCategories } from "@/features/categories/hooks";
-import { useQuery } from "@tanstack/react-query";
+import { useCategories } from "@/features/categories/useCategoriesQuery";
+import { useDrafts } from "@/features/drafts/useDrafts";
+import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
+import { qk } from "@/lib/queryKeys";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,32 +17,26 @@ interface Balance {
 }
 
 export default function WatchView() {
-  const { data: categories = [], isLoading: categoriesLoading } =
-    useCategories();
-  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
-  const [previewText, setPreviewText] = useState("");
+  const queryClient = useQueryClient();
+  const [mounted, setMounted] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<"main" | "insights">(
     "main"
   );
-  const [isMounted, setIsMounted] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
-  const isDragging = useRef(false);
 
-  // Ensure client-side only
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  // Voice recording state
+  const [recording, setRecording] = useState(false);
+  const [preview, setPreview] = useState("");
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const transcriptRef = useRef<string>("");
 
-  // Get default account or first account
-  const defaultAccount = useMemo(() => {
-    if (!accounts || accounts.length === 0) return null;
-    const defAcc = accounts.find((a: any) => a.is_default);
-    return defAcc || accounts[0];
-  }, [accounts]);
+  // Data hooks
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
+  const defaultAccount = accounts.find((a) => a.is_default) || accounts[0];
+  const { data: categories = [] } = useCategories(defaultAccount?.id);
+  const { data: drafts = [] } = useDrafts();
 
-  // Fetch balance for default account
+  // Fetch balance
   const { data: balance } = useQuery<Balance>({
     queryKey: ["account-balance", defaultAccount?.id],
     queryFn: async () => {
@@ -51,404 +47,678 @@ export default function WatchView() {
       if (!res.ok) throw new Error("Failed to fetch balance");
       return res.json();
     },
-    enabled: !!defaultAccount?.id && isMounted,
+    enabled: !!defaultAccount?.id && mounted,
     refetchInterval: 5000,
   });
 
-  // Prevent default browser swipe/back behavior
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  // Fetch today's transactions
+  const today = new Date().toISOString().split("T")[0];
+  const { data: todayTransactions = [] } = useQuery({
+    queryKey: ["transactions-today", defaultAccount?.id, today],
+    queryFn: async () => {
+      if (!defaultAccount?.id) return [];
+      const res = await fetch(
+        `/api/transactions?account_id=${defaultAccount.id}&start_date=${today}&end_date=${today}`
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.transactions || [];
+    },
+    enabled: !!defaultAccount?.id && mounted,
+  });
 
-    const preventSwipeBack = (e: TouchEvent) => {
-      if (isDragging.current) {
-        e.preventDefault();
-      }
-    };
+  const todaySpending = useMemo(
+    () =>
+      todayTransactions.reduce(
+        (sum: number, t: any) => sum + Number(t.amount || 0),
+        0
+      ),
+    [todayTransactions]
+  );
 
-    // Disable browser back gesture
-    window.addEventListener("touchmove", preventSwipeBack, {
-      passive: false,
-    });
-
-    // Prevent overscroll
-    if (document.body) {
-      document.body.style.overscrollBehavior = "none";
-      document.body.style.overflow = "hidden";
-    }
-
-    return () => {
-      window.removeEventListener("touchmove", preventSwipeBack);
-      if (document.body) {
-        document.body.style.overscrollBehavior = "";
-        document.body.style.overflow = "";
-      }
-    };
+  const SpeechRecognitionImpl = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return (
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition ||
+      null
+    );
   }, []);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-    isDragging.current = false;
-  };
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touchStartX.current) return;
+  // Voice recording
+  const startRecording = () => {
+    if (!SpeechRecognitionImpl) {
+      toast.error("Speech recognition not supported");
+      return;
+    }
+    try {
+      const rec: SpeechRecognition = new SpeechRecognitionImpl();
+      recognitionRef.current = rec;
+      transcriptRef.current = "";
+      rec.lang = "en-US";
+      rec.continuous = true;
+      rec.interimResults = true;
 
-    const deltaX = Math.abs(e.touches[0].clientX - touchStartX.current);
-    const deltaY = Math.abs(e.touches[0].clientY - touchStartY.current);
+      rec.onresult = (event: SpeechRecognitionEvent) => {
+        let text = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          text += event.results[i][0]?.transcript ?? "";
+        }
+        transcriptRef.current = text;
+        setPreview(text);
+      };
 
-    // If horizontal movement is significant, mark as dragging
-    if (deltaX > 10 && deltaX > deltaY) {
-      isDragging.current = true;
-      e.preventDefault(); // Prevent browser back
+      rec.onerror = () => {
+        toast.error("Speech recognition error");
+        stopRecording();
+      };
+
+      rec.onend = () => {
+        setRecording(false);
+        const sentence = transcriptRef.current.trim();
+        if (sentence) saveDraft(sentence);
+      };
+
+      rec.start();
+      setRecording(true);
+    } catch (e) {
+      toast.error("Could not start speech recognition");
     }
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!isDragging.current || !touchStartX.current) {
-      touchStartX.current = 0;
-      touchStartY.current = 0;
-      isDragging.current = false;
+  const stopRecording = () => {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    setRecording(false);
+  };
+
+  const saveDraft = async (sentence: string) => {
+    if (!sentence || !defaultAccount?.id) return;
+
+    const parsed = parseSpeechExpense(sentence, categories);
+
+    if (!parsed.amount) {
+      toast.error("Could not detect amount in speech");
+      setPreview("");
       return;
     }
 
-    const touchEndX = e.changedTouches[0].clientX;
-    const deltaX = touchStartX.current - touchEndX;
+    try {
+      const response = await fetch("/api/drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          account_id: defaultAccount.id,
+          amount: parsed.amount,
+          category_id: parsed.categoryId || null,
+          subcategory_id: parsed.subcategoryId || null,
+          description: sentence,
+          voice_transcript: sentence,
+          confidence_score: parsed.confidenceScore || null,
+          date: parsed.date || new Date().toISOString().split("T")[0],
+        }),
+      });
 
-    // Only switch screens if swipe distance > 100px
+      if (response.ok) {
+        toast.success("Saved as draft!");
+        queryClient.invalidateQueries({ queryKey: qk.drafts() });
+        queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+      } else {
+        toast.error("Failed to save draft");
+      }
+    } catch (error) {
+      toast.error("Failed to save voice entry");
+    }
+    setPreview("");
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const deltaX = touchStartX.current - e.changedTouches[0].clientX;
     if (Math.abs(deltaX) > 100) {
       if (deltaX > 0 && currentScreen === "main") {
-        // Swipe left on main -> insights
         setCurrentScreen("insights");
       } else if (deltaX < 0 && currentScreen === "insights") {
-        // Swipe right on insights -> main
         setCurrentScreen("main");
       }
     }
-
-    touchStartX.current = 0;
-    touchStartY.current = 0;
-    isDragging.current = false;
   };
 
-  // Show loading state
-  if (!isMounted || categoriesLoading || accountsLoading) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
-        <div
-          className="relative"
-          style={{
-            width: "min(80vw, 80vh)",
-            height: "min(80vw, 80vh)",
-            maxWidth: "300px",
-            maxHeight: "300px",
-            borderRadius: "50%",
-            background:
-              "linear-gradient(135deg, #1e3a8a 0%, #3b0764 50%, #831843 100%)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "inset 0 0 60px rgba(0,0,0,0.5)",
-          }}
-        >
-          <div className="text-white text-lg">Loading...</div>
-        </div>
-      </div>
-    );
+  if (!mounted || accountsLoading) {
+    return <LoadingScreen />;
   }
 
-  // Show error if no accounts
   if (!defaultAccount) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
-        <div
-          className="relative p-8"
-          style={{
-            width: "min(80vw, 80vh)",
-            height: "min(80vw, 80vh)",
-            maxWidth: "300px",
-            maxHeight: "300px",
-            borderRadius: "50%",
-            background:
-              "linear-gradient(135deg, #1e3a8a 0%, #3b0764 50%, #831843 100%)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "inset 0 0 60px rgba(0,0,0,0.5)",
-          }}
-        >
-          <div className="text-red-400 text-4xl mb-3">⚠️</div>
-          <div className="text-white text-sm text-center">
-            No account found. Please set up an account first.
-          </div>
-        </div>
-      </div>
-    );
+    return <ErrorScreen />;
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="fixed inset-0 overflow-hidden select-none"
-      style={{
-        touchAction: "none",
-        WebkitUserSelect: "none",
-        background:
-          "linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)",
-      }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* Circular mask for watch display */}
-      <div className="absolute inset-0 flex items-center justify-center">
+    <>
+      <style>{`
+        @keyframes pulse {
+          0%, 100% {
+            box-shadow: 0 10px 40px rgba(239, 68, 68, 0.8), inset 0 3px 10px rgba(255,255,255,0.2), 0 0 0 0 rgba(239, 68, 68, 0.7);
+          }
+          50% {
+            box-shadow: 0 10px 40px rgba(239, 68, 68, 0.8), inset 0 3px 10px rgba(255,255,255,0.2), 0 0 0 20px rgba(239, 68, 68, 0);
+          }
+        }
+      `}</style>
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        style={{
+          position: "fixed",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background:
+            "radial-gradient(circle at 30% 20%, #667eea 0%, #764ba2 40%, #f093fb 100%)",
+        }}
+      >
         <div
-          className="relative overflow-hidden"
           style={{
             width: "min(100vw, 100vh)",
             height: "min(100vw, 100vh)",
-            maxWidth: "450px",
-            maxHeight: "450px",
+            maxWidth: "480px",
+            maxHeight: "480px",
             borderRadius: "50%",
             background:
-              "linear-gradient(135deg, #1e3a8a 0%, #3b0764 50%, #831843 100%)",
+              "linear-gradient(135deg, #1e3a8a 0%, #6366f1 50%, #ec4899 100%)",
             boxShadow:
-              "inset 0 0 60px rgba(0,0,0,0.5), 0 0 30px rgba(0,0,0,0.3)",
+              "inset 0 0 100px rgba(0,0,0,0.7), 0 0 50px rgba(147, 51, 234, 0.5)",
+            border: "4px solid rgba(147, 51, 234, 0.3)",
+            position: "relative",
+            overflow: "hidden",
           }}
         >
-          {/* Main Screen - Wallet & Microphone */}
+          {/* Main Screen */}
           <div
-            className={`absolute inset-0 flex flex-col items-center justify-center transition-transform duration-300 ${
-              currentScreen === "main" ? "translate-x-0" : "-translate-x-full"
-            }`}
-            style={{ touchAction: "none" }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "2rem",
+              transform:
+                currentScreen === "main"
+                  ? "translateX(0)"
+                  : "translateX(-100%)",
+              transition: "transform 0.3s ease-out",
+            }}
           >
-            {/* Wallet Balance */}
-            <div className="text-center mb-6 px-4">
-              <div className="text-xs text-cyan-300 font-medium uppercase tracking-wider mb-2 opacity-80">
-                {defaultAccount?.name || "Wallet"}
+            {/* Balance */}
+            <div style={{ textAlign: "center", marginBottom: "30px" }}>
+              <div
+                style={{
+                  fontSize: "14px",
+                  color: "#a5f3fc",
+                  marginBottom: "12px",
+                  textTransform: "uppercase",
+                  letterSpacing: "2px",
+                  fontWeight: "600",
+                }}
+              >
+                {defaultAccount?.name || "Balance"}
               </div>
               <div
-                className="text-5xl font-bold tabular-nums mb-2"
                 style={{
+                  fontSize: "56px",
+                  fontWeight: "bold",
                   background:
-                    "linear-gradient(135deg, #a5f3fc 0%, #fbbf24 100%)",
+                    "linear-gradient(135deg, #fbbf24 0%, #f97316 50%, #ec4899 100%)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   backgroundClip: "text",
-                  filter: "drop-shadow(0 2px 10px rgba(165, 243, 252, 0.5))",
+                  filter: "drop-shadow(0 4px 12px rgba(251, 191, 36, 0.5))",
                 }}
               >
                 ${balance?.balance?.toFixed(2) || "0.00"}
               </div>
-              {balance?.pending_drafts ? (
-                <div className="text-xs text-orange-300 mt-1">
-                  {balance.draft_count} draft
-                  {balance.draft_count !== 1 ? "s" : ""}
-                </div>
-              ) : null}
-            </div>
 
-            {/* Voice Entry Button */}
-            <div className="relative mb-4">
-              <div className="scale-[2]">
-                <VoiceEntryButton
-                  categories={categories || []}
-                  accountId={defaultAccount?.id}
-                  onParsed={(result) => console.log("Parsed:", result)}
-                  onDraftCreated={() => {
-                    toast.success("Saved!", { duration: 2000 });
+              {/* Draft Info */}
+              {balance && (balance.draft_count ?? 0) > 0 && (
+                <div
+                  style={{
+                    marginTop: "12px",
+                    padding: "8px 16px",
+                    borderRadius: "20px",
+                    background: "rgba(251, 146, 60, 0.15)",
+                    border: "1px solid rgba(251, 146, 60, 0.3)",
+                    display: "inline-block",
                   }}
-                  onPreviewChange={setPreviewText}
-                  className=""
-                />
-              </div>
+                >
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "#fb923c",
+                      marginBottom: "4px",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {balance.draft_count} DRAFT
+                    {balance.draft_count !== 1 ? "S" : ""}
+                  </div>
+                  {balance.pending_drafts && balance.pending_drafts > 0 && (
+                    <div
+                      style={{
+                        fontSize: "16px",
+                        color: "#fbbf24",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      -${balance.pending_drafts.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Preview Text */}
-            {previewText && (
+            {/* Microphone Button */}
+            <div
+              onClick={recording ? stopRecording : startRecording}
+              style={{
+                width: "100px",
+                height: "100px",
+                borderRadius: "50%",
+                background: recording
+                  ? "linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%)"
+                  : "linear-gradient(135deg, #06b6d4 0%, #8b5cf6 50%, #ec4899 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                boxShadow: recording
+                  ? undefined
+                  : "0 10px 40px rgba(139, 92, 246, 0.6), inset 0 3px 10px rgba(255,255,255,0.2)",
+                border: "3px solid rgba(255,255,255,0.3)",
+                animation: recording
+                  ? "pulse 1.5s ease-in-out infinite"
+                  : "none",
+              }}
+            >
+              {recording ? (
+                <svg
+                  width="45"
+                  height="45"
+                  viewBox="0 0 24 24"
+                  fill="white"
+                  stroke="white"
+                  strokeWidth="2"
+                >
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              ) : (
+                <svg
+                  width="45"
+                  height="45"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" x2="12" y1="19" y2="22" />
+                </svg>
+              )}
+            </div>
+
+            {/* Preview */}
+            {recording && preview && (
               <div
-                className="absolute bottom-16 left-4 right-4 p-3 rounded-2xl text-center animate-in fade-in"
                 style={{
-                  background: "rgba(30, 58, 138, 0.95)",
-                  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  marginTop: "24px",
+                  padding: "14px 18px",
+                  borderRadius: "16px",
+                  background: "rgba(0,0,0,0.4)",
+                  maxWidth: "85%",
+                  textAlign: "center",
+                  border: "1px solid rgba(165, 243, 252, 0.3)",
                 }}
               >
-                <div className="text-[10px] text-cyan-300 mb-1 font-medium uppercase">
-                  Listening
+                <div
+                  style={{
+                    fontSize: "10px",
+                    color: "#a5f3fc",
+                    marginBottom: "6px",
+                    textTransform: "uppercase",
+                    letterSpacing: "2px",
+                    fontWeight: "600",
+                  }}
+                >
+                  🎤 Listening...
                 </div>
-                <div className="text-sm text-white font-medium line-clamp-2">
-                  {previewText}
+                <div
+                  style={{
+                    fontSize: "14px",
+                    color: "rgba(255,255,255,0.95)",
+                    fontStyle: "italic",
+                  }}
+                >
+                  {preview}
                 </div>
               </div>
             )}
 
             {/* Swipe Indicator */}
-            <div className="absolute bottom-6 left-0 right-0 text-center">
-              <div className="text-[10px] text-white/40 mb-2">
-                ← Swipe for stats
-              </div>
-              <div className="flex justify-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-cyan-400"></div>
-                <div className="w-2 h-2 rounded-full bg-white/20"></div>
-              </div>
+            <div
+              style={{
+                position: "absolute",
+                bottom: "24px",
+                display: "flex",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  width: "10px",
+                  height: "10px",
+                  borderRadius: "50%",
+                  background: "#a5f3fc",
+                  boxShadow: "0 0 10px #a5f3fc",
+                }}
+              />
+              <div
+                style={{
+                  width: "10px",
+                  height: "10px",
+                  borderRadius: "50%",
+                  background: "rgba(255,255,255,0.3)",
+                }}
+              />
             </div>
           </div>
 
           {/* Insights Screen */}
           <div
-            className={`absolute inset-0 flex flex-col items-center justify-center px-6 py-8 transition-transform duration-300 overflow-y-auto ${
-              currentScreen === "insights"
-                ? "translate-x-0"
-                : "translate-x-full"
-            }`}
-            style={{ touchAction: "pan-y" }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "2rem",
+              transform:
+                currentScreen === "insights"
+                  ? "translateX(0)"
+                  : "translateX(100%)",
+              transition: "transform 0.3s ease-out",
+            }}
           >
-            <div className="w-full space-y-3 max-h-full overflow-y-auto">
-              {/* Header */}
-              <div className="text-center mb-2">
-                <h2
-                  className="text-2xl font-bold mb-1"
+            <div
+              style={{
+                fontSize: "18px",
+                fontWeight: "bold",
+                background: "linear-gradient(135deg, #a5f3fc 0%, #fbbf24 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+                marginBottom: "32px",
+              }}
+            >
+              Today's Activity
+            </div>
+
+            {/* Spending Card */}
+            <div
+              style={{
+                background: "rgba(59, 130, 246, 0.2)",
+                border: "1px solid rgba(147, 51, 234, 0.3)",
+                borderRadius: "20px",
+                padding: "20px",
+                marginBottom: "16px",
+                textAlign: "center",
+                width: "85%",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "#a5f3fc",
+                  marginBottom: "8px",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                }}
+              >
+                💸 Spending
+              </div>
+              <div
+                style={{
+                  fontSize: "36px",
+                  fontWeight: "bold",
+                  background:
+                    "linear-gradient(135deg, #fbbf24 0%, #f97316 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                ${todaySpending.toFixed(2)}
+              </div>
+            </div>
+
+            {/* Transactions Card */}
+            <div
+              style={{
+                background: "rgba(6, 182, 212, 0.2)",
+                border: "1px solid rgba(20, 184, 166, 0.3)",
+                borderRadius: "20px",
+                padding: "20px",
+                marginBottom: "16px",
+                textAlign: "center",
+                width: "85%",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "#a5f3fc",
+                  marginBottom: "8px",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                }}
+              >
+                📊 Transactions
+              </div>
+              <div
+                style={{
+                  fontSize: "36px",
+                  fontWeight: "bold",
+                  background:
+                    "linear-gradient(135deg, #a5f3fc 0%, #67e8f9 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                {todayTransactions.length}
+              </div>
+            </div>
+
+            {/* Drafts Card */}
+            {drafts.length > 0 && (
+              <div
+                style={{
+                  background: "rgba(251, 146, 60, 0.2)",
+                  border: "1px solid rgba(251, 146, 60, 0.3)",
+                  borderRadius: "20px",
+                  padding: "20px",
+                  textAlign: "center",
+                  width: "85%",
+                }}
+              >
+                <div
                   style={{
+                    fontSize: "11px",
+                    color: "#fb923c",
+                    marginBottom: "8px",
+                    textTransform: "uppercase",
+                    letterSpacing: "1px",
+                  }}
+                >
+                  🎤 Pending Drafts
+                </div>
+                <div
+                  style={{
+                    fontSize: "36px",
+                    fontWeight: "bold",
                     background:
-                      "linear-gradient(135deg, #a5f3fc 0%, #fbbf24 100%)",
+                      "linear-gradient(135deg, #fbbf24 0%, #fb923c 100%)",
                     WebkitBackgroundClip: "text",
                     WebkitTextFillColor: "transparent",
                     backgroundClip: "text",
                   }}
                 >
-                  Dashboard
-                </h2>
-                <p className="text-xs text-white/60">Today&apos;s Activity</p>
+                  {drafts.length}
+                </div>
               </div>
+            )}
 
-              {/* Insights Cards */}
-              <QuickInsight accountId={defaultAccount?.id} />
-            </div>
-
-            {/* Swipe Indicator */}
-            <div className="absolute bottom-6 left-0 right-0 text-center">
-              <div className="text-[10px] text-white/40 mb-2">
-                Swipe right →
-              </div>
-              <div className="flex justify-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-white/20"></div>
-                <div className="w-2 h-2 rounded-full bg-cyan-400"></div>
-              </div>
+            {/* Swipe Back */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: "24px",
+                display: "flex",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  width: "10px",
+                  height: "10px",
+                  borderRadius: "50%",
+                  background: "rgba(255,255,255,0.3)",
+                }}
+              />
+              <div
+                style={{
+                  width: "10px",
+                  height: "10px",
+                  borderRadius: "50%",
+                  background: "#a5f3fc",
+                  boxShadow: "0 0 10px #a5f3fc",
+                }}
+              />
             </div>
           </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background:
+          "radial-gradient(circle at 30% 20%, #667eea 0%, #764ba2 40%, #f093fb 100%)",
+      }}
+    >
+      <div
+        style={{
+          width: "min(100vw, 100vh)",
+          height: "min(100vw, 100vh)",
+          maxWidth: "480px",
+          maxHeight: "480px",
+          borderRadius: "50%",
+          background:
+            "linear-gradient(135deg, #1e3a8a 0%, #6366f1 50%, #ec4899 100%)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "inset 0 0 100px rgba(0,0,0,0.7)",
+          border: "4px solid rgba(147, 51, 234, 0.3)",
+        }}
+      >
+        <div style={{ color: "#a5f3fc", fontSize: "18px", fontWeight: "600" }}>
+          Loading...
         </div>
       </div>
     </div>
   );
 }
 
-function QuickInsight({ accountId }: { accountId?: string }) {
-  const today = new Date().toISOString().split("T")[0];
-
-  const { data: todayTransactions } = useQuery({
-    queryKey: ["transactions-today", accountId, today],
-    queryFn: async () => {
-      if (!accountId) return [];
-      const res = await fetch(
-        `/api/transactions?account_id=${accountId}&start_date=${today}&end_date=${today}`
-      );
-      if (!res.ok) return [];
-      const data = await res.json();
-      return data.transactions || [];
-    },
-    enabled: !!accountId,
-  });
-
-  const todayTotal = useMemo(() => {
-    if (!todayTransactions || todayTransactions.length === 0) return 0;
-    return todayTransactions.reduce(
-      (sum: number, t: any) => sum + Number(t.amount || 0),
-      0
-    );
-  }, [todayTransactions]);
-
-  const transactionCount = todayTransactions?.length || 0;
-
+function ErrorScreen() {
   return (
-    <div className="space-y-3">
-      {/* Today's Spending */}
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      }}
+    >
       <div
-        className="p-4 rounded-2xl text-center"
         style={{
-          background: "rgba(59, 130, 246, 0.4)",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
-          border: "1px solid rgba(255, 255, 255, 0.1)",
+          width: "min(100vw, 100vh)",
+          height: "min(100vw, 100vh)",
+          maxWidth: "480px",
+          maxHeight: "480px",
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #1e3a8a 0%, #831843 100%)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "3rem",
+          boxShadow: "inset 0 0 80px rgba(0,0,0,0.6)",
+          border: "4px solid rgba(239, 68, 68, 0.3)",
         }}
       >
-        <div className="text-[10px] text-cyan-300 font-medium uppercase tracking-wider mb-1">
-          Today&apos;s Spending
+        <div
+          style={{ color: "#ef4444", fontSize: "56px", marginBottom: "20px" }}
+        >
+          ⚠️
         </div>
         <div
-          className="text-3xl font-bold"
           style={{
-            background: "linear-gradient(135deg, #fbbf24 0%, #f97316 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
+            color: "white",
+            fontSize: "16px",
+            textAlign: "center",
+            marginBottom: "24px",
           }}
         >
-          ${todayTotal.toFixed(2)}
+          No accounts found. Create one in Settings → Accounts
         </div>
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            padding: "14px 28px",
+            borderRadius: "28px",
+            background: "linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%)",
+            color: "white",
+            border: "none",
+            fontSize: "15px",
+            fontWeight: "600",
+            cursor: "pointer",
+          }}
+        >
+          🔄 Reload
+        </button>
       </div>
-
-      {/* Transaction Count */}
-      <div
-        className="p-4 rounded-2xl text-center"
-        style={{
-          background: "rgba(6, 182, 212, 0.4)",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
-          border: "1px solid rgba(255, 255, 255, 0.1)",
-        }}
-      >
-        <div className="text-[10px] text-cyan-300 font-medium uppercase tracking-wider mb-1">
-          Transactions
-        </div>
-        <div
-          className="text-3xl font-bold"
-          style={{
-            background: "linear-gradient(135deg, #a5f3fc 0%, #67e8f9 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-          }}
-        >
-          {transactionCount}
-        </div>
-      </div>
-
-      {/* Last Transaction */}
-      {todayTransactions && todayTransactions.length > 0 && (
-        <div
-          className="p-4 rounded-2xl"
-          style={{
-            background: "rgba(16, 185, 129, 0.4)",
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
-          }}
-        >
-          <div className="text-[10px] text-emerald-300 font-medium uppercase tracking-wider mb-2 text-center">
-            Latest
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-white/90 truncate mr-2">
-              {todayTransactions[0].description ||
-                todayTransactions[0].category?.name ||
-                "Expense"}
-            </span>
-            <span className="text-base font-bold text-white whitespace-nowrap">
-              ${Number(todayTransactions[0].amount).toFixed(2)}
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
