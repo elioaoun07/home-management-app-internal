@@ -277,7 +277,9 @@ export default function MobileExpenseForm() {
               ) : (
                 <div className="w-8" />
               )}
-              <h1 className="text-sm font-semibold text-white">New Expense</h1>
+              <h1 className="text-sm font-semibold bg-gradient-to-r from-teal via-cyan-400 to-cyan-300 bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]">
+                New Expense
+              </h1>
               <button
                 onClick={
                   closeDisabled
@@ -422,26 +424,38 @@ export default function MobileExpenseForm() {
                   <button
                     onClick={() => setIsPrivate(!isPrivate)}
                     className={cn(
-                      "neo-card p-3 rounded-lg border transition-all duration-300 active:scale-95 flex items-center gap-2",
+                      "group relative p-3 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2.5 overflow-hidden",
                       isPrivate
-                        ? "border-secondary/60 bg-secondary/25 neo-glow"
-                        : "border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80"
+                        ? "border-teal/40 bg-gradient-to-br from-teal/20 via-teal/15 to-cyan-500/10 shadow-[0_0_20px_rgba(20,184,166,0.25),0_0_40px_rgba(6,182,212,0.15)] hover:shadow-[0_0_25px_rgba(20,184,166,0.35),0_0_50px_rgba(6,182,212,0.2)]"
+                        : "neo-card border-[#1a2942]/60 hover:border-[#1a2942]"
                     )}
                   >
-                    <span className="text-sm font-medium text-secondary/80">
-                      Private Transaction
+                    {/* Animated background glow when private */}
+                    {isPrivate && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-teal/0 via-teal/30 to-teal/0 animate-[shimmer_3s_ease-in-out_infinite]" />
+                    )}
+
+                    <span
+                      className={cn(
+                        "relative text-sm font-semibold tracking-wide transition-all duration-300",
+                        isPrivate
+                          ? "text-teal drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]"
+                          : "text-cyan-400/70 group-hover:text-cyan-400/90"
+                      )}
+                    >
+                      {isPrivate ? "Private" : "Public"}
                     </span>
                     <svg
                       className={cn(
-                        "w-5 h-5 transition-all duration-500",
+                        "relative w-5 h-5 transition-all duration-500",
                         isPrivate
-                          ? "text-secondary animate-pulse"
-                          : "text-accent/60"
+                          ? "text-teal drop-shadow-[0_0_10px_rgba(20,184,166,0.8)] animate-pulse"
+                          : "text-cyan-400/60 group-hover:text-cyan-400/80"
                       )}
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                     >
                       {isPrivate ? (
                         // Locked icon

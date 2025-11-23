@@ -191,7 +191,7 @@ export default function AccountBalance({
           ) : (
             <div className="flex flex-col gap-0.5 mt-1">
               <div className="flex items-center gap-2">
-                <span className="text-xl font-bold tabular-nums text-white">
+                <span className="text-xl font-bold tabular-nums bg-gradient-to-r from-teal via-cyan-400 to-cyan-300 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(20,184,166,0.4)]">
                   ${currentBalance.toFixed(2)}
                 </span>
                 <Button
@@ -206,8 +206,8 @@ export default function AccountBalance({
               <span
                 className={
                   balance?.pending_drafts && balance.pending_drafts > 0
-                    ? "text-xs text-orange-400/70"
-                    : "text-xs text-[hsl(var(--text-muted)/0.6)]"
+                    ? "text-xs font-medium text-amber-400/90 drop-shadow-[0_0_6px_rgba(251,191,36,0.3)]"
+                    : "text-xs text-cyan-400/50 font-medium"
                 }
               >
                 {String(balance?.draft_count ?? 0)} pending draft
