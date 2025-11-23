@@ -1,22 +1,22 @@
 "use client";
 
-import { RotateCcwIcon, SaveIcon } from "@/components/icons/FuturisticIcons";
+import {
+  MonitorIcon,
+  RotateCcwIcon,
+  SaveIcon,
+  SmartphoneIcon,
+  WatchIcon,
+} from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAccounts, useSetDefaultAccount } from "@/features/accounts/hooks";
-import { usePreferences } from "@/features/preferences/usePreferences";
 import {
   useSectionOrder,
   useUpdatePreferences,
@@ -43,7 +43,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SortableItem } from "./SortableItem";
 
@@ -59,10 +59,12 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   account: "Account Selection",
 };
 
+type SectionType = "theme" | "view" | "accounts" | "steps" | "household";
+
 export function SettingsDialog({ open, onOpenChange }: Props) {
-  const { theme: darkLightTheme, updateTheme } = usePreferences();
   const { theme: colorTheme, setTheme, isLoading: themeLoading } = useTheme();
   const { viewMode, updateViewMode } = useViewMode();
+  const [activeSection, setActiveSection] = useState<SectionType>("theme");
 
   // Section order state
   const { data: serverOrderArray } = useSectionOrder();
@@ -71,7 +73,6 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     initialOrder.length ? initialOrder : []
   );
   const [activeId, setActiveId] = useState<SectionKey | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const updatePreferences = useUpdatePreferences();
 
   useEffect(() => {
@@ -86,23 +87,9 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     return order.some((k, i) => k !== so[i]);
   }, [order, serverOrderArray]);
 
-  function move(idx: number, dir: -1 | 1) {
-    setOrder((prev) => {
-      const next = prev.slice();
-      const j = idx + dir;
-      if (j < 0 || j >= next.length) return prev;
-      const tmp = next[idx];
-      next[idx] = next[j];
-      next[j] = tmp;
-      return next;
-    });
-  }
-
   function resetToDefault() {
     const so = Array.isArray(serverOrderArray) ? serverOrderArray : null;
     if (!so) return;
-    // rely on hook defaulting logic by clearing to server default if it had one,
-    // or derive from labels order fallback
     setOrder(
       (so as SectionKey[]) ?? [
         "account",
@@ -117,13 +104,14 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
   async function handleSave() {
     try {
       await updatePreferences.mutateAsync({ section_order: order });
+      toast.success("Steps order saved!");
     } catch (e) {
-      // Swallow; toast could be added later
       console.error(e);
+      toast.error("Failed to save");
     }
   }
 
-  // DnD sensors configuration
+  // DnD sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -137,7 +125,6 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-
     if (over && active.id !== over.id) {
       setOrder((items) => {
         const oldIndex = items.indexOf(active.id as SectionKey);
@@ -152,261 +139,214 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     setActiveId(null);
   }
 
+  const sections: { id: SectionType; label: string }[] = [
+    { id: "theme", label: "Theme" },
+    { id: "view", label: "View" },
+    { id: "accounts", label: "Accounts" },
+    { id: "steps", label: "Steps" },
+    { id: "household", label: "Household" },
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[640px] max-h-[85vh] flex flex-col bg-[hsl(var(--card)/0.96)] backdrop-blur-sm shadow-2xl border border-[hsl(var(--header-border)/0.22)]">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="text-xl font-bold">Settings</DialogTitle>
-          <DialogDescription className="text-sm">
-            Personalize your appearance and layout preferences.
-          </DialogDescription>
+      <DialogContent className="sm:max-w-[720px] max-h-[90vh] p-0 gap-0 bg-gradient-to-br from-[hsl(var(--card))] to-[hsl(var(--card)/0.95)] backdrop-blur-xl border-2 border-[hsl(var(--nav-text-primary)/0.2)] rounded-3xl overflow-hidden">
+        {/* Header */}
+        <DialogHeader className="px-8 pt-8 pb-6 border-b border-[hsl(var(--header-border)/0.15)]">
+          <DialogTitle className="text-3xl font-bold bg-gradient-to-r from-cyan-400 via-teal to-cyan-300 bg-clip-text text-transparent">
+            Settings
+          </DialogTitle>
         </DialogHeader>
 
-        <Tabs
-          defaultValue="appearance"
-          className="flex-1 flex flex-col overflow-hidden"
-        >
-          <TabsList className="grid w-full grid-cols-5 bg-[hsl(var(--header-bg)/0.5)] border border-[hsl(var(--header-border)/0.3)] rounded-xl p-1 flex-shrink-0">
-            <TabsTrigger
-              value="appearance"
-              className="data-[state=active]:bg-[hsl(var(--nav-text-primary)/0.2)] data-[state=active]:text-[hsl(var(--nav-text-primary))] data-[state=active]:neo-glow-sm rounded-lg transition-all"
-            >
-              Theme
-            </TabsTrigger>
-            <TabsTrigger
-              value="view"
-              className="data-[state=active]:bg-[hsl(var(--nav-text-primary)/0.2)] data-[state=active]:text-[hsl(var(--nav-text-primary))] data-[state=active]:neo-glow-sm rounded-lg transition-all"
-            >
-              View
-            </TabsTrigger>
-            <TabsTrigger
-              value="accounts"
-              className="data-[state=active]:bg-[hsl(var(--nav-text-primary)/0.2)] data-[state=active]:text-[hsl(var(--nav-text-primary))] data-[state=active]:neo-glow-sm rounded-lg transition-all"
-            >
-              Accounts
-            </TabsTrigger>
-            <TabsTrigger
-              value="steps"
-              className="data-[state=active]:bg-[hsl(var(--nav-text-primary)/0.2)] data-[state=active]:text-[hsl(var(--nav-text-primary))] data-[state=active]:neo-glow-sm rounded-lg transition-all"
-            >
-              Steps
-            </TabsTrigger>
-            <TabsTrigger
-              value="household"
-              className="data-[state=active]:bg-[hsl(var(--nav-text-primary)/0.2)] data-[state=active]:text-[hsl(var(--nav-text-primary))] data-[state=active]:neo-glow-sm rounded-lg transition-all"
-            >
-              Household
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent
-            value="appearance"
-            className="mt-4 flex-1 overflow-y-auto"
-          >
-            <div className="space-y-4 h-[400px] flex flex-col">
-              <div className="flex-shrink-0">
-                <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
-                  Color Theme
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Choose your preferred color scheme
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-4 flex-1">
-                <button
-                  onClick={async () => {
-                    await setTheme("blue");
-                    toast.success("Theme updated to Blue");
-                  }}
-                  disabled={themeLoading}
-                  className="neo-card flex flex-col items-center justify-center gap-3 rounded-xl p-6 hover:neo-glow-sm transition-all active:scale-[0.98] h-full disabled:opacity-50"
-                >
-                  <div className="w-16 h-16 rounded-full neo-glow bg-gradient-to-br from-[#3b82f6] via-[#06b6d4] to-[#14b8a6] shadow-lg"></div>
-                  <span className="text-base font-semibold">Blue Ocean</span>
-                  <span className="text-xs text-muted-foreground">
-                    Cool & Professional
-                  </span>
-                </button>
-                <button
-                  onClick={async () => {
-                    await setTheme("pink");
-                    toast.success("Theme updated to Pink");
-                  }}
-                  disabled={themeLoading}
-                  className="neo-card flex flex-col items-center justify-center gap-3 rounded-xl p-6 hover:neo-glow-sm transition-all active:scale-[0.98] h-full disabled:opacity-50"
-                >
-                  <div className="w-16 h-16 rounded-full neo-glow bg-gradient-to-br from-[#ec4899] via-[#f472b6] to-[#fbbf24] shadow-lg"></div>
-                  <span className="text-base font-semibold">Pink Sunset</span>
-                  <span className="text-xs text-muted-foreground">
-                    Warm & Vibrant
-                  </span>
-                </button>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="view" className="mt-4 flex-1 overflow-y-auto">
-            <div className="space-y-4 h-[400px] flex flex-col">
-              <div className="flex-shrink-0">
-                <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
-                  View Mode
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Switch between different platform views
-                </p>
-              </div>
-
-              <RadioGroup
-                value={viewMode}
-                onValueChange={(value) => {
-                  updateViewMode(value as ViewMode);
-                  toast.success(
-                    `Switched to ${value.charAt(0).toUpperCase() + value.slice(1)} view`
-                  );
-                  // Close dialog and reload for view change to take effect
-                  setTimeout(() => {
-                    onOpenChange(false);
-                    window.location.reload();
-                  }, 500);
-                }}
-                className="space-y-3 flex-1"
-              >
-                <div
-                  className={`neo-card flex items-center gap-3 rounded-xl p-4 hover:neo-glow-sm transition-all cursor-pointer ${
-                    viewMode === "mobile" ? "border-[#3b82f6] border-2" : ""
-                  }`}
-                >
-                  <RadioGroupItem
-                    id="view-mobile"
-                    value="mobile"
-                    className="flex-shrink-0"
-                  />
-                  <Label
-                    htmlFor="view-mobile"
-                    className="flex-1 cursor-pointer"
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+          {/* Sidebar Navigation */}
+          <div className="md:w-48 border-b md:border-b-0 md:border-r border-[hsl(var(--header-border)/0.15)] bg-[hsl(var(--header-bg)/0.3)] overflow-hidden">
+            <div className="overflow-x-auto md:overflow-x-visible p-4 md:p-6">
+              <nav className="flex md:flex-col gap-1 min-w-max md:min-w-0">
+                {sections.map((section) => (
+                  <button
+                    key={section.id}
+                    onClick={() => setActiveSection(section.id)}
+                    className={`
+                      px-4 py-3 rounded-xl text-sm font-medium transition-all text-left whitespace-nowrap
+                      ${
+                        activeSection === section.id
+                          ? "bg-gradient-to-r from-cyan-500/20 to-teal/20 text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.2)]"
+                          : "text-slate-400 hover:text-cyan-400 hover:bg-[hsl(var(--card)/0.5)]"
+                      }
+                    `}
                   >
-                    <div className="text-sm font-semibold">Mobile</div>
-                    <div className="text-xs text-muted-foreground">
-                      Optimized for phones with touch navigation
-                    </div>
-                  </Label>
-                  {viewMode === "mobile" && (
-                    <span className="text-xs bg-[hsl(var(--nav-text-primary)/0.2)] text-[hsl(var(--nav-text-primary))] px-2 py-1 rounded-full font-medium">
-                      Active
-                    </span>
-                  )}
-                </div>
-
-                <div
-                  className={`neo-card flex items-center gap-3 rounded-xl p-4 hover:neo-glow-sm transition-all cursor-pointer ${
-                    viewMode === "web" ? "border-[#3b82f6] border-2" : ""
-                  }`}
-                >
-                  <RadioGroupItem
-                    id="view-web"
-                    value="web"
-                    className="flex-shrink-0"
-                  />
-                  <Label htmlFor="view-web" className="flex-1 cursor-pointer">
-                    <div className="text-sm font-semibold">Web</div>
-                    <div className="text-xs text-muted-foreground">
-                      Desktop layout with expanded features
-                    </div>
-                  </Label>
-                  {viewMode === "web" && (
-                    <span className="text-xs bg-[hsl(var(--nav-text-primary)/0.2)] text-[hsl(var(--nav-text-primary))] px-2 py-1 rounded-full font-medium">
-                      Active
-                    </span>
-                  )}
-                </div>
-
-                <div
-                  className={`neo-card flex items-center gap-3 rounded-xl p-4 hover:neo-glow-sm transition-all cursor-pointer ${
-                    viewMode === "watch" ? "border-[#3b82f6] border-2" : ""
-                  }`}
-                >
-                  <RadioGroupItem
-                    id="view-watch"
-                    value="watch"
-                    className="flex-shrink-0"
-                  />
-                  <Label htmlFor="view-watch" className="flex-1 cursor-pointer">
-                    <div className="text-sm font-semibold">Watch</div>
-                    <div className="text-xs text-muted-foreground">
-                      Voice entry and quick balance overview
-                    </div>
-                  </Label>
-                  {viewMode === "watch" && (
-                    <span className="text-xs bg-[hsl(var(--nav-text-primary)/0.2)] text-[hsl(var(--nav-text-primary))] px-2 py-1 rounded-full font-medium">
-                      Active
-                    </span>
-                  )}
-                </div>
-              </RadioGroup>
-
-              <div className="flex-shrink-0 p-3 neo-card rounded-lg border border-[hsl(var(--nav-text-primary)/0.2)] bg-[hsl(var(--header-bg)/0.5)]">
-                <p className="text-xs text-muted-foreground">
-                  <strong className="text-[hsl(var(--nav-text-primary))]">
-                    Note:
-                  </strong>{" "}
-                  View preference is stored locally on this device. Web view is
-                  coming soon.
-                </p>
-              </div>
+                    {section.label}
+                  </button>
+                ))}
+              </nav>
             </div>
-          </TabsContent>
+          </div>
 
-          <TabsContent value="accounts" className="mt-4 flex-1 overflow-y-auto">
-            <div className="h-[400px]">
-              <AccountsPanel />
-            </div>
-          </TabsContent>
-
-          <TabsContent
-            value="household"
-            className="mt-4 flex-1 overflow-y-auto"
-          >
-            <div className="h-[400px]">
-              <HouseholdPanel />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="steps" className="mt-4 flex-1 overflow-y-auto">
-            <div className="space-y-4 h-[400px] flex flex-col">
-              <div className="flex-shrink-0">
-                <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
-                  Expense Walkthrough Steps
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Customize the order of steps in your expense entry
-                  walkthrough. Drag to reorder.
-                </p>
-                <div className="mt-2 p-3 neo-card rounded-lg border border-[hsl(var(--nav-text-primary)/0.2)] bg-[hsl(var(--header-bg)/0.5)]">
-                  <p className="text-xs text-muted-foreground">
-                    <strong className="text-[hsl(var(--nav-text-primary))]">
-                      Note:
-                    </strong>{" "}
-                    The walkthrough guides you through each step. If you have a
-                    default account, the Account step is automatically skipped.
-                    Subcategory only appears when a category has subcategories.
+          {/* Content Area */}
+          <ScrollArea className="flex-1 p-6 md:p-8">
+            {/* THEME SECTION */}
+            {activeSection === "theme" && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <div>
+                  <h3 className="text-lg font-semibold text-cyan-400 mb-1">
+                    Color Theme
+                  </h3>
+                  <p className="text-sm text-slate-400">
+                    Choose your app color scheme
                   </p>
                 </div>
-              </div>
 
-              <div className="flex-1 neo-card rounded-xl border border-[hsl(var(--header-border)/0.3)] overflow-hidden">
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
-                  onDragCancel={handleDragCancel}
-                  modifiers={[restrictToParentElement, restrictToVerticalAxis]}
-                >
-                  <ScrollArea className="h-full">
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={async () => {
+                      await setTheme("blue");
+                      toast.success("Theme updated!");
+                    }}
+                    disabled={themeLoading}
+                    className={`group relative neo-card p-8 rounded-2xl hover:scale-[1.02] transition-all disabled:opacity-50 ${
+                      colorTheme === "blue"
+                        ? "ring-2 ring-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.3)]"
+                        : ""
+                    }`}
+                  >
+                    <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-[#3b82f6] via-[#06b6d4] to-[#14b8a6] shadow-[0_0_30px_rgba(59,130,246,0.5)] mb-4"></div>
+                    <p className="text-lg font-bold bg-gradient-to-r from-cyan-400 to-teal bg-clip-text text-transparent">
+                      Blue
+                    </p>
+                    {colorTheme === "blue" && (
+                      <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-cyan-400 flex items-center justify-center text-slate-900 text-xs font-bold">
+                        ✓
+                      </div>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      await setTheme("pink");
+                      toast.success("Theme updated!");
+                    }}
+                    disabled={themeLoading}
+                    className={`group relative neo-card p-8 rounded-2xl hover:scale-[1.02] transition-all disabled:opacity-50 ${
+                      colorTheme === "pink"
+                        ? "ring-2 ring-pink-400 shadow-[0_0_30px_rgba(236,72,153,0.3)]"
+                        : ""
+                    }`}
+                  >
+                    <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-[#ec4899] via-[#f472b6] to-[#fbbf24] shadow-[0_0_30px_rgba(236,72,153,0.5)] mb-4"></div>
+                    <p className="text-lg font-bold bg-gradient-to-r from-pink-400 to-amber-400 bg-clip-text text-transparent">
+                      Pink
+                    </p>
+                    {colorTheme === "pink" && (
+                      <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-pink-400 flex items-center justify-center text-slate-900 text-xs font-bold">
+                        ✓
+                      </div>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* VIEW SECTION */}
+            {activeSection === "view" && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <div>
+                  <h3 className="text-lg font-semibold text-cyan-400 mb-1">
+                    View Mode
+                  </h3>
+                  <p className="text-sm text-slate-400">
+                    Choose your preferred interface
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    {
+                      mode: "mobile" as ViewMode,
+                      Icon: SmartphoneIcon,
+                      label: "Mobile",
+                      desc: "Optimized for touch",
+                    },
+                    {
+                      mode: "web" as ViewMode,
+                      Icon: MonitorIcon,
+                      label: "Web",
+                      desc: "Desktop experience",
+                    },
+                    {
+                      mode: "watch" as ViewMode,
+                      Icon: WatchIcon,
+                      label: "Watch",
+                      desc: "Minimal interface",
+                    },
+                  ].map(({ mode, Icon, label, desc }) => (
+                    <button
+                      key={mode}
+                      onClick={() => {
+                        updateViewMode(mode);
+                        toast.success(`Switched to ${label} view`);
+                        setTimeout(() => {
+                          onOpenChange(false);
+                          window.location.reload();
+                        }, 500);
+                      }}
+                      className={`
+                        w-full neo-card p-5 rounded-xl flex items-center gap-4 transition-all hover:scale-[1.01]
+                        ${
+                          viewMode === mode
+                            ? "ring-2 ring-teal shadow-[0_0_20px_rgba(20,184,166,0.3)]"
+                            : "hover:bg-[hsl(var(--card)/0.8)]"
+                        }
+                      `}
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-teal/20 flex items-center justify-center">
+                        <Icon className="w-6 h-6 text-cyan-400" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="font-semibold text-slate-200">{label}</p>
+                        <p className="text-xs text-slate-400">{desc}</p>
+                      </div>
+                      {viewMode === mode && (
+                        <div className="px-3 py-1 rounded-full bg-teal/20 text-teal text-xs font-medium">
+                          Active
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ACCOUNTS SECTION */}
+            {activeSection === "accounts" && <AccountsPanel />}
+
+            {/* STEPS SECTION */}
+            {activeSection === "steps" && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <div>
+                  <h3 className="text-lg font-semibold text-cyan-400 mb-1">
+                    Entry Steps Order
+                  </h3>
+                  <p className="text-sm text-slate-400">
+                    Drag to reorder expense entry steps
+                  </p>
+                </div>
+
+                <div className="neo-card rounded-2xl border border-[hsl(var(--header-border)/0.2)] overflow-hidden">
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDragCancel={handleDragCancel}
+                    modifiers={[
+                      restrictToParentElement,
+                      restrictToVerticalAxis,
+                    ]}
+                  >
                     <div className="p-4">
                       {!serverOrderArray || serverOrderArray.length === 0 ? (
-                        <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
-                          Loading preferences...
+                        <div className="h-40 flex items-center justify-center text-slate-400">
+                          Loading...
                         </div>
                       ) : (
                         <SortableContext
@@ -423,33 +363,34 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                         </SortableContext>
                       )}
                     </div>
-                  </ScrollArea>
-                </DndContext>
-              </div>
+                  </DndContext>
+                </div>
 
-              <div className="flex items-center justify-between flex-shrink-0">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={resetToDefault}
-                  className="neo-card hover:neo-glow-sm"
-                >
-                  <RotateCcwIcon className="mr-2 h-4 w-4 drop-shadow-[0_0_6px_rgba(248,113,113,0.4)]" />{" "}
-                  Reset
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={!canSave || updatePreferences.isPending}
-                  className="neo-gradient text-white hover:opacity-90"
-                >
-                  <SaveIcon className="mr-2 h-4 w-4 drop-shadow-[0_0_6px_rgba(20,184,166,0.5)]" />
-                  {updatePreferences.isPending ? "Saving..." : "Save"}
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={resetToDefault}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    <RotateCcwIcon className="mr-2 h-4 w-4" />
+                    Reset
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    disabled={!canSave || updatePreferences.isPending}
+                    className="flex-1 neo-gradient !text-slate-200 font-semibold"
+                  >
+                    <SaveIcon className="mr-2 h-4 w-4" />
+                    {updatePreferences.isPending ? "Saving..." : "Save Order"}
+                  </Button>
+                </div>
               </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+            )}
+
+            {/* HOUSEHOLD SECTION */}
+            {activeSection === "household" && <HouseholdPanel />}
+          </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -473,52 +414,55 @@ function AccountsPanel() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 animate-in fade-in duration-300">
       <div>
-        <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
+        <h3 className="text-lg font-semibold text-cyan-400 mb-1">
           Default Account
         </h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Select your default account for quick expense entry
-        </p>
+        <p className="text-sm text-slate-400">Choose your primary account</p>
       </div>
 
-      <RadioGroup
-        value={defaultAccount?.id || ""}
-        onValueChange={handleSetDefault}
-        className="space-y-2"
-      >
-        {accounts.map((account: any) => (
-          <div
-            key={account.id}
-            className="neo-card flex items-center gap-3 rounded-xl p-3 hover:neo-glow-sm transition-all cursor-pointer"
-          >
-            <RadioGroupItem
-              id={`account-${account.id}`}
-              value={account.id}
-              className="flex-shrink-0"
-            />
-            <Label
-              htmlFor={`account-${account.id}`}
-              className="flex-1 cursor-pointer"
-            >
-              <div className="text-sm font-semibold">{account.name}</div>
-              <div className="text-xs text-muted-foreground capitalize">
-                {account.type}
-              </div>
-            </Label>
-            {account.is_default && (
-              <span className="text-xs bg-[hsl(var(--nav-text-primary)/0.2)] text-[hsl(var(--nav-text-primary))] px-2 py-1 rounded-full font-medium">
-                Default
-              </span>
-            )}
-          </div>
-        ))}
-      </RadioGroup>
-
-      {accounts.length === 0 && (
-        <div className="text-sm text-muted-foreground text-center py-12 neo-card rounded-xl">
+      {accounts.length === 0 ? (
+        <div className="neo-card p-12 rounded-2xl text-center text-slate-400">
           No accounts found
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {accounts.map((account: any) => (
+            <button
+              key={account.id}
+              onClick={() => handleSetDefault(account.id)}
+              className={`
+                w-full neo-card p-5 rounded-xl flex items-center gap-4 transition-all hover:scale-[1.01]
+                ${
+                  account.is_default
+                    ? "ring-2 ring-teal shadow-[0_0_20px_rgba(20,184,166,0.3)]"
+                    : "hover:bg-[hsl(var(--card)/0.8)]"
+                }
+              `}
+            >
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-teal/20 flex items-center justify-center">
+                <span className="text-xl">
+                  {account.type === "cash"
+                    ? "💵"
+                    : account.type === "bank"
+                      ? "🏦"
+                      : "💳"}
+                </span>
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-semibold text-slate-200">{account.name}</p>
+                <p className="text-xs text-slate-400 capitalize">
+                  {account.type}
+                </p>
+              </div>
+              {account.is_default && (
+                <div className="px-3 py-1 rounded-full bg-teal/20 text-teal text-xs font-medium">
+                  Default
+                </div>
+              )}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -550,119 +494,125 @@ function HouseholdPanel() {
 
   if (loading)
     return (
-      <div className="text-sm text-muted-foreground py-12 text-center">
-        Loading…
+      <div className="flex items-center justify-center py-20 text-slate-400">
+        Loading...
       </div>
     );
+
   if (error)
     return (
-      <div className="text-sm text-red-600 neo-card p-4 rounded-xl">
+      <div className="neo-card p-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400">
         {error}
       </div>
     );
 
-  if (!link)
+  if (!link) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6 animate-in fade-in duration-300">
         <div>
-          <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
-            Household Link
+          <h3 className="text-lg font-semibold text-cyan-400 mb-1">
+            Household Linking
           </h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            No household linked yet. Create a code to link with your partner.
+          <p className="text-sm text-slate-400">
+            Create a code to share with your partner
           </p>
         </div>
-        <Button
-          type="button"
-          onClick={async () => {
-            setError(null);
-            setLoading(true);
-            try {
-              const res = await fetch("/api/onboarding", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ account_type: "household" }),
-              });
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok) throw new Error(data?.error || "Failed");
-              const res2 = await fetch("/api/household", {
-                cache: "no-store",
-              });
-              const d2 = await res2.json();
-              setLink(d2?.link ?? { code: data?.code });
-            } catch (e: any) {
-              setError(e?.message || "Failed to generate code");
-            } finally {
-              setLoading(false);
-            }
-          }}
-          className="neo-gradient text-white hover:opacity-90"
-        >
-          Create Household Code
-        </Button>
-        <p className="text-sm text-muted-foreground">
-          Or use the avatar menu → Link household to enter a code.
-        </p>
-        {error ? (
-          <div className="text-sm text-red-600 neo-card p-4 rounded-xl">
-            {error}
+
+        <div className="neo-card p-8 rounded-2xl text-center space-y-4">
+          <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-cyan-500/20 to-teal/20 flex items-center justify-center text-4xl">
+            👥
           </div>
-        ) : null}
+          <p className="text-slate-300">No household link created yet</p>
+          <Button
+            onClick={async () => {
+              setError(null);
+              setLoading(true);
+              try {
+                const res = await fetch("/api/onboarding", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ account_type: "household" }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data?.error || "Failed");
+                const res2 = await fetch("/api/household", {
+                  cache: "no-store",
+                });
+                const d2 = await res2.json();
+                setLink(d2?.link ?? { code: data?.code });
+                toast.success("Household code created!");
+              } catch (e: any) {
+                setError(e?.message || "Failed to generate code");
+                toast.error("Failed to create code");
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="neo-gradient !text-slate-200 font-semibold"
+          >
+            Create Household Code
+          </Button>
+        </div>
       </div>
     );
+  }
 
   const isLinked = Boolean(link.partner_user_id);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 animate-in fade-in duration-300">
       <div>
-        <h3 className="text-base font-semibold text-[hsl(var(--nav-text-primary))]">
+        <h3 className="text-lg font-semibold text-cyan-400 mb-1">
           Household Status
         </h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage your household connection
+        <p className="text-sm text-slate-400">
+          Your household connection details
         </p>
       </div>
 
-      <div className="neo-card p-4 rounded-xl space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">Status</span>
+      <div className="neo-card p-6 rounded-2xl space-y-4">
+        <div className="flex items-center justify-between pb-4 border-b border-[hsl(var(--header-border)/0.2)]">
+          <span className="text-slate-300 font-medium">Status</span>
           {isLinked ? (
-            <span className="text-sm font-semibold text-green-500">
-              ✓ Linked
-            </span>
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold">
+              <span>✓</span>
+              <span>Linked</span>
+            </div>
           ) : (
-            <span className="text-sm font-semibold text-yellow-500">
-              ⏳ Awaiting Partner
-            </span>
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 font-semibold">
+              <span>⏳</span>
+              <span>Pending</span>
+            </div>
           )}
         </div>
-        <Separator />
-        <div className="space-y-2">
+
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Owner</span>
-            <span className="text-sm font-medium">
+            <span className="text-sm text-slate-400">Owner</span>
+            <span className="text-sm font-medium text-slate-200 truncate ml-4">
               {link.owner_email || link.owner_user_id}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Partner</span>
-            <span className="text-sm font-medium">
+            <span className="text-sm text-slate-400">Partner</span>
+            <span className="text-sm font-medium text-slate-200 truncate ml-4">
               {link.partner_email || link.partner_user_id || "—"}
             </span>
           </div>
         </div>
       </div>
 
-      {!isLinked && link.code ? (
-        <div className="neo-card p-4 rounded-xl space-y-2">
-          <div className="text-sm font-medium text-[hsl(var(--nav-text-primary))]">
-            Share this code:
-          </div>
-          <div className="font-mono tracking-widest text-2xl font-bold text-center py-3 bg-[hsl(var(--header-bg)/0.5)] rounded-lg">
+      {!isLinked && link.code && (
+        <div className="neo-card p-6 rounded-2xl space-y-4 text-center">
+          <p className="text-sm font-medium text-cyan-400">Share this code:</p>
+          <div className="font-mono tracking-[0.5em] text-3xl font-bold bg-gradient-to-r from-cyan-400 to-teal bg-clip-text text-transparent py-4">
             {link.code}
           </div>
+          <p className="text-xs text-slate-400">
+            Your partner can enter this code to link accounts
+          </p>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

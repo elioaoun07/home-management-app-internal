@@ -353,41 +353,43 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
           <div className="space-y-3">
             {/* Compact Stats Grid */}
             <div className="grid grid-cols-3 gap-3">
-              <Card className="neo-card p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer">
+              <Card className="neo-card p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer bg-gradient-to-br from-emerald-500/10 to-transparent">
                 <div className="flex flex-col items-center justify-center text-center">
-                  <DollarSignIcon className="w-6 h-6 text-[#06b6d4]/60 mb-2 drop-shadow-[0_0_10px_rgba(6,182,212,0.4)]" />
-                  <p className="text-[10px] text-[#38bdf8]/70 mb-1 font-medium uppercase tracking-wide">
+                  <DollarSignIcon className="w-6 h-6 text-emerald-400/80 mb-2 drop-shadow-[0_0_12px_rgba(52,211,153,0.5)]" />
+                  <p className="text-[10px] text-emerald-300/70 mb-1 font-medium uppercase tracking-wide">
                     Total
                   </p>
-                  <p className="text-2xl font-bold text-white truncate">
+                  <p className="text-2xl font-bold bg-gradient-to-br from-emerald-400 via-emerald-300 to-teal bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">
                     ${stats.total.toFixed(0)}
                   </p>
                 </div>
               </Card>
 
               <Card
-                className="neo-card p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer"
+                className="neo-card p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer bg-gradient-to-br from-violet-500/10 to-transparent"
                 style={{ animationDelay: "100ms" }}
               >
                 <div className="flex flex-col items-center justify-center text-center">
-                  <TrendingUpIcon className="w-6 h-6 text-[#06b6d4]/60 mb-2 drop-shadow-[0_0_10px_rgba(6,182,212,0.4)]" />
-                  <p className="text-[10px] text-[#38bdf8]/70 mb-1 font-medium uppercase tracking-wide">
+                  <TrendingUpIcon className="w-6 h-6 text-violet-400/80 mb-2 drop-shadow-[0_0_12px_rgba(167,139,250,0.5)]" />
+                  <p className="text-[10px] text-violet-300/70 mb-1 font-medium uppercase tracking-wide">
                     Count
                   </p>
-                  <p className="text-2xl font-bold text-white">{stats.count}</p>
+                  <p className="text-2xl font-bold bg-gradient-to-br from-violet-400 via-purple-300 to-violet-300 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(167,139,250,0.3)]">
+                    {stats.count}
+                  </p>
                 </div>
               </Card>
 
               <Card
-                className="neo-card p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer"
+                className="neo-card p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer bg-gradient-to-br from-sky-500/10 to-transparent"
                 style={{ animationDelay: "200ms" }}
               >
                 <div className="flex flex-col items-center justify-center text-center">
-                  <BarChart3Icon className="w-6 h-6 text-[#06b6d4]/60 mb-2 drop-shadow-[0_0_10px_rgba(6,182,212,0.4)]" />
-                  <p className="text-[10px] text-[#38bdf8]/70 mb-1 font-medium uppercase tracking-wide">
+                  <BarChart3Icon className="w-6 h-6 text-sky-400/80 mb-2 drop-shadow-[0_0_12px_rgba(56,189,248,0.5)]" />
+                  <p className="text-[10px] text-sky-300/70 mb-1 font-medium uppercase tracking-wide">
                     Daily
                   </p>
-                  <p className="text-2xl font-bold text-white truncate">
+                  <p className="text-2xl font-bold bg-gradient-to-br from-sky-400 via-cyan-300 to-blue-300 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(56,189,248,0.3)] truncate">
                     ${stats.dailyAvg.toFixed(0)}
                   </p>
                 </div>
@@ -397,20 +399,22 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
             {/* Top Category - More visual */}
             {stats.topCategory && (
               <Card
-                className="neo-card p-3 bg-gradient-to-br from-[#06b6d4]/5 to-transparent hover:from-[#06b6d4]/10 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl glow-pulse-primary spring-bounce"
+                className="neo-card p-3 bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-transparent hover:from-amber-500/20 hover:via-orange-500/15 transition-all duration-300 hover:-translate-y-1 shadow-[0_0_20px_rgba(251,191,36,0.15)] hover:shadow-[0_0_25px_rgba(251,191,36,0.25)] spring-bounce"
                 style={{ animationDelay: "300ms" }}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <StarIcon className="w-6 h-6 text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.6)]" />
+                    <StarIcon className="w-6 h-6 text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.6)] animate-pulse" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-[#38bdf8]/70">Top Spend</p>
-                      <p className="text-sm font-semibold text-white truncate">
+                      <p className="text-xs text-amber-300/80 font-medium">
+                        Top Spend
+                      </p>
+                      <p className="text-sm font-semibold bg-gradient-to-r from-amber-200 to-amber-100 bg-clip-text text-transparent truncate">
                         {stats.topCategory.name}
                       </p>
                     </div>
                   </div>
-                  <p className="text-xl font-bold text-[#06b6d4] ml-2">
+                  <p className="text-xl font-bold bg-gradient-to-br from-amber-400 via-amber-300 to-yellow-300 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(251,191,36,0.4)] ml-2">
                     ${stats.topCategory.amount.toFixed(0)}
                   </p>
                 </div>
@@ -418,16 +422,16 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
             )}
 
             {/* Category Breakdown - Clickable with progress bars */}
-            <Card className="neo-card p-3">
+            <Card className="neo-card p-3 bg-gradient-to-br from-slate-500/5 to-transparent">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-[#06b6d4]">
+                <h3 className="text-sm font-semibold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
                   Categories
                 </h3>
-                <span className="text-xs text-[#38bdf8]/60">
+                <span className="text-xs text-slate-400/80 font-medium">
                   {Object.keys(stats.byCategory).length}
                 </span>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-3">
                 {Object.entries(stats.byCategory)
                   .sort((a, b) => b[1] - a[1])
                   .slice(0, 6)
@@ -440,19 +444,19 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                           if (navigator.vibrate) navigator.vibrate(5);
                           handleCategoryClick(cat);
                         }}
-                        className="w-full group hover:-translate-y-0.5 transition-transform duration-200"
+                        className="w-full group hover:-translate-y-0.5 transition-transform duration-200 py-1"
                       >
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-xs text-white truncate flex-1 text-left">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs text-slate-200 truncate flex-1 text-left group-hover:text-white transition-colors font-medium">
                             {cat}
                           </span>
-                          <span className="text-xs font-semibold text-[#06b6d4] ml-2">
+                          <span className="text-xs font-semibold bg-gradient-to-r from-emerald-400 to-teal bg-clip-text text-transparent ml-2">
                             ${amt.toFixed(0)}
                           </span>
                         </div>
-                        <div className="h-1.5 bg-[#1a2942] rounded-full overflow-hidden">
+                        <div className="h-2 bg-[#1a2942]/60 rounded-full overflow-hidden shadow-inner">
                           <div
-                            className="h-full bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] rounded-full transition-all duration-300 group-hover:from-[#06b6d4] group-hover:to-[#3b82f6]"
+                            className="h-full bg-gradient-to-r from-blue-500 via-cyan-500 to-teal rounded-full transition-all duration-300 group-hover:shadow-[0_0_12px_rgba(59,130,246,0.6)] group-hover:from-blue-400 group-hover:via-cyan-400 group-hover:to-teal"
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
@@ -463,13 +467,13 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
             </Card>
 
             {/* Recent Transactions Preview - Compact */}
-            <Card className="neo-card p-3">
+            <Card className="neo-card p-3 bg-gradient-to-br from-indigo-500/5 to-transparent">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-[#06b6d4]">
+                  <h3 className="text-sm font-semibold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
                     Recent
                   </h3>
-                  <span className="text-[10px] text-[#38bdf8]/60 font-normal">
+                  <span className="text-[10px] text-indigo-300/60 font-normal">
                     Last added
                   </span>
                   <button
@@ -514,14 +518,14 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                       );
                     })()}
                     <div className="flex-1 min-w-0 text-left">
-                      <p className="text-xs font-medium text-white truncate">
+                      <p className="text-xs font-medium text-slate-100 truncate">
                         {tx.category}
                       </p>
-                      <p className="text-[10px] text-[#38bdf8]/60">
+                      <p className="text-[10px] text-slate-400/70">
                         {format(new Date(tx.date), "MMM d")}
                       </p>
                     </div>
-                    <p className="text-sm font-bold text-[#06b6d4]">
+                    <p className="text-sm font-bold bg-gradient-to-br from-emerald-400 to-teal bg-clip-text text-transparent">
                       ${tx.amount.toFixed(0)}
                     </p>
                   </button>
@@ -534,7 +538,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
         {viewMode === "list" && (
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
-              <h3 className="text-sm font-semibold text-[#06b6d4]">
+              <h3 className="text-sm font-semibold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
                 Transactions
               </h3>
               <button

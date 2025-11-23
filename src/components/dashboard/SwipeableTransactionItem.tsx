@@ -229,18 +229,18 @@ export default function SwipeableTransactionItem({
                 );
               })()}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">
+                <p className="text-sm font-semibold text-slate-100 truncate">
                   {transaction.category || "Uncategorized"}
                 </p>
                 {transaction.subcategory && (
-                  <p className="text-xs text-[#38bdf8]/70 truncate">
+                  <p className="text-xs text-slate-400/70 truncate">
                     {transaction.subcategory}
                   </p>
                 )}
               </div>
             </div>
             {/* Date + Account */}
-            <div className="flex items-center gap-2 mt-1.5 text-xs text-[#38bdf8]/60">
+            <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-400/60">
               <span>{format(new Date(transaction.date), "MMM d")}</span>
               {transaction.account_name && (
                 <>
@@ -253,11 +253,11 @@ export default function SwipeableTransactionItem({
 
           {/* Right: Amount */}
           <div className="text-right">
-            <p className="text-lg font-bold text-[#06b6d4]">
+            <p className="text-lg font-bold bg-gradient-to-br from-emerald-400 via-emerald-300 to-teal bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
               ${transaction.amount.toFixed(2)}
             </p>
             {transaction.description && (
-              <p className="text-xs text-[#38bdf8]/60 truncate max-w-[80px]">
+              <p className="text-xs text-slate-400/60 truncate max-w-[80px]">
                 {transaction.description}
               </p>
             )}
