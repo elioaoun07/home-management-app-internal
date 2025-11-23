@@ -302,7 +302,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                         <Icon className="w-6 h-6 text-cyan-400" />
                       </div>
                       <div className="flex-1 text-left">
-                        <p className="font-semibold text-slate-200">{label}</p>
+                        <p className="font-semibold text-cyan-300">{label}</p>
                         <p className="text-xs text-slate-400">{desc}</p>
                       </div>
                       {viewMode === mode && (
@@ -378,7 +378,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   <Button
                     onClick={handleSave}
                     disabled={!canSave || updatePreferences.isPending}
-                    className="flex-1 neo-gradient !text-slate-200 font-semibold"
+                    className="flex-1 neo-gradient !text-cyan-100 font-semibold"
                   >
                     <SaveIcon className="mr-2 h-4 w-4" />
                     {updatePreferences.isPending ? "Saving..." : "Save Order"}
@@ -451,7 +451,7 @@ function AccountsPanel() {
                 </span>
               </div>
               <div className="flex-1 text-left">
-                <p className="font-semibold text-slate-200">{account.name}</p>
+                <p className="font-semibold text-cyan-300">{account.name}</p>
                 <p className="text-xs text-slate-400 capitalize">
                   {account.type}
                 </p>
@@ -522,7 +522,7 @@ function HouseholdPanel() {
           <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-cyan-500/20 to-teal/20 flex items-center justify-center text-4xl">
             👥
           </div>
-          <p className="text-slate-300">No household link created yet</p>
+          <p className="text-cyan-300">No household link created yet</p>
           <Button
             onClick={async () => {
               setError(null);
@@ -548,7 +548,7 @@ function HouseholdPanel() {
                 setLoading(false);
               }
             }}
-            className="neo-gradient !text-slate-200 font-semibold"
+            className="neo-gradient !text-cyan-100 font-semibold"
           >
             Create Household Code
           </Button>
@@ -572,7 +572,7 @@ function HouseholdPanel() {
 
       <div className="neo-card p-6 rounded-2xl space-y-4">
         <div className="flex items-center justify-between pb-4 border-b border-[hsl(var(--header-border)/0.2)]">
-          <span className="text-slate-300 font-medium">Status</span>
+          <span className="text-cyan-300 font-medium">Status</span>
           {isLinked ? (
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold">
               <span>✓</span>
@@ -589,13 +589,13 @@ function HouseholdPanel() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm text-slate-400">Owner</span>
-            <span className="text-sm font-medium text-slate-200 truncate ml-4">
+            <span className="text-sm font-medium text-cyan-300 truncate ml-4">
               {link.owner_email || link.owner_user_id}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-slate-400">Partner</span>
-            <span className="text-sm font-medium text-slate-200 truncate ml-4">
+            <span className="text-sm font-medium text-cyan-300 truncate ml-4">
               {link.partner_email || link.partner_user_id || "—"}
             </span>
           </div>
