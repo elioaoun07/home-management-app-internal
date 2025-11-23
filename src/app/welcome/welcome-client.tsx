@@ -113,7 +113,7 @@ export default function WelcomeClient() {
 
       {/* Individual option */}
       <section
-        className="rounded-md border p-4 mb-4 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 animate-in fade-in slide-in-from-bottom-4"
+        className="rounded-md bg-[#0f1d2e]/60 shadow-[0_0_0_1px_rgba(6,182,212,0.25)_inset] p-4 mb-4 transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(6,182,212,0.4)_inset,0_0_20px_rgba(59,130,246,0.3)] hover:-translate-y-0.5 animate-in fade-in slide-in-from-bottom-4"
         style={{ animationDelay: "0.2s", animationDuration: "0.5s" }}
       >
         <h3 className="font-medium mb-2">Use as an Individual</h3>
@@ -131,7 +131,7 @@ export default function WelcomeClient() {
 
       {/* Household option */}
       <section
-        className="rounded-md border p-4 space-y-6 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 animate-in fade-in slide-in-from-bottom-4"
+        className="rounded-md bg-[#0f1d2e]/60 shadow-[0_0_0_1px_rgba(6,182,212,0.25)_inset] p-4 space-y-6 transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(6,182,212,0.4)_inset,0_0_20px_rgba(59,130,246,0.3)] hover:-translate-y-0.5 animate-in fade-in slide-in-from-bottom-4"
         style={{ animationDelay: "0.3s", animationDuration: "0.5s" }}
       >
         <h3 className="font-medium">Use as a Household</h3>

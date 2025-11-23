@@ -88,7 +88,7 @@ export default async function Home() {
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
           {/* Feature 1 */}
-          <div className="group p-6 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card hover:border-primary/30 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 shimmer transform-3d">
+          <div className="group p-6 rounded-2xl bg-[#0f1d2e]/80 backdrop-blur-sm shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] hover:bg-[#0f1d2e] hover:shadow-[0_0_0_1px_rgba(6,182,212,0.4)_inset,0_0_30px_rgba(59,130,246,0.3)] transition-all duration-300 hover:-translate-y-2 shimmer transform-3d">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-3 transition-transform shadow-lg shadow-primary/10 glow-pulse-primary">
               <ZapIcon className="w-6 h-6 text-primary drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
             </div>
@@ -100,7 +100,7 @@ export default async function Home() {
 
           {/* Feature 2 */}
           <div
-            className="group p-6 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card hover:border-primary/30 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 shimmer transform-3d"
+            className="group p-6 rounded-2xl bg-[#0f1d2e]/80 backdrop-blur-sm shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] hover:bg-[#0f1d2e] hover:shadow-[0_0_0_1px_rgba(6,182,212,0.4)_inset,0_0_30px_rgba(59,130,246,0.3)] transition-all duration-300 hover:-translate-y-2 shimmer transform-3d"
             style={{ animationDelay: "100ms" }}
           >
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-3 transition-transform shadow-lg shadow-primary/10 glow-pulse-primary">
@@ -114,7 +114,7 @@ export default async function Home() {
 
           {/* Feature 3 */}
           <div
-            className="group p-6 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card hover:border-primary/30 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 shimmer transform-3d"
+            className="group p-6 rounded-2xl bg-[#0f1d2e]/80 backdrop-blur-sm shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] hover:bg-[#0f1d2e] hover:shadow-[0_0_0_1px_rgba(6,182,212,0.4)_inset,0_0_30px_rgba(59,130,246,0.3)] transition-all duration-300 hover:-translate-y-2 shimmer transform-3d"
             style={{ animationDelay: "200ms" }}
           >
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-3 transition-transform shadow-lg shadow-primary/10 glow-pulse-primary">
@@ -128,7 +128,7 @@ export default async function Home() {
 
           {/* Feature 4 */}
           <div
-            className="group p-6 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card hover:border-primary/30 hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 shimmer transform-3d"
+            className="group p-6 rounded-2xl bg-[#0f1d2e]/80 backdrop-blur-sm shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] hover:bg-[#0f1d2e] hover:shadow-[0_0_0_1px_rgba(6,182,212,0.4)_inset,0_0_30px_rgba(59,130,246,0.3)] transition-all duration-300 hover:-translate-y-2 shimmer transform-3d"
             style={{ animationDelay: "300ms" }}
           >
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-3 transition-transform shadow-lg shadow-primary/10 glow-pulse-primary">
@@ -145,7 +145,7 @@ export default async function Home() {
 
       {/* CTA Section */}
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20">
-        <div className="rounded-3xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 p-12 text-center backdrop-blur-sm shadow-2xl shimmer glow-pulse-primary transform-3d hover:scale-[1.02] transition-all duration-500">
+        <div className="rounded-3xl bg-gradient-to-br from-[#0f1d2e] via-[#1a2942] to-[#0a1628] shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset,0_0_40px_rgba(59,130,246,0.4)] p-12 text-center backdrop-blur-sm shimmer glow-pulse-primary transform-3d hover:scale-[1.02] transition-all duration-500">
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">
             Ready to take control of your finances?
           </h2>

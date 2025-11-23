@@ -110,8 +110,8 @@ export default function CategoryGrid({
                   type="button"
                   className={`justify-start gap-2 h-14 text-left transition-all hover:scale-105 ${
                     active
-                      ? "ring-2 ring-primary/50 shadow-lg"
-                      : "hover:shadow-md"
+                      ? "shadow-[0_0_0_2px_rgba(6,182,212,0.8)_inset,0_0_25px_rgba(6,182,212,0.4)] bg-[#06b6d4]/20"
+                      : "hover:shadow-[0_0_0_2px_rgba(6,182,212,0.4)_inset] shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset]"
                   }`}
                   onClick={() => onCategorySelect?.(cat.id)}
                   style={{
@@ -128,9 +128,9 @@ export default function CategoryGrid({
             })}
 
         <Button
-          variant="secondary"
+          variant="outline"
           type="button"
-          className="justify-start h-14 hover:bg-primary/10 hover:text-primary transition-all hover:scale-105"
+          className="justify-start h-14 shadow-[0_0_0_2px_rgba(6,182,212,0.4)_inset] hover:shadow-[0_0_0_2px_rgba(6,182,212,0.8)_inset,0_0_20px_rgba(6,182,212,0.3)] hover:bg-[#06b6d4]/10 transition-all hover:scale-105"
           onClick={() => setAddDialogOpen(true)}
         >
           <span className="text-xl mr-2">+</span>

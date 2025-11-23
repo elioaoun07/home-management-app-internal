@@ -162,7 +162,7 @@ export default function AccountBalance({
                 step="0.01"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
-                className="h-8 w-32 text-lg font-bold bg-[#0a1628] border-[#3b82f6]/30 text-white focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20"
+                className="h-8 w-32 text-lg font-bold bg-[#0a1628] border-[#06b6d4]/60 text-white focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSave();
@@ -197,7 +197,7 @@ export default function AccountBalance({
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 bg-[#3b82f6]/20 hover:bg-[#3b82f6]/30 border border-[#3b82f6]/30 rounded-lg active:scale-95 transition-all"
+                  className="h-7 w-7 bg-[#3b82f6]/20 hover:bg-[#3b82f6]/30 shadow-[0_0_0_1px_rgba(59,130,246,0.4)_inset] rounded-lg active:scale-95 transition-all"
                   onClick={handleEdit}
                 >
                   <Edit2Icon className="h-3.5 w-3.5 text-[#38bdf8] drop-shadow-[0_0_6px_rgba(56,189,248,0.5)]" />

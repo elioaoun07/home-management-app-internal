@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MOBILE_CONTENT_BOTTOM_OFFSET } from "@/constants/layout";
-import { useTheme } from "@/contexts/ThemeContext";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
@@ -38,8 +37,6 @@ import VoiceEntryButton from "./VoiceEntryButton";
 type Step = SectionKey | "confirm";
 
 export default function MobileExpenseForm() {
-  const { theme } = useTheme();
-
   const {
     step,
     setStep,
@@ -258,52 +255,13 @@ export default function MobileExpenseForm() {
     bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_CONTENT_BOTTOM_OFFSET}px)`,
   };
 
-  const themeColors = {
-    blue: {
-      bgMain: "bg-[#0a1628]",
-      bgGradientFrom: "from-[#1a2942]",
-      bgGradientTo: "to-[#0f1d2e]",
-      bgCard: "bg-[#1a2942]",
-      borderPrimary: "border-[#3b82f6]/20",
-      borderAccent: "border-[#3b82f6]/30",
-      bgButton: "bg-[#3b82f6]/10",
-      bgButtonHover: "hover:bg-[#3b82f6]/20",
-      textPrimary: "text-[#06b6d4]",
-      textSecondary: "text-[#38bdf8]",
-      gradientBar: "from-[#3b82f6] via-[#06b6d4] to-[#14b8a6]",
-      focusBorder: "focus:border-[#06b6d4]",
-      focusRing: "focus:ring-[#06b6d4]/20",
-      nextButton: "bg-gradient-to-r from-[#ec4899] via-[#f472b6] to-[#fb923c]",
-    },
-    pink: {
-      bgMain: "bg-[#1a0a14]",
-      bgGradientFrom: "from-[#3d2435]",
-      bgGradientTo: "to-[#2d1b29]",
-      bgCard: "bg-[#3d2435]",
-      borderPrimary: "border-[#ec4899]/20",
-      borderAccent: "border-[#ec4899]/30",
-      bgButton: "bg-[#ec4899]/10",
-      bgButtonHover: "hover:bg-[#ec4899]/20",
-      textPrimary: "text-[#f472b6]",
-      textSecondary: "text-[#f9a8d4]",
-      gradientBar: "from-[#ec4899] via-[#f472b6] to-[#fbbf24]",
-      focusBorder: "focus:border-[#f472b6]",
-      focusRing: "focus:ring-[#f472b6]/20",
-      nextButton: "bg-gradient-to-r from-[#ec4899] via-[#f472b6] to-[#fb923c]",
-    },
-  };
-
-  const colors = themeColors[theme];
-
   return (
-    <div className={`fixed inset-0 top-14 ${colors.bgMain} flex flex-col`}>
+    <div className="fixed inset-0 top-14 bg-bg-dark flex flex-col">
       {!isInitialized ? (
-        <div className={`fixed inset-0 top-14 ${colors.bgMain} loading-fade`} />
+        <div className="fixed inset-0 top-14 bg-bg-dark loading-fade" />
       ) : (
         <>
-          <div
-            className={`fixed top-0 left-0 right-0 z-30 bg-gradient-to-b ${colors.bgGradientFrom} ${colors.bgGradientTo} border-b ${colors.borderPrimary} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top`}
-          >
+          <div className="fixed top-0 left-0 right-0 z-30 bg-gradient-to-b from-bg-card-custom to-bg-medium border-b border-[#1a2942] px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top">
             <div className="flex items-center justify-between mb-2 pt-16">
               {step !== firstValidStep ? (
                 <button
@@ -312,11 +270,9 @@ export default function MobileExpenseForm() {
                     goBack();
                   }}
                   suppressHydrationWarning
-                  className={`p-1.5 -ml-2 rounded-lg ${colors.bgButton} ${colors.bgButtonHover} active:scale-95 transition-all duration-200 border ${colors.borderPrimary} hover:shadow-md`}
+                  className="p-1.5 -ml-2 rounded-lg bg-primary/10 hover:bg-primary/20 active:scale-95 transition-all duration-200 border border-[#1a2942] hover:shadow-md"
                 >
-                  <ChevronLeftIcon
-                    className={`w-5 h-5 ${colors.textSecondary} drop-shadow-[0_0_6px_rgba(56,189,248,0.3)]`}
-                  />
+                  <ChevronLeftIcon className="w-5 h-5 text-accent drop-shadow-[0_0_6px_rgba(56,189,248,0.3)]" />
                 </button>
               ) : (
                 <div className="w-8" />
@@ -339,20 +295,16 @@ export default function MobileExpenseForm() {
                 className={cn(
                   "p-1.5 -mr-2 rounded-lg",
                   closeDisabled
-                    ? `${colors.bgButton} border ${colors.borderPrimary} opacity-50 cursor-not-allowed`
-                    : `${colors.bgButton} ${colors.bgButtonHover} active:scale-95 transition-all border ${colors.borderPrimary}`
+                    ? "bg-primary/10 border border-[#1a2942] opacity-50 cursor-not-allowed"
+                    : "bg-primary/10 hover:bg-primary/20 active:scale-95 transition-all border border-[#1a2942]"
                 )}
               >
-                <XIcon
-                  className={`w-5 h-5 ${colors.textSecondary} drop-shadow-[0_0_6px_rgba(248,113,113,0.4)]`}
-                />
+                <XIcon className="w-5 h-5 text-accent drop-shadow-[0_0_6px_rgba(248,113,113,0.4)]" />
               </button>
             </div>
-            <div
-              className={`h-0.5 ${colors.bgCard} rounded-full overflow-hidden relative`}
-            >
+            <div className="h-0.5 bg-bg-card-custom rounded-full overflow-hidden relative">
               <div
-                className={`h-full bg-gradient-to-r ${colors.gradientBar} transition-all duration-500 ease-out neo-glow-sm glow-pulse-primary`}
+                className="h-full bg-gradient-to-r from-primary via-secondary to-teal transition-all duration-500 ease-out neo-glow-sm glow-pulse-primary"
                 style={{ width: `${progress()}%` }}
               />
             </div>
@@ -368,7 +320,7 @@ export default function MobileExpenseForm() {
 
           <div
             className={cn(
-              `fixed left-0 right-0 overflow-y-auto px-3 py-3 ${colors.bgMain}`,
+              "fixed left-0 right-0 overflow-y-auto px-3 py-3 bg-bg-dark",
               selectedAccountId && step === "amount"
                 ? "top-[205px]"
                 : "top-[80px]"
@@ -378,9 +330,7 @@ export default function MobileExpenseForm() {
             {step === "amount" && (
               <div key="amount-step" className="space-y-3 step-slide-in">
                 <div>
-                  <Label
-                    className={`text-xs ${colors.textPrimary} font-medium mb-1 block`}
-                  >
+                  <Label className="text-xs text-[#22d3ee] font-medium mb-1 block">
                     How much did you spend?
                   </Label>
                   <div className="mt-1 relative">
@@ -394,18 +344,16 @@ export default function MobileExpenseForm() {
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       suppressHydrationWarning
-                      className={`text-3xl font-bold h-16 pl-10 pr-14 border-2 text-center ${colors.bgCard} border-[hsl(var(--header-border)/0.3)] text-white placeholder:text-[hsl(var(--input-placeholder)/0.3)] ${colors.focusBorder} focus:ring-2 ${colors.focusRing} focus:scale-[1.02] transition-all duration-200 neo-card bounce-in`}
+                      className="text-3xl font-bold h-16 pl-10 pr-14 border-2 text-center bg-bg-card-custom border-[#22d3ee]/30 text-white placeholder:text-[hsl(var(--input-placeholder)/0.3)] focus:border-[#22d3ee] focus:ring-2 focus:ring-[#22d3ee]/20 focus:scale-[1.02] transition-all duration-200 neo-card bounce-in"
                       autoFocus
                     />
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                       <button
                         onClick={() => setShowCalculator(true)}
                         suppressHydrationWarning
-                        className={`p-2 rounded-lg neo-card ${colors.bgButton} border ${colors.borderAccent} ${colors.bgButtonHover} active:scale-95 transition-all`}
+                        className="p-2 rounded-lg neo-card bg-primary/10 border border-[#1a2942] hover:bg-primary/20 active:scale-95 transition-all"
                       >
-                        <CalculatorIcon
-                          className={`w-5 h-5 ${colors.textPrimary} drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]`}
-                        />
+                        <CalculatorIcon className="w-5 h-5 text-[#22d3ee] drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]" />
                       </button>
                       <VoiceEntryButton
                         categories={categories}
@@ -428,7 +376,7 @@ export default function MobileExpenseForm() {
                             "Voice entry saved! Check drafts to confirm."
                           );
                         }}
-                        className="p-2 rounded-lg neo-card bg-[#06b6d4]/10 border border-[#06b6d4]/30 hover:bg-[#06b6d4]/20 active:scale-95 transition-all"
+                        className="p-2 rounded-lg neo-card bg-secondary/10 border border-secondary/30 hover:bg-secondary/20 active:scale-95 transition-all"
                       />
                     </div>
                   </div>
@@ -440,10 +388,10 @@ export default function MobileExpenseForm() {
                       key={val}
                       variant="outline"
                       style={{ animationDelay: `${100 + index * 40}ms` }}
-                      className="h-9 text-sm font-semibold neo-card bg-[#1a2942] border-[#3b82f6]/20 text-[#38bdf8] hover:bg-[#3b82f6]/10 hover:border-[#3b82f6]/40 hover:scale-105 active:scale-95 transition-all category-appear"
+                      className="h-9 text-sm font-semibold neo-card bg-bg-card-custom border-[#1a2942] hover:bg-primary/10 hover:border-[#1a2942] hover:scale-105 active:scale-95 transition-all category-appear"
                       onClick={() => setAmount(val.toString())}
                     >
-                      ${val}
+                      <span className="text-[#22d3ee]">${val}</span>
                     </Button>
                   ))}
                 </div>
@@ -476,19 +424,19 @@ export default function MobileExpenseForm() {
                     className={cn(
                       "neo-card p-3 rounded-lg border transition-all duration-300 active:scale-95 flex items-center gap-2",
                       isPrivate
-                        ? "border-[#06b6d4]/60 bg-[#06b6d4]/25 neo-glow"
-                        : "border-[#3b82f6]/20 bg-[#1a2942] hover:border-[#3b82f6]/30"
+                        ? "border-secondary/60 bg-secondary/25 neo-glow"
+                        : "border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80"
                     )}
                   >
-                    <span className="text-sm font-medium text-[#06b6d4]/80">
+                    <span className="text-sm font-medium text-secondary/80">
                       Private Transaction
                     </span>
                     <svg
                       className={cn(
                         "w-5 h-5 transition-all duration-500",
                         isPrivate
-                          ? "text-[#06b6d4] animate-pulse"
-                          : "text-[#38bdf8]/60"
+                          ? "text-secondary animate-pulse"
+                          : "text-accent/60"
                       )}
                       fill="none"
                       viewBox="0 0 24 24"
@@ -530,7 +478,7 @@ export default function MobileExpenseForm() {
 
             {step === "account" && (
               <div key="account-step" className="space-y-3 step-slide-in">
-                <Label className="text-base font-semibold text-[#06b6d4]">
+                <Label className="text-base font-semibold text-secondary">
                   Which account?
                 </Label>
                 <div className="space-y-2">
@@ -550,8 +498,8 @@ export default function MobileExpenseForm() {
                       className={cn(
                         "w-full p-2.5 rounded-lg border text-left transition-all active:scale-[0.98] category-appear",
                         selectedAccountId === account.id
-                          ? "neo-card border-[#3b82f6]/40 bg-[#3b82f6]/10 neo-glow-sm"
-                          : "neo-card border-[#3b82f6]/20 bg-[#1a2942] hover:border-[#3b82f6]/30 hover:bg-[#3b82f6]/5"
+                          ? "neo-card border-[#06b6d4]/60 bg-primary/10 neo-glow-sm"
+                          : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5"
                       )}
                     >
                       <div className="flex items-center justify-between">
@@ -559,12 +507,12 @@ export default function MobileExpenseForm() {
                           <div className="font-semibold text-base text-white">
                             {account.name}
                           </div>
-                          <div className="text-xs text-[#38bdf8]/70 capitalize mt-0.5">
+                          <div className="text-xs text-accent/70 capitalize mt-0.5">
                             {account.type}
                           </div>
                         </div>
                         {selectedAccountId === account.id && (
-                          <CheckIcon className="w-5 h-5 text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+                          <CheckIcon className="w-5 h-5 text-secondary drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
                         )}
                       </div>
                     </button>
@@ -575,7 +523,7 @@ export default function MobileExpenseForm() {
 
             {step === "category" && (
               <div key="category-step" className="space-y-3 step-slide-in">
-                <Label className="text-base font-semibold text-[#06b6d4]">
+                <Label className="text-base font-semibold text-secondary">
                   What category?
                 </Label>
                 <div className="grid grid-cols-2 gap-2 pb-4">
@@ -615,8 +563,8 @@ export default function MobileExpenseForm() {
                         className={cn(
                           "p-2.5 rounded-lg border text-left transition-all active:scale-95 min-h-[65px] category-appear",
                           selectedCategoryId === category.id
-                            ? "neo-card border-[#3b82f6]/40 bg-[#3b82f6]/10 neo-glow-sm"
-                            : "neo-card border-[#3b82f6]/20 bg-[#1a2942] hover:border-[#3b82f6]/30 hover:bg-[#3b82f6]/5",
+                            ? "neo-card border-[#06b6d4]/60 bg-primary/10 neo-glow-sm"
+                            : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5",
                           isSubmitting && "opacity-50 cursor-not-allowed"
                         )}
                       >
@@ -629,7 +577,7 @@ export default function MobileExpenseForm() {
                             return (
                               <IconComponent
                                 className={cn(
-                                  "w-8 h-8 text-[#06b6d4]/80",
+                                  "w-8 h-8 text-secondary/80",
                                   getCategoryGlowClass(category.color)
                                 )}
                               />
@@ -652,7 +600,7 @@ export default function MobileExpenseForm() {
               >
                 {allSubcategories.length > 0 && (
                   <>
-                    <Label className="text-base font-semibold text-[#06b6d4]">
+                    <Label className="text-base font-semibold text-secondary">
                       More specific?
                     </Label>
                     <div className="grid grid-cols-2 gap-2">
@@ -661,15 +609,15 @@ export default function MobileExpenseForm() {
                         className={cn(
                           "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
                           !selectedSubcategoryId
-                            ? "neo-card border-[#06b6d4]/60 bg-[#06b6d4]/25 neo-glow shadow-lg"
-                            : "neo-card border-[#3b82f6]/20 bg-[#1a2942] hover:border-[#3b82f6]/30 hover:bg-[#3b82f6]/5"
+                            ? "neo-card border-secondary/60 bg-secondary/25 neo-glow shadow-lg"
+                            : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5"
                         )}
                       >
                         <span
                           className={cn(
                             "font-semibold text-xs",
                             !selectedSubcategoryId
-                              ? "text-[#06b6d4]"
+                              ? "text-secondary"
                               : "text-white"
                           )}
                         >
@@ -684,15 +632,15 @@ export default function MobileExpenseForm() {
                           className={cn(
                             "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
                             selectedSubcategoryId === sub.id
-                              ? "neo-card border-[#06b6d4]/60 bg-[#06b6d4]/25 neo-glow shadow-lg"
-                              : "neo-card border-[#3b82f6]/20 bg-[#1a2942] hover:border-[#3b82f6]/30 hover:bg-[#3b82f6]/5"
+                              ? "neo-card border-secondary/60 bg-secondary/25 neo-glow shadow-lg"
+                              : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5"
                           )}
                         >
                           <span
                             className={cn(
                               "font-semibold text-xs",
                               selectedSubcategoryId === sub.id
-                                ? "text-[#06b6d4]"
+                                ? "text-secondary"
                                 : "text-white"
                             )}
                           >
@@ -705,7 +653,7 @@ export default function MobileExpenseForm() {
                 )}
 
                 <div className="space-y-2 pt-2">
-                  <Label className="text-sm font-medium text-[#06b6d4]/80">
+                  <Label className="text-sm font-medium text-secondary/80">
                     Add a note (optional)
                   </Label>
                   <Input
@@ -713,7 +661,7 @@ export default function MobileExpenseForm() {
                     placeholder="e.g., Lunch with team"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="bg-[#1a2942] border-[#3b82f6]/30 text-white placeholder:text-[#3b82f6]/30 focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20 h-11"
+                    className="bg-bg-card-custom border-[#1a2942] text-white placeholder:text-primary/30 focus:border-secondary focus:ring-2 focus:ring-secondary/20 h-11"
                   />
                 </div>
 

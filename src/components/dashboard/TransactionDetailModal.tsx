@@ -199,17 +199,17 @@ export default function TransactionDetailModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="w-full max-w-md md:max-w-lg bg-[#0f1d2e] border border-[#3b82f6]/30 rounded-t-2xl md:rounded-2xl shadow-2xl animate-in slide-in-from-bottom duration-300 md:slide-in-from-bottom-0 flex flex-col"
+        className="w-full max-w-md md:max-w-lg bg-[#0f1d2e] rounded-t-2xl md:rounded-2xl shadow-2xl animate-in slide-in-from-bottom duration-300 md:slide-in-from-bottom-0 flex flex-col neo-glow"
         style={{
           // Reserve space for the bottom navigation bar so it serves as the modal delimiter.
           // 72px is a reasonable default for the mobile nav height; adjust if your nav is taller.
-          maxHeight: "calc(100vh - 72px)",
-          marginBottom: "72px",
+          maxHeight: "calc(100vh - 88px)",
+          marginBottom: "88px",
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[#3b82f6]/20">
+        <div className="flex items-center justify-between p-4 pb-3">
           <h2 className="text-lg font-semibold text-white">
             {isOwner ? "Transaction Details" : "View Transaction"}
           </h2>
@@ -222,9 +222,9 @@ export default function TransactionDetailModal({
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-4 flex-1 overflow-y-auto">
+        <div className="px-4 pt-2 pb-4 space-y-4 flex-1 overflow-y-auto">
           {/* Account / Category Selectors */}
-          <Card className="neo-card p-3 border-[#06b6d4]/30">
+          <Card className="neo-card p-3">
             <div className="flex items-start gap-3">
               {(() => {
                 const IconComponent = getCategoryIcon(
@@ -251,7 +251,7 @@ export default function TransactionDetailModal({
                         setSelectedAccount(acc);
                       }}
                       disabled={!isOwner}
-                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#1a2942] border border-[#3b82f6]/20 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white disabled:opacity-50 disabled:cursor-not-allowed focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset]"
                     >
                       <option value="">Select account</option>
                       {(accounts || []).map((a: any) => (
@@ -275,7 +275,7 @@ export default function TransactionDetailModal({
                           }))
                         }
                         disabled={!isOwner}
-                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#1a2942] border border-[#3b82f6]/20 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white disabled:opacity-50 disabled:cursor-not-allowed focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset]"
                       >
                         <option value="">None</option>
                         {topCategories.map((c) => (
@@ -299,7 +299,7 @@ export default function TransactionDetailModal({
                           }))
                         }
                         disabled={!isOwner}
-                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#1a2942] border border-[#3b82f6]/20 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white disabled:opacity-50 disabled:cursor-not-allowed focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset]"
                       >
                         <option value="">None</option>
                         {(() => {
@@ -331,7 +331,7 @@ export default function TransactionDetailModal({
                 setFormData({ ...formData, amount: e.target.value })
               }
               disabled={!isOwner}
-              className="bg-[#1a2942] border-[#3b82f6]/30 text-white text-lg font-bold h-12 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white text-lg font-bold h-12 disabled:opacity-50 disabled:cursor-not-allowed focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset,0_0_20px_rgba(6,182,212,0.3)]"
             />
           </div>
 
@@ -345,14 +345,14 @@ export default function TransactionDetailModal({
                 setFormData({ ...formData, date: e.target.value })
               }
               disabled={!isOwner}
-              className="bg-[#1a2942] border-[#3b82f6]/30 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white disabled:opacity-50 disabled:cursor-not-allowed focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset,0_0_20px_rgba(6,182,212,0.3)]"
             />
           </div>
 
           {/* Account */}
           <div className="space-y-2">
             <Label className="text-[#06b6d4] text-sm">Account</Label>
-            <div className="px-3 py-2 rounded-lg bg-[#1a2942]/50 border border-[#3b82f6]/20 text-white">
+            <div className="px-3 py-2 rounded-lg bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] text-white">
               {transaction.account_name}
             </div>
           </div>
@@ -367,7 +367,7 @@ export default function TransactionDetailModal({
               }
               rows={3}
               disabled={!isOwner}
-              className="w-full px-3 py-2 rounded-lg bg-[#1a2942] border border-[#3b82f6]/30 text-white resize-none focus:outline-none focus:ring-2 focus:ring-[#06b6d4]/40 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-3 py-2 rounded-lg bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white resize-none focus:outline-none focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset,0_0_20px_rgba(6,182,212,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
               placeholder="Add a note..."
             />
           </div>
@@ -375,12 +375,12 @@ export default function TransactionDetailModal({
 
         {/* Footer (sticky on mobile) */}
         {isOwner ? (
-          <div className="p-4 border-t border-[#3b82f6]/20 flex gap-3 bg-[#0f1d2e] sticky bottom-0">
+          <div className="p-4 pt-3 flex gap-3 bg-gradient-to-t from-[#0f1d2e] to-transparent sticky bottom-0">
             <Button
               onClick={handleDelete}
               disabled={deleting}
               variant="outline"
-              className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10"
+              className="flex-1 shadow-[0_0_0_2px_rgba(239,68,68,0.4)_inset] text-red-400 hover:bg-red-500/10 hover:shadow-[0_0_0_2px_rgba(239,68,68,0.6)_inset,0_0_20px_rgba(239,68,68,0.3)]"
             >
               <Trash2Icon className="w-4 h-4 mr-2 drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
               {deleting ? "Deleting..." : "Delete"}
@@ -395,7 +395,7 @@ export default function TransactionDetailModal({
             </Button>
           </div>
         ) : (
-          <div className="p-4 border-t border-[#3b82f6]/20 bg-[#0f1d2e] sticky bottom-0">
+          <div className="p-4 pt-3 bg-gradient-to-t from-[#0f1d2e] to-transparent sticky bottom-0">
             <p className="text-center text-[#38bdf8]/60 text-sm">
               Read-only: This is your partner's transaction
             </p>

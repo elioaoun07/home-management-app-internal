@@ -191,16 +191,16 @@ export default function SwipeableTransactionItem({
       <div
         className={cn(
           "relative bg-gradient-to-br from-[#1a2942] to-[#0f1d2e] rounded-xl p-3 cursor-pointer",
-          // Theme-based border colors
-          // If this is my transaction: use my theme color
-          // If this is partner's transaction: use opposite color
+          // Theme-based subtle styling
+          // Use background gradients and shadows instead of borders for softer look
+          "neo-card",
           isOwner
             ? currentUserTheme === "pink"
-              ? "border-2 border-[#ec4899]/40"
-              : "border-2 border-[#3b82f6]/40"
+              ? "shadow-[0_0_12px_rgba(236,72,153,0.15)]"
+              : "shadow-[0_0_12px_rgba(59,130,246,0.15)]"
             : currentUserTheme === "pink"
-              ? "border-2 border-[#3b82f6]/40"
-              : "border-2 border-[#ec4899]/40",
+              ? "shadow-[0_0_12px_rgba(59,130,246,0.15)]"
+              : "shadow-[0_0_12px_rgba(236,72,153,0.15)]",
           isDragging ? "" : "transition-transform duration-200 ease-out"
         )}
         style={{

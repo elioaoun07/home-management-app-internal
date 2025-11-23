@@ -201,8 +201,12 @@ export default function MobileNav() {
 
       {/* Bottom Navigation */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-md border-t border-[hsl(var(--header-border)/0.3)] pb-safe shadow-2xl"
-        style={navSurfaceStyles}
+        className="fixed bottom-0 left-0 right-0 z-50 bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-md pb-safe shadow-2xl"
+        style={{
+          ...navSurfaceStyles,
+          boxShadow:
+            "0 -4px 12px rgba(0, 0, 0, 0.1), 0 -1px 3px rgba(59, 130, 246, 0.05)",
+        }}
       >
         <div className="flex items-center justify-around gap-2 px-4 h-full">
           {navItems.map((item) => {

@@ -79,6 +79,46 @@ export const FilterIcon = ({ className, size = 24 }: IconProps) => (
   </svg>
 );
 
+export const RefreshIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M21 3V9H15"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M3 21V15H9"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M21 9C20.2044 7.27636 19.0258 5.79547 17.5519 4.68293C16.078 3.57039 14.357 2.86118 12.5456 2.62046C10.7342 2.37974 8.8923 2.61682 7.20697 3.30557C5.52164 3.99431 4.05188 5.11191 2.95 6.55"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M3 15C3.79564 16.7236 4.97422 18.2045 6.44811 19.3171C7.922 20.4296 9.64302 21.1388 11.4544 21.3795C13.2658 21.6203 15.1077 21.3832 16.793 20.6944C18.4784 20.0057 19.9481 18.8881 21.05 17.45"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 export const XIcon = ({ className, size = 24 }: IconProps) => (
   <svg
     width={size}

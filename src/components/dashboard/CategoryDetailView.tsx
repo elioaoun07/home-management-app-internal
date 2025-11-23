@@ -6,7 +6,6 @@ import {
   ZapIcon,
 } from "@/components/icons/FuturisticIcons";
 import { Card } from "@/components/ui/card";
-import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format } from "date-fns";
@@ -40,7 +39,6 @@ export default function CategoryDetailView({
   onBack,
   onTransactionClick,
 }: Props) {
-  const { theme } = useTheme();
   const [isExiting, setIsExiting] = useState(false);
 
   const handleBack = () => {
@@ -49,33 +47,6 @@ export default function CategoryDetailView({
       onBack();
     }, 400);
   };
-
-  const themeColors = {
-    blue: {
-      primary: "cyan",
-      primaryHex: "#06b6d4",
-      secondary: "#38bdf8",
-      gradient: "from-cyan-500 via-blue-500 to-blue-600",
-      cardBg: "bg-cyan-500/5",
-      cardBorder: "border-cyan-500/30",
-      textPrimary: "text-cyan-400",
-      textSecondary: "text-blue-300",
-      glow: "shadow-cyan-500/50",
-    },
-    pink: {
-      primary: "pink",
-      primaryHex: "#f472b6",
-      secondary: "#f9a8d4",
-      gradient: "from-pink-400 via-rose-500 to-pink-600",
-      cardBg: "bg-pink-500/5",
-      cardBorder: "border-pink-500/30",
-      textPrimary: "text-pink-400",
-      textSecondary: "text-rose-300",
-      glow: "shadow-pink-500/50",
-    },
-  };
-
-  const colors = themeColors[theme];
 
   const stats = useMemo(() => {
     const bySubcategory = transactions.reduce(
@@ -112,16 +83,12 @@ export default function CategoryDetailView({
   return (
     <div
       className={cn(
-        "min-h-screen bg-[#0a1628] relative",
-        theme === "pink" && "bg-[#1a0a14]",
+        "min-h-screen bg-bg-dark relative",
         isExiting ? "slide-out-blurred-left" : "slide-in-blurred-right"
       )}
       style={
         {
-          "--glow-color":
-            theme === "blue"
-              ? "rgba(6, 182, 212, 0.3)"
-              : "rgba(244, 114, 182, 0.3)",
+          "--glow-color": "var(--secondary)",
         } as React.CSSProperties
       }
     >
@@ -130,62 +97,37 @@ export default function CategoryDetailView({
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: `linear-gradient(${colors.primaryHex} 1px, transparent 1px), linear-gradient(90deg, ${colors.primaryHex} 1px, transparent 1px)`,
+            backgroundImage: `linear-gradient(var(--secondary) 1px, transparent 1px), linear-gradient(90deg, var(--secondary) 1px, transparent 1px)`,
             backgroundSize: "50px 50px",
           }}
         />
       </div>
 
       {/* Header with Glass Morphism */}
-      <div
-        className={cn(
-          "sticky top-0 z-30 backdrop-blur-xl border-b px-3 py-15",
-          theme === "blue"
-            ? "bg-[#1a2942]/90 border-cyan-500/20"
-            : "bg-[#2d1b29]/90 border-pink-500/20"
-        )}
-      >
+      <div className="sticky top-0 z-30 backdrop-blur-xl border-b px-3 py-15 bg-bg-card-custom/90 border-secondary/20">
         <button
           onClick={handleBack}
-          className={cn(
-            "flex items-center gap-2 mb-3 px-4 py-2.5 rounded-lg transition-all duration-300 group shadow-md hover:shadow-lg",
-            theme === "blue"
-              ? "text-cyan-300 hover:text-cyan-200 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30"
-              : "text-pink-300 hover:text-pink-200 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30"
-          )}
+          className="flex items-center gap-2 mb-3 px-4 py-2.5 rounded-lg transition-all duration-300 group shadow-md hover:shadow-lg text-secondary hover:text-secondary/80 bg-secondary/10 hover:bg-secondary/20 border border-secondary/30"
         >
           <ArrowLeftIcon className="w-5 h-5 transition-transform group-hover:-translate-x-1 drop-shadow-[0_0_10px_rgba(56,189,248,0.7)]" />
           <span className="text-sm font-semibold">Back to Dashboard</span>
         </button>
 
         <div className="flex items-center gap-4">
-          <div
-            className={cn(
-              "relative p-3 rounded-xl scale-in-center",
-              colors.cardBg,
-              colors.cardBorder,
-              "border glow-pulse"
-            )}
-          >
+          <div className="relative p-3 rounded-xl scale-in-center bg-secondary/5 border-secondary/30 border glow-pulse">
             {(() => {
               const IconComponent = getCategoryIcon(category);
               return (
-                <IconComponent className="w-12 h-12 text-[#06b6d4] drop-shadow-[0_0_15px_rgba(6,182,212,0.7)]" />
+                <IconComponent className="w-12 h-12 text-secondary drop-shadow-[0_0_15px_rgba(6,182,212,0.7)]" />
               );
             })()}
-            <SparklesIcon
-              className={cn(
-                "absolute -top-1 -right-1 w-4 h-4",
-                colors.textPrimary,
-                "animate-pulse drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]"
-              )}
-            />
+            <SparklesIcon className="absolute -top-1 -right-1 w-4 h-4 text-secondary animate-pulse drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
           </div>
           <div className="fade-in-expand">
             <h1 className={cn("text-2xl font-bold text-white mb-1")}>
               {category}
             </h1>
-            <p className={cn("text-sm", colors.textSecondary)}>
+            <p className="text-sm text-accent">
               {stats.count} transaction{stats.count !== 1 ? "s" : ""}
             </p>
           </div>
@@ -197,43 +139,23 @@ export default function CategoryDetailView({
         {/* Summary Cards with Stagger Animation */}
         <div className="grid grid-cols-2 gap-3">
           <Card
-            className={cn(
-              "neo-card p-4 border backdrop-blur-sm scale-in-center",
-              colors.cardBorder,
-              colors.cardBg,
-              `bg-gradient-to-br ${colors.gradient} bg-opacity-10`
-            )}
+            className="neo-card p-4 border backdrop-blur-sm scale-in-center border-secondary/30 bg-secondary/5 bg-gradient-to-br from-secondary via-primary to-primary bg-opacity-10"
             style={{ animationDelay: "0.1s" }}
           >
-            <p className={cn("text-xs mb-1", colors.textSecondary)}>
-              Total Spent
-            </p>
+            <p className="text-xs mb-1 text-accent">Total Spent</p>
             <div className="flex items-center gap-2">
-              <p className={cn("text-2xl font-bold", colors.textPrimary)}>
+              <p className="text-2xl font-bold text-secondary">
                 ${totalAmount.toFixed(2)}
               </p>
-              <ZapIcon
-                className={cn(
-                  "w-5 h-5",
-                  colors.textPrimary,
-                  "animate-pulse drop-shadow-[0_0_10px_rgba(6,182,212,0.6)]"
-                )}
-              />
+              <ZapIcon className="w-5 h-5 text-secondary animate-pulse drop-shadow-[0_0_10px_rgba(6,182,212,0.6)]" />
             </div>
           </Card>
 
           <Card
-            className={cn(
-              "neo-card p-4 border backdrop-blur-sm scale-in-center",
-              theme === "blue"
-                ? "border-blue-500/20 bg-blue-500/5"
-                : "border-rose-500/20 bg-rose-500/5"
-            )}
+            className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-primary/5"
             style={{ animationDelay: "0.2s" }}
           >
-            <p className={cn("text-xs mb-1", colors.textSecondary)}>
-              Avg per Transaction
-            </p>
+            <p className="text-xs mb-1 text-accent">Avg per Transaction</p>
             <p className="text-2xl font-bold text-white">
               ${stats.avgTransaction.toFixed(2)}
             </p>
@@ -243,20 +165,10 @@ export default function CategoryDetailView({
         {/* By Subcategory */}
         {Object.keys(stats.bySubcategory).length > 1 && (
           <Card
-            className={cn(
-              "neo-card p-4 border backdrop-blur-sm scale-in-center",
-              theme === "blue"
-                ? "border-blue-500/20 bg-blue-500/5"
-                : "border-rose-500/20 bg-rose-500/5"
-            )}
+            className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-primary/5"
             style={{ animationDelay: "0.3s" }}
           >
-            <h3
-              className={cn(
-                "text-sm font-semibold mb-3 flex items-center gap-2",
-                colors.textPrimary
-              )}
-            >
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-secondary">
               <SparklesIcon className="w-4 h-4 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
               By Subcategory
             </h3>
@@ -266,21 +178,13 @@ export default function CategoryDetailView({
                 .map(([sub, amt], index) => (
                   <div
                     key={sub}
-                    className={cn(
-                      "flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 cursor-pointer",
-                      theme === "blue"
-                        ? "bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20"
-                        : "bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20",
-                      "fade-in-expand"
-                    )}
+                    className="flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 cursor-pointer bg-secondary/10 hover:bg-secondary/20 border border-secondary/20 fade-in-expand"
                     style={{ animationDelay: `${0.4 + index * 0.1}s` }}
                   >
                     <span className="text-sm text-white font-medium">
                       {sub}
                     </span>
-                    <span
-                      className={cn("text-sm font-bold", colors.textPrimary)}
-                    >
+                    <span className="text-sm font-bold text-secondary">
                       ${amt.toFixed(2)}
                     </span>
                   </div>
@@ -291,20 +195,10 @@ export default function CategoryDetailView({
 
         {/* By Account */}
         <Card
-          className={cn(
-            "neo-card p-4 border backdrop-blur-sm scale-in-center",
-            theme === "blue"
-              ? "border-blue-500/20 bg-blue-500/5"
-              : "border-rose-500/20 bg-rose-500/5"
-          )}
+          className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-primary/5"
           style={{ animationDelay: "0.5s" }}
         >
-          <h3
-            className={cn(
-              "text-sm font-semibold mb-3 flex items-center gap-2",
-              colors.textPrimary
-            )}
-          >
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-secondary">
             <ZapIcon className="w-4 h-4 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
             By Account
           </h3>
@@ -314,17 +208,11 @@ export default function CategoryDetailView({
               .map(([acct, amt], index) => (
                 <div
                   key={acct}
-                  className={cn(
-                    "flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105",
-                    theme === "blue"
-                      ? "bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20"
-                      : "bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20",
-                    "fade-in-expand"
-                  )}
+                  className="flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 bg-primary/10 hover:bg-primary/20 border border-[#1a2942] fade-in-expand"
                   style={{ animationDelay: `${0.6 + index * 0.1}s` }}
                 >
                   <span className="text-sm text-white font-medium">{acct}</span>
-                  <span className={cn("text-sm font-bold", colors.textPrimary)}>
+                  <span className="text-sm font-bold text-secondary">
                     ${amt.toFixed(2)}
                   </span>
                 </div>
@@ -334,20 +222,10 @@ export default function CategoryDetailView({
 
         {/* All Transactions */}
         <Card
-          className={cn(
-            "neo-card p-4 border backdrop-blur-sm scale-in-center",
-            theme === "blue"
-              ? "border-cyan-500/20 bg-cyan-500/5"
-              : "border-pink-500/20 bg-pink-500/5"
-          )}
+          className="neo-card p-4 border backdrop-blur-sm scale-in-center border-secondary/20 bg-secondary/5"
           style={{ animationDelay: "0.7s" }}
         >
-          <h3
-            className={cn(
-              "text-sm font-semibold mb-3 flex items-center gap-2",
-              colors.textPrimary
-            )}
-          >
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-secondary">
             <SparklesIcon className="w-4 h-4 animate-pulse drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
             All Transactions
           </h3>
@@ -361,55 +239,29 @@ export default function CategoryDetailView({
                 <div
                   key={tx.id}
                   onClick={() => onTransactionClick(tx)}
-                  className={cn(
-                    "flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:scale-105 group",
-                    theme === "blue"
-                      ? "bg-blue-500/5 hover:bg-blue-500/15 border-blue-500/20 hover:border-cyan-500/40"
-                      : "bg-pink-500/5 hover:bg-pink-500/15 border-pink-500/20 hover:border-pink-500/40",
-                    "fade-in-expand"
-                  )}
+                  className="flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:scale-105 group bg-primary/5 hover:bg-primary/15 border-[#1a2942] hover:border-secondary/40 fade-in-expand"
                   style={{ animationDelay: `${0.8 + index * 0.05}s` }}
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-white truncate">
                       {tx.subcategory || category}
                     </p>
-                    <div
-                      className={cn(
-                        "flex items-center gap-2 text-xs mt-1",
-                        colors.textSecondary
-                      )}
-                    >
+                    <div className="flex items-center gap-2 text-xs mt-1 text-accent">
                       <span>{format(new Date(tx.date), "MMM d, yyyy")}</span>
                       <span>•</span>
                       <span>{tx.account_name}</span>
                     </div>
                     {tx.description && (
-                      <p
-                        className={cn(
-                          "text-xs mt-1 truncate opacity-70",
-                          colors.textSecondary
-                        )}
-                      >
+                      <p className="text-xs mt-1 truncate opacity-70 text-accent">
                         {tx.description}
                       </p>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <p
-                      className={cn(
-                        "text-base font-bold ml-3",
-                        colors.textPrimary
-                      )}
-                    >
+                    <p className="text-base font-bold ml-3 text-secondary">
                       ${tx.amount.toFixed(2)}
                     </p>
-                    <div
-                      className={cn(
-                        "w-1 h-1 rounded-full transition-all group-hover:w-2 group-hover:h-2",
-                        theme === "blue" ? "bg-cyan-400" : "bg-pink-400"
-                      )}
-                    />
+                    <div className="w-1 h-1 rounded-full transition-all group-hover:w-2 group-hover:h-2 bg-secondary" />
                   </div>
                 </div>
               ))}

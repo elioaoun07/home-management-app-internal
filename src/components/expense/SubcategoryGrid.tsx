@@ -150,7 +150,7 @@ export default function SubcategoryGrid({
                     >
                       <input
                         ref={inputRef}
-                        className="border rounded px-2 py-1 flex-1"
+                        className="shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] bg-[#0a1628]/50 rounded px-2 py-1 flex-1 focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset]"
                         value={otherName}
                         onChange={(e) => setOtherName(e.target.value)}
                         placeholder="Rename 'Other'..."

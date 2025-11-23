@@ -547,7 +547,7 @@ export default function CategoryManagerDialog({
                                   )}
                                   {isEditing ? (
                                     <input
-                                      className="ml-1 border rounded px-2 py-1 text-sm flex-1 min-w-0"
+                                      className="ml-1 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] bg-[#0a1628]/50 rounded px-2 py-1 text-sm flex-1 min-w-0 focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset]"
                                       value={editingCatName}
                                       onChange={(e) =>
                                         setEditingCatName(e.target.value)
@@ -721,7 +721,7 @@ export default function CategoryManagerDialog({
                                             <div className="flex items-center gap-2 flex-1">
                                               {isSubEditing ? (
                                                 <input
-                                                  className="border rounded px-2 py-1 text-sm flex-1"
+                                                  className="shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] bg-[#0a1628]/50 rounded px-2 py-1 text-sm flex-1 focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset]"
                                                   value={editingSubName}
                                                   onChange={(e) =>
                                                     setEditingSubName(
@@ -773,7 +773,7 @@ export default function CategoryManagerDialog({
                                                   />
                                                 ) : (
                                                   <button
-                                                    className="w-full px-2 py-1 border rounded text-sm text-muted-foreground hover:bg-muted/10"
+                                                    className="w-full px-2 py-1 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] rounded text-sm text-[#06b6d4] hover:bg-[#06b6d4]/10 hover:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset]"
                                                     onClick={(e) => {
                                                       e.preventDefault();
                                                       e.stopPropagation();
