@@ -523,7 +523,7 @@ export default function MobileExpenseForm() {
 
             {step === "category" && (
               <div key="category-step" className="space-y-3 step-slide-in">
-                <Label className="text-base font-semibold text-secondary">
+                <Label className="text-base font-semibold text-[#22d3ee]">
                   What category?
                 </Label>
                 <div className="grid grid-cols-2 gap-2 pb-4">
@@ -577,7 +577,7 @@ export default function MobileExpenseForm() {
                             return (
                               <IconComponent
                                 className={cn(
-                                  "w-8 h-8 text-secondary/80",
+                                  "w-8 h-8 text-[#22d3ee]",
                                   getCategoryGlowClass(category.color)
                                 )}
                               />
@@ -600,7 +600,7 @@ export default function MobileExpenseForm() {
               >
                 {allSubcategories.length > 0 && (
                   <>
-                    <Label className="text-base font-semibold text-secondary">
+                    <Label className="text-base font-semibold text-[#22d3ee]">
                       More specific?
                     </Label>
                     <div className="grid grid-cols-2 gap-2">
@@ -609,7 +609,7 @@ export default function MobileExpenseForm() {
                         className={cn(
                           "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
                           !selectedSubcategoryId
-                            ? "neo-card border-secondary/60 bg-secondary/25 neo-glow shadow-lg"
+                            ? "neo-card border-[#22d3ee]/60 bg-[#22d3ee]/25 neo-glow shadow-lg"
                             : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5"
                         )}
                       >
@@ -617,7 +617,7 @@ export default function MobileExpenseForm() {
                           className={cn(
                             "font-semibold text-xs",
                             !selectedSubcategoryId
-                              ? "text-secondary"
+                              ? "text-[#22d3ee]"
                               : "text-white"
                           )}
                         >
@@ -632,7 +632,7 @@ export default function MobileExpenseForm() {
                           className={cn(
                             "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
                             selectedSubcategoryId === sub.id
-                              ? "neo-card border-secondary/60 bg-secondary/25 neo-glow shadow-lg"
+                              ? "neo-card border-[#22d3ee]/60 bg-[#22d3ee]/25 neo-glow shadow-lg"
                               : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5"
                           )}
                         >
@@ -640,7 +640,7 @@ export default function MobileExpenseForm() {
                             className={cn(
                               "font-semibold text-xs",
                               selectedSubcategoryId === sub.id
-                                ? "text-secondary"
+                                ? "text-[#22d3ee]"
                                 : "text-white"
                             )}
                           >

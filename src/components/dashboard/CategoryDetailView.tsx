@@ -104,30 +104,30 @@ export default function CategoryDetailView({
       </div>
 
       {/* Header with Glass Morphism */}
-      <div className="sticky top-0 z-30 backdrop-blur-xl border-b px-3 py-15 bg-bg-card-custom/90 border-secondary/20">
+      <div className="sticky top-0 z-30 backdrop-blur-xl border-b px-3 py-15 bg-bg-card-custom/90 border-[#1a2942]">
         <button
           onClick={handleBack}
-          className="flex items-center gap-2 mb-3 px-4 py-2.5 rounded-lg transition-all duration-300 group shadow-md hover:shadow-lg text-secondary hover:text-secondary/80 bg-secondary/10 hover:bg-secondary/20 border border-secondary/30"
+          className="flex items-center gap-2 mb-3 px-4 py-2.5 rounded-lg transition-all duration-300 group shadow-md hover:shadow-lg text-[#22d3ee] hover:text-[#22d3ee]/80 bg-secondary/10 hover:bg-secondary/20 border border-[#1a2942]"
         >
-          <ArrowLeftIcon className="w-5 h-5 transition-transform group-hover:-translate-x-1 drop-shadow-[0_0_10px_rgba(56,189,248,0.7)]" />
+          <ArrowLeftIcon className="w-5 h-5 transition-transform group-hover:-translate-x-1 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)]" />
           <span className="text-sm font-semibold">Back to Dashboard</span>
         </button>
 
         <div className="flex items-center gap-4">
-          <div className="relative p-3 rounded-xl scale-in-center bg-secondary/5 border-secondary/30 border glow-pulse">
+          <div className="relative p-3 rounded-xl scale-in-center bg-secondary/5 border-[#1a2942] border glow-pulse">
             {(() => {
               const IconComponent = getCategoryIcon(category);
               return (
-                <IconComponent className="w-12 h-12 text-secondary drop-shadow-[0_0_15px_rgba(6,182,212,0.7)]" />
+                <IconComponent className="w-12 h-12 text-[#22d3ee] drop-shadow-[0_0_15px_rgba(34,211,238,0.7)]" />
               );
             })()}
-            <SparklesIcon className="absolute -top-1 -right-1 w-4 h-4 text-secondary animate-pulse drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+            <SparklesIcon className="absolute -top-1 -right-1 w-4 h-4 text-[#22d3ee] animate-pulse drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
           </div>
           <div className="fade-in-expand">
             <h1 className={cn("text-2xl font-bold text-white mb-1")}>
               {category}
             </h1>
-            <p className="text-sm text-accent">
+            <p className="text-sm text-[#94a3b8]">
               {stats.count} transaction{stats.count !== 1 ? "s" : ""}
             </p>
           </div>
@@ -139,15 +139,15 @@ export default function CategoryDetailView({
         {/* Summary Cards with Stagger Animation */}
         <div className="grid grid-cols-2 gap-3">
           <Card
-            className="neo-card p-4 border backdrop-blur-sm scale-in-center border-secondary/30 bg-secondary/5 bg-gradient-to-br from-secondary via-primary to-primary bg-opacity-10"
+            className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-secondary/5 bg-gradient-to-br from-secondary via-primary to-primary bg-opacity-10"
             style={{ animationDelay: "0.1s" }}
           >
-            <p className="text-xs mb-1 text-accent">Total Spent</p>
+            <p className="text-xs mb-1 text-[#94a3b8]">Total Spent</p>
             <div className="flex items-center gap-2">
-              <p className="text-2xl font-bold text-secondary">
+              <p className="text-2xl font-bold text-[#22d3ee]">
                 ${totalAmount.toFixed(2)}
               </p>
-              <ZapIcon className="w-5 h-5 text-secondary animate-pulse drop-shadow-[0_0_10px_rgba(6,182,212,0.6)]" />
+              <ZapIcon className="w-5 h-5 text-[#22d3ee] animate-pulse drop-shadow-[0_0_10px_rgba(34,211,238,0.6)]" />
             </div>
           </Card>
 
@@ -155,7 +155,7 @@ export default function CategoryDetailView({
             className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-primary/5"
             style={{ animationDelay: "0.2s" }}
           >
-            <p className="text-xs mb-1 text-accent">Avg per Transaction</p>
+            <p className="text-xs mb-1 text-[#94a3b8]">Avg per Transaction</p>
             <p className="text-2xl font-bold text-white">
               ${stats.avgTransaction.toFixed(2)}
             </p>
@@ -168,8 +168,8 @@ export default function CategoryDetailView({
             className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-primary/5"
             style={{ animationDelay: "0.3s" }}
           >
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-secondary">
-              <SparklesIcon className="w-4 h-4 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-[#22d3ee]">
+              <SparklesIcon className="w-4 h-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
               By Subcategory
             </h3>
             <div className="space-y-2">
@@ -178,13 +178,13 @@ export default function CategoryDetailView({
                 .map(([sub, amt], index) => (
                   <div
                     key={sub}
-                    className="flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 cursor-pointer bg-secondary/10 hover:bg-secondary/20 border border-secondary/20 fade-in-expand"
+                    className="flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 cursor-pointer bg-secondary/10 hover:bg-secondary/20 border border-[#1a2942] fade-in-expand"
                     style={{ animationDelay: `${0.4 + index * 0.1}s` }}
                   >
                     <span className="text-sm text-white font-medium">
                       {sub}
                     </span>
-                    <span className="text-sm font-bold text-secondary">
+                    <span className="text-sm font-bold text-[#22d3ee]">
                       ${amt.toFixed(2)}
                     </span>
                   </div>
@@ -198,8 +198,8 @@ export default function CategoryDetailView({
           className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-primary/5"
           style={{ animationDelay: "0.5s" }}
         >
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-secondary">
-            <ZapIcon className="w-4 h-4 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-[#22d3ee]">
+            <ZapIcon className="w-4 h-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
             By Account
           </h3>
           <div className="space-y-2">
@@ -212,7 +212,7 @@ export default function CategoryDetailView({
                   style={{ animationDelay: `${0.6 + index * 0.1}s` }}
                 >
                   <span className="text-sm text-white font-medium">{acct}</span>
-                  <span className="text-sm font-bold text-secondary">
+                  <span className="text-sm font-bold text-[#22d3ee]">
                     ${amt.toFixed(2)}
                   </span>
                 </div>
@@ -222,11 +222,11 @@ export default function CategoryDetailView({
 
         {/* All Transactions */}
         <Card
-          className="neo-card p-4 border backdrop-blur-sm scale-in-center border-secondary/20 bg-secondary/5"
+          className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-secondary/5"
           style={{ animationDelay: "0.7s" }}
         >
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-secondary">
-            <SparklesIcon className="w-4 h-4 animate-pulse drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]" />
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-[#22d3ee]">
+            <SparklesIcon className="w-4 h-4 animate-pulse drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
             All Transactions
           </h3>
           <div className="space-y-2">
@@ -246,22 +246,22 @@ export default function CategoryDetailView({
                     <p className="text-sm font-medium text-white truncate">
                       {tx.subcategory || category}
                     </p>
-                    <div className="flex items-center gap-2 text-xs mt-1 text-accent">
+                    <div className="flex items-center gap-2 text-xs mt-1 text-[#94a3b8]">
                       <span>{format(new Date(tx.date), "MMM d, yyyy")}</span>
                       <span>•</span>
                       <span>{tx.account_name}</span>
                     </div>
                     {tx.description && (
-                      <p className="text-xs mt-1 truncate opacity-70 text-accent">
+                      <p className="text-xs mt-1 truncate opacity-70 text-[#94a3b8]">
                         {tx.description}
                       </p>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <p className="text-base font-bold ml-3 text-secondary">
+                    <p className="text-base font-bold ml-3 text-[#22d3ee]">
                       ${tx.amount.toFixed(2)}
                     </p>
-                    <div className="w-1 h-1 rounded-full transition-all group-hover:w-2 group-hover:h-2 bg-secondary" />
+                    <div className="w-1 h-1 rounded-full transition-all group-hover:w-2 group-hover:h-2 bg-[#22d3ee]" />
                   </div>
                 </div>
               ))}
