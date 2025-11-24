@@ -2,6 +2,7 @@
 
 import { GripVerticalIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -12,6 +13,7 @@ export function SortableItem({
   id: string;
   children: React.ReactNode;
 }) {
+  const themeClasses = useThemeClasses();
   const {
     attributes,
     listeners,
@@ -48,7 +50,9 @@ export function SortableItem({
         aria-label="Drag to reorder"
         className="cursor-grab active:cursor-grabbing hover:bg-transparent"
       >
-        <GripVerticalIcon className="h-5 w-5 text-slate-400 hover:text-cyan-400 transition-colors drop-shadow-[0_0_4px_rgba(148,163,184,0.3)]" />
+        <GripVerticalIcon
+          className={`h-5 w-5 text-slate-400 ${themeClasses.textHover} transition-colors drop-shadow-[0_0_4px_rgba(148,163,184,0.3)]`}
+        />
       </Button>
     </li>
   );

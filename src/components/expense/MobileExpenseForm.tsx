@@ -20,6 +20,7 @@ import {
   useSectionOrder,
   type SectionKey,
 } from "@/features/preferences/useSectionOrder";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useQueryClient } from "@tanstack/react-query";
@@ -83,6 +84,7 @@ export default function MobileExpenseForm() {
 
   const { data: categories = [] } = useCategories(selectedAccountId);
   const queryClient = useQueryClient();
+  const themeClasses = useThemeClasses();
 
   useEffect(() => {
     if (stepFlow.length > 0 && !accountsLoading) {
@@ -274,7 +276,9 @@ export default function MobileExpenseForm() {
               ) : (
                 <div className="w-8" />
               )}
-              <h1 className="text-sm font-semibold bg-gradient-to-r from-teal via-cyan-400 to-cyan-300 bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]">
+              <h1
+                className={`text-sm font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`}
+              >
                 New Expense
               </h1>
               <button
@@ -303,7 +307,7 @@ export default function MobileExpenseForm() {
             </div>
             <div className="h-0.5 bg-bg-card-custom rounded-full overflow-hidden relative">
               <div
-                className="h-full bg-gradient-to-r from-primary via-secondary to-teal transition-all duration-500 ease-out neo-glow-sm glow-pulse-primary"
+                className={`h-full bg-gradient-to-r ${themeClasses.activeItemGradient} transition-all duration-500 ease-out neo-glow-sm glow-pulse-primary`}
                 style={{ width: `${progress()}%` }}
               />
             </div>
@@ -329,7 +333,9 @@ export default function MobileExpenseForm() {
             {step === "amount" && (
               <div key="amount-step" className="space-y-3 step-slide-in">
                 <div>
-                  <Label className="text-xs text-[#22d3ee] font-medium mb-1 block text-center">
+                  <Label
+                    className={`text-xs ${themeClasses.text} font-medium mb-1 block text-center`}
+                  >
                     How much did you spend?
                   </Label>
                   <div className="mt-1 relative">
@@ -343,7 +349,7 @@ export default function MobileExpenseForm() {
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       suppressHydrationWarning
-                      className="text-3xl font-bold h-16 px-4 border-2 text-center bg-bg-card-custom border-[#22d3ee]/30 text-white placeholder:text-[hsl(var(--input-placeholder)/0.3)] focus:border-[#22d3ee] focus:ring-2 focus:ring-[#22d3ee]/20 focus:scale-[1.02] transition-all duration-200 neo-card bounce-in"
+                      className={`text-3xl font-bold h-16 px-4 border-2 text-center bg-bg-card-custom ${themeClasses.border} text-white placeholder:text-[hsl(var(--input-placeholder)/0.3)] ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} focus:scale-[1.02] transition-all duration-200 neo-card bounce-in`}
                       autoFocus
                     />
                   </div>
@@ -353,7 +359,9 @@ export default function MobileExpenseForm() {
                       suppressHydrationWarning
                       className="p-1.5 rounded-lg neo-card bg-primary/10 border border-[#1a2942] hover:bg-primary/20 active:scale-95 transition-all"
                     >
-                      <CalculatorIcon className="w-4 h-4 text-[#22d3ee] drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]" />
+                      <CalculatorIcon
+                        className={`w-4 h-4 ${themeClasses.text} drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]`}
+                      />
                     </button>
                     <VoiceEntryButton
                       categories={categories}
@@ -390,7 +398,7 @@ export default function MobileExpenseForm() {
                       className="h-9 text-sm font-semibold neo-card bg-bg-card-custom border-[#1a2942] hover:bg-primary/10 hover:border-[#1a2942] hover:scale-105 active:scale-95 transition-all category-appear"
                       onClick={() => setAmount(val.toString())}
                     >
-                      <span className="text-[#22d3ee]">${val}</span>
+                      <span className={themeClasses.text}>${val}</span>
                     </Button>
                   ))}
                 </div>
@@ -423,21 +431,23 @@ export default function MobileExpenseForm() {
                     className={cn(
                       "group relative p-3 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2.5 overflow-hidden",
                       isPrivate
-                        ? "border-teal/40 bg-gradient-to-br from-teal/20 via-teal/15 to-cyan-500/10 shadow-[0_0_20px_rgba(20,184,166,0.25),0_0_40px_rgba(6,182,212,0.15)] hover:shadow-[0_0_25px_rgba(20,184,166,0.35),0_0_50px_rgba(6,182,212,0.2)]"
+                        ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow} hover:shadow-[0_0_25px_rgba(20,184,166,0.35),0_0_50px_rgba(6,182,212,0.2)]`
                         : "neo-card border-[#1a2942]/60 hover:border-[#1a2942]"
                     )}
                   >
                     {/* Animated background glow when private */}
                     {isPrivate && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-teal/0 via-teal/30 to-teal/0 animate-[shimmer_3s_ease-in-out_infinite]" />
+                      <div
+                        className={`absolute inset-0 bg-gradient-to-r ${themeClasses.iconBg} animate-[shimmer_3s_ease-in-out_infinite]`}
+                      />
                     )}
 
                     <span
                       className={cn(
                         "relative text-sm font-semibold tracking-wide transition-all duration-300",
                         isPrivate
-                          ? "text-teal drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]"
-                          : "text-cyan-400/70 group-hover:text-cyan-400/90"
+                          ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]`
+                          : `${themeClasses.textFaint} ${themeClasses.textHover}`
                       )}
                     >
                       {isPrivate ? "Private" : "Public"}
@@ -446,8 +456,8 @@ export default function MobileExpenseForm() {
                       className={cn(
                         "relative w-5 h-5 transition-all duration-500",
                         isPrivate
-                          ? "text-teal drop-shadow-[0_0_10px_rgba(20,184,166,0.8)] animate-pulse"
-                          : "text-cyan-400/60 group-hover:text-cyan-400/80"
+                          ? `${themeClasses.textActive} drop-shadow-[0_0_10px_rgba(20,184,166,0.8)] animate-pulse`
+                          : `${themeClasses.textFaint} ${themeClasses.textHover}`
                       )}
                       fill="none"
                       viewBox="0 0 24 24"
@@ -509,7 +519,7 @@ export default function MobileExpenseForm() {
                       className={cn(
                         "w-full p-2.5 rounded-lg border text-left transition-all active:scale-[0.98] category-appear",
                         selectedAccountId === account.id
-                          ? "neo-card border-[#06b6d4]/60 bg-primary/10 neo-glow-sm"
+                          ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
                           : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5"
                       )}
                     >
@@ -534,7 +544,9 @@ export default function MobileExpenseForm() {
 
             {step === "category" && (
               <div key="category-step" className="space-y-3 step-slide-in">
-                <Label className="text-base font-semibold text-[#22d3ee]">
+                <Label
+                  className={`text-base font-semibold ${themeClasses.text}`}
+                >
                   What category?
                 </Label>
                 <div className="grid grid-cols-2 gap-2 pb-4">
@@ -628,7 +640,9 @@ export default function MobileExpenseForm() {
               >
                 {allSubcategories.length > 0 && (
                   <>
-                    <Label className="text-base font-semibold text-[#22d3ee]">
+                    <Label
+                      className={`text-base font-semibold ${themeClasses.text}`}
+                    >
                       More specific?
                     </Label>
                     <div className="grid grid-cols-2 gap-2">
@@ -637,15 +651,15 @@ export default function MobileExpenseForm() {
                         className={cn(
                           "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
                           !selectedSubcategoryId
-                            ? "neo-card border-[#22d3ee]/60 bg-[#22d3ee]/25 neo-glow shadow-lg"
-                            : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5"
+                            ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow shadow-lg`
+                            : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`
                         )}
                       >
                         <span
                           className={cn(
                             "font-semibold text-xs",
                             !selectedSubcategoryId
-                              ? "text-[#22d3ee]"
+                              ? themeClasses.text
                               : "text-white"
                           )}
                         >
@@ -673,7 +687,7 @@ export default function MobileExpenseForm() {
                               "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
                               active
                                 ? "neo-card neo-glow shadow-lg"
-                                : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5"
+                                : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`
                             )}
                           >
                             <span
@@ -691,14 +705,13 @@ export default function MobileExpenseForm() {
 
                 <div className="space-y-2 pt-2">
                   <Label className="text-sm font-medium text-secondary/80">
-                    Add a note (optional)
+                    Add a note
                   </Label>
                   <Input
                     type="text"
-                    placeholder="e.g., Lunch with team"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="bg-bg-card-custom border-[#1a2942] text-white placeholder:text-primary/30 focus:border-secondary focus:ring-2 focus:ring-secondary/20 h-11"
+                    className={`!bg-bg-card-custom ${themeClasses.border} text-white placeholder:text-slate-500 ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} h-11`}
                   />
                 </div>
 

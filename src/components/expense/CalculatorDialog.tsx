@@ -7,6 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Props = {
@@ -24,6 +26,7 @@ export default function CalculatorDialog({
   onResult,
   initialValue = "0",
 }: Props) {
+  const themeClasses = useThemeClasses();
   const [display, setDisplay] = useState(initialValue);
   const [previousValue, setPreviousValue] = useState<string | null>(null);
   const [operation, setOperation] = useState<Operation>(null);
@@ -203,18 +206,28 @@ export default function CalculatorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-gradient-to-br from-[#0f1d2e] to-[#1a2942] border-2 border-[#3b82f6]/30 shadow-[0_0_40px_rgba(59,130,246,0.2)]">
+      <DialogContent
+        className={`sm:max-w-md border-2 ${themeClasses.calculatorBg} ${themeClasses.calculatorShadow}`}
+      >
         <DialogHeader>
-          <DialogTitle className="text-transparent bg-gradient-to-r from-cyan-400 to-teal bg-clip-text text-xl font-bold">
+          <DialogTitle
+            className={`text-transparent bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-xl font-bold`}
+          >
             Calculator
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Display */}
-          <div className="neo-card bg-gradient-to-br from-[#0a1525] to-[#0f1d2e] border-2 border-cyan-500/30 p-5 rounded-xl text-right shadow-[0_0_20px_rgba(6,182,212,0.15)] relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none"></div>
-            <div className="text-4xl font-mono font-bold text-transparent bg-gradient-to-r from-cyan-300 to-teal bg-clip-text truncate relative z-10">
+          <div
+            className={`neo-card ${themeClasses.calculatorDisplayBg} border-2 ${themeClasses.border} p-5 rounded-xl text-right ${themeClasses.activeItemShadow} relative overflow-hidden`}
+          >
+            <div
+              className={`absolute inset-0 bg-gradient-to-br ${themeClasses.bgSurface} to-transparent pointer-events-none`}
+            ></div>
+            <div
+              className={`text-4xl font-mono font-bold text-transparent bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text truncate relative z-10`}
+            >
               {(() => {
                 const num = parseFloat(display);
                 // Show no decimals for whole numbers, up to 2 for decimals
@@ -222,7 +235,9 @@ export default function CalculatorDialog({
               })()}
             </div>
             {operation && previousValue && (
-              <div className="text-sm text-cyan-400/70 mt-2 relative z-10">
+              <div
+                className={`text-sm ${themeClasses.textMuted} mt-2 relative z-10`}
+              >
                 {previousValue} {operation}
               </div>
             )}
@@ -234,7 +249,10 @@ export default function CalculatorDialog({
               variant="secondary"
               onClick={addTip}
               disabled={display === lastTipValue}
-              className="text-xs px-4 py-2 bg-gradient-to-r from-emerald-500/20 to-teal/20 hover:from-emerald-500/30 hover:to-teal/30 border border-emerald-400/40 text-emerald-300 font-medium shadow-[0_0_10px_rgba(16,185,129,0.2)] hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all"
+              className={cn(
+                "text-xs px-4 py-2 border font-medium transition-all",
+                themeClasses.calculatorTipBtn
+              )}
             >
               💡 Add 10% Tip
             </Button>
@@ -244,45 +262,28 @@ export default function CalculatorDialog({
             {/* Row 1 */}
             <Button
               onClick={clear}
-              className="col-span-2"
-              style={{
-                background:
-                  "linear-gradient(to bottom right, rgba(239, 68, 68, 0.2), rgba(225, 29, 72, 0.2))",
-                border: "1px solid rgba(248, 113, 113, 0.5)",
-                color: "#fecaca",
-                fontWeight: "bold",
-                boxShadow: "0 0 15px rgba(239, 68, 68, 0.2)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "col-span-2 font-bold transition-all duration-300 border",
+                themeClasses.calculatorClearBtn
+              )}
             >
               C
             </Button>
             <Button
               onClick={() => setDisplay(display.slice(0, -1) || "0")}
-              style={{
-                background:
-                  "linear-gradient(to bottom right, rgba(249, 115, 22, 0.2), rgba(245, 158, 11, 0.2))",
-                border: "1px solid rgba(251, 146, 60, 0.5)",
-                color: "#fed7aa",
-                fontWeight: "bold",
-                boxShadow: "0 0 15px rgba(249, 115, 22, 0.2)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-bold transition-all duration-300 border",
+                themeClasses.calculatorBackspaceBtn
+              )}
             >
               ⌫
             </Button>
             <Button
               onClick={() => performOperation("/")}
-              style={{
-                background:
-                  "linear-gradient(to bottom right, rgba(6, 182, 212, 0.15), rgba(59, 130, 246, 0.15))",
-                border: "1px solid rgba(34, 211, 238, 0.4)",
-                color: "#67e8f9",
-                fontWeight: "bold",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 15px rgba(6, 182, 212, 0.2)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-bold text-lg transition-all duration-300 border",
+                themeClasses.calculatorOperatorBtn
+              )}
             >
               ÷
             </Button>
@@ -290,58 +291,37 @@ export default function CalculatorDialog({
             {/* Row 2 */}
             <Button
               onClick={() => inputNumber("7")}
-              style={{
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#cbd5e1",
-                fontWeight: "600",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-semibold text-lg transition-all duration-300 border",
+                themeClasses.calculatorNumberBtn
+              )}
             >
               7
             </Button>
             <Button
               onClick={() => inputNumber("8")}
-              style={{
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#cbd5e1",
-                fontWeight: "600",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-semibold text-lg transition-all duration-300 border",
+                themeClasses.calculatorNumberBtn
+              )}
             >
               8
             </Button>
             <Button
               onClick={() => inputNumber("9")}
-              style={{
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#cbd5e1",
-                fontWeight: "600",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-semibold text-lg transition-all duration-300 border",
+                themeClasses.calculatorNumberBtn
+              )}
             >
               9
             </Button>
             <Button
               onClick={() => performOperation("*")}
-              style={{
-                background:
-                  "linear-gradient(to bottom right, rgba(6, 182, 212, 0.15), rgba(59, 130, 246, 0.15))",
-                border: "1px solid rgba(34, 211, 238, 0.4)",
-                color: "#67e8f9",
-                fontWeight: "bold",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 15px rgba(6, 182, 212, 0.2)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-bold text-lg transition-all duration-300 border",
+                themeClasses.calculatorOperatorBtn
+              )}
             >
               ×
             </Button>
@@ -349,58 +329,37 @@ export default function CalculatorDialog({
             {/* Row 3 */}
             <Button
               onClick={() => inputNumber("4")}
-              style={{
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#cbd5e1",
-                fontWeight: "600",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-semibold text-lg transition-all duration-300 border",
+                themeClasses.calculatorNumberBtn
+              )}
             >
               4
             </Button>
             <Button
               onClick={() => inputNumber("5")}
-              style={{
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#cbd5e1",
-                fontWeight: "600",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-semibold text-lg transition-all duration-300 border",
+                themeClasses.calculatorNumberBtn
+              )}
             >
               5
             </Button>
             <Button
               onClick={() => inputNumber("6")}
-              style={{
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#cbd5e1",
-                fontWeight: "600",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-semibold text-lg transition-all duration-300 border",
+                themeClasses.calculatorNumberBtn
+              )}
             >
               6
             </Button>
             <Button
               onClick={() => performOperation("-")}
-              style={{
-                background:
-                  "linear-gradient(to bottom right, rgba(6, 182, 212, 0.15), rgba(59, 130, 246, 0.15))",
-                border: "1px solid rgba(34, 211, 238, 0.4)",
-                color: "#67e8f9",
-                fontWeight: "bold",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 15px rgba(6, 182, 212, 0.2)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-bold text-lg transition-all duration-300 border",
+                themeClasses.calculatorOperatorBtn
+              )}
             >
               −
             </Button>
@@ -408,58 +367,37 @@ export default function CalculatorDialog({
             {/* Row 4 */}
             <Button
               onClick={() => inputNumber("1")}
-              style={{
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#cbd5e1",
-                fontWeight: "600",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-semibold text-lg transition-all duration-300 border",
+                themeClasses.calculatorNumberBtn
+              )}
             >
               1
             </Button>
             <Button
               onClick={() => inputNumber("2")}
-              style={{
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#cbd5e1",
-                fontWeight: "600",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-semibold text-lg transition-all duration-300 border",
+                themeClasses.calculatorNumberBtn
+              )}
             >
               2
             </Button>
             <Button
               onClick={() => inputNumber("3")}
-              style={{
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#cbd5e1",
-                fontWeight: "600",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-semibold text-lg transition-all duration-300 border",
+                themeClasses.calculatorNumberBtn
+              )}
             >
               3
             </Button>
             <Button
               onClick={() => performOperation("+")}
-              style={{
-                background:
-                  "linear-gradient(to bottom right, rgba(6, 182, 212, 0.15), rgba(59, 130, 246, 0.15))",
-                border: "1px solid rgba(34, 211, 238, 0.4)",
-                color: "#67e8f9",
-                fontWeight: "bold",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 15px rgba(6, 182, 212, 0.2)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-bold text-lg transition-all duration-300 border",
+                themeClasses.calculatorOperatorBtn
+              )}
             >
               +
             </Button>
@@ -467,30 +405,19 @@ export default function CalculatorDialog({
             {/* Row 5 */}
             <Button
               onClick={() => inputNumber("0")}
-              className="col-span-2"
-              style={{
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#cbd5e1",
-                fontWeight: "600",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "col-span-2 font-semibold text-lg transition-all duration-300 border",
+                themeClasses.calculatorNumberBtn
+              )}
             >
               0
             </Button>
             <Button
               onClick={inputDot}
-              style={{
-                background: "rgba(30, 41, 59, 0.8)",
-                border: "1px solid rgba(71, 85, 105, 0.3)",
-                color: "#cbd5e1",
-                fontWeight: "600",
-                fontSize: "1.125rem",
-                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
-                transition: "all 0.3s",
-              }}
+              className={cn(
+                "font-semibold text-lg transition-all duration-300 border",
+                themeClasses.calculatorNumberBtn
+              )}
             >
               .
             </Button>
@@ -503,11 +430,12 @@ export default function CalculatorDialog({
                       onOpenChange(false);
                     }
               }
-              className={
+              className={cn(
+                "font-bold text-xl transition-all hover:scale-110",
                 operation
-                  ? "bg-gradient-to-r from-emerald-500 to-teal text-white hover:from-emerald-600 hover:to-teal/90 shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] font-bold text-xl transition-all hover:scale-110"
-                  : "bg-gradient-to-r from-teal to-cyan-500 text-white hover:from-teal/90 hover:to-cyan-600 shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:shadow-[0_0_30px_rgba(20,184,166,0.6)] font-bold text-xl transition-all hover:scale-110"
-              }
+                  ? themeClasses.calculatorEqualBtn
+                  : `bg-gradient-to-r ${themeClasses.activeItemGradient} text-white ${themeClasses.activeItemShadow}`
+              )}
             >
               {operation ? "=" : "✓"}
             </Button>

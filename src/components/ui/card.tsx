@@ -1,13 +1,17 @@
 import * as React from "react";
 
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 
 function Card({ className, ...props }: React.ComponentProps<"div">) {
+  const themeClasses = useThemeClasses();
   return (
     <div
       data-slot="card"
       className={cn(
-        "bg-[#0f1d2e] text-white flex flex-col gap-6 rounded-xl py-6 shadow-[0_0_20px_rgba(59,130,246,0.2)]",
+        "flex flex-col gap-6 rounded-xl py-6",
+        themeClasses.cardBg,
+        themeClasses.cardShadow,
         className
       )}
       {...props}
@@ -29,10 +33,15 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+  const themeClasses = useThemeClasses();
   return (
     <div
       data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
+      className={cn(
+        "leading-none font-semibold",
+        themeClasses.cardTitle,
+        className
+      )}
       {...props}
     />
   );

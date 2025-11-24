@@ -17,6 +17,7 @@ import {
 } from "@/components/icons/FuturisticIcons";
 import { Card } from "@/components/ui/card";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useQueryClient } from "@tanstack/react-query";
@@ -60,6 +61,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   endDate,
   currentUserId,
 }: Props) {
+  const themeClasses = useThemeClasses();
   const [viewMode, setViewMode] = useState<ViewMode>("widgets");
   const [filterCategory, setFilterCategory] = useState<string>("");
   const [filterAccount, setFilterAccount] = useState<string>("");
@@ -247,10 +249,12 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 hover:-translate-y-0.5",
               viewMode === "widgets"
                 ? "neo-gradient text-white shadow-lg spring-bounce"
-                : "neo-card text-[#38bdf8] hover:bg-[#3b82f6]/10 hover:shadow-md"
+                : `neo-card ${themeClasses.text} ${themeClasses.bgHover} hover:shadow-md`
             )}
           >
-            <BarChart3Icon className="w-4 h-4 inline-block mr-1.5 drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]" />
+            <BarChart3Icon
+              className={`w-4 h-4 inline-block mr-1.5 ${themeClasses.glow}`}
+            />
             Overview
           </button>
           <button
@@ -262,24 +266,30 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 hover:-translate-y-0.5",
               viewMode === "list"
                 ? "neo-gradient text-white shadow-lg spring-bounce"
-                : "neo-card text-[#38bdf8] hover:bg-[#3b82f6]/10 hover:shadow-md"
+                : `neo-card ${themeClasses.text} ${themeClasses.bgHover} hover:shadow-md`
             )}
           >
-            <ListIcon className="w-4 h-4 inline-block mr-1.5 drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]" />
+            <ListIcon
+              className={`w-4 h-4 inline-block mr-1.5 ${themeClasses.glow}`}
+            />
             List
           </button>
 
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={cn(
-              "ml-auto p-2 rounded-lg neo-card hover:bg-[#3b82f6]/10 relative transition-all",
-              hasActiveFilters && "ring-2 ring-[#06b6d4]/40",
-              showFilters && "bg-[#3b82f6]/20"
+              `ml-auto p-2 rounded-lg neo-card ${themeClasses.bgHover} relative transition-all`,
+              hasActiveFilters && `ring-2 ${themeClasses.ringActive}/40`,
+              showFilters && themeClasses.bgActive
             )}
           >
-            <FilterIcon className="w-5 h-5 text-[#38bdf8] drop-shadow-[0_0_8px_rgba(56,189,248,0.6)]" />
+            <FilterIcon
+              className={`w-5 h-5 ${themeClasses.text} ${themeClasses.glow}`}
+            />
             {hasActiveFilters && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#06b6d4] rounded-full animate-pulse" />
+              <span
+                className={`absolute -top-1 -right-1 w-3 h-3 ${themeClasses.bgActive.replace("/20", "")} rounded-full animate-pulse`}
+              />
             )}
           </button>
         </div>
@@ -291,7 +301,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
-                className="flex-1 px-3 py-2 rounded-lg bg-[#1a2942]/80 neo-border text-white text-sm focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20 transition-all"
+                className={`flex-1 px-3 py-2 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-sm ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} transition-all`}
               >
                 <option value="">All Categories</option>
                 {categories.map((cat) => (
@@ -303,7 +313,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               <select
                 value={filterAccount}
                 onChange={(e) => setFilterAccount(e.target.value)}
-                className="flex-1 px-3 py-2 rounded-lg bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white text-sm focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset,0_0_20px_rgba(6,182,212,0.3)] transition-all"
+                className={`flex-1 px-3 py-2 rounded-lg ${themeClasses.bgSurface} shadow-[0_0_0_1px_rgba(255,255,255,0.1)_inset] text-white text-sm ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} transition-all`}
               >
                 <option value="">All Accounts</option>
                 {accounts.map((acc) => (
@@ -332,8 +342,8 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     className={cn(
                       "px-3 py-1.5 rounded-lg capitalize flex items-center gap-1 transition-all",
                       sortField === field
-                        ? "bg-[#06b6d4]/20 text-[#06b6d4] neo-glow-sm"
-                        : "neo-card text-[#38bdf8] hover:bg-[#3b82f6]/10"
+                        ? `${themeClasses.bgActive} ${themeClasses.textActive} neo-glow-sm`
+                        : `neo-card ${themeClasses.text} ${themeClasses.bgHover}`
                     )}
                   >
                     {field === "recent" ? "Last Added" : field}
@@ -349,7 +359,9 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
             </div>
 
             {/* Results count */}
-            <div className="text-xs text-[#38bdf8]/70 text-center py-1">
+            <div
+              className={`text-xs ${themeClasses.textMuted} text-center py-1`}
+            >
               {filteredTransactions.length} of {transactions.length}
             </div>
           </div>
@@ -433,7 +445,9 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
             {/* Category Breakdown - Clickable with progress bars */}
             <Card className="neo-card p-3 bg-gradient-to-br from-slate-500/5 to-transparent">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+                <h3
+                  className={`text-sm font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
+                >
                   Categories
                 </h3>
                 <span className="text-xs text-slate-400/80 font-medium">
@@ -483,13 +497,19 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
             </Card>
 
             {/* Recent Transactions Preview - Compact */}
-            <Card className="neo-card p-3 bg-gradient-to-br from-indigo-500/5 to-transparent">
+            <Card
+              className={`neo-card p-3 bg-gradient-to-br ${themeClasses.cardGradient}`}
+            >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                  <h3
+                    className={`text-sm font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
+                  >
                     Recent
                   </h3>
-                  <span className="text-[10px] text-indigo-300/60 font-normal">
+                  <span
+                    className={`text-[10px] ${themeClasses.textFaint} font-normal`}
+                  >
                     Last added
                   </span>
                   <button
@@ -498,14 +518,14 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     disabled={isRefreshing}
                     aria-label="Refresh recent transactions"
                     className={cn(
-                      "p-1 rounded-full text-[#38bdf8] hover:text-[#06b6d4] hover:bg-[#3b82f6]/10 transition-all",
+                      `p-1 rounded-full ${themeClasses.text} ${themeClasses.bgHover} transition-all`,
                       isRefreshing && "opacity-60",
                       "disabled:cursor-not-allowed"
                     )}
                   >
                     <RefreshIcon
                       className={cn(
-                        "w-4 h-4 drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]",
+                        `w-4 h-4 ${themeClasses.glow}`,
                         isRefreshing && "animate-spin"
                       )}
                     />
@@ -513,7 +533,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                 </div>
                 <button
                   onClick={() => setViewMode("list")}
-                  className="text-xs text-[#38bdf8] hover:text-[#06b6d4] transition-colors"
+                  className={`text-xs ${themeClasses.text} ${themeClasses.textHover} transition-colors`}
                 >
                   View all →
                 </button>
@@ -523,14 +543,16 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                   <button
                     key={tx.id}
                     onClick={() => setSelectedTransaction(tx)}
-                    className="w-full flex items-center gap-2 p-2 rounded-lg bg-[#0a1628]/30 hover:bg-[#0f1d2e] shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] hover:shadow-[0_0_0_1px_rgba(6,182,212,0.4)_inset,0_0_15px_rgba(6,182,212,0.2)] transition-all"
+                    className={`w-full flex items-center gap-2 p-2 rounded-lg ${themeClasses.bgSurface} ${themeClasses.bgHover} shadow-[0_0_0_1px_rgba(255,255,255,0.05)_inset] ${themeClasses.borderHover} transition-all`}
                   >
                     {(() => {
                       const IconComponent = getCategoryIcon(
                         tx.category || undefined
                       );
                       return (
-                        <IconComponent className="w-5 h-5 text-[#06b6d4]/60 drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
+                        <IconComponent
+                          className={`w-5 h-5 ${themeClasses.textFaint} ${themeClasses.glow}`}
+                        />
                       );
                     })()}
                     <div className="flex-1 min-w-0 text-left">
@@ -541,7 +563,9 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                         {format(new Date(tx.date), "MMM d")}
                       </p>
                     </div>
-                    <p className="text-sm font-bold bg-gradient-to-br from-emerald-400 to-teal bg-clip-text text-transparent">
+                    <p
+                      className={`text-sm font-bold bg-gradient-to-br ${themeClasses.titleGradient} bg-clip-text text-transparent`}
+                    >
                       ${tx.amount.toFixed(0)}
                     </p>
                   </button>
@@ -554,7 +578,9 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
         {viewMode === "list" && (
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
-              <h3 className="text-sm font-semibold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+              <h3
+                className={`text-sm font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
+              >
                 Transactions
               </h3>
               <button
@@ -563,14 +589,14 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                 disabled={isRefreshing}
                 aria-label="Refresh transaction list"
                 className={cn(
-                  "p-1 rounded-full text-[#38bdf8] hover:text-[#06b6d4] hover:bg-[#3b82f6]/10 transition-all",
+                  `p-1 rounded-full ${themeClasses.text} ${themeClasses.textHover} ${themeClasses.bgHover} transition-all`,
                   isRefreshing && "opacity-60",
                   "disabled:cursor-not-allowed"
                 )}
               >
                 <RefreshIcon
                   className={cn(
-                    "w-4 h-4 drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]",
+                    `w-4 h-4 ${themeClasses.glow}`,
                     isRefreshing && "animate-spin"
                   )}
                 />
@@ -579,7 +605,9 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
             {filteredTransactions.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-4xl mb-3">📭</div>
-                <p className="text-[#38bdf8]/70 mb-4">No transactions found</p>
+                <p className={`${themeClasses.textMuted} mb-4`}>
+                  No transactions found
+                </p>
                 {hasActiveFilters && (
                   <button
                     onClick={clearFilters}
@@ -591,7 +619,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               </div>
             ) : (
               <>
-                <div className="text-xs text-[#38bdf8]/60 px-1 mb-2">
+                <div className={`text-xs ${themeClasses.textFaint} px-1 mb-2`}>
                   💡 Swipe right to edit • Swipe left to delete
                 </div>
                 {filteredTransactions.map((tx) => (

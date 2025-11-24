@@ -4,6 +4,7 @@ import { Edit2Icon, SaveIcon, XIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ export default function AccountBalance({
   accountId,
   accountName,
 }: AccountBalanceProps) {
+  const themeClasses = useThemeClasses();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
@@ -191,7 +193,9 @@ export default function AccountBalance({
           ) : (
             <div className="flex flex-col gap-0.5 mt-1">
               <div className="flex items-center gap-2">
-                <span className="text-xl font-bold tabular-nums bg-gradient-to-r from-teal via-cyan-400 to-cyan-300 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(20,184,166,0.4)]">
+                <span
+                  className={`text-xl font-bold tabular-nums bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(20,184,166,0.4)]`}
+                >
                   ${currentBalance.toFixed(2)}
                 </span>
                 <Button
@@ -207,7 +211,7 @@ export default function AccountBalance({
                 className={
                   balance?.pending_drafts && balance.pending_drafts > 0
                     ? "text-xs font-medium text-amber-400/90 drop-shadow-[0_0_6px_rgba(251,191,36,0.3)]"
-                    : "text-xs text-cyan-400/50 font-medium"
+                    : `text-xs ${themeClasses.textFaint} font-medium`
                 }
               >
                 {String(balance?.draft_count ?? 0)} pending draft

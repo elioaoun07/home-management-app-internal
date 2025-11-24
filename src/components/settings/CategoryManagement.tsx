@@ -4,8 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/hooks";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import {
   closestCenter,
   DndContext,
@@ -66,6 +74,7 @@ type NewCategory = {
 };
 
 export function CategoryManagement() {
+  const themeClasses = useThemeClasses();
   const queryClient = useQueryClient();
   const { data: accounts = [] } = useAccounts();
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
@@ -95,7 +104,8 @@ export function CategoryManagement() {
       const hierarchical = buildHierarchy(categoriesData);
       setCategories(hierarchical);
     }
-  }, [categoriesData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(categoriesData)]);
 
   function buildHierarchy(flat: any[]): CategoryItem[] {
     const parentCategories = flat
@@ -342,33 +352,39 @@ export function CategoryManagement() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
-        <h3 className="text-lg font-semibold text-cyan-400 mb-1">
+        <h3 className={`text-lg font-semibold ${themeClasses.text} mb-1`}>
           Category Management
         </h3>
-        <p className="text-sm text-slate-400">
+        <p className={`text-sm ${themeClasses.textMuted}`}>
           Customize your categories, reorder them, and change colors
         </p>
       </div>
 
       {/* Account Selector */}
       <div>
-        <label className="text-sm font-medium text-slate-300 mb-2 block">
+        <label
+          className={`text-sm font-medium ${themeClasses.textFaint} mb-2 block`}
+        >
           Select Account
         </label>
-        <select
+        <Select
           value={selectedAccountId}
-          onChange={(e) => {
-            setSelectedAccountId(e.target.value);
+          onValueChange={(value) => {
+            setSelectedAccountId(value);
             setHasChanges(false);
           }}
-          className="w-full px-4 py-2 rounded-xl bg-[hsl(var(--card)/0.5)] border border-[hsl(var(--header-border)/0.3)] text-white focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 transition-all"
         >
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className={`py-2 rounded-xl ${themeClasses.bgActive}`}>
+            <SelectValue placeholder="Select an account" />
+          </SelectTrigger>
+          <SelectContent>
+            {accounts.map((account) => (
+              <SelectItem key={account.id} value={account.id}>
+                {account.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Actions Bar */}
@@ -382,7 +398,7 @@ export function CategoryManagement() {
               parent_id: null,
             })
           }
-          className="bg-gradient-to-r from-cyan-500 to-teal text-white hover:shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+          className={`bg-gradient-to-r ${themeClasses.activeItemGradient} text-white ${themeClasses.glow}`}
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Category
@@ -401,10 +417,14 @@ export function CategoryManagement() {
 
       {/* New Category Form */}
       {newCategory && (
-        <Card className="p-4 bg-gradient-to-br from-cyan-500/10 to-teal/5 border-cyan-400/30">
+        <Card
+          className={`p-4 bg-gradient-to-br ${themeClasses.cardGradient} ${themeClasses.border}`}
+        >
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-cyan-400">New Category</h4>
+              <h4 className={`font-semibold ${themeClasses.text}`}>
+                New Category
+              </h4>
               <Button
                 variant="ghost"
                 size="sm"
@@ -420,7 +440,7 @@ export function CategoryManagement() {
                 onChange={(e) =>
                   setNewCategory({ ...newCategory, name: e.target.value })
                 }
-                className="bg-[hsl(var(--card))] border-cyan-400/30"
+                className={`bg-[hsl(var(--card))] ${themeClasses.border}`}
               />
               <Input
                 placeholder="Icon (emoji)"
@@ -428,29 +448,31 @@ export function CategoryManagement() {
                 onChange={(e) =>
                   setNewCategory({ ...newCategory, icon: e.target.value })
                 }
-                className="bg-[hsl(var(--card))] border-cyan-400/30"
+                className={`bg-[hsl(var(--card))] ${themeClasses.border}`}
                 maxLength={2}
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-300">Color:</label>
+              <label className={`text-sm ${themeClasses.textFaint}`}>
+                Color:
+              </label>
               <input
                 type="color"
                 value={newCategory.color}
                 onChange={(e) =>
                   setNewCategory({ ...newCategory, color: e.target.value })
                 }
-                className="h-10 w-20 rounded cursor-pointer border border-cyan-400/30"
+                className={`h-10 w-20 rounded cursor-pointer border ${themeClasses.border}`}
               />
               <div
-                className="h-10 flex-1 rounded border border-cyan-400/30"
+                className={`h-10 flex-1 rounded border ${themeClasses.border}`}
                 style={{ backgroundColor: newCategory.color }}
               />
             </div>
             <div className="flex gap-2">
               <Button
                 onClick={handleCreateCategory}
-                className="flex-1 bg-cyan-500 hover:bg-cyan-600"
+                className={`flex-1 ${themeClasses.bgActive} ${themeClasses.textActive} ${themeClasses.bgHover}`}
               >
                 Create
               </Button>
@@ -511,7 +533,9 @@ export function CategoryManagement() {
           </SortableContext>
           <DragOverlay>
             {activeCategory ? (
-              <div className="bg-cyan-500/20 border-2 border-cyan-400 rounded-xl p-3 shadow-lg">
+              <div
+                className={`${themeClasses.bgSurface} border-2 ${themeClasses.borderActive} rounded-xl p-3 shadow-lg`}
+              >
                 <span className="mr-2">{activeCategory.icon}</span>
                 <span className="font-medium">{activeCategory.name}</span>
               </div>
@@ -544,6 +568,7 @@ function CategoryCard({
   onUpdateCategory: (updates: Partial<EditingCategory>) => void;
   onCancelEdit: () => void;
 }) {
+  const themeClasses = useThemeClasses();
   const {
     attributes,
     listeners,
@@ -563,7 +588,9 @@ function CategoryCard({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <Card className="p-3 bg-gradient-to-br from-[hsl(var(--card))] to-[hsl(var(--card)/0.8)] border-[hsl(var(--header-border)/0.3)] hover:border-cyan-400/50 transition-all">
+      <Card
+        className={`p-3 bg-gradient-to-br from-[hsl(var(--card))] to-[hsl(var(--card)/0.8)] border-[hsl(var(--header-border)/0.3)] ${themeClasses.borderHover} transition-all`}
+      >
         {isEditing ? (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
@@ -583,7 +610,9 @@ function CategoryCard({
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-400">Color:</label>
+              <label className={`text-xs ${themeClasses.textFaint}`}>
+                Color:
+              </label>
               <input
                 type="color"
                 value={editingCategory.color}
@@ -599,7 +628,7 @@ function CategoryCard({
               <Button
                 onClick={() => onUpdateCategory({})}
                 size="sm"
-                className="flex-1 bg-cyan-500 hover:bg-cyan-600"
+                className={`flex-1 ${themeClasses.bgActive} ${themeClasses.textActive} ${themeClasses.bgHover}`}
               >
                 Save
               </Button>
@@ -619,14 +648,14 @@ function CategoryCard({
               <div
                 {...attributes}
                 {...listeners}
-                className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-cyan-400"
+                className={`cursor-grab active:cursor-grabbing ${themeClasses.textFaint} ${themeClasses.textHover}`}
               >
                 <GripVertical className="w-5 h-5" />
               </div>
               {category.subcategories && category.subcategories.length > 0 && (
                 <button
                   onClick={onToggleExpand}
-                  className="text-slate-400 hover:text-cyan-400"
+                  className={`${themeClasses.textFaint} ${themeClasses.textHover}`}
                 >
                   {isExpanded ? (
                     <ChevronDown className="w-4 h-4" />
@@ -651,9 +680,9 @@ function CategoryCard({
                   size="sm"
                   variant="ghost"
                   onClick={() => onEdit(category)}
-                  className="h-8 w-8 p-0 hover:bg-cyan-500/20"
+                  className={`h-8 w-8 p-0 ${themeClasses.bgHover}`}
                 >
-                  <Edit className="w-4 h-4 text-cyan-400" />
+                  <Edit className={`w-4 h-4 ${themeClasses.text}`} />
                 </Button>
                 <Button
                   size="sm"
@@ -717,6 +746,7 @@ function SubcategoryCard({
   onUpdateCategory: (updates: Partial<EditingCategory>) => void;
   onCancelEdit: () => void;
 }) {
+  const themeClasses = useThemeClasses();
   const {
     attributes,
     listeners,
@@ -736,7 +766,9 @@ function SubcategoryCard({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <Card className="p-2 bg-[hsl(var(--card)/0.5)] border-[hsl(var(--header-border)/0.2)] hover:border-cyan-400/30 transition-all">
+      <Card
+        className={`p-2 bg-[hsl(var(--card)/0.5)] border-[hsl(var(--header-border)/0.2)] ${themeClasses.borderHover} transition-all`}
+      >
         {isEditing ? (
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-2">
@@ -771,7 +803,7 @@ function SubcategoryCard({
               <Button
                 onClick={() => onUpdateCategory({})}
                 size="sm"
-                className="flex-1 bg-cyan-500 hover:bg-cyan-600 text-xs"
+                className={`flex-1 ${themeClasses.bgActive} ${themeClasses.textActive} ${themeClasses.bgHover} text-xs`}
               >
                 Save
               </Button>
@@ -790,7 +822,7 @@ function SubcategoryCard({
             <div
               {...attributes}
               {...listeners}
-              className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-cyan-400"
+              className={`cursor-grab active:cursor-grabbing ${themeClasses.textFaint} ${themeClasses.textHover}`}
             >
               <GripVertical className="w-4 h-4" />
             </div>
@@ -810,9 +842,9 @@ function SubcategoryCard({
                 size="sm"
                 variant="ghost"
                 onClick={() => onEdit(subcategory)}
-                className="h-6 w-6 p-0 hover:bg-cyan-500/20"
+                className={`h-6 w-6 p-0 ${themeClasses.bgHover}`}
               >
-                <Edit className="w-3 h-3 text-cyan-400" />
+                <Edit className={`w-3 h-3 ${themeClasses.text}`} />
               </Button>
               <Button
                 size="sm"

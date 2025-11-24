@@ -2,6 +2,7 @@
 
 import UserMenuClient from "@/components/auth/UserMenuClient";
 import { useTab } from "@/contexts/TabContext";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
 
 type Props = {
@@ -17,6 +18,7 @@ export default function ConditionalHeader({
 }: Props) {
   const { activeTab } = useTab();
   const { viewMode, isLoaded } = useViewMode();
+  const themeClasses = useThemeClasses();
 
   // Hide header in watch/web mode - after all hooks are called
   if (!isLoaded || viewMode === "watch" || viewMode === "web") {
@@ -30,7 +32,9 @@ export default function ConditionalHeader({
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
           <span className="text-white font-bold text-sm">B</span>
         </div>
-        <h1 className="text-base font-bold bg-gradient-to-r from-teal via-cyan-400 to-cyan-300 bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]">
+        <h1
+          className={`text-base font-bold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]`}
+        >
           Budget Manager
         </h1>
       </div>

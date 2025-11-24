@@ -23,6 +23,7 @@ import {
   useUpdatePreferences,
   type SectionKey,
 } from "@/features/preferences/useSectionOrder";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode, ViewMode } from "@/hooks/useViewMode";
 import {
   closestCenter,
@@ -70,6 +71,7 @@ type SectionType =
 
 export function SettingsDialog({ open, onOpenChange }: Props) {
   const { theme: colorTheme, setTheme, isLoading: themeLoading } = useTheme();
+  const themeClasses = useThemeClasses();
   const { viewMode, updateViewMode } = useViewMode();
   const [activeSection, setActiveSection] = useState<SectionType>("theme");
 
@@ -157,17 +159,27 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[720px] max-h-[90vh] p-0 gap-0 bg-gradient-to-br from-[hsl(var(--card))] to-[hsl(var(--card)/0.95)] backdrop-blur-xl border-2 border-[hsl(var(--nav-text-primary)/0.2)] rounded-3xl overflow-hidden">
+      <DialogContent
+        className={`sm:max-w-[720px] max-h-[90vh] p-0 gap-0 bg-gradient-to-br from-[hsl(var(--card))] to-[hsl(var(--card)/0.95)] backdrop-blur-xl border-2 ${themeClasses.border} rounded-3xl overflow-hidden`}
+      >
         {/* Header */}
-        <DialogHeader className="px-8 pt-8 pb-6 border-b border-[hsl(var(--header-border)/0.15)]">
-          <DialogTitle className="text-3xl font-bold bg-gradient-to-r from-cyan-400 via-teal to-cyan-300 bg-clip-text text-transparent">
-            Settings
+        <DialogHeader
+          className={`px-8 pt-8 pb-6 border-b ${themeClasses.border}`}
+        >
+          <DialogTitle className="text-3xl font-bold">
+            <span
+              className={`bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`}
+            >
+              Settings
+            </span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           {/* Sidebar Navigation */}
-          <div className="md:w-48 border-b md:border-b-0 md:border-r border-[hsl(var(--header-border)/0.15)] bg-[hsl(var(--header-bg)/0.3)] overflow-hidden">
+          <div
+            className={`md:w-48 border-b md:border-b-0 md:border-r ${themeClasses.border} ${themeClasses.bgSurface} overflow-hidden`}
+          >
             <div className="overflow-x-auto md:overflow-x-visible p-4 md:p-6">
               <nav className="flex md:flex-col gap-1 min-w-max md:min-w-0">
                 {sections.map((section) => (
@@ -178,8 +190,8 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                       px-4 py-3 rounded-xl text-sm font-medium transition-all text-left whitespace-nowrap
                       ${
                         activeSection === section.id
-                          ? "bg-gradient-to-r from-cyan-500/20 to-teal/20 text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.2)]"
-                          : "text-slate-400 hover:text-cyan-400 hover:bg-[hsl(var(--card)/0.5)]"
+                          ? `bg-gradient-to-r ${themeClasses.activeItemGradient} ${themeClasses.text} ${themeClasses.activeItemShadow}`
+                          : `${themeClasses.textFaint} ${themeClasses.textHover} ${themeClasses.bgHover}`
                       }
                     `}
                   >
@@ -196,10 +208,12 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
             {activeSection === "theme" && (
               <div className="space-y-6 animate-in fade-in duration-300">
                 <div>
-                  <h3 className="text-lg font-semibold text-cyan-400 mb-1">
+                  <h3
+                    className={`text-lg font-semibold ${themeClasses.text} mb-1`}
+                  >
                     Color Theme
                   </h3>
-                  <p className="text-sm text-slate-400">
+                  <p className={`text-sm ${themeClasses.textMuted}`}>
                     Choose your app color scheme
                   </p>
                 </div>
@@ -258,10 +272,12 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
             {activeSection === "view" && (
               <div className="space-y-6 animate-in fade-in duration-300">
                 <div>
-                  <h3 className="text-lg font-semibold text-cyan-400 mb-1">
+                  <h3
+                    className={`text-lg font-semibold ${themeClasses.text} mb-1`}
+                  >
                     View Mode
                   </h3>
-                  <p className="text-sm text-slate-400">
+                  <p className={`text-sm ${themeClasses.textMuted}`}>
                     Choose your preferred interface
                   </p>
                 </div>
@@ -301,20 +317,30 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                         w-full neo-card p-5 rounded-xl flex items-center gap-4 transition-all hover:scale-[1.01]
                         ${
                           viewMode === mode
-                            ? "ring-2 ring-teal shadow-[0_0_20px_rgba(20,184,166,0.3)]"
+                            ? `ring-2 ${themeClasses.ringActive} ${themeClasses.shadowActive}`
                             : "hover:bg-[hsl(var(--card)/0.8)]"
                         }
                       `}
                     >
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-teal/20 flex items-center justify-center">
-                        <Icon className="w-6 h-6 text-cyan-400" />
+                      <div
+                        className={`w-12 h-12 rounded-xl bg-gradient-to-br ${themeClasses.iconBg} flex items-center justify-center`}
+                      >
+                        <Icon className={`w-6 h-6 ${themeClasses.text}`} />
                       </div>
                       <div className="flex-1 text-left">
-                        <p className="font-semibold text-cyan-300">{label}</p>
-                        <p className="text-xs text-slate-400">{desc}</p>
+                        <p
+                          className={`font-semibold ${themeClasses.textHighlight}`}
+                        >
+                          {label}
+                        </p>
+                        <p className={`text-xs ${themeClasses.textFaint}`}>
+                          {desc}
+                        </p>
                       </div>
                       {viewMode === mode && (
-                        <div className="px-3 py-1 rounded-full bg-teal/20 text-teal text-xs font-medium">
+                        <div
+                          className={`px-3 py-1 rounded-full ${themeClasses.bgActive} ${themeClasses.textActive} text-xs font-medium`}
+                        >
                           Active
                         </div>
                       )}
@@ -334,10 +360,12 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
             {activeSection === "steps" && (
               <div className="space-y-6 animate-in fade-in duration-300">
                 <div>
-                  <h3 className="text-lg font-semibold text-cyan-400 mb-1">
+                  <h3
+                    className={`text-lg font-semibold ${themeClasses.text} mb-1`}
+                  >
                     Entry Steps Order
                   </h3>
-                  <p className="text-sm text-slate-400">
+                  <p className={`text-sm ${themeClasses.textMuted}`}>
                     Drag to reorder expense entry steps
                   </p>
                 </div>
@@ -356,7 +384,9 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   >
                     <div className="p-4">
                       {!serverOrderArray || serverOrderArray.length === 0 ? (
-                        <div className="h-40 flex items-center justify-center text-slate-400">
+                        <div
+                          className={`h-40 flex items-center justify-center ${themeClasses.textFaint}`}
+                        >
                           Loading...
                         </div>
                       ) : (
@@ -381,7 +411,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   <Button
                     onClick={resetToDefault}
                     variant="outline"
-                    className="flex-1"
+                    className={`flex-1 ${themeClasses.borderHover}`}
                   >
                     <RotateCcwIcon className="mr-2 h-4 w-4" />
                     Reset
@@ -389,7 +419,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   <Button
                     onClick={handleSave}
                     disabled={!canSave || updatePreferences.isPending}
-                    className="flex-1 neo-gradient !text-cyan-100 font-semibold"
+                    className={`flex-1 neo-gradient ${themeClasses.textButton} font-semibold`}
                   >
                     <SaveIcon className="mr-2 h-4 w-4" />
                     {updatePreferences.isPending ? "Saving..." : "Save Order"}
@@ -411,6 +441,7 @@ export default SettingsDialog;
 
 function AccountsPanel() {
   const { data: accounts = [] } = useAccounts();
+  const themeClasses = useThemeClasses();
   const setDefaultMutation = useSetDefaultAccount();
   const defaultAccount = accounts.find((a: any) => a.is_default);
 
@@ -427,14 +458,18 @@ function AccountsPanel() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
-        <h3 className="text-lg font-semibold text-cyan-400 mb-1">
+        <h3 className={`text-lg font-semibold ${themeClasses.text} mb-1`}>
           Default Account
         </h3>
-        <p className="text-sm text-slate-400">Choose your primary account</p>
+        <p className={`text-sm ${themeClasses.textMuted}`}>
+          Choose your primary account
+        </p>
       </div>
 
       {accounts.length === 0 ? (
-        <div className="neo-card p-12 rounded-2xl text-center text-slate-400">
+        <div
+          className={`neo-card p-12 rounded-2xl text-center ${themeClasses.textFaint}`}
+        >
           No accounts found
         </div>
       ) : (
@@ -447,12 +482,14 @@ function AccountsPanel() {
                 w-full neo-card p-5 rounded-xl flex items-center gap-4 transition-all hover:scale-[1.01]
                 ${
                   account.is_default
-                    ? "ring-2 ring-teal shadow-[0_0_20px_rgba(20,184,166,0.3)]"
+                    ? `ring-2 ${themeClasses.ringActive} ${themeClasses.shadowActive}`
                     : "hover:bg-[hsl(var(--card)/0.8)]"
                 }
               `}
             >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-teal/20 flex items-center justify-center">
+              <div
+                className={`w-12 h-12 rounded-xl bg-gradient-to-br ${themeClasses.iconBg} flex items-center justify-center`}
+              >
                 <span className="text-xl">
                   {account.type === "cash"
                     ? "💵"
@@ -462,13 +499,17 @@ function AccountsPanel() {
                 </span>
               </div>
               <div className="flex-1 text-left">
-                <p className="font-semibold text-cyan-300">{account.name}</p>
-                <p className="text-xs text-slate-400 capitalize">
+                <p className={`font-semibold ${themeClasses.textHighlight}`}>
+                  {account.name}
+                </p>
+                <p className={`text-xs ${themeClasses.textFaint} capitalize`}>
                   {account.type}
                 </p>
               </div>
               {account.is_default && (
-                <div className="px-3 py-1 rounded-full bg-teal/20 text-teal text-xs font-medium">
+                <div
+                  className={`px-3 py-1 rounded-full ${themeClasses.bgActive} ${themeClasses.textActive} text-xs font-medium`}
+                >
                   Default
                 </div>
               )}
@@ -484,6 +525,7 @@ function HouseholdPanel() {
   const [loading, setLoading] = useState(true);
   const [link, setLink] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const themeClasses = useThemeClasses();
 
   useEffect(() => {
     let ignore = false;
@@ -505,7 +547,9 @@ function HouseholdPanel() {
 
   if (loading)
     return (
-      <div className="flex items-center justify-center py-20 text-slate-400">
+      <div
+        className={`flex items-center justify-center py-20 ${themeClasses.textFaint}`}
+      >
         Loading...
       </div>
     );
@@ -521,19 +565,23 @@ function HouseholdPanel() {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
         <div>
-          <h3 className="text-lg font-semibold text-cyan-400 mb-1">
+          <h3 className={`text-lg font-semibold ${themeClasses.text} mb-1`}>
             Household Linking
           </h3>
-          <p className="text-sm text-slate-400">
+          <p className={`text-sm ${themeClasses.textMuted}`}>
             Create a code to share with your partner
           </p>
         </div>
 
         <div className="neo-card p-8 rounded-2xl text-center space-y-4">
-          <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-cyan-500/20 to-teal/20 flex items-center justify-center text-4xl">
+          <div
+            className={`w-20 h-20 mx-auto rounded-full bg-gradient-to-br ${themeClasses.iconBg} flex items-center justify-center text-4xl`}
+          >
             👥
           </div>
-          <p className="text-cyan-300">No household link created yet</p>
+          <p className={themeClasses.textHighlight}>
+            No household link created yet
+          </p>
           <Button
             onClick={async () => {
               setError(null);
@@ -559,7 +607,7 @@ function HouseholdPanel() {
                 setLoading(false);
               }
             }}
-            className="neo-gradient !text-cyan-100 font-semibold"
+            className={`neo-gradient ${themeClasses.textButton} font-semibold`}
           >
             Create Household Code
           </Button>
@@ -573,17 +621,19 @@ function HouseholdPanel() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div>
-        <h3 className="text-lg font-semibold text-cyan-400 mb-1">
+        <h3 className={`text-lg font-semibold ${themeClasses.text} mb-1`}>
           Household Status
         </h3>
-        <p className="text-sm text-slate-400">
+        <p className={`text-sm ${themeClasses.textMuted}`}>
           Your household connection details
         </p>
       </div>
 
       <div className="neo-card p-6 rounded-2xl space-y-4">
         <div className="flex items-center justify-between pb-4 border-b border-[hsl(var(--header-border)/0.2)]">
-          <span className="text-cyan-300 font-medium">Status</span>
+          <span className={`${themeClasses.textHighlight} font-medium`}>
+            Status
+          </span>
           {isLinked ? (
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold">
               <span>✓</span>
@@ -599,14 +649,18 @@ function HouseholdPanel() {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-400">Owner</span>
-            <span className="text-sm font-medium text-cyan-300 truncate ml-4">
+            <span className={`text-sm ${themeClasses.textFaint}`}>Owner</span>
+            <span
+              className={`text-sm font-medium ${themeClasses.textHighlight} truncate ml-4`}
+            >
               {link.owner_email || link.owner_user_id}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-400">Partner</span>
-            <span className="text-sm font-medium text-cyan-300 truncate ml-4">
+            <span className={`text-sm ${themeClasses.textFaint}`}>Partner</span>
+            <span
+              className={`text-sm font-medium ${themeClasses.textHighlight} truncate ml-4`}
+            >
               {link.partner_email || link.partner_user_id || "—"}
             </span>
           </div>
@@ -615,11 +669,15 @@ function HouseholdPanel() {
 
       {!isLinked && link.code && (
         <div className="neo-card p-6 rounded-2xl space-y-4 text-center">
-          <p className="text-sm font-medium text-cyan-400">Share this code:</p>
-          <div className="font-mono tracking-[0.5em] text-3xl font-bold bg-gradient-to-r from-cyan-400 to-teal bg-clip-text text-transparent py-4">
+          <p className={`text-sm font-medium ${themeClasses.text}`}>
+            Share this code:
+          </p>
+          <div
+            className={`font-mono tracking-[0.5em] text-3xl font-bold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent py-4`}
+          >
             {link.code}
           </div>
-          <p className="text-xs text-slate-400">
+          <p className={`text-xs ${themeClasses.textFaint}`}>
             Your partner can enter this code to link accounts
           </p>
         </div>

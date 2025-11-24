@@ -2,6 +2,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
 
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
@@ -9,16 +10,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default:
-          "bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] text-white shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:shadow-[0_0_30px_rgba(59,130,246,0.5)] hover:-translate-y-0.5 transition-all",
+        default: "hover:-translate-y-0.5 transition-all",
         destructive:
           "bg-destructive text-white shadow-sm hover:bg-destructive/90 hover:shadow-lg focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 hover:-translate-y-0.5",
-        outline:
-          "bg-transparent shadow-[0_0_0_2px_rgba(6,182,212,0.4)_inset] hover:shadow-[0_0_0_2px_rgba(6,182,212,0.8)_inset,0_0_20px_rgba(6,182,212,0.3)] hover:bg-[#06b6d4]/10 text-[#06b6d4] hover:-translate-y-0.5 transition-all",
-        secondary:
-          "bg-[#1a2942] text-[#38bdf8] shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:bg-[#1e3a5f] hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:-translate-y-0.5 transition-all",
-        ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 hover:shadow-sm hover:scale-105",
+        outline: "hover:-translate-y-0.5 transition-all",
+        secondary: "hover:-translate-y-0.5 transition-all",
+        ghost: "hover:scale-105",
         link: "text-primary underline-offset-4 hover:underline hover:scale-105",
       },
       size: {
@@ -37,7 +34,7 @@ const buttonVariants = cva(
 
 function Button({
   className,
-  variant,
+  variant = "default",
   size,
   asChild = false,
   ...props
@@ -46,11 +43,30 @@ function Button({
     asChild?: boolean;
   }) {
   const Comp = asChild ? Slot : "button";
+  const themeClasses = useThemeClasses();
+
+  const dynamicClasses = React.useMemo(() => {
+    switch (variant) {
+      case "default":
+        return cn(themeClasses.buttonPrimary, themeClasses.buttonFocus);
+      case "secondary":
+        return cn(themeClasses.buttonSecondary, themeClasses.buttonFocus);
+      case "outline":
+        return cn(themeClasses.buttonOutline, themeClasses.buttonFocus);
+      case "ghost":
+        return cn(themeClasses.buttonGhost, themeClasses.buttonFocus);
+      default:
+        return themeClasses.buttonFocus;
+    }
+  }, [variant, themeClasses]);
 
   return (
     <Comp
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(
+        buttonVariants({ variant, size, className }),
+        dynamicClasses
+      )}
       suppressHydrationWarning
       {...props}
     />

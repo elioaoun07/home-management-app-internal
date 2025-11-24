@@ -1337,15 +1337,16 @@ body {
   [data-slot="dialog-content"] {
     background-color: #1a2942 !important;
     opacity: 1 !important;
-    color: white !important;
+    /* color: white !important; - Removed to allow theme colors */
   }
 
-  [data-slot="dialog-content"] label,
+  /* Removed blanket white text override to allow specific styling */
+  /* [data-slot="dialog-content"] label,
   [data-slot="dialog-content"] p,
   [data-slot="dialog-content"] span:not([data-slot="dialog-close"] span),
   [data-slot="dialog-content"] div {
     color: white !important;
-  }
+  } */
 
   [data-slot="dialog-content"] input,
   [data-slot="dialog-content"] textarea,
@@ -1395,9 +1396,9 @@ body {
       color: inherit;
     }
 
-    [data-slot="dialog-content"] * {
+    /* [data-slot="dialog-content"] * {
       color: white !important;
-    }
+    } */
 
     [data-slot="dialog-content"] [data-slot="dialog-title"] {
       color: #06b6d4 !important;
