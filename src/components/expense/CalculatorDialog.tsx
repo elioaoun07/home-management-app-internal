@@ -203,17 +203,18 @@ export default function CalculatorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-[#1a2942] border-[#3b82f6]/20">
+      <DialogContent className="sm:max-w-md bg-gradient-to-br from-[#0f1d2e] to-[#1a2942] border-2 border-[#3b82f6]/30 shadow-[0_0_40px_rgba(59,130,246,0.2)]">
         <DialogHeader>
-          <DialogTitle className="text-[#06b6d4] text-xl">
+          <DialogTitle className="text-transparent bg-gradient-to-r from-cyan-400 to-teal bg-clip-text text-xl font-bold">
             Calculator
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Display */}
-          <div className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 p-4 rounded-lg text-right">
-            <div className="text-3xl font-mono font-bold text-white truncate">
+          <div className="neo-card bg-gradient-to-br from-[#0a1525] to-[#0f1d2e] border-2 border-cyan-500/30 p-5 rounded-xl text-right shadow-[0_0_20px_rgba(6,182,212,0.15)] relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none"></div>
+            <div className="text-4xl font-mono font-bold text-transparent bg-gradient-to-r from-cyan-300 to-teal bg-clip-text truncate relative z-10">
               {(() => {
                 const num = parseFloat(display);
                 // Show no decimals for whole numbers, up to 2 for decimals
@@ -221,7 +222,7 @@ export default function CalculatorDialog({
               })()}
             </div>
             {operation && previousValue && (
-              <div className="text-sm text-[#38bdf8]/70 mt-1">
+              <div className="text-sm text-cyan-400/70 mt-2 relative z-10">
                 {previousValue} {operation}
               </div>
             )}
@@ -233,138 +234,263 @@ export default function CalculatorDialog({
               variant="secondary"
               onClick={addTip}
               disabled={display === lastTipValue}
-              className="text-xs px-3 py-1 bg-[#14b8a6]/20 hover:bg-[#14b8a6]/30 border border-[#14b8a6]/30 text-[#14b8a6]"
+              className="text-xs px-4 py-2 bg-gradient-to-r from-emerald-500/20 to-teal/20 hover:from-emerald-500/30 hover:to-teal/30 border border-emerald-400/40 text-emerald-300 font-medium shadow-[0_0_10px_rgba(16,185,129,0.2)] hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all"
             >
-              Add Tip 10%
+              💡 Add 10% Tip
             </Button>
           </div>
           {/* Keypad */}
           <div className="grid grid-cols-4 gap-2">
             {/* Row 1 */}
             <Button
-              variant="outline"
               onClick={clear}
-              className="col-span-2 neo-card bg-[#ef4444]/10 border-[#ef4444]/30 text-[#ef4444] hover:bg-[#ef4444]/20"
+              className="col-span-2"
+              style={{
+                background:
+                  "linear-gradient(to bottom right, rgba(239, 68, 68, 0.2), rgba(225, 29, 72, 0.2))",
+                border: "1px solid rgba(248, 113, 113, 0.5)",
+                color: "#fecaca",
+                fontWeight: "bold",
+                boxShadow: "0 0 15px rgba(239, 68, 68, 0.2)",
+                transition: "all 0.3s",
+              }}
             >
               C
             </Button>
             <Button
-              variant="outline"
               onClick={() => setDisplay(display.slice(0, -1) || "0")}
-              className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-[#38bdf8] hover:bg-[#3b82f6]/10"
+              style={{
+                background:
+                  "linear-gradient(to bottom right, rgba(249, 115, 22, 0.2), rgba(245, 158, 11, 0.2))",
+                border: "1px solid rgba(251, 146, 60, 0.5)",
+                color: "#fed7aa",
+                fontWeight: "bold",
+                boxShadow: "0 0 15px rgba(249, 115, 22, 0.2)",
+                transition: "all 0.3s",
+              }}
             >
               ⌫
             </Button>
             <Button
-              variant="outline"
               onClick={() => performOperation("/")}
-              className="neo-card bg-[#0f1d2e] border-[#06b6d4]/30 text-[#06b6d4] hover:bg-[#06b6d4]/10"
+              style={{
+                background:
+                  "linear-gradient(to bottom right, rgba(6, 182, 212, 0.15), rgba(59, 130, 246, 0.15))",
+                border: "1px solid rgba(34, 211, 238, 0.4)",
+                color: "#67e8f9",
+                fontWeight: "bold",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 15px rgba(6, 182, 212, 0.2)",
+                transition: "all 0.3s",
+              }}
             >
               ÷
             </Button>
 
             {/* Row 2 */}
             <Button
-              variant="outline"
               onClick={() => inputNumber("7")}
-              className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-white hover:bg-[#3b82f6]/10"
+              style={{
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(71, 85, 105, 0.3)",
+                color: "#cbd5e1",
+                fontWeight: "600",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
+                transition: "all 0.3s",
+              }}
             >
               7
             </Button>
             <Button
-              variant="outline"
               onClick={() => inputNumber("8")}
-              className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-white hover:bg-[#3b82f6]/10"
+              style={{
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(71, 85, 105, 0.3)",
+                color: "#cbd5e1",
+                fontWeight: "600",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
+                transition: "all 0.3s",
+              }}
             >
               8
             </Button>
             <Button
-              variant="outline"
               onClick={() => inputNumber("9")}
-              className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-white hover:bg-[#3b82f6]/10"
+              style={{
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(71, 85, 105, 0.3)",
+                color: "#cbd5e1",
+                fontWeight: "600",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
+                transition: "all 0.3s",
+              }}
             >
               9
             </Button>
             <Button
-              variant="outline"
               onClick={() => performOperation("*")}
-              className="neo-card bg-[#0f1d2e] border-[#06b6d4]/30 text-[#06b6d4] hover:bg-[#06b6d4]/10"
+              style={{
+                background:
+                  "linear-gradient(to bottom right, rgba(6, 182, 212, 0.15), rgba(59, 130, 246, 0.15))",
+                border: "1px solid rgba(34, 211, 238, 0.4)",
+                color: "#67e8f9",
+                fontWeight: "bold",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 15px rgba(6, 182, 212, 0.2)",
+                transition: "all 0.3s",
+              }}
             >
               ×
             </Button>
 
             {/* Row 3 */}
             <Button
-              variant="outline"
               onClick={() => inputNumber("4")}
-              className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-white hover:bg-[#3b82f6]/10"
+              style={{
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(71, 85, 105, 0.3)",
+                color: "#cbd5e1",
+                fontWeight: "600",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
+                transition: "all 0.3s",
+              }}
             >
               4
             </Button>
             <Button
-              variant="outline"
               onClick={() => inputNumber("5")}
-              className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-white hover:bg-[#3b82f6]/10"
+              style={{
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(71, 85, 105, 0.3)",
+                color: "#cbd5e1",
+                fontWeight: "600",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
+                transition: "all 0.3s",
+              }}
             >
               5
             </Button>
             <Button
-              variant="outline"
               onClick={() => inputNumber("6")}
-              className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-white hover:bg-[#3b82f6]/10"
+              style={{
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(71, 85, 105, 0.3)",
+                color: "#cbd5e1",
+                fontWeight: "600",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
+                transition: "all 0.3s",
+              }}
             >
               6
             </Button>
             <Button
-              variant="outline"
               onClick={() => performOperation("-")}
-              className="neo-card bg-[#0f1d2e] border-[#06b6d4]/30 text-[#06b6d4] hover:bg-[#06b6d4]/10"
+              style={{
+                background:
+                  "linear-gradient(to bottom right, rgba(6, 182, 212, 0.15), rgba(59, 130, 246, 0.15))",
+                border: "1px solid rgba(34, 211, 238, 0.4)",
+                color: "#67e8f9",
+                fontWeight: "bold",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 15px rgba(6, 182, 212, 0.2)",
+                transition: "all 0.3s",
+              }}
             >
               −
             </Button>
 
             {/* Row 4 */}
             <Button
-              variant="outline"
               onClick={() => inputNumber("1")}
-              className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-white hover:bg-[#3b82f6]/10"
+              style={{
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(71, 85, 105, 0.3)",
+                color: "#cbd5e1",
+                fontWeight: "600",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
+                transition: "all 0.3s",
+              }}
             >
               1
             </Button>
             <Button
-              variant="outline"
               onClick={() => inputNumber("2")}
-              className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-white hover:bg-[#3b82f6]/10"
+              style={{
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(71, 85, 105, 0.3)",
+                color: "#cbd5e1",
+                fontWeight: "600",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
+                transition: "all 0.3s",
+              }}
             >
               2
             </Button>
             <Button
-              variant="outline"
               onClick={() => inputNumber("3")}
-              className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-white hover:bg-[#3b82f6]/10"
+              style={{
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(71, 85, 105, 0.3)",
+                color: "#cbd5e1",
+                fontWeight: "600",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
+                transition: "all 0.3s",
+              }}
             >
               3
             </Button>
             <Button
-              variant="outline"
               onClick={() => performOperation("+")}
-              className="neo-card bg-[#0f1d2e] border-[#06b6d4]/30 text-[#06b6d4] hover:bg-[#06b6d4]/10"
+              style={{
+                background:
+                  "linear-gradient(to bottom right, rgba(6, 182, 212, 0.15), rgba(59, 130, 246, 0.15))",
+                border: "1px solid rgba(34, 211, 238, 0.4)",
+                color: "#67e8f9",
+                fontWeight: "bold",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 15px rgba(6, 182, 212, 0.2)",
+                transition: "all 0.3s",
+              }}
             >
               +
             </Button>
 
             {/* Row 5 */}
             <Button
-              variant="outline"
               onClick={() => inputNumber("0")}
-              className="col-span-2 neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-white hover:bg-[#3b82f6]/10"
+              className="col-span-2"
+              style={{
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(71, 85, 105, 0.3)",
+                color: "#cbd5e1",
+                fontWeight: "600",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
+                transition: "all 0.3s",
+              }}
             >
               0
             </Button>
             <Button
-              variant="outline"
               onClick={inputDot}
-              className="neo-card bg-[#0f1d2e] border-[#3b82f6]/20 text-white hover:bg-[#3b82f6]/10"
+              style={{
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(71, 85, 105, 0.3)",
+                color: "#cbd5e1",
+                fontWeight: "600",
+                fontSize: "1.125rem",
+                boxShadow: "0 0 10px rgba(100, 116, 139, 0.15)",
+                transition: "all 0.3s",
+              }}
             >
               .
             </Button>
@@ -379,8 +505,8 @@ export default function CalculatorDialog({
               }
               className={
                 operation
-                  ? "neo-gradient text-white hover:scale-105 transition-all"
-                  : "bg-[#14b8a6] hover:bg-[#14b8a6]/90 text-white neo-glow-sm"
+                  ? "bg-gradient-to-r from-emerald-500 to-teal text-white hover:from-emerald-600 hover:to-teal/90 shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] font-bold text-xl transition-all hover:scale-110"
+                  : "bg-gradient-to-r from-teal to-cyan-500 text-white hover:from-teal/90 hover:to-cyan-600 shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:shadow-[0_0_30px_rgba(20,184,166,0.6)] font-bold text-xl transition-all hover:scale-110"
               }
             >
               {operation ? "=" : "✓"}

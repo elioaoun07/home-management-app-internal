@@ -332,11 +332,11 @@ export default function MobileExpenseForm() {
             {step === "amount" && (
               <div key="amount-step" className="space-y-3 step-slide-in">
                 <div>
-                  <Label className="text-xs text-[#22d3ee] font-medium mb-1 block">
+                  <Label className="text-xs text-[#22d3ee] font-medium mb-1 block text-center">
                     How much did you spend?
                   </Label>
                   <div className="mt-1 relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-[hsl(var(--text-muted-light)/0.6)]">
+                    <span className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 -ml-16 text-2xl font-bold text-[hsl(var(--text-muted-light)/0.6)] pointer-events-none">
                       $
                     </span>
                     <Input
@@ -346,41 +346,41 @@ export default function MobileExpenseForm() {
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       suppressHydrationWarning
-                      className="text-3xl font-bold h-16 pl-10 pr-14 border-2 text-center bg-bg-card-custom border-[#22d3ee]/30 text-white placeholder:text-[hsl(var(--input-placeholder)/0.3)] focus:border-[#22d3ee] focus:ring-2 focus:ring-[#22d3ee]/20 focus:scale-[1.02] transition-all duration-200 neo-card bounce-in"
+                      className="text-3xl font-bold h-16 px-4 border-2 text-center bg-bg-card-custom border-[#22d3ee]/30 text-white placeholder:text-[hsl(var(--input-placeholder)/0.3)] focus:border-[#22d3ee] focus:ring-2 focus:ring-[#22d3ee]/20 focus:scale-[1.02] transition-all duration-200 neo-card bounce-in"
                       autoFocus
                     />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                      <button
-                        onClick={() => setShowCalculator(true)}
-                        suppressHydrationWarning
-                        className="p-2 rounded-lg neo-card bg-primary/10 border border-[#1a2942] hover:bg-primary/20 active:scale-95 transition-all"
-                      >
-                        <CalculatorIcon className="w-5 h-5 text-[#22d3ee] drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]" />
-                      </button>
-                      <VoiceEntryButton
-                        categories={categories}
-                        accountId={selectedAccountId}
-                        onPreviewChange={() => {}}
-                        onParsed={({
-                          sentence,
-                          amount: voiceAmount,
-                          categoryId,
-                          subcategoryId,
-                        }) => {
-                          if (voiceAmount != null && !isNaN(voiceAmount))
-                            setAmount(String(voiceAmount));
-                          if (categoryId) setSelectedCategoryId(categoryId);
-                          if (subcategoryId)
-                            setSelectedSubcategoryId(subcategoryId);
-                        }}
-                        onDraftCreated={() => {
-                          toast.success(
-                            "Voice entry saved! Check drafts to confirm."
-                          );
-                        }}
-                        className="p-2 rounded-lg neo-card bg-secondary/10 border border-secondary/30 hover:bg-secondary/20 active:scale-95 transition-all"
-                      />
-                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 mt-2">
+                    <button
+                      onClick={() => setShowCalculator(true)}
+                      suppressHydrationWarning
+                      className="p-1.5 rounded-lg neo-card bg-primary/10 border border-[#1a2942] hover:bg-primary/20 active:scale-95 transition-all"
+                    >
+                      <CalculatorIcon className="w-4 h-4 text-[#22d3ee] drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]" />
+                    </button>
+                    <VoiceEntryButton
+                      categories={categories}
+                      accountId={selectedAccountId}
+                      onPreviewChange={() => {}}
+                      onParsed={({
+                        sentence,
+                        amount: voiceAmount,
+                        categoryId,
+                        subcategoryId,
+                      }) => {
+                        if (voiceAmount != null && !isNaN(voiceAmount))
+                          setAmount(String(voiceAmount));
+                        if (categoryId) setSelectedCategoryId(categoryId);
+                        if (subcategoryId)
+                          setSelectedSubcategoryId(subcategoryId);
+                      }}
+                      onDraftCreated={() => {
+                        toast.success(
+                          "Voice entry saved! Check drafts to confirm."
+                        );
+                      }}
+                      className="p-1.5 rounded-lg neo-card bg-secondary/10 border border-secondary/30 hover:bg-secondary/20 active:scale-95 transition-all"
+                    />
                   </div>
                 </div>
 
