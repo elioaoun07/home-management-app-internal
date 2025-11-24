@@ -198,26 +198,37 @@ export default function SubcategoryGrid({
                   </Button>
                 );
               }
+              const subcategoryColor = cat.color || "#38bdf8";
               return (
                 <Button
                   key={cat.id}
-                  variant={active ? "default" : "outline"}
+                  variant="outline"
                   type="button"
-                  className={`justify-start gap-2 transition-all duration-150 hover:scale-105 ${
-                    active
-                      ? "ring-2 ring-primary/50 shadow-md"
-                      : "hover:shadow-sm"
-                  }`}
+                  className={`justify-start gap-2 transition-all duration-150 hover:scale-105 relative overflow-hidden`}
                   onClick={() => onSubcategorySelect?.(cat.id)}
                   style={{
                     backgroundColor: active
-                      ? (cat.color ?? undefined)
-                      : undefined,
-                    borderColor: cat.color ?? undefined,
+                      ? `${subcategoryColor}25`
+                      : "transparent",
+                    borderColor: subcategoryColor,
+                    color: active ? subcategoryColor : "inherit",
+                    boxShadow: active
+                      ? `inset 0 0 0 2px ${subcategoryColor}, 0 0 20px ${subcategoryColor}40`
+                      : `inset 0 0 0 1px ${subcategoryColor}40`,
+                    backgroundImage: "none",
                   }}
                 >
-                  {cat.icon && <span className="text-lg">{cat.icon}</span>}
-                  <span>{cat.name}</span>
+                  {/* Color indicator bar */}
+                  <div
+                    className="absolute left-0 top-0 bottom-0 w-1"
+                    style={{ backgroundColor: subcategoryColor }}
+                  />
+                  {cat.icon && <span className="text-lg ml-1">{cat.icon}</span>}
+                  <span
+                    style={{ color: active ? subcategoryColor : undefined }}
+                  >
+                    {cat.name}
+                  </span>
                 </Button>
               );
             })}

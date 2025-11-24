@@ -7,6 +7,7 @@ import {
   SmartphoneIcon,
   WatchIcon,
 } from "@/components/icons/FuturisticIcons";
+import { CategoryManagement } from "@/components/settings/CategoryManagement";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -59,7 +60,13 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   account: "Account Selection",
 };
 
-type SectionType = "theme" | "view" | "accounts" | "steps" | "household";
+type SectionType =
+  | "theme"
+  | "view"
+  | "accounts"
+  | "categories"
+  | "steps"
+  | "household";
 
 export function SettingsDialog({ open, onOpenChange }: Props) {
   const { theme: colorTheme, setTheme, isLoading: themeLoading } = useTheme();
@@ -143,6 +150,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     { id: "theme", label: "Theme" },
     { id: "view", label: "View" },
     { id: "accounts", label: "Accounts" },
+    { id: "categories", label: "Categories" },
     { id: "steps", label: "Steps" },
     { id: "household", label: "Household" },
   ];
@@ -318,6 +326,9 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
 
             {/* ACCOUNTS SECTION */}
             {activeSection === "accounts" && <AccountsPanel />}
+
+            {/* CATEGORIES SECTION */}
+            {activeSection === "categories" && <CategoryManagement />}
 
             {/* STEPS SECTION */}
             {activeSection === "steps" && (

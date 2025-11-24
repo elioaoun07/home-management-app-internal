@@ -103,26 +103,38 @@ export default function CategoryGrid({
             ))
           : roots.map((cat) => {
               const active = selectedCategoryId === cat.id;
+              const categoryColor = cat.color || "#38bdf8";
               return (
                 <Button
                   key={cat.id}
-                  variant={active ? "default" : "outline"}
+                  variant="outline"
                   type="button"
-                  className={`justify-start gap-2 h-14 text-left transition-all hover:scale-105 ${
-                    active
-                      ? "shadow-[0_0_0_2px_rgba(6,182,212,0.8)_inset,0_0_25px_rgba(6,182,212,0.4)] bg-[#06b6d4]/20"
-                      : "hover:shadow-[0_0_0_2px_rgba(6,182,212,0.4)_inset] shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset]"
-                  }`}
+                  className={`justify-start gap-2 h-14 text-left transition-all hover:scale-105 relative overflow-hidden`}
                   onClick={() => onCategorySelect?.(cat.id)}
                   style={{
                     backgroundColor: active
-                      ? (cat.color ?? undefined)
-                      : undefined,
-                    borderColor: cat.color ?? undefined,
+                      ? `${categoryColor}25`
+                      : "transparent",
+                    borderColor: categoryColor,
+                    color: active ? categoryColor : "inherit",
+                    boxShadow: active
+                      ? `inset 0 0 0 2px ${categoryColor}, 0 0 20px ${categoryColor}40`
+                      : `inset 0 0 0 1px ${categoryColor}40`,
+                    backgroundImage: "none",
                   }}
                 >
-                  {cat.icon && <span className="text-xl">{cat.icon}</span>}
-                  <span className="font-medium">{cat.name}</span>
+                  {/* Color indicator bar */}
+                  <div
+                    className="absolute left-0 top-0 bottom-0 w-1"
+                    style={{ backgroundColor: categoryColor }}
+                  />
+                  {cat.icon && <span className="text-xl ml-1">{cat.icon}</span>}
+                  <span
+                    className="font-medium"
+                    style={{ color: active ? categoryColor : undefined }}
+                  >
+                    {cat.name}
+                  </span>
                 </Button>
               );
             })}

@@ -8,9 +8,19 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 // Single source of truth for the categories query
 export { useCategories } from "./useCategoriesQuery";
 
+// Category management hooks (CRUD operations with reordering)
+export {
+  useBulkUpdateCategories,
+  useCategoryManagement,
+  useCreateCategory as useCreateCategoryManagement,
+  useDeleteCategory as useDeleteCategoryManagement,
+  useReorderCategories,
+  useUpdateCategory as useUpdateCategoryManagement,
+} from "./useCategoryManagement";
+
 /**
  * Create category (root or sub).
- * Pass the accountId you’re working in; parent_id is optional (null = root).
+ * Pass the accountId you're working in; parent_id is optional (null = root).
  */
 export function useCreateCategory(accountId?: string) {
   const qc = useQueryClient();

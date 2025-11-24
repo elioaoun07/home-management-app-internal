@@ -13,6 +13,8 @@ export type Transaction = {
   user_name?: string;
   account_name?: string;
   category_icon?: string;
+  category_color?: string;
+  subcategory_color?: string;
   category_id?: string | null;
   subcategory_id?: string | null;
 };

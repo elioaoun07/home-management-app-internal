@@ -60,8 +60,8 @@ export class SupabaseTransactionService implements TransactionService {
       .from("transactions")
       .select(
         `id, date, category_id, subcategory_id, amount, description, account_id, inserted_at, user_id, is_private,
-        category:user_categories!transactions_category_fk(name, icon),
-        subcategory:user_categories!transactions_subcategory_fk(name)`
+        category:user_categories!transactions_category_fk(name, icon, color),
+        subcategory:user_categories!transactions_subcategory_fk(name, color)`
       )
       .order("inserted_at", { ascending: false })
       .limit(limit);
@@ -130,7 +130,10 @@ export class SupabaseTransactionService implements TransactionService {
         (rawRows || []).map((r: any) => r.subcategory_id).filter(Boolean)
       ),
     ];
-    let categoryNamesMap: Record<string, { name: string; icon?: string }> = {};
+    let categoryNamesMap: Record<
+      string,
+      { name: string; icon?: string; color?: string }
+    > = {};
 
     if (categoryIds.length > 0 || subcategoryIds.length > 0) {
       const allCatIds = [...categoryIds, ...subcategoryIds];
@@ -138,12 +141,16 @@ export class SupabaseTransactionService implements TransactionService {
       // Fetch categories for current user
       const { data: myCategories } = await this.supabase
         .from("user_categories")
-        .select("id, name, icon")
+        .select("id, name, icon, color")
         .in("id", allCatIds);
 
       if (myCategories) {
         myCategories.forEach((cat: any) => {
-          categoryNamesMap[cat.id] = { name: cat.name, icon: cat.icon };
+          categoryNamesMap[cat.id] = {
+            name: cat.name,
+            icon: cat.icon,
+            color: cat.color,
+          };
         });
       }
 
@@ -151,13 +158,17 @@ export class SupabaseTransactionService implements TransactionService {
       if (partnerId) {
         const { data: partnerCategories } = await this.supabase
           .from("user_categories")
-          .select("id, name, icon")
+          .select("id, name, icon, color")
           .eq("user_id", partnerId)
           .in("id", allCatIds);
 
         if (partnerCategories) {
           partnerCategories.forEach((cat: any) => {
-            categoryNamesMap[cat.id] = { name: cat.name, icon: cat.icon };
+            categoryNamesMap[cat.id] = {
+              name: cat.name,
+              icon: cat.icon,
+              color: cat.color,
+            };
           });
         }
       }
@@ -236,6 +247,14 @@ export class SupabaseTransactionService implements TransactionService {
       account_name: accountNamesMap[r.account_id] || "Unknown",
       category_icon:
         categoryNamesMap[r.category_id]?.icon || r.category?.icon || "📝",
+      category_color:
+        categoryNamesMap[r.category_id]?.color ||
+        r.category?.color ||
+        "#38bdf8",
+      subcategory_color:
+        categoryNamesMap[r.subcategory_id]?.color ||
+        r.subcategory?.color ||
+        "#38bdf8",
       is_private: r.is_private || false,
       is_owner: r.user_id === userId,
       user_theme:

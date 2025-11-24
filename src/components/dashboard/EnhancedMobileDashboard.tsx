@@ -35,6 +35,8 @@ type Transaction = {
   inserted_at: string;
   account_name?: string;
   category_icon?: string;
+  category_color?: string;
+  subcategory_color?: string;
   user_theme?: string;
   user_id?: string;
   is_owner?: boolean;
@@ -79,14 +81,17 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     const byCategory = transactions.reduce(
       (acc, t) => {
         const cat = t.category || "Uncategorized";
-        acc[cat] = (acc[cat] || 0) + t.amount;
+        acc[cat] = {
+          amount: (acc[cat]?.amount || 0) + t.amount,
+          color: t.category_color || "#38bdf8",
+        };
         return acc;
       },
-      {} as Record<string, number>
+      {} as Record<string, { amount: number; color: string }>
     );
 
     const topCategory = Object.entries(byCategory).sort(
-      (a, b) => b[1] - a[1]
+      (a, b) => b[1].amount - a[1].amount
     )[0];
 
     // Calculate daily average
@@ -102,7 +107,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
       count: transactions.length,
       dailyAvg,
       topCategory: topCategory
-        ? { name: topCategory[0], amount: topCategory[1] }
+        ? {
+            name: topCategory[0],
+            amount: topCategory[1].amount,
+            color: topCategory[1].color,
+          }
         : null,
       byCategory,
     };
@@ -433,10 +442,10 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               </div>
               <div className="space-y-3">
                 {Object.entries(stats.byCategory)
-                  .sort((a, b) => b[1] - a[1])
+                  .sort((a, b) => b[1].amount - a[1].amount)
                   .slice(0, 6)
-                  .map(([cat, amt]) => {
-                    const percentage = (amt / stats.total) * 100;
+                  .map(([cat, data]) => {
+                    const percentage = (data.amount / stats.total) * 100;
                     return (
                       <button
                         key={cat}
@@ -447,17 +456,24 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                         className="w-full group hover:-translate-y-0.5 transition-transform duration-200 py-1"
                       >
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs text-slate-200 truncate flex-1 text-left group-hover:text-white transition-colors font-medium">
+                          <span
+                            className="text-xs truncate flex-1 text-left group-hover:brightness-125 transition-all font-medium"
+                            style={{ color: data.color }}
+                          >
                             {cat}
                           </span>
                           <span className="text-xs font-semibold bg-gradient-to-r from-emerald-400 to-teal bg-clip-text text-transparent ml-2">
-                            ${amt.toFixed(0)}
+                            ${data.amount.toFixed(0)}
                           </span>
                         </div>
                         <div className="h-2 bg-[#1a2942]/60 rounded-full overflow-hidden shadow-inner">
                           <div
-                            className="h-full bg-gradient-to-r from-blue-500 via-cyan-500 to-teal rounded-full transition-all duration-300 group-hover:shadow-[0_0_12px_rgba(59,130,246,0.6)] group-hover:from-blue-400 group-hover:via-cyan-400 group-hover:to-teal"
-                            style={{ width: `${percentage}%` }}
+                            className="h-full rounded-full transition-all duration-300 group-hover:brightness-110"
+                            style={{
+                              width: `${percentage}%`,
+                              backgroundColor: data.color,
+                              boxShadow: `0 0 12px ${data.color}40`,
+                            }}
                           />
                         </div>
                       </button>

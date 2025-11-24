@@ -21,10 +21,7 @@ import {
   type SectionKey,
 } from "@/features/preferences/useSectionOrder";
 import { cn } from "@/lib/utils";
-import {
-  getCategoryGlowClass,
-  getCategoryIcon,
-} from "@/lib/utils/getCategoryIcon";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
@@ -543,66 +540,83 @@ export default function MobileExpenseForm() {
                 <div className="grid grid-cols-2 gap-2 pb-4">
                   {categories
                     .filter((c: any) => !c.parent_id)
-                    .map((category: any, index: number) => (
-                      <button
-                        key={category.id}
-                        onClick={() => {
-                          setSelectedCategoryId(category.id);
-                          const hasSubcategories =
-                            categories.some(
-                              (c: any) => c.parent_id === category.id
-                            ) || (category as any).subcategories?.length > 0;
+                    .map((category: any, index: number) => {
+                      const active = selectedCategoryId === category.id;
+                      const color = category.color || "#22d3ee";
 
-                          if (
-                            hasSubcategories &&
-                            stepFlow.includes("subcategory")
-                          ) {
-                            const next = getNextStep();
-                            if (next) {
-                              setStep(next);
+                      return (
+                        <button
+                          key={category.id}
+                          onClick={() => {
+                            setSelectedCategoryId(category.id);
+                            const hasSubcategories =
+                              categories.some(
+                                (c: any) => c.parent_id === category.id
+                              ) || (category as any).subcategories?.length > 0;
+
+                            if (
+                              hasSubcategories &&
+                              stepFlow.includes("subcategory")
+                            ) {
+                              const next = getNextStep();
+                              if (next) {
+                                setStep(next);
+                              } else {
+                                handleSubmit();
+                              }
                             } else {
-                              handleSubmit();
+                              const next = getNextStep();
+                              if (next) {
+                                setStep(next);
+                              } else {
+                                handleSubmit();
+                              }
                             }
-                          } else {
-                            const next = getNextStep();
-                            if (next) {
-                              setStep(next);
-                            } else {
-                              handleSubmit();
-                            }
-                          }
-                        }}
-                        disabled={isSubmitting}
-                        style={{ animationDelay: `${index * 30}ms` }}
-                        className={cn(
-                          "p-2.5 rounded-lg border text-left transition-all active:scale-95 min-h-[65px] category-appear",
-                          selectedCategoryId === category.id
-                            ? "neo-card border-[#06b6d4]/60 bg-primary/10 neo-glow-sm"
-                            : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5",
-                          isSubmitting && "opacity-50 cursor-not-allowed"
-                        )}
-                      >
-                        <div className="flex flex-col items-center justify-center gap-1 h-full">
-                          {(() => {
-                            const IconComponent = getCategoryIcon(
-                              category.name,
-                              category.slug
-                            );
-                            return (
-                              <IconComponent
-                                className={cn(
-                                  "w-8 h-8 text-[#22d3ee]",
-                                  getCategoryGlowClass(category.color)
-                                )}
-                              />
-                            );
-                          })()}
-                          <span className="font-semibold text-center text-xs text-white">
-                            {category.name}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
+                          }}
+                          disabled={isSubmitting}
+                          style={{
+                            animationDelay: `${index * 30}ms`,
+                            borderColor: active ? color : undefined,
+                            backgroundColor: active ? `${color}20` : undefined,
+                            boxShadow: active
+                              ? `0 0 15px ${color}40, inset 0 0 0 1px ${color}40`
+                              : undefined,
+                          }}
+                          className={cn(
+                            "p-2.5 rounded-lg border text-left transition-all active:scale-95 min-h-[65px] category-appear",
+                            active
+                              ? "neo-card neo-glow-sm"
+                              : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5",
+                            isSubmitting && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          <div className="flex flex-col items-center justify-center gap-1 h-full">
+                            {(() => {
+                              const IconComponent = getCategoryIcon(
+                                category.name,
+                                category.slug
+                              );
+                              return (
+                                <div
+                                  style={{
+                                    color: color,
+                                    filter: `drop-shadow(0 0 8px ${color}80)`,
+                                  }}
+                                >
+                                  <IconComponent className="w-8 h-8" />
+                                </div>
+                              );
+                            })()}
+                            <span
+                              className="font-semibold text-center text-xs"
+                              style={{ color: active ? color : "white" }}
+                            >
+                              {category.name}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -638,30 +652,39 @@ export default function MobileExpenseForm() {
                           None
                         </span>
                       </button>
-                      {allSubcategories.map((sub: any, index: number) => (
-                        <button
-                          key={sub.id}
-                          onClick={() => setSelectedSubcategoryId(sub.id)}
-                          style={{ animationDelay: `${(index + 1) * 30}ms` }}
-                          className={cn(
-                            "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
-                            selectedSubcategoryId === sub.id
-                              ? "neo-card border-[#22d3ee]/60 bg-[#22d3ee]/25 neo-glow shadow-lg"
-                              : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5"
-                          )}
-                        >
-                          <span
+                      {allSubcategories.map((sub: any, index: number) => {
+                        const active = selectedSubcategoryId === sub.id;
+                        const color = sub.color || "#22d3ee";
+                        return (
+                          <button
+                            key={sub.id}
+                            onClick={() => setSelectedSubcategoryId(sub.id)}
+                            style={{
+                              animationDelay: `${(index + 1) * 30}ms`,
+                              borderColor: active ? color : undefined,
+                              backgroundColor: active
+                                ? `${color}25`
+                                : undefined,
+                              boxShadow: active
+                                ? `0 0 15px ${color}40`
+                                : undefined,
+                            }}
                             className={cn(
-                              "font-semibold text-xs",
-                              selectedSubcategoryId === sub.id
-                                ? "text-[#22d3ee]"
-                                : "text-white"
+                              "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
+                              active
+                                ? "neo-card neo-glow shadow-lg"
+                                : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5"
                             )}
                           >
-                            {sub.name}
-                          </span>
-                        </button>
-                      ))}
+                            <span
+                              className="font-semibold text-xs"
+                              style={{ color: active ? color : "white" }}
+                            >
+                              {sub.name}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </>
                 )}

@@ -15,14 +15,38 @@ export async function loginAction(formData: FormData) {
   const cookieStore = await cookies();
   const supabase = await supabaseServer(cookieStore);
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  let data, error;
+  try {
+    const result = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    data = result.data;
+    error = result.error;
+  } catch (e: any) {
+    console.error("Login error (catch):", e);
+    return {
+      error:
+        "Unable to connect to authentication service. Please try again later.",
+      details: e.message,
+    };
+  }
 
   if (error) {
     console.error("Login error:", error);
-    return { error: "Invalid email or password" };
+
+    // Provide more specific error messages
+    if (error.message?.includes("Invalid login credentials")) {
+      return { error: "Invalid email or password" };
+    }
+    if (error.message?.includes("Internal")) {
+      return {
+        error:
+          "Authentication service is temporarily unavailable. Please try again.",
+      };
+    }
+
+    return { error: error.message || "Invalid email or password" };
   }
 
   if (!data.session) {

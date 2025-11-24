@@ -18,6 +18,8 @@ type Transaction = {
   inserted_at: string;
   account_name?: string;
   category_icon?: string;
+  category_color?: string;
+  subcategory_color?: string;
   user_theme?: string;
   user_id?: string;
   is_owner?: boolean;
@@ -229,11 +231,22 @@ export default function SwipeableTransactionItem({
                 );
               })()}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-100 truncate">
+                <p
+                  className="text-sm font-semibold truncate"
+                  style={{ color: transaction.category_color || "#e2e8f0" }}
+                >
                   {transaction.category || "Uncategorized"}
                 </p>
                 {transaction.subcategory && (
-                  <p className="text-xs text-slate-400/70 truncate">
+                  <p
+                    className="text-xs truncate opacity-70"
+                    style={{
+                      color:
+                        transaction.subcategory_color ||
+                        transaction.category_color ||
+                        "#94a3b8",
+                    }}
+                  >
                     {transaction.subcategory}
                   </p>
                 )}
