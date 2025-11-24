@@ -160,7 +160,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={`sm:max-w-[720px] max-h-[90vh] p-0 gap-0 bg-gradient-to-br from-[hsl(var(--card))] to-[hsl(var(--card)/0.95)] backdrop-blur-xl border-2 ${themeClasses.border} rounded-3xl overflow-hidden`}
+        className={`sm:max-w-[720px] max-h-[90vh] p-0 gap-0 ${themeClasses.dialogBg} backdrop-blur-xl border-2 ${themeClasses.border} rounded-3xl overflow-hidden`}
       >
         {/* Header */}
         <DialogHeader

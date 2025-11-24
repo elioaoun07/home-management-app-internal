@@ -395,7 +395,12 @@ export default function MobileExpenseForm() {
                       key={val}
                       variant="outline"
                       style={{ animationDelay: `${100 + index * 40}ms` }}
-                      className="h-9 text-sm font-semibold neo-card bg-bg-card-custom border-[#1a2942] hover:bg-primary/10 hover:border-[#1a2942] hover:scale-105 active:scale-95 transition-all category-appear"
+                      className={cn(
+                        "h-9 text-sm font-semibold neo-card bg-bg-card-custom transition-all category-appear hover:scale-105 active:scale-95",
+                        themeClasses.border,
+                        themeClasses.bgHover,
+                        themeClasses.borderHover
+                      )}
                       onClick={() => setAmount(val.toString())}
                     >
                       <span className={themeClasses.text}>${val}</span>

@@ -220,7 +220,12 @@ export default function CalculatorDialog({
         <div className="space-y-4">
           {/* Display */}
           <div
-            className={`neo-card ${themeClasses.calculatorDisplayBg} border-2 ${themeClasses.border} p-5 rounded-xl text-right ${themeClasses.activeItemShadow} relative overflow-hidden`}
+            className={cn(
+              "p-5 rounded-xl text-right relative overflow-hidden border-2",
+              themeClasses.calculatorDisplayBg,
+              themeClasses.border,
+              themeClasses.calculatorShadow
+            )}
           >
             <div
               className={`absolute inset-0 bg-gradient-to-br ${themeClasses.bgSurface} to-transparent pointer-events-none`}
@@ -432,9 +437,7 @@ export default function CalculatorDialog({
               }
               className={cn(
                 "font-bold text-xl transition-all hover:scale-110",
-                operation
-                  ? themeClasses.calculatorEqualBtn
-                  : `bg-gradient-to-r ${themeClasses.activeItemGradient} text-white ${themeClasses.activeItemShadow}`
+                themeClasses.calculatorEqualBtn
               )}
             >
               {operation ? "=" : "✓"}

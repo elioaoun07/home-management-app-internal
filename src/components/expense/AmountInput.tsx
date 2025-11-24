@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { ReactNode, useState } from "react";
 import CalculatorDialog from "./CalculatorDialog";
 
@@ -17,6 +18,7 @@ type Props = {
 };
 
 export default function AmountInput({ value, onChange, rightExtra }: Props) {
+  const themeClasses = useThemeClasses();
   const [isCalcOpen, setCalcOpen] = useState(false);
 
   return (
@@ -25,7 +27,7 @@ export default function AmountInput({ value, onChange, rightExtra }: Props) {
         htmlFor="amount"
         className="text-base font-semibold flex items-center gap-2"
       >
-        <DollarSignIcon className="h-4 w-4 drop-shadow-[0_0_6px_rgba(6,182,212,0.4)]" />
+        <DollarSignIcon className={`h-4 w-4 ${themeClasses.glow}`} />
         Amount
       </Label>
       <div className="flex items-center gap-2">
@@ -40,18 +42,18 @@ export default function AmountInput({ value, onChange, rightExtra }: Props) {
             placeholder="0.00"
             value={value}
             onChange={(e) => onChange?.(e.target.value)}
-            className="pl-8 h-12 text-lg font-semibold transition-all focus:ring-2 focus:ring-primary/20"
+            className={`pl-8 h-12 text-lg font-semibold transition-all focus:ring-0 focus-visible:ring-0 ${themeClasses.inputFocusForce}`}
           />
         </div>
         <Button
           type="button"
           variant="outline"
           size="icon"
-          className="h-12 w-12 hover:bg-primary/10 hover:text-primary transition-all"
+          className={`h-12 w-12 transition-all ${themeClasses.buttonGhost}`}
           aria-label="Open calculator"
           onClick={() => setCalcOpen(true)}
         >
-          <CalculatorIcon className="h-5 w-5 drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
+          <CalculatorIcon className={`h-5 w-5 ${themeClasses.glow}`} />
         </Button>
         {rightExtra}
       </div>

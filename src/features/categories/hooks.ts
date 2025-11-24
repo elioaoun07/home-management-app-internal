@@ -14,7 +14,7 @@ export {
   useCategoryManagement,
   useCreateCategory as useCreateCategoryManagement,
   useDeleteCategory as useDeleteCategoryManagement,
-  useReorderCategories,
+  useReorderCategories as useReorderCategoriesManagement,
   useUpdateCategory as useUpdateCategoryManagement,
 } from "./useCategoryManagement";
 

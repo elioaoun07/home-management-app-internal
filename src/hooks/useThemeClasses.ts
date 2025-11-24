@@ -20,6 +20,7 @@ export function useThemeClasses() {
     bgActive: isPink ? "bg-amber-500/20" : "bg-teal/20",
     bgHover: isPink ? "hover:bg-pink-500/20" : "hover:bg-cyan-500/20",
     bgSurface: isPink ? "bg-pink-500/10" : "bg-cyan-500/10",
+    bgPage: isPink ? "bg-[#1a0a14]" : "bg-[#0a1628]",
 
     // Borders & Rings
     border: isPink ? "border-pink-400/30" : "border-cyan-400/30",
@@ -38,6 +39,9 @@ export function useThemeClasses() {
     inputFocus: isPink
       ? "focus-visible:shadow-[0_0_0_2px_rgba(236,72,153,0.6)_inset,0_0_20px_rgba(236,72,153,0.3)]"
       : "focus-visible:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset,0_0_20px_rgba(6,182,212,0.3)]",
+    inputFocusForce: isPink
+      ? "focus:shadow-[0_0_0_2px_rgba(236,72,153,0.6)_inset,0_0_20px_rgba(236,72,153,0.3)]"
+      : "focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset,0_0_20px_rgba(6,182,212,0.3)]",
     inputBg: isPink ? "bg-[#1a0a14]/50" : "bg-[#0a1628]/50",
     inputFocusBg: isPink
       ? "focus-visible:bg-[#2d1b29]"
@@ -159,31 +163,29 @@ export function useThemeClasses() {
 
     // Calculator Specific
     calculatorBg: isPink
-      ? "bg-gradient-to-br from-[#2d1b29] to-[#3d2435] border-pink-500/30"
-      : "bg-gradient-to-br from-[#0f1d2e] to-[#1a2942] border-[#3b82f6]/30",
-    calculatorDisplayBg: isPink
-      ? "bg-gradient-to-br from-[#1a0a14] to-[#2d1b29]"
-      : "bg-gradient-to-br from-[#0a1525] to-[#0f1d2e]",
+      ? "bg-[#2d1b29] border-pink-500/20"
+      : "bg-[#0f1d2e] border-[#3b82f6]/20",
+    calculatorDisplayBg: isPink ? "bg-[#1a0a14]" : "bg-[#0a1628]",
     calculatorShadow: isPink
-      ? "shadow-[0_0_40px_rgba(236,72,153,0.2)]"
-      : "shadow-[0_0_40px_rgba(59,130,246,0.2)]",
+      ? "shadow-xl shadow-pink-900/10"
+      : "shadow-xl shadow-blue-900/10",
     calculatorOperatorBtn: isPink
-      ? "bg-gradient-to-br from-pink-500/15 to-amber-500/15 border-pink-400/40 text-pink-300 shadow-[0_0_15px_rgba(236,72,153,0.2)]"
-      : "bg-gradient-to-br from-cyan-500/15 to-blue-500/15 border-cyan-400/40 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.2)]",
+      ? "bg-none shadow-none hover:shadow-none bg-pink-500/10 hover:bg-pink-500/20 border-pink-500/20 text-pink-200"
+      : "bg-none shadow-none hover:shadow-none bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/20 text-cyan-200",
     calculatorNumberBtn: isPink
-      ? "bg-[#2d1b29]/80 border-pink-500/20 text-pink-100 shadow-[0_0_10px_rgba(236,72,153,0.1)]"
-      : "bg-slate-800/80 border-slate-700/30 text-slate-200 shadow-[0_0_10px_rgba(100,116,139,0.15)]",
+      ? "bg-none shadow-none hover:shadow-none bg-[#3d2435] hover:bg-[#4d2d42] border-pink-500/10 text-pink-100"
+      : "bg-none shadow-none hover:shadow-none bg-[#1e293b] hover:bg-[#334155] border-slate-700/50 text-slate-200",
     calculatorEqualBtn: isPink
-      ? "bg-gradient-to-r from-pink-500 to-amber-500 text-white shadow-[0_0_20px_rgba(236,72,153,0.4)]"
-      : "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)]",
+      ? "bg-none shadow-none hover:shadow-none bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/50"
+      : "bg-none shadow-none hover:shadow-none bg-emerald-600/80 hover:bg-emerald-600 text-white border border-emerald-500/50",
     calculatorClearBtn: isPink
-      ? "bg-gradient-to-br from-red-500/20 to-rose-500/20 border-red-400/40 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.2)]"
-      : "bg-gradient-to-br from-red-500/20 to-rose-500/20 border-red-400/40 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.2)]",
+      ? "bg-none shadow-none hover:shadow-none bg-red-500/40 hover:bg-red-500/60 border border-red-400/40 text-red-100"
+      : "bg-none shadow-none hover:shadow-none bg-red-900/40 hover:bg-red-900/60 border border-red-500/30 text-red-200",
     calculatorBackspaceBtn: isPink
-      ? "bg-gradient-to-br from-orange-500/20 to-amber-500/20 border-orange-400/40 text-orange-300 shadow-[0_0_15px_rgba(249,115,22,0.2)]"
-      : "bg-gradient-to-br from-orange-500/20 to-amber-500/20 border-orange-400/40 text-orange-300 shadow-[0_0_15px_rgba(249,115,22,0.2)]",
+      ? "bg-none shadow-none hover:shadow-none bg-red-500/40 hover:bg-red-500/60 border border-red-400/40 text-red-100"
+      : "bg-none shadow-none hover:shadow-none bg-red-900/40 hover:bg-red-900/60 border border-red-500/30 text-red-200",
     calculatorTipBtn: isPink
-      ? "bg-gradient-to-r from-pink-500/20 to-amber-500/20 hover:from-pink-500/30 hover:to-amber-500/30 border-pink-400/40 text-pink-300 shadow-[0_0_10px_rgba(236,72,153,0.2)] hover:shadow-[0_0_15px_rgba(236,72,153,0.3)]"
-      : "bg-gradient-to-r from-emerald-500/20 to-teal/20 hover:from-emerald-500/30 hover:to-teal/30 border-emerald-400/40 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)] hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]",
+      ? "bg-none shadow-none hover:shadow-none bg-pink-500/10 hover:bg-pink-500/20 border-pink-500/20 text-pink-200"
+      : "bg-none shadow-none hover:shadow-none bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/20 text-emerald-200",
   };
 }

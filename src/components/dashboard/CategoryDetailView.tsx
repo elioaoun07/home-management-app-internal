@@ -6,6 +6,7 @@ import {
   ZapIcon,
 } from "@/components/icons/FuturisticIcons";
 import { Card } from "@/components/ui/card";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format } from "date-fns";
@@ -39,6 +40,7 @@ export default function CategoryDetailView({
   onBack,
   onTransactionClick,
 }: Props) {
+  const themeClasses = useThemeClasses();
   const [isExiting, setIsExiting] = useState(false);
 
   const handleBack = () => {
@@ -104,24 +106,56 @@ export default function CategoryDetailView({
       </div>
 
       {/* Header with Glass Morphism */}
-      <div className="sticky top-0 z-30 backdrop-blur-xl border-b px-3 py-15 bg-bg-card-custom/90 border-[#1a2942]">
+      <div
+        className={cn(
+          "sticky top-0 z-30 backdrop-blur-xl border-b px-3 py-15 bg-bg-card-custom/90",
+          themeClasses.border
+        )}
+      >
         <button
           onClick={handleBack}
-          className="flex items-center gap-2 mb-3 px-4 py-2.5 rounded-lg transition-all duration-300 group shadow-md hover:shadow-lg text-[#22d3ee] hover:text-[#22d3ee]/80 bg-secondary/10 hover:bg-secondary/20 border border-[#1a2942]"
+          className={cn(
+            "flex items-center gap-2 mb-3 px-4 py-2.5 rounded-lg transition-all duration-300 group shadow-md hover:shadow-lg bg-secondary/10 hover:bg-secondary/20 border",
+            themeClasses.text,
+            themeClasses.textHover,
+            themeClasses.border
+          )}
         >
-          <ArrowLeftIcon className="w-5 h-5 transition-transform group-hover:-translate-x-1 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)]" />
+          <ArrowLeftIcon
+            className={cn(
+              "w-5 h-5 transition-transform group-hover:-translate-x-1",
+              themeClasses.glow
+            )}
+          />
           <span className="text-sm font-semibold">Back to Dashboard</span>
         </button>
 
         <div className="flex items-center gap-4">
-          <div className="relative p-3 rounded-xl scale-in-center bg-secondary/5 border-[#1a2942] border glow-pulse">
+          <div
+            className={cn(
+              "relative p-3 rounded-xl scale-in-center bg-secondary/5 border glow-pulse",
+              themeClasses.border
+            )}
+          >
             {(() => {
               const IconComponent = getCategoryIcon(category);
               return (
-                <IconComponent className="w-12 h-12 text-[#22d3ee] drop-shadow-[0_0_15px_rgba(34,211,238,0.7)]" />
+                <IconComponent
+                  className={cn(
+                    "w-12 h-12",
+                    themeClasses.text,
+                    themeClasses.glow
+                  )}
+                />
               );
             })()}
-            <SparklesIcon className="absolute -top-1 -right-1 w-4 h-4 text-[#22d3ee] animate-pulse drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+            <SparklesIcon
+              className={cn(
+                "absolute -top-1 -right-1 w-4 h-4 animate-pulse",
+                themeClasses.text,
+                themeClasses.glow
+              )}
+            />
           </div>
           <div className="fade-in-expand">
             <h1 className={cn("text-2xl font-bold text-white mb-1")}>
@@ -139,20 +173,32 @@ export default function CategoryDetailView({
         {/* Summary Cards with Stagger Animation */}
         <div className="grid grid-cols-2 gap-3">
           <Card
-            className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-secondary/5 bg-gradient-to-br from-secondary via-primary to-primary bg-opacity-10"
+            className={cn(
+              "neo-card p-4 border backdrop-blur-sm scale-in-center bg-secondary/5 bg-gradient-to-br from-secondary via-primary to-primary bg-opacity-10",
+              themeClasses.border
+            )}
             style={{ animationDelay: "0.1s" }}
           >
             <p className="text-xs mb-1 text-[#94a3b8]">Total Spent</p>
             <div className="flex items-center gap-2">
-              <p className="text-2xl font-bold text-[#22d3ee]">
+              <p className={cn("text-2xl font-bold", themeClasses.text)}>
                 ${totalAmount.toFixed(2)}
               </p>
-              <ZapIcon className="w-5 h-5 text-[#22d3ee] animate-pulse drop-shadow-[0_0_10px_rgba(34,211,238,0.6)]" />
+              <ZapIcon
+                className={cn(
+                  "w-5 h-5 animate-pulse",
+                  themeClasses.text,
+                  themeClasses.glow
+                )}
+              />
             </div>
           </Card>
 
           <Card
-            className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-primary/5"
+            className={cn(
+              "neo-card p-4 border backdrop-blur-sm scale-in-center bg-primary/5",
+              themeClasses.border
+            )}
             style={{ animationDelay: "0.2s" }}
           >
             <p className="text-xs mb-1 text-[#94a3b8]">Avg per Transaction</p>
@@ -165,11 +211,19 @@ export default function CategoryDetailView({
         {/* By Subcategory */}
         {Object.keys(stats.bySubcategory).length > 1 && (
           <Card
-            className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-primary/5"
+            className={cn(
+              "neo-card p-4 border backdrop-blur-sm scale-in-center bg-primary/5",
+              themeClasses.border
+            )}
             style={{ animationDelay: "0.3s" }}
           >
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-[#22d3ee]">
-              <SparklesIcon className="w-4 h-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
+            <h3
+              className={cn(
+                "text-sm font-semibold mb-3 flex items-center gap-2",
+                themeClasses.text
+              )}
+            >
+              <SparklesIcon className={cn("w-4 h-4", themeClasses.glow)} />
               By Subcategory
             </h3>
             <div className="space-y-2">
@@ -178,13 +232,18 @@ export default function CategoryDetailView({
                 .map(([sub, amt], index) => (
                   <div
                     key={sub}
-                    className="flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 cursor-pointer bg-secondary/10 hover:bg-secondary/20 border border-[#1a2942] fade-in-expand"
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 cursor-pointer bg-secondary/10 hover:bg-secondary/20 border fade-in-expand",
+                      themeClasses.border
+                    )}
                     style={{ animationDelay: `${0.4 + index * 0.1}s` }}
                   >
                     <span className="text-sm text-white font-medium">
                       {sub}
                     </span>
-                    <span className="text-sm font-bold text-[#22d3ee]">
+                    <span
+                      className={cn("text-sm font-bold", themeClasses.text)}
+                    >
                       ${amt.toFixed(2)}
                     </span>
                   </div>
@@ -195,11 +254,19 @@ export default function CategoryDetailView({
 
         {/* By Account */}
         <Card
-          className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-primary/5"
+          className={cn(
+            "neo-card p-4 border backdrop-blur-sm scale-in-center bg-primary/5",
+            themeClasses.border
+          )}
           style={{ animationDelay: "0.5s" }}
         >
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-[#22d3ee]">
-            <ZapIcon className="w-4 h-4 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+          <h3
+            className={cn(
+              "text-sm font-semibold mb-3 flex items-center gap-2",
+              themeClasses.text
+            )}
+          >
+            <ZapIcon className={cn("w-4 h-4", themeClasses.glow)} />
             By Account
           </h3>
           <div className="space-y-2">
@@ -208,11 +275,14 @@ export default function CategoryDetailView({
               .map(([acct, amt], index) => (
                 <div
                   key={acct}
-                  className="flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 bg-primary/10 hover:bg-primary/20 border border-[#1a2942] fade-in-expand"
+                  className={cn(
+                    "flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 bg-primary/10 hover:bg-primary/20 border fade-in-expand",
+                    themeClasses.border
+                  )}
                   style={{ animationDelay: `${0.6 + index * 0.1}s` }}
                 >
                   <span className="text-sm text-white font-medium">{acct}</span>
-                  <span className="text-sm font-bold text-[#22d3ee]">
+                  <span className={cn("text-sm font-bold", themeClasses.text)}>
                     ${amt.toFixed(2)}
                   </span>
                 </div>
@@ -222,11 +292,21 @@ export default function CategoryDetailView({
 
         {/* All Transactions */}
         <Card
-          className="neo-card p-4 border backdrop-blur-sm scale-in-center border-[#1a2942] bg-secondary/5"
+          className={cn(
+            "neo-card p-4 border backdrop-blur-sm scale-in-center bg-secondary/5",
+            themeClasses.border
+          )}
           style={{ animationDelay: "0.7s" }}
         >
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-[#22d3ee]">
-            <SparklesIcon className="w-4 h-4 animate-pulse drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+          <h3
+            className={cn(
+              "text-sm font-semibold mb-3 flex items-center gap-2",
+              themeClasses.text
+            )}
+          >
+            <SparklesIcon
+              className={cn("w-4 h-4 animate-pulse", themeClasses.glow)}
+            />
             All Transactions
           </h3>
           <div className="space-y-2">
@@ -239,7 +319,10 @@ export default function CategoryDetailView({
                 <div
                   key={tx.id}
                   onClick={() => onTransactionClick(tx)}
-                  className="flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:scale-105 group bg-primary/5 hover:bg-primary/15 border-[#1a2942] hover:border-secondary/40 fade-in-expand"
+                  className={cn(
+                    "flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:scale-105 group bg-primary/5 hover:bg-primary/15 hover:border-secondary/40 fade-in-expand",
+                    themeClasses.border
+                  )}
                   style={{ animationDelay: `${0.8 + index * 0.05}s` }}
                 >
                   <div className="flex-1 min-w-0">
@@ -258,10 +341,20 @@ export default function CategoryDetailView({
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <p className="text-base font-bold ml-3 text-[#22d3ee]">
+                    <p
+                      className={cn(
+                        "text-base font-bold ml-3",
+                        themeClasses.text
+                      )}
+                    >
                       ${tx.amount.toFixed(2)}
                     </p>
-                    <div className="w-1 h-1 rounded-full transition-all group-hover:w-2 group-hover:h-2 bg-[#22d3ee]" />
+                    <div
+                      className={cn(
+                        "w-1 h-1 rounded-full transition-all group-hover:w-2 group-hover:h-2",
+                        themeClasses.bgActive
+                      )}
+                    />
                   </div>
                 </div>
               ))}

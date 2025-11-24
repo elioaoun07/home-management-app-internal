@@ -12,6 +12,8 @@ import {
   TAGS_BAR_GAP,
   TAGS_BAR_HEIGHT,
 } from "@/constants/layout";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { cn } from "@/lib/utils";
 import { format, subDays } from "date-fns";
 import { type CSSProperties } from "react";
 
@@ -40,6 +42,7 @@ export default function ExpenseTagsBar({
   onCategoryClick,
   onDateChange,
 }: ExpenseTagsBarProps) {
+  const themeClasses = useThemeClasses();
   const wrapperStyles: CSSProperties = {
     bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT + TAGS_BAR_GAP}px)`,
   };
@@ -54,17 +57,32 @@ export default function ExpenseTagsBar({
       style={wrapperStyles}
     >
       <div
-        className="mx-auto max-w-[520px] pointer-events-auto rounded-[26px] border border-[#1a2942] bg-bg-dark/95 px-3 py-2.5 shadow-2xl slide-in-from-bottom backdrop-blur-xl"
+        className={cn(
+          "mx-auto max-w-[520px] pointer-events-auto rounded-[26px] border bg-bg-dark/95 px-3 py-2.5 shadow-2xl slide-in-from-bottom backdrop-blur-xl",
+          themeClasses.border
+        )}
         style={barStyles}
       >
         <div className="flex flex-wrap gap-1.5">
           {selectedAccount && (
             <button
               onClick={onAccountClick}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card border-[#22d3ee]/30 bg-[#22d3ee]/10 hover:bg-[#22d3ee]/20 hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in"
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in",
+                themeClasses.border,
+                themeClasses.bgSurface,
+                themeClasses.bgHover
+              )}
             >
-              <span className="text-[10px] text-[#06b6d4]/80">Account</span>
-              <span className="font-semibold text-xs text-[#22d3ee]">
+              <span className={cn("text-[10px]", themeClasses.textMuted)}>
+                Account
+              </span>
+              <span
+                className={cn(
+                  "font-semibold text-xs",
+                  themeClasses.textHighlight
+                )}
+              >
                 {selectedAccount.name}
               </span>
             </button>
@@ -73,10 +91,19 @@ export default function ExpenseTagsBar({
           {amount && (
             <button
               onClick={onAmountClick}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card border-[#22d3ee]/30 bg-[#22d3ee]/10 hover:bg-[#22d3ee]/20 hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in"
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in",
+                themeClasses.border,
+                themeClasses.bgSurface,
+                themeClasses.bgHover
+              )}
             >
-              <span className="text-[10px] text-[#06b6d4]/80">Amount</span>
-              <span className="font-bold text-xs text-[#22d3ee]">
+              <span className={cn("text-[10px]", themeClasses.textMuted)}>
+                Amount
+              </span>
+              <span
+                className={cn("font-bold text-xs", themeClasses.textHighlight)}
+              >
                 ${amount}
               </span>
             </button>
@@ -85,19 +112,44 @@ export default function ExpenseTagsBar({
           {selectedCategory && (
             <button
               onClick={onCategoryClick}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card border-secondary/30 bg-secondary/10 hover:bg-secondary/20 hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in"
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in",
+                themeClasses.border,
+                themeClasses.bgSurface,
+                themeClasses.bgHover
+              )}
             >
-              <span className="text-[10px] text-[#06b6d4]/80">Category</span>
-              <span className="font-semibold text-xs text-secondary">
+              <span className={cn("text-[10px]", themeClasses.textMuted)}>
+                Category
+              </span>
+              <span
+                className={cn(
+                  "font-semibold text-xs",
+                  themeClasses.textHighlight
+                )}
+              >
                 {selectedCategory.icon} {selectedCategory.name}
               </span>
             </button>
           )}
 
           {selectedSubcategory && (
-            <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card border-accent/30 bg-accent/10 cursor-default quick-scale-in">
-              <span className="text-[10px] text-[#06b6d4]/80">Subcategory</span>
-              <span className="font-semibold text-xs text-accent">
+            <button
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card cursor-default quick-scale-in",
+                themeClasses.border,
+                themeClasses.bgSurface
+              )}
+            >
+              <span className={cn("text-[10px]", themeClasses.textMuted)}>
+                Subcategory
+              </span>
+              <span
+                className={cn(
+                  "font-semibold text-xs",
+                  themeClasses.textHighlight
+                )}
+              >
                 {selectedSubcategory.name}
               </span>
             </button>

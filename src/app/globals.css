@@ -21,6 +21,15 @@ body {
   .shimmer {
     position: relative;
     overflow: hidden;
+    --shimmer-from: rgba(59, 130, 246, 0);
+    --shimmer-via: rgba(6, 182, 212, 0.08);
+    --shimmer-via-strong: rgba(6, 182, 212, 0.15);
+  }
+
+  :root[data-theme="pink"] .shimmer {
+    --shimmer-from: rgba(236, 72, 153, 0);
+    --shimmer-via: rgba(251, 191, 36, 0.08);
+    --shimmer-via-strong: rgba(251, 191, 36, 0.15);
   }
 
   .shimmer::after {
@@ -33,10 +42,10 @@ body {
     transform: translateX(-100%);
     background: linear-gradient(
       90deg,
-      rgba(59, 130, 246, 0) 0,
-      rgba(6, 182, 212, 0.08) 20%,
-      rgba(6, 182, 212, 0.15) 60%,
-      rgba(59, 130, 246, 0)
+      var(--shimmer-from) 0,
+      var(--shimmer-via) 20%,
+      var(--shimmer-via-strong) 60%,
+      var(--shimmer-from)
     );
     animation: shimmer 2.5s infinite;
     pointer-events: none;
@@ -61,20 +70,33 @@ body {
   /* Advanced glow effects */
   .glow-pulse-primary {
     animation: glow-pulse-primary 2s ease-in-out infinite;
+    --glow-1: rgba(59, 130, 246, 0.4);
+    --glow-2: rgba(59, 130, 246, 0.2);
+    --glow-3: rgba(59, 130, 246, 0.6);
+    --glow-4: rgba(59, 130, 246, 0.3);
+    --glow-5: rgba(59, 130, 246, 0.1);
+  }
+
+  :root[data-theme="pink"] .glow-pulse-primary {
+    --glow-1: rgba(236, 72, 153, 0.4);
+    --glow-2: rgba(236, 72, 153, 0.2);
+    --glow-3: rgba(236, 72, 153, 0.6);
+    --glow-4: rgba(236, 72, 153, 0.3);
+    --glow-5: rgba(236, 72, 153, 0.1);
   }
 
   @keyframes glow-pulse-primary {
     0%,
     100% {
       box-shadow:
-        0 0 20px rgba(59, 130, 246, 0.4),
-        0 0 40px rgba(59, 130, 246, 0.2);
+        0 0 20px var(--glow-1),
+        0 0 40px var(--glow-2);
     }
     50% {
       box-shadow:
-        0 0 30px rgba(59, 130, 246, 0.6),
-        0 0 60px rgba(59, 130, 246, 0.3),
-        0 0 80px rgba(59, 130, 246, 0.1);
+        0 0 30px var(--glow-3),
+        0 0 60px var(--glow-4),
+        0 0 80px var(--glow-5);
     }
   }
 
@@ -160,6 +182,16 @@ body {
   --neo-accent: #22d3ee;
   --neo-highlight: #38bdf8;
 
+  /* Neo Card Variables (Blue Default) */
+  --neo-card-bg-start: rgba(59, 130, 246, 0.08);
+  --neo-card-bg-end: rgba(6, 182, 212, 0.05);
+  --neo-card-border: rgba(59, 130, 246, 0.2);
+  --neo-card-shadow: rgba(59, 130, 246, 0.1);
+  --neo-card-hover-border: rgba(26, 41, 66, 1);
+  --neo-card-hover-shadow-1: rgba(6, 182, 212, 0.4);
+  --neo-card-hover-shadow-2: rgba(59, 130, 246, 0.15);
+  --neo-card-hover-shadow-3: rgba(6, 182, 212, 0.2);
+
   /* Pink Theme Palette */
   --pink-navy: #1a0a14;
   --pink-indigo: #2d1b29;
@@ -201,6 +233,16 @@ body {
   --bg-card-custom: #3d2435;
   --teal: #fbbf24;
   --purple: #c084fc;
+
+  /* Neo Card Variables (Pink Theme) */
+  --neo-card-bg-start: rgba(236, 72, 153, 0.08);
+  --neo-card-bg-end: rgba(251, 191, 36, 0.05);
+  --neo-card-border: rgba(236, 72, 153, 0.2);
+  --neo-card-shadow: rgba(236, 72, 153, 0.1);
+  --neo-card-hover-border: rgba(45, 27, 41, 1);
+  --neo-card-hover-shadow-1: rgba(251, 191, 36, 0.4);
+  --neo-card-hover-shadow-2: rgba(236, 72, 153, 0.15);
+  --neo-card-hover-shadow-3: rgba(251, 191, 36, 0.2);
 }
 
 :root[data-theme="blue"] {
@@ -992,23 +1034,23 @@ body {
   .neo-card {
     background: linear-gradient(
       135deg,
-      rgba(59, 130, 246, 0.08) 0%,
-      rgba(6, 182, 212, 0.05) 100%
+      var(--neo-card-bg-start) 0%,
+      var(--neo-card-bg-end) 100%
     );
-    border: 1px solid rgba(26, 41, 66, 0.8); /* neo-indigo with opacity */
+    border: 1px solid var(--neo-card-border);
     box-shadow:
-      0 0 0 1px rgba(6, 182, 212, 0.15) inset,
+      0 0 0 1px var(--neo-card-shadow) inset,
       0 4px 6px -1px rgba(0, 0, 0, 0.1),
-      0 0 15px rgba(59, 130, 246, 0.1);
+      0 0 15px var(--neo-card-shadow);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .neo-card:hover {
-    border-color: rgba(26, 41, 66, 1); /* solid neo-indigo on hover */
+    border-color: var(--neo-card-hover-border);
     box-shadow:
-      0 0 0 1px rgba(6, 182, 212, 0.4) inset,
-      0 10px 15px -3px rgba(59, 130, 246, 0.15),
-      0 0 30px rgba(6, 182, 212, 0.2);
+      0 0 0 1px var(--neo-card-hover-shadow-1) inset,
+      0 10px 15px -3px var(--neo-card-hover-shadow-2),
+      0 0 30px var(--neo-card-hover-shadow-3);
     transform: translateY(-2px);
   }
 
@@ -1334,11 +1376,10 @@ body {
   }
 
   /* Global dialog fixes - ensure solid backgrounds and readable text */
-  [data-slot="dialog-content"] {
+  /* [data-slot="dialog-content"] {
     background-color: #1a2942 !important;
     opacity: 1 !important;
-    /* color: white !important; - Removed to allow theme colors */
-  }
+  } */
 
   /* Removed blanket white text override to allow specific styling */
   /* [data-slot="dialog-content"] label,
@@ -1348,23 +1389,23 @@ body {
     color: white !important;
   } */
 
-  [data-slot="dialog-content"] input,
+  /* [data-slot="dialog-content"] input,
   [data-slot="dialog-content"] textarea,
   [data-slot="dialog-content"] select {
     background-color: #0f1729 !important;
     color: #38bdf8 !important;
     border-color: #3b82f6 !important;
-  }
+  } */
 
-  [data-slot="dialog-content"] input::placeholder,
+  /* [data-slot="dialog-content"] input::placeholder,
   [data-slot="dialog-content"] textarea::placeholder {
     color: #38bdf8 !important;
     opacity: 0.5 !important;
-  }
+  } */
 
-  [data-slot="dialog-content"] button {
+  /* [data-slot="dialog-content"] button {
     color: white !important;
-  }
+  } */
 
   [data-slot="dialog-overlay"] {
     background-color: rgba(0, 0, 0, 0.7) !important;
@@ -1400,12 +1441,12 @@ body {
       color: white !important;
     } */
 
-    [data-slot="dialog-content"] [data-slot="dialog-title"] {
+    /* [data-slot="dialog-content"] [data-slot="dialog-title"] {
       color: #06b6d4 !important;
     }
 
     [data-slot="dialog-content"] [data-slot="dialog-description"] {
       color: rgba(56, 189, 248, 0.8) !important;
-    }
+    } */
   }
 }

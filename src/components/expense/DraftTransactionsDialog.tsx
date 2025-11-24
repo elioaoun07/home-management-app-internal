@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -48,6 +49,7 @@ type Props = {
 };
 
 export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
+  const themeClasses = useThemeClasses();
   const [drafts, setDrafts] = useState<DraftTransaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -174,8 +176,10 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <MicIcon className="w-5 h-5 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+          <DialogTitle
+            className={cn("flex items-center gap-2", themeClasses.dialogTitle)}
+          >
+            <MicIcon className={cn("w-5 h-5", themeClasses.glow)} />
             Voice Entry Drafts
           </DialogTitle>
           <DialogDescription>

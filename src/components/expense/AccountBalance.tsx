@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -151,10 +152,21 @@ export default function AccountBalance({
   const currentBalance = balance?.balance || 0;
 
   return (
-    <div className="neo-card bg-gradient-to-br from-[#1a2942] to-[#0f1d2e] border-[#06b6d4]/30 p-2.5 shadow-lg">
+    <div
+      className={cn(
+        "neo-card p-2.5 shadow-lg",
+        themeClasses.cardBg,
+        themeClasses.border
+      )}
+    >
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <Label className="text-[10px] text-[#06b6d4] font-medium uppercase tracking-wider">
+          <Label
+            className={cn(
+              "text-[10px] font-medium uppercase tracking-wider",
+              themeClasses.textHighlight
+            )}
+          >
             {accountName || "Account"} Balance
           </Label>
           {isEditing ? (
@@ -164,7 +176,13 @@ export default function AccountBalance({
                 step="0.01"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
-                className="h-8 w-32 text-lg font-bold bg-[#0a1628] border-[#06b6d4]/60 text-white focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20"
+                className={cn(
+                  "h-8 w-32 text-lg font-bold text-white focus:ring-2",
+                  themeClasses.inputBg,
+                  themeClasses.border,
+                  themeClasses.focusBorder,
+                  themeClasses.focusRing
+                )}
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSave();
@@ -194,17 +212,28 @@ export default function AccountBalance({
             <div className="flex flex-col gap-0.5 mt-1">
               <div className="flex items-center gap-2">
                 <span
-                  className={`text-xl font-bold tabular-nums bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(20,184,166,0.4)]`}
+                  className={`text-xl font-bold tabular-nums bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`}
                 >
                   ${currentBalance.toFixed(2)}
                 </span>
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 bg-[#3b82f6]/20 hover:bg-[#3b82f6]/30 shadow-[0_0_0_1px_rgba(59,130,246,0.4)_inset] rounded-lg active:scale-95 transition-all"
+                  className={cn(
+                    "h-7 w-7 rounded-lg active:scale-95 transition-all",
+                    themeClasses.bgActive,
+                    themeClasses.bgHover,
+                    themeClasses.inputBorder
+                  )}
                   onClick={handleEdit}
                 >
-                  <Edit2Icon className="h-3.5 w-3.5 text-[#38bdf8] drop-shadow-[0_0_6px_rgba(56,189,248,0.5)]" />
+                  <Edit2Icon
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      themeClasses.textHighlight,
+                      themeClasses.glow
+                    )}
+                  />
                 </Button>
               </div>
               <span

@@ -28,6 +28,7 @@ import {
   useRecurringPayments,
   useUpdateRecurringPayment,
 } from "@/features/recurring/useRecurringPayments";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format, formatDistanceToNow, isPast, isToday } from "date-fns";
@@ -35,6 +36,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export default function RecurringPage() {
+  const themeClasses = useThemeClasses();
   const { data: recurringPayments = [], isLoading } = useRecurringPayments();
   const { data: accounts = [] } = useAccounts();
   const defaultAccount = accounts.find((a) => a.is_default) || accounts[0];
@@ -222,23 +224,34 @@ export default function RecurringPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0a1628] flex items-center justify-center">
-        <div className="text-[#38bdf8]">Loading...</div>
+      <div
+        className={cn(
+          "min-h-screen flex items-center justify-center",
+          themeClasses.bgPage
+        )}
+      >
+        <div className={themeClasses.text}>Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a1628] pb-32">
+    <div className={cn("min-h-screen pb-32", themeClasses.bgPage)}>
       <div className="max-w-2xl mx-auto p-4">
         {/* Sticky Header with Add Button */}
-        <div className="sticky top-14 z-30 bg-[#0a1628] pb-4 mb-2 -mx-4 px-4 pt-4 border-b border-[#3b82f6]/10">
+        <div
+          className={cn(
+            "sticky top-14 z-30 pb-4 mb-2 -mx-4 px-4 pt-4 border-b",
+            themeClasses.bgPage,
+            themeClasses.border
+          )}
+        >
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h1 className="text-2xl font-bold text-[#38bdf8]">
+              <h1 className={cn("text-2xl font-bold", themeClasses.text)}>
                 Recurring Payments
               </h1>
-              <p className="text-sm text-[#38bdf8]/60">
+              <p className={cn("text-sm", themeClasses.textMuted)}>
                 {recurringPayments.length} active{" "}
                 {recurringPayments.length === 1 ? "payment" : "payments"}
               </p>
@@ -270,9 +283,13 @@ export default function RecurringPage() {
         {/* List */}
         {recurringPayments.length === 0 ? (
           <div className="neo-card p-8 text-center">
-            <CalendarClockIcon className="w-16 h-16 text-[#38bdf8]/30 mx-auto mb-4" />
-            <p className="text-[#38bdf8]/70 mb-2">No recurring payments yet</p>
-            <p className="text-sm text-[#38bdf8]/50">
+            <CalendarClockIcon
+              className={cn("w-16 h-16 mx-auto mb-4", themeClasses.textFaint)}
+            />
+            <p className={cn("mb-2", themeClasses.textMuted)}>
+              No recurring payments yet
+            </p>
+            <p className={cn("text-sm", themeClasses.textFaint)}>
               Tap the + button to add your first recurring payment
             </p>
           </div>
@@ -290,7 +307,11 @@ export default function RecurringPage() {
                   className={cn(
                     "neo-card p-4 transition-all",
                     dueDateInfo.isDue &&
-                      "border-[#06b6d4]/60 bg-[#06b6d4]/10 neo-glow"
+                      cn(
+                        "neo-glow",
+                        themeClasses.borderActive,
+                        themeClasses.bgActive
+                      )
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -299,16 +320,16 @@ export default function RecurringPage() {
                         className={cn(
                           "w-10 h-10 rounded-lg flex items-center justify-center",
                           dueDateInfo.isDue
-                            ? "bg-[#06b6d4]/20"
-                            : "bg-[#3b82f6]/10"
+                            ? themeClasses.bgActive
+                            : themeClasses.bgSurface
                         )}
                       >
                         <IconComponent
                           className={cn(
                             "w-5 h-5",
                             dueDateInfo.isDue
-                              ? "text-[#06b6d4]"
-                              : "text-[#38bdf8]"
+                              ? themeClasses.textHighlight
+                              : themeClasses.text
                           )}
                         />
                       </div>
@@ -317,7 +338,12 @@ export default function RecurringPage() {
                         <h3 className="font-semibold text-white mb-1">
                           {payment.name}
                         </h3>
-                        <p className="text-2xl font-bold text-[#06b6d4] mb-2">
+                        <p
+                          className={cn(
+                            "text-2xl font-bold mb-2",
+                            themeClasses.textHighlight
+                          )}
+                        >
                           ${payment.amount.toFixed(2)}
                         </p>
 
@@ -326,17 +352,20 @@ export default function RecurringPage() {
                             className={cn(
                               "px-2 py-1 rounded-full",
                               dueDateInfo.isDue
-                                ? "bg-[#06b6d4]/20 text-[#06b6d4]"
-                                : "bg-[#3b82f6]/20 text-[#38bdf8]"
+                                ? cn(
+                                    themeClasses.bgActive,
+                                    themeClasses.textHighlight
+                                  )
+                                : cn(themeClasses.bgSurface, themeClasses.text)
                             )}
                           >
                             {dueDateInfo.formatted}
                           </span>
-                          <span className="text-[#38bdf8]/60">
+                          <span className={themeClasses.textMuted}>
                             {payment.recurrence_type}
                           </span>
                           {payment.category && (
-                            <span className="text-[#38bdf8]/60">
+                            <span className={themeClasses.textMuted}>
                               {payment.category.name}
                             </span>
                           )}
@@ -348,16 +377,31 @@ export default function RecurringPage() {
                       {dueDateInfo.isDue && (
                         <button
                           onClick={() => setConfirmingPayment(payment)}
-                          className="p-2 rounded-lg bg-[#06b6d4]/20 hover:bg-[#06b6d4]/30 active:scale-95 transition-all"
+                          className={cn(
+                            "p-2 rounded-lg active:scale-95 transition-all",
+                            themeClasses.bgActive,
+                            themeClasses.bgHover
+                          )}
                         >
-                          <CheckIcon className="w-4 h-4 text-[#06b6d4]" />
+                          <CheckIcon
+                            className={cn(
+                              "w-4 h-4",
+                              themeClasses.textHighlight
+                            )}
+                          />
                         </button>
                       )}
                       <button
                         onClick={() => setEditingPayment(payment)}
-                        className="p-2 rounded-lg bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 active:scale-95 transition-all"
+                        className={cn(
+                          "p-2 rounded-lg active:scale-95 transition-all",
+                          themeClasses.bgSurface,
+                          themeClasses.bgHover
+                        )}
                       >
-                        <Edit2Icon className="w-4 h-4 text-[#38bdf8]" />
+                        <Edit2Icon
+                          className={cn("w-4 h-4", themeClasses.text)}
+                        />
                       </button>
                       <button
                         onClick={() => handleDelete(payment.id)}

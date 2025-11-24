@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import {
   closestCenter,
   DndContext,
@@ -69,6 +70,7 @@ export default function CategoryManagerDialog({
   accountId,
   onChange,
 }: Props) {
+  const themeClasses = useThemeClasses();
   // Accounts for dropdown + default marker
   const { data: accounts = [] } = useAccounts();
   const [selectedAccountId, setSelectedAccountId] = useState<string>(accountId);
@@ -444,7 +446,9 @@ export default function CategoryManagerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Manage Categories</DialogTitle>
+          <DialogTitle className={themeClasses.dialogTitle}>
+            Manage Categories
+          </DialogTitle>
         </DialogHeader>
 
         {/* Account selector + default star */}

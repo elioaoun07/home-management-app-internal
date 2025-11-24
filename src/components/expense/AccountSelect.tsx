@@ -19,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAccounts, useCreateAccount } from "@/features/accounts/hooks";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { cn } from "@/lib/utils";
 import type { AccountType } from "@/types/domain";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -31,6 +33,7 @@ type Props = {
 const PLACEHOLDER = "Choose an account";
 
 export default function AccountSelect({ value, onChange }: Props) {
+  const themeClasses = useThemeClasses();
   const {
     data: accounts = [],
     isLoading,
@@ -157,7 +160,9 @@ export default function AccountSelect({ value, onChange }: Props) {
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-xl">Add New Account</DialogTitle>
+            <DialogTitle className={cn("text-xl", themeClasses.dialogTitle)}>
+              Add New Account
+            </DialogTitle>
           </DialogHeader>
           <form className="space-y-5" onSubmit={onAddAccount}>
             <div>

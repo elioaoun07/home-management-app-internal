@@ -28,6 +28,7 @@ import {
   prefetchExpenseData,
 } from "@/features/navigation/prefetchTabs";
 import { useDuePaymentsCount } from "@/features/recurring/useRecurringPayments";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -48,6 +49,7 @@ const navItems: Array<{
 ];
 
 export default function MobileNav() {
+  const themeClasses = useThemeClasses();
   const { activeTab, setActiveTab } = useTab();
   const queryClient = useQueryClient();
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
@@ -300,9 +302,9 @@ export default function MobileNav() {
             }
           }}
         >
-          <DialogContent className="neo-card border-[#3b82f6]/30">
+          <DialogContent className={cn("neo-card", themeClasses.border)}>
             <DialogHeader>
-              <DialogTitle className="text-[#06b6d4]">
+              <DialogTitle className={themeClasses.dialogTitle}>
                 Confirm Transaction: {selectedTemplate?.name}
               </DialogTitle>
             </DialogHeader>
