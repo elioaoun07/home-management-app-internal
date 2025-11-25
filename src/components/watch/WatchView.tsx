@@ -668,6 +668,8 @@ function LoadingScreen() {
 }
 
 function ErrorScreen() {
+  const themeClasses = useThemeClasses();
+
   return (
     <div
       style={{
