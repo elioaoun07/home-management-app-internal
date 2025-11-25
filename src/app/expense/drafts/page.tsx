@@ -208,7 +208,7 @@ export default function DraftsPage() {
               className={cn(
                 `rounded-2xl p-5 space-y-4 ${themeClasses.surfaceBg} border transition-all`,
                 isEditing
-                  ? `${themeClasses.borderAccent} shadow-lg ${themeClasses.glow}`
+                  ? `${themeClasses.borderActive} shadow-lg ${themeClasses.glow}`
                   : `${themeClasses.border} ${themeClasses.borderHover}`
               )}
             >
