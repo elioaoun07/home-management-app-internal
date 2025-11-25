@@ -777,7 +777,7 @@ export default function CategoryManagerDialog({
                                                   />
                                                 ) : (
                                                   <button
-                                                    className="w-full px-2 py-1 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] rounded text-sm text-[#06b6d4] hover:bg-[#06b6d4]/10 hover:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset]"
+                                                    className={`w-full px-2 py-1 ${themeClasses.inputBorder} rounded text-sm ${themeClasses.labelText} ${themeClasses.bgHover} hover:${themeClasses.inputFocusForce}`}
                                                     onClick={(e) => {
                                                       e.preventDefault();
                                                       e.stopPropagation();

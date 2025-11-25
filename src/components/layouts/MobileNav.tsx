@@ -193,7 +193,7 @@ export default function MobileNav() {
               if (navigator.vibrate) navigator.vibrate(10);
               setActiveTab("recurring");
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#06b6d4] text-white shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all neo-glow"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${themeClasses.badgeBg} text-white shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all neo-glow`}
           >
             <CalendarClockIcon className="w-3.5 h-3.5" />
             <span className="text-xs font-semibold">{duePaymentsCount}</span>
@@ -206,8 +206,7 @@ export default function MobileNav() {
         className="fixed bottom-0 left-0 right-0 z-50 bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-md pb-safe shadow-2xl"
         style={{
           ...navSurfaceStyles,
-          boxShadow:
-            "0 -4px 12px rgba(0, 0, 0, 0.1), 0 -1px 3px rgba(59, 130, 246, 0.05)",
+          boxShadow: themeClasses.navShadow,
         }}
       >
         <div className="flex items-center justify-around gap-2 px-4 h-full">
@@ -273,7 +272,9 @@ export default function MobileNav() {
                 <div className="relative">
                   <Icon className="w-5 h-5" />
                   {item.id === "recurring" && duePaymentsCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-[#06b6d4] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                    <span
+                      className={`absolute -top-1 -right-1 ${themeClasses.badgeBg} text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1`}
+                    >
                       {duePaymentsCount}
                     </span>
                   )}
@@ -316,7 +317,7 @@ export default function MobileNav() {
               }}
             >
               <div>
-                <Label className="text-[#38bdf8]">Amount *</Label>
+                <Label className={themeClasses.headerText}>Amount *</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -325,17 +326,17 @@ export default function MobileNav() {
                   onChange={(e) => setTemplateAmount(e.target.value)}
                   required
                   autoFocus
-                  className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                  className={`${themeClasses.inputBg} ${themeClasses.border} text-white`}
                   disabled={isCreatingTemplate}
                 />
               </div>
               <div>
-                <Label className="text-[#38bdf8]">Description</Label>
+                <Label className={themeClasses.headerText}>Description</Label>
                 <Input
                   value={templateDescription}
                   onChange={(e) => setTemplateDescription(e.target.value)}
                   placeholder="Optional notes"
-                  className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                  className={`${themeClasses.inputBg} ${themeClasses.border} text-white`}
                   disabled={isCreatingTemplate}
                 />
               </div>
@@ -349,7 +350,7 @@ export default function MobileNav() {
                     setTemplateDescription("");
                   }}
                   disabled={isCreatingTemplate}
-                  className="border-[#3b82f6]/30 text-[#38bdf8]"
+                  className={`${themeClasses.border} ${themeClasses.headerText}`}
                 >
                   Cancel
                 </Button>

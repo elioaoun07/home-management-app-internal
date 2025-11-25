@@ -260,7 +260,9 @@ export default function MobileExpenseForm() {
         <div className="fixed inset-0 top-14 bg-bg-dark loading-fade" />
       ) : (
         <>
-          <div className="fixed top-0 left-0 right-0 z-30 bg-gradient-to-b from-bg-card-custom to-bg-medium border-b border-[#1a2942] px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top">
+          <div
+            className={`fixed top-0 left-0 right-0 z-30 bg-gradient-to-b from-bg-card-custom to-bg-medium border-b ${themeClasses.border} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top`}
+          >
             <div className="flex items-center justify-between mb-2 pt-16">
               {step !== firstValidStep ? (
                 <button
@@ -269,9 +271,11 @@ export default function MobileExpenseForm() {
                     goBack();
                   }}
                   suppressHydrationWarning
-                  className="p-1.5 -ml-2 rounded-lg bg-primary/10 hover:bg-primary/20 active:scale-95 transition-all duration-200 border border-[#1a2942] hover:shadow-md"
+                  className={`p-1.5 -ml-2 rounded-lg ${themeClasses.bgSurface} hover:bg-opacity-30 active:scale-95 transition-all duration-200 ${themeClasses.border} hover:shadow-md`}
                 >
-                  <ChevronLeftIcon className="w-5 h-5 text-accent drop-shadow-[0_0_6px_rgba(56,189,248,0.3)]" />
+                  <ChevronLeftIcon
+                    className={`w-5 h-5 ${themeClasses.text} ${themeClasses.iconGlow}`}
+                  />
                 </button>
               ) : (
                 <div className="w-8" />
@@ -298,11 +302,11 @@ export default function MobileExpenseForm() {
                 className={cn(
                   "p-1.5 -mr-2 rounded-lg",
                   closeDisabled
-                    ? "bg-primary/10 border border-[#1a2942] opacity-50 cursor-not-allowed"
-                    : "bg-primary/10 hover:bg-primary/20 active:scale-95 transition-all border border-[#1a2942]"
+                    ? `${themeClasses.bgSurface} ${themeClasses.border} opacity-50 cursor-not-allowed`
+                    : `${themeClasses.bgSurface} hover:bg-opacity-30 active:scale-95 transition-all ${themeClasses.border}`
                 )}
               >
-                <XIcon className="w-5 h-5 text-accent drop-shadow-[0_0_6px_rgba(248,113,113,0.4)]" />
+                <XIcon className={`w-5 h-5 ${themeClasses.text}`} />
               </button>
             </div>
             <div className="h-0.5 bg-bg-card-custom rounded-full overflow-hidden relative">
@@ -338,8 +342,8 @@ export default function MobileExpenseForm() {
                   >
                     How much did you spend?
                   </Label>
-                  <div className="mt-1 relative">
-                    <span className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 -ml-16 text-2xl font-bold text-[hsl(var(--text-muted-light)/0.6)] pointer-events-none">
+                  <div className="mt-1 relative flex items-center">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-[hsl(var(--text-muted-light)/0.6)] pointer-events-none z-10">
                       $
                     </span>
                     <Input
@@ -349,43 +353,55 @@ export default function MobileExpenseForm() {
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       suppressHydrationWarning
-                      className={`text-3xl font-bold h-16 px-4 border-2 text-center bg-bg-card-custom ${themeClasses.border} text-white placeholder:text-[hsl(var(--input-placeholder)/0.3)] ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} focus:scale-[1.02] transition-all duration-200 neo-card bounce-in`}
+                      className={`text-3xl font-bold h-16 pl-12 pr-24 border-2 text-center bg-bg-card-custom ${themeClasses.border} text-white placeholder:text-[hsl(var(--input-placeholder)/0.3)] ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} focus:scale-[1.02] transition-all duration-200 neo-card bounce-in`}
                       autoFocus
                     />
-                  </div>
-                  <div className="flex items-center justify-end gap-2 mt-2">
-                    <button
-                      onClick={() => setShowCalculator(true)}
-                      suppressHydrationWarning
-                      className="p-1.5 rounded-lg neo-card bg-primary/10 border border-[#1a2942] hover:bg-primary/20 active:scale-95 transition-all"
-                    >
-                      <CalculatorIcon
-                        className={`w-4 h-4 ${themeClasses.text} drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]`}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
+                      <button
+                        onClick={() => setShowCalculator(true)}
+                        suppressHydrationWarning
+                        className={cn(
+                          "p-2.5 rounded-lg border active:scale-95 transition-all",
+                          themeClasses.border,
+                          themeClasses.bgHover
+                        )}
+                      >
+                        <CalculatorIcon
+                          className={cn(
+                            "w-5 h-5",
+                            themeClasses.text,
+                            themeClasses.glow
+                          )}
+                        />
+                      </button>
+                      <VoiceEntryButton
+                        categories={categories}
+                        accountId={selectedAccountId}
+                        onPreviewChange={() => {}}
+                        onParsed={({
+                          sentence,
+                          amount: voiceAmount,
+                          categoryId,
+                          subcategoryId,
+                        }) => {
+                          if (voiceAmount != null && !isNaN(voiceAmount))
+                            setAmount(String(voiceAmount));
+                          if (categoryId) setSelectedCategoryId(categoryId);
+                          if (subcategoryId)
+                            setSelectedSubcategoryId(subcategoryId);
+                        }}
+                        onDraftCreated={() => {
+                          toast.success(
+                            "Voice entry saved! Check drafts to confirm."
+                          );
+                        }}
+                        className={cn(
+                          "p-2.5 rounded-lg border active:scale-95 transition-all",
+                          themeClasses.border,
+                          themeClasses.bgHover
+                        )}
                       />
-                    </button>
-                    <VoiceEntryButton
-                      categories={categories}
-                      accountId={selectedAccountId}
-                      onPreviewChange={() => {}}
-                      onParsed={({
-                        sentence,
-                        amount: voiceAmount,
-                        categoryId,
-                        subcategoryId,
-                      }) => {
-                        if (voiceAmount != null && !isNaN(voiceAmount))
-                          setAmount(String(voiceAmount));
-                        if (categoryId) setSelectedCategoryId(categoryId);
-                        if (subcategoryId)
-                          setSelectedSubcategoryId(subcategoryId);
-                      }}
-                      onDraftCreated={() => {
-                        toast.success(
-                          "Voice entry saved! Check drafts to confirm."
-                        );
-                      }}
-                      className="p-1.5 rounded-lg neo-card bg-secondary/10 border border-secondary/30 hover:bg-secondary/20 active:scale-95 transition-all"
-                    />
+                    </div>
                   </div>
                 </div>
 
@@ -437,7 +453,7 @@ export default function MobileExpenseForm() {
                       "group relative p-3 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2.5 overflow-hidden",
                       isPrivate
                         ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow} hover:shadow-[0_0_25px_rgba(20,184,166,0.35),0_0_50px_rgba(6,182,212,0.2)]`
-                        : "neo-card border-[#1a2942]/60 hover:border-[#1a2942]"
+                        : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`
                     )}
                   >
                     {/* Animated background glow when private */}
@@ -525,7 +541,7 @@ export default function MobileExpenseForm() {
                         "w-full p-2.5 rounded-lg border text-left transition-all active:scale-[0.98] category-appear",
                         selectedAccountId === account.id
                           ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
-                          : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5"
+                          : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`
                       )}
                     >
                       <div className="flex items-center justify-between">
@@ -603,7 +619,7 @@ export default function MobileExpenseForm() {
                             "p-2.5 rounded-lg border text-left transition-all active:scale-95 min-h-[65px] category-appear",
                             active
                               ? "neo-card neo-glow-sm"
-                              : "neo-card border-[#1a2942] bg-bg-card-custom hover:border-[#1a2942]/80 hover:bg-primary/5",
+                              : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} hover:bg-primary/5`,
                             isSubmitting && "opacity-50 cursor-not-allowed"
                           )}
                         >

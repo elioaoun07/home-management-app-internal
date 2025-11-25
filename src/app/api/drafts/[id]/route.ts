@@ -61,6 +61,13 @@ export async function PATCH(
 
     if (error) throw error;
 
+    // Update account_balances.updated_at since this draft is now confirmed
+    // and will affect the balance calculation
+    await supabase
+      .from("account_balances")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("account_id", account_id);
+
     return NextResponse.json({ transaction });
   } catch (error: any) {
     console.error("Error confirming draft:", error);

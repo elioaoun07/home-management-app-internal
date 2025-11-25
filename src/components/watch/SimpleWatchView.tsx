@@ -3,6 +3,7 @@
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useDrafts } from "@/features/drafts/useDrafts";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
 import { qk } from "@/lib/queryKeys";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ interface Balance {
 }
 
 export default function SimpleWatchView() {
+  const themeClasses = useThemeClasses();
   const queryClient = useQueryClient();
   const [mounted, setMounted] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<"main" | "insights">(
@@ -305,13 +307,17 @@ export default function SimpleWatchView() {
             style={{
               padding: "14px 28px",
               borderRadius: "28px",
-              background: "linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%)",
+              background: themeClasses.isPink
+                ? "linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)"
+                : "linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%)",
               color: "white",
               border: "none",
               fontSize: "15px",
               fontWeight: "600",
               cursor: "pointer",
-              boxShadow: "0 4px 20px rgba(139, 92, 246, 0.5)",
+              boxShadow: themeClasses.isPink
+                ? "0 4px 20px rgba(236, 72, 153, 0.5)"
+                : "0 4px 20px rgba(139, 92, 246, 0.5)",
             }}
           >
             🔄 Reload
@@ -485,14 +491,18 @@ export default function SimpleWatchView() {
                 borderRadius: "50%",
                 background: recording
                   ? "linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%)"
-                  : "linear-gradient(135deg, #06b6d4 0%, #8b5cf6 50%, #ec4899 100%)",
+                  : themeClasses.isPink
+                    ? "linear-gradient(135deg, #ec4899 0%, #8b5cf6 50%, #06b6d4 100%)"
+                    : "linear-gradient(135deg, #06b6d4 0%, #8b5cf6 50%, #ec4899 100%)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
                 boxShadow: recording
                   ? "0 10px 40px rgba(239, 68, 68, 0.8), inset 0 3px 10px rgba(255,255,255,0.2), 0 0 0 0 rgba(239, 68, 68, 0.7)"
-                  : "0 10px 40px rgba(139, 92, 246, 0.6), inset 0 3px 10px rgba(255,255,255,0.2)",
+                  : themeClasses.isPink
+                    ? "0 10px 40px rgba(236, 72, 153, 0.6), inset 0 3px 10px rgba(255,255,255,0.2)"
+                    : "0 10px 40px rgba(139, 92, 246, 0.6), inset 0 3px 10px rgba(255,255,255,0.2)",
                 border: "3px solid rgba(255,255,255,0.3)",
                 animation: recording
                   ? "pulse 1.5s ease-in-out infinite"

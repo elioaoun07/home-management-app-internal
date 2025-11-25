@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useOnboarding } from "@/features/preferences/useOnboarding";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { createClient } from "@supabase/supabase-js";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -39,6 +40,7 @@ export default function UserMenuClient({ name, email, avatarUrl }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const { data: onboarding } = useOnboarding();
+  const themeClasses = useThemeClasses();
 
   // Redirect to onboarding walkthrough for new users (except on auth/welcome routes)
   useEffect(() => {
@@ -87,13 +89,15 @@ export default function UserMenuClient({ name, email, avatarUrl }: Props) {
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            className="flex items-center gap-1.5 p-1.5 h-auto rounded-lg bg-[#3b82f6]/10 backdrop-blur-sm border border-[#3b82f6]/20 hover:bg-[#3b82f6]/20 transition-all"
+            className={`flex items-center gap-1.5 p-1.5 h-auto rounded-lg ${themeClasses.bgSurface} backdrop-blur-sm ${themeClasses.border} ${themeClasses.bgHover} transition-all`}
           >
-            <Avatar className="h-7 w-7 ring-2 ring-[#06b6d4]/30">
+            <Avatar className={`h-7 w-7 ${themeClasses.ringSelection}`}>
               {avatarUrl ? (
                 <AvatarImage src={avatarUrl} alt={name} />
               ) : (
-                <AvatarFallback className="text-xs font-semibold bg-[#06b6d4]/20 text-[#06b6d4]">
+                <AvatarFallback
+                  className={`text-xs font-semibold ${themeClasses.bgSurface} ${themeClasses.labelText}`}
+                >
                   {initials || <UserIcon className="h-3.5 w-3.5" />}
                 </AvatarFallback>
               )}
@@ -103,43 +107,49 @@ export default function UserMenuClient({ name, email, avatarUrl }: Props) {
 
         <DropdownMenuContent
           align="end"
-          className="w-64 p-2 bg-[#1a2942] border-[#3b82f6]/20"
+          className={`w-64 p-2 ${themeClasses.modalBg} ${themeClasses.border}`}
         >
           <DropdownMenuLabel className="px-3 py-2">
             <div className="flex items-center gap-3">
-              <Avatar className="h-10 w-10 ring-2 ring-[#06b6d4]/30">
+              <Avatar className={`h-10 w-10 ${themeClasses.ringSelection}`}>
                 {avatarUrl ? (
                   <AvatarImage src={avatarUrl} alt={name} />
                 ) : (
-                  <AvatarFallback className="text-sm font-semibold bg-[#06b6d4]/20 text-[#06b6d4]">
+                  <AvatarFallback
+                    className={`text-sm font-semibold ${themeClasses.bgSurface} ${themeClasses.labelText}`}
+                  >
                     {initials || <UserIcon className="h-5 w-5" />}
                   </AvatarFallback>
                 )}
               </Avatar>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold truncate text-white">{name}</div>
-                <div className="text-xs text-[#38bdf8]/70 truncate">
+                <div
+                  className={`text-xs ${themeClasses.headerTextMuted} truncate`}
+                >
                   {email}
                 </div>
               </div>
             </div>
           </DropdownMenuLabel>
-          <DropdownMenuSeparator className="bg-[#3b82f6]/20" />
+          <DropdownMenuSeparator className={themeClasses.separatorBg} />
           <DropdownMenuItem
             onClick={() => setSettingsOpen(true)}
-            className="cursor-pointer rounded-lg py-2.5 text-white hover:bg-[#3b82f6]/10"
+            className={`cursor-pointer rounded-lg py-2.5 text-white ${themeClasses.hoverBgSubtle}`}
           >
-            <SettingsIcon className="mr-3 h-4 w-4 text-[#06b6d4]" />
+            <SettingsIcon
+              className={`mr-3 h-4 w-4 ${themeClasses.labelText}`}
+            />
             <span>Settings</span>
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => setLinkOpen(true)}
-            className="cursor-pointer rounded-lg py-2.5 text-white hover:bg-[#3b82f6]/10"
+            className={`cursor-pointer rounded-lg py-2.5 text-white ${themeClasses.hoverBgSubtle}`}
           >
-            <UserIcon className="mr-3 h-4 w-4 text-[#06b6d4]" />
+            <UserIcon className={`mr-3 h-4 w-4 ${themeClasses.labelText}`} />
             <span>Link household</span>
           </DropdownMenuItem>
-          <DropdownMenuSeparator className="bg-[#3b82f6]/20" />
+          <DropdownMenuSeparator className={themeClasses.separatorBg} />
           <DropdownMenuItem
             onClick={handleSignOut}
             className="cursor-pointer rounded-lg py-2.5 text-red-400 hover:bg-red-500/10"

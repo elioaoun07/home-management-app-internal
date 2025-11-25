@@ -122,7 +122,9 @@ export default function AccountBalance({
 
   if (error) {
     return (
-      <div className="neo-card bg-[#1a2942] border-yellow-500/20 p-4 mb-4">
+      <div
+        className={`neo-card ${themeClasses.surfaceBg} border-yellow-500/20 p-4 mb-4`}
+      >
         <div className="flex items-start gap-2">
           <div className="flex-1">
             <Label className="text-sm font-medium text-yellow-400">
@@ -140,10 +142,12 @@ export default function AccountBalance({
 
   if (isLoading) {
     return (
-      <div className="neo-card bg-[#1a2942] p-4 mb-4">
+      <div className={cn("neo-card p-4 mb-4", themeClasses.cardBg)}>
         <div className="animate-pulse">
-          <div className="h-4 bg-[#3b82f6]/20 rounded w-24 mb-2"></div>
-          <div className="h-8 bg-[#3b82f6]/20 rounded w-32"></div>
+          <div
+            className={cn("h-4 rounded w-24 mb-2", themeClasses.bgSurface)}
+          ></div>
+          <div className={cn("h-8 rounded w-32", themeClasses.bgSurface)}></div>
         </div>
       </div>
     );
@@ -252,24 +256,11 @@ export default function AccountBalance({
             </div>
           )}
         </div>
-        {!isEditing && (balance?.balance_set_at || balance?.updated_at) && (
+        {!isEditing && balance?.balance_set_at && (
           <div className="text-[10px] text-[hsl(var(--text-muted-light)/0.5)] text-right">
-            {balance?.balance_set_at && (
-              <>
-                <span className="font-medium">Set on</span>
-                <br />
-                <span>{new Date(balance.balance_set_at).toLocaleString()}</span>
-                {balance?.updated_at && <br />}
-              </>
-            )}
-
-            {balance?.updated_at && (
-              <>
-                <span className="font-medium">Updated</span>
-                <br />
-                <span>{new Date(balance.updated_at).toLocaleString()}</span>
-              </>
-            )}
+            <span className="font-medium">Set on</span>
+            <br />
+            <span>{new Date(balance.balance_set_at).toLocaleString()}</span>
           </div>
         )}
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useEffect, useState } from "react";
 
 interface ErrorLog {
@@ -13,6 +14,7 @@ interface ErrorLog {
 }
 
 export default function ErrorLogsPage() {
+  const themeClasses = useThemeClasses();
   const [logs, setLogs] = useState<ErrorLog[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,17 +38,21 @@ export default function ErrorLogsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a1628] p-4 flex items-center justify-center">
-        <div className="text-[#38bdf8]">Loading logs...</div>
+      <div
+        className={`min-h-screen ${themeClasses.pageBg} p-4 flex items-center justify-center`}
+      >
+        <div className={themeClasses.loadingText}>Loading logs...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a1628] p-4">
+    <div className={`min-h-screen ${themeClasses.pageBg} p-4`}>
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-[#38bdf8]">Error Logs</h1>
+          <h1 className={`text-2xl font-bold ${themeClasses.headerText}`}>
+            Error Logs
+          </h1>
           <button
             onClick={fetchLogs}
             className="px-4 py-2 bg-[#38bdf8] text-white rounded-lg text-sm"
@@ -71,7 +77,9 @@ export default function ErrorLogsPage() {
                       {log.error_message}
                     </div>
                     {log.component_name && (
-                      <div className="text-xs text-[#38bdf8] mb-2">
+                      <div
+                        className={`text-xs ${themeClasses.headerText} mb-2`}
+                      >
                         Component: {log.component_name}
                       </div>
                     )}
@@ -83,7 +91,9 @@ export default function ErrorLogsPage() {
 
                 {log.error_stack && (
                   <details className="mt-2">
-                    <summary className="cursor-pointer text-xs text-[#38bdf8] hover:underline">
+                    <summary
+                      className={`cursor-pointer text-xs ${themeClasses.headerText} hover:underline`}
+                    >
                       Stack trace
                     </summary>
                     <pre className="mt-2 text-xs bg-black/30 p-3 rounded overflow-x-auto text-gray-300">

@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useDrafts } from "@/features/drafts/useDrafts";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { qk } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,6 +23,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 export default function DraftsPage() {
+  const themeClasses = useThemeClasses();
   const { data: drafts = [], isLoading: loading } = useDrafts();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -125,10 +127,14 @@ export default function DraftsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a1628] flex items-center justify-center">
+      <div
+        className={`min-h-screen ${themeClasses.bgPage} flex items-center justify-center`}
+      >
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-[#06b6d4] border-t-transparent rounded-full animate-spin" />
-          <p className="text-[#06b6d4] text-sm font-medium">
+          <div
+            className={`w-8 h-8 border-2 ${themeClasses.spinnerBorder} border-t-transparent rounded-full animate-spin`}
+          />
+          <p className={`${themeClasses.loadingText} text-sm font-medium`}>
             Loading drafts...
           </p>
         </div>
@@ -138,10 +144,16 @@ export default function DraftsPage() {
 
   if (drafts.length === 0) {
     return (
-      <div className="min-h-screen bg-[#0a1628] flex items-center justify-center p-6">
+      <div
+        className={`min-h-screen ${themeClasses.bgPage} flex items-center justify-center p-6`}
+      >
         <div className="text-center max-w-sm">
-          <div className="w-20 h-20 mx-auto mb-6 bg-[#06b6d4]/10 rounded-full flex items-center justify-center">
-            <MicIcon className="w-10 h-10 text-[#06b6d4] drop-shadow-[0_0_15px_rgba(6,182,212,0.6)]" />
+          <div
+            className={`w-20 h-20 mx-auto mb-6 ${themeClasses.bgSurface} rounded-full flex items-center justify-center`}
+          >
+            <MicIcon
+              className={`w-10 h-10 ${themeClasses.labelText} ${themeClasses.spinnerGlow}`}
+            />
           </div>
           <h2 className="text-2xl font-bold text-white mb-3">
             No Draft Transactions
@@ -156,16 +168,24 @@ export default function DraftsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a1628] pb-24">
+    <div className={`min-h-screen ${themeClasses.bgPage} pb-24`}>
       <div className="max-w-2xl mx-auto p-4 space-y-4">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <div className="relative">
-            <div className="w-10 h-10 bg-[#06b6d4]/20 rounded-full flex items-center justify-center">
-              <MicIcon className="w-5 h-5 text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+            <div
+              className={`w-10 h-10 ${themeClasses.bgSurface} rounded-full flex items-center justify-center`}
+            >
+              <MicIcon
+                className={`w-5 h-5 ${themeClasses.labelText} ${themeClasses.iconGlow}`}
+              />
             </div>
-            <div className="absolute -top-1 -right-1 w-5 h-5 bg-[#06b6d4] rounded-full flex items-center justify-center">
-              <span className="text-[10px] font-bold text-[#0a1628]">
+            <div
+              className={`absolute -top-1 -right-1 w-5 h-5 ${themeClasses.badgeBg} rounded-full flex items-center justify-center`}
+            >
+              <span
+                className={`text-[10px] font-bold ${themeClasses.bgPage.includes("1a0a14") ? "text-[#1a0a14]" : "text-[#0a1628]"}`}
+              >
                 {drafts.length}
               </span>
             </div>
@@ -186,16 +206,20 @@ export default function DraftsPage() {
             <div
               key={draft.id}
               className={cn(
-                "rounded-2xl p-5 space-y-4 bg-[#1a2942] border transition-all",
+                `rounded-2xl p-5 space-y-4 ${themeClasses.surfaceBg} border transition-all`,
                 isEditing
-                  ? "border-[#06b6d4] shadow-lg shadow-[#06b6d4]/20"
-                  : "border-[#1a2942] hover:border-[#2a3952]"
+                  ? `${themeClasses.borderAccent} shadow-lg ${themeClasses.glow}`
+                  : `${themeClasses.border} ${themeClasses.borderHover}`
               )}
             >
               {/* Voice transcript */}
               {draft.voice_transcript && (
-                <div className="flex items-start gap-3 bg-[#0a1628]/70 p-4 rounded-xl border border-[#1e3a4f]">
-                  <MicIcon className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#06b6d4] drop-shadow-[0_0_6px_rgba(6,182,212,0.5)]" />
+                <div
+                  className={`flex items-start gap-3 ${themeClasses.bgPage}/70 p-4 rounded-xl border ${themeClasses.border}`}
+                >
+                  <MicIcon
+                    className={`w-4 h-4 mt-0.5 flex-shrink-0 ${themeClasses.text} ${themeClasses.iconGlow}`}
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm italic text-[#94a3b8] leading-relaxed">
                       &ldquo;{draft.voice_transcript}&rdquo;
@@ -210,7 +234,9 @@ export default function DraftsPage() {
                   {/* Edit Form */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium text-[#06b6d4]">
+                      <Label
+                        className={`text-sm font-medium ${themeClasses.labelText}`}
+                      >
                         Amount
                       </Label>
                       <Input
@@ -220,12 +246,14 @@ export default function DraftsPage() {
                         onChange={(e) =>
                           setEditForm((f) => ({ ...f, amount: e.target.value }))
                         }
-                        className="h-11 bg-[#0a1628] border-[#06b6d4]/30 text-white text-base focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20"
+                        className={`h-11 ${themeClasses.formControlBg} text-white text-base`}
                         placeholder="0.00"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium text-[#06b6d4]">
+                      <Label
+                        className={`text-sm font-medium ${themeClasses.labelText}`}
+                      >
                         Date
                       </Label>
                       <Input
@@ -234,13 +262,15 @@ export default function DraftsPage() {
                         onChange={(e) =>
                           setEditForm((f) => ({ ...f, date: e.target.value }))
                         }
-                        className="h-11 bg-[#0a1628] border-[#06b6d4]/30 text-white text-base focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20"
+                        className={`h-11 ${themeClasses.bgPage} ${themeClasses.border} text-white text-base ${themeClasses.focusRing}`}
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-[#06b6d4]">
+                    <Label
+                      className={`text-sm font-medium ${themeClasses.labelText}`}
+                    >
                       Account
                     </Label>
                     <select
@@ -251,7 +281,7 @@ export default function DraftsPage() {
                           account_id: e.target.value,
                         }))
                       }
-                      className="w-full h-11 rounded-lg border bg-[#0a1628] border-[#06b6d4]/30 px-3 text-base text-white focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20 focus:outline-none"
+                      className={`w-full h-11 rounded-lg border ${themeClasses.bgPage} ${themeClasses.border} px-3 text-base text-white ${themeClasses.focusRing} focus:outline-none`}
                     >
                       {accounts.map((acc: any) => (
                         <option key={acc.id} value={acc.id}>
@@ -262,7 +292,9 @@ export default function DraftsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-[#06b6d4]">
+                    <Label
+                      className={`text-sm font-medium ${themeClasses.labelText}`}
+                    >
                       Category
                     </Label>
                     <select
@@ -274,7 +306,7 @@ export default function DraftsPage() {
                           subcategory_id: "",
                         }));
                       }}
-                      className="w-full h-11 rounded-lg border bg-[#0a1628] border-[#06b6d4]/30 px-3 text-base text-white focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20 focus:outline-none"
+                      className={`w-full h-11 rounded-lg border ${themeClasses.bgPage} ${themeClasses.border} px-3 text-base text-white ${themeClasses.focusRing} focus:outline-none`}
                     >
                       <option value="">Select category...</option>
                       {categories
@@ -291,7 +323,9 @@ export default function DraftsPage() {
 
                   {editForm.category_id && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium text-[#06b6d4]">
+                      <Label
+                        className={`text-sm font-medium ${themeClasses.labelText}`}
+                      >
                         Subcategory
                       </Label>
                       <select
@@ -302,7 +336,7 @@ export default function DraftsPage() {
                             subcategory_id: e.target.value,
                           }))
                         }
-                        className="w-full h-11 rounded-lg border bg-[#0a1628] border-[#06b6d4]/30 px-3 text-base text-white focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20 focus:outline-none"
+                        className={`w-full h-11 rounded-lg border ${themeClasses.bgPage} ${themeClasses.border} px-3 text-base text-white ${themeClasses.focusRing} focus:outline-none`}
                       >
                         <option value="">None</option>
                         {categories
@@ -321,7 +355,9 @@ export default function DraftsPage() {
                   )}
 
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-[#06b6d4]">
+                    <Label
+                      className={`text-sm font-medium ${themeClasses.labelText}`}
+                    >
                       Description
                     </Label>
                     <Input
@@ -332,7 +368,7 @@ export default function DraftsPage() {
                           description: e.target.value,
                         }))
                       }
-                      className="h-11 bg-[#0a1628] border-[#06b6d4]/30 text-white text-base focus:border-[#06b6d4] focus:ring-2 focus:ring-[#06b6d4]/20"
+                      className={`h-11 ${themeClasses.bgPage} ${themeClasses.border} text-white text-base ${themeClasses.focusRing}`}
                       placeholder="Optional notes..."
                     />
                   </div>
@@ -340,15 +376,17 @@ export default function DraftsPage() {
                   <div className="flex gap-3 pt-2">
                     <Button
                       onClick={() => confirmDraft(draft.id)}
-                      className="flex-1 h-12 bg-[#06b6d4] hover:bg-[#0891b2] text-white font-medium rounded-xl shadow-lg shadow-[#06b6d4]/25 transition-all"
+                      className={`flex-1 h-12 ${themeClasses.isPink ? "bg-pink-500 hover:bg-pink-600 shadow-pink-500/25" : "bg-cyan-500 hover:bg-cyan-600 shadow-cyan-500/25"} text-white font-medium rounded-xl shadow-lg transition-all`}
                     >
-                      <CheckIcon className="w-5 h-5 mr-2 drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]" />
+                      <CheckIcon
+                        className={`w-5 h-5 mr-2 ${themeClasses.iconGlow}`}
+                      />
                       Confirm & Save
                     </Button>
                     <Button
                       variant="outline"
                       onClick={cancelEditing}
-                      className="h-12 px-6 border-[#3b82f6]/30 text-[#94a3b8] hover:bg-[#1a2942] hover:text-white rounded-xl"
+                      className={`h-12 px-6 ${themeClasses.border} ${themeClasses.textMuted} ${themeClasses.bgHover} hover:text-white rounded-xl`}
                     >
                       <XIcon className="w-5 h-5 drop-shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
                     </Button>
@@ -366,7 +404,7 @@ export default function DraftsPage() {
                         </div>
                         <Badge
                           variant="outline"
-                          className="text-xs border-[#06b6d4]/40 text-[#06b6d4] bg-[#06b6d4]/5"
+                          className={`text-xs ${themeClasses.border} ${themeClasses.text} bg-primary/5`}
                         >
                           {draft.accounts.name}
                         </Badge>
@@ -375,7 +413,7 @@ export default function DraftsPage() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => startEditing(draft)}
-                          className="w-10 h-10 rounded-full bg-[#06b6d4]/10 hover:bg-[#06b6d4]/20 text-[#06b6d4] flex items-center justify-center transition-colors"
+                          className={`w-10 h-10 rounded-full bg-primary/10 hover:bg-primary/20 ${themeClasses.text} flex items-center justify-center transition-colors`}
                         >
                           <PencilIcon className="w-4 h-4 drop-shadow-[0_0_6px_rgba(56,189,248,0.5)]" />
                         </button>

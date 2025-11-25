@@ -5,7 +5,9 @@ import MobileExpenseForm from "@/components/expense/MobileExpenseForm";
 import SimpleWatchView from "@/components/watch/SimpleWatchView";
 import { WatchErrorBoundary } from "@/components/watch/WatchErrorBoundary";
 import { useTab } from "@/contexts/TabContext";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
+import { cn } from "@/lib/utils";
 import { Suspense, lazy } from "react";
 
 // Lazy load pages to reduce bundle size
@@ -14,12 +16,18 @@ const RecurringPage = lazy(() => import("@/app/recurring/page"));
 export default function TabContainer() {
   const { viewMode, isLoaded } = useViewMode();
   const { activeTab } = useTab(); // Always call hooks at the top level
+  const themeClasses = useThemeClasses();
 
   // Show loading while view mode is being loaded from localStorage
   if (!isLoaded) {
     return (
-      <div className="min-h-screen bg-[#0a1628] flex items-center justify-center">
-        <div className="text-[#38bdf8]">Loading...</div>
+      <div
+        className={cn(
+          "min-h-screen flex items-center justify-center",
+          themeClasses.bgPage
+        )}
+      >
+        <div className={cn("animate-pulse", themeClasses.text)}>Loading...</div>
       </div>
     );
   }
@@ -36,9 +44,14 @@ export default function TabContainer() {
   // Web view - to be implemented later
   if (viewMode === "web") {
     return (
-      <div className="min-h-screen bg-[#0a1628] flex items-center justify-center p-8">
+      <div
+        className={cn(
+          "min-h-screen flex items-center justify-center p-8",
+          themeClasses.bgPage
+        )}
+      >
         <div className="neo-card p-8 text-center max-w-md">
-          <h2 className="text-2xl font-bold text-[#38bdf8] mb-4">
+          <h2 className={cn("text-2xl font-bold mb-4", themeClasses.text)}>
             Web View Coming Soon
           </h2>
           <p className="text-[hsl(var(--text-muted))]">
@@ -49,6 +62,18 @@ export default function TabContainer() {
       </div>
     );
   }
+
+  // Loading fallback component
+  const LoadingFallback = () => (
+    <div
+      className={cn(
+        "min-h-screen flex items-center justify-center",
+        themeClasses.bgPage
+      )}
+    >
+      <div className={cn("animate-pulse", themeClasses.text)}>Loading...</div>
+    </div>
+  );
 
   // Default mobile view
   return (
@@ -68,13 +93,7 @@ export default function TabContainer() {
 
       {/* Recurring: Add top padding for fixed header */}
       <div className={activeTab === "recurring" ? "block pt-14" : "hidden"}>
-        <Suspense
-          fallback={
-            <div className="min-h-screen bg-[#0a1628] flex items-center justify-center">
-              <div className="text-[#38bdf8]">Loading...</div>
-            </div>
-          }
-        >
+        <Suspense fallback={<LoadingFallback />}>
           <RecurringPage />
         </Suspense>
       </div>

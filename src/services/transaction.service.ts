@@ -34,6 +34,26 @@ export interface TransactionService {
 export class SupabaseTransactionService implements TransactionService {
   constructor(private supabase: SupabaseClient) {}
 
+  /**
+   * Updates the updated_at timestamp on account_balances when a confirmed transaction
+   * affects the balance. Draft transactions should NOT trigger this update.
+   */
+  private async touchAccountBalanceUpdatedAt(accountId: string): Promise<void> {
+    try {
+      const { error } = await this.supabase
+        .from("account_balances")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("account_id", accountId);
+
+      if (error) {
+        console.error("Error updating account_balances.updated_at:", error);
+        // Non-critical error - don't throw, just log
+      }
+    } catch (e) {
+      console.error("Failed to touch account balance updated_at:", e);
+    }
+  }
+
   async getTransactions(userId: string, filters: TransactionFilters = {}) {
     const { start, end, limit = 200 } = filters;
 
@@ -344,6 +364,10 @@ export class SupabaseTransactionService implements TransactionService {
       throw new Error("Failed to create transaction");
     }
 
+    // Update account_balances.updated_at for confirmed transactions
+    // Note: Transactions created via this service are always confirmed (not drafts)
+    await this.touchAccountBalanceUpdatedAt(account_id);
+
     return created;
   }
 
@@ -408,12 +432,22 @@ export class SupabaseTransactionService implements TransactionService {
       .update(updateFields)
       .eq("id", id)
       .eq("user_id", userId)
-      .select()
+      .select("*, account_id, is_draft")
       .single();
 
     if (error) {
       console.error("Error updating transaction:", error);
       throw new Error("Failed to update transaction");
+    }
+
+    // Update account_balances.updated_at if this is a confirmed transaction
+    // and we updated fields that affect the balance (amount or date)
+    if (
+      updated &&
+      !updated.is_draft &&
+      (updateFields.amount !== undefined || updateFields.date !== undefined)
+    ) {
+      await this.touchAccountBalanceUpdatedAt(updated.account_id);
     }
 
     return updated;

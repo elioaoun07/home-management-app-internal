@@ -2,6 +2,7 @@
 
 import { Edit2Icon, Trash2Icon } from "@/components/icons/FuturisticIcons";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format } from "date-fns";
@@ -58,6 +59,7 @@ export default function SwipeableTransactionItem({
   // If I have pink theme: my transactions=pink border, partner's=blue border
   // If I have blue theme: my transactions=blue border, partner's=pink border
   const { theme: currentUserTheme } = useTheme();
+  const themeClasses = useThemeClasses();
 
   const SWIPE_THRESHOLD = 80; // pixels to trigger action
   const MAX_OFFSET = 120; // max swipe distance
@@ -173,8 +175,12 @@ export default function SwipeableTransactionItem({
             offset > 30 ? "opacity-100" : "opacity-0"
           )}
         >
-          <Edit2Icon className="w-5 h-5 text-blue-400 drop-shadow-[0_0_8px_rgba(96,165,250,0.6)]" />
-          <span className="text-sm font-medium text-blue-400">Edit</span>
+          <Edit2Icon
+            className={`w-5 h-5 ${themeClasses.editText} ${themeClasses.editGlow}`}
+          />
+          <span className={`text-sm font-medium ${themeClasses.editText}`}>
+            Edit
+          </span>
         </div>
 
         {/* Delete (Left side - revealed by swiping left) */}
@@ -227,7 +233,9 @@ export default function SwipeableTransactionItem({
                   transaction.category || undefined
                 );
                 return (
-                  <IconComponent className="w-5 h-5 text-[#06b6d4]/70 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+                  <IconComponent
+                    className={`w-5 h-5 ${themeClasses.labelTextMuted} ${themeClasses.iconGlow}`}
+                  />
                 );
               })()}
               <div className="flex-1 min-w-0">

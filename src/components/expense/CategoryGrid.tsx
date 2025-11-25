@@ -4,6 +4,7 @@ import { PencilIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useState } from "react";
 import AddCategoryDialog from "./AddCategoryDialog";
 import CategoryManagerDialog from "./CategoryManagerDialog";
@@ -19,6 +20,7 @@ export default function CategoryGrid({
   selectedCategoryId,
   onCategorySelect,
 }: Props) {
+  const themeClasses = useThemeClasses();
   const {
     data: categories = [],
     isLoading,
@@ -142,7 +144,7 @@ export default function CategoryGrid({
         <Button
           variant="outline"
           type="button"
-          className="justify-start h-14 shadow-[0_0_0_2px_rgba(6,182,212,0.4)_inset] hover:shadow-[0_0_0_2px_rgba(6,182,212,0.8)_inset,0_0_20px_rgba(6,182,212,0.3)] hover:bg-[#06b6d4]/10 transition-all hover:scale-105"
+          className={`justify-start h-14 transition-all hover:scale-105 ${themeClasses.buttonOutline}`}
           onClick={() => setAddDialogOpen(true)}
         >
           <span className="text-xl mr-2">+</span>

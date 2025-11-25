@@ -2,6 +2,7 @@
 
 import { CheckIcon, PlusIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useState } from "react";
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export default function AddExpenseButton({ disabled = true, onSubmit }: Props) {
+  const themeClasses = useThemeClasses();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -48,7 +50,9 @@ export default function AddExpenseButton({ disabled = true, onSubmit }: Props) {
         </span>
       ) : (
         <span className="flex items-center gap-2">
-          <PlusIcon className="w-5 h-5 transition-transform group-hover:rotate-90 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+          <PlusIcon
+            className={`w-5 h-5 transition-transform group-hover:rotate-90 ${themeClasses.iconGlow}`}
+          />
           Add Expense
         </span>
       )}

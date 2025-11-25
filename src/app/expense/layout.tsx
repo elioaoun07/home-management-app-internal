@@ -4,6 +4,7 @@ import { ExpenseFormProvider } from "@/components/expense/ExpenseFormContext";
 import ExpenseTagsBarWrapper from "@/components/expense/ExpenseTagsBarWrapper";
 import ExpenseShell from "@/components/layouts/ExpenseShell";
 import { useTab } from "@/contexts/TabContext";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
 import React from "react";
 
@@ -12,6 +13,7 @@ export default function ExpenseLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const themeClasses = useThemeClasses();
   const { activeTab } = useTab();
   const { viewMode, isLoaded } = useViewMode();
 
@@ -21,8 +23,10 @@ export default function ExpenseLayout({
   // Wait for view mode to load before rendering
   if (!isLoaded) {
     return (
-      <div className="min-h-screen bg-[#0a1628] flex items-center justify-center">
-        <div className="text-[#38bdf8]">Loading...</div>
+      <div
+        className={`min-h-screen ${themeClasses.pageBg} flex items-center justify-center`}
+      >
+        <div className={themeClasses.loadingText}>Loading...</div>
       </div>
     );
   }

@@ -420,10 +420,14 @@ export default function RecurringPage() {
         {/* Add/Edit Drawer */}
         {showAddDrawer && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end">
-            <div className="w-full bg-[#1a2942] rounded-t-3xl h-[92vh] flex flex-col">
+            <div
+              className={`w-full ${themeClasses.surfaceBg} rounded-t-3xl h-[92vh] flex flex-col`}
+            >
               {/* Fixed Header */}
-              <div className="flex items-center justify-between p-6 pb-4 border-b border-[#3b82f6]/10 flex-shrink-0">
-                <h2 className="text-xl font-bold text-[#38bdf8]">
+              <div
+                className={`flex items-center justify-between p-6 pb-4 border-b ${themeClasses.border} flex-shrink-0`}
+              >
+                <h2 className={`text-xl font-bold ${themeClasses.headerText}`}>
                   {editingPayment ? "Edit Payment" : "Add Recurring Payment"}
                 </h2>
                 <button
@@ -431,9 +435,9 @@ export default function RecurringPage() {
                     setShowAddDrawer(false);
                     setEditingPayment(null);
                   }}
-                  className="p-2 rounded-lg bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20"
+                  className={`p-2 rounded-lg ${themeClasses.bgSurface} ${themeClasses.bgHover}`}
                 >
-                  <XIcon className="w-5 h-5 text-[#38bdf8]" />
+                  <XIcon className={`w-5 h-5 ${themeClasses.headerText}`} />
                 </button>
               </div>
 
@@ -441,7 +445,9 @@ export default function RecurringPage() {
               <div className="overflow-y-auto flex-1 p-6 pt-4">
                 <div className="space-y-4 pb-32">
                   <div>
-                    <Label className="text-sm text-[#38bdf8] mb-2 block">
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
                       Name *
                     </Label>
                     <Input
@@ -450,12 +456,14 @@ export default function RecurringPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, name: e.target.value })
                       }
-                      className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                      className={`${themeClasses.formControlBg} text-white`}
                     />
                   </div>
 
                   <div>
-                    <Label className="text-sm text-[#38bdf8] mb-2 block">
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
                       Amount *
                     </Label>
                     <Input
@@ -465,12 +473,14 @@ export default function RecurringPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, amount: e.target.value })
                       }
-                      className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                      className={`${themeClasses.formControlBg} text-white`}
                     />
                   </div>
 
                   <div>
-                    <Label className="text-sm text-[#38bdf8] mb-2 block">
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
                       Account *
                     </Label>
                     <Select
@@ -479,7 +489,9 @@ export default function RecurringPage() {
                         setFormData({ ...formData, account_id: value })
                       }
                     >
-                      <SelectTrigger className="bg-[#0a1628] border-[#3b82f6]/30 text-white">
+                      <SelectTrigger
+                        className={`${themeClasses.formControlBg} text-white`}
+                      >
                         <SelectValue placeholder="Select account" />
                       </SelectTrigger>
                       <SelectContent>
@@ -493,7 +505,9 @@ export default function RecurringPage() {
                   </div>
 
                   <div>
-                    <Label className="text-sm text-[#38bdf8] mb-2 block">
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
                       Category
                     </Label>
                     <Select
@@ -506,7 +520,9 @@ export default function RecurringPage() {
                         })
                       }
                     >
-                      <SelectTrigger className="bg-[#0a1628] border-[#3b82f6]/30 text-white">
+                      <SelectTrigger
+                        className={`${themeClasses.formControlBg} text-white`}
+                      >
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -523,7 +539,9 @@ export default function RecurringPage() {
 
                   {subcategories.length > 0 && (
                     <div>
-                      <Label className="text-sm text-[#38bdf8] mb-2 block">
+                      <Label
+                        className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                      >
                         Subcategory
                       </Label>
                       <Select
@@ -532,7 +550,9 @@ export default function RecurringPage() {
                           setFormData({ ...formData, subcategory_id: value })
                         }
                       >
-                        <SelectTrigger className="bg-[#0a1628] border-[#3b82f6]/30 text-white">
+                        <SelectTrigger
+                          className={`${themeClasses.formControlBg} text-white`}
+                        >
                           <SelectValue placeholder="Select subcategory" />
                         </SelectTrigger>
                         <SelectContent>
@@ -547,7 +567,9 @@ export default function RecurringPage() {
                   )}
 
                   <div>
-                    <Label className="text-sm text-[#38bdf8] mb-2 block">
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
                       Repeat *
                     </Label>
                     <Select
@@ -556,7 +578,9 @@ export default function RecurringPage() {
                         setFormData({ ...formData, recurrence_type: value })
                       }
                     >
-                      <SelectTrigger className="bg-[#0a1628] border-[#3b82f6]/30 text-white">
+                      <SelectTrigger
+                        className={`${themeClasses.formControlBg} text-white`}
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -570,7 +594,9 @@ export default function RecurringPage() {
 
                   {formData.recurrence_type === "monthly" && (
                     <div>
-                      <Label className="text-sm text-[#38bdf8] mb-2 block">
+                      <Label
+                        className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                      >
                         Day of Month
                       </Label>
                       <Input
@@ -585,14 +611,16 @@ export default function RecurringPage() {
                             recurrence_day: e.target.value,
                           })
                         }
-                        className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                        className={`${themeClasses.formControlBg} text-white`}
                       />
                     </div>
                   )}
 
                   {formData.recurrence_type === "weekly" && (
                     <div>
-                      <Label className="text-sm text-[#38bdf8] mb-2 block">
+                      <Label
+                        className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                      >
                         Day of Week
                       </Label>
                       <Select
@@ -601,7 +629,9 @@ export default function RecurringPage() {
                           setFormData({ ...formData, recurrence_day: value })
                         }
                       >
-                        <SelectTrigger className="bg-[#0a1628] border-[#3b82f6]/30 text-white">
+                        <SelectTrigger
+                          className={`${themeClasses.formControlBg} text-white`}
+                        >
                           <SelectValue placeholder="Select day" />
                         </SelectTrigger>
                         <SelectContent>
@@ -618,7 +648,9 @@ export default function RecurringPage() {
                   )}
 
                   <div>
-                    <Label className="text-sm text-[#38bdf8] mb-2 block">
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
                       Next Due Date *
                     </Label>
                     <Input
@@ -630,12 +662,14 @@ export default function RecurringPage() {
                           next_due_date: e.target.value,
                         })
                       }
-                      className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                      className={`${themeClasses.formControlBg} text-white`}
                     />
                   </div>
 
                   <div>
-                    <Label className="text-sm text-[#38bdf8] mb-2 block">
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
                       Description
                     </Label>
                     <Input
@@ -647,7 +681,7 @@ export default function RecurringPage() {
                           description: e.target.value,
                         })
                       }
-                      className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                      className={`${themeClasses.formControlBg} text-white`}
                     />
                   </div>
 
@@ -673,16 +707,18 @@ export default function RecurringPage() {
         {/* Confirm Payment Dialog */}
         {confirmingPayment && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-[#1a2942] rounded-2xl p-6 max-w-md w-full">
+            <div
+              className={`${themeClasses.surfaceBg} rounded-2xl p-6 max-w-md w-full`}
+            >
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-[#38bdf8]">
+                <h2 className={`text-xl font-bold ${themeClasses.headerText}`}>
                   Confirm Payment
                 </h2>
                 <button
                   onClick={() => setConfirmingPayment(null)}
-                  className="p-2 rounded-lg bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20"
+                  className={`p-2 rounded-lg ${themeClasses.bgSurface} ${themeClasses.bgHover}`}
                 >
-                  <XIcon className="w-5 h-5 text-[#38bdf8]" />
+                  <XIcon className={`w-5 h-5 ${themeClasses.headerText}`} />
                 </button>
               </div>
 
@@ -690,14 +726,16 @@ export default function RecurringPage() {
                 <h3 className="font-semibold text-white text-lg mb-2">
                   {confirmingPayment.name}
                 </h3>
-                <p className="text-sm text-[#38bdf8]/60">
+                <p className={`text-sm ${themeClasses.headerTextMuted}`}>
                   This will create a transaction and schedule the next payment.
                 </p>
               </div>
 
               <div className="space-y-4 mb-6">
                 <div>
-                  <Label className="text-sm text-[#38bdf8] mb-2 block">
+                  <Label
+                    className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                  >
                     Amount
                   </Label>
                   <Input
@@ -709,12 +747,14 @@ export default function RecurringPage() {
                         amount: e.target.value,
                       })
                     }
-                    className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                    className={`${themeClasses.formControlBg} text-white`}
                   />
                 </div>
 
                 <div>
-                  <Label className="text-sm text-[#38bdf8] mb-2 block">
+                  <Label
+                    className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                  >
                     Description
                   </Label>
                   <Input
@@ -725,12 +765,14 @@ export default function RecurringPage() {
                         description: e.target.value,
                       })
                     }
-                    className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                    className={`${themeClasses.formControlBg} text-white`}
                   />
                 </div>
 
                 <div>
-                  <Label className="text-sm text-[#38bdf8] mb-2 block">
+                  <Label
+                    className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                  >
                     Date
                   </Label>
                   <Input
@@ -742,7 +784,7 @@ export default function RecurringPage() {
                         date: e.target.value,
                       })
                     }
-                    className="bg-[#0a1628] border-[#3b82f6]/30 text-white"
+                    className={`${themeClasses.formControlBg} text-white`}
                   />
                 </div>
               </div>

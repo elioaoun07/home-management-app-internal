@@ -66,6 +66,31 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning className="scroll-smooth">
+      <head>
+        {/* Critical early CSS to prevent ANY flash of wrong theme color */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function(){
+                try {
+                  var colorTheme = localStorage.getItem('color-theme') || 'blue';
+                  var bgColor = colorTheme === 'pink' ? '#1a0a14' : '#0a1628';
+                  
+                  // Create and inject critical CSS immediately with highest specificity
+                  var style = document.createElement('style');
+                  style.id = 'critical-theme-css';
+                  style.innerHTML = 'html,html body,body{background-color:' + bgColor + '!important;background:' + bgColor + '!important;}';
+                  document.head.appendChild(style);
+                  
+                  // Set data-theme attribute on html element
+                  document.documentElement.setAttribute('data-theme', colorTheme);
+                  document.documentElement.style.backgroundColor = bgColor;
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body suppressHydrationWarning className="overflow-x-hidden">
         {/* Early theme apply to avoid flash of incorrect theme */}
         <script
@@ -86,9 +111,12 @@ export default async function RootLayout({
                     d.classList.remove('dark');
                   }
                   
-                // Apply color theme (blue or pink) - will be replaced by ThemeProvider
-                var colorTheme = localStorage.getItem('color-theme') || 'blue';
-                document.documentElement.setAttribute('data-theme', colorTheme);
+                  // Apply color theme (blue or pink) - reinforce the data-theme attribute
+                  var colorTheme = localStorage.getItem('color-theme') || 'blue';
+                  document.documentElement.setAttribute('data-theme', colorTheme);
+                  
+                  // Set body background immediately based on theme to prevent flash
+                  document.body.style.backgroundColor = colorTheme === 'pink' ? '#1a0a14' : '#0a1628';
                 } catch(e) {}
               })();
             `,

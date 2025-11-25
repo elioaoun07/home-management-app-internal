@@ -30,32 +30,34 @@ export default function AmountInput({ value, onChange, rightExtra }: Props) {
         <DollarSignIcon className={`h-4 w-4 ${themeClasses.glow}`} />
         Amount
       </Label>
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">
-            $
-          </span>
-          <Input
-            id="amount"
-            type="number"
-            inputMode="decimal"
-            placeholder="0.00"
-            value={value}
-            onChange={(e) => onChange?.(e.target.value)}
-            className={`pl-8 h-12 text-lg font-semibold transition-all focus:ring-0 focus-visible:ring-0 ${themeClasses.inputFocusForce}`}
-          />
+      <div className="relative flex items-center">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold z-10">
+          $
+        </span>
+        <Input
+          id="amount"
+          type="number"
+          inputMode="decimal"
+          placeholder="0.00"
+          value={value}
+          onChange={(e) => onChange?.(e.target.value)}
+          className={`pl-8 pr-24 h-12 text-lg font-semibold transition-all focus:ring-0 focus-visible:ring-0 ${themeClasses.inputFocusForce}`}
+        />
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={`h-8 w-8 transition-all ${themeClasses.bgHover}`}
+            aria-label="Open calculator"
+            onClick={() => setCalcOpen(true)}
+          >
+            <CalculatorIcon
+              className={`h-5 w-5 ${themeClasses.text} ${themeClasses.glow}`}
+            />
+          </Button>
+          {rightExtra}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className={`h-12 w-12 transition-all ${themeClasses.buttonGhost}`}
-          aria-label="Open calculator"
-          onClick={() => setCalcOpen(true)}
-        >
-          <CalculatorIcon className={`h-5 w-5 ${themeClasses.glow}`} />
-        </Button>
-        {rightExtra}
       </div>
 
       <CalculatorDialog

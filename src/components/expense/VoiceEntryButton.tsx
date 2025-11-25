@@ -1,10 +1,11 @@
 "use client";
 
 import { MicIcon, SquareIcon } from "@/components/icons/FuturisticIcons";
-import { Button } from "@/components/ui/button";
 import type { UICategory } from "@/features/categories/useCategoriesQuery";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
 import { qk } from "@/lib/queryKeys";
+import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -168,42 +169,45 @@ export default function VoiceEntryButton({
     setPreview("");
   };
 
-  return (
-    <div className={className}>
-      <div className="relative inline-flex items-center">
-        <Button
-          type="button"
-          size="icon"
-          variant={recording ? "destructive" : "outline"}
-          onClick={recording ? stop : start}
-          disabled={!supported}
-          aria-label={recording ? "Stop voice input" : "Start voice input"}
-          title={recording ? "Stop voice input" : "Start voice input"}
-          className="h-12 w-12 hover:bg-primary/10 hover:text-primary transition-all"
-        >
-          {recording ? (
-            <SquareIcon className="h-5 w-5 drop-shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
-          ) : (
-            <MicIcon className="h-5 w-5 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
-          )}
-        </Button>
+  const themeClasses = useThemeClasses();
 
-        {recording && preview && (
-          <div className="absolute top-full right-0 z-20 mt-2 pointer-events-none">
-            <div className="relative min-w-56 max-w-[80vw] max-h-48 overflow-auto rounded-lg border bg-background px-3 py-2 text-sm text-foreground shadow-md ring-1 ring-border break-words">
-              {/* caret */}
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute -top-1 right-4 h-2 w-2 rotate-45 bg-background border-l border-t border-border"
-              />
-              {preview}
-            </div>
-          </div>
+  return (
+    <>
+      <button
+        type="button"
+        onClick={recording ? stop : start}
+        disabled={!supported}
+        aria-label={recording ? "Stop voice input" : "Start voice input"}
+        title={recording ? "Stop voice input" : "Start voice input"}
+        className={cn(
+          "flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed",
+          className
         )}
-        <span className="sr-only" aria-live="polite">
-          {recording && preview ? `Preview ${preview}` : ""}
-        </span>
-      </div>
-    </div>
+      >
+        {recording ? (
+          <SquareIcon className="w-5 h-5 text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
+        ) : (
+          <MicIcon
+            className={cn("w-5 h-5", themeClasses.text, themeClasses.glow)}
+          />
+        )}
+      </button>
+
+      {recording && preview && (
+        <div className="absolute top-full right-0 z-20 mt-2 pointer-events-none">
+          <div className="relative min-w-56 max-w-[80vw] max-h-48 overflow-auto rounded-lg border bg-background px-3 py-2 text-sm text-foreground shadow-md ring-1 ring-border break-words">
+            {/* caret */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -top-1 right-4 h-2 w-2 rotate-45 bg-background border-l border-t border-border"
+            />
+            {preview}
+          </div>
+        </div>
+      )}
+      <span className="sr-only" aria-live="polite">
+        {recording && preview ? `Preview ${preview}` : ""}
+      </span>
+    </>
   );
 }

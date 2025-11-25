@@ -80,12 +80,13 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   // Calculate summary stats with daily average
   const stats = useMemo(() => {
     const total = transactions.reduce((sum, t) => sum + t.amount, 0);
+    const defaultColor = themeClasses.defaultAccentColor;
     const byCategory = transactions.reduce(
       (acc, t) => {
         const cat = t.category || "Uncategorized";
         acc[cat] = {
           amount: (acc[cat]?.amount || 0) + t.amount,
-          color: t.category_color || "#38bdf8",
+          color: t.category_color || defaultColor,
         };
         return acc;
       },
@@ -117,7 +118,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
         : null,
       byCategory,
     };
-  }, [transactions, startDate, endDate]);
+  }, [transactions, startDate, endDate, themeClasses.defaultAccentColor]);
 
   // Filter and sort transactions
   const filteredTransactions = useMemo(() => {
@@ -236,9 +237,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   }
 
   return (
-    <div className="min-h-screen bg-[#0a1628] pb-20">
+    <div className={`min-h-screen ${themeClasses.pageBg} pb-20`}>
       {/* View Mode Toggle */}
-      <div className="sticky top-14 z-20 bg-gradient-to-b from-[#1a2942] to-[#0f1d2e] px-3 py-3 pb-4 shimmer backdrop-blur-xl">
+      <div
+        className={`sticky top-14 z-20 ${themeClasses.headerGradient} px-3 py-3 pb-4 shimmer backdrop-blur-xl`}
+      >
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
@@ -480,7 +483,9 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                             ${data.amount.toFixed(0)}
                           </span>
                         </div>
-                        <div className="h-2 bg-[#1a2942]/60 rounded-full overflow-hidden shadow-inner">
+                        <div
+                          className={`h-2 ${themeClasses.surfaceBgMuted} rounded-full overflow-hidden shadow-inner`}
+                        >
                           <div
                             className="h-full rounded-full transition-all duration-300 group-hover:brightness-110"
                             style={{

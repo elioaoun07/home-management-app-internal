@@ -6,7 +6,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:shadow-[0_0_0_3px_rgba(6,182,212,0.4)] aria-invalid:shadow-[0_0_0_3px_rgba(239,68,68,0.3)] active:scale-95 hover:shadow-md will-change-transform",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none aria-invalid:shadow-[0_0_0_3px_rgba(239,68,68,0.3)] active:scale-95 hover:shadow-md will-change-transform",
   {
     variants: {
       variant: {

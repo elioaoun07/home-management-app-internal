@@ -11,6 +11,32 @@ body {
   touch-action: pan-y;
 }
 
+/* Theme-aware background - prevents flash of wrong color on load */
+/* Default to blue theme */
+html,
+body {
+  background-color: #0a1628;
+}
+
+/* Pink theme backgrounds - use higher specificity */
+html[data-theme="pink"],
+html[data-theme="pink"] body,
+:root[data-theme="pink"] body {
+  background-color: #1a0a14 !important;
+}
+
+/* Blue theme backgrounds - explicit for clarity */
+html[data-theme="blue"],
+html[data-theme="blue"] body,
+:root[data-theme="blue"] body {
+  background-color: #0a1628 !important;
+}
+
+/* Smooth transition only after initial load */
+body.theme-loaded {
+  transition: background-color 0.3s ease;
+}
+
 /* Custom z-index utilities */
 @layer utilities {
   .z-45 {

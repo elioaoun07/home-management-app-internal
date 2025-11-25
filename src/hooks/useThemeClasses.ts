@@ -1,8 +1,29 @@
 import { useTheme } from "@/contexts/ThemeContext";
+import { useEffect, useState } from "react";
+
+// Get theme from localStorage for instant initial render (SSR-safe)
+function getInitialTheme(): "blue" | "pink" {
+  if (typeof window === "undefined") return "blue";
+  const stored = localStorage.getItem("color-theme");
+  return stored === "pink" ? "pink" : "blue";
+}
 
 export function useThemeClasses() {
-  const { theme: colorTheme } = useTheme();
-  const isPink = colorTheme === "pink";
+  // Use local state to avoid hydration mismatch
+  const [localTheme, setLocalTheme] = useState<"blue" | "pink">(
+    getInitialTheme
+  );
+
+  // Also use context for updates
+  const { theme: contextTheme } = useTheme();
+
+  // Sync with context changes
+  useEffect(() => {
+    setLocalTheme(contextTheme);
+  }, [contextTheme]);
+
+  // Use localTheme which is initialized from localStorage
+  const isPink = localTheme === "pink";
 
   return {
     // Text Colors
@@ -187,5 +208,106 @@ export function useThemeClasses() {
     calculatorTipBtn: isPink
       ? "bg-none shadow-none hover:shadow-none bg-pink-500/10 hover:bg-pink-500/20 border-pink-500/20 text-pink-200"
       : "bg-none shadow-none hover:shadow-none bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/20 text-emerald-200",
+
+    // Badge/Notification Specific
+    badgeBg: isPink ? "bg-pink-500" : "bg-[#06b6d4]",
+    badgeText: isPink ? "text-white" : "text-white",
+
+    // Modal/Sheet Specific
+    modalBg: isPink ? "bg-[#1a0a14]" : "bg-[#0f1d2e]",
+    modalBorder: isPink ? "border-pink-500/20" : "border-[#3b82f6]/20",
+
+    // Icon Drop Shadows
+    iconGlow: isPink
+      ? "drop-shadow-[0_0_8px_rgba(236,72,153,0.5)]"
+      : "drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]",
+    iconGlowStrong: isPink
+      ? "drop-shadow-[0_0_10px_rgba(236,72,153,0.6)]"
+      : "drop-shadow-[0_0_10px_rgba(6,182,212,0.6)]",
+    iconGlowMuted: isPink
+      ? "drop-shadow-[0_0_6px_rgba(236,72,153,0.4)]"
+      : "drop-shadow-[0_0_6px_rgba(56,189,248,0.5)]",
+
+    // Spinner/Loading
+    spinnerBorder: isPink ? "border-pink-500" : "border-[#06b6d4]",
+    spinnerGlow: isPink
+      ? "drop-shadow-[0_0_15px_rgba(236,72,153,0.6)]"
+      : "drop-shadow-[0_0_15px_rgba(6,182,212,0.6)]",
+    loadingText: isPink ? "text-pink-400" : "text-[#38bdf8]",
+
+    // Nav specific
+    navShadow: isPink
+      ? "0 -4px 12px rgba(0, 0, 0, 0.1), 0 -1px 3px rgba(236, 72, 153, 0.05)"
+      : "0 -4px 12px rgba(0, 0, 0, 0.1), 0 -1px 3px rgba(59, 130, 246, 0.05)",
+
+    // Action Buttons (Edit, Delete, etc)
+    editText: isPink ? "text-pink-400" : "text-blue-400",
+    editGlow: isPink
+      ? "drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]"
+      : "drop-shadow-[0_0_8px_rgba(96,165,250,0.6)]",
+
+    // Separators
+    separatorBg: isPink ? "bg-pink-500/20" : "bg-[#3b82f6]/20",
+
+    // Hover states for clickable items
+    hoverBgSubtle: isPink ? "hover:bg-pink-500/10" : "hover:bg-[#3b82f6]/10",
+
+    // Ring for selection states
+    ringSelection: isPink
+      ? "ring-2 ring-pink-400/30"
+      : "ring-2 ring-[#06b6d4]/30",
+    ringSelectionStrong: isPink
+      ? "ring-2 ring-pink-400 shadow-[0_0_30px_rgba(236,72,153,0.3)]"
+      : "ring-2 ring-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.3)]",
+
+    // Label text
+    labelText: isPink ? "text-pink-400" : "text-[#06b6d4]",
+    labelTextMuted: isPink ? "text-pink-400/70" : "text-[#06b6d4]/70",
+
+    // Form Input Combined (for quick use)
+    formInput: isPink
+      ? "bg-[#1a0a14]/50 shadow-[0_0_0_1px_rgba(236,72,153,0.3)_inset] text-white focus:shadow-[0_0_0_2px_rgba(236,72,153,0.6)_inset,0_0_20px_rgba(236,72,153,0.3)]"
+      : "bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset,0_0_20px_rgba(6,182,212,0.3)]",
+    formInputReadonly: isPink
+      ? "bg-[#1a0a14]/50 shadow-[0_0_0_1px_rgba(236,72,153,0.2)_inset] text-white"
+      : "bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] text-white",
+
+    // Header text
+    headerText: isPink ? "text-pink-300" : "text-[#38bdf8]",
+    headerTextMuted: isPink ? "text-pink-400/60" : "text-[#38bdf8]/60",
+
+    // Page and Header Backgrounds
+    pageBg: isPink ? "bg-[#1a0a14]" : "bg-[#0a1628]",
+    headerGradient: isPink
+      ? "bg-gradient-to-b from-[#2d1b29] to-[#1a0a14]"
+      : "bg-gradient-to-b from-[#1a2942] to-[#0f1d2e]",
+    surfaceBg: isPink ? "bg-[#2d1b29]" : "bg-[#1a2942]",
+    surfaceBgMuted: isPink ? "bg-[#2d1b29]/60" : "bg-[#1a2942]/60",
+
+    // Progress bars
+    progressBg: isPink ? "bg-[#2d1b29]/60" : "bg-[#1a2942]/60",
+    progressFill: isPink ? "bg-pink-500" : "bg-cyan-500",
+
+    // Default fallback colors (for when category color is not set)
+    defaultAccentColor: isPink ? "#ec4899" : "#38bdf8",
+    defaultAccentColorAlt: isPink ? "#f472b6" : "#06b6d4",
+
+    // Card/Section with hover effects
+    sectionCard: isPink
+      ? "bg-[#1a0a14]/60 shadow-[0_0_0_1px_rgba(236,72,153,0.25)_inset] hover:shadow-[0_0_0_1px_rgba(236,72,153,0.4)_inset,0_0_20px_rgba(236,72,153,0.3)]"
+      : "bg-[#0f1d2e]/60 shadow-[0_0_0_1px_rgba(6,182,212,0.25)_inset] hover:shadow-[0_0_0_1px_rgba(6,182,212,0.4)_inset,0_0_20px_rgba(59,130,246,0.3)]",
+
+    // Feature cards for landing pages
+    featureCard: isPink
+      ? "bg-[#1a0a14]/80 shadow-[0_0_0_1px_rgba(236,72,153,0.2)_inset] hover:bg-[#1a0a14] hover:shadow-[0_0_0_1px_rgba(236,72,153,0.4)_inset,0_0_30px_rgba(236,72,153,0.3)]"
+      : "bg-[#0f1d2e]/80 shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] hover:bg-[#0f1d2e] hover:shadow-[0_0_0_1px_rgba(6,182,212,0.4)_inset,0_0_30px_rgba(59,130,246,0.3)]",
+
+    // Form control styling for drawers/dialogs
+    formControlBg: isPink
+      ? "bg-[#1a0a14] border-pink-500/30"
+      : "bg-[#0a1628] border-[#3b82f6]/30",
+
+    // Theme boolean for conditional logic
+    isPink,
   };
 }

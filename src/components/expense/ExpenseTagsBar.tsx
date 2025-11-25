@@ -162,23 +162,27 @@ export default function ExpenseTagsBar({
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card border-purple/30 bg-purple/10 hover:bg-purple/20 hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in"
               >
                 <CalendarIcon className="w-3.5 h-3.5 text-purple" />
-                <span className="text-[10px] text-[#06b6d4]/80">Date</span>
+                <span className={`text-[10px] ${themeClasses.labelTextMuted}`}>
+                  Date
+                </span>
                 <span className="font-semibold text-xs text-purple">
                   {format(date, "MMM d")}
                 </span>
               </button>
             </PopoverTrigger>
             <PopoverContent
-              className="w-auto p-0 bg-bg-card-custom border-[#1a2942]"
+              className={`w-auto p-0 bg-bg-card-custom ${themeClasses.border}`}
               align="start"
             >
-              <div className="p-2 space-y-1.5 border-b border-[#1a2942]/50">
+              <div
+                className={`p-2 space-y-1.5 border-b ${themeClasses.border} opacity-50`}
+              >
                 <button
                   onClick={() => {
                     const today = new Date();
                     onDateChange(today);
                   }}
-                  className="w-full px-2.5 py-1.5 text-xs rounded-lg neo-card bg-bg-medium border-[#1a2942] text-secondary hover:bg-primary/10 transition-all"
+                  className={`w-full px-2.5 py-1.5 text-xs rounded-lg neo-card bg-bg-medium ${themeClasses.border} text-secondary hover:bg-primary/10 transition-all`}
                 >
                   Today
                 </button>
@@ -187,7 +191,7 @@ export default function ExpenseTagsBar({
                     const yesterday = subDays(new Date(), 1);
                     onDateChange(yesterday);
                   }}
-                  className="w-full px-2.5 py-1.5 text-xs rounded-lg neo-card bg-bg-medium border-[#1a2942] text-secondary hover:bg-primary/10 transition-all"
+                  className={`w-full px-2.5 py-1.5 text-xs rounded-lg neo-card bg-bg-medium ${themeClasses.border} text-secondary hover:bg-primary/10 transition-all`}
                 >
                   Yesterday
                 </button>

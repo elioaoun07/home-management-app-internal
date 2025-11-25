@@ -3,11 +3,13 @@
 import EnhancedMobileDashboard from "@/components/dashboard/EnhancedMobileDashboard";
 import { useUserPreferences } from "@/features/preferences/useUserPreferences";
 import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getDefaultDateRange } from "@/lib/utils/date";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 export default function DashboardClientPage() {
+  const themeClasses = useThemeClasses();
   const router = useRouter();
   const [monthStartDay, setMonthStartDay] = useState(1);
   const { data: preferences } = useUserPreferences();
@@ -93,30 +95,34 @@ export default function DashboardClientPage() {
   // ONLY show skeleton if we're loading AND have no cached data
   if (isLoading && transactions.length === 0) {
     return (
-      <div className="min-h-screen bg-[#0a1628] p-4">
+      <div className={`min-h-screen ${themeClasses.pageBg} p-4`}>
         <div className="max-w-7xl mx-auto space-y-4">
           {/* Header Skeleton */}
-          <div className="h-12 bg-[#1a2942] rounded-lg animate-pulse" />
+          <div
+            className={`h-12 ${themeClasses.surfaceBg} rounded-lg animate-pulse`}
+          />
 
           {/* Stats Cards Skeleton */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-24 bg-[#1a2942] rounded-lg animate-pulse"
+                className={`h-24 ${themeClasses.surfaceBg} rounded-lg animate-pulse`}
               />
             ))}
           </div>
 
           {/* Chart Skeleton */}
-          <div className="h-64 bg-[#1a2942] rounded-lg animate-pulse" />
+          <div
+            className={`h-64 ${themeClasses.surfaceBg} rounded-lg animate-pulse`}
+          />
 
           {/* Transactions List Skeleton */}
           <div className="space-y-2">
             {[1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
-                className="h-16 bg-[#1a2942] rounded-lg animate-pulse"
+                className={`h-16 ${themeClasses.surfaceBg} rounded-lg animate-pulse`}
               />
             ))}
           </div>
@@ -127,12 +133,14 @@ export default function DashboardClientPage() {
 
   if (isError) {
     return (
-      <div className="min-h-screen bg-[#0a1628] flex items-center justify-center p-4">
+      <div
+        className={`min-h-screen ${themeClasses.pageBg} flex items-center justify-center p-4`}
+      >
         <div className="text-center">
           <div className="text-red-400 text-lg mb-4">
             Failed to load dashboard
           </div>
-          <div className="text-[#38bdf8] text-sm mb-4">
+          <div className={`${themeClasses.headerText} text-sm mb-4`}>
             {error instanceof Error ? error.message : "Unknown error"}
           </div>
           <button

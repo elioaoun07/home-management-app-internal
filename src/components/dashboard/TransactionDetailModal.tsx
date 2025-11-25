@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -47,6 +48,8 @@ export default function TransactionDetailModal({
   onDelete,
   currentUserId,
 }: Props) {
+  const themeClasses = useThemeClasses();
+
   // Check if current user owns this transaction
   const isOwner =
     transaction.is_owner ??
@@ -199,7 +202,7 @@ export default function TransactionDetailModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="w-full max-w-md md:max-w-lg bg-[#0f1d2e] rounded-t-2xl md:rounded-2xl shadow-2xl animate-in slide-in-from-bottom duration-300 md:slide-in-from-bottom-0 flex flex-col neo-glow"
+        className={`w-full max-w-md md:max-w-lg ${themeClasses.modalBg} rounded-t-2xl md:rounded-2xl shadow-2xl animate-in slide-in-from-bottom duration-300 md:slide-in-from-bottom-0 flex flex-col neo-glow`}
         style={{
           // Reserve space for the bottom navigation bar so it serves as the modal delimiter.
           // 72px is a reasonable default for the mobile nav height; adjust if your nav is taller.
@@ -215,9 +218,11 @@ export default function TransactionDetailModal({
           </h2>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-[#3b82f6]/10 transition-colors"
+            className={`p-2 rounded-lg ${themeClasses.hoverBgSubtle} transition-colors`}
           >
-            <XIcon className="w-5 h-5 text-[#38bdf8] drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]" />
+            <XIcon
+              className={`w-5 h-5 ${themeClasses.headerText} ${themeClasses.iconGlow}`}
+            />
           </button>
         </div>
 
@@ -231,13 +236,17 @@ export default function TransactionDetailModal({
                   transaction.category || undefined
                 );
                 return (
-                  <IconComponent className="w-8 h-8 text-[#06b6d4]/70 mt-1 drop-shadow-[0_0_10px_rgba(6,182,212,0.6)]" />
+                  <IconComponent
+                    className={`w-8 h-8 ${themeClasses.labelTextMuted} mt-1 ${themeClasses.iconGlowStrong}`}
+                  />
                 );
               })()}
               <div className="flex-1">
                 <div className="space-y-2">
                   <div>
-                    <Label className="text-[#06b6d4] text-xs">Account</Label>
+                    <Label className={`${themeClasses.labelText} text-xs`}>
+                      Account
+                    </Label>
                     <select
                       value={formData.account_id}
                       onChange={(e) => {
@@ -251,7 +260,7 @@ export default function TransactionDetailModal({
                         setSelectedAccount(acc);
                       }}
                       disabled={!isOwner}
-                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white disabled:opacity-50 disabled:cursor-not-allowed focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset]"
+                      className={`w-full mt-1 px-3 py-2 rounded-lg ${themeClasses.formInput} disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                       <option value="">Select account</option>
                       {(accounts || []).map((a: any) => (
@@ -264,7 +273,9 @@ export default function TransactionDetailModal({
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <Label className="text-[#06b6d4] text-xs">Category</Label>
+                      <Label className={`${themeClasses.labelText} text-xs`}>
+                        Category
+                      </Label>
                       <select
                         value={formData.category_id}
                         onChange={(e) =>
@@ -275,7 +286,7 @@ export default function TransactionDetailModal({
                           }))
                         }
                         disabled={!isOwner}
-                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white disabled:opacity-50 disabled:cursor-not-allowed focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset]"
+                        className={`w-full mt-1 px-3 py-2 rounded-lg ${themeClasses.formInput} disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         <option value="">None</option>
                         {topCategories.map((c) => (
@@ -287,7 +298,7 @@ export default function TransactionDetailModal({
                     </div>
 
                     <div>
-                      <Label className="text-[#06b6d4] text-xs">
+                      <Label className={`${themeClasses.labelText} text-xs`}>
                         Subcategory
                       </Label>
                       <select
@@ -299,7 +310,7 @@ export default function TransactionDetailModal({
                           }))
                         }
                         disabled={!isOwner}
-                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white disabled:opacity-50 disabled:cursor-not-allowed focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset]"
+                        className={`w-full mt-1 px-3 py-2 rounded-lg ${themeClasses.formInput} disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         <option value="">None</option>
                         {(() => {
@@ -322,7 +333,9 @@ export default function TransactionDetailModal({
 
           {/* Amount */}
           <div className="space-y-2">
-            <Label className="text-[#06b6d4] text-sm">Amount</Label>
+            <Label className={`${themeClasses.labelText} text-sm`}>
+              Amount
+            </Label>
             <Input
               type="number"
               step="0.01"
@@ -331,13 +344,13 @@ export default function TransactionDetailModal({
                 setFormData({ ...formData, amount: e.target.value })
               }
               disabled={!isOwner}
-              className="bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white text-lg font-bold h-12 disabled:opacity-50 disabled:cursor-not-allowed focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset,0_0_20px_rgba(6,182,212,0.3)]"
+              className={`${themeClasses.formInput} text-lg font-bold h-12 disabled:opacity-50 disabled:cursor-not-allowed`}
             />
           </div>
 
           {/* Date */}
           <div className="space-y-2">
-            <Label className="text-[#06b6d4] text-sm">Date</Label>
+            <Label className={`${themeClasses.labelText} text-sm`}>Date</Label>
             <Input
               type="date"
               value={formData.date}
@@ -345,21 +358,27 @@ export default function TransactionDetailModal({
                 setFormData({ ...formData, date: e.target.value })
               }
               disabled={!isOwner}
-              className="bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white disabled:opacity-50 disabled:cursor-not-allowed focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset,0_0_20px_rgba(6,182,212,0.3)]"
+              className={`${themeClasses.formInput} disabled:opacity-50 disabled:cursor-not-allowed`}
             />
           </div>
 
           {/* Account */}
           <div className="space-y-2">
-            <Label className="text-[#06b6d4] text-sm">Account</Label>
-            <div className="px-3 py-2 rounded-lg bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] text-white">
+            <Label className={`${themeClasses.labelText} text-sm`}>
+              Account
+            </Label>
+            <div
+              className={`px-3 py-2 rounded-lg ${themeClasses.formInputReadonly}`}
+            >
               {transaction.account_name}
             </div>
           </div>
 
           {/* Description */}
           <div className="space-y-2">
-            <Label className="text-[#06b6d4] text-sm">Description</Label>
+            <Label className={`${themeClasses.labelText} text-sm`}>
+              Description
+            </Label>
             <textarea
               value={formData.description}
               onChange={(e) =>
@@ -367,7 +386,7 @@ export default function TransactionDetailModal({
               }
               rows={3}
               disabled={!isOwner}
-              className="w-full px-3 py-2 rounded-lg bg-[#0a1628]/50 shadow-[0_0_0_1px_rgba(6,182,212,0.3)_inset] text-white resize-none focus:outline-none focus:shadow-[0_0_0_2px_rgba(6,182,212,0.6)_inset,0_0_20px_rgba(6,182,212,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`w-full px-3 py-2 rounded-lg ${themeClasses.formInput} resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed`}
               placeholder="Add a note..."
             />
           </div>
@@ -375,7 +394,9 @@ export default function TransactionDetailModal({
 
         {/* Footer (sticky on mobile) */}
         {isOwner ? (
-          <div className="p-4 pt-3 flex gap-3 bg-gradient-to-t from-[#0f1d2e] to-transparent sticky bottom-0">
+          <div
+            className={`p-4 pt-3 flex gap-3 bg-gradient-to-t from-[${themeClasses.modalBg.includes("1a0a14") ? "#1a0a14" : "#0f1d2e"}] to-transparent sticky bottom-0`}
+          >
             <Button
               onClick={handleDelete}
               disabled={deleting}
@@ -395,8 +416,12 @@ export default function TransactionDetailModal({
             </Button>
           </div>
         ) : (
-          <div className="p-4 pt-3 bg-gradient-to-t from-[#0f1d2e] to-transparent sticky bottom-0">
-            <p className="text-center text-[#38bdf8]/60 text-sm">
+          <div
+            className={`p-4 pt-3 bg-gradient-to-t from-[${themeClasses.modalBg.includes("1a0a14") ? "#1a0a14" : "#0f1d2e"}] to-transparent sticky bottom-0`}
+          >
+            <p
+              className={`text-center ${themeClasses.headerTextMuted} text-sm`}
+            >
               Read-only: This is your partner's transaction
             </p>
           </div>

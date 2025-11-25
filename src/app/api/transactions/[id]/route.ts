@@ -20,7 +20,22 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Delete the transaction (RLS ensures user can only delete their own)
+    // First, get the transaction to check if it's a draft and get account_id
+    const { data: transaction, error: fetchError } = await supabase
+      .from("transactions")
+      .select("account_id, is_draft")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+
+    if (fetchError || !transaction) {
+      return NextResponse.json(
+        { error: "Transaction not found" },
+        { status: 404 }
+      );
+    }
+
+    // Delete the transaction
     const { error } = await supabase
       .from("transactions")
       .delete()
@@ -33,6 +48,14 @@ export async function DELETE(
         { error: "Failed to delete transaction" },
         { status: 500 }
       );
+    }
+
+    // Update account_balances.updated_at only for confirmed (non-draft) transactions
+    if (!transaction.is_draft) {
+      await supabase
+        .from("account_balances")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("account_id", transaction.account_id);
     }
 
     return NextResponse.json({ success: true });
