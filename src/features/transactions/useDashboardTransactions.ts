@@ -1,3 +1,4 @@
+import { CACHE_TIMES } from "@/lib/queryConfig";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export type Transaction = {
@@ -27,6 +28,11 @@ type DashboardParams = {
 /**
  * Fetch transactions for dashboard with aggressive caching
  * Uses stale-while-revalidate pattern for instant UI
+ *
+ * OPTIMIZED:
+ * - 2 minute staleTime (was 0) - reduces unnecessary refetches
+ * - Cache for 24 hours in memory
+ * - Only refetch on reconnect or explicit invalidation
  */
 export function useDashboardTransactions({
   startDate,
@@ -46,9 +52,10 @@ export function useDashboardTransactions({
       const data = await response.json();
       return data as Transaction[];
     },
-    staleTime: 0, // Always refetch when invalidated
+    // OPTIMIZED: 2 minute stale time for balance between freshness and speed
+    staleTime: CACHE_TIMES.TRANSACTIONS,
     gcTime: 1000 * 60 * 60 * 24, // Keep in cache for 24 hours
-    refetchOnMount: true, // Refetch to show latest transactions
+    refetchOnMount: false, // Use cached data, don't refetch on mount
     refetchOnWindowFocus: false, // Don't refetch on window focus (better UX)
     refetchOnReconnect: true, // Refetch when reconnecting
     retry: 2,

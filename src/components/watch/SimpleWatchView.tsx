@@ -5,6 +5,11 @@ import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useDrafts } from "@/features/drafts/useDrafts";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
+import {
+  CACHE_TIMES,
+  getCachedBalance,
+  setCachedBalance,
+} from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -38,21 +43,35 @@ export default function SimpleWatchView() {
   const { data: categories = [] } = useCategories(defaultAccount?.id);
   const { data: drafts = [] } = useDrafts();
 
-  // Fetch balance
+  // Get cached balance for instant display
+  const cachedBalance = defaultAccount?.id
+    ? getCachedBalance(defaultAccount.id)
+    : null;
+
+  // OPTIMIZED: Fetch balance with smart caching
   const { data: balance } = useQuery<Balance>({
     queryKey: ["account-balance", defaultAccount?.id],
     queryFn: async () => {
       if (!defaultAccount?.id) return null;
-      const res = await fetch(`/api/accounts/${defaultAccount.id}/balance`, {
-        cache: "no-store",
-      });
+      const res = await fetch(`/api/accounts/${defaultAccount.id}/balance`);
       if (!res.ok) throw new Error("Failed to fetch balance");
-      return res.json();
+      const data = await res.json();
+      // Cache to localStorage for instant next load
+      setCachedBalance(defaultAccount.id, data.balance);
+      return data;
     },
     enabled: !!defaultAccount?.id && mounted,
-    staleTime: 0, // Always fetch fresh
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    // OPTIMIZED: Use cache, don't refetch on every mount
+    staleTime: CACHE_TIMES.BALANCE,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    // Use cached balance for instant UI
+    placeholderData: cachedBalance
+      ? {
+          account_id: defaultAccount?.id!,
+          balance: cachedBalance.balance,
+        }
+      : undefined,
   });
 
   // Fetch today's transactions
@@ -69,6 +88,9 @@ export default function SimpleWatchView() {
       return data.transactions || [];
     },
     enabled: !!defaultAccount?.id && mounted,
+    // OPTIMIZED: Cache today's transactions
+    staleTime: CACHE_TIMES.TRANSACTIONS,
+    refetchOnMount: false,
   });
 
   const todaySpending = useMemo(

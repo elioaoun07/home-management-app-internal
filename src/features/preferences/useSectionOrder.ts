@@ -1,6 +1,7 @@
 // src/features/preferences/useSectionOrder.ts
 "use client";
 
+import { CACHE_TIMES } from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -8,6 +9,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 const DEFAULT_ORDER = ["amount", "account", "category", "subcategory"] as const;
 
 export type SectionKey = (typeof DEFAULT_ORDER)[number];
+
+// Get cached section order from localStorage for instant load
+function getCachedSectionOrder(): SectionKey[] | undefined {
+  try {
+    if (typeof window === "undefined") return undefined;
+    const raw = localStorage.getItem("user_preferences");
+    if (!raw) return undefined;
+    const data = JSON.parse(raw);
+    if (Array.isArray(data?.section_order)) {
+      return data.section_order as SectionKey[];
+    }
+  } catch {}
+  return undefined;
+}
 
 export function useSectionOrder(
   userId?: string,
@@ -17,10 +32,13 @@ export function useSectionOrder(
   // Always fetch from server by default
   const enabled = options?.enabled ?? true;
 
+  // Get cached order for instant display
+  const cachedOrder = getCachedSectionOrder();
+
   return useQuery({
     queryKey: qk.sectionOrder(userId),
     queryFn: async (): Promise<SectionKey[]> => {
-      const res = await fetch("/api/user-preferences", { cache: "no-store" });
+      const res = await fetch("/api/user-preferences");
       if (!res.ok) throw new Error("Failed to fetch section order");
       const data = await res.json();
 
@@ -48,9 +66,12 @@ export function useSectionOrder(
       return result;
     },
     enabled,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    refetchOnMount: true,
+    // OPTIMIZED: Use cache, don't refetch on mount
+    staleTime: CACHE_TIMES.PREFERENCES,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
+    // Use cached order for instant UI
+    initialData: cachedOrder,
   });
 }
 

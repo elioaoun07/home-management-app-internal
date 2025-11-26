@@ -4,11 +4,13 @@
  */
 "use client";
 
+import DraftsDrawer from "@/components/expense/DraftsDrawer";
 import type { Template } from "@/components/expense/TemplateDrawer";
 import TemplateDrawer from "@/components/expense/TemplateDrawer";
 import {
   BarChart3Icon,
   CalendarClockIcon,
+  MicIcon,
   PlusIcon,
 } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
@@ -23,11 +25,11 @@ import { Label } from "@/components/ui/label";
 import { MOBILE_NAV_HEIGHT } from "@/constants/layout";
 import { useTab } from "@/contexts/TabContext";
 import { prefetchDashboardData } from "@/features/dashboard/prefetchDashboard";
+import { useDraftCount } from "@/features/drafts/useDrafts";
 import {
   prefetchAllTabs,
   prefetchExpenseData,
 } from "@/features/navigation/prefetchTabs";
-import { useDuePaymentsCount } from "@/features/recurring/useRecurringPayments";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
 import { cn } from "@/lib/utils";
@@ -53,13 +55,13 @@ export default function MobileNav() {
   const { activeTab, setActiveTab } = useTab();
   const queryClient = useQueryClient();
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
+  const [showDraftsDrawer, setShowDraftsDrawer] = useState(false);
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(
     null
   );
   const [templateAmount, setTemplateAmount] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
-  const duePaymentsCount = useDuePaymentsCount();
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isLongPress, setIsLongPress] = useState(false);
   const { viewMode, isLoaded } = useViewMode();
@@ -68,6 +70,9 @@ export default function MobileNav() {
     expense: false,
     all: false,
   });
+
+  // Draft transactions count for floating badge
+  const draftCount = useDraftCount();
 
   // Prefetch all tabs on initial mount for instant switching
   useEffect(() => {
@@ -180,26 +185,28 @@ export default function MobileNav() {
 
   return (
     <>
-      {/* Floating Due Payments Notification - Above Nav Bar */}
-      {duePaymentsCount > 0 && (
-        <div
-          className="fixed right-4 z-40 animate-in slide-in-from-bottom-4 duration-300"
+      {/* Floating Draft Transactions Badge */}
+      {draftCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowDraftsDrawer(true)}
+          className="fixed bottom-24 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-full bg-amber-500/90 text-white shadow-lg hover:bg-amber-600 active:scale-95 transition-all animate-in slide-in-from-right-5 duration-300"
           style={{
-            bottom: `calc(${MOBILE_NAV_HEIGHT}px + env(safe-area-inset-bottom) + 12px)`,
+            boxShadow: "0 4px 20px rgba(245, 158, 11, 0.4)",
           }}
         >
-          <button
-            onClick={() => {
-              if (navigator.vibrate) navigator.vibrate(10);
-              setActiveTab("recurring");
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${themeClasses.badgeBg} text-white shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all neo-glow`}
-          >
-            <CalendarClockIcon className="w-3.5 h-3.5" />
-            <span className="text-xs font-semibold">{duePaymentsCount}</span>
-          </button>
-        </div>
+          <MicIcon className="w-4 h-4" />
+          <span className="text-sm font-semibold">
+            {draftCount} Draft{draftCount > 1 ? "s" : ""}
+          </span>
+        </button>
       )}
+
+      {/* Drafts Drawer */}
+      <DraftsDrawer
+        open={showDraftsDrawer}
+        onOpenChange={setShowDraftsDrawer}
+      />
 
       {/* Bottom Navigation */}
       <nav
@@ -271,13 +278,6 @@ export default function MobileNav() {
               >
                 <div className="relative">
                   <Icon className="w-5 h-5" />
-                  {item.id === "recurring" && duePaymentsCount > 0 && (
-                    <span
-                      className={`absolute -top-1 -right-1 ${themeClasses.badgeBg} text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1`}
-                    >
-                      {duePaymentsCount}
-                    </span>
-                  )}
                 </div>
                 <span className="text-[10px] font-medium whitespace-nowrap">
                   {item.label}

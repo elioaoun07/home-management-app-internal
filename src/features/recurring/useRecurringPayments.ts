@@ -1,3 +1,4 @@
+import { CACHE_TIMES } from "@/lib/queryConfig";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export type RecurringPayment = {
@@ -35,6 +36,12 @@ export type RecurringPayment = {
   };
 };
 
+/**
+ * OPTIMIZED: Recurring payments with smart caching
+ * - 30 minute staleTime
+ * - No refetch on mount (uses cached data)
+ * - Only refetches when explicitly invalidated
+ */
 export function useRecurringPayments() {
   return useQuery<RecurringPayment[]>({
     queryKey: ["recurring-payments"],
@@ -44,27 +51,10 @@ export function useRecurringPayments() {
       const data = await res.json();
       return data.recurring_payments || [];
     },
-  });
-}
-
-export function useDuePayments() {
-  return useQuery<RecurringPayment[]>({
-    queryKey: ["recurring-payments", "due"],
-    queryFn: async () => {
-      const res = await fetch("/api/recurring-payments?due_only=true");
-      if (!res.ok) throw new Error("Failed to fetch due payments");
-      const data = await res.json();
-      return data.recurring_payments || [];
-    },
-    staleTime: 1000 * 60 * 30, // 30 minutes - due payments don't change that often
-    refetchOnMount: true,
+    staleTime: CACHE_TIMES.RECURRING, // 30 minutes
+    refetchOnMount: false, // Don't refetch on mount - use cache
     refetchOnWindowFocus: false,
   });
-}
-
-export function useDuePaymentsCount() {
-  const { data = [] } = useDuePayments();
-  return data.length;
 }
 
 export function useCreateRecurringPayment() {

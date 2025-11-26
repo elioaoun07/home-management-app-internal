@@ -1,5 +1,6 @@
 "use client";
 
+import { CACHE_TIMES } from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
 import { useQuery } from "@tanstack/react-query";
 
@@ -20,7 +21,7 @@ type DraftTransaction = {
 };
 
 async function fetchDrafts(): Promise<DraftTransaction[]> {
-  const res = await fetch("/api/drafts", { cache: "no-store" });
+  const res = await fetch("/api/drafts");
   if (!res.ok) {
     throw new Error("Failed to fetch drafts");
   }
@@ -28,13 +29,18 @@ async function fetchDrafts(): Promise<DraftTransaction[]> {
   return data.drafts || [];
 }
 
+/**
+ * OPTIMIZED: Drafts with smart caching
+ * - 1 minute staleTime (may be added frequently)
+ * - Refetch on window focus (user might add from another device)
+ */
 export function useDrafts() {
   return useQuery({
     queryKey: qk.drafts(),
     queryFn: fetchDrafts,
-    staleTime: 1000 * 30, // 30 seconds
+    staleTime: CACHE_TIMES.DRAFTS, // 1 minute
     refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    refetchOnMount: false, // Don't refetch on mount - use cache
   });
 }
 

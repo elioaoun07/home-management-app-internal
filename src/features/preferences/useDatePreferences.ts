@@ -67,12 +67,15 @@ export function useDatePreferences() {
     setLoaded(true);
   }, []);
 
-  // Best-effort GET from server to sync (doesn’t block UI)
+  // Best-effort GET from server to sync (doesn't block UI)
+  // OPTIMIZED: Only sync if user preferences might have changed
+  // This runs in background, doesn't affect initial load
   useEffect(() => {
     let ignore = false;
-    (async () => {
+    // Delay server sync to not compete with initial page load
+    const timeoutId = setTimeout(async () => {
       try {
-        const res = await fetch("/api/user-preferences", { cache: "no-store" });
+        const res = await fetch("/api/user-preferences");
         if (!res.ok) return;
         const data = await res.json();
         const parsed = parseDateStart(data?.date_start);
@@ -81,9 +84,11 @@ export function useDatePreferences() {
           writeLocal({ date_start: formatDateStart(parsed) });
         }
       } catch {}
-    })();
+    }, 2000); // Delay 2 seconds to not block initial render
+
     return () => {
       ignore = true;
+      clearTimeout(timeoutId);
     };
   }, []);
 

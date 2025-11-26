@@ -12,10 +12,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const dueOnly = searchParams.get("due_only") === "true";
-
-    let query = supabase
+    const { data, error } = await supabase
       .from("recurring_payments")
       .select(
         `
@@ -28,13 +25,6 @@ export async function GET(request: Request) {
       .eq("user_id", user.id)
       .eq("is_active", true)
       .order("next_due_date", { ascending: true });
-
-    if (dueOnly) {
-      const today = new Date().toISOString().split("T")[0];
-      query = query.lte("next_due_date", today);
-    }
-
-    const { data, error } = await query;
 
     if (error) {
       console.error("Error fetching recurring payments:", error);

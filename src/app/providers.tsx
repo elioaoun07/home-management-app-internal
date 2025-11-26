@@ -11,7 +11,7 @@ import { ThemeProvider } from "../components/theme-provider";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
 
-const RQ_PERSIST_KEY = "hm-rq-cache-v2";
+const RQ_PERSIST_KEY = "hm-rq-cache-v3"; // Bumped version for new caching strategy
 const STABLE_KEYS = new Set([
   "accounts",
   "categories",
@@ -19,7 +19,9 @@ const STABLE_KEYS = new Set([
   "templates",
   "user-categories",
   "subcategories",
-  // NOTE: "account-balance" is NOT persisted - must always be fresh from server
+  // OPTIMIZED: Now persisting account-balance for instant UI
+  // Balance is only invalidated after user mutations
+  "account-balance",
   "transactions",
   "dashboard-stats",
   "user-preferences",
@@ -33,11 +35,12 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 1000 * 60 * 120, // 2 hours for stable data - instant tab switching
+            // OPTIMIZED: Longer staleTime for instant tab switching
+            staleTime: 1000 * 60 * 5, // 5 minutes default (most queries override this)
             gcTime: 1000 * 60 * 60 * 24, // 24 hours garbage collection
             refetchOnWindowFocus: false, // Don't refetch on focus for better mobile UX
             refetchOnReconnect: true,
-            refetchOnMount: false, // Don't refetch if data is fresh
+            refetchOnMount: false, // CRITICAL: Don't refetch on mount - use cache
             retry: 2,
             retryDelay: (attemptIndex) =>
               Math.min(1000 * 2 ** attemptIndex, 30000),
@@ -95,6 +98,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             // Clear local user preferences and theme on user switch
             localStorage.removeItem("user_preferences");
             localStorage.removeItem("hm-theme");
+            // Clear all balance caches on user switch
+            Object.keys(localStorage)
+              .filter((key) => key.startsWith("balance_cache_"))
+              .forEach((key) => localStorage.removeItem(key));
           } catch {}
           queryClient.clear();
           currentUserId = nextUserId;

@@ -1,12 +1,25 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.account_balances (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  account_id uuid NOT NULL UNIQUE,
+  user_id uuid NOT NULL,
+  balance numeric NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  balance_set_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT account_balances_pkey PRIMARY KEY (id),
+  CONSTRAINT account_balances_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
+  CONSTRAINT account_balances_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.accounts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   user_id uuid NOT NULL,
   name text NOT NULL,
   type text NOT NULL CHECK (type = ANY (ARRAY['income'::text, 'expense'::text])),
   inserted_at timestamp with time zone NOT NULL DEFAULT now(),
+  is_default boolean DEFAULT false,
   CONSTRAINT accounts_pkey PRIMARY KEY (id),
   CONSTRAINT accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -19,6 +32,18 @@ CREATE TABLE public.default_categories (
   sort_order integer NOT NULL,
   CONSTRAINT default_categories_pkey PRIMARY KEY (id),
   CONSTRAINT default_categories_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.default_categories(id)
+);
+CREATE TABLE public.error_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  error_message text NOT NULL,
+  error_stack text,
+  component_name text,
+  user_agent text,
+  url text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT error_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT error_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.events (
   id text NOT NULL,
@@ -46,6 +71,28 @@ CREATE TABLE public.household_links (
   CONSTRAINT household_links_pkey PRIMARY KEY (id),
   CONSTRAINT household_links_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id),
   CONSTRAINT household_links_partner_user_id_fkey FOREIGN KEY (partner_user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.recurring_payments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  account_id uuid NOT NULL,
+  category_id uuid,
+  subcategory_id uuid,
+  name text NOT NULL,
+  amount numeric NOT NULL,
+  description text,
+  recurrence_type text NOT NULL CHECK (recurrence_type = ANY (ARRAY['daily'::text, 'weekly'::text, 'monthly'::text, 'yearly'::text])),
+  recurrence_day integer,
+  next_due_date date NOT NULL,
+  last_processed_date date,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT recurring_payments_pkey PRIMARY KEY (id),
+  CONSTRAINT recurring_payments_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT recurring_payments_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
+  CONSTRAINT recurring_payments_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
+  CONSTRAINT recurring_payments_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id)
 );
 CREATE TABLE public.subtasks (
   id text NOT NULL,
@@ -112,13 +159,19 @@ CREATE TABLE public.transactions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
   date date NOT NULL,
-  category text NOT NULL,
-  subcategory text NOT NULL,
   amount numeric NOT NULL,
   description text NOT NULL DEFAULT ''::text,
   inserted_at timestamp with time zone NOT NULL DEFAULT now(),
   account_id uuid NOT NULL,
+  category_id uuid,
+  subcategory_id uuid,
+  is_draft boolean NOT NULL DEFAULT false,
+  voice_transcript text,
+  confidence_score numeric,
+  is_private boolean NOT NULL DEFAULT false,
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT transactions_category_fk FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
+  CONSTRAINT transactions_subcategory_fk FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
   CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -127,11 +180,11 @@ CREATE TABLE public.user_categories (
   user_id uuid NOT NULL,
   name text NOT NULL,
   icon text,
-  color text,
+  color text DEFAULT '#38bdf8'::text,
   inserted_at timestamp with time zone NOT NULL DEFAULT now(),
   parent_id uuid,
   account_id uuid NOT NULL,
-  position integer NOT NULL DEFAULT 0,
+  position integer NOT NULL DEFAULT 0 CHECK ("position" >= 0),
   visible boolean NOT NULL DEFAULT true,
   default_category_id uuid,
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -139,8 +192,8 @@ CREATE TABLE public.user_categories (
   CONSTRAINT user_categories_pkey PRIMARY KEY (id),
   CONSTRAINT user_categories_default_fk FOREIGN KEY (default_category_id) REFERENCES public.default_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id)
 );
 CREATE TABLE public.user_onboarding (
@@ -154,7 +207,7 @@ CREATE TABLE public.user_onboarding (
 );
 CREATE TABLE public.user_preferences (
   user_id uuid NOT NULL,
-  theme text NOT NULL DEFAULT '''dark''::text'::text CHECK (theme = ANY (ARRAY['light'::text, 'dark'::text, 'wood'::text, 'system'::text])),
+  theme text NOT NULL DEFAULT '''dark''::text'::text CHECK (theme = ANY (ARRAY['light'::text, 'dark'::text, 'wood'::text, 'system'::text, 'blue'::text, 'pink'::text])),
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
   section_order jsonb DEFAULT '["amount", "account", "category", "subcategory", "description"]'::jsonb,
   date_start text DEFAULT '''mon-1''::text'::text,

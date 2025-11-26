@@ -5,6 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import {
+  CACHE_TIMES,
+  getCachedBalance,
+  setCachedBalance,
+} from "@/lib/queryConfig";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -33,7 +38,14 @@ export default function AccountBalance({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
 
-  // Fetch balance
+  // Get cached balance for instant display
+  const cachedBalance = accountId ? getCachedBalance(accountId) : null;
+
+  // Fetch balance with smart caching - NOT on every mount
+  // Balance will only be fetched:
+  // 1. First time (no cache)
+  // 2. When cache expires (5 minutes)
+  // 3. When explicitly invalidated after mutations
   const {
     data: balance,
     isLoading,
@@ -42,22 +54,32 @@ export default function AccountBalance({
     queryKey: ["account-balance", accountId],
     queryFn: async () => {
       if (!accountId) return null;
-      const res = await fetch(`/api/accounts/${accountId}/balance`, {
-        cache: "no-store", // Always fetch fresh data
-      });
+      const res = await fetch(`/api/accounts/${accountId}/balance`);
       if (!res.ok) {
         const errorData = await res
           .json()
           .catch(() => ({ error: "Failed to fetch balance" }));
         throw new Error(errorData.error || "Failed to fetch balance");
       }
-      return res.json();
+      const data = await res.json();
+      // Cache to localStorage for instant next load
+      setCachedBalance(accountId, data.balance);
+      return data;
     },
     enabled: !!accountId,
     retry: 1,
-    refetchOnMount: "always", // ALWAYS fetch fresh balance on mount
-    refetchOnWindowFocus: true, // Refetch when user returns to app
-    staleTime: 0, // Balance is always stale - always refetch
+    // OPTIMIZED: Use cached data, only refetch when stale or invalidated
+    staleTime: CACHE_TIMES.BALANCE, // 5 minutes
+    refetchOnMount: false, // Don't refetch on every mount
+    refetchOnWindowFocus: false, // Don't refetch on tab focus
+    // Use cached balance as placeholder for instant UI
+    placeholderData: cachedBalance
+      ? {
+          account_id: accountId!,
+          balance: cachedBalance.balance,
+          updated_at: cachedBalance.updatedAt,
+        }
+      : undefined,
   });
 
   // Handle errors with useEffect (new React Query pattern)

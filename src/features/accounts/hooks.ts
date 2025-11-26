@@ -1,13 +1,14 @@
 // src/features/accounts/hooks.ts
 "use client";
 
+import { CACHE_TIMES } from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
 import type { Account, AccountType } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // --- Query ---
 async function fetchAccounts(): Promise<Account[]> {
-  const res = await fetch("/api/accounts", { cache: "no-store" });
+  const res = await fetch("/api/accounts");
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `HTTP ${res.status}`);
@@ -15,11 +16,18 @@ async function fetchAccounts(): Promise<Account[]> {
   return (await res.json()) as Account[];
 }
 
+/**
+ * OPTIMIZED: Accounts with smart caching
+ * - 1 hour staleTime (accounts rarely change)
+ * - No refetch on mount
+ */
 export function useAccounts() {
   return useQuery({
     queryKey: qk.accounts(), // shared key
     queryFn: fetchAccounts,
-    staleTime: 5 * 60 * 1000, // 5 minutes - prevents unnecessary refetches
+    staleTime: CACHE_TIMES.ACCOUNTS, // 1 hour - accounts rarely change
+    refetchOnMount: false, // Don't refetch on mount
+    refetchOnWindowFocus: false,
   });
 }
 

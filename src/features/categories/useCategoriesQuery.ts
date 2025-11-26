@@ -1,5 +1,6 @@
 "use client";
 
+import { CACHE_TIMES } from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
 import { useQuery } from "@tanstack/react-query";
 
@@ -19,9 +20,7 @@ export type UICategory = DbCategory | DefaultCategory;
 
 async function fetchCategories(accountId: string): Promise<UICategory[]> {
   const qs = new URLSearchParams({ accountId });
-  const res = await fetch(`/api/categories?${qs.toString()}`, {
-    cache: "no-store",
-  });
+  const res = await fetch(`/api/categories?${qs.toString()}`);
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `Failed to fetch categories`);
@@ -38,12 +37,18 @@ async function fetchCategories(accountId: string): Promise<UICategory[]> {
   return data as UICategory[];
 }
 
-/** Query per selected account (keyed by accountId for correct caching/persistence). */
+/**
+ * OPTIMIZED: Categories with smart caching
+ * - 1 hour staleTime (categories rarely change)
+ * - No refetch on mount
+ */
 export function useCategories(accountId?: string) {
   return useQuery({
     queryKey: qk.categories(accountId),
     queryFn: () => fetchCategories(accountId as string),
     enabled: !!accountId,
-    // global defaults in providers.tsx handle stale/persist/refetch
+    staleTime: CACHE_TIMES.CATEGORIES, // 1 hour
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 }
