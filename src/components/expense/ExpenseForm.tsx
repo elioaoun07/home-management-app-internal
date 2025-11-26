@@ -37,7 +37,7 @@ export default function ExpenseForm() {
     useSectionOrder();
   const sectionOrder: SectionKey[] = Array.isArray(sectionOrderRaw)
     ? sectionOrderRaw
-    : ["account", "category", "subcategory", "amount"];
+    : ["amount", "account", "category", "subcategory"];
   const [selectedAccountId, setSelectedAccountId] = useState<string>();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>();
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string>();

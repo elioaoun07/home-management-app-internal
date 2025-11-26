@@ -19,7 +19,7 @@ const STABLE_KEYS = new Set([
   "templates",
   "user-categories",
   "subcategories",
-  "account-balance",
+  // NOTE: "account-balance" is NOT persisted - must always be fresh from server
   "transactions",
   "dashboard-stats",
   "user-preferences",

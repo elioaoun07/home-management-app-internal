@@ -50,9 +50,9 @@ export default function WatchView() {
       return res.json();
     },
     enabled: !!defaultAccount?.id && mounted,
-    staleTime: 1000 * 60 * 2, // 2 minutes
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    staleTime: 0, // Always fetch fresh
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   // Fetch today's transactions

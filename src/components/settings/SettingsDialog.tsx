@@ -100,13 +100,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     const so = Array.isArray(serverOrderArray) ? serverOrderArray : null;
     if (!so) return;
     setOrder(
-      (so as SectionKey[]) ?? [
-        "account",
-        "category",
-        "subcategory",
-        "amount",
-        "description",
-      ]
+      (so as SectionKey[]) ?? ["amount", "account", "category", "subcategory"]
     );
   }
 

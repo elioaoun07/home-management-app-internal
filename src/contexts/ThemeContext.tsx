@@ -43,7 +43,9 @@ function applyThemeToDOM(newTheme: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
+  // Always start with "blue" to match server render and avoid hydration mismatch
+  const [theme, setThemeState] = useState<Theme>("blue");
+  const [mounted, setMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionTo, setTransitionTo] = useState<Theme>("pink");
@@ -51,8 +53,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const pendingThemeRef = useRef<Theme | null>(null);
   const { data: preferences } = useUserPreferences();
 
+  // On mount, sync with localStorage (client-side only)
+  useEffect(() => {
+    setMounted(true);
+    const storedTheme = getInitialTheme();
+    if (storedTheme !== "blue") {
+      setThemeState(storedTheme);
+      applyThemeToDOM(storedTheme);
+    }
+  }, []);
+
   // Sync with database preferences
   useEffect(() => {
+    if (!mounted) return;
     if (preferences?.theme) {
       const userTheme = preferences.theme as Theme;
       if (
@@ -64,13 +77,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem("color-theme", userTheme);
       }
     }
-  }, [preferences, theme]);
-
-  // Apply theme on mount
-  useEffect(() => {
-    const currentTheme = getInitialTheme();
-    applyThemeToDOM(currentTheme);
-  }, []);
+  }, [preferences, theme, mounted]);
 
   // Called when paint has FULLY covered the screen
   const handlePaintCovered = useCallback(async () => {

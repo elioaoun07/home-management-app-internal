@@ -52,7 +52,8 @@ export default function MobileExpenseForm() {
     setDate,
   } = useExpenseForm();
 
-  const { data: sectionOrder } = useSectionOrder(undefined, { sync: false });
+  const { data: sectionOrder, isLoading: sectionOrderLoading } =
+    useSectionOrder();
 
   const stepFlow = useMemo<Step[]>(() => {
     if (!sectionOrder || sectionOrder.length === 0) {

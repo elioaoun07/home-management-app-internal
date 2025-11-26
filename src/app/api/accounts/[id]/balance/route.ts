@@ -20,10 +20,10 @@ export async function GET(
 
   const { id: accountId } = await params;
 
-  // Verify account belongs to user
+  // Verify account belongs to user AND get account type
   const { data: account, error: accountError } = await supabase
     .from("accounts")
-    .select("id")
+    .select("id, type")
     .eq("id", accountId)
     .eq("user_id", user.id)
     .single();
@@ -32,11 +32,13 @@ export async function GET(
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
 
-  // Get initial balance and balance_set_at timestamp
+  // Get the user's balance record for this account
+  // IMPORTANT: Filter by BOTH account_id AND user_id to ensure user isolation
   const { data: balanceData, error } = await supabase
     .from("account_balances")
     .select("balance, balance_set_at, created_at, updated_at")
     .eq("account_id", accountId)
+    .eq("user_id", user.id)
     .single();
 
   if (error) {
@@ -45,6 +47,8 @@ export async function GET(
       return NextResponse.json({
         account_id: accountId,
         balance: 0,
+        pending_drafts: 0,
+        draft_count: 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
@@ -53,68 +57,71 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Get account type to determine if we add or subtract transactions
-  const { data: accountData } = await supabase
-    .from("accounts")
-    .select("type")
-    .eq("id", accountId)
-    .single();
+  // SIMPLE LOGIC:
+  // 1. User sets their balance (e.g., $40 on Nov 21)
+  // 2. We only subtract transactions that were INSERTED after balance_set_at
+  // 3. This ensures we don't double-count old transactions
 
-  const accountType = accountData?.type || "expense";
+  const balanceSetAt = balanceData.balance_set_at;
 
-  // Calculate current balance from initial balance and transactions since balance_set_at
-  // For expense accounts: balance - SUM(transactions)
-  // For income accounts: balance + SUM(transactions)
-  //
-  // We include transactions where `date >= balance_set_at::date`
-  // This means: transactions from the SAME DAY the balance was set are counted.
-  //
-  // Example: User sets balance to $202 on Nov 25 at 10 AM
-  //   - balance_set_at = 2025-11-25T10:00:00
-  //   - We count transactions where date >= '2025-11-25'
-  //   - If user then spends $50 on Nov 25, balance becomes $152
-  //
-  // This assumes: when user sets balance, they're setting a "starting point" and
-  // any transactions entered from that day forward should be subtracted.
-  const balanceSetDate = balanceData.balance_set_at.split("T")[0]; // Get YYYY-MM-DD from ISO string
-
-  const { data: transactionsSum, error: transError } = await supabase
+  // Get confirmed transactions inserted AFTER balance was set
+  const { data: newTransactions, error: transError } = await supabase
     .from("transactions")
     .select("amount")
     .eq("account_id", accountId)
+    .eq("user_id", user.id)
     .eq("is_draft", false)
-    .gte("date", balanceSetDate); // Include transactions from same day AND after
+    .gt("inserted_at", balanceSetAt);
 
   if (transError) {
     console.error("Error fetching transactions for balance:", transError);
   }
 
-  const totalTransactions =
-    transactionsSum?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-
-  // Get pending draft transactions for this account
-  const { data: draftTransactions } = await supabase
+  // Get pending draft transactions (always count all drafts)
+  const { data: draftTransactions, error: draftError } = await supabase
     .from("transactions")
     .select("amount")
     .eq("account_id", accountId)
+    .eq("user_id", user.id)
     .eq("is_draft", true);
 
+  if (draftError) {
+    console.error("Error fetching draft transactions:", draftError);
+  }
+
+  const totalNewTransactions =
+    newTransactions?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
   const totalDrafts =
     draftTransactions?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
+  // Calculate current balance
+  // For expense accounts: balance - expenses
+  // For income accounts: balance + income (not typical, but supported)
+  const accountType = account.type || "expense";
   const currentBalance =
     accountType === "expense"
-      ? Number(balanceData.balance) - totalTransactions - totalDrafts
-      : Number(balanceData.balance) + totalTransactions + totalDrafts;
+      ? Number(balanceData.balance) - totalNewTransactions - totalDrafts
+      : Number(balanceData.balance) + totalNewTransactions + totalDrafts;
 
   return NextResponse.json({
     account_id: accountId,
     balance: currentBalance,
     pending_drafts: totalDrafts,
     draft_count: draftTransactions?.length || 0,
-    balance_set_at: balanceData.balance_set_at,
+    balance_set_at: balanceSetAt,
     created_at: balanceData.created_at,
     updated_at: balanceData.updated_at,
+    // DEBUG - check what's in the database
+    _debug: {
+      user_id: user.id,
+      stored_balance: balanceData.balance,
+      balance_set_at: balanceSetAt,
+      new_transactions_count: newTransactions?.length || 0,
+      new_transactions_total: totalNewTransactions,
+      drafts_count: draftTransactions?.length || 0,
+      drafts_total: totalDrafts,
+      account_type: accountType,
+    },
   });
 }
 

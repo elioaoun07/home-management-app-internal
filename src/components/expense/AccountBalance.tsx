@@ -55,9 +55,9 @@ export default function AccountBalance({
     },
     enabled: !!accountId,
     retry: 1,
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    staleTime: 1000 * 60 * 5, // 5 minutes - balance updated through mutations
+    refetchOnMount: "always", // ALWAYS fetch fresh balance on mount
+    refetchOnWindowFocus: true, // Refetch when user returns to app
+    staleTime: 0, // Balance is always stale - always refetch
   });
 
   // Handle errors with useEffect (new React Query pattern)

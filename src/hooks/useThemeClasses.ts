@@ -3,29 +3,21 @@
 import { useTheme } from "@/contexts/ThemeContext";
 import { useEffect, useState } from "react";
 
-// Get theme from localStorage for instant initial render (SSR-safe)
-function getInitialTheme(): "blue" | "pink" {
-  if (typeof window === "undefined") return "blue";
-  const stored = localStorage.getItem("color-theme");
-  return stored === "pink" ? "pink" : "blue";
-}
-
 export function useThemeClasses() {
-  // Use local state to avoid hydration mismatch
-  const [localTheme, setLocalTheme] = useState<"blue" | "pink">(
-    getInitialTheme
-  );
+  // Start with default theme to match server render (avoids hydration mismatch)
+  const [mounted, setMounted] = useState(false);
 
-  // Also use context for updates
+  // Get theme from context
   const { theme: contextTheme } = useTheme();
 
-  // Sync with context changes
+  // After hydration, mark as mounted
   useEffect(() => {
-    setLocalTheme(contextTheme);
-  }, [contextTheme]);
+    setMounted(true);
+  }, []);
 
-  // Use localTheme which is initialized from localStorage
-  const isPink = localTheme === "pink";
+  // Use default "blue" theme until mounted to avoid hydration mismatch
+  // After mount, use the actual theme from context
+  const isPink = mounted ? contextTheme === "pink" : false;
 
   return {
     // Text Colors
