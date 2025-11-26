@@ -216,7 +216,6 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   <button
                     onClick={async () => {
                       await setTheme("blue");
-                      toast.success("Theme updated!");
                     }}
                     disabled={themeLoading}
                     className={`group relative neo-card p-8 rounded-2xl hover:scale-[1.02] transition-all disabled:opacity-50 ${
@@ -239,7 +238,6 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   <button
                     onClick={async () => {
                       await setTheme("pink");
-                      toast.success("Theme updated!");
                     }}
                     disabled={themeLoading}
                     className={`group relative neo-card p-8 rounded-2xl hover:scale-[1.02] transition-all disabled:opacity-50 ${

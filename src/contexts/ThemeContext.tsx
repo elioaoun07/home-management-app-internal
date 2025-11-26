@@ -125,9 +125,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       // Start the beautiful paint animation!
       setIsTransitioning(true);
 
+      // Toast shows in the NEW theme color (opposite of what we're switching FROM)
       toast.success(
         `🎨 ${newTheme === "blue" ? "Blue Ocean" : "Pink Sunset"} theme!`,
-        { duration: 2000 }
+        {
+          duration: 2000,
+          style: {
+            background: newTheme === "blue" ? "#1e3a5f" : "#3d1a2e",
+            border: `1px solid ${newTheme === "blue" ? "#3b82f6" : "#ec4899"}`,
+            color: newTheme === "blue" ? "#93c5fd" : "#f9a8d4",
+          },
+        }
       );
     } catch (error) {
       console.error("Failed to save theme:", error);

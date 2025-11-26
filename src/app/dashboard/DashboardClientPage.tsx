@@ -4,6 +4,7 @@ import EnhancedMobileDashboard from "@/components/dashboard/EnhancedMobileDashbo
 import { useUserPreferences } from "@/features/preferences/useUserPreferences";
 import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import { getDefaultDateRange } from "@/lib/utils/date";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -12,6 +13,9 @@ export default function DashboardClientPage() {
   const themeClasses = useThemeClasses();
   const router = useRouter();
   const [monthStartDay, setMonthStartDay] = useState(1);
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>(
+    undefined
+  );
   const { data: preferences } = useUserPreferences();
 
   const defaultRange = useMemo(
@@ -20,6 +24,20 @@ export default function DashboardClientPage() {
   );
 
   const [dateRange, setDateRange] = useState(defaultRange);
+
+  // Fetch current user ID from Supabase auth
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const supabase = supabaseBrowser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.id) {
+        setCurrentUserId(user.id);
+      }
+    };
+    fetchUserId();
+  }, []);
 
   // Update month start day from preferences
   useEffect(() => {
@@ -60,37 +78,6 @@ export default function DashboardClientPage() {
     startDate: dateRange.start,
     endDate: dateRange.end,
   });
-
-  // Extract current user ID from transactions (first transaction with matching user will be current user)
-  // In a household setup, we need to identify which transactions belong to the current user
-  // The API returns user_id for each transaction
-  const currentUserId = useMemo(() => {
-    // Try to get from localStorage first (more reliable)
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("supabase.auth.token");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          const userId = parsed?.currentSession?.user?.id;
-          if (userId) return userId;
-        } catch (e) {
-          // Fallback below
-        }
-      }
-    }
-    // Fallback: find user_id that appears most frequently (likely current user's)
-    if (transactions.length > 0) {
-      const userCounts: Record<string, number> = {};
-      transactions.forEach((tx: any) => {
-        if (tx.user_id) {
-          userCounts[tx.user_id] = (userCounts[tx.user_id] || 0) + 1;
-        }
-      });
-      const sorted = Object.entries(userCounts).sort((a, b) => b[1] - a[1]);
-      if (sorted.length > 0) return sorted[0][0];
-    }
-    return undefined;
-  }, [transactions]);
 
   // ONLY show skeleton if we're loading AND have no cached data
   if (isLoading && transactions.length === 0) {
@@ -154,6 +141,15 @@ export default function DashboardClientPage() {
     );
   }
 
+  const handleDateRangeChange = (start: string, end: string) => {
+    setDateRange({ start, end });
+    // Update URL for shareable links
+    const url = new URL(window.location.href);
+    url.searchParams.set("start", start);
+    url.searchParams.set("end", end);
+    window.history.replaceState({}, "", url.toString());
+  };
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
       <EnhancedMobileDashboard
@@ -161,6 +157,7 @@ export default function DashboardClientPage() {
         startDate={dateRange.start}
         endDate={dateRange.end}
         currentUserId={currentUserId}
+        onDateRangeChange={handleDateRangeChange}
       />
     </div>
   );

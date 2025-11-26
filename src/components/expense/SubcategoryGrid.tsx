@@ -6,6 +6,8 @@ import {
   useCategories,
   type UICategory,
 } from "@/features/categories/useCategoriesQuery";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { cn } from "@/lib/utils";
 import { useRef, useState } from "react";
 
 type Props = {
@@ -21,6 +23,8 @@ export default function SubcategoryGrid({
   selectedSubcategoryId,
   onSubcategorySelect,
 }: Props) {
+  const themeClasses = useThemeClasses();
+
   // reuse the same categories query (already filtered by account)
   const {
     data: categories = [] as UICategory[],
@@ -198,35 +202,33 @@ export default function SubcategoryGrid({
                   </Button>
                 );
               }
-              const subcategoryColor = cat.color || "#38bdf8";
               return (
                 <Button
                   key={cat.id}
                   variant="outline"
                   type="button"
-                  className={`justify-start gap-2 transition-all duration-150 hover:scale-105 relative overflow-hidden`}
+                  className={cn(
+                    "justify-start gap-2 transition-all duration-150 hover:scale-105 relative overflow-hidden",
+                    active
+                      ? `${themeClasses.bgActive} ${themeClasses.borderActive} ${themeClasses.text}`
+                      : `${themeClasses.border} hover:${themeClasses.borderHover}`
+                  )}
                   onClick={() => onSubcategorySelect?.(cat.id)}
-                  style={{
-                    backgroundColor: active
-                      ? `${subcategoryColor}25`
-                      : "transparent",
-                    borderColor: subcategoryColor,
-                    color: active ? subcategoryColor : "inherit",
-                    boxShadow: active
-                      ? `inset 0 0 0 2px ${subcategoryColor}, 0 0 20px ${subcategoryColor}40`
-                      : `inset 0 0 0 1px ${subcategoryColor}40`,
-                    backgroundImage: "none",
-                  }}
                 >
                   {/* Color indicator bar */}
                   <div
-                    className="absolute left-0 top-0 bottom-0 w-1"
-                    style={{ backgroundColor: subcategoryColor }}
+                    className={cn(
+                      "absolute left-0 top-0 bottom-0 w-1",
+                      active
+                        ? "bg-current"
+                        : themeClasses.bgActive
+                            .replace("bg-", "bg-")
+                            .replace("/20", "")
+                    )}
+                    style={{ backgroundColor: themeClasses.defaultAccentColor }}
                   />
                   {cat.icon && <span className="text-lg ml-1">{cat.icon}</span>}
-                  <span
-                    style={{ color: active ? subcategoryColor : undefined }}
-                  >
+                  <span className={active ? themeClasses.text : ""}>
                     {cat.name}
                   </span>
                 </Button>

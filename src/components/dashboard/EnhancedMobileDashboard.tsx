@@ -16,14 +16,100 @@ import {
   XIcon,
 } from "@/components/icons/FuturisticIcons";
 import { Card } from "@/components/ui/card";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
+import {
+  endOfMonth,
+  endOfWeek,
+  format,
+  startOfMonth,
+  startOfWeek,
+  subDays,
+} from "date-fns";
 import { memo, useMemo, useState } from "react";
 import { toast } from "sonner";
+
+// SVG Icons for ownership filter
+const UserIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+const UsersIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
+const HeartIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+  </svg>
+);
+
+const CalendarIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+    <line x1="16" x2="16" y1="2" y2="6" />
+    <line x1="8" x2="8" y1="2" y2="6" />
+    <line x1="3" x2="21" y1="10" y2="10" />
+  </svg>
+);
+
+const ChevronDownIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
 
 type Transaction = {
   id: string;
@@ -48,11 +134,14 @@ type Props = {
   startDate: string;
   endDate: string;
   currentUserId?: string;
+  onDateRangeChange?: (start: string, end: string) => void;
 };
 
 type ViewMode = "widgets" | "list";
 type SortField = "recent" | "date" | "amount" | "category";
 type SortOrder = "asc" | "desc";
+type OwnershipFilter = "all" | "mine" | "partner";
+type DatePreset = "today" | "week" | "month" | "custom";
 
 // Memoized component for instant rendering
 const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
@@ -60,11 +149,15 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   startDate,
   endDate,
   currentUserId,
+  onDateRangeChange,
 }: Props) {
+  const { theme: currentUserTheme } = useTheme();
   const themeClasses = useThemeClasses();
   const [viewMode, setViewMode] = useState<ViewMode>("widgets");
   const [filterCategory, setFilterCategory] = useState<string>("");
   const [filterAccount, setFilterAccount] = useState<string>("");
+  const [ownershipFilter, setOwnershipFilter] =
+    useState<OwnershipFilter>("all");
   const [sortField, setSortField] = useState<SortField>("recent");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [showFilters, setShowFilters] = useState(false);
@@ -77,52 +170,16 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   const queryClient = useQueryClient();
   const deleteMutation = useDeleteTransaction();
 
-  // Calculate summary stats with daily average
-  const stats = useMemo(() => {
-    const total = transactions.reduce((sum, t) => sum + t.amount, 0);
-    const defaultColor = themeClasses.defaultAccentColor;
-    const byCategory = transactions.reduce(
-      (acc, t) => {
-        const cat = t.category || "Uncategorized";
-        acc[cat] = {
-          amount: (acc[cat]?.amount || 0) + t.amount,
-          color: t.category_color || defaultColor,
-        };
-        return acc;
-      },
-      {} as Record<string, { amount: number; color: string }>
-    );
-
-    const topCategory = Object.entries(byCategory).sort(
-      (a, b) => b[1].amount - a[1].amount
-    )[0];
-
-    // Calculate daily average
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const daysDiff = Math.ceil(
-      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    const dailyAvg = daysDiff > 0 ? total / daysDiff : 0;
-
-    return {
-      total,
-      count: transactions.length,
-      dailyAvg,
-      topCategory: topCategory
-        ? {
-            name: topCategory[0],
-            amount: topCategory[1].amount,
-            color: topCategory[1].color,
-          }
-        : null,
-      byCategory,
-    };
-  }, [transactions, startDate, endDate, themeClasses.defaultAccentColor]);
-
-  // Filter and sort transactions
+  // Filter and sort transactions FIRST (before stats calculation)
   const filteredTransactions = useMemo(() => {
     let filtered = [...transactions];
+
+    // Ownership filter
+    if (ownershipFilter === "mine") {
+      filtered = filtered.filter((t) => t.is_owner === true);
+    } else if (ownershipFilter === "partner") {
+      filtered = filtered.filter((t) => t.is_owner === false);
+    }
 
     if (filterCategory) {
       filtered = filtered.filter((t) => t.category === filterCategory);
@@ -149,7 +206,62 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     });
 
     return filtered;
-  }, [transactions, filterCategory, filterAccount, sortField, sortOrder]);
+  }, [
+    transactions,
+    filterCategory,
+    filterAccount,
+    ownershipFilter,
+    sortField,
+    sortOrder,
+  ]);
+
+  // Calculate summary stats from FILTERED transactions
+  const stats = useMemo(() => {
+    const total = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
+    const defaultColor = themeClasses.defaultAccentColor;
+    const byCategory = filteredTransactions.reduce(
+      (acc, t) => {
+        const cat = t.category || "Uncategorized";
+        acc[cat] = {
+          amount: (acc[cat]?.amount || 0) + t.amount,
+          color: t.category_color || defaultColor,
+        };
+        return acc;
+      },
+      {} as Record<string, { amount: number; color: string }>
+    );
+
+    const topCategory = Object.entries(byCategory).sort(
+      (a, b) => b[1].amount - a[1].amount
+    )[0];
+
+    // Calculate daily average
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const daysDiff = Math.ceil(
+      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    const dailyAvg = daysDiff > 0 ? total / daysDiff : 0;
+
+    return {
+      total,
+      count: filteredTransactions.length,
+      dailyAvg,
+      topCategory: topCategory
+        ? {
+            name: topCategory[0],
+            amount: topCategory[1].amount,
+            color: topCategory[1].color,
+          }
+        : null,
+      byCategory,
+    };
+  }, [
+    filteredTransactions,
+    startDate,
+    endDate,
+    themeClasses.defaultAccentColor,
+  ]);
 
   const categories = useMemo(() => {
     return Array.from(
@@ -175,9 +287,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   const clearFilters = () => {
     setFilterCategory("");
     setFilterAccount("");
+    setOwnershipFilter("all");
   };
 
-  const hasActiveFilters = filterCategory || filterAccount;
+  const hasActiveFilters =
+    filterCategory || filterAccount || ownershipFilter !== "all";
 
   const handleDelete = async (id: string) => {
     try {
@@ -238,134 +352,280 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
 
   return (
     <div className={`min-h-screen ${themeClasses.pageBg} pb-20`}>
-      {/* View Mode Toggle */}
+      {/* Sticky Header with Ownership Toggle */}
       <div
-        className={`sticky top-14 z-20 ${themeClasses.headerGradient} px-3 py-3 pb-4 shimmer backdrop-blur-xl`}
+        className={`sticky top-14 z-20 ${themeClasses.headerGradient} backdrop-blur-xl`}
       >
-        <div className="flex items-center gap-2">
+        {/* Ownership Filter - Subheader */}
+        <div className="flex items-center justify-center border-b border-white/5">
           <button
-            onClick={() => {
-              if (navigator.vibrate) navigator.vibrate(5);
-              setViewMode("widgets");
-            }}
+            onClick={() => setOwnershipFilter("mine")}
             className={cn(
-              "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 hover:-translate-y-0.5",
-              viewMode === "widgets"
-                ? "neo-gradient text-white shadow-lg spring-bounce"
-                : `neo-card ${themeClasses.text} ${themeClasses.bgHover} hover:shadow-md`
+              "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all border-b-2",
+              ownershipFilter === "mine"
+                ? currentUserTheme === "pink"
+                  ? "border-pink-500 text-pink-400"
+                  : "border-blue-500 text-blue-400"
+                : "border-transparent text-slate-400 hover:text-slate-300"
             )}
           >
-            <BarChart3Icon
-              className={`w-4 h-4 inline-block mr-1.5 ${themeClasses.glow}`}
-            />
-            Overview
+            <UserIcon className="w-3.5 h-3.5" />
+            Me
           </button>
           <button
-            onClick={() => {
-              if (navigator.vibrate) navigator.vibrate(5);
-              setViewMode("list");
-            }}
+            onClick={() => setOwnershipFilter("all")}
             className={cn(
-              "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 hover:-translate-y-0.5",
-              viewMode === "list"
-                ? "neo-gradient text-white shadow-lg spring-bounce"
-                : `neo-card ${themeClasses.text} ${themeClasses.bgHover} hover:shadow-md`
+              "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all border-b-2",
+              ownershipFilter === "all"
+                ? `border-current ${themeClasses.textActive}`
+                : "border-transparent text-slate-400 hover:text-slate-300"
             )}
           >
-            <ListIcon
-              className={`w-4 h-4 inline-block mr-1.5 ${themeClasses.glow}`}
-            />
-            List
+            <UsersIcon className="w-3.5 h-3.5" />
+            Both
           </button>
+          <button
+            onClick={() => setOwnershipFilter("partner")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all border-b-2",
+              ownershipFilter === "partner"
+                ? currentUserTheme === "pink"
+                  ? "border-blue-500 text-blue-400"
+                  : "border-pink-500 text-pink-400"
+                : "border-transparent text-slate-400 hover:text-slate-300"
+            )}
+          >
+            <HeartIcon className="w-3.5 h-3.5" />
+            Partner
+          </button>
+        </div>
 
+        {/* View Toggle & Filters Row */}
+        <div className="flex items-center gap-2 px-3 py-2">
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-1 p-0.5 rounded-lg neo-card">
+            <button
+              onClick={() => {
+                if (navigator.vibrate) navigator.vibrate(5);
+                setViewMode("widgets");
+              }}
+              className={cn(
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                viewMode === "widgets"
+                  ? "neo-gradient text-white shadow-sm"
+                  : `${themeClasses.text} hover:bg-white/5`
+              )}
+            >
+              <BarChart3Icon className="w-3.5 h-3.5 inline-block mr-1" />
+              Overview
+            </button>
+            <button
+              onClick={() => {
+                if (navigator.vibrate) navigator.vibrate(5);
+                setViewMode("list");
+              }}
+              className={cn(
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                viewMode === "list"
+                  ? "neo-gradient text-white shadow-sm"
+                  : `${themeClasses.text} hover:bg-white/5`
+              )}
+            >
+              <ListIcon className="w-3.5 h-3.5 inline-block mr-1" />
+              List
+            </button>
+          </div>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Filter Button */}
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={cn(
-              `ml-auto p-2 rounded-lg neo-card ${themeClasses.bgHover} relative transition-all`,
-              hasActiveFilters && `ring-2 ${themeClasses.ringActive}/40`,
-              showFilters && themeClasses.bgActive
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+              showFilters || hasActiveFilters
+                ? `${themeClasses.bgActive} ${themeClasses.textActive}`
+                : `neo-card ${themeClasses.text} hover:bg-white/5`
             )}
           >
-            <FilterIcon
-              className={`w-5 h-5 ${themeClasses.text} ${themeClasses.glow}`}
-            />
+            <FilterIcon className="w-3.5 h-3.5" />
+            Filter
             {hasActiveFilters && (
               <span
-                className={`absolute -top-1 -right-1 w-3 h-3 ${themeClasses.bgActive.replace("/20", "")} rounded-full animate-pulse`}
+                className={`w-1.5 h-1.5 rounded-full ${themeClasses.bgActive.replace("/20", "")}`}
               />
             )}
           </button>
         </div>
 
-        {/* Filters Panel */}
+        {/* Expandable Filters Panel */}
         {showFilters && (
-          <div className="mt-3 space-y-2 animate-in slide-in-from-top-2 duration-200">
-            <div className="flex gap-2">
-              <select
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                className={`flex-1 px-3 py-2 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-sm ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} transition-all`}
+          <div className="px-3 pb-3 space-y-3 animate-in slide-in-from-top-2 duration-200 border-t border-white/5">
+            {/* Date Quick Filters */}
+            <div className="pt-3">
+              <div
+                className={`text-[10px] uppercase tracking-wider ${themeClasses.textMuted} mb-2`}
               >
-                <option value="">All Categories</option>
-                {categories.map((cat) => (
-                  <option key={cat || "unknown"} value={cat || ""}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={filterAccount}
-                onChange={(e) => setFilterAccount(e.target.value)}
-                className={`flex-1 px-3 py-2 rounded-lg ${themeClasses.bgSurface} shadow-[0_0_0_1px_rgba(255,255,255,0.1)_inset] text-white text-sm ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} transition-all`}
+                Date Range
+              </div>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+                {[
+                  {
+                    label: "Today",
+                    getValue: () => {
+                      const today = format(new Date(), "yyyy-MM-dd");
+                      return { start: today, end: today };
+                    },
+                  },
+                  {
+                    label: "This Week",
+                    getValue: () => ({
+                      start: format(
+                        startOfWeek(new Date(), { weekStartsOn: 1 }),
+                        "yyyy-MM-dd"
+                      ),
+                      end: format(
+                        endOfWeek(new Date(), { weekStartsOn: 1 }),
+                        "yyyy-MM-dd"
+                      ),
+                    }),
+                  },
+                  {
+                    label: "This Month",
+                    getValue: () => ({
+                      start: format(startOfMonth(new Date()), "yyyy-MM-dd"),
+                      end: format(endOfMonth(new Date()), "yyyy-MM-dd"),
+                    }),
+                  },
+                  {
+                    label: "Last 7 Days",
+                    getValue: () => ({
+                      start: format(subDays(new Date(), 7), "yyyy-MM-dd"),
+                      end: format(new Date(), "yyyy-MM-dd"),
+                    }),
+                  },
+                  {
+                    label: "Last 30 Days",
+                    getValue: () => ({
+                      start: format(subDays(new Date(), 30), "yyyy-MM-dd"),
+                      end: format(new Date(), "yyyy-MM-dd"),
+                    }),
+                  },
+                ].map((preset) => {
+                  const range = preset.getValue();
+                  const isActive =
+                    startDate === range.start && endDate === range.end;
+                  return (
+                    <button
+                      key={preset.label}
+                      onClick={() =>
+                        onDateRangeChange?.(range.start, range.end)
+                      }
+                      className={cn(
+                        "px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all",
+                        isActive
+                          ? `neo-gradient text-white shadow-sm`
+                          : `neo-card ${themeClasses.text} hover:bg-white/5`
+                      )}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className={`text-[10px] ${themeClasses.textMuted} mt-2`}>
+                <CalendarIcon className="w-3 h-3 inline mr-1" />
+                {format(new Date(startDate), "MMM d")} -{" "}
+                {format(new Date(endDate), "MMM d, yyyy")}
+              </div>
+            </div>
+
+            {/* Category & Account Filters */}
+            <div>
+              <div
+                className={`text-[10px] uppercase tracking-wider ${themeClasses.textMuted} mb-2`}
               >
-                <option value="">All Accounts</option>
-                {accounts.map((acc) => (
-                  <option key={acc || "unknown"} value={acc || ""}>
-                    {acc}
-                  </option>
-                ))}
-              </select>
+                Filters
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className={`flex-1 px-3 py-2 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-xs ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all appearance-none`}
+                >
+                  <option value="">All Categories</option>
+                  {categories.map((cat) => (
+                    <option key={cat || "unknown"} value={cat || ""}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filterAccount}
+                  onChange={(e) => setFilterAccount(e.target.value)}
+                  className={`flex-1 px-3 py-2 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-xs ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all appearance-none`}
+                >
+                  <option value="">All Accounts</option>
+                  {accounts.map((acc) => (
+                    <option key={acc || "unknown"} value={acc || ""}>
+                      {acc}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Sort Options */}
+            <div>
+              <div
+                className={`text-[10px] uppercase tracking-wider ${themeClasses.textMuted} mb-2`}
+              >
+                Sort By
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {(["recent", "date", "amount", "category"] as SortField[]).map(
+                  (field) => (
+                    <button
+                      key={field}
+                      onClick={() => toggleSort(field)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 transition-all",
+                        sortField === field
+                          ? `${themeClasses.bgActive} ${themeClasses.textActive}`
+                          : `neo-card ${themeClasses.text} hover:bg-white/5`
+                      )}
+                    >
+                      {field === "recent"
+                        ? "Recent"
+                        : field.charAt(0).toUpperCase() + field.slice(1)}
+                      {sortField === field &&
+                        (sortOrder === "asc" ? (
+                          <ArrowUpRightIcon className="w-3 h-3" />
+                        ) : (
+                          <ArrowDownRightIcon className="w-3 h-3" />
+                        ))}
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* Results & Clear */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <span className={`text-xs ${themeClasses.textMuted}`}>
+                {filteredTransactions.length} of {transactions.length}{" "}
+                transactions
+              </span>
               {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
-                  className="p-2 rounded-lg neo-card hover:bg-red-500/10 transition-all"
+                  className="flex items-center gap-1 px-2 py-1 rounded text-xs text-red-400 hover:bg-red-500/10 transition-all"
                 >
-                  <XIcon className="w-4 h-4 text-red-400 drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
+                  <XIcon className="w-3 h-3" />
+                  Clear All
                 </button>
               )}
-            </div>
-
-            {/* Sort options */}
-            <div className="flex gap-2 text-xs">
-              {(["recent", "date", "amount", "category"] as SortField[]).map(
-                (field) => (
-                  <button
-                    key={field}
-                    onClick={() => toggleSort(field)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg capitalize flex items-center gap-1 transition-all",
-                      sortField === field
-                        ? `${themeClasses.bgActive} ${themeClasses.textActive} neo-glow-sm`
-                        : `neo-card ${themeClasses.text} ${themeClasses.bgHover}`
-                    )}
-                  >
-                    {field === "recent" ? "Last Added" : field}
-                    {sortField === field &&
-                      (sortOrder === "asc" ? (
-                        <ArrowUpRightIcon className="w-3 h-3" />
-                      ) : (
-                        <ArrowDownRightIcon className="w-3 h-3" />
-                      ))}
-                  </button>
-                )
-              )}
-            </div>
-
-            {/* Results count */}
-            <div
-              className={`text-xs ${themeClasses.textMuted} text-center py-1`}
-            >
-              {filteredTransactions.length} of {transactions.length}
             </div>
           </div>
         )}
@@ -561,7 +821,10 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                       );
                     })()}
                     <div className="flex-1 min-w-0 text-left">
-                      <p className="text-xs font-medium text-slate-100 truncate">
+                      <p
+                        className="text-xs font-medium truncate"
+                        style={{ color: tx.category_color || "#e2e8f0" }}
+                      >
                         {tx.category}
                       </p>
                       <p className="text-[10px] text-slate-400/70">

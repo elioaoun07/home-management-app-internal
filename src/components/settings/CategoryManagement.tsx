@@ -787,18 +787,6 @@ function SubcategoryCard({
                 className="bg-[hsl(var(--card))] text-sm"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={editingCategory.color}
-                onChange={(e) => onUpdateCategory({ color: e.target.value })}
-                className="h-6 w-12 rounded cursor-pointer"
-              />
-              <div
-                className="h-6 flex-1 rounded"
-                style={{ backgroundColor: editingCategory.color }}
-              />
-            </div>
             <div className="flex gap-2">
               <Button
                 onClick={() => onUpdateCategory({})}
@@ -826,15 +814,8 @@ function SubcategoryCard({
             >
               <GripVertical className="w-4 h-4" />
             </div>
-            <div
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: subcategory.color }}
-            />
             <span className="text-sm mr-1">{subcategory.icon}</span>
-            <span
-              className="text-sm flex-1"
-              style={{ color: subcategory.color }}
-            >
+            <span className={`text-sm flex-1 ${themeClasses.textMuted}`}>
               {subcategory.name}
             </span>
             <div className="flex gap-1">

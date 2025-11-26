@@ -199,20 +199,30 @@ export default function SwipeableTransactionItem({
       <div
         className={cn(
           "relative bg-gradient-to-br from-[#1a2942] to-[#0f1d2e] rounded-xl p-3 cursor-pointer",
-          // Theme-based subtle styling
-          // Use background gradients and shadows instead of borders for softer look
+          // Theme-based border styling
+          // Own transactions get user's theme color border, partner's get opposite color
           "neo-card",
-          isOwner
-            ? currentUserTheme === "pink"
-              ? "shadow-[0_0_12px_rgba(236,72,153,0.15)]"
-              : "shadow-[0_0_12px_rgba(59,130,246,0.15)]"
-            : currentUserTheme === "pink"
-              ? "shadow-[0_0_12px_rgba(59,130,246,0.15)]"
-              : "shadow-[0_0_12px_rgba(236,72,153,0.15)]",
           isDragging ? "" : "transition-transform duration-200 ease-out"
         )}
         style={{
           transform: `translateX(${offset}px)`,
+          // Override neo-card border with left colored border for ownership indication
+          borderLeft: `4px solid ${
+            isOwner
+              ? currentUserTheme === "pink"
+                ? "#ec4899" // pink-500
+                : "#3b82f6" // blue-500
+              : currentUserTheme === "pink"
+                ? "#3b82f6" // blue-500
+                : "#ec4899" // pink-500
+          }`,
+          boxShadow: isOwner
+            ? currentUserTheme === "pink"
+              ? "0 0 12px rgba(236,72,153,0.15)"
+              : "0 0 12px rgba(59,130,246,0.15)"
+            : currentUserTheme === "pink"
+              ? "0 0 12px rgba(59,130,246,0.15)"
+              : "0 0 12px rgba(236,72,153,0.15)",
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -246,15 +256,7 @@ export default function SwipeableTransactionItem({
                   {transaction.category || "Uncategorized"}
                 </p>
                 {transaction.subcategory && (
-                  <p
-                    className="text-xs truncate opacity-70"
-                    style={{
-                      color:
-                        transaction.subcategory_color ||
-                        transaction.category_color ||
-                        "#94a3b8",
-                    }}
-                  >
+                  <p className={`text-xs truncate ${themeClasses.textMuted}`}>
                     {transaction.subcategory}
                   </p>
                 )}
