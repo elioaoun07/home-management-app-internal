@@ -170,6 +170,12 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   const queryClient = useQueryClient();
   const deleteMutation = useDeleteTransaction();
 
+  // Check if any transaction is pending (optimistic, not yet confirmed)
+  const hasPendingTransactions = useMemo(
+    () => transactions.some((t) => (t as any)._isPending),
+    [transactions]
+  );
+
   // Filter and sort transactions FIRST (before stats calculation)
   const filteredTransactions = useMemo(() => {
     let filtered = [...transactions];
@@ -342,10 +348,15 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   if (categoryDetail) {
     const categoryTxs = getCategoryTransactions(categoryDetail);
     const totalAmount = categoryTxs.reduce((sum, t) => sum + t.amount, 0);
+    // Get category color from the first transaction with this category
+    const categoryColor = categoryTxs.find(
+      (t) => t.category_color
+    )?.category_color;
 
     return (
       <CategoryDetailView
         category={categoryDetail}
+        categoryColor={categoryColor}
         transactions={categoryTxs}
         totalAmount={totalAmount}
         onBack={() => setCategoryDetail(null)}
@@ -786,11 +797,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                   <button
                     type="button"
                     onClick={handleRefresh}
-                    disabled={isRefreshing}
+                    disabled={isRefreshing || hasPendingTransactions}
                     aria-label="Refresh recent transactions"
                     className={cn(
                       `p-1 rounded-full ${themeClasses.text} ${themeClasses.bgHover} transition-all`,
-                      isRefreshing && "opacity-60",
+                      (isRefreshing || hasPendingTransactions) && "opacity-60",
                       "disabled:cursor-not-allowed"
                     )}
                   >
@@ -803,47 +814,92 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                   </button>
                 </div>
                 <button
-                  onClick={() => setViewMode("list")}
+                  onClick={() => {
+                    setViewMode("list");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
                   className={`text-xs ${themeClasses.text} ${themeClasses.textHover} transition-colors`}
                 >
                   View all →
                 </button>
               </div>
               <div className="space-y-1.5">
-                {filteredTransactions.slice(0, 5).map((tx) => (
-                  <button
-                    key={tx.id}
-                    onClick={() => setSelectedTransaction(tx)}
-                    className={`w-full flex items-center gap-2 p-2 rounded-lg ${themeClasses.bgSurface} ${themeClasses.bgHover} shadow-[0_0_0_1px_rgba(255,255,255,0.05)_inset] ${themeClasses.borderHover} transition-all`}
-                  >
-                    {(() => {
-                      const IconComponent = getCategoryIcon(
-                        tx.category || undefined
-                      );
-                      return (
-                        <IconComponent
-                          className={`w-5 h-5 ${themeClasses.textFaint} ${themeClasses.glow}`}
-                        />
-                      );
-                    })()}
-                    <div className="flex-1 min-w-0 text-left">
-                      <p
-                        className="text-xs font-medium truncate"
-                        style={{ color: tx.category_color || "#e2e8f0" }}
-                      >
-                        {tx.category}
-                      </p>
-                      <p className="text-[10px] text-slate-400/70">
-                        {format(new Date(tx.date), "MMM d")}
-                      </p>
-                    </div>
-                    <p
-                      className={`text-sm font-bold bg-gradient-to-br ${themeClasses.titleGradient} bg-clip-text text-transparent`}
+                {filteredTransactions.slice(0, 5).map((tx) => {
+                  // Partner transactions use opposite theme color
+                  const isPartnerTransaction = tx.is_owner === false;
+                  const iconColorClass = isPartnerTransaction
+                    ? themeClasses.isPink
+                      ? "text-cyan-400/60" // Partner in pink theme = cyan
+                      : "text-pink-400/60" // Partner in blue theme = pink
+                    : themeClasses.textFaint;
+                  const iconGlowClass = isPartnerTransaction
+                    ? themeClasses.isPink
+                      ? "drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" // Cyan glow
+                      : "drop-shadow-[0_0_8px_rgba(236,72,153,0.4)]" // Pink glow
+                    : themeClasses.glow;
+
+                  return (
+                    <button
+                      key={tx.id}
+                      onClick={() => setSelectedTransaction(tx)}
+                      className={`w-full flex items-center gap-2 p-2 rounded-lg ${themeClasses.bgSurface} ${themeClasses.bgHover} shadow-[0_0_0_1px_rgba(255,255,255,0.05)_inset] ${themeClasses.borderHover} transition-all`}
                     >
-                      ${tx.amount.toFixed(0)}
-                    </p>
-                  </button>
-                ))}
+                      {(() => {
+                        const IconComponent = getCategoryIcon(
+                          tx.category || undefined
+                        );
+                        return (
+                          <IconComponent
+                            className={`w-5 h-5 ${iconColorClass} ${iconGlowClass}`}
+                          />
+                        );
+                      })()}
+                      <div className="flex-1 min-w-0 text-left">
+                        <p
+                          className="text-xs font-medium truncate"
+                          style={{ color: tx.category_color || "#e2e8f0" }}
+                        >
+                          {tx.category || "Uncategorized"}
+                        </p>
+                        <p className="text-[10px] text-slate-400/70">
+                          {format(new Date(tx.date), "MMM d")}
+                        </p>
+                      </div>
+                      {/* Pending sync indicator */}
+                      {(tx as any)._isPending && (
+                        <span title="Syncing...">
+                          <svg
+                            className="w-3.5 h-3.5 text-amber-400 animate-spin flex-shrink-0"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="3"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            />
+                          </svg>
+                        </span>
+                      )}
+                      <p
+                        className={cn(
+                          `text-sm font-bold bg-gradient-to-br ${themeClasses.titleGradient} bg-clip-text text-transparent`,
+                          (tx as any)._isPending && "opacity-70"
+                        )}
+                      >
+                        ${tx.amount.toFixed(0)}
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
             </Card>
           </div>
@@ -860,11 +916,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               <button
                 type="button"
                 onClick={handleRefresh}
-                disabled={isRefreshing}
+                disabled={isRefreshing || hasPendingTransactions}
                 aria-label="Refresh transaction list"
                 className={cn(
                   `p-1 rounded-full ${themeClasses.text} ${themeClasses.textHover} ${themeClasses.bgHover} transition-all`,
-                  isRefreshing && "opacity-60",
+                  (isRefreshing || hasPendingTransactions) && "opacity-60",
                   "disabled:cursor-not-allowed"
                 )}
               >

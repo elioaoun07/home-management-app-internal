@@ -6,9 +6,8 @@ import {
   XIcon,
 } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
@@ -16,10 +15,11 @@ import {
   useUpdateTransaction,
 } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
-import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
-import { useEffect, useState } from "react";
+import { isToday, isYesterday, yyyyMmDd } from "@/lib/utils/date";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { toast } from "sonner";
+
+type EditField = "date" | "account" | "category" | "subcategory" | null;
 
 type Transaction = {
   id: string;
@@ -53,6 +53,25 @@ export default function TransactionDetailModal({
   currentUserId,
 }: Props) {
   const themeClasses = useThemeClasses();
+  const [isClosing, setIsClosing] = useState(false);
+  const [editingField, setEditingField] = useState<EditField>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Helper to format date display
+  const humanDate = (dateStr: string) => {
+    const d = new Date(dateStr + "T00:00:00");
+    if (isToday(d)) return "Today";
+    if (isYesterday(d)) return "Yesterday";
+    return d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
+  };
+
+  // Animated close handler
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+    }, 250); // Match the close animation duration
+  }, [onClose]);
 
   // Check if current user owns this transaction
   const isOwner =
@@ -77,48 +96,44 @@ export default function TransactionDetailModal({
   );
 
   const handleSave = () => {
-    // Close modal immediately for instant UI feedback
-    onClose();
-
-    // Optimistic update - mutation hook handles cache updates
-    updateMutation.mutate(
-      {
-        id: transaction.id,
-        date: formData.date,
-        amount: parseFloat(formData.amount),
-        description: formData.description,
-        account_id: formData.account_id,
-        category_id: formData.category_id || null,
-        subcategory_id: formData.subcategory_id || null,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Transaction updated");
-          onSave();
+    // Close modal with animation, then trigger mutation
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+      // Optimistic update - mutation hook handles cache updates
+      updateMutation.mutate(
+        {
+          id: transaction.id,
+          date: formData.date,
+          amount: parseFloat(formData.amount),
+          description: formData.description,
+          account_id: formData.account_id,
+          category_id: formData.category_id || null,
+          subcategory_id: formData.subcategory_id || null,
         },
-        onError: () => {
-          toast.error("Failed to update transaction");
-        },
-      }
-    );
+        {
+          onSuccess: () => {
+            onSave();
+          },
+        }
+      );
+    }, 200);
   };
 
   const handleDelete = () => {
     if (!confirm("Delete this transaction?")) return;
 
-    // Close modal immediately for instant UI feedback
-    onClose();
-
-    // Optimistic delete - mutation hook handles cache updates
-    deleteMutation.mutate(transaction.id, {
-      onSuccess: () => {
-        toast.success("Transaction deleted");
-        onDelete();
-      },
-      onError: () => {
-        toast.error("Failed to delete transaction");
-      },
-    });
+    // Close modal with animation, then trigger mutation
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+      // Optimistic delete - mutation hook handles cache updates
+      deleteMutation.mutate(transaction.id, {
+        onSuccess: () => {
+          onDelete();
+        },
+      });
+    }, 200);
   };
 
   // Load accounts and categories
@@ -217,24 +232,47 @@ export default function TransactionDetailModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-hidden"
-      onClick={onClose}
+      className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center overflow-hidden"
+      onClick={handleClose}
+      style={{
+        animation: isClosing
+          ? "modalBackdropFadeOut 0.25s ease-in forwards"
+          : "modalBackdropFadeIn 0.2s ease-out forwards",
+      }}
     >
+      {/* Backdrop */}
       <div
-        className={`w-full max-w-md md:max-w-lg ${themeClasses.modalBg} rounded-t-2xl md:rounded-2xl shadow-2xl animate-in slide-in-from-bottom duration-300 md:slide-in-from-bottom-0 flex flex-col neo-glow`}
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         style={{
-          // Leave space for bottom nav (64px) on mobile
+          animation: isClosing
+            ? "modalBackdropFadeOut 0.25s ease-in forwards"
+            : "modalBackdropFadeIn 0.2s ease-out forwards",
+        }}
+      />
+
+      {/* Modal Panel */}
+      <div
+        className={`relative w-full max-w-md md:max-w-lg ${themeClasses.modalBg} rounded-t-3xl md:rounded-2xl shadow-2xl flex flex-col neo-glow`}
+        style={{
           maxHeight: "calc(100vh - 120px)",
+          animation: isClosing
+            ? "modalSlideDown 0.25s cubic-bezier(0.4, 0, 1, 1) forwards"
+            : "modalSlideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Drag Handle Indicator */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-white/20" />
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between p-4 pb-3">
           <h2 className="text-lg font-semibold text-white">
             {isOwner ? "Transaction Details" : "View Transaction"}
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className={`p-2 rounded-lg ${themeClasses.hoverBgSubtle} transition-colors`}
           >
             <XIcon
@@ -244,202 +282,337 @@ export default function TransactionDetailModal({
         </div>
 
         {/* Content */}
-        <div className="px-4 pt-2 pb-4 space-y-4 flex-1 overflow-y-auto overscroll-contain">
-          {/* Account / Category Selectors */}
-          <Card className="neo-card p-3">
-            <div className="flex items-start gap-3">
-              {(() => {
-                const IconComponent = getCategoryIcon(
-                  transaction.category || undefined
-                );
-                return (
-                  <IconComponent
-                    className={`w-8 h-8 ${themeClasses.labelTextMuted} mt-1 ${themeClasses.iconGlowStrong}`}
+        <div
+          ref={contentRef}
+          className="px-4 pb-4 space-y-3 flex-1 overflow-y-auto overscroll-contain"
+        >
+          {/* Amount - Big & Central */}
+          <div className="text-center py-3">
+            {isOwner ? (
+              <div className="relative inline-flex items-center">
+                <span className="absolute left-2 text-3xl font-bold text-emerald-400/70">
+                  $
+                </span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={(e) =>
+                    setFormData({ ...formData, amount: e.target.value })
+                  }
+                  className="text-center text-4xl font-bold bg-transparent border-none focus:ring-0 text-emerald-400 w-44 pl-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+            ) : (
+              <p className="text-4xl font-bold text-emerald-400">
+                ${transaction.amount.toFixed(2)}
+              </p>
+            )}
+          </div>
+
+          {/* Compact Fields */}
+          <div className="space-y-1">
+            {/* Date Row - Tap to expand inline calendar */}
+            <div>
+              <button
+                onClick={() =>
+                  isOwner &&
+                  setEditingField(editingField === "date" ? null : "date")
+                }
+                disabled={!isOwner}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 transition-colors ${isOwner ? "hover:bg-white/8 active:scale-[0.99]" : ""}`}
+              >
+                <span className={`text-sm ${themeClasses.textMuted}`}>
+                  Date
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-medium ${themeClasses.text}`}>
+                    {humanDate(formData.date)}
+                  </span>
+                  {isOwner && (
+                    <span
+                      className={`text-white/30 transition-transform ${editingField === "date" ? "rotate-90" : ""}`}
+                    >
+                      ›
+                    </span>
+                  )}
+                </div>
+              </button>
+              {editingField === "date" && (
+                <div className="mt-2 p-3 rounded-xl bg-slate-800/95 border border-white/10 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <Calendar
+                    mode="single"
+                    selected={new Date(formData.date + "T00:00:00")}
+                    onSelect={(d) => {
+                      if (d) {
+                        setFormData({ ...formData, date: yyyyMmDd(d) });
+                        setEditingField(null);
+                      }
+                    }}
+                    className="rounded-md"
                   />
-                );
-              })()}
-              <div className="flex-1">
-                <div className="space-y-2">
-                  <div>
-                    <Label className={`${themeClasses.labelText} text-xs`}>
-                      Account
-                    </Label>
-                    <select
-                      value={formData.account_id}
-                      onChange={(e) => {
-                        const acc = e.target.value;
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          date: yyyyMmDd(new Date()),
+                        });
+                        setEditingField(null);
+                      }}
+                    >
+                      Today
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        const y = new Date();
+                        y.setDate(y.getDate() - 1);
+                        setFormData({ ...formData, date: yyyyMmDd(y) });
+                        setEditingField(null);
+                      }}
+                    >
+                      Yesterday
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Account Row - Tap to expand */}
+            <div>
+              <button
+                onClick={() =>
+                  isOwner &&
+                  setEditingField(editingField === "account" ? null : "account")
+                }
+                disabled={!isOwner}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 transition-colors ${isOwner ? "hover:bg-white/8 active:scale-[0.99]" : ""}`}
+              >
+                <span className={`text-sm ${themeClasses.textMuted}`}>
+                  Account
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-medium ${themeClasses.text}`}>
+                    {accounts?.find((a: any) => a.id === formData.account_id)
+                      ?.name || "—"}
+                  </span>
+                  {isOwner && (
+                    <span
+                      className={`text-white/30 transition-transform ${editingField === "account" ? "rotate-90" : ""}`}
+                    >
+                      ›
+                    </span>
+                  )}
+                </div>
+              </button>
+              {editingField === "account" && (
+                <div className="mt-2 p-3 rounded-xl bg-white/5 grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-150">
+                  {(accounts || []).map((a: any) => (
+                    <button
+                      key={a.id}
+                      onClick={() => {
                         setFormData((prev) => ({
                           ...prev,
-                          account_id: acc,
+                          account_id: a.id,
                           category_id: "",
                           subcategory_id: "",
                         }));
-                        setSelectedAccount(acc);
+                        setSelectedAccount(a.id);
+                        setEditingField(null);
                       }}
-                      disabled={!isOwner}
-                      className={`w-full mt-1 px-3 py-2 rounded-lg ${themeClasses.formInput} disabled:opacity-50 disabled:cursor-not-allowed`}
+                      className={`px-3 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95 text-left ${
+                        formData.account_id === a.id
+                          ? "bg-cyan-500/20 text-cyan-400 ring-1 ring-cyan-500/50"
+                          : `bg-white/5 ${themeClasses.text} hover:bg-white/10`
+                      }`}
                     >
-                      <option value="">Select account</option>
-                      {(accounts || []).map((a: any) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className={`${themeClasses.labelText} text-xs`}>
-                        Category
-                      </Label>
-                      <select
-                        value={formData.category_id}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            category_id: e.target.value,
-                            subcategory_id: "",
-                          }))
-                        }
-                        disabled={!isOwner}
-                        className={`w-full mt-1 px-3 py-2 rounded-lg ${themeClasses.formInput} disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        <option value="">None</option>
-                        {topCategories.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <Label className={`${themeClasses.labelText} text-xs`}>
-                        Subcategory
-                      </Label>
-                      <select
-                        value={formData.subcategory_id}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            subcategory_id: e.target.value,
-                          }))
-                        }
-                        disabled={!isOwner}
-                        className={`w-full mt-1 px-3 py-2 rounded-lg ${themeClasses.formInput} disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        <option value="">None</option>
-                        {(() => {
-                          const sel = topCategories.find(
-                            (tc) => tc.id === formData.category_id
-                          );
-                          return (sel?.sub || []).map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ));
-                        })()}
-                      </select>
-                    </div>
-                  </div>
+                      {a.name}
+                    </button>
+                  ))}
                 </div>
+              )}
+            </div>
+
+            {/* Category Row - Tap to expand */}
+            <div>
+              <button
+                onClick={() =>
+                  isOwner &&
+                  setEditingField(
+                    editingField === "category" ? null : "category"
+                  )
+                }
+                disabled={!isOwner}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 transition-colors ${isOwner ? "hover:bg-white/8 active:scale-[0.99]" : ""}`}
+              >
+                <span className={`text-sm ${themeClasses.textMuted}`}>
+                  Category
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-medium ${themeClasses.text}`}>
+                    {topCategories.find((c) => c.id === formData.category_id)
+                      ?.name ||
+                      transaction.category ||
+                      "—"}
+                  </span>
+                  {isOwner && (
+                    <span
+                      className={`text-white/30 transition-transform ${editingField === "category" ? "rotate-90" : ""}`}
+                    >
+                      ›
+                    </span>
+                  )}
+                </div>
+              </button>
+              {editingField === "category" && (
+                <div className="mt-2 p-3 rounded-xl bg-white/5 grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-150">
+                  {topCategories.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          category_id: c.id,
+                          subcategory_id: "",
+                        }));
+                        setEditingField(c.sub?.length ? "subcategory" : null);
+                      }}
+                      className={`px-3 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95 text-left ${
+                        formData.category_id === c.id
+                          ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50"
+                          : `bg-white/5 ${themeClasses.text} hover:bg-white/10`
+                      }`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Subcategory Row - Only if category has subs */}
+            {(() => {
+              const sel = topCategories.find(
+                (tc) => tc.id === formData.category_id
+              );
+              if (!sel?.sub?.length) return null;
+              return (
+                <div>
+                  <button
+                    onClick={() =>
+                      isOwner &&
+                      setEditingField(
+                        editingField === "subcategory" ? null : "subcategory"
+                      )
+                    }
+                    disabled={!isOwner}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 transition-colors ${isOwner ? "hover:bg-white/8 active:scale-[0.99]" : ""}`}
+                  >
+                    <span className={`text-sm ${themeClasses.textMuted}`}>
+                      Subcategory
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-sm font-medium ${themeClasses.text}`}
+                      >
+                        {sel.sub.find((s) => s.id === formData.subcategory_id)
+                          ?.name ||
+                          transaction.subcategory ||
+                          "—"}
+                      </span>
+                      {isOwner && (
+                        <span
+                          className={`text-white/30 transition-transform ${editingField === "subcategory" ? "rotate-90" : ""}`}
+                        >
+                          ›
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                  {editingField === "subcategory" && (
+                    <div className="mt-2 p-3 rounded-xl bg-white/5 grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-150">
+                      {sel.sub.map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              subcategory_id: s.id,
+                            }));
+                            setEditingField(null);
+                          }}
+                          className={`px-3 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95 text-left ${
+                            formData.subcategory_id === s.id
+                              ? "bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/50"
+                              : `bg-white/5 ${themeClasses.text} hover:bg-white/10`
+                          }`}
+                        >
+                          {s.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Note Row - Inline editable */}
+            {isOwner ? (
+              <div className="px-4 py-3 rounded-xl bg-white/5">
+                <input
+                  type="text"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  placeholder="Add note..."
+                  className={`w-full bg-transparent text-sm ${themeClasses.text} focus:outline-none placeholder:text-white/30`}
+                />
               </div>
-            </div>
-          </Card>
-
-          {/* Amount */}
-          <div className="space-y-2">
-            <Label className={`${themeClasses.labelText} text-sm`}>
-              Amount
-            </Label>
-            <Input
-              type="number"
-              step="0.01"
-              value={formData.amount}
-              onChange={(e) =>
-                setFormData({ ...formData, amount: e.target.value })
-              }
-              disabled={!isOwner}
-              className={`${themeClasses.formInput} text-lg font-bold h-12 disabled:opacity-50 disabled:cursor-not-allowed`}
-            />
-          </div>
-
-          {/* Date */}
-          <div className="space-y-2">
-            <Label className={`${themeClasses.labelText} text-sm`}>Date</Label>
-            <Input
-              type="date"
-              value={formData.date}
-              onChange={(e) =>
-                setFormData({ ...formData, date: e.target.value })
-              }
-              disabled={!isOwner}
-              className={`${themeClasses.formInput} disabled:opacity-50 disabled:cursor-not-allowed`}
-            />
-          </div>
-
-          {/* Account */}
-          <div className="space-y-2">
-            <Label className={`${themeClasses.labelText} text-sm`}>
-              Account
-            </Label>
-            <div
-              className={`px-3 py-2 rounded-lg ${themeClasses.formInputReadonly}`}
-            >
-              {transaction.account_name}
-            </div>
-          </div>
-
-          {/* Description */}
-          <div className="space-y-2">
-            <Label className={`${themeClasses.labelText} text-sm`}>
-              Description
-            </Label>
-            <textarea
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-              rows={3}
-              disabled={!isOwner}
-              className={`w-full px-3 py-2 rounded-lg ${themeClasses.formInput} resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed`}
-              placeholder="Add a note..."
-            />
+            ) : transaction.description ? (
+              <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/5">
+                <span className={`text-sm ${themeClasses.textMuted}`}>
+                  Note
+                </span>
+                <span className={`text-sm ${themeClasses.text}`}>
+                  {transaction.description}
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
 
-        {/* Footer (sticky on mobile) */}
+        {/* Footer */}
         {isOwner ? (
-          <div
-            className={`p-4 pt-3 flex gap-3 bg-gradient-to-t from-[${themeClasses.modalBg.includes("1a0a14") ? "#1a0a14" : "#0f1d2e"}] to-transparent sticky bottom-0`}
-          >
+          <div className="p-4 pt-2 flex gap-3 border-t border-white/5">
             <Button
               onClick={handleDelete}
               disabled={deleteMutation.isPending}
               variant="outline"
-              className="flex-1 shadow-[0_0_0_2px_rgba(239,68,68,0.4)_inset] text-red-400 hover:bg-red-500/10 hover:shadow-[0_0_0_2px_rgba(239,68,68,0.6)_inset,0_0_20px_rgba(239,68,68,0.3)]"
+              className="flex-1 h-11 shadow-[0_0_0_1px_rgba(239,68,68,0.3)_inset] text-red-400 hover:bg-red-500/10 hover:shadow-[0_0_0_1px_rgba(239,68,68,0.5)_inset]"
             >
-              <Trash2Icon className="w-4 h-4 mr-2 drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              <Trash2Icon className="w-4 h-4 mr-2" />
+              {deleteMutation.isPending ? "..." : "Delete"}
             </Button>
             <Button
               onClick={handleSave}
               disabled={updateMutation.isPending}
-              className="flex-1 neo-gradient"
+              className="flex-1 h-11 neo-gradient"
             >
-              <SaveIcon className="w-4 h-4 mr-2 drop-shadow-[0_0_6px_rgba(20,184,166,0.5)]" />
-              {updateMutation.isPending ? "Saving..." : "Save"}
+              <SaveIcon className="w-4 h-4 mr-2" />
+              {updateMutation.isPending ? "..." : "Save"}
             </Button>
           </div>
         ) : (
-          <div
-            className={`p-4 pt-3 bg-gradient-to-t from-[${themeClasses.modalBg.includes("1a0a14") ? "#1a0a14" : "#0f1d2e"}] to-transparent sticky bottom-0`}
-          >
-            <p
-              className={`text-center ${themeClasses.headerTextMuted} text-sm`}
-            >
-              Read-only: This is your partner's transaction
+          <div className="p-4 pt-2 border-t border-white/5">
+            <p className={`text-center ${themeClasses.textMuted} text-xs`}>
+              👀 Viewing partner's transaction
             </p>
           </div>
         )}

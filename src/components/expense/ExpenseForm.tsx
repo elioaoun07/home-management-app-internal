@@ -18,6 +18,7 @@ import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
+import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { isToday, isYesterday, yyyyMmDd } from "@/lib/utils/date";
 import { format } from "date-fns";
@@ -161,12 +162,16 @@ export default function ExpenseForm() {
     // Optimistic add - mutation hook handles cache updates
     addTransactionMutation.mutate(txData, {
       onSuccess: () => {
-        toast.success("Expense added successfully!");
+        toast.success("Expense added!", {
+          icon: ToastIcons.create,
+          description: `$${txData.amount.toFixed(2)} added`,
+        });
       },
       onError: (error) => {
         console.error("Error creating transaction:", error);
         toast.error(
-          error instanceof Error ? error.message : "Failed to add expense"
+          error instanceof Error ? error.message : "Failed to add expense",
+          { icon: ToastIcons.error }
         );
       },
     });

@@ -23,10 +23,13 @@ type Transaction = {
   inserted_at: string;
   account_name?: string;
   category_icon?: string;
+  category_color?: string;
+  is_owner?: boolean;
 };
 
 type Props = {
   category: string;
+  categoryColor?: string;
   transactions: Transaction[];
   totalAmount: number;
   onBack: () => void;
@@ -35,12 +38,19 @@ type Props = {
 
 export default function CategoryDetailView({
   category,
+  categoryColor,
   transactions,
   totalAmount,
   onBack,
   onTransactionClick,
 }: Props) {
   const themeClasses = useThemeClasses();
+
+  // Use category color or fallback to theme color
+  const iconColor = categoryColor || themeClasses.defaultAccentColor;
+  const iconGlowStyle = categoryColor
+    ? `drop-shadow(0 0 8px ${categoryColor}80)`
+    : undefined;
   const [isExiting, setIsExiting] = useState(false);
 
   const handleBack = () => {
@@ -132,30 +142,44 @@ export default function CategoryDetailView({
 
         <div className="flex items-center gap-4">
           <div
-            className={cn(
-              "relative p-3 rounded-xl scale-in-center bg-secondary/5 border glow-pulse",
-              themeClasses.border
-            )}
+            className="relative p-3 rounded-xl scale-in-center border"
+            style={{
+              borderColor: categoryColor
+                ? `${categoryColor}50`
+                : "rgba(6, 182, 212, 0.3)",
+              backgroundColor: categoryColor
+                ? `${categoryColor}15`
+                : "rgba(6, 182, 212, 0.05)",
+              boxShadow: categoryColor
+                ? `0 0 30px ${categoryColor}40, 0 0 60px ${categoryColor}20, inset 0 0 20px ${categoryColor}10`
+                : "0 0 30px rgba(6, 182, 212, 0.2)",
+            }}
           >
-            {(() => {
-              const IconComponent = getCategoryIcon(category);
-              return (
-                <IconComponent
-                  className={cn(
-                    "w-12 h-12",
-                    themeClasses.text,
-                    themeClasses.glow
-                  )}
-                />
-              );
-            })()}
-            <SparklesIcon
-              className={cn(
-                "absolute -top-1 -right-1 w-4 h-4 animate-pulse",
-                themeClasses.text,
-                themeClasses.glow
-              )}
-            />
+            {/* Wrapper div to apply color to SVG via currentColor inheritance */}
+            <div
+              style={{
+                color: categoryColor || iconColor,
+                filter: categoryColor
+                  ? `drop-shadow(0 0 8px ${categoryColor}) drop-shadow(0 0 16px ${categoryColor}80)`
+                  : `drop-shadow(0 0 8px ${iconColor})`,
+              }}
+            >
+              {(() => {
+                const IconComponent = getCategoryIcon(category);
+                return <IconComponent className="w-12 h-12" />;
+              })()}
+            </div>
+            <div
+              className="absolute -top-1 -right-1"
+              style={{
+                color: categoryColor || themeClasses.defaultAccentColor,
+                filter: categoryColor
+                  ? `drop-shadow(0 0 6px ${categoryColor})`
+                  : undefined,
+              }}
+            >
+              <SparklesIcon className="w-4 h-4 animate-pulse" />
+            </div>
           </div>
           <div className="fade-in-expand">
             <h1 className={cn("text-2xl font-bold text-white mb-1")}>
@@ -315,49 +339,71 @@ export default function CategoryDetailView({
                 (a, b) =>
                   new Date(b.date).getTime() - new Date(a.date).getTime()
               )
-              .map((tx, index) => (
-                <div
-                  key={tx.id}
-                  onClick={() => onTransactionClick(tx)}
-                  className={cn(
-                    "flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:scale-105 group bg-primary/5 hover:bg-primary/15 hover:border-secondary/40 fade-in-expand",
-                    themeClasses.border
-                  )}
-                  style={{ animationDelay: `${0.8 + index * 0.05}s` }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">
-                      {tx.subcategory || category}
-                    </p>
-                    <div className="flex items-center gap-2 text-xs mt-1 text-[#94a3b8]">
-                      <span>{format(new Date(tx.date), "MMM d, yyyy")}</span>
-                      <span>•</span>
-                      <span>{tx.account_name}</span>
-                    </div>
-                    {tx.description && (
-                      <p className="text-xs mt-1 truncate opacity-70 text-[#94a3b8]">
-                        {tx.description}
-                      </p>
+              .map((tx, index) => {
+                // Owner-based border: current user's theme color if owner, opposite if partner
+                const isPartner = tx.is_owner === false;
+                const ownerBorderColor = isPartner
+                  ? themeClasses.isPink
+                    ? "rgba(6, 182, 212, 0.4)" // Cyan for partner in pink theme
+                    : "rgba(236, 72, 153, 0.4)" // Pink for partner in blue theme
+                  : themeClasses.isPink
+                    ? "rgba(236, 72, 153, 0.4)" // Pink for owner in pink theme
+                    : "rgba(6, 182, 212, 0.4)"; // Cyan for owner in blue theme
+                const ownerGlowColor = isPartner
+                  ? themeClasses.isPink
+                    ? "rgba(6, 182, 212, 0.2)"
+                    : "rgba(236, 72, 153, 0.2)"
+                  : themeClasses.isPink
+                    ? "rgba(236, 72, 153, 0.2)"
+                    : "rgba(6, 182, 212, 0.2)";
+
+                return (
+                  <div
+                    key={tx.id}
+                    onClick={() => onTransactionClick(tx)}
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:scale-105 group bg-primary/5 hover:bg-primary/15 fade-in-expand"
                     )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <p
-                      className={cn(
-                        "text-base font-bold ml-3",
-                        themeClasses.text
+                    style={{
+                      animationDelay: `${0.8 + index * 0.05}s`,
+                      borderColor: ownerBorderColor,
+                      boxShadow: `0 0 10px ${ownerGlowColor}`,
+                    }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">
+                        {tx.subcategory || category}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs mt-1 text-[#94a3b8]">
+                        <span>{format(new Date(tx.date), "MMM d, yyyy")}</span>
+                        <span>•</span>
+                        <span>{tx.account_name}</span>
+                      </div>
+                      {tx.description && (
+                        <p className="text-xs mt-1 truncate opacity-70 text-[#94a3b8]">
+                          {tx.description}
+                        </p>
                       )}
-                    >
-                      ${tx.amount.toFixed(2)}
-                    </p>
-                    <div
-                      className={cn(
-                        "w-1 h-1 rounded-full transition-all group-hover:w-2 group-hover:h-2",
-                        themeClasses.bgActive
-                      )}
-                    />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p
+                        className={cn(
+                          "text-base font-bold ml-3",
+                          themeClasses.text
+                        )}
+                      >
+                        ${tx.amount.toFixed(2)}
+                      </p>
+                      <div
+                        className={cn(
+                          "w-1 h-1 rounded-full transition-all group-hover:w-2 group-hover:h-2",
+                          themeClasses.bgActive
+                        )}
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
           </div>
         </Card>
       </div>

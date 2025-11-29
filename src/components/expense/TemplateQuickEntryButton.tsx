@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
+import { ToastIcons } from "@/lib/toastIcons";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import TemplateDialog from "./TemplateDialog";
@@ -295,11 +296,16 @@ export default function TemplateQuickEntryButton({
                   },
                   {
                     onSuccess: () => {
-                      toast.success("Expense added");
+                      toast.success("Expense added", {
+                        icon: ToastIcons.create,
+                        description: `$${parseFloat(amount).toFixed(2)} from template`,
+                      });
                     },
                     onError: (err) => {
                       console.error("Quick entry failed", err);
-                      toast.error("Failed to add expense");
+                      toast.error("Failed to add expense", {
+                        icon: ToastIcons.error,
+                      });
                     },
                   }
                 );

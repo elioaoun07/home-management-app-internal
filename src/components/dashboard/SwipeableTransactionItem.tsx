@@ -24,6 +24,8 @@ type Transaction = {
   user_theme?: string;
   user_id?: string;
   is_owner?: boolean;
+  /** True if this transaction is optimistic (not yet confirmed by server) */
+  _isPending?: boolean;
 };
 
 type Props = {
@@ -274,16 +276,47 @@ export default function SwipeableTransactionItem({
             </div>
           </div>
 
-          {/* Right: Amount */}
-          <div className="text-right">
-            <p className="text-lg font-bold bg-gradient-to-br from-emerald-400 via-emerald-300 to-teal bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]">
-              ${transaction.amount.toFixed(2)}
-            </p>
-            {transaction.description && (
-              <p className="text-xs text-slate-400/60 truncate max-w-[80px]">
-                {transaction.description}
-              </p>
+          {/* Right: Amount + Pending Indicator */}
+          <div className="text-right flex items-center gap-2">
+            {/* Pending sync indicator */}
+            {transaction._isPending && (
+              <div className="flex items-center" title="Syncing...">
+                <svg
+                  className="w-4 h-4 text-amber-400 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+              </div>
             )}
+            <div>
+              <p
+                className={cn(
+                  "text-lg font-bold bg-gradient-to-br from-emerald-400 via-emerald-300 to-teal bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]",
+                  transaction._isPending && "opacity-70"
+                )}
+              >
+                ${transaction.amount.toFixed(2)}
+              </p>
+              {transaction.description && (
+                <p className="text-xs text-slate-400/60 truncate max-w-[80px]">
+                  {transaction.description}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>

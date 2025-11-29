@@ -1,4 +1,6 @@
+import { ToastIcons } from "@/lib/toastIcons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 export type Transaction = {
   id: string;
@@ -17,6 +19,8 @@ export type Transaction = {
   subcategory_color?: string;
   category_id?: string | null;
   subcategory_id?: string | null;
+  /** True if this transaction is optimistic (not yet confirmed by server) */
+  _isPending?: boolean;
 };
 
 type TransactionInput = {
@@ -212,6 +216,7 @@ export function useDeleteTransaction() {
     },
     onError: (err, transactionId, context) => {
       // Rollback on error
+      toast.error("Failed to delete transaction", { icon: ToastIcons.error });
       if (context?.previousTransactions) {
         context.previousTransactions.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data);
@@ -246,6 +251,9 @@ export function useDeleteTransaction() {
         queryKey: ["account-balance"],
         refetchType: "none",
       });
+    },
+    onSuccess: () => {
+      toast.success("Transaction deleted", { icon: ToastIcons.delete });
     },
   });
 }
@@ -397,6 +405,7 @@ export function useAddTransaction() {
         subcategory_color: subcategoryColor,
         user_name: opt?.user_name ?? undefined,
         inserted_at: new Date().toISOString(),
+        _isPending: true, // Mark as pending until server confirms
       };
 
       // Optimistically add to ALL existing transaction queries
@@ -473,6 +482,7 @@ export function useAddTransaction() {
     },
     onError: (err, newTransaction, context) => {
       // Rollback transactions on error
+      toast.error("Failed to add transaction", { icon: ToastIcons.error });
       if (context?.previousTransactions) {
         context.previousTransactions.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data);
@@ -579,6 +589,9 @@ export function useAddTransaction() {
           }
         );
       }
+
+      // Note: Success toast for "add" is handled by the calling component
+      // which can include amount and category in the message
     },
     onSettled: () => {
       // Mark all transaction queries as stale - they will refetch when next accessed
@@ -657,7 +670,7 @@ export function useUpdateTransaction() {
           ]) as { balance: number } | undefined)
         : undefined;
 
-      // Optimistically update transaction in ALL queries
+      // Optimistically update transaction in ALL queries with _isPending flag
       queryClient.setQueriesData<Transaction[]>(
         { queryKey: ["transactions"] },
         (old) => {
@@ -670,13 +683,14 @@ export function useUpdateTransaction() {
                   // Keep fields that aren't being updated
                   category: t.category,
                   subcategory: t.subcategory,
+                  _isPending: true, // Show sync spinner until API confirms
                 }
               : t
           );
         }
       );
 
-      // Also update today's transactions
+      // Also update today's transactions with _isPending flag
       queryClient.setQueriesData<any[]>(
         { queryKey: ["transactions-today"] },
         (old) => {
@@ -686,6 +700,7 @@ export function useUpdateTransaction() {
               ? {
                   ...t,
                   ...update,
+                  _isPending: true, // Show sync spinner until API confirms
                 }
               : t
           );
@@ -713,6 +728,7 @@ export function useUpdateTransaction() {
     },
     onError: (err, update, context) => {
       // Rollback transactions on error
+      toast.error("Failed to update transaction", { icon: ToastIcons.error });
       if (context?.previousTransactions) {
         context.previousTransactions.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, data);
@@ -731,6 +747,30 @@ export function useUpdateTransaction() {
           context.previousBalance
         );
       }
+    },
+    onSuccess: (data, update) => {
+      // Clear _isPending flag from the updated transaction
+      queryClient.setQueriesData<Transaction[]>(
+        { queryKey: ["transactions"] },
+        (old) => {
+          if (!old) return old;
+          return old.map((t) =>
+            t.id === update.id ? { ...t, _isPending: false } : t
+          );
+        }
+      );
+      queryClient.setQueriesData<any[]>(
+        { queryKey: ["transactions-today"] },
+        (old) => {
+          if (!old) return old;
+          return old.map((t: any) =>
+            t.id === update.id ? { ...t, _isPending: false } : t
+          );
+        }
+      );
+
+      // Show success toast
+      toast.success("Transaction updated", { icon: ToastIcons.update });
     },
     onSettled: () => {
       // Mark all transaction queries as stale - they will refetch when next accessed

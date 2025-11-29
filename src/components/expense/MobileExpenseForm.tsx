@@ -25,6 +25,7 @@ import {
   useDeleteTransaction,
 } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format } from "date-fns";
@@ -173,20 +174,25 @@ export default function MobileExpenseForm() {
     addTransactionMutation.mutate(transactionData, {
       onSuccess: (newTransaction) => {
         toast.success("Expense added!", {
+          icon: ToastIcons.create,
           description: `$${amountForToast} for ${categoryNameForToast}`,
           action: {
             label: "Undo",
             onClick: () => {
               deleteTransactionMutation.mutate(newTransaction.id, {
-                onSuccess: () => toast.success("Transaction deleted"),
-                onError: () => toast.error("Failed to undo transaction"),
+                onSuccess: () =>
+                  toast.success("Transaction undone", {
+                    icon: ToastIcons.delete,
+                  }),
+                onError: () =>
+                  toast.error("Failed to undo", { icon: ToastIcons.error }),
               });
             },
           },
         });
       },
       onError: () => {
-        toast.error("Failed to add expense");
+        toast.error("Failed to add expense", { icon: ToastIcons.error });
       },
     });
   };

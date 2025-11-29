@@ -33,6 +33,7 @@ import {
 import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
+import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
@@ -152,11 +153,16 @@ export default function MobileNav() {
       },
       {
         onSuccess: () => {
-          toast.success("Transaction added!");
+          toast.success("Transaction added!", {
+            icon: ToastIcons.create,
+            description: `$${parseFloat(amount).toFixed(2)} from template`,
+          });
         },
         onError: (error) => {
           console.error("Template transaction failed", error);
-          toast.error("Failed to create transaction");
+          toast.error("Failed to create transaction", {
+            icon: ToastIcons.error,
+          });
         },
       }
     );
