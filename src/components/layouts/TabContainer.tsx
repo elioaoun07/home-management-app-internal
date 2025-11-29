@@ -4,6 +4,7 @@ import DashboardClientPage from "@/app/dashboard/DashboardClientPage";
 import MobileExpenseForm from "@/components/expense/MobileExpenseForm";
 import SimpleWatchView from "@/components/watch/SimpleWatchView";
 import { WatchErrorBoundary } from "@/components/watch/WatchErrorBoundary";
+import WebViewContainer from "@/components/web/WebViewContainer";
 import { useTab } from "@/contexts/TabContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
@@ -41,26 +42,9 @@ export default function TabContainer() {
     );
   }
 
-  // Web view - to be implemented later
+  // Web view - Full responsive dashboard and budget interface
   if (viewMode === "web") {
-    return (
-      <div
-        className={cn(
-          "min-h-screen flex items-center justify-center p-8",
-          themeClasses.bgPage
-        )}
-      >
-        <div className="neo-card p-8 text-center max-w-md">
-          <h2 className={cn("text-2xl font-bold mb-4", themeClasses.text)}>
-            Web View Coming Soon
-          </h2>
-          <p className="text-[hsl(var(--text-muted))]">
-            The desktop web interface is currently under development. Please
-            switch back to Mobile or Watch view in Settings.
-          </p>
-        </div>
-      </div>
-    );
+    return <WebViewContainer />;
   }
 
   // Loading fallback component

@@ -18,7 +18,8 @@ export default function ExpenseLayout({
   const { viewMode, isLoaded } = useViewMode();
 
   // Only show tags bar when actively on the expense tab (not dashboard or drafts)
-  const showTagsBar = activeTab === "expense";
+  // and only in mobile view mode (not web or watch)
+  const showTagsBar = activeTab === "expense" && viewMode === "mobile";
 
   // Wait for view mode to load before rendering
   if (!isLoaded) {

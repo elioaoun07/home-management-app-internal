@@ -2,6 +2,7 @@ import { ErrorLogger } from "@/components/ErrorLogger";
 import ConditionalHeader from "@/components/layouts/ConditionalHeader";
 import MobileNav from "@/components/layouts/MobileNav";
 import { Toaster } from "@/components/ui/sonner";
+import { UserProvider } from "@/contexts/UserContext";
 import { supabaseServerRSC } from "@/lib/supabase/server";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
@@ -123,39 +124,45 @@ export default async function RootLayout({
           }}
         />
         <Providers>
-          <ErrorLogger />
-          {/* Conditional header - hidden on expense page */}
-          {user && (
-            <ConditionalHeader
-              userName={userName}
-              userEmail={userEmail}
-              avatarUrl={avatarUrl}
+          <UserProvider
+            userData={
+              user ? { name: userName, email: userEmail, avatarUrl } : null
+            }
+          >
+            <ErrorLogger />
+            {/* Conditional header - hidden on expense page */}
+            {user && (
+              <ConditionalHeader
+                userName={userName}
+                userEmail={userEmail}
+                avatarUrl={avatarUrl}
+              />
+            )}
+            {children}
+            <MobileNav />
+            <Toaster
+              richColors
+              closeButton
+              position="top-center"
+              toastOptions={{
+                style: {
+                  background: "hsl(var(--header-bg))",
+                  border: "1px solid hsl(var(--header-border))",
+                  color: "hsl(var(--foreground))",
+                  backdropFilter: "blur(12px)",
+                },
+                className: "neo-card shadow-2xl",
+                actionButtonStyle: {
+                  background: "hsl(var(--nav-text-primary))",
+                  color: "hsl(var(--background))",
+                  border: "none",
+                  fontWeight: "600",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                },
+                duration: 3000,
+              }}
             />
-          )}
-          {children}
-          <MobileNav />
-          <Toaster
-            richColors
-            closeButton
-            position="top-center"
-            toastOptions={{
-              style: {
-                background: "hsl(var(--header-bg))",
-                border: "1px solid hsl(var(--header-border))",
-                color: "hsl(var(--foreground))",
-                backdropFilter: "blur(12px)",
-              },
-              className: "neo-card shadow-2xl",
-              actionButtonStyle: {
-                background: "hsl(var(--nav-text-primary))",
-                color: "hsl(var(--background))",
-                border: "none",
-                fontWeight: "600",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-              },
-              duration: 3000,
-            }}
-          />
+          </UserProvider>
         </Providers>
       </body>
     </html>
