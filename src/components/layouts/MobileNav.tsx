@@ -143,7 +143,7 @@ export default function MobileNav() {
     // Optimistic add - mutation hook handles cache updates
     addTransactionMutation.mutate(
       {
-        account_id: template.account_id,
+        account_id: template.account_id!,
         category_id: template.category_id,
         subcategory_id: template.subcategory_id,
         amount: parseFloat(amount),

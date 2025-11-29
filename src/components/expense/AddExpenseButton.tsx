@@ -7,7 +7,7 @@ import { useState } from "react";
 
 type Props = {
   disabled?: boolean;
-  onSubmit?: () => Promise<void>;
+  onSubmit?: () => void | Promise<void>;
 };
 
 export default function AddExpenseButton({ disabled = true, onSubmit }: Props) {
