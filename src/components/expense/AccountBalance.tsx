@@ -1,6 +1,11 @@
 "use client";
 
-import { Edit2Icon, SaveIcon, XIcon } from "@/components/icons/FuturisticIcons";
+import {
+  Edit2Icon,
+  RefreshIcon,
+  SaveIcon,
+  XIcon,
+} from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,14 +46,16 @@ export default function AccountBalance({
   // Get cached balance for instant display
   const cachedBalance = accountId ? getCachedBalance(accountId) : null;
 
-  // Fetch balance with smart caching - NOT on every mount
-  // Balance will only be fetched:
+  // Fetch balance with smart caching
+  // Balance will be fetched:
   // 1. First time (no cache)
   // 2. When cache expires (5 minutes)
   // 3. When explicitly invalidated after mutations
+  // 4. When window regains focus (for multi-device sync)
   const {
     data: balance,
     isLoading,
+    isFetching,
     error,
   } = useQuery<Balance>({
     queryKey: ["account-balance", accountId],
@@ -68,10 +75,10 @@ export default function AccountBalance({
     },
     enabled: !!accountId,
     retry: 1,
-    // OPTIMIZED: Use cached data, only refetch when stale or invalidated
+    // OPTIMIZED: Use cached data, refetch when stale
     staleTime: CACHE_TIMES.BALANCE, // 5 minutes
-    refetchOnMount: false, // Don't refetch on every mount
-    refetchOnWindowFocus: false, // Don't refetch on tab focus
+    refetchOnMount: "always", // Always check on mount
+    refetchOnWindowFocus: true, // Sync across devices when tab gains focus
     // Use cached balance as placeholder for instant UI
     placeholderData: cachedBalance
       ? {
@@ -238,10 +245,21 @@ export default function AccountBalance({
             <div className="flex flex-col gap-0.5 mt-1">
               <div className="flex items-center gap-2">
                 <span
-                  className={`text-xl font-bold tabular-nums bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`}
+                  className={cn(
+                    `text-xl font-bold tabular-nums bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`,
+                    isFetching && "opacity-70"
+                  )}
                 >
                   ${currentBalance.toFixed(2)}
                 </span>
+                {/* Subtle loading indicator while syncing */}
+                {isFetching && (
+                  <div
+                    className={cn("animate-spin", themeClasses.textHighlight)}
+                  >
+                    <RefreshIcon className="h-3.5 w-3.5" />
+                  </div>
+                )}
                 <Button
                   size="icon"
                   variant="ghost"

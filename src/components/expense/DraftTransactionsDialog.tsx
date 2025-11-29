@@ -20,11 +20,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
+import {
+  useConfirmDraft,
+  useDeleteDraft,
+  useDrafts,
+} from "@/features/drafts/useDrafts";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 type DraftTransaction = {
@@ -50,8 +54,9 @@ type Props = {
 
 export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
   const themeClasses = useThemeClasses();
-  const [drafts, setDrafts] = useState<DraftTransaction[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { data: drafts = [], isLoading: loading } = useDrafts();
+  const deleteDraftMutation = useDeleteDraft();
+  const confirmDraftMutation = useConfirmDraft();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     amount: "",
@@ -61,32 +66,8 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
     date: "",
     account_id: "",
   });
-  const queryClient = useQueryClient();
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories(editForm.account_id);
-
-  useEffect(() => {
-    if (open) {
-      fetchDrafts();
-    }
-  }, [open]);
-
-  const fetchDrafts = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/drafts");
-      const data = await res.json();
-      if (res.ok) {
-        setDrafts(data.drafts || []);
-      } else {
-        toast.error(data.error || "Failed to load drafts");
-      }
-    } catch (error) {
-      toast.error("Failed to load draft transactions");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const startEditing = (draft: DraftTransaction) => {
     setEditingId(draft.id);
@@ -112,48 +93,36 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
     });
   };
 
-  const confirmDraft = async (draftId: string) => {
-    try {
-      const res = await fetch(`/api/drafts/${draftId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editForm),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        toast.success("Transaction confirmed!");
-        setDrafts((prev) => prev.filter((d) => d.id !== draftId));
-        cancelEditing();
-        // Invalidate transactions cache
-        queryClient.invalidateQueries({ queryKey: ["transactions"] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      } else {
-        toast.error(data.error || "Failed to confirm");
+  const confirmDraft = (draftId: string) => {
+    // Optimistic - UI updates instantly via mutation hook
+    confirmDraftMutation.mutate(
+      {
+        id: draftId,
+        ...editForm,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Transaction confirmed!");
+          cancelEditing();
+        },
+        onError: () => {
+          toast.error("Failed to confirm transaction");
+        },
       }
-    } catch (error) {
-      toast.error("Failed to confirm transaction");
-    }
+    );
   };
 
-  const deleteDraft = async (draftId: string) => {
-    try {
-      const res = await fetch(`/api/drafts/${draftId}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
+  const deleteDraft = (draftId: string) => {
+    // Optimistic - draft disappears instantly
+    deleteDraftMutation.mutate(draftId, {
+      onSuccess: () => {
         toast.success("Draft deleted");
-        setDrafts((prev) => prev.filter((d) => d.id !== draftId));
         if (editingId === draftId) cancelEditing();
-      } else {
-        const data = await res.json();
-        toast.error(data.error || "Failed to delete");
-      }
-    } catch (error) {
-      toast.error("Failed to delete draft");
-    }
+      },
+      onError: () => {
+        toast.error("Failed to delete draft");
+      },
+    });
   };
 
   const getConfidenceBadge = (score: number | null) => {

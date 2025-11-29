@@ -16,10 +16,10 @@ import {
 } from "@/components/ui/popover";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
+import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
 import { cn } from "@/lib/utils";
 import { isToday, isYesterday, yyyyMmDd } from "@/lib/utils/date";
-import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useEffect, useMemo, useState, type JSX } from "react";
 import { toast } from "sonner";
@@ -50,8 +50,8 @@ export default function ExpenseForm() {
   const { data: accounts = [] } = useAccounts();
   const selectedAccount = accounts.find((a: any) => a.id === selectedAccountId);
 
-  // Query client for invalidating balance
-  const queryClient = useQueryClient();
+  // Mutation for adding transactions with optimistic updates
+  const addTransactionMutation = useAddTransaction();
 
   const humanDate = (d: Date) => {
     if (isToday(d)) return "Today";
@@ -115,56 +115,61 @@ export default function ExpenseForm() {
   const isFormValid =
     selectedAccountId && selectedCategoryId && amount && parseFloat(amount) > 0;
 
-  const handleSubmit = async () => {
+  // Look up selected category/subcategory data for optimistic UI
+  const selectedCategory = categories.find(
+    (c: any) => c.id === selectedCategoryId
+  );
+  // Subcategory might be in flat list or nested
+  const selectedSubcategory = selectedSubcategoryId
+    ? categories.find((c: any) => c.id === selectedSubcategoryId) ||
+      (selectedCategory as any)?.subcategories?.find(
+        (s: any) => s.id === selectedSubcategoryId
+      )
+    : undefined;
+
+  const handleSubmit = () => {
     if (!isFormValid) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    try {
-      const response = await fetch("/api/transactions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          account_id: selectedAccountId,
-          category_id: selectedCategoryId,
-          subcategory_id: selectedSubcategoryId || null,
-          amount: amount,
-          description: description,
-          date: yyyyMmDd(date),
-        }),
-      });
+    // Store values for the mutation, including display names for optimistic UI
+    const txData = {
+      account_id: selectedAccountId!,
+      category_id: selectedCategoryId!,
+      subcategory_id: selectedSubcategoryId || null,
+      amount: parseFloat(amount),
+      description: description || undefined,
+      date: yyyyMmDd(date),
+      _optimistic: {
+        category_name: (selectedCategory as any)?.name ?? null,
+        subcategory_name: (selectedSubcategory as any)?.name ?? null,
+        account_name: selectedAccount?.name ?? null,
+        category_icon: (selectedCategory as any)?.icon ?? null,
+        category_color: (selectedCategory as any)?.color ?? null,
+        subcategory_color: (selectedSubcategory as any)?.color ?? null,
+      },
+    };
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create transaction");
-      }
+    // Reset form immediately for instant UI feedback
+    setSelectedAccountId(undefined);
+    setSelectedCategoryId(undefined);
+    setSelectedSubcategoryId(undefined);
+    setAmount("");
+    setDescription("");
 
-      const transaction = await response.json();
-      console.log("Transaction created:", transaction);
-
-      toast.success("Expense added successfully!");
-
-      // Invalidate balance query to refresh the display
-      queryClient.invalidateQueries({
-        queryKey: ["account-balance", selectedAccountId],
-      });
-
-      // Reset form
-      setSelectedAccountId(undefined);
-      setSelectedCategoryId(undefined);
-      setSelectedSubcategoryId(undefined);
-      setAmount("");
-      setDescription("");
-      // Keep the selected date to allow entering multiple backdated expenses
-    } catch (error) {
-      console.error("Error creating transaction:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to add expense"
-      );
-    }
+    // Optimistic add - mutation hook handles cache updates
+    addTransactionMutation.mutate(txData, {
+      onSuccess: () => {
+        toast.success("Expense added successfully!");
+      },
+      onError: (error) => {
+        console.error("Error creating transaction:", error);
+        toast.error(
+          error instanceof Error ? error.message : "Failed to add expense"
+        );
+      },
+    });
   };
 
   const sectionComponents: Record<SectionKey, JSX.Element> = useMemo(

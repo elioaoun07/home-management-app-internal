@@ -20,10 +20,13 @@ import {
   useSectionOrder,
   type SectionKey,
 } from "@/features/preferences/useSectionOrder";
+import {
+  useAddTransaction,
+  useDeleteTransaction,
+} from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
-import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
@@ -79,12 +82,12 @@ export default function MobileExpenseForm() {
   );
 
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
 
   const { data: categories = [] } = useCategories(selectedAccountId);
-  const queryClient = useQueryClient();
+  const addTransactionMutation = useAddTransaction();
+  const deleteTransactionMutation = useDeleteTransaction();
   const themeClasses = useThemeClasses();
 
   useEffect(() => {
@@ -126,92 +129,66 @@ export default function MobileExpenseForm() {
     isAmountStep && (!amount || Number.parseFloat(amount) <= 0);
 
   const handleSubmit = async () => {
-    if (!canSubmit || isSubmitting) return;
+    if (!canSubmit || addTransactionMutation.isPending) return;
 
-    setIsSubmitting(true);
-    try {
-      const response = await fetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          account_id: selectedAccountId,
-          category_id: selectedCategoryId,
-          subcategory_id: selectedSubcategoryId || null,
-          amount: amount,
-          description: description || null,
-          date: format(date, "yyyy-MM-dd"),
-          is_private: isPrivate,
-        }),
-      });
+    // Store current values for undo
+    const transactionData = {
+      account_id: selectedAccountId,
+      category_id: selectedCategoryId,
+      subcategory_id: selectedSubcategoryId || null,
+      amount: parseFloat(amount),
+      description: description || undefined,
+      date: format(date, "yyyy-MM-dd"),
+      is_private: isPrivate,
+      // Include display names for optimistic UI
+      _optimistic: {
+        category_name: selectedCategory?.name ?? null,
+        subcategory_name: selectedSubcategory?.name ?? null,
+        account_name: selectedAccount?.name ?? null,
+        category_icon: (selectedCategory as any)?.icon ?? null,
+        category_color: (selectedCategory as any)?.color ?? null,
+        subcategory_color: (selectedSubcategory as any)?.color ?? null,
+      },
+    };
 
-      if (!response.ok) {
-        throw new Error("Failed to create transaction");
-      }
+    // Store values for undo before resetting form
+    const amountForToast = amount;
+    const categoryNameForToast = selectedCategory?.name;
 
-      const newTransaction = await response.json();
-
-      toast.success("Expense added!", {
-        description: `$${amount} for ${selectedCategory?.name}`,
-        action: {
-          label: "Undo",
-          onClick: async () => {
-            try {
-              const deleteResponse = await fetch(
-                `/api/transactions/${newTransaction.id}`,
-                {
-                  method: "DELETE",
-                }
-              );
-
-              if (!deleteResponse.ok) {
-                throw new Error("Failed to delete transaction");
-              }
-
-              await Promise.all([
-                queryClient.invalidateQueries({
-                  queryKey: ["account-balance", selectedAccountId],
-                }),
-                queryClient.invalidateQueries({
-                  queryKey: ["transactions"],
-                  refetchType: "active",
-                }),
-              ]);
-
-              toast.success("Transaction deleted");
-            } catch (error) {
-              toast.error("Failed to undo transaction");
-            }
-          },
-        },
-      });
-
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ["account-balance", selectedAccountId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["transactions"],
-          refetchType: "active",
-        }),
-      ]);
-
-      setAmount("");
-      setSelectedCategoryId(undefined);
-      setSelectedSubcategoryId(undefined);
-      setDescription("");
-      setIsPrivate(false);
-      const newDefaultAccount = accounts.find((a: any) => a.is_default);
-      if (newDefaultAccount) {
-        setSelectedAccountId(newDefaultAccount.id);
-      } else {
-        setSelectedAccountId(undefined);
-      }
-      setStep(firstValidStep);
-    } catch (error) {
-      toast.error("Failed to add expense");
-    } finally {
-      setIsSubmitting(false);
+    // Reset form immediately for instant UI feedback
+    setAmount("");
+    setSelectedCategoryId(undefined);
+    setSelectedSubcategoryId(undefined);
+    setDescription("");
+    setIsPrivate(false);
+    const newDefaultAccount = accounts.find((a: any) => a.is_default);
+    if (newDefaultAccount) {
+      setSelectedAccountId(newDefaultAccount.id);
+    } else {
+      setSelectedAccountId(undefined);
     }
+    setStep(firstValidStep);
+
+    // Optimistic add - mutation hook handles cache updates
+    addTransactionMutation.mutate(transactionData, {
+      onSuccess: (newTransaction) => {
+        toast.success("Expense added!", {
+          description: `$${amountForToast} for ${categoryNameForToast}`,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              deleteTransactionMutation.mutate(newTransaction.id, {
+                onSuccess: () => toast.success("Transaction deleted"),
+                onError: () => toast.error("Failed to undo transaction"),
+              });
+            },
+          },
+        });
+      },
+      onError: () => {
+        toast.error("Failed to add expense");
+      },
+    });
   };
 
   const goBack = () => {
@@ -607,7 +584,7 @@ export default function MobileExpenseForm() {
                               }
                             }
                           }}
-                          disabled={isSubmitting}
+                          disabled={addTransactionMutation.isPending}
                           style={{
                             animationDelay: `${index * 30}ms`,
                             borderColor: active ? color : undefined,
@@ -621,7 +598,8 @@ export default function MobileExpenseForm() {
                             active
                               ? "neo-card neo-glow-sm"
                               : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} hover:bg-primary/5`,
-                            isSubmitting && "opacity-50 cursor-not-allowed"
+                            addTransactionMutation.isPending &&
+                              "opacity-50 cursor-not-allowed"
                           )}
                         >
                           <div className="flex flex-col items-center justify-center gap-1 h-full">
@@ -748,9 +726,9 @@ export default function MobileExpenseForm() {
                       handleSubmit();
                     }
                   }}
-                  disabled={isSubmitting}
+                  disabled={addTransactionMutation.isPending}
                 >
-                  {isSubmitting
+                  {addTransactionMutation.isPending
                     ? "Adding..."
                     : getNextStep()
                       ? "Next"

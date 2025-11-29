@@ -26,11 +26,13 @@ import {
 } from "@/components/ui/select";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
-import { useDrafts } from "@/features/drafts/useDrafts";
+import {
+  useConfirmDraft,
+  useDeleteDraft,
+  useDrafts,
+} from "@/features/drafts/useDrafts";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
-import { qk } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -46,6 +48,8 @@ export default function DraftsDrawer({
 }: DraftsDrawerProps) {
   const themeClasses = useThemeClasses();
   const { data: drafts = [], isLoading } = useDrafts();
+  const deleteDraftMutation = useDeleteDraft();
+  const confirmDraftMutation = useConfirmDraft();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     amount: "",
@@ -55,8 +59,6 @@ export default function DraftsDrawer({
     date: "",
     account_id: "",
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const queryClient = useQueryClient();
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories(editForm.account_id);
 
@@ -92,68 +94,55 @@ export default function DraftsDrawer({
     });
   };
 
-  const confirmDraft = async (draftId: string) => {
+  const confirmDraft = (draftId: string) => {
     if (!editForm.amount || !editForm.category_id) {
       toast.error("Please fill in amount and category");
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      const res = await fetch(`/api/drafts/${draftId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editForm),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        toast.success("Transaction confirmed!");
-        cancelEditing();
-        // Invalidate all related queries
-        queryClient.invalidateQueries({ queryKey: qk.drafts() });
-        queryClient.invalidateQueries({ queryKey: ["transactions"] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-        queryClient.invalidateQueries({ queryKey: ["account-balance"] });
-
-        // Close drawer if no more drafts
-        if (drafts.length === 1) {
-          onOpenChange(false);
-        }
-      } else {
-        toast.error(data.error || "Failed to confirm");
+    // Optimistic - UI updates instantly
+    confirmDraftMutation.mutate(
+      {
+        id: draftId,
+        ...editForm,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Transaction confirmed!");
+          cancelEditing();
+          // Close drawer if no more drafts
+          if (drafts.length === 1) {
+            onOpenChange(false);
+          }
+        },
+        onError: (error) => {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Failed to confirm transaction"
+          );
+        },
       }
-    } catch (error) {
-      toast.error("Failed to confirm transaction");
-    } finally {
-      setIsSubmitting(false);
-    }
+    );
   };
 
-  const deleteDraft = async (draftId: string) => {
-    try {
-      const res = await fetch(`/api/drafts/${draftId}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
+  const deleteDraft = (draftId: string) => {
+    // Optimistic - draft disappears instantly
+    deleteDraftMutation.mutate(draftId, {
+      onSuccess: () => {
         toast.success("Draft deleted");
         if (editingId === draftId) cancelEditing();
-        queryClient.invalidateQueries({ queryKey: qk.drafts() });
-        queryClient.invalidateQueries({ queryKey: ["account-balance"] });
-
         // Close drawer if no more drafts
         if (drafts.length === 1) {
           onOpenChange(false);
         }
-      } else {
-        const data = await res.json();
-        toast.error(data.error || "Failed to delete");
-      }
-    } catch (error) {
-      toast.error("Failed to delete draft");
-    }
+      },
+      onError: (error) => {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to delete draft"
+        );
+      },
+    });
   };
 
   const getConfidenceBadge = (score: number | null) => {
@@ -393,13 +382,13 @@ export default function DraftsDrawer({
                       <Button
                         onClick={() => confirmDraft(draft.id)}
                         disabled={
-                          isSubmitting ||
+                          confirmDraftMutation.isPending ||
                           !editForm.amount ||
                           !editForm.category_id
                         }
                         className="w-full neo-gradient text-white"
                       >
-                        {isSubmitting ? (
+                        {confirmDraftMutation.isPending ? (
                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         ) : (
                           <>

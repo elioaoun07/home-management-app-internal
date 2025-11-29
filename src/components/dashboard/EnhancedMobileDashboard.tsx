@@ -293,13 +293,17 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   const hasActiveFilters =
     filterCategory || filterAccount || ownershipFilter !== "all";
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteMutation.mutateAsync(id);
-      toast.success("Transaction deleted");
-    } catch (error) {
-      toast.error("Failed to delete transaction");
-    }
+  const handleDelete = (id: string) => {
+    // Use mutate (not mutateAsync) for instant optimistic UI
+    // The mutation hook handles cache updates automatically
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        toast.success("Transaction deleted");
+      },
+      onError: () => {
+        toast.error("Failed to delete transaction");
+      },
+    });
   };
 
   const handleRefresh = async () => {
@@ -408,6 +412,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               onClick={() => {
                 if (navigator.vibrate) navigator.vibrate(5);
                 setViewMode("widgets");
+                window.scrollTo({ top: 0, behavior: "smooth" });
               }}
               className={cn(
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
@@ -423,6 +428,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               onClick={() => {
                 if (navigator.vibrate) navigator.vibrate(5);
                 setViewMode("list");
+                window.scrollTo({ top: 0, behavior: "smooth" });
               }}
               className={cn(
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
@@ -912,12 +918,12 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
           transaction={selectedTransaction}
           onClose={() => setSelectedTransaction(null)}
           onSave={() => {
-            queryClient.invalidateQueries({ queryKey: ["transactions"] });
-            queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+            // Mutation hook already invalidates queries - just clear selection
+            setSelectedTransaction(null);
           }}
           onDelete={() => {
-            queryClient.invalidateQueries({ queryKey: ["transactions"] });
-            queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+            // Mutation hook already invalidates queries - just clear selection
+            setSelectedTransaction(null);
           }}
           currentUserId={currentUserId}
         />

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useQueryClient } from "@tanstack/react-query";
+import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import TemplateDialog from "./TemplateDialog";
@@ -39,7 +39,7 @@ export default function TemplateQuickEntryButton({
   onEditTemplate: (template: Template) => void;
   selectedDate?: string; // YYYY-MM-DD
 }) {
-  const queryClient = useQueryClient();
+  const addTransactionMutation = useAddTransaction();
   const [open, setOpen] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,7 +48,6 @@ export default function TemplateQuickEntryButton({
   const [quickEdit, setQuickEdit] = useState<Template | undefined>(undefined);
   const [quickEditAmount, setQuickEditAmount] = useState("");
   const [quickEditDescription, setQuickEditDescription] = useState("");
-  const [quickSaving, setQuickSaving] = useState(false);
 
   const refreshTemplates = async () => {
     setLoading(true);
@@ -271,52 +270,39 @@ export default function TemplateQuickEntryButton({
             </DialogHeader>
             <form
               className="space-y-4"
-              onSubmit={async (e) => {
+              onSubmit={(e) => {
                 e.preventDefault();
                 if (!quickEdit) return;
-                try {
-                  setQuickSaving(true);
-                  const res = await fetch("/api/transactions", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      account_id: quickEdit.account_id,
-                      category_id: quickEdit.category_id,
-                      subcategory_id: quickEdit.subcategory_id,
-                      amount: quickEditAmount,
-                      description: quickEditDescription,
-                      date: selectedDate,
-                    }),
-                  });
-                  if (!res.ok) {
-                    let msg = "Failed to add expense";
-                    try {
-                      const j = await res.json();
-                      if (j?.error) msg = j.error;
-                    } catch {}
-                    toast.error(msg);
-                    return;
+
+                // Store values and close dialogs immediately for instant UI
+                const template = quickEdit;
+                const amount = quickEditAmount;
+                const desc = quickEditDescription;
+                const date =
+                  selectedDate || new Date().toISOString().split("T")[0];
+                setQuickEdit(undefined);
+                setOpen(false);
+
+                // Optimistic add - mutation hook handles cache updates
+                addTransactionMutation.mutate(
+                  {
+                    account_id: template.account_id,
+                    category_id: template.category_id,
+                    subcategory_id: template.subcategory_id,
+                    amount: parseFloat(amount),
+                    description: desc,
+                    date: date,
+                  },
+                  {
+                    onSuccess: () => {
+                      toast.success("Expense added");
+                    },
+                    onError: (err) => {
+                      console.error("Quick entry failed", err);
+                      toast.error("Failed to add expense");
+                    },
                   }
-
-                  // Invalidate queries to update dashboard
-                  await queryClient.invalidateQueries({
-                    queryKey: ["transactions"],
-                    refetchType: "active",
-                  });
-                  await queryClient.invalidateQueries({
-                    queryKey: ["account-balance"],
-                  });
-
-                  toast.success("Expense added");
-                  // Close both dialogs on success
-                  setQuickEdit(undefined);
-                  setOpen(false);
-                } catch (err) {
-                  console.error("Quick entry failed", err);
-                  toast.error("Failed to add expense");
-                } finally {
-                  setQuickSaving(false);
-                }
+                );
               }}
             >
               <div>
@@ -329,7 +315,7 @@ export default function TemplateQuickEntryButton({
                   min="0"
                   step="0.01"
                   autoFocus
-                  disabled={quickSaving}
+                  disabled={addTransactionMutation.isPending}
                 />
               </div>
               <div>
@@ -337,7 +323,7 @@ export default function TemplateQuickEntryButton({
                 <Input
                   value={quickEditDescription}
                   onChange={(e) => setQuickEditDescription(e.target.value)}
-                  disabled={quickSaving}
+                  disabled={addTransactionMutation.isPending}
                 />
               </div>
               <div className="flex gap-2 justify-end">
@@ -345,12 +331,15 @@ export default function TemplateQuickEntryButton({
                   type="button"
                   variant="outline"
                   onClick={() => setQuickEdit(undefined)}
-                  disabled={quickSaving}
+                  disabled={addTransactionMutation.isPending}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={quickSaving}>
-                  {quickSaving ? "Saving..." : "Save"}
+                <Button
+                  type="submit"
+                  disabled={addTransactionMutation.isPending}
+                >
+                  {addTransactionMutation.isPending ? "Saving..." : "Save"}
                 </Button>
               </div>
             </form>

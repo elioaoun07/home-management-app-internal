@@ -368,7 +368,66 @@ export class SupabaseTransactionService implements TransactionService {
     // Note: Transactions created via this service are always confirmed (not drafts)
     await this.touchAccountBalanceUpdatedAt(account_id);
 
-    return created;
+    // Fetch the category and subcategory names to return a complete transaction object
+    // This is needed for optimistic UI to work correctly
+    let categoryName: string | null = null;
+    let categoryIcon: string | null = null;
+    let categoryColor: string | null = null;
+    let subcategoryName: string | null = null;
+    let subcategoryColor: string | null = null;
+    let accountName: string | null = null;
+
+    // Fetch category details
+    if (category_id) {
+      const { data: categoryData } = await this.supabase
+        .from("user_categories")
+        .select("name, icon, color")
+        .eq("id", category_id)
+        .single();
+      if (categoryData) {
+        categoryName = categoryData.name;
+        categoryIcon = categoryData.icon;
+        categoryColor = categoryData.color;
+      }
+    }
+
+    // Fetch subcategory details
+    if (subcategory_id) {
+      const { data: subcategoryData } = await this.supabase
+        .from("user_categories")
+        .select("name, color")
+        .eq("id", subcategory_id)
+        .single();
+      if (subcategoryData) {
+        subcategoryName = subcategoryData.name;
+        subcategoryColor = subcategoryData.color;
+      }
+    }
+
+    // Fetch account name
+    if (account_id) {
+      const { data: accountData } = await this.supabase
+        .from("accounts")
+        .select("name")
+        .eq("id", account_id)
+        .single();
+      if (accountData) {
+        accountName = accountData.name;
+      }
+    }
+
+    // Return the complete transaction object with all display names
+    return {
+      ...created,
+      category: categoryName,
+      subcategory: subcategoryName,
+      account_name: accountName,
+      category_icon: categoryIcon || "📝",
+      category_color: categoryColor || "#38bdf8",
+      subcategory_color: subcategoryColor || "#38bdf8",
+      is_owner: true,
+      user_id: userId,
+    };
   }
 
   async updateTransaction(userId: string, data: UpdateTransactionDTO) {

@@ -11,10 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
-import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
+import {
+  useDeleteTransaction,
+  useUpdateTransaction,
+} from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 type Transaction = {
@@ -58,6 +62,7 @@ export default function TransactionDetailModal({
       transaction.user_id === currentUserId);
 
   const deleteMutation = useDeleteTransaction();
+  const updateMutation = useUpdateTransaction();
 
   const [formData, setFormData] = useState({
     date: transaction.date,
@@ -70,51 +75,50 @@ export default function TransactionDetailModal({
   const [selectedAccount, setSelectedAccount] = useState<string | undefined>(
     transaction.account_id
   );
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const response = await fetch(`/api/transactions/${transaction.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date: formData.date,
-          amount: parseFloat(formData.amount),
-          description: formData.description,
-          account_id: formData.account_id,
-          category_id: formData.category_id || null,
-          subcategory_id: formData.subcategory_id || null,
-        }),
-      });
+  const handleSave = () => {
+    // Close modal immediately for instant UI feedback
+    onClose();
 
-      if (!response.ok) throw new Error("Failed to update");
-
-      toast.success("Transaction updated");
-      onSave();
-      onClose();
-    } catch (error) {
-      toast.error("Failed to update transaction");
-    } finally {
-      setSaving(false);
-    }
+    // Optimistic update - mutation hook handles cache updates
+    updateMutation.mutate(
+      {
+        id: transaction.id,
+        date: formData.date,
+        amount: parseFloat(formData.amount),
+        description: formData.description,
+        account_id: formData.account_id,
+        category_id: formData.category_id || null,
+        subcategory_id: formData.subcategory_id || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Transaction updated");
+          onSave();
+        },
+        onError: () => {
+          toast.error("Failed to update transaction");
+        },
+      }
+    );
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!confirm("Delete this transaction?")) return;
 
-    setDeleting(true);
-    try {
-      await deleteMutation.mutateAsync(transaction.id);
-      toast.success("Transaction deleted");
-      onDelete();
-      onClose();
-    } catch (error) {
-      toast.error("Failed to delete transaction");
-    } finally {
-      setDeleting(false);
-    }
+    // Close modal immediately for instant UI feedback
+    onClose();
+
+    // Optimistic delete - mutation hook handles cache updates
+    deleteMutation.mutate(transaction.id, {
+      onSuccess: () => {
+        toast.success("Transaction deleted");
+        onDelete();
+      },
+      onError: () => {
+        toast.error("Failed to delete transaction");
+      },
+    });
   };
 
   // Load accounts and categories
@@ -199,15 +203,28 @@ export default function TransactionDetailModal({
     }
   }, [categories, transaction]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalStyle;
+    };
+  }, []);
+
+  // Use portal to render modal at document.body level, escaping any scroll containers
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-hidden"
+      onClick={onClose}
+    >
       <div
         className={`w-full max-w-md md:max-w-lg ${themeClasses.modalBg} rounded-t-2xl md:rounded-2xl shadow-2xl animate-in slide-in-from-bottom duration-300 md:slide-in-from-bottom-0 flex flex-col neo-glow`}
         style={{
-          // Reserve space for the bottom navigation bar so it serves as the modal delimiter.
-          // 72px is a reasonable default for the mobile nav height; adjust if your nav is taller.
-          maxHeight: "calc(100vh - 88px)",
-          marginBottom: "88px",
+          // Leave space for bottom nav (64px) on mobile
+          maxHeight: "calc(100vh - 120px)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -227,7 +244,7 @@ export default function TransactionDetailModal({
         </div>
 
         {/* Content */}
-        <div className="px-4 pt-2 pb-4 space-y-4 flex-1 overflow-y-auto">
+        <div className="px-4 pt-2 pb-4 space-y-4 flex-1 overflow-y-auto overscroll-contain">
           {/* Account / Category Selectors */}
           <Card className="neo-card p-3">
             <div className="flex items-start gap-3">
@@ -399,20 +416,20 @@ export default function TransactionDetailModal({
           >
             <Button
               onClick={handleDelete}
-              disabled={deleting}
+              disabled={deleteMutation.isPending}
               variant="outline"
               className="flex-1 shadow-[0_0_0_2px_rgba(239,68,68,0.4)_inset] text-red-400 hover:bg-red-500/10 hover:shadow-[0_0_0_2px_rgba(239,68,68,0.6)_inset,0_0_20px_rgba(239,68,68,0.3)]"
             >
               <Trash2Icon className="w-4 h-4 mr-2 drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
-              {deleting ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
             <Button
               onClick={handleSave}
-              disabled={saving}
+              disabled={updateMutation.isPending}
               className="flex-1 neo-gradient"
             >
               <SaveIcon className="w-4 h-4 mr-2 drop-shadow-[0_0_6px_rgba(20,184,166,0.5)]" />
-              {saving ? "Saving..." : "Save"}
+              {updateMutation.isPending ? "Saving..." : "Save"}
             </Button>
           </div>
         ) : (
@@ -427,6 +444,7 @@ export default function TransactionDetailModal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

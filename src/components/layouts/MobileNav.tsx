@@ -30,6 +30,7 @@ import {
   prefetchAllTabs,
   prefetchExpenseData,
 } from "@/features/navigation/prefetchTabs";
+import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
 import { cn } from "@/lib/utils";
@@ -54,9 +55,9 @@ export default function MobileNav() {
   const themeClasses = useThemeClasses();
   const { activeTab, setActiveTab } = useTab();
   const queryClient = useQueryClient();
+  const addTransactionMutation = useAddTransaction();
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
   const [showDraftsDrawer, setShowDraftsDrawer] = useState(false);
-  const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(
     null
   );
@@ -128,50 +129,37 @@ export default function MobileNav() {
     setTemplateDescription(template.description || "");
   };
 
-  const handleConfirmTemplate = async () => {
-    if (!selectedTemplate) return;
+  const handleConfirmTemplate = () => {
+    if (!selectedTemplate || !selectedTemplate.account_id) return;
 
-    setIsCreatingTemplate(true);
+    // Close dialog immediately for instant UI feedback
+    const template = selectedTemplate;
+    const amount = templateAmount;
+    const desc = templateDescription;
+    setSelectedTemplate(null);
+    setTemplateAmount("");
+    setTemplateDescription("");
 
-    try {
-      const res = await fetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          account_id: selectedTemplate.account_id,
-          category_id: selectedTemplate.category_id,
-          subcategory_id: selectedTemplate.subcategory_id,
-          amount: templateAmount,
-          description: templateDescription,
-          date: new Date().toISOString().split("T")[0],
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to create transaction");
+    // Optimistic add - mutation hook handles cache updates
+    addTransactionMutation.mutate(
+      {
+        account_id: template.account_id,
+        category_id: template.category_id,
+        subcategory_id: template.subcategory_id,
+        amount: parseFloat(amount),
+        description: desc || undefined,
+        date: new Date().toISOString().split("T")[0],
+      },
+      {
+        onSuccess: () => {
+          toast.success("Transaction added!");
+        },
+        onError: (error) => {
+          console.error("Template transaction failed", error);
+          toast.error("Failed to create transaction");
+        },
       }
-
-      // Invalidate queries to update dashboard
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ["transactions"],
-          refetchType: "active",
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["account-balance"],
-        }),
-      ]);
-
-      toast.success("Transaction added!");
-      setSelectedTemplate(null);
-      setTemplateAmount("");
-      setTemplateDescription("");
-    } catch (error) {
-      console.error("Template transaction failed", error);
-      toast.error("Failed to create transaction");
-    } finally {
-      setIsCreatingTemplate(false);
-    }
+    );
   };
 
   const navSurfaceStyles: CSSProperties = {
@@ -327,7 +315,7 @@ export default function MobileNav() {
                   required
                   autoFocus
                   className={`${themeClasses.inputBg} ${themeClasses.border} text-white`}
-                  disabled={isCreatingTemplate}
+                  disabled={addTransactionMutation.isPending}
                 />
               </div>
               <div>
@@ -337,7 +325,7 @@ export default function MobileNav() {
                   onChange={(e) => setTemplateDescription(e.target.value)}
                   placeholder="Optional notes"
                   className={`${themeClasses.inputBg} ${themeClasses.border} text-white`}
-                  disabled={isCreatingTemplate}
+                  disabled={addTransactionMutation.isPending}
                 />
               </div>
               <div className="flex gap-2 justify-end">
@@ -349,17 +337,19 @@ export default function MobileNav() {
                     setTemplateAmount("");
                     setTemplateDescription("");
                   }}
-                  disabled={isCreatingTemplate}
+                  disabled={addTransactionMutation.isPending}
                   className={`${themeClasses.border} ${themeClasses.headerText}`}
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isCreatingTemplate || !templateAmount}
+                  disabled={addTransactionMutation.isPending || !templateAmount}
                   className="neo-gradient text-white"
                 >
-                  {isCreatingTemplate ? "Adding..." : "Add Transaction"}
+                  {addTransactionMutation.isPending
+                    ? "Adding..."
+                    : "Add Transaction"}
                 </Button>
               </div>
             </form>

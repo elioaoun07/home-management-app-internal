@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useUpdateTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -80,7 +81,7 @@ export default function TransactionsTable({
 }: Props) {
   const [editing, setEditing] = useState<EditingCell>(null);
   const [draft, setDraft] = useState<string>("");
-  const [saving, setSaving] = useState(false);
+  const [deferredSaving, setDeferredSaving] = useState(false);
   const [dataRows, setDataRows] = useState<Tx[]>(rows);
   const [categoriesByAccount, setCategoriesByAccount] = useState<
     Record<
@@ -88,6 +89,14 @@ export default function TransactionsTable({
       Array<{ id: string; name: string; parent_id?: string | null }>
     >
   >({});
+
+  // Mutation for immediate updates with optimistic updates
+  const updateTransactionMutation = useUpdateTransaction();
+
+  // Combined saving state for UI (immediate mode uses mutation, deferred uses local state)
+  const saving = deferredSave
+    ? deferredSaving
+    : updateTransactionMutation.isPending;
 
   useEffect(() => {
     setDataRows(rows);
@@ -182,7 +191,7 @@ export default function TransactionsTable({
     const body: any = { id };
     if (deferredSave && onDeferredChange) {
       // Apply locally and emit a patch without calling the server
-      setSaving(true);
+      setDeferredSaving(true);
       try {
         let computedPatch: any | null = null;
         let computedUpdated: Tx | null = null;
@@ -244,39 +253,26 @@ export default function TransactionsTable({
         }
         setEditing(null);
       } finally {
-        setSaving(false);
+        setDeferredSaving(false);
       }
       return;
     }
 
-    // Immediate save mode
-    setSaving(true);
+    // Immediate save mode with optimistic updates
     try {
-      if (field === "amount") body.amount = draft;
-      if (field === "date") body.date = draft;
-      if (field === "description") body.description = draft;
+      const updateData: any = { id };
+      if (field === "amount") updateData.amount = parseFloat(draft);
+      if (field === "date") updateData.date = draft;
+      if (field === "description") updateData.description = draft;
       if (field === "category") {
-        body.category_id = draft === "__none__" ? "" : draft;
-        body.subcategory_id = ""; // reset
+        updateData.category_id = draft === "__none__" ? null : draft;
+        updateData.subcategory_id = null; // reset
       }
       if (field === "subcategory") {
-        body.subcategory_id = draft === "__none__" ? "" : draft;
+        updateData.subcategory_id = draft === "__none__" ? null : draft;
       }
-      const res = await fetch("/api/transactions", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        let msg = "Failed to update";
-        try {
-          const j = await res.json();
-          if (j?.error) msg = j.error;
-        } catch {}
-        toast.error(msg);
-        return;
-      }
-      const updated: Tx = await res.json();
+
+      const updated = await updateTransactionMutation.mutateAsync(updateData);
       toast.success("Transaction updated");
       if (onChange) onChange(updated);
       else {
@@ -288,8 +284,6 @@ export default function TransactionsTable({
     } catch (e) {
       console.error("Update failed", e);
       toast.error("Failed to update transaction. Please try again.");
-    } finally {
-      setSaving(false);
     }
   };
 
