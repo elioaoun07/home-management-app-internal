@@ -1,13 +1,13 @@
 {
   "name": "Budget Manager - Smart Expense Tracking",
   "short_name": "Budget",
-  "description": "Track expenses, manage budgets, and gain insights into spending habits.",
+  "description": "Track expenses, manage budgets, and gain insights into spending habits with beautiful analytics.",
   "start_url": "/expense",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#fafafa",
-  "theme_color": "#6366f1",
+  "background_color": "#0a1628",
+  "theme_color": "#06b6d4",
   "categories": ["finance", "productivity", "lifestyle"],
   "icons": [
     {

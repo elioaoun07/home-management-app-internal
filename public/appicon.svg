@@ -1,21 +1,115 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="App Icon: Dollar">
-	<!-- Background rounded square -->
-	<defs>
-		<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-			<stop offset="0%" stop-color="#22c55e"/>
-			<stop offset="100%" stop-color="#16a34a"/>
-		</linearGradient>
-	</defs>
-	<rect x="32" y="32" width="448" height="448" rx="96" fill="url(#bg)"/>
-
-	<!-- Dollar symbol -->
-	<text
-		x="256"
-		y="310"
-		text-anchor="middle"
-		font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Noto Sans', 'Liberation Sans', sans-serif"
-		font-size="300"
-		font-weight="800"
-		fill="#ffffff"
-	>$</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Budget Manager App Icon">
+  <defs>
+    <!-- Main gradient for background -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a1628;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#0f1d2e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a2942;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Accent gradient for glow effects -->
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#06b6d4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#14b8a6;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Radial glow -->
+    <radialGradient id="glowCenter" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#06b6d4;stop-opacity:0.35" />
+      <stop offset="60%" style="stop-color:#3b82f6;stop-opacity:0.15" />
+      <stop offset="100%" style="stop-color:#0a1628;stop-opacity:0" />
+    </radialGradient>
+    
+    <!-- Icon symbol gradient -->
+    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#22d3ee;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#06b6d4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#14b8a6;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Outer ring gradient -->
+    <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.9" />
+      <stop offset="25%" style="stop-color:#06b6d4;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#14b8a6;stop-opacity:0.9" />
+      <stop offset="75%" style="stop-color:#06b6d4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0.9" />
+    </linearGradient>
+    
+    <!-- Strong glow for main icon -->
+    <filter id="strongGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feFlood flood-color="#06b6d4" flood-opacity="0.5"/>
+      <feComposite in2="blur" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Soft outer glow -->
+    <filter id="outerGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background rounded square with slight padding -->
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="url(#bgGradient)"/>
+  
+  <!-- Subtle gradient overlay for depth -->
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="url(#glowCenter)"/>
+  
+  <!-- Outer decorative border -->
+  <rect x="12" y="12" width="488" height="488" rx="100" ry="100" fill="none" stroke="url(#ringGradient)" stroke-width="2" opacity="0.35"/>
+  
+  <!-- Inner decorative ring -->
+  <circle cx="256" cy="256" r="160" fill="none" stroke="url(#accentGradient)" stroke-width="1.5" opacity="0.2"/>
+  
+  <!-- Main icon group - Modern Wallet with Analytics -->
+  <g filter="url(#strongGlow)" transform="translate(256, 256)">
+    <!-- Wallet body -->
+    <rect x="-100" y="-65" width="200" height="130" rx="22" ry="22" fill="#0f1d2e" stroke="url(#iconGradient)" stroke-width="4"/>
+    
+    <!-- Card slots -->
+    <rect x="-80" y="-45" width="100" height="6" rx="3" fill="url(#iconGradient)" opacity="0.5"/>
+    <rect x="-80" y="-30" width="70" height="4" rx="2" fill="url(#iconGradient)" opacity="0.3"/>
+    
+    <!-- Wallet clasp/fold line -->
+    <path d="M -100 -20 L 100 -20" stroke="url(#iconGradient)" stroke-width="2" opacity="0.4"/>
+    
+    <!-- Currency symbol area -->
+    <g transform="translate(40, 15)">
+      <!-- Circular badge background -->
+      <circle cx="0" cy="0" r="38" fill="#0a1628" stroke="url(#iconGradient)" stroke-width="3"/>
+      
+      <!-- Dollar sign -->
+      <text x="0" y="14" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700" fill="url(#iconGradient)">$</text>
+    </g>
+    
+    <!-- Mini chart bars on left side -->
+    <g transform="translate(-55, 25)" filter="url(#outerGlow)">
+      <rect x="0" y="-25" width="10" height="25" rx="2" fill="#3b82f6" opacity="0.8"/>
+      <rect x="15" y="-35" width="10" height="35" rx="2" fill="#06b6d4" opacity="0.9"/>
+      <rect x="30" y="-20" width="10" height="20" rx="2" fill="#14b8a6" opacity="0.8"/>
+    </g>
+  </g>
+  
+  <!-- Sparkle accents -->
+  <g filter="url(#outerGlow)">
+    <circle cx="135" cy="135" r="6" fill="#22d3ee" opacity="0.8"/>
+    <circle cx="377" cy="135" r="5" fill="#14b8a6" opacity="0.7"/>
+    <circle cx="135" cy="377" r="5" fill="#3b82f6" opacity="0.7"/>
+    <circle cx="377" cy="377" r="6" fill="#06b6d4" opacity="0.8"/>
+  </g>
+  
+  <!-- Subtle tech lines -->
+  <g opacity="0.06" stroke="#06b6d4" stroke-width="1">
+    <line x1="60" y1="170" x2="452" y2="170"/>
+    <line x1="60" y1="342" x2="452" y2="342"/>
+  </g>
 </svg>
