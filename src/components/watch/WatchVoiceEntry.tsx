@@ -1,7 +1,7 @@
 "use client";
 
 import VoiceEntryButton from "@/components/expense/VoiceEntryButton";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -9,7 +9,8 @@ import { useEffect, useState } from "react";
 export default function WatchVoiceEntry() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
+  // Use only current user's accounts for adding transactions
+  const { data: accounts = [], isLoading: accountsLoading } = useMyAccounts();
   const defaultAccount = accounts.find((a) => a.is_default) || accounts[0];
   const { data: categories = [] } = useCategories(defaultAccount?.id);
 

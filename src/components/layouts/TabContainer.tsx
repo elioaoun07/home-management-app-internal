@@ -70,7 +70,7 @@ export default function TabContainer() {
 
       {/* Expense: Positioning handled internally in MobileExpenseForm */}
       <div className={activeTab === "expense" ? "block" : "hidden"}>
-        <main className="h-screen overflow-hidden">
+        <main className="h-screen">
           <MobileExpenseForm />
         </main>
       </div>

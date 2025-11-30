@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, ReactNode, useContext, useState } from "react";
+import {
+  createContext,
+  MutableRefObject,
+  ReactNode,
+  useContext,
+  useRef,
+  useState,
+} from "react";
 
 type Step = "amount" | "account" | "category" | "subcategory" | "confirm";
 
@@ -27,6 +34,11 @@ interface ExpenseFormContextType {
     description?: string | null;
   }) => void;
   resetForm: () => void;
+  // Edit mode state (shared so floating button can be rendered at layout level)
+  isEditMode: boolean;
+  setIsEditMode: (isEdit: boolean) => void;
+  // Use ref for callback to avoid re-render loops
+  exitEditModeRef: MutableRefObject<(() => void) | null>;
 }
 
 const ExpenseFormContext = createContext<ExpenseFormContextType | undefined>(
@@ -41,6 +53,8 @@ export function ExpenseFormProvider({ children }: { children: ReactNode }) {
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string>();
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date());
+  const [isEditMode, setIsEditMode] = useState(false);
+  const exitEditModeRef = useRef<(() => void) | null>(null);
 
   const applyTemplate = (template: {
     account_id: string;
@@ -86,6 +100,9 @@ export function ExpenseFormProvider({ children }: { children: ReactNode }) {
         setDescription,
         applyTemplate,
         resetForm,
+        isEditMode,
+        setIsEditMode,
+        exitEditModeRef,
       }}
     >
       {children}

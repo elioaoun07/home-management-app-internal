@@ -63,6 +63,7 @@ export async function GET(_req: NextRequest) {
       headers: { "Cache-Control": "no-store" },
     });
   }
+
   // Return only the fields the UI needs
   const categories = data.map((c) => ({
     id: c.id,
@@ -73,6 +74,7 @@ export async function GET(_req: NextRequest) {
     position: c.position ?? 0,
     account_id: c.account_id,
   }));
+
   return NextResponse.json(categories, {
     headers: { "Cache-Control": "no-store" },
   });

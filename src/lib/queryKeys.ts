@@ -3,6 +3,9 @@ export const qk = {
   // Per-user: keep userId in the key
   accounts: (userId?: string) => ["accounts", { userId }] as const,
 
+  // Only current user's accounts (for transaction forms)
+  myAccounts: () => ["my-accounts"] as const,
+
   // Per-account categories (so each account caches separately)
   categories: (accountId?: string) => ["categories", { accountId }] as const,
 

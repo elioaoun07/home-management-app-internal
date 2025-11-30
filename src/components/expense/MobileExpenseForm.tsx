@@ -8,13 +8,31 @@ import {
   CalculatorIcon,
   CheckIcon,
   ChevronLeftIcon,
+  PlusIcon,
   XIcon,
 } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MOBILE_CONTENT_BOTTOM_OFFSET } from "@/constants/layout";
-import { useAccounts } from "@/features/accounts/hooks";
+import {
+  useDeleteAccount,
+  useMyAccounts,
+  useReorderAccounts,
+} from "@/features/accounts/hooks";
+import {
+  useDeleteCategory,
+  useReorderCategories,
+} from "@/features/categories/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
   useSectionOrder,
@@ -29,14 +47,60 @@ import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format } from "date-fns";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { AnimatePresence, Reorder, motion } from "framer-motion";
+import { AlertTriangle, GripVertical, Minus, X } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { toast } from "sonner";
 import AccountBalance from "./AccountBalance";
 import CalculatorDialog from "./CalculatorDialog";
 import { useExpenseForm } from "./ExpenseFormContext";
+import NewAccountDrawer from "./NewAccountDrawer";
+import NewCategoryDrawer from "./NewCategoryDrawer";
 import VoiceEntryButton from "./VoiceEntryButton";
 
 type Step = SectionKey | "confirm";
+
+// Delete confirmation state type
+type DeleteConfirmState = {
+  id: string;
+  name: string;
+  color?: string;
+  type: "account" | "category" | "subcategory";
+  step: "first" | "second";
+} | null;
+
+// Long press hook for edit mode
+function useLongPress(callback: () => void, threshold = 500) {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const start = useCallback(() => {
+    timeoutRef.current = setTimeout(() => {
+      callback();
+    }, threshold);
+  }, [callback, threshold]);
+
+  const clear = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }, []);
+
+  return {
+    onMouseDown: start,
+    onMouseUp: clear,
+    onMouseLeave: clear,
+    onTouchStart: start,
+    onTouchEnd: clear,
+  };
+}
 
 export default function MobileExpenseForm() {
   const {
@@ -54,6 +118,8 @@ export default function MobileExpenseForm() {
     setDescription,
     date,
     setDate,
+    setIsEditMode,
+    exitEditModeRef,
   } = useExpenseForm();
 
   const { data: sectionOrder, isLoading: sectionOrderLoading } =
@@ -66,7 +132,8 @@ export default function MobileExpenseForm() {
     return [...sectionOrder];
   }, [sectionOrder]);
 
-  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
+  // Use only the current user's own accounts (not partner's) for the expense form
+  const { data: accounts = [], isLoading: accountsLoading } = useMyAccounts();
   const defaultAccount = accounts.find((a: any) => a.is_default);
 
   const getFirstValidStep = (flow: Step[], hasDefault: boolean): Step => {
@@ -85,11 +152,332 @@ export default function MobileExpenseForm() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [showNewAccountDrawer, setShowNewAccountDrawer] = useState(false);
+  const [showNewCategoryDrawer, setShowNewCategoryDrawer] = useState(false);
 
-  const { data: categories = [] } = useCategories(selectedAccountId);
+  // Edit mode states for each section
+  const [editModeAccount, setEditModeAccount] = useState(false);
+  const [editModeCategory, setEditModeCategory] = useState(false);
+  const [editModeSubcategory, setEditModeSubcategory] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Track if order has changed (to know whether to save on exit)
+  const [accountsOrderChanged, setAccountsOrderChanged] = useState(false);
+  const [categoriesOrderChanged, setCategoriesOrderChanged] = useState(false);
+  const [subcategoriesOrderChanged, setSubcategoriesOrderChanged] =
+    useState(false);
+
+  // Track if save is in progress (to prevent sync from resetting during mutation)
+  // These stay true until the NEXT time categories data changes from server
+  const [accountsSaving, setAccountsSaving] = useState(false);
+  const [categoriesSaving, setCategoriesSaving] = useState(false);
+  const [subcategoriesSaving, setSubcategoriesSaving] = useState(false);
+
+  // Track the last saved order to compare and know when server has caught up
+  const lastSavedCategoriesRef = useRef<string | null>(null);
+  const lastSavedSubcategoriesRef = useRef<string | null>(null);
+  const lastSavedAccountsRef = useRef<string | null>(null);
+
+  const { data: categories = [], refetch: refetchCategories } =
+    useCategories(selectedAccountId);
   const addTransactionMutation = useAddTransaction();
   const deleteTransactionMutation = useDeleteTransaction();
+  const deleteAccountMutation = useDeleteAccount();
+  const deleteCategoryMutation = useDeleteCategory(selectedAccountId);
+  const reorderAccountsMutation = useReorderAccounts();
+  const reorderCategoriesMutation = useReorderCategories(selectedAccountId);
   const themeClasses = useThemeClasses();
+
+  // Ordered lists for drag-and-drop (local state synced with data)
+  const [orderedAccounts, setOrderedAccounts] = useState<any[]>([]);
+  const [orderedCategories, setOrderedCategories] = useState<any[]>([]);
+  const [orderedSubcategories, setOrderedSubcategories] = useState<any[]>([]);
+
+  // Sync accounts with ordered list (only when NOT in edit mode and NOT saving)
+  useEffect(() => {
+    if (accounts.length > 0 && !editModeAccount && !accountsSaving) {
+      // Skip sync if we just saved - keep our local order until next fresh fetch
+      if (lastSavedAccountsRef.current) {
+        lastSavedAccountsRef.current = null;
+        return;
+      }
+      setOrderedAccounts(accounts);
+      setAccountsOrderChanged(false);
+    }
+  }, [accounts, editModeAccount, accountsSaving]);
+
+  // Sync categories with ordered list (only when NOT in edit mode and NOT saving)
+  useEffect(() => {
+    if (!editModeCategory && !categoriesSaving) {
+      const rootCats = categories.filter((c: any) => !c.parent_id);
+      if (rootCats.length > 0) {
+        // Skip sync if we just saved - keep our local order until next fresh fetch
+        if (lastSavedCategoriesRef.current) {
+          // Just clear the flag, don't sync from stale server data
+          lastSavedCategoriesRef.current = null;
+          return;
+        }
+        setOrderedCategories(rootCats);
+        setCategoriesOrderChanged(false);
+      }
+    }
+  }, [categories, editModeCategory, categoriesSaving]);
+
+  // Sync subcategories with ordered list when category changes (only when NOT in edit mode and NOT saving)
+  useEffect(() => {
+    if (!editModeSubcategory && !subcategoriesSaving) {
+      if (selectedCategoryId) {
+        const subs = categories.filter(
+          (c: any) => c.parent_id === selectedCategoryId
+        );
+        const selectedCategoryData = categories.find(
+          (c: any) => c.id === selectedCategoryId
+        );
+        const nestedSubs = (selectedCategoryData as any)?.subcategories || [];
+        const newSubs = [...subs, ...nestedSubs];
+
+        // Skip sync if we just saved - keep our local order until next fresh fetch
+        if (lastSavedSubcategoriesRef.current) {
+          // Just clear the flag, don't sync from stale server data
+          lastSavedSubcategoriesRef.current = null;
+          return;
+        }
+        setOrderedSubcategories(newSubs);
+        setSubcategoriesOrderChanged(false);
+      } else {
+        // Only clear if not already empty to avoid infinite loop
+        setOrderedSubcategories((prev) => (prev.length > 0 ? [] : prev));
+      }
+    }
+  }, [
+    selectedCategoryId,
+    categories,
+    editModeSubcategory,
+    subcategoriesSaving,
+  ]);
+
+  // Handle reorder - just update local state and mark as changed
+  const handleAccountsReorder = (newOrder: any[]) => {
+    setOrderedAccounts(newOrder);
+    setAccountsOrderChanged(true);
+  };
+
+  const handleCategoriesReorder = (newOrder: any[]) => {
+    setOrderedCategories(newOrder);
+    setCategoriesOrderChanged(true);
+  };
+
+  const handleSubcategoriesReorder = (newOrder: any[]) => {
+    setOrderedSubcategories(newOrder);
+    setSubcategoriesOrderChanged(true);
+  };
+
+  // Save functions - called when exiting edit mode
+  const saveAccountsOrder = useCallback(() => {
+    if (accountsOrderChanged && orderedAccounts.length > 0) {
+      setAccountsSaving(true);
+      // Store the order we're saving so we don't reset to it later
+      lastSavedAccountsRef.current = orderedAccounts.map((a) => a.id).join(",");
+      const updates = orderedAccounts.map((account, index) => ({
+        id: account.id,
+        position: index,
+      }));
+      reorderAccountsMutation.mutate(updates, {
+        onSuccess: () => {
+          toast.success("Accounts reordered", { icon: ToastIcons.update });
+          setAccountsSaving(false);
+        },
+        onError: () => {
+          toast.error("Failed to save order", { icon: ToastIcons.error });
+          lastSavedAccountsRef.current = null; // Clear on error to allow resync
+          setAccountsSaving(false);
+        },
+      });
+    }
+    setAccountsOrderChanged(false);
+  }, [accountsOrderChanged, orderedAccounts, reorderAccountsMutation]);
+
+  const saveCategoriesOrder = useCallback(() => {
+    if (categoriesOrderChanged && orderedCategories.length > 0) {
+      setCategoriesSaving(true);
+      // Store the order we're saving so we don't reset to it later
+      lastSavedCategoriesRef.current = orderedCategories
+        .map((c) => c.id)
+        .join(",");
+      const updates = orderedCategories.map((category, index) => ({
+        id: category.id,
+        position: index + 1, // API requires 1-based positions
+      }));
+      reorderCategoriesMutation.mutate(updates, {
+        onSuccess: () => {
+          toast.success("Categories reordered", { icon: ToastIcons.update });
+          setCategoriesSaving(false);
+        },
+        onError: () => {
+          toast.error("Failed to save order", { icon: ToastIcons.error });
+          lastSavedCategoriesRef.current = null; // Clear on error to allow resync
+          setCategoriesSaving(false);
+        },
+      });
+    }
+    setCategoriesOrderChanged(false);
+  }, [categoriesOrderChanged, orderedCategories, reorderCategoriesMutation]);
+
+  const saveSubcategoriesOrder = useCallback(() => {
+    if (subcategoriesOrderChanged && orderedSubcategories.length > 0) {
+      setSubcategoriesSaving(true);
+      // Store the order we're saving so we don't reset to it later
+      lastSavedSubcategoriesRef.current = orderedSubcategories
+        .map((s) => s.id)
+        .join(",");
+      const updates = orderedSubcategories.map((sub, index) => ({
+        id: sub.id,
+        position: index + 1, // API requires 1-based positions
+      }));
+      reorderCategoriesMutation.mutate(updates, {
+        onSuccess: () => {
+          toast.success("Subcategories reordered", { icon: ToastIcons.update });
+          setSubcategoriesSaving(false);
+        },
+        onError: () => {
+          toast.error("Failed to save order", { icon: ToastIcons.error });
+          lastSavedSubcategoriesRef.current = null; // Clear on error to allow resync
+          setSubcategoriesSaving(false);
+        },
+      });
+    }
+    setSubcategoriesOrderChanged(false);
+  }, [
+    subcategoriesOrderChanged,
+    orderedSubcategories,
+    reorderCategoriesMutation,
+  ]);
+
+  // Check if any edit mode is active
+  const isAnyEditMode =
+    editModeAccount || editModeCategory || editModeSubcategory;
+
+  // Exit edit mode and save changes if any
+  const exitEditModeAccount = useCallback(() => {
+    if (accountsOrderChanged) {
+      saveAccountsOrder();
+    }
+    setEditModeAccount(false);
+  }, [accountsOrderChanged, saveAccountsOrder]);
+
+  const exitEditModeCategory = useCallback(() => {
+    if (categoriesOrderChanged) {
+      saveCategoriesOrder();
+    }
+    setEditModeCategory(false);
+  }, [categoriesOrderChanged, saveCategoriesOrder]);
+
+  const exitEditModeSubcategory = useCallback(() => {
+    if (subcategoriesOrderChanged) {
+      saveSubcategoriesOrder();
+    }
+    setEditModeSubcategory(false);
+  }, [subcategoriesOrderChanged, saveSubcategoriesOrder]);
+
+  // Exit all edit modes (called from floating button or backdrop)
+  const exitAllEditModes = useCallback(() => {
+    if (editModeAccount) exitEditModeAccount();
+    if (editModeCategory) exitEditModeCategory();
+    if (editModeSubcategory) exitEditModeSubcategory();
+  }, [
+    editModeAccount,
+    editModeCategory,
+    editModeSubcategory,
+    exitEditModeAccount,
+    exitEditModeCategory,
+    exitEditModeSubcategory,
+  ]);
+
+  // Sync edit mode state to context (so floating button can be rendered at layout level)
+  useEffect(() => {
+    setIsEditMode(isAnyEditMode);
+  }, [isAnyEditMode, setIsEditMode]);
+
+  // Register the exit callback using ref (no re-renders, no infinite loops)
+  // This runs on every render to keep the ref current
+  exitEditModeRef.current = () => {
+    if (editModeAccount) {
+      if (accountsOrderChanged) saveAccountsOrder();
+      setEditModeAccount(false);
+    }
+    if (editModeCategory) {
+      if (categoriesOrderChanged) saveCategoriesOrder();
+      setEditModeCategory(false);
+    }
+    if (editModeSubcategory) {
+      if (subcategoriesOrderChanged) saveSubcategoriesOrder();
+      setEditModeSubcategory(false);
+    }
+  };
+
+  // Long press handlers for each section
+  const accountLongPress = useLongPress(() => {
+    setEditModeAccount(true);
+    if (navigator.vibrate) navigator.vibrate(50);
+  });
+
+  const categoryLongPress = useLongPress(() => {
+    setEditModeCategory(true);
+    if (navigator.vibrate) navigator.vibrate(50);
+  });
+
+  const subcategoryLongPress = useLongPress(() => {
+    setEditModeSubcategory(true);
+    if (navigator.vibrate) navigator.vibrate(50);
+  });
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return;
+
+    if (deleteConfirm.step === "first") {
+      setDeleteConfirm({ ...deleteConfirm, step: "second" });
+    } else {
+      setIsDeleting(true);
+      try {
+        if (deleteConfirm.type === "account") {
+          await deleteAccountMutation.mutateAsync(deleteConfirm.id);
+          if (selectedAccountId === deleteConfirm.id) {
+            setSelectedAccountId(undefined as any);
+          }
+          toast.success("Account deleted", { icon: ToastIcons.delete });
+        } else {
+          await deleteCategoryMutation.mutateAsync(deleteConfirm.id);
+          if (
+            deleteConfirm.type === "category" &&
+            selectedCategoryId === deleteConfirm.id
+          ) {
+            setSelectedCategoryId(undefined as any);
+          }
+          if (
+            deleteConfirm.type === "subcategory" &&
+            selectedSubcategoryId === deleteConfirm.id
+          ) {
+            setSelectedSubcategoryId(undefined);
+          }
+          toast.success(
+            `${deleteConfirm.type === "category" ? "Category" : "Subcategory"} deleted`,
+            {
+              icon: ToastIcons.delete,
+            }
+          );
+        }
+        setDeleteConfirm(null);
+      } catch (error: any) {
+        toast.error(error.message || "Failed to delete", {
+          icon: ToastIcons.error,
+        });
+      } finally {
+        setIsDeleting(false);
+      }
+    }
+  };
 
   useEffect(() => {
     if (stepFlow.length > 0 && !accountsLoading) {
@@ -155,6 +543,7 @@ export default function MobileExpenseForm() {
     // Store values for undo before resetting form
     const amountForToast = amount;
     const categoryNameForToast = selectedCategory?.name;
+    const isIncomeForToast = selectedAccount?.type === "income";
 
     // Reset form immediately for instant UI feedback
     setAmount("");
@@ -173,7 +562,7 @@ export default function MobileExpenseForm() {
     // Optimistic add - mutation hook handles cache updates
     addTransactionMutation.mutate(transactionData, {
       onSuccess: (newTransaction) => {
-        toast.success("Expense added!", {
+        toast.success(isIncomeForToast ? "Income added!" : "Expense added!", {
           icon: ToastIcons.create,
           description: `$${amountForToast} for ${categoryNameForToast}`,
           action: {
@@ -192,7 +581,10 @@ export default function MobileExpenseForm() {
         });
       },
       onError: () => {
-        toast.error("Failed to add expense", { icon: ToastIcons.error });
+        toast.error(
+          `Failed to add ${selectedAccount?.type === "income" ? "income" : "expense"}`,
+          { icon: ToastIcons.error }
+        );
       },
     });
   };
@@ -244,8 +636,9 @@ export default function MobileExpenseForm() {
         <div className="fixed inset-0 top-14 bg-bg-dark loading-fade" />
       ) : (
         <>
+          {/* HEADER - TOP DELIMITER - Must be above all other UI elements */}
           <div
-            className={`fixed top-0 left-0 right-0 z-30 bg-gradient-to-b from-bg-card-custom to-bg-medium border-b ${themeClasses.border} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top`}
+            className={`fixed top-0 left-0 right-0 z-[100] bg-gradient-to-b from-bg-card-custom to-bg-medium border-b ${themeClasses.border} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top`}
           >
             <div className="flex items-center justify-between mb-2 pt-16">
               {step !== firstValidStep ? (
@@ -267,7 +660,7 @@ export default function MobileExpenseForm() {
               <h1
                 className={`text-sm font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`}
               >
-                New Expense
+                New {selectedAccount?.type === "income" ? "Income" : "Expense"}
               </h1>
               <button
                 onClick={
@@ -311,12 +704,18 @@ export default function MobileExpenseForm() {
 
           <div
             className={cn(
-              "fixed left-0 right-0 overflow-y-auto px-3 py-3 bg-bg-dark",
+              "fixed left-0 right-0 overflow-y-auto px-3 py-3 bg-bg-dark z-[45]",
               selectedAccountId && step === "amount"
                 ? "top-[205px]"
                 : "top-[80px]"
             )}
             style={contentAreaStyles}
+            onClick={(e) => {
+              // If in edit mode and clicked on empty space (not a widget), exit edit mode
+              if (isAnyEditMode && e.target === e.currentTarget) {
+                exitAllEditModes();
+              }
+            }}
           >
             {step === "amount" && (
               <div key="amount-step" className="space-y-3 step-slide-in">
@@ -504,138 +903,412 @@ export default function MobileExpenseForm() {
 
             {step === "account" && (
               <div key="account-step" className="space-y-3 step-slide-in">
-                <Label className="text-base font-semibold text-secondary">
-                  Which account?
-                </Label>
-                <div className="space-y-2">
-                  {accounts.map((account: any, index: number) => (
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold text-secondary">
+                    Which account?
+                  </Label>
+                  {editModeAccount && (
                     <button
-                      key={account.id}
-                      onClick={() => {
-                        setSelectedAccountId(account.id);
-                        const next = getNextStep();
-                        if (next) {
-                          setStep(next);
-                        } else {
-                          handleSubmit();
-                        }
-                      }}
-                      style={{ animationDelay: `${index * 40}ms` }}
-                      className={cn(
-                        "w-full p-2.5 rounded-lg border text-left transition-all active:scale-[0.98] category-appear",
-                        selectedAccountId === account.id
-                          ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
-                          : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`
-                      )}
+                      onClick={exitEditModeAccount}
+                      className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors animate-in fade-in"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="font-semibold text-base text-white">
-                            {account.name}
-                          </div>
-                          <div className="text-xs text-accent/70 capitalize mt-0.5">
-                            {account.type}
-                          </div>
-                        </div>
-                        {selectedAccountId === account.id && (
-                          <CheckIcon className="w-5 h-5 text-secondary drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
-                        )}
+                      <X className="w-4 h-4" />
+                      Done
+                    </button>
+                  )}
+                </div>
+
+                {editModeAccount && (
+                  <p className="text-xs text-cyan-400 animate-in fade-in slide-in-from-top-2">
+                    Drag to reorder • Tap{" "}
+                    <span className="inline-flex items-center justify-center w-4 h-4 bg-red-500 rounded-full mx-0.5">
+                      <Minus className="w-3 h-3 text-white" />
+                    </span>{" "}
+                    to delete
+                  </p>
+                )}
+
+                <div {...accountLongPress} className="space-y-2">
+                  {editModeAccount ? (
+                    <Reorder.Group
+                      axis="y"
+                      values={orderedAccounts}
+                      onReorder={handleAccountsReorder}
+                      className="space-y-2"
+                    >
+                      {orderedAccounts.map((account: any) => (
+                        <Reorder.Item
+                          key={account.id}
+                          value={account}
+                          className="relative"
+                          whileDrag={{
+                            scale: 1.02,
+                            boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+                            zIndex: 50,
+                          }}
+                        >
+                          <motion.div
+                            animate={{
+                              rotate: [0, -0.3, 0.3, 0],
+                            }}
+                            transition={{
+                              rotate: {
+                                repeat: Infinity,
+                                duration: 0.4,
+                                ease: "easeInOut",
+                              },
+                            }}
+                          >
+                            {/* Delete button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirm({
+                                  id: account.id,
+                                  name: account.name,
+                                  type: "account",
+                                  step: "first",
+                                });
+                              }}
+                              className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-red-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
+                            >
+                              <Minus className="w-4 h-4" strokeWidth={3} />
+                            </button>
+
+                            <div
+                              className={cn(
+                                "w-full p-2.5 rounded-lg border text-left transition-all flex items-center gap-2",
+                                selectedAccountId === account.id
+                                  ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
+                                  : `neo-card ${themeClasses.border} bg-bg-card-custom`
+                              )}
+                            >
+                              {/* Drag handle */}
+                              <div className="text-slate-500 cursor-grab active:cursor-grabbing">
+                                <GripVertical className="w-5 h-5" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-semibold text-base text-white">
+                                  {account.name}
+                                </div>
+                                <div className="text-xs text-accent/70 capitalize mt-0.5">
+                                  {account.type}
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        </Reorder.Item>
+                      ))}
+                    </Reorder.Group>
+                  ) : (
+                    <AnimatePresence mode="popLayout">
+                      {accounts.map((account: any, index: number) => (
+                        <motion.div
+                          key={account.id}
+                          layout
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          transition={{ duration: 0.2, delay: index * 0.03 }}
+                          className="relative"
+                        >
+                          <button
+                            onClick={() => {
+                              setSelectedAccountId(account.id);
+                              const next = getNextStep();
+                              if (next) {
+                                setStep(next);
+                              } else {
+                                handleSubmit();
+                              }
+                            }}
+                            className={cn(
+                              "w-full p-2.5 rounded-lg border text-left transition-all active:scale-[0.98]",
+                              selectedAccountId === account.id
+                                ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
+                                : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="font-semibold text-base text-white">
+                                  {account.name}
+                                </div>
+                                <div className="text-xs text-accent/70 capitalize mt-0.5">
+                                  {account.type}
+                                </div>
+                              </div>
+                              {selectedAccountId === account.id && (
+                                <CheckIcon className="w-5 h-5 text-secondary drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+                              )}
+                            </div>
+                          </button>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  )}
+
+                  {/* Add New Account Button */}
+                  {!editModeAccount && (
+                    <button
+                      onClick={() => setShowNewAccountDrawer(true)}
+                      style={{ animationDelay: `${accounts.length * 40}ms` }}
+                      className="w-full p-2.5 rounded-lg border-2 border-dashed border-slate-600 hover:border-cyan-500/50 text-center transition-all active:scale-[0.98] category-appear bg-transparent hover:bg-cyan-500/5"
+                    >
+                      <div className="flex items-center justify-center gap-2 text-slate-400 hover:text-cyan-400">
+                        <PlusIcon className="w-5 h-5" />
+                        <span className="font-medium">New Account</span>
                       </div>
                     </button>
-                  ))}
+                  )}
                 </div>
+
+                {!editModeAccount && accounts.length > 0 && (
+                  <p className="text-[10px] text-slate-600 text-center">
+                    Hold to edit accounts
+                  </p>
+                )}
               </div>
             )}
 
             {step === "category" && (
               <div key="category-step" className="space-y-3 step-slide-in">
-                <Label
-                  className={`text-base font-semibold ${themeClasses.text}`}
-                >
-                  What category?
-                </Label>
-                <div className="grid grid-cols-2 gap-2 pb-4">
-                  {categories
-                    .filter((c: any) => !c.parent_id)
-                    .map((category: any, index: number) => {
-                      const active = selectedCategoryId === category.id;
-                      const color = category.color || "#22d3ee";
+                <div className="flex items-center justify-between">
+                  <Label
+                    className={`text-base font-semibold ${themeClasses.text}`}
+                  >
+                    What category?
+                  </Label>
+                  {editModeCategory && (
+                    <button
+                      onClick={exitEditModeCategory}
+                      className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors animate-in fade-in"
+                    >
+                      <X className="w-4 h-4" />
+                      Done
+                    </button>
+                  )}
+                </div>
 
-                      return (
-                        <button
-                          key={category.id}
-                          onClick={() => {
-                            setSelectedCategoryId(category.id);
-                            const hasSubcategories =
-                              categories.some(
-                                (c: any) => c.parent_id === category.id
-                              ) || (category as any).subcategories?.length > 0;
+                {editModeCategory && (
+                  <p className="text-xs text-cyan-400 animate-in fade-in slide-in-from-top-2">
+                    Drag to reorder • Tap{" "}
+                    <span className="inline-flex items-center justify-center w-4 h-4 bg-red-500 rounded-full mx-0.5">
+                      <Minus className="w-3 h-3 text-white" />
+                    </span>{" "}
+                    to delete
+                  </p>
+                )}
 
-                            if (
-                              hasSubcategories &&
-                              stepFlow.includes("subcategory")
-                            ) {
-                              const next = getNextStep();
-                              if (next) {
-                                setStep(next);
-                              } else {
-                                handleSubmit();
-                              }
-                            } else {
-                              const next = getNextStep();
-                              if (next) {
-                                setStep(next);
-                              } else {
-                                handleSubmit();
-                              }
-                            }
-                          }}
-                          disabled={addTransactionMutation.isPending}
-                          style={{
-                            animationDelay: `${index * 30}ms`,
-                            borderColor: active ? color : undefined,
-                            backgroundColor: active ? `${color}20` : undefined,
-                            boxShadow: active
-                              ? `0 0 15px ${color}40, inset 0 0 0 1px ${color}40`
-                              : undefined,
-                          }}
-                          className={cn(
-                            "p-2.5 rounded-lg border text-left transition-all active:scale-95 min-h-[65px] category-appear",
-                            active
-                              ? "neo-card neo-glow-sm"
-                              : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} hover:bg-primary/5`,
-                            addTransactionMutation.isPending &&
-                              "opacity-50 cursor-not-allowed"
-                          )}
-                        >
-                          <div className="flex flex-col items-center justify-center gap-1 h-full">
-                            {(() => {
-                              const IconComponent = getCategoryIcon(
-                                category.name,
-                                category.slug
-                              );
-                              return (
+                <div {...categoryLongPress}>
+                  {editModeCategory ? (
+                    <Reorder.Group
+                      axis="y"
+                      values={orderedCategories}
+                      onReorder={handleCategoriesReorder}
+                      className="space-y-2 pb-4"
+                    >
+                      {orderedCategories.map((category: any) => {
+                        const color = category.color || "#22d3ee";
+                        const IconComponent = getCategoryIcon(
+                          category.name,
+                          category.slug
+                        );
+
+                        return (
+                          <Reorder.Item
+                            key={category.id}
+                            value={category}
+                            className="relative"
+                            whileDrag={{
+                              scale: 1.02,
+                              boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+                              zIndex: 50,
+                            }}
+                          >
+                            <motion.div
+                              animate={{
+                                rotate: [0, -0.3, 0.3, 0],
+                              }}
+                              transition={{
+                                rotate: {
+                                  repeat: Infinity,
+                                  duration: 0.4,
+                                  ease: "easeInOut",
+                                },
+                              }}
+                            >
+                              {/* Delete button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirm({
+                                    id: category.id,
+                                    name: category.name,
+                                    color: color,
+                                    type: "category",
+                                    step: "first",
+                                  });
+                                }}
+                                className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-red-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
+                              >
+                                <Minus className="w-4 h-4" strokeWidth={3} />
+                              </button>
+
+                              <div
+                                className={cn(
+                                  "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3",
+                                  `neo-card ${themeClasses.border} bg-bg-card-custom`
+                                )}
+                              >
+                                {/* Drag handle */}
+                                <div className="text-slate-500 cursor-grab active:cursor-grabbing">
+                                  <GripVertical className="w-5 h-5" />
+                                </div>
                                 <div
                                   style={{
                                     color: color,
-                                    filter: `drop-shadow(0 0 8px ${color}80)`,
+                                    filter: `drop-shadow(0 0 6px ${color}80)`,
                                   }}
                                 >
-                                  <IconComponent className="w-8 h-8" />
+                                  <IconComponent className="w-6 h-6" />
                                 </div>
+                                <span className="font-semibold text-sm text-white flex-1">
+                                  {category.name}
+                                </span>
+                              </div>
+                            </motion.div>
+                          </Reorder.Item>
+                        );
+                      })}
+                    </Reorder.Group>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 pb-4">
+                      {orderedCategories.length === 0 ? (
+                        <div className="col-span-2 text-center py-4">
+                          <p className="text-xs text-slate-500 mb-3">
+                            No categories yet
+                          </p>
+                        </div>
+                      ) : (
+                        <AnimatePresence mode="popLayout">
+                          {orderedCategories.map(
+                            (category: any, index: number) => {
+                              const active = selectedCategoryId === category.id;
+                              const color = category.color || "#22d3ee";
+
+                              return (
+                                <motion.div
+                                  key={category.id}
+                                  layout
+                                  initial={{ opacity: 0, scale: 0.9 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.8 }}
+                                  transition={{
+                                    duration: 0.2,
+                                    delay: index * 0.02,
+                                  }}
+                                  className="relative"
+                                >
+                                  <button
+                                    onClick={() => {
+                                      setSelectedCategoryId(category.id);
+                                      const hasSubcategories =
+                                        categories.some(
+                                          (c: any) =>
+                                            c.parent_id === category.id
+                                        ) ||
+                                        (category as any).subcategories
+                                          ?.length > 0;
+
+                                      if (
+                                        hasSubcategories &&
+                                        stepFlow.includes("subcategory")
+                                      ) {
+                                        const next = getNextStep();
+                                        if (next) {
+                                          setStep(next);
+                                        } else {
+                                          handleSubmit();
+                                        }
+                                      } else {
+                                        const next = getNextStep();
+                                        if (next) {
+                                          setStep(next);
+                                        } else {
+                                          handleSubmit();
+                                        }
+                                      }
+                                    }}
+                                    disabled={addTransactionMutation.isPending}
+                                    style={{
+                                      borderColor: active ? color : undefined,
+                                      backgroundColor: active
+                                        ? `${color}20`
+                                        : undefined,
+                                      boxShadow: active
+                                        ? `0 0 15px ${color}40, inset 0 0 0 1px ${color}40`
+                                        : undefined,
+                                    }}
+                                    className={cn(
+                                      "w-full p-2.5 rounded-lg border text-left transition-all min-h-[65px] active:scale-95",
+                                      active
+                                        ? "neo-card neo-glow-sm"
+                                        : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} hover:bg-primary/5`,
+                                      addTransactionMutation.isPending &&
+                                        "opacity-50 cursor-not-allowed"
+                                    )}
+                                  >
+                                    <div className="flex flex-col items-center justify-center gap-1 h-full">
+                                      {(() => {
+                                        const IconComponent = getCategoryIcon(
+                                          category.name,
+                                          category.slug
+                                        );
+                                        return (
+                                          <div
+                                            style={{
+                                              color: color,
+                                              filter: `drop-shadow(0 0 8px ${color}80)`,
+                                            }}
+                                          >
+                                            <IconComponent className="w-7 h-7" />
+                                          </div>
+                                        );
+                                      })()}
+                                      <span
+                                        className="font-semibold text-center text-xs"
+                                        style={{
+                                          color: active ? color : "white",
+                                        }}
+                                      >
+                                        {category.name}
+                                      </span>
+                                    </div>
+                                  </button>
+                                </motion.div>
                               );
-                            })()}
-                            <span
-                              className="font-semibold text-center text-xs"
-                              style={{ color: active ? color : "white" }}
-                            >
-                              {category.name}
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
+                            }
+                          )}
+                        </AnimatePresence>
+                      )}
+                      {/* Add New Category Button - at bottom */}
+                      <button
+                        onClick={() => setShowNewCategoryDrawer(true)}
+                        className="p-2.5 rounded-lg border-2 border-dashed border-slate-600 hover:border-cyan-500/50 text-center transition-all active:scale-95 min-h-[65px] bg-transparent hover:bg-cyan-500/5 flex flex-col items-center justify-center gap-1 category-appear"
+                      >
+                        <PlusIcon className="w-6 h-6 text-slate-400" />
+                        <span className="text-xs text-slate-400">New</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
+
+                {!editModeCategory && orderedCategories.length > 0 && (
+                  <p className="text-[10px] text-slate-600 text-center -mt-2">
+                    Hold to edit categories
+                  </p>
+                )}
               </div>
             )}
 
@@ -644,68 +1317,216 @@ export default function MobileExpenseForm() {
                 key="subcategory-step"
                 className="space-y-4 step-slide-in pb-4"
               >
-                {allSubcategories.length > 0 && (
+                {orderedSubcategories.length > 0 && (
                   <>
-                    <Label
-                      className={`text-base font-semibold ${themeClasses.text}`}
-                    >
-                      More specific?
-                    </Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => setSelectedSubcategoryId(undefined)}
-                        className={cn(
-                          "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
-                          !selectedSubcategoryId
-                            ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow shadow-lg`
-                            : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`
-                        )}
+                    <div className="flex items-center justify-between">
+                      <Label
+                        className={`text-base font-semibold ${themeClasses.text}`}
                       >
-                        <span
-                          className={cn(
-                            "font-semibold text-xs",
-                            !selectedSubcategoryId
-                              ? themeClasses.text
-                              : "text-white"
-                          )}
+                        More specific?
+                      </Label>
+                      {editModeSubcategory && (
+                        <button
+                          onClick={exitEditModeSubcategory}
+                          className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors animate-in fade-in"
                         >
-                          None
-                        </span>
-                      </button>
-                      {allSubcategories.map((sub: any, index: number) => {
-                        const active = selectedSubcategoryId === sub.id;
-                        const color = sub.color || "#22d3ee";
-                        return (
+                          <X className="w-4 h-4" />
+                          Done
+                        </button>
+                      )}
+                    </div>
+
+                    {editModeSubcategory && (
+                      <p className="text-xs text-cyan-400 animate-in fade-in slide-in-from-top-2">
+                        Drag to reorder • Tap{" "}
+                        <span className="inline-flex items-center justify-center w-4 h-4 bg-red-500 rounded-full mx-0.5">
+                          <Minus className="w-3 h-3 text-white" />
+                        </span>{" "}
+                        to delete
+                      </p>
+                    )}
+
+                    <div {...subcategoryLongPress}>
+                      {editModeSubcategory ? (
+                        <Reorder.Group
+                          axis="y"
+                          values={orderedSubcategories}
+                          onReorder={handleSubcategoriesReorder}
+                          className="space-y-2"
+                        >
+                          {orderedSubcategories.map((sub: any) => {
+                            const color = sub.color || "#22d3ee";
+                            const IconComponent = getCategoryIcon(sub.name);
+
+                            return (
+                              <Reorder.Item
+                                key={sub.id}
+                                value={sub}
+                                className="relative"
+                                whileDrag={{
+                                  scale: 1.02,
+                                  boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+                                  zIndex: 50,
+                                }}
+                              >
+                                <motion.div
+                                  animate={{
+                                    rotate: [0, -0.3, 0.3, 0],
+                                  }}
+                                  transition={{
+                                    rotate: {
+                                      repeat: Infinity,
+                                      duration: 0.4,
+                                      ease: "easeInOut",
+                                    },
+                                  }}
+                                >
+                                  {/* Delete button */}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteConfirm({
+                                        id: sub.id,
+                                        name: sub.name,
+                                        color: color,
+                                        type: "subcategory",
+                                        step: "first",
+                                      });
+                                    }}
+                                    className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-red-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
+                                  >
+                                    <Minus
+                                      className="w-4 h-4"
+                                      strokeWidth={3}
+                                    />
+                                  </button>
+
+                                  <div
+                                    className={cn(
+                                      "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3",
+                                      `neo-card ${themeClasses.border} bg-bg-card-custom`
+                                    )}
+                                  >
+                                    {/* Drag handle */}
+                                    <div className="text-slate-500 cursor-grab active:cursor-grabbing">
+                                      <GripVertical className="w-5 h-5" />
+                                    </div>
+                                    <div
+                                      style={{
+                                        color: color,
+                                        filter: `drop-shadow(0 0 6px ${color}80)`,
+                                      }}
+                                    >
+                                      <IconComponent className="w-5 h-5" />
+                                    </div>
+                                    <span className="font-semibold text-sm text-white flex-1">
+                                      {sub.name}
+                                    </span>
+                                  </div>
+                                </motion.div>
+                              </Reorder.Item>
+                            );
+                          })}
+                        </Reorder.Group>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
                           <button
-                            key={sub.id}
-                            onClick={() => setSelectedSubcategoryId(sub.id)}
-                            style={{
-                              animationDelay: `${(index + 1) * 30}ms`,
-                              borderColor: active ? color : undefined,
-                              backgroundColor: active
-                                ? `${color}25`
-                                : undefined,
-                              boxShadow: active
-                                ? `0 0 15px ${color}40`
-                                : undefined,
-                            }}
+                            onClick={() => setSelectedSubcategoryId(undefined)}
                             className={cn(
                               "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
-                              active
-                                ? "neo-card neo-glow shadow-lg"
+                              !selectedSubcategoryId
+                                ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow shadow-lg`
                                 : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`
                             )}
                           >
                             <span
-                              className="font-semibold text-xs"
-                              style={{ color: active ? color : "white" }}
+                              className={cn(
+                                "font-semibold text-xs",
+                                !selectedSubcategoryId
+                                  ? themeClasses.text
+                                  : "text-white"
+                              )}
                             >
-                              {sub.name}
+                              None
                             </span>
                           </button>
-                        );
-                      })}
+                          <AnimatePresence mode="popLayout">
+                            {orderedSubcategories.map(
+                              (sub: any, index: number) => {
+                                const active = selectedSubcategoryId === sub.id;
+                                const color = sub.color || "#22d3ee";
+                                return (
+                                  <motion.div
+                                    key={sub.id}
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    transition={{
+                                      duration: 0.2,
+                                      delay: index * 0.02,
+                                    }}
+                                    className="relative"
+                                  >
+                                    <button
+                                      onClick={() =>
+                                        setSelectedSubcategoryId(sub.id)
+                                      }
+                                      style={{
+                                        borderColor: active ? color : undefined,
+                                        backgroundColor: active
+                                          ? `${color}25`
+                                          : undefined,
+                                        boxShadow: active
+                                          ? `0 0 15px ${color}40`
+                                          : undefined,
+                                      }}
+                                      className={cn(
+                                        "w-full p-2.5 rounded-lg border text-center transition-all min-h-[55px] flex flex-col items-center justify-center gap-1 active:scale-95",
+                                        active
+                                          ? "neo-card neo-glow shadow-lg"
+                                          : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`
+                                      )}
+                                    >
+                                      {(() => {
+                                        const IconComponent = getCategoryIcon(
+                                          sub.name
+                                        );
+                                        return (
+                                          <div
+                                            style={{
+                                              color: color,
+                                              filter: `drop-shadow(0 0 6px ${color}80)`,
+                                            }}
+                                          >
+                                            <IconComponent className="w-5 h-5" />
+                                          </div>
+                                        );
+                                      })()}
+                                      <span
+                                        className="font-semibold text-xs"
+                                        style={{
+                                          color: active ? color : "white",
+                                        }}
+                                      >
+                                        {sub.name}
+                                      </span>
+                                    </button>
+                                  </motion.div>
+                                );
+                              }
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
                     </div>
+
+                    {!editModeSubcategory &&
+                      orderedSubcategories.length > 0 && (
+                        <p className="text-[10px] text-slate-600 text-center">
+                          Hold to edit subcategories
+                        </p>
+                      )}
                   </>
                 )}
 
@@ -738,7 +1559,7 @@ export default function MobileExpenseForm() {
                     ? "Adding..."
                     : getNextStep()
                       ? "Next"
-                      : "Add Expense"}
+                      : `Add ${selectedAccount?.type === "income" ? "Income" : "Expense"}`}
                 </Button>
               </div>
             )}
@@ -753,6 +1574,146 @@ export default function MobileExpenseForm() {
               setAmount(rounded);
             }}
           />
+
+          <NewAccountDrawer
+            open={showNewAccountDrawer}
+            onOpenChange={setShowNewAccountDrawer}
+            onAccountCreated={(accountId) => {
+              // Auto-select the newly created account
+              setSelectedAccountId(accountId);
+            }}
+          />
+
+          {selectedAccountId && (
+            <NewCategoryDrawer
+              open={showNewCategoryDrawer}
+              onOpenChange={setShowNewCategoryDrawer}
+              accountId={selectedAccountId}
+              onCategoryCreated={async (categoryId: string) => {
+                // Refetch categories to get the new subcategories
+                await refetchCategories();
+                // Auto-select the newly created category
+                setSelectedCategoryId(categoryId);
+                // Navigate to subcategory step if it's in the flow
+                if (stepFlow.includes("subcategory")) {
+                  setStep("subcategory");
+                }
+              }}
+            />
+          )}
+
+          {/* Delete Confirmation Drawer */}
+          <Drawer
+            open={deleteConfirm !== null}
+            onOpenChange={(open) => !open && setDeleteConfirm(null)}
+          >
+            <DrawerContent className="bg-bg-dark border-t border-slate-800">
+              <DrawerHeader className="text-center pb-2">
+                <div className="mx-auto w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-2">
+                  <AlertTriangle className="w-6 h-6 text-red-500" />
+                </div>
+                <DrawerTitle
+                  className={cn(
+                    "text-lg font-semibold",
+                    deleteConfirm?.step === "second"
+                      ? "text-red-400"
+                      : themeClasses.text
+                  )}
+                >
+                  {deleteConfirm?.step === "first"
+                    ? `Delete ${deleteConfirm?.type === "account" ? "Account" : deleteConfirm?.type === "category" ? "Category" : "Subcategory"}?`
+                    : "Are you absolutely sure?"}
+                </DrawerTitle>
+                <DrawerDescription className="text-slate-400 text-sm">
+                  {deleteConfirm?.step === "first" ? (
+                    <>
+                      You're about to delete{" "}
+                      <span
+                        className="font-semibold"
+                        style={{ color: deleteConfirm?.color || "#22d3ee" }}
+                      >
+                        {deleteConfirm?.name}
+                      </span>
+                      . This action cannot be undone.
+                    </>
+                  ) : (
+                    <>
+                      This will permanently remove{" "}
+                      <span
+                        className="font-semibold"
+                        style={{ color: deleteConfirm?.color || "#22d3ee" }}
+                      >
+                        {deleteConfirm?.name}
+                      </span>{" "}
+                      and all associated data.
+                      {deleteConfirm?.type === "category" && (
+                        <span className="block mt-1 text-amber-400">
+                          All subcategories will also be deleted.
+                        </span>
+                      )}
+                      {deleteConfirm?.type === "account" && (
+                        <span className="block mt-1 text-amber-400">
+                          All transactions in this account will be orphaned.
+                        </span>
+                      )}
+                    </>
+                  )}
+                </DrawerDescription>
+              </DrawerHeader>
+
+              <DrawerFooter className="pt-2 pb-6">
+                <Button
+                  onClick={handleDeleteConfirm}
+                  disabled={isDeleting}
+                  className={cn(
+                    "w-full h-12 text-base font-semibold border-0 shadow-lg transition-all",
+                    deleteConfirm?.step === "first"
+                      ? "bg-red-500/80 hover:bg-red-500 text-white"
+                      : "bg-red-600 hover:bg-red-700 text-white animate-pulse"
+                  )}
+                >
+                  {isDeleting
+                    ? "Deleting..."
+                    : deleteConfirm?.step === "first"
+                      ? "Yes, Delete"
+                      : "Delete Forever"}
+                </Button>
+                <DrawerClose asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full h-11 bg-transparent",
+                      themeClasses.border,
+                      themeClasses.text
+                    )}
+                  >
+                    Cancel
+                  </Button>
+                </DrawerClose>
+              </DrawerFooter>
+            </DrawerContent>
+          </Drawer>
+
+          {/* Backdrop for clicking outside to exit edit mode */}
+          {/* z-[44] keeps it BELOW content (z-[45]) but above regular elements */}
+          <AnimatePresence>
+            {isAnyEditMode && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                onClick={exitAllEditModes}
+                className="fixed inset-0 z-[44] bg-black/20"
+                style={{
+                  top:
+                    selectedAccountId && step === "amount" ? "205px" : "80px",
+                }} // Dynamic: below header
+              />
+            )}
+          </AnimatePresence>
+
+          {/* Floating Done Button is now rendered at layout level (ExpenseTagsBarWrapper) to fix z-index stacking */}
         </>
       )}
     </div>

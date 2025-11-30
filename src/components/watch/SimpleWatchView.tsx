@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useDrafts } from "@/features/drafts/useDrafts";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
@@ -37,8 +37,8 @@ export default function SimpleWatchView() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const transcriptRef = useRef<string>("");
 
-  // Hooks
-  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
+  // Hooks - use only current user's accounts for adding transactions
+  const { data: accounts = [], isLoading: accountsLoading } = useMyAccounts();
   const defaultAccount = accounts.find((a) => a.is_default) || accounts[0];
   const { data: categories = [] } = useCategories(defaultAccount?.id);
   const { data: drafts = [] } = useDrafts();

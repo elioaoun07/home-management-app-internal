@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import {
@@ -76,7 +76,7 @@ type NewCategory = {
 export function CategoryManagement() {
   const themeClasses = useThemeClasses();
   const queryClient = useQueryClient();
-  const { data: accounts = [] } = useAccounts();
+  const { data: accounts = [] } = useMyAccounts();
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
   const { data: categoriesData = [] } = useCategories(selectedAccountId);
 

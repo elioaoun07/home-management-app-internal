@@ -13,6 +13,6 @@ export default async function Home() {
   if (user) {
     redirect("/dashboard");
   }
-  
+
   return <LandingPageClient />;
 }

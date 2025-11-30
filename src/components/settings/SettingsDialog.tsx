@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useAccounts, useSetDefaultAccount } from "@/features/accounts/hooks";
+import { useMyAccounts, useSetDefaultAccount } from "@/features/accounts/hooks";
 import {
   useSectionOrder,
   useUpdatePreferences,
@@ -432,7 +432,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
 export default SettingsDialog;
 
 function AccountsPanel() {
-  const { data: accounts = [] } = useAccounts();
+  const { data: accounts = [] } = useMyAccounts();
   const themeClasses = useThemeClasses();
   const setDefaultMutation = useSetDefaultAccount();
   const defaultAccount = accounts.find((a: any) => a.is_default);

@@ -17,10 +17,15 @@ import {
 } from "@/components/icons/FuturisticIcons";
 import { Card } from "@/components/ui/card";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAccounts } from "@/features/accounts/hooks";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
+import {
+  calculateIncomeExpenseSummary,
+  getExpenseTransactions,
+} from "@/lib/utils/incomeExpense";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   endOfMonth,
@@ -141,6 +146,7 @@ type ViewMode = "widgets" | "list";
 type SortField = "recent" | "date" | "amount" | "category";
 type SortOrder = "asc" | "desc";
 type OwnershipFilter = "all" | "mine" | "partner";
+type AccountTypeFilter = "expense" | "income" | "all";
 type DatePreset = "today" | "week" | "month" | "custom";
 
 // Memoized component for instant rendering
@@ -153,11 +159,14 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
 }: Props) {
   const { theme: currentUserTheme } = useTheme();
   const themeClasses = useThemeClasses();
+  const { data: accounts } = useAccounts();
   const [viewMode, setViewMode] = useState<ViewMode>("widgets");
   const [filterCategory, setFilterCategory] = useState<string>("");
   const [filterAccount, setFilterAccount] = useState<string>("");
   const [ownershipFilter, setOwnershipFilter] =
     useState<OwnershipFilter>("all");
+  const [accountTypeFilter, setAccountTypeFilter] =
+    useState<AccountTypeFilter>("expense");
   const [sortField, setSortField] = useState<SortField>("recent");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [showFilters, setShowFilters] = useState(false);
@@ -176,9 +185,30 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     [transactions]
   );
 
+  // ==================== INCOME VS EXPENSE ====================
+  const incomeExpenseSummary = useMemo(() => {
+    return calculateIncomeExpenseSummary(transactions, accounts);
+  }, [transactions, accounts]);
+
+  // Filter transactions based on account type FIRST
+  const typeFilteredTransactions = useMemo(() => {
+    if (accountTypeFilter === "all") return transactions;
+    return (
+      accountTypeFilter === "expense"
+        ? getExpenseTransactions(transactions, accounts)
+        : incomeExpenseSummary.incomeTransactions
+    ) as Transaction[];
+  }, [
+    transactions,
+    accountTypeFilter,
+    accounts,
+    incomeExpenseSummary.incomeTransactions,
+  ]);
+  // ==================== END INCOME VS EXPENSE ====================
+
   // Filter and sort transactions FIRST (before stats calculation)
   const filteredTransactions = useMemo(() => {
-    let filtered = [...transactions];
+    let filtered = [...typeFilteredTransactions];
 
     // Ownership filter
     if (ownershipFilter === "mine") {
@@ -275,11 +305,13 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     );
   }, [transactions]);
 
-  const accounts = useMemo(() => {
+  const accountNames = useMemo(() => {
     return Array.from(
-      new Set(transactions.map((t) => t.account_name).filter(Boolean))
+      new Set(
+        typeFilteredTransactions.map((t) => t.account_name).filter(Boolean)
+      )
     );
-  }, [transactions]);
+  }, [typeFilteredTransactions]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -293,6 +325,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   const clearFilters = () => {
     setFilterCategory("");
     setFilterAccount("");
+    setAccountTypeFilter("expense");
     setOwnershipFilter("all");
   };
 
@@ -584,7 +617,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                   className={`flex-1 px-3 py-2 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-xs ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all appearance-none`}
                 >
                   <option value="">All Accounts</option>
-                  {accounts.map((acc) => (
+                  {accountNames.map((acc) => (
                     <option key={acc || "unknown"} value={acc || ""}>
                       {acc}
                     </option>

@@ -16,8 +16,18 @@ async function fetchAccounts(): Promise<Account[]> {
   return (await res.json()) as Account[];
 }
 
+// Fetch only current user's accounts (not partner's)
+async function fetchOwnAccounts(): Promise<Account[]> {
+  const res = await fetch("/api/accounts?own=true");
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return (await res.json()) as Account[];
+}
+
 /**
- * OPTIMIZED: Accounts with smart caching
+ * OPTIMIZED: Accounts with smart caching (includes partner's accounts for dashboard)
  * - 1 hour staleTime (accounts rarely change)
  * - No refetch on mount
  */
@@ -31,8 +41,27 @@ export function useAccounts() {
   });
 }
 
+/**
+ * Fetch only the current user's own accounts (for add transaction forms)
+ * Use this when user should only see their own accounts, not partner's
+ */
+export function useMyAccounts() {
+  return useQuery({
+    queryKey: [...qk.accounts(), "own"], // separate key from useAccounts
+    queryFn: fetchOwnAccounts,
+    staleTime: CACHE_TIMES.ACCOUNTS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
 // --- Mutations ---
-type CreateAccountInput = { name: string; type: AccountType };
+type CreateAccountInput = {
+  name: string;
+  type: AccountType;
+  country_code?: string;
+  location_name?: string;
+};
 
 async function createAccount(input: CreateAccountInput): Promise<Account> {
   const res = await fetch("/api/accounts", {
@@ -57,12 +86,15 @@ export function useCreateAccount() {
     Account,
     Error,
     CreateAccountInput,
-    { previous?: Account[]; tempId: string }
+    { previous?: Account[]; previousOwn?: Account[]; tempId: string }
   >({
     mutationFn: createAccount,
-    onMutate: async ({ name, type }) => {
+    onMutate: async ({ name, type, country_code, location_name }) => {
+      // Cancel all account queries
       await qc.cancelQueries({ queryKey: qk.accounts() });
+
       const previous = qc.getQueryData<Account[]>(qk.accounts());
+      const previousOwn = qc.getQueryData<Account[]>([...qk.accounts(), "own"]);
 
       const tempId = `temp-${Date.now()}`;
       const optimistic: Account = {
@@ -71,25 +103,40 @@ export function useCreateAccount() {
         name: name.trim(),
         type,
         inserted_at: new Date().toISOString(),
+        country_code,
+        location_name,
       };
 
+      // Update both caches optimistically
       qc.setQueryData<Account[]>(qk.accounts(), (old = []) => [
         optimistic,
         ...old,
       ]);
+      qc.setQueryData<Account[]>([...qk.accounts(), "own"], (old = []) => [
+        optimistic,
+        ...old,
+      ]);
 
-      return { previous, tempId };
+      return { previous, previousOwn, tempId };
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.previous) qc.setQueryData(qk.accounts(), ctx.previous);
+      if (ctx?.previousOwn)
+        qc.setQueryData([...qk.accounts(), "own"], ctx.previousOwn);
     },
     onSuccess: (created, _vars, ctx) => {
+      // Update both caches with the real account
       qc.setQueryData<Account[]>(qk.accounts(), (old = []) => [
+        created,
+        ...old.filter((a) => a.id !== ctx?.tempId),
+      ]);
+      qc.setQueryData<Account[]>([...qk.accounts(), "own"], (old = []) => [
         created,
         ...old.filter((a) => a.id !== ctx?.tempId),
       ]);
     },
     onSettled: () => {
+      // Invalidate both queries
       qc.invalidateQueries({ queryKey: qk.accounts(), refetchType: "active" });
     },
   });
@@ -117,5 +164,128 @@ export function useSetDefaultAccount() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.accounts() });
     },
+  });
+}
+
+// Delete account mutation
+async function deleteAccount(accountId: string): Promise<void> {
+  const res = await fetch(`/api/accounts/${accountId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    let msg = "Failed to delete account";
+    try {
+      const j = await res.json();
+      if (j?.error) msg = j.error;
+    } catch {}
+    throw new Error(msg);
+  }
+}
+
+export function useDeleteAccount() {
+  const qc = useQueryClient();
+  return useMutation<
+    void,
+    Error,
+    string,
+    { previous?: Account[]; previousOwn?: Account[] }
+  >({
+    mutationFn: deleteAccount,
+    onMutate: async (accountId) => {
+      await qc.cancelQueries({ queryKey: qk.accounts() });
+
+      const previous = qc.getQueryData<Account[]>(qk.accounts());
+      const previousOwn = qc.getQueryData<Account[]>([...qk.accounts(), "own"]);
+
+      // Optimistically remove from both caches
+      qc.setQueryData<Account[]>(qk.accounts(), (old = []) =>
+        old.filter((a) => a.id !== accountId)
+      );
+      qc.setQueryData<Account[]>([...qk.accounts(), "own"], (old = []) =>
+        old.filter((a) => a.id !== accountId)
+      );
+
+      return { previous, previousOwn };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.previous) qc.setQueryData(qk.accounts(), ctx.previous);
+      if (ctx?.previousOwn)
+        qc.setQueryData([...qk.accounts(), "own"], ctx.previousOwn);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: qk.accounts(), refetchType: "active" });
+    },
+  });
+}
+
+// Reorder accounts mutation
+async function reorderAccounts(
+  updates: Array<{ id: string; position: number }>
+): Promise<void> {
+  const res = await fetch("/api/accounts/reorder", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ updates }),
+  });
+  if (!res.ok) {
+    let msg = "Failed to reorder accounts";
+    try {
+      const j = await res.json();
+      if (j?.error) msg = j.error;
+    } catch {}
+    throw new Error(msg);
+  }
+}
+
+export function useReorderAccounts() {
+  const qc = useQueryClient();
+  return useMutation<
+    void,
+    Error,
+    Array<{ id: string; position: number }>,
+    { previous?: Account[]; previousOwn?: Account[] }
+  >({
+    mutationFn: reorderAccounts,
+    onMutate: async (updates) => {
+      await qc.cancelQueries({ queryKey: qk.accounts() });
+
+      const previous = qc.getQueryData<Account[]>(qk.accounts());
+      const previousOwn = qc.getQueryData<Account[]>([...qk.accounts(), "own"]);
+
+      // Create position map
+      const positionMap = new Map(updates.map((u) => [u.id, u.position]));
+
+      // Optimistically update positions in both caches
+      const updatePositions = (accounts: Account[]): Account[] => {
+        return accounts
+          .map((a) => ({
+            ...a,
+            position: positionMap.has(a.id)
+              ? positionMap.get(a.id)!
+              : ((a as any).position ?? 0),
+          }))
+          .sort(
+            (a, b) => ((a as any).position ?? 0) - ((b as any).position ?? 0)
+          );
+      };
+
+      qc.setQueryData<Account[]>(qk.accounts(), (old = []) =>
+        updatePositions(old)
+      );
+      qc.setQueryData<Account[]>([...qk.accounts(), "own"], (old = []) =>
+        updatePositions(old)
+      );
+
+      return { previous, previousOwn };
+    },
+    onError: (_err, _updates, ctx) => {
+      // Revert to previous state on error
+      if (ctx?.previous) qc.setQueryData(qk.accounts(), ctx.previous);
+      if (ctx?.previousOwn)
+        qc.setQueryData([...qk.accounts(), "own"], ctx.previousOwn);
+      // Only refetch on error to ensure we have correct server state
+      qc.invalidateQueries({ queryKey: qk.accounts(), refetchType: "active" });
+    },
+    // No onSettled - we trust the optimistic update on success
   });
 }

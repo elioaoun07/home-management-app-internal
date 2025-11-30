@@ -200,21 +200,26 @@ export function useReorderCategories(accountId?: string) {
       await qc.cancelQueries({ queryKey: qk.categories(accountId) });
       const prev = qc.getQueryData<Category[]>(qk.categories(accountId));
       const map = new Map(updates.map((u) => [u.id, u.position]));
-      qc.setQueryData<Category[]>(qk.categories(accountId), (old = []) =>
-        old.map((c) => (map.has(c.id) ? { ...c, position: map.get(c.id)! } : c))
-      );
+      qc.setQueryData<Category[]>(qk.categories(accountId), (old = []) => {
+        // Update positions
+        const updated = old.map((c) =>
+          map.has(c.id) ? { ...c, position: map.get(c.id)! } : c
+        );
+        // Sort by position to match server order (persisted cache will be correct on reload)
+        return updated.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+      });
       return { prev };
     },
     onError: (_e, _v, ctx) => {
       if (!accountId) return;
+      // Revert to previous state on error
       if (ctx?.prev) qc.setQueryData(qk.categories(accountId), ctx.prev);
-    },
-    onSettled: () => {
-      if (!accountId) return;
+      // Only refetch on error to ensure we have correct server state
       qc.invalidateQueries({
         queryKey: qk.categories(accountId),
         refetchType: "active",
       });
     },
+    // No onSettled - we trust the optimistic update on success
   });
 }

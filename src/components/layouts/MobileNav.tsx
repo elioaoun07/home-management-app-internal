@@ -220,6 +220,13 @@ export default function MobileNav() {
                 <button
                   key={item.id}
                   type="button"
+                  onClick={() => {
+                    // Haptic feedback
+                    if (navigator.vibrate) {
+                      navigator.vibrate(10);
+                    }
+                    setActiveTab("expense");
+                  }}
                   onMouseEnter={handleExpensePrefetch}
                   onTouchStart={(e) => {
                     handleExpensePrefetch();

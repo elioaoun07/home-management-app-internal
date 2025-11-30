@@ -4,19 +4,11 @@ import { CACHE_TIMES } from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
 import { useQuery } from "@tanstack/react-query";
 
-// Import default (nested) categories used as fallback
-import {
-  DEFAULT_CATEGORIES,
-  // If your constants file exports a type for its items, keep this alias:
-  // e.g., `export type Category = { id: string; name: string; icon?: string; color?: string; subcategories?: ... }`
-  Category as DefaultCategory,
-} from "@/constants/defaultCategories";
-
 // Import the DB (flat) category shape
 import type { Category as DbCategory } from "@/types/domain";
 
-/** Union for the UI: either DB-flat (with parent_id) or default-nested (with subcategories[]) */
-export type UICategory = DbCategory | DefaultCategory;
+/** UI category type - only DB categories (flat with parent_id) */
+export type UICategory = DbCategory;
 
 async function fetchCategories(accountId: string): Promise<UICategory[]> {
   const qs = new URLSearchParams({ accountId });
@@ -28,13 +20,10 @@ async function fetchCategories(accountId: string): Promise<UICategory[]> {
 
   const data = (await res.json()) as unknown;
 
-  // If API returns an empty array, fall back to the default nested categories
-  if (Array.isArray(data) && data.length === 0) {
-    return DEFAULT_CATEGORIES as UICategory[];
-  }
-
-  // Otherwise it’s your DB-flat list (already filtered by account & visible=true)
-  return data as UICategory[];
+  // Return DB categories only - DO NOT fall back to DEFAULT_CATEGORIES
+  // Default categories have non-UUID IDs (like "cat-home-rent") that will fail
+  // when used in transactions. If no categories exist, return empty array.
+  return (data as UICategory[]) || [];
 }
 
 /**

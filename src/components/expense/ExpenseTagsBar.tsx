@@ -53,7 +53,7 @@ export default function ExpenseTagsBar({
 
   return (
     <div
-      className="fixed left-0 right-0 z-40 px-4 pointer-events-none"
+      className="fixed left-0 right-0 z-[50] px-4 pointer-events-none"
       style={wrapperStyles}
     >
       <div

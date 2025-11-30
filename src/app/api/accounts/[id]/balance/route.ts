@@ -4,6 +4,26 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+// Helper to get partner user ID if linked
+async function getPartnerUserId(
+  supabase: any,
+  userId: string
+): Promise<string | null> {
+  const { data: link } = await supabase
+    .from("household_links")
+    .select("owner_user_id, partner_user_id, active")
+    .or(`owner_user_id.eq.${userId},partner_user_id.eq.${userId}`)
+    .eq("active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!link) return null;
+  return link.owner_user_id === userId
+    ? link.partner_user_id
+    : link.owner_user_id;
+}
+
 // GET /api/accounts/[id]/balance - Get balance for a specific account
 export async function GET(
   _req: NextRequest,
@@ -20,25 +40,31 @@ export async function GET(
 
   const { id: accountId } = await params;
 
-  // Verify account belongs to user AND get account type
+  // Get partner ID if linked
+  const partnerId = await getPartnerUserId(supabase, user.id);
+  const allowedUserIds = partnerId ? [user.id, partnerId] : [user.id];
+
+  // Verify account belongs to user OR partner AND get account type
   const { data: account, error: accountError } = await supabase
     .from("accounts")
-    .select("id, type")
+    .select("id, type, user_id")
     .eq("id", accountId)
-    .eq("user_id", user.id)
+    .in("user_id", allowedUserIds)
     .single();
 
   if (accountError || !account) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
 
-  // Get the user's balance record for this account
-  // IMPORTANT: Filter by BOTH account_id AND user_id to ensure user isolation
+  // The account owner (could be current user or partner)
+  const accountOwnerId = account.user_id;
+
+  // Get the balance record for this account (owned by account owner)
   const { data: balanceData, error } = await supabase
     .from("account_balances")
     .select("balance, balance_set_at, created_at, updated_at")
     .eq("account_id", accountId)
-    .eq("user_id", user.id)
+    .eq("user_id", accountOwnerId)
     .single();
 
   if (error) {
@@ -65,11 +91,12 @@ export async function GET(
   const balanceSetAt = balanceData.balance_set_at;
 
   // Get confirmed transactions inserted AFTER balance was set
+  // Use accountOwnerId since transactions belong to the account owner
   const { data: newTransactions, error: transError } = await supabase
     .from("transactions")
     .select("amount")
     .eq("account_id", accountId)
-    .eq("user_id", user.id)
+    .eq("user_id", accountOwnerId)
     .eq("is_draft", false)
     .gt("inserted_at", balanceSetAt);
 
@@ -82,7 +109,7 @@ export async function GET(
     .from("transactions")
     .select("amount")
     .eq("account_id", accountId)
-    .eq("user_id", user.id)
+    .eq("user_id", accountOwnerId)
     .eq("is_draft", true);
 
   if (draftError) {

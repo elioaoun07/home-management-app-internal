@@ -1,13 +1,39 @@
 "use client";
 
+import InteractiveWorldMap, {
+  TripDetailsPanel,
+} from "@/components/charts/InteractiveWorldMap";
+import {
+  ComparisonBar,
+  DonutChart,
+  MiniBarChart,
+  MiniLineChart,
+  Sparkline,
+} from "@/components/charts/MiniCharts";
 import CategoryDetailView from "@/components/dashboard/CategoryDetailView";
 import TransactionDetailModal from "@/components/dashboard/TransactionDetailModal";
 import { Card } from "@/components/ui/card";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAccounts } from "@/features/accounts/hooks";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
+import {
+  getCurrentSeasonComparison,
+  getDailySpending,
+  getMonthlySpending,
+  getMonthOverMonth,
+  getSameMonthLastYear,
+  getSeasonalAnalysis,
+  getSpendingByCountry,
+  getTripTimeline,
+  getYearOverYear,
+} from "@/lib/utils/comparisonAnalytics";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
+import {
+  calculateIncomeExpenseSummary,
+  getExpenseTransactions,
+} from "@/lib/utils/incomeExpense";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   differenceInDays,
@@ -19,26 +45,37 @@ import {
   startOfMonth,
   startOfWeek,
   subDays,
+  subYears,
 } from "date-fns";
 import {
   AlertTriangle,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  BarChart3,
   CalendarDays,
   DollarSign,
   Filter,
   Flame,
   Heart,
+  Leaf,
+  LineChart,
   Pencil,
+  PiggyBank,
   Receipt,
   RefreshCw,
   Shield,
+  Snowflake,
+  Sun,
   Target,
   Trash2,
   TrendingDown,
   TrendingUp,
   User,
   Users,
+  Wallet,
+  Wind,
 } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type Transaction = {
@@ -68,6 +105,7 @@ type Props = {
 };
 
 type OwnershipFilter = "all" | "mine" | "partner";
+type AccountTypeFilter = "all" | "expense" | "income";
 type SortField = "recent" | "date" | "amount" | "category";
 type SortOrder = "asc" | "desc";
 
@@ -87,9 +125,12 @@ const WebDashboard = memo(function WebDashboard({
   const themeClasses = useThemeClasses();
   const queryClient = useQueryClient();
   const deleteMutation = useDeleteTransaction();
+  const { data: accounts } = useAccounts();
 
   const [ownershipFilter, setOwnershipFilter] =
     useState<OwnershipFilter>("all");
+  const [accountTypeFilter, setAccountTypeFilter] =
+    useState<AccountTypeFilter>("expense");
   const [filterCategory, setFilterCategory] = useState<string>("");
   const [filterAccount, setFilterAccount] = useState<string>("");
   const [sortField, setSortField] = useState<SortField>("recent");
@@ -103,29 +144,78 @@ const WebDashboard = memo(function WebDashboard({
     null
   );
 
+  // Ref for controlling map zoom from external components
+  const zoomToCountryRef = useRef<{
+    zoomToCountry: (code: string) => void;
+    zoomOut: () => void;
+  } | null>(null);
+
   const hasPendingTransactions = useMemo(
     () => transactions.some((t) => (t as any)._isPending),
     [transactions]
   );
 
+  // ==================== OWNERSHIP FILTERED TRANSACTIONS ====================
+  // Apply ownership filter FIRST before any other processing
+  const ownershipFilteredTransactions = useMemo(() => {
+    if (ownershipFilter === "all") return transactions;
+    if (ownershipFilter === "mine")
+      return transactions.filter((t) => t.is_owner === true);
+    return transactions.filter((t) => t.is_owner === false); // partner
+  }, [transactions, ownershipFilter]);
+
+  // ==================== INCOME VS EXPENSE ====================
+  const incomeExpenseSummary = useMemo(() => {
+    return calculateIncomeExpenseSummary(
+      ownershipFilteredTransactions,
+      accounts
+    );
+  }, [ownershipFilteredTransactions, accounts]);
+
+  const savingsRate = useMemo(() => {
+    if (incomeExpenseSummary.totalIncome === 0) return 0;
+    return (
+      (incomeExpenseSummary.netBalance / incomeExpenseSummary.totalIncome) * 100
+    );
+  }, [incomeExpenseSummary]);
+
+  // Filter transactions based on account type (AFTER ownership filter)
+  const typeFilteredTransactions = useMemo(() => {
+    if (accountTypeFilter === "all") return ownershipFilteredTransactions;
+    return (
+      accountTypeFilter === "expense"
+        ? getExpenseTransactions(ownershipFilteredTransactions, accounts)
+        : incomeExpenseSummary.incomeTransactions
+    ) as Transaction[];
+  }, [
+    ownershipFilteredTransactions,
+    accountTypeFilter,
+    accounts,
+    incomeExpenseSummary.incomeTransactions,
+  ]);
+
+  // ==================== END INCOME VS EXPENSE ====================
+
   const categories = useMemo(() => {
     return Array.from(
-      new Set(transactions.map((t) => t.category).filter(Boolean))
+      new Set(typeFilteredTransactions.map((t) => t.category).filter(Boolean))
     );
-  }, [transactions]);
+  }, [typeFilteredTransactions]);
 
-  const accounts = useMemo(() => {
+  const accountsList = useMemo(() => {
     return Array.from(
-      new Set(transactions.map((t) => t.account_name).filter(Boolean))
+      new Set(
+        typeFilteredTransactions.map((t) => t.account_name).filter(Boolean)
+      )
     );
-  }, [transactions]);
+  }, [typeFilteredTransactions]);
 
+  // Apply additional filters (category, account) and sorting
+  // Note: ownership filter is already applied in ownershipFilteredTransactions
   const filteredTransactions = useMemo(() => {
-    let filtered = [...transactions];
-    if (ownershipFilter === "mine")
-      filtered = filtered.filter((t) => t.is_owner === true);
-    else if (ownershipFilter === "partner")
-      filtered = filtered.filter((t) => t.is_owner === false);
+    let filtered = [...typeFilteredTransactions];
+
+    // Category and account filters only
     if (filterCategory)
       filtered = filtered.filter((t) => t.category === filterCategory);
     if (filterAccount)
@@ -145,8 +235,7 @@ const WebDashboard = memo(function WebDashboard({
     });
     return filtered;
   }, [
-    transactions,
-    ownershipFilter,
+    typeFilteredTransactions,
     filterCategory,
     filterAccount,
     sortField,
@@ -454,15 +543,79 @@ const WebDashboard = memo(function WebDashboard({
     return items.slice(0, 5);
   }, [dayOfWeekPattern, spendingVelocity, stats, categoryTrends]);
 
+  // ==================== PERIOD COMPARISONS ====================
+
+  // Month over Month
+  const monthOverMonth = useMemo(
+    () => getMonthOverMonth(filteredTransactions),
+    [filteredTransactions]
+  );
+
+  // Year over Year
+  const yearOverYear = useMemo(
+    () => getYearOverYear(filteredTransactions),
+    [filteredTransactions]
+  );
+
+  // Same Month Last Year (Nov 2025 vs Nov 2024)
+  const sameMonthLastYear = useMemo(
+    () => getSameMonthLastYear(filteredTransactions),
+    [filteredTransactions]
+  );
+
+  // Season comparison
+  const seasonComparison = useMemo(
+    () => getCurrentSeasonComparison(filteredTransactions),
+    [filteredTransactions]
+  );
+
+  // Seasonal analysis
+  const seasonalAnalysis = useMemo(
+    () => getSeasonalAnalysis(filteredTransactions),
+    [filteredTransactions]
+  );
+
+  // ==================== TIME SERIES DATA ====================
+
+  // Daily spending for last 30 days
+  const dailySpending = useMemo(
+    () => getDailySpending(filteredTransactions, 30),
+    [filteredTransactions]
+  );
+
+  // Monthly spending for last 12 months
+  const monthlySpending = useMemo(
+    () => getMonthlySpending(filteredTransactions, 12),
+    [filteredTransactions]
+  );
+
+  // ==================== TRIP / TRAVEL ANALYTICS ====================
+
+  // Spending by country (location comes from accounts)
+  const countrySpending = useMemo(
+    () => getSpendingByCountry(filteredTransactions, accounts),
+    [filteredTransactions, accounts]
+  );
+
+  // Trip timeline (based on accounts with country_code)
+  const tripTimeline = useMemo(
+    () => getTripTimeline(filteredTransactions, accounts),
+    [filteredTransactions, accounts]
+  );
+
   // ==================== END ANALYTICS ====================
 
   const hasActiveFilters =
-    filterCategory || filterAccount || ownershipFilter !== "all";
+    filterCategory ||
+    filterAccount ||
+    ownershipFilter !== "all" ||
+    accountTypeFilter !== "expense";
 
   const clearFilters = () => {
     setFilterCategory("");
     setFilterAccount("");
     setOwnershipFilter("all");
+    setAccountTypeFilter("expense");
   };
 
   const handleRefresh = async () => {
@@ -492,7 +645,8 @@ const WebDashboard = memo(function WebDashboard({
     setCategoryDetail(categoryName);
 
   if (categoryDetail) {
-    const categoryTxs = transactions.filter(
+    // Apply all filters to category detail view (ownership + account type + category)
+    const categoryTxs = typeFilteredTransactions.filter(
       (t) => t.category === categoryDetail
     );
     const totalAmount = categoryTxs.reduce((sum, t) => sum + t.amount, 0);
@@ -529,6 +683,7 @@ const WebDashboard = memo(function WebDashboard({
         className={`sticky top-0 z-20 ${themeClasses.headerGradient} backdrop-blur-xl border-b border-white/5`}
       >
         <div className="max-w-7xl mx-auto">
+          {/* Ownership Filter Row */}
           <div className="flex items-center justify-center py-2 border-b border-white/5">
             <div className="flex items-center gap-1 p-1 rounded-xl neo-card">
               {[
@@ -543,6 +698,46 @@ const WebDashboard = memo(function WebDashboard({
                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
                     ownershipFilter === item.id
                       ? `${themeClasses.bgActive} ${themeClasses.textActive}`
+                      : "text-slate-400 hover:text-slate-300 hover:bg-white/5"
+                  )}
+                >
+                  <item.icon className="w-3.5 h-3.5" />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Account Type Filter Row */}
+          <div className="flex items-center justify-center py-2 border-b border-white/5">
+            <div className="flex items-center gap-1 p-1 rounded-xl neo-card">
+              {[
+                {
+                  id: "expense" as const,
+                  icon: ArrowDownCircle,
+                  label: "Expenses",
+                  color: "text-red-400",
+                },
+                {
+                  id: "all" as const,
+                  icon: Wallet,
+                  label: "All",
+                  color: "text-slate-400",
+                },
+                {
+                  id: "income" as const,
+                  icon: ArrowUpCircle,
+                  label: "Income",
+                  color: "text-emerald-400",
+                },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setAccountTypeFilter(item.id)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                    accountTypeFilter === item.id
+                      ? `${themeClasses.bgActive} ${item.color}`
                       : "text-slate-400 hover:text-slate-300 hover:bg-white/5"
                   )}
                 >
@@ -660,7 +855,7 @@ const WebDashboard = memo(function WebDashboard({
                   className={`px-2 py-1.5 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-xs flex-1`}
                 >
                   <option value="">All Accounts</option>
-                  {accounts.map((acc) => (
+                  {accountsList.map((acc) => (
                     <option key={acc || "unknown"} value={acc || ""}>
                       {acc}
                     </option>
@@ -755,6 +950,129 @@ const WebDashboard = memo(function WebDashboard({
             </div>
           </Card>
         </div>
+
+        {/* Income vs Expense Widget */}
+        <Card className="neo-card p-6 mb-4 bg-gradient-to-br from-[#0f1d2e] to-[#1a2942]">
+          <h3
+            className={`text-sm font-semibold mb-4 ${themeClasses.headerText} flex items-center gap-2`}
+          >
+            <PiggyBank className="w-4 h-4" />
+            Income vs Expenses
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Income */}
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-emerald-500/20">
+                <ArrowUpCircle className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-xs text-emerald-300/70">Total Income</p>
+                <p className="text-2xl font-bold text-emerald-400">
+                  ${incomeExpenseSummary.totalIncome.toFixed(0)}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {incomeExpenseSummary.incomeTransactions.length} transactions
+                </p>
+              </div>
+            </div>
+
+            {/* Expenses */}
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-red-500/20">
+                <ArrowDownCircle className="w-6 h-6 text-red-400" />
+              </div>
+              <div>
+                <p className="text-xs text-red-300/70">Total Expenses</p>
+                <p className="text-2xl font-bold text-red-400">
+                  ${incomeExpenseSummary.totalExpense.toFixed(0)}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {incomeExpenseSummary.expenseTransactions.length} transactions
+                </p>
+              </div>
+            </div>
+
+            {/* Net Balance / Savings */}
+            <div className="flex items-center gap-3">
+              <div
+                className={cn(
+                  "p-3 rounded-xl",
+                  incomeExpenseSummary.netBalance >= 0
+                    ? "bg-cyan-500/20"
+                    : "bg-amber-500/20"
+                )}
+              >
+                <PiggyBank
+                  className={cn(
+                    "w-6 h-6",
+                    incomeExpenseSummary.netBalance >= 0
+                      ? "text-cyan-400"
+                      : "text-amber-400"
+                  )}
+                />
+              </div>
+              <div>
+                <p
+                  className={cn(
+                    "text-xs",
+                    incomeExpenseSummary.netBalance >= 0
+                      ? "text-cyan-300/70"
+                      : "text-amber-300/70"
+                  )}
+                >
+                  Net{" "}
+                  {incomeExpenseSummary.netBalance >= 0 ? "Savings" : "Deficit"}
+                </p>
+                <p
+                  className={cn(
+                    "text-2xl font-bold",
+                    incomeExpenseSummary.netBalance >= 0
+                      ? "text-cyan-400"
+                      : "text-amber-400"
+                  )}
+                >
+                  ${Math.abs(incomeExpenseSummary.netBalance).toFixed(0)}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {savingsRate >= 0 ? savingsRate.toFixed(1) : "0"}% savings
+                  rate
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Visual Bar */}
+          <div className="mt-4">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs text-emerald-400">Income</span>
+              <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400"
+                  style={{
+                    width: `${incomeExpenseSummary.totalIncome > 0 ? 100 : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-400">Expenses</span>
+              <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-red-500 to-red-400"
+                  style={{
+                    width: `${
+                      incomeExpenseSummary.totalIncome > 0
+                        ? (incomeExpenseSummary.totalExpense /
+                            incomeExpenseSummary.totalIncome) *
+                          100
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
 
         {/* Insights Bar */}
         {insights.length > 0 && (
@@ -1055,6 +1373,258 @@ const WebDashboard = memo(function WebDashboard({
           </Card>
         </div>
 
+        {/* Row 4: Period Comparisons */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
+          {/* Month over Month */}
+          <Card className="neo-card p-4 bg-gradient-to-br from-blue-500/10 to-transparent">
+            <div className="flex items-center gap-2 mb-3">
+              <CalendarDays className="w-4 h-4 text-blue-400" />
+              <h3 className="text-sm font-semibold text-white">
+                Month / Month
+              </h3>
+            </div>
+            <ComparisonBar
+              current={monthOverMonth.currentTotal}
+              previous={monthOverMonth.previousTotal}
+              currentLabel="This Month"
+              previousLabel="Last Month"
+              currentColor="#3b82f6"
+            />
+          </Card>
+
+          {/* Same Month Last Year */}
+          <Card className="neo-card p-4 bg-gradient-to-br from-purple-500/10 to-transparent">
+            <div className="flex items-center gap-2 mb-3">
+              <BarChart3 className="w-4 h-4 text-purple-400" />
+              <h3 className="text-sm font-semibold text-white">vs Last Year</h3>
+            </div>
+            <ComparisonBar
+              current={sameMonthLastYear.currentTotal}
+              previous={sameMonthLastYear.previousTotal}
+              currentLabel={format(new Date(), "MMM yyyy")}
+              previousLabel={format(subYears(new Date(), 1), "MMM yyyy")}
+              currentColor="#a855f7"
+            />
+          </Card>
+
+          {/* Year over Year */}
+          <Card className="neo-card p-4 bg-gradient-to-br from-emerald-500/10 to-transparent">
+            <div className="flex items-center gap-2 mb-3">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-semibold text-white">Year / Year</h3>
+            </div>
+            <ComparisonBar
+              current={yearOverYear.currentTotal}
+              previous={yearOverYear.previousTotal}
+              currentLabel={format(new Date(), "yyyy")}
+              previousLabel={format(subYears(new Date(), 1), "yyyy")}
+              currentColor="#10b981"
+            />
+          </Card>
+
+          {/* Season Comparison */}
+          <Card className="neo-card p-4 bg-gradient-to-br from-amber-500/10 to-transparent">
+            <div className="flex items-center gap-2 mb-3">
+              {seasonComparison.season === "winter" && (
+                <Snowflake className="w-4 h-4 text-cyan-400" />
+              )}
+              {seasonComparison.season === "spring" && (
+                <Leaf className="w-4 h-4 text-green-400" />
+              )}
+              {seasonComparison.season === "summer" && (
+                <Sun className="w-4 h-4 text-amber-400" />
+              )}
+              {seasonComparison.season === "fall" && (
+                <Wind className="w-4 h-4 text-orange-400" />
+              )}
+              <h3 className="text-sm font-semibold text-white capitalize">
+                {seasonComparison.season} vs Last Year
+              </h3>
+            </div>
+            <ComparisonBar
+              current={seasonComparison.currentTotal}
+              previous={seasonComparison.previousTotal}
+              currentLabel={`${seasonComparison.season.charAt(0).toUpperCase() + seasonComparison.season.slice(1)} '${format(new Date(), "yy")}`}
+              previousLabel={`${seasonComparison.season.charAt(0).toUpperCase() + seasonComparison.season.slice(1)} '${format(subYears(new Date(), 1), "yy")}`}
+              currentColor="#f59e0b"
+            />
+          </Card>
+        </div>
+
+        {/* Row 5: Spending Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          {/* Daily Spending Line Chart */}
+          <Card className="neo-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <LineChart className="w-4 h-4 text-blue-400" />
+                <h3 className="text-sm font-semibold text-white">
+                  Daily Spending (30 Days)
+                </h3>
+              </div>
+              <Sparkline
+                values={dailySpending.map((d) => d.amount)}
+                color="#3b82f6"
+                width={60}
+                height={20}
+              />
+            </div>
+            <MiniLineChart
+              data={dailySpending.map((d) => ({
+                label: d.label,
+                value: d.amount,
+              }))}
+              height={140}
+              color="#3b82f6"
+              gradientId="dailyGrad"
+              showLabels
+            />
+          </Card>
+
+          {/* Monthly Spending Bar Chart */}
+          <Card className="neo-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-semibold text-white">
+                  Monthly Spending (12 Months)
+                </h3>
+              </div>
+              <Sparkline
+                values={monthlySpending.map((d) => d.amount)}
+                color="#10b981"
+                width={60}
+                height={20}
+              />
+            </div>
+            <MiniBarChart
+              data={monthlySpending.map((d) => ({
+                label: d.label,
+                value: d.amount,
+                color: "#10b981",
+              }))}
+              height={140}
+              defaultColor="#10b981"
+            />
+          </Card>
+        </div>
+
+        {/* Row 6: Category Distribution & Seasonal Analysis */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          {/* Category Donut Chart */}
+          <Card className="neo-card p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Target className="w-4 h-4 text-violet-400" />
+              <h3 className="text-sm font-semibold text-white">
+                Category Distribution
+              </h3>
+            </div>
+            <div className="flex items-center justify-center">
+              <DonutChart
+                data={Object.entries(stats.byCategory)
+                  .sort((a, b) => b[1].amount - a[1].amount)
+                  .slice(0, 6)
+                  .map(([label, data]) => ({
+                    label,
+                    value: data.amount,
+                    color: data.color,
+                  }))}
+                size={150}
+                thickness={20}
+                centerLabel="Total"
+                centerValue={`$${stats.total.toFixed(0)}`}
+              />
+            </div>
+          </Card>
+
+          {/* Seasonal Spending */}
+          <Card className="neo-card p-4 lg:col-span-2">
+            <div className="flex items-center gap-2 mb-3">
+              <Sun className="w-4 h-4 text-amber-400" />
+              <h3 className="text-sm font-semibold text-white">
+                Seasonal Spending Pattern
+              </h3>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              {seasonalAnalysis.map((season) => {
+                const SeasonIcon =
+                  season.season === "winter"
+                    ? Snowflake
+                    : season.season === "spring"
+                      ? Leaf
+                      : season.season === "summer"
+                        ? Sun
+                        : Wind;
+                const iconColor =
+                  season.season === "winter"
+                    ? "text-cyan-400"
+                    : season.season === "spring"
+                      ? "text-green-400"
+                      : season.season === "summer"
+                        ? "text-amber-400"
+                        : "text-orange-400";
+                const bgColor =
+                  season.season === "winter"
+                    ? "bg-cyan-500/10"
+                    : season.season === "spring"
+                      ? "bg-green-500/10"
+                      : season.season === "summer"
+                        ? "bg-amber-500/10"
+                        : "bg-orange-500/10";
+
+                return (
+                  <div
+                    key={season.season}
+                    className={cn("p-3 rounded-xl", bgColor)}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <SeasonIcon className={cn("w-4 h-4", iconColor)} />
+                      <span className="text-xs font-medium text-white capitalize">
+                        {season.season}
+                      </span>
+                    </div>
+                    <p className={cn("text-lg font-bold", iconColor)}>
+                      ${season.total.toFixed(0)}
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      ${season.avgPerMonth.toFixed(0)}/mo avg
+                    </p>
+                    {season.topCategories[0] && (
+                      <p className="text-[10px] text-slate-500 mt-1 truncate">
+                        Top: {season.topCategories[0].category}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+
+        {/* Row 7: World Map & Trip Details */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          <Card className="neo-card p-4 lg:col-span-2">
+            <InteractiveWorldMap
+              spending={countrySpending}
+              transactions={filteredTransactions}
+              onCountryClick={(code) => console.log("Clicked country:", code)}
+              zoomToCountryRef={zoomToCountryRef}
+            />
+          </Card>
+
+          <Card className="neo-card p-4 h-[450px]">
+            <TripDetailsPanel
+              spending={countrySpending}
+              transactions={filteredTransactions}
+              onZoomToCountry={(code) =>
+                zoomToCountryRef.current?.zoomToCountry(code)
+              }
+              onZoomOut={() => zoomToCountryRef.current?.zoomOut()}
+              className="h-full"
+            />
+          </Card>
+        </div>
+
         {/* Transactions */}
         <Card
           className={`neo-card p-4 bg-gradient-to-br ${themeClasses.cardGradient}`}
@@ -1076,6 +1646,19 @@ const WebDashboard = memo(function WebDashboard({
                   : "text-pink-400"
                 : themeClasses.textFaint;
               const isHovered = hoveredTransaction === tx.id;
+
+              // Partner transactions get opposite theme color border
+              // If I'm blue theme: partner's transactions show pink border
+              // If I'm pink theme: partner's transactions show cyan/blue border
+              const partnerBorderStyle = isPartnerTx
+                ? {
+                    border: `1px solid ${themeClasses.isPink ? "rgba(6, 182, 212, 0.5)" : "rgba(236, 72, 153, 0.5)"}`,
+                    boxShadow: themeClasses.isPink
+                      ? "0 0 8px rgba(6, 182, 212, 0.15)"
+                      : "0 0 8px rgba(236, 72, 153, 0.15)",
+                  }
+                : {};
+
               return (
                 <div
                   key={tx.id}
@@ -1085,6 +1668,7 @@ const WebDashboard = memo(function WebDashboard({
                     themeClasses.bgHover,
                     "hover:shadow-lg group"
                   )}
+                  style={partnerBorderStyle}
                   onMouseEnter={() => setHoveredTransaction(tx.id)}
                   onMouseLeave={() => setHoveredTransaction(null)}
                   onClick={() => setSelectedTransaction(tx)}

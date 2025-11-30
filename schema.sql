@@ -20,6 +20,9 @@ CREATE TABLE public.accounts (
   type text NOT NULL CHECK (type = ANY (ARRAY['income'::text, 'expense'::text])),
   inserted_at timestamp with time zone NOT NULL DEFAULT now(),
   is_default boolean DEFAULT false,
+  country_code text,
+  location_name text,
+  position integer NOT NULL DEFAULT 0,
   CONSTRAINT accounts_pkey PRIMARY KEY (id),
   CONSTRAINT accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -192,8 +195,8 @@ CREATE TABLE public.user_categories (
   CONSTRAINT user_categories_pkey PRIMARY KEY (id),
   CONSTRAINT user_categories_default_fk FOREIGN KEY (default_category_id) REFERENCES public.default_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id)
 );
 CREATE TABLE public.user_onboarding (
