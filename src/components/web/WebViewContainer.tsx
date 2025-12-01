@@ -3,6 +3,7 @@
 import UserMenuClient from "@/components/auth/UserMenuClient";
 import WebBudget from "@/components/web/WebBudget";
 import WebDashboard from "@/components/web/WebDashboard";
+import WebFuturePurchases from "@/components/web/WebFuturePurchases";
 import { useUser } from "@/contexts/UserContext";
 import { useUserPreferences } from "@/features/preferences/useUserPreferences";
 import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
@@ -10,10 +11,10 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { getDefaultDateRange } from "@/lib/utils/date";
-import { BarChart3, Wallet } from "lucide-react";
+import { BarChart3, Rocket, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-export type WebTab = "dashboard" | "budget";
+export type WebTab = "dashboard" | "budget" | "goals";
 
 // Mock category budgets for now (will be connected to Supabase later)
 const DEFAULT_CATEGORY_BUDGETS = [
@@ -209,6 +210,12 @@ export default function WebViewContainer() {
                 <Wallet className="w-5 h-5" />
                 <span className="text-sm font-semibold">Budget</span>
               </div>
+              <div
+                className={`neo-card ${themeClasses.text} px-6 py-3 rounded-xl flex items-center gap-3`}
+              >
+                <Rocket className="w-5 h-5" />
+                <span className="text-sm font-semibold">Goals</span>
+              </div>
             </div>
           </div>
         </nav>
@@ -263,6 +270,12 @@ export default function WebViewContainer() {
                 <Wallet className="w-5 h-5" />
                 <span className="text-sm font-semibold">Budget</span>
               </div>
+              <div
+                className={`neo-card ${themeClasses.text} px-6 py-3 rounded-xl flex items-center gap-3`}
+              >
+                <Rocket className="w-5 h-5" />
+                <span className="text-sm font-semibold">Goals</span>
+              </div>
             </div>
           </div>
         </nav>
@@ -315,6 +328,11 @@ export default function WebViewContainer() {
             onBudgetChange={handleBudgetChange}
           />
         </div>
+
+        {/* Future Purchases / Goals View */}
+        <div className={activeTab === "goals" ? "block" : "hidden"}>
+          <WebFuturePurchases />
+        </div>
       </main>
 
       {/* Bottom Navigation - Fixed at bottom, outside scroll */}
@@ -366,6 +384,28 @@ export default function WebViewContainer() {
                 )}
               />
               <span className="text-sm font-semibold">Budget</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (navigator.vibrate) navigator.vibrate(10);
+                setActiveTab("goals");
+              }}
+              className={cn(
+                "flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300",
+                "hover:scale-105 active:scale-95",
+                activeTab === "goals"
+                  ? "bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg shadow-violet-500/30"
+                  : `neo-card ${themeClasses.text} hover:bg-white/5`
+              )}
+            >
+              <Rocket
+                className={cn(
+                  "w-5 h-5",
+                  activeTab === "goals" && "drop-shadow-lg"
+                )}
+              />
+              <span className="text-sm font-semibold">Goals</span>
             </button>
           </div>
         </div>
