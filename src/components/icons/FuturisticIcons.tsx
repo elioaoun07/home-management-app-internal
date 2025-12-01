@@ -1204,9 +1204,33 @@ export const BillIcon = ({ className, size = 24 }: IconProps) => (
       strokeLinejoin="round"
     />
     {/* Bill lines */}
-    <line x1="8" y1="8" x2="16" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    <line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    <line x1="8" y1="16" x2="12" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <line
+      x1="8"
+      y1="8"
+      x2="16"
+      y2="8"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    <line
+      x1="8"
+      y1="12"
+      x2="16"
+      y2="12"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    <line
+      x1="8"
+      y1="16"
+      x2="12"
+      y2="16"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
     {/* Dollar sign or amount */}
     <circle cx="15" cy="16" r="1.5" stroke="currentColor" strokeWidth="1" />
   </svg>
