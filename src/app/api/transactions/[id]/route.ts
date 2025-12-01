@@ -74,7 +74,6 @@ export async function PATCH(
 
     // Fetch category and subcategory names for complete response
     let categoryName: string | null = null;
-    let categoryIcon: string | null = null;
     let categoryColor: string | null = null;
     let subcategoryName: string | null = null;
     let subcategoryColor: string | null = null;
@@ -83,12 +82,11 @@ export async function PATCH(
     if (updated.category_id) {
       const { data: categoryData } = await supabase
         .from("user_categories")
-        .select("name, icon, color")
+        .select("name, color")
         .eq("id", updated.category_id)
         .single();
       if (categoryData) {
         categoryName = categoryData.name;
-        categoryIcon = categoryData.icon;
         categoryColor = categoryData.color;
       }
     }
@@ -122,13 +120,12 @@ export async function PATCH(
       .update({ updated_at: new Date().toISOString() })
       .eq("account_id", updated.account_id);
 
-    // Return complete transaction object
+    // Return complete transaction object (icon derived from category name via getCategoryIcon)
     return NextResponse.json({
       ...updated,
       category: categoryName,
       subcategory: subcategoryName,
       account_name: accountName,
-      category_icon: categoryIcon || "📝",
       category_color: categoryColor || "#38bdf8",
       subcategory_color: subcategoryColor || "#38bdf8",
       is_owner: true,

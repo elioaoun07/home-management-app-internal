@@ -51,7 +51,6 @@ import { toast } from "sonner";
 type CategoryItem = {
   id: string;
   name: string;
-  icon: string;
   color: string;
   parent_id: string | null;
   position: number;
@@ -63,13 +62,11 @@ type CategoryItem = {
 type EditingCategory = {
   id: string;
   name: string;
-  icon: string;
   color: string;
 };
 
 type NewCategory = {
   name: string;
-  icon: string;
   color: string;
   parent_id: string | null;
 };
@@ -394,7 +391,6 @@ export function CategoryManagement() {
           onClick={() =>
             setNewCategory({
               name: "",
-              icon: "📁",
               color: "#38bdf8",
               parent_id: null,
             })
@@ -434,7 +430,7 @@ export function CategoryManagement() {
                 <X className="w-4 h-4" />
               </Button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <Input
                 placeholder="Category name"
                 value={newCategory.name}
@@ -442,15 +438,6 @@ export function CategoryManagement() {
                   setNewCategory({ ...newCategory, name: e.target.value })
                 }
                 className={`bg-[hsl(var(--card))] ${themeClasses.border}`}
-              />
-              <Input
-                placeholder="Icon (emoji)"
-                value={newCategory.icon}
-                onChange={(e) =>
-                  setNewCategory({ ...newCategory, icon: e.target.value })
-                }
-                className={`bg-[hsl(var(--card))] ${themeClasses.border}`}
-                maxLength={2}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -512,7 +499,6 @@ export function CategoryManagement() {
                     setEditingCategory({
                       id: cat.id,
                       name: cat.name,
-                      icon: cat.icon,
                       color: cat.color,
                     })
                   }
@@ -520,7 +506,6 @@ export function CategoryManagement() {
                   onAddSubcategory={(parentId) =>
                     setNewCategory({
                       name: "",
-                      icon: "📄",
                       color: category.color,
                       parent_id: parentId,
                     })
@@ -599,20 +584,13 @@ function CategoryCard({
       >
         {isEditing ? (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Input
                 value={editingCategory.name}
                 onChange={(e) => onUpdateCategory({ name: e.target.value })}
                 placeholder="Category name"
                 className="bg-[hsl(var(--card))]"
                 autoFocus
-              />
-              <Input
-                value={editingCategory.icon}
-                onChange={(e) => onUpdateCategory({ icon: e.target.value })}
-                placeholder="Icon"
-                maxLength={2}
-                className="bg-[hsl(var(--card))]"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -784,20 +762,13 @@ function SubcategoryCard({
       >
         {isEditing ? (
           <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Input
                 value={editingCategory.name}
                 onChange={(e) => onUpdateCategory({ name: e.target.value })}
                 placeholder="Subcategory name"
                 className="bg-[hsl(var(--card))] text-sm"
                 autoFocus
-              />
-              <Input
-                value={editingCategory.icon}
-                onChange={(e) => onUpdateCategory({ icon: e.target.value })}
-                placeholder="Icon"
-                maxLength={2}
-                className="bg-[hsl(var(--card))] text-sm"
               />
             </div>
             <div className="flex gap-2">

@@ -146,7 +146,6 @@ export default function ExpenseForm() {
         category_name: (selectedCategory as any)?.name ?? null,
         subcategory_name: (selectedSubcategory as any)?.name ?? null,
         account_name: selectedAccount?.name ?? null,
-        category_icon: (selectedCategory as any)?.icon ?? null,
         category_color: (selectedCategory as any)?.color ?? null,
         subcategory_color: (selectedSubcategory as any)?.color ?? null,
       },

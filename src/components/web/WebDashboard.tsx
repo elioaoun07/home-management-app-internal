@@ -88,7 +88,6 @@ type Transaction = {
   account_id: string;
   inserted_at: string;
   account_name?: string;
-  category_icon?: string;
   category_color?: string;
   subcategory_color?: string;
   user_theme?: string;

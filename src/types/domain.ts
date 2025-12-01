@@ -22,7 +22,6 @@ export interface Category {
   account_id?: UUID | null;
   name: string;
   parent_id?: UUID | null;
-  icon?: string | null;
   color?: string | null;
   position?: number | null;
   visible?: boolean | null;
@@ -32,14 +31,12 @@ export interface Category {
 export interface DefaultSubcategory {
   id: UUID;
   name: string;
-  icon?: string;
   color?: string;
 }
 
 export interface DefaultCategory {
   id: UUID;
   name: string;
-  icon?: string;
   color?: string;
   subcategories?: DefaultSubcategory[];
 }

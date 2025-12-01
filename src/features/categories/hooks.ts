@@ -60,7 +60,6 @@ export function useCreateCategory(accountId?: string) {
         id: tempId,
         user_id: "",
         name: input.name.trim(),
-        icon: input.icon ?? null,
         color: input.color ?? null,
         parent_id: input.parent_id ?? null,
         position: input.position ?? null,

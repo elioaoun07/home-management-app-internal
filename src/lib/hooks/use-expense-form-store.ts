@@ -6,7 +6,6 @@ export type ExpenseFormState = {
   selectedAccountName?: string;
   selectedCategoryId?: string;
   selectedCategoryName?: string;
-  selectedCategoryIcon?: string;
   selectedSubcategoryId?: string;
   selectedSubcategoryName?: string;
   date: Date;
@@ -14,7 +13,7 @@ export type ExpenseFormState = {
   actions: {
     setAmount: (amount: string) => void;
     setAccountId: (id: string, name: string) => void;
-    setCategoryId: (id: string, name: string, icon?: string) => void;
+    setCategoryId: (id: string, name: string) => void;
     setSubcategoryId: (id?: string, name?: string) => void;
     setDate: (date: Date) => void;
     setStep: (step: string) => void;
@@ -30,12 +29,8 @@ export const useExpenseFormStore = create<ExpenseFormState>((set) => ({
     setAmount: (amount) => set({ amount }),
     setAccountId: (selectedAccountId, selectedAccountName) =>
       set({ selectedAccountId, selectedAccountName }),
-    setCategoryId: (
-      selectedCategoryId,
-      selectedCategoryName,
-      selectedCategoryIcon
-    ) =>
-      set({ selectedCategoryId, selectedCategoryName, selectedCategoryIcon }),
+    setCategoryId: (selectedCategoryId, selectedCategoryName) =>
+      set({ selectedCategoryId, selectedCategoryName }),
     setSubcategoryId: (selectedSubcategoryId, selectedSubcategoryName) =>
       set({ selectedSubcategoryId, selectedSubcategoryName }),
     setDate: (date) => set({ date }),
@@ -45,7 +40,6 @@ export const useExpenseFormStore = create<ExpenseFormState>((set) => ({
         amount: "",
         selectedCategoryId: undefined,
         selectedCategoryName: undefined,
-        selectedCategoryIcon: undefined,
         selectedSubcategoryId: undefined,
         selectedSubcategoryName: undefined,
         step: "amount",

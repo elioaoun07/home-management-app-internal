@@ -103,7 +103,7 @@ async function createCategory(
       position: position ?? maxPosition + 1,
       visible: true,
     })
-    .select("id,name,icon,color,parent_id,position,visible,account_id")
+    .select("id,name,color,parent_id,position,visible,account_id")
     .single();
 
   if (error) {
@@ -125,13 +125,12 @@ async function updateCategory(
   data: {
     id: string;
     name?: string;
-    icon?: string;
     color?: string;
     visible?: boolean;
     position?: number;
   }
 ) {
-  const { id, name, icon, color, visible, position } = data;
+  const { id, name, color, visible, position } = data;
 
   if (!id) {
     return NextResponse.json(
@@ -142,7 +141,6 @@ async function updateCategory(
 
   const updates: Record<string, any> = { updated_at: new Date().toISOString() };
   if (name !== undefined && name.trim()) updates.name = name.trim();
-  if (icon !== undefined) updates.icon = icon;
   if (color !== undefined) updates.color = color;
   if (visible !== undefined) updates.visible = visible;
   if (position !== undefined) updates.position = position;
@@ -152,7 +150,7 @@ async function updateCategory(
     .update(updates)
     .eq("id", id)
     .eq("user_id", userId)
-    .select("id,name,icon,color,parent_id,position,visible,account_id")
+    .select("id,name,color,parent_id,position,visible,account_id")
     .single();
 
   if (error) {
@@ -309,7 +307,7 @@ async function bulkUpdateCategories(
       .update({ ...fields, updated_at: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", userId)
-      .select("id,name,icon,color,parent_id,position,visible,account_id")
+      .select("id,name,color,parent_id,position,visible,account_id")
       .single();
   });
 

@@ -18,7 +18,7 @@ export async function GET(request: Request) {
         `
         *,
         account:accounts(id, name, type),
-        category:user_categories!recurring_payments_category_id_fkey(id, name, slug, icon, color),
+        category:user_categories!recurring_payments_category_id_fkey(id, name, slug, color),
         subcategory:user_categories!recurring_payments_subcategory_id_fkey(id, name, slug)
       `
       )

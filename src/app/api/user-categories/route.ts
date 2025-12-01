@@ -22,7 +22,6 @@ export async function POST(req: NextRequest) {
 
   const rawName = (body?.name ?? "") as string;
   const name = rawName.trim();
-  const icon = (body?.icon ?? null) as string | null;
   const color = (body?.color ?? null) as string | null;
   const account_id = body?.account_id as string | undefined;
   const parent_id = body?.parent_id ? String(body.parent_id) : null;
@@ -97,7 +96,6 @@ export async function POST(req: NextRequest) {
   const insertData = {
     user_id: user.id,
     name,
-    icon,
     color,
     account_id,
     parent_id,
@@ -109,7 +107,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabase
     .from("user_categories")
     .insert(insertData)
-    .select("id,name,icon,color,parent_id,position,visible,account_id")
+    .select("id,name,color,parent_id,position,visible,account_id")
     .single();
 
   if (error) {

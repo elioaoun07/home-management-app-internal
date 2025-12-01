@@ -31,7 +31,7 @@ export async function PATCH(
     .update(updates)
     .eq("id", id)
     .eq("user_id", user.id)
-    .select("id,name,icon,color,parent_id,position,visible,account_id")
+    .select("id,name,color,parent_id,position,visible,account_id")
     .single();
 
   if (error) {

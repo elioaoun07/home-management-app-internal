@@ -80,7 +80,7 @@ export class SupabaseTransactionService implements TransactionService {
       .from("transactions")
       .select(
         `id, date, category_id, subcategory_id, amount, description, account_id, inserted_at, user_id, is_private,
-        category:user_categories!transactions_category_fk(name, icon, color),
+        category:user_categories!transactions_category_fk(name, color),
         subcategory:user_categories!transactions_subcategory_fk(name, color)`
       )
       .order("inserted_at", { ascending: false })
@@ -150,10 +150,7 @@ export class SupabaseTransactionService implements TransactionService {
         (rawRows || []).map((r: any) => r.subcategory_id).filter(Boolean)
       ),
     ];
-    let categoryNamesMap: Record<
-      string,
-      { name: string; icon?: string; color?: string }
-    > = {};
+    let categoryNamesMap: Record<string, { name: string; color?: string }> = {};
 
     if (categoryIds.length > 0 || subcategoryIds.length > 0) {
       const allCatIds = [...categoryIds, ...subcategoryIds];
@@ -161,14 +158,13 @@ export class SupabaseTransactionService implements TransactionService {
       // Fetch categories for current user
       const { data: myCategories } = await this.supabase
         .from("user_categories")
-        .select("id, name, icon, color")
+        .select("id, name, color")
         .in("id", allCatIds);
 
       if (myCategories) {
         myCategories.forEach((cat: any) => {
           categoryNamesMap[cat.id] = {
             name: cat.name,
-            icon: cat.icon,
             color: cat.color,
           };
         });
@@ -178,7 +174,7 @@ export class SupabaseTransactionService implements TransactionService {
       if (partnerId) {
         const { data: partnerCategories } = await this.supabase
           .from("user_categories")
-          .select("id, name, icon, color")
+          .select("id, name, color")
           .eq("user_id", partnerId)
           .in("id", allCatIds);
 
@@ -186,7 +182,6 @@ export class SupabaseTransactionService implements TransactionService {
           partnerCategories.forEach((cat: any) => {
             categoryNamesMap[cat.id] = {
               name: cat.name,
-              icon: cat.icon,
               color: cat.color,
             };
           });
@@ -265,8 +260,6 @@ export class SupabaseTransactionService implements TransactionService {
       user_id: r.user_id,
       user_name: r.user_id === userId ? meName : partnerName || "Partner",
       account_name: accountNamesMap[r.account_id] || "Unknown",
-      category_icon:
-        categoryNamesMap[r.category_id]?.icon || r.category?.icon || "📝",
       category_color:
         categoryNamesMap[r.category_id]?.color ||
         r.category?.color ||
@@ -371,7 +364,6 @@ export class SupabaseTransactionService implements TransactionService {
     // Fetch the category and subcategory names to return a complete transaction object
     // This is needed for optimistic UI to work correctly
     let categoryName: string | null = null;
-    let categoryIcon: string | null = null;
     let categoryColor: string | null = null;
     let subcategoryName: string | null = null;
     let subcategoryColor: string | null = null;
@@ -381,12 +373,11 @@ export class SupabaseTransactionService implements TransactionService {
     if (category_id) {
       const { data: categoryData } = await this.supabase
         .from("user_categories")
-        .select("name, icon, color")
+        .select("name, color")
         .eq("id", category_id)
         .single();
       if (categoryData) {
         categoryName = categoryData.name;
-        categoryIcon = categoryData.icon;
         categoryColor = categoryData.color;
       }
     }
@@ -422,7 +413,6 @@ export class SupabaseTransactionService implements TransactionService {
       category: categoryName,
       subcategory: subcategoryName,
       account_name: accountName,
-      category_icon: categoryIcon || "📝",
       category_color: categoryColor || "#38bdf8",
       subcategory_color: subcategoryColor || "#38bdf8",
       is_owner: true,

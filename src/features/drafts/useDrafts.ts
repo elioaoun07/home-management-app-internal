@@ -16,7 +16,7 @@ type DraftTransaction = {
   inserted_at: string;
   account_id: string;
   accounts: { name: string };
-  category?: { name: string; icon: string } | null;
+  category?: { name: string } | null;
   subcategory?: { name: string } | null;
 };
 

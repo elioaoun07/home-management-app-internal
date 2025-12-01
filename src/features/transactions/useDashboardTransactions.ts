@@ -14,7 +14,6 @@ export type Transaction = {
   user_id?: string;
   user_name?: string;
   account_name?: string;
-  category_icon?: string;
   category_color?: string;
   subcategory_color?: string;
   category_id?: string | null;
@@ -36,7 +35,6 @@ type TransactionInput = {
     category_name?: string | null;
     subcategory_name?: string | null;
     account_name?: string | null;
-    category_icon?: string | null;
     category_color?: string | null;
     subcategory_color?: string | null;
     user_name?: string | null;
@@ -310,7 +308,6 @@ export function useAddTransaction() {
       let categoryName = opt?.category_name ?? null;
       let subcategoryName = opt?.subcategory_name ?? null;
       let accountName = opt?.account_name ?? undefined;
-      let categoryIcon = opt?.category_icon ?? undefined;
       let categoryColor = opt?.category_color ?? undefined;
       let subcategoryColor = opt?.subcategory_color ?? undefined;
 
@@ -343,7 +340,6 @@ export function useAddTransaction() {
           );
           if (cat) {
             categoryName = cat.name;
-            categoryIcon = cat.icon;
             categoryColor = cat.color;
             // Look for subcategory in nested subcategories
             if (newTransaction.subcategory_id && cat.subcategories) {
@@ -400,7 +396,6 @@ export function useAddTransaction() {
         category_id: newTransaction.category_id,
         subcategory_id: newTransaction.subcategory_id,
         account_name: accountName,
-        category_icon: categoryIcon,
         category_color: categoryColor,
         subcategory_color: subcategoryColor,
         user_name: opt?.user_name ?? undefined,

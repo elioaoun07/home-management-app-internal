@@ -31,7 +31,7 @@ export async function GET(request: Request) {
         inserted_at,
         account_id,
         accounts!inner(name),
-        category:user_categories!transactions_category_fk(name, icon),
+        category:user_categories!transactions_category_fk(name),
         subcategory:user_categories!transactions_subcategory_fk(name)
       `
       )

@@ -61,7 +61,6 @@ type UICategory = {
   id: string;
   name: string;
   parent_id: string | null;
-  icon?: string | null;
   position?: number | null;
 };
 
@@ -101,7 +100,6 @@ export default function CategoryManagerDialog({
             id: c.id,
             name: c.name,
             parent_id: c.parent_id,
-            icon: c.icon ?? null,
             position: c.position ?? null,
           }))
         : [],

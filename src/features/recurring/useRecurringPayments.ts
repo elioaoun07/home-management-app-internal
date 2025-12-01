@@ -26,7 +26,6 @@ export type RecurringPayment = {
     id: string;
     name: string;
     slug: string;
-    icon: string | null;
     color: string | null;
   };
   subcategory?: {

@@ -42,7 +42,7 @@ export async function GET(_req: NextRequest) {
 
   const { data, error } = await supabase
     .from("user_categories")
-    .select("id,name,icon,color,parent_id,position,visible,account_id")
+    .select("id,name,color,parent_id,position,visible,account_id")
     .eq("user_id", user.id)
     .eq("account_id", accountId)
     .eq("visible", true)
@@ -64,11 +64,10 @@ export async function GET(_req: NextRequest) {
     });
   }
 
-  // Return only the fields the UI needs
+  // Return only the fields the UI needs (icon is derived from name via getCategoryIcon)
   const categories = data.map((c) => ({
     id: c.id,
     name: c.name,
-    icon: c.icon,
     color: c.color,
     parent_id: c.parent_id,
     position: c.position ?? 0,

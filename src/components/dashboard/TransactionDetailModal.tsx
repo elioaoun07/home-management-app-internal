@@ -31,7 +31,6 @@ type Transaction = {
   account_id: string;
   inserted_at: string;
   account_name?: string;
-  category_icon?: string;
   user_theme?: string;
   user_id?: string;
   is_owner?: boolean;
