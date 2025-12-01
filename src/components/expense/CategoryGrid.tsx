@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useState } from "react";
 import AddCategoryDialog from "./AddCategoryDialog";
 import CategoryManagerDialog from "./CategoryManagerDialog";
@@ -130,7 +131,14 @@ export default function CategoryGrid({
                     className="absolute left-0 top-0 bottom-0 w-1"
                     style={{ backgroundColor: categoryColor }}
                   />
-                  {cat.icon && <span className="text-xl ml-1">{cat.icon}</span>}
+                  {(() => {
+                    const Icon = getCategoryIcon(cat.name);
+                    return (
+                      <span style={{ color: categoryColor }}>
+                        <Icon className="w-5 h-5 ml-1" />
+                      </span>
+                    );
+                  })()}
                   <span
                     className="font-medium"
                     style={{ color: active ? categoryColor : undefined }}

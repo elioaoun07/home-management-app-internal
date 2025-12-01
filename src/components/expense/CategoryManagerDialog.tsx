@@ -27,6 +27,7 @@ import {
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import {
   closestCenter,
   DndContext,
@@ -691,11 +692,19 @@ export default function CategoryManagerDialog({
                                           <Trash2 className="h-4 w-4 text-red-500" />
                                         </Button>
                                       )}
-                                      {cat.icon && (
-                                        <span className="text-lg" aria-hidden>
-                                          {cat.icon}
-                                        </span>
-                                      )}
+                                      {(() => {
+                                        const CatIcon = getCategoryIcon(
+                                          cat.name
+                                        );
+                                        return (
+                                          <span
+                                            className="text-cyan"
+                                            aria-hidden
+                                          >
+                                            <CatIcon className="w-5 h-5" />
+                                          </span>
+                                        );
+                                      })()}
                                     </>
                                   )}
                                 </div>
@@ -893,14 +902,18 @@ export default function CategoryManagerDialog({
                                                       <Trash2 className="h-4 w-4 text-red-500" />
                                                     </Button>
                                                   )}
-                                                  {sub.icon && (
-                                                    <span
-                                                      className="text-lg"
-                                                      aria-hidden
-                                                    >
-                                                      {sub.icon}
-                                                    </span>
-                                                  )}
+                                                  {(() => {
+                                                    const SubIcon =
+                                                      getCategoryIcon(sub.name);
+                                                    return (
+                                                      <span
+                                                        className="text-cyan"
+                                                        aria-hidden
+                                                      >
+                                                        <SubIcon className="w-4 h-4" />
+                                                      </span>
+                                                    );
+                                                  })()}
                                                 </>
                                               )}
                                             </div>

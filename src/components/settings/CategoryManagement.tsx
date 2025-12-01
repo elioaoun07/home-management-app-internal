@@ -14,6 +14,7 @@ import {
 import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import {
   closestCenter,
   DndContext,
@@ -532,14 +533,19 @@ export function CategoryManagement() {
             </div>
           </SortableContext>
           <DragOverlay>
-            {activeCategory ? (
-              <div
-                className={`${themeClasses.bgSurface} border-2 ${themeClasses.borderActive} rounded-xl p-3 shadow-lg`}
-              >
-                <span className="mr-2">{activeCategory.icon}</span>
-                <span className="font-medium">{activeCategory.name}</span>
-              </div>
-            ) : null}
+            {activeCategory
+              ? (() => {
+                  const DragIcon = getCategoryIcon(activeCategory.name);
+                  return (
+                    <div
+                      className={`${themeClasses.bgSurface} border-2 ${themeClasses.borderActive} rounded-xl p-3 shadow-lg flex items-center gap-2`}
+                    >
+                      <DragIcon className="w-5 h-5 text-cyan" />
+                      <span className="font-medium">{activeCategory.name}</span>
+                    </div>
+                  );
+                })()
+              : null}
           </DragOverlay>
         </DndContext>
       </ScrollArea>
@@ -668,7 +674,14 @@ function CategoryCard({
                 className="w-3 h-3 rounded-full"
                 style={{ backgroundColor: category.color }}
               />
-              <span className="text-xl mr-2">{category.icon}</span>
+              {(() => {
+                const CategoryIcon = getCategoryIcon(category.name);
+                return (
+                  <span style={{ color: category.color }}>
+                    <CategoryIcon className="w-5 h-5" />
+                  </span>
+                );
+              })()}
               <span
                 className="font-medium flex-1"
                 style={{ color: category.color }}
@@ -814,7 +827,10 @@ function SubcategoryCard({
             >
               <GripVertical className="w-4 h-4" />
             </div>
-            <span className="text-sm mr-1">{subcategory.icon}</span>
+            {(() => {
+              const SubIcon = getCategoryIcon(subcategory.name);
+              return <SubIcon className="w-4 h-4 text-cyan" />;
+            })()}
             <span className={`text-sm flex-1 ${themeClasses.textMuted}`}>
               {subcategory.name}
             </span>

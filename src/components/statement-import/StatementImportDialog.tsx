@@ -40,6 +40,7 @@ import {
   useParseStatement,
 } from "@/features/statement-import/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { ParsedTransaction } from "@/types/statement";
 
 interface Props {
@@ -1034,11 +1035,17 @@ function KeywordGroupCard({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">Select category...</SelectItem>
-              {parentCategories.map((cat: any) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.icon} {cat.name}
-                </SelectItem>
-              ))}
+              {parentCategories.map((cat: any) => {
+                const Icon = getCategoryIcon(cat.name);
+                return (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    <span className="flex items-center gap-2">
+                      <Icon className="w-4 h-4 text-cyan" />
+                      {cat.name}
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
 
@@ -1061,11 +1068,17 @@ function KeywordGroupCard({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">None</SelectItem>
-              {subcategories.map((sub: any) => (
-                <SelectItem key={sub.id} value={sub.id}>
-                  {sub.icon} {sub.name}
-                </SelectItem>
-              ))}
+              {subcategories.map((sub: any) => {
+                const Icon = getCategoryIcon(sub.name);
+                return (
+                  <SelectItem key={sub.id} value={sub.id}>
+                    <span className="flex items-center gap-2">
+                      <Icon className="w-4 h-4 text-cyan" />
+                      {sub.name}
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
 

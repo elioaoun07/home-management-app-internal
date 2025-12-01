@@ -33,6 +33,7 @@ import {
   useSaveMerchantMapping,
 } from "@/features/statement-import/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { MerchantMapping } from "@/types/statement";
 
 interface Props {
@@ -193,12 +194,28 @@ function MappingRow({
         </p>
         {(category || account) && (
           <div className="flex items-center gap-2 mt-1 text-sm">
-            {category && (
-              <span className={themeClasses.textMuted}>
-                {category.icon} {category.name}
-                {subcategory && ` → ${subcategory.icon} ${subcategory.name}`}
-              </span>
-            )}
+            {category &&
+              (() => {
+                const CategoryIcon = getCategoryIcon(category.name);
+                return (
+                  <span
+                    className={`flex items-center gap-1 ${themeClasses.textMuted}`}
+                  >
+                    <CategoryIcon className="w-4 h-4 text-cyan" />
+                    {category.name}
+                    {subcategory &&
+                      (() => {
+                        const SubIcon = getCategoryIcon(subcategory.name);
+                        return (
+                          <span className="flex items-center gap-1">
+                            → <SubIcon className="w-3.5 h-3.5 text-cyan" />{" "}
+                            {subcategory.name}
+                          </span>
+                        );
+                      })()}
+                  </span>
+                );
+              })()}
             {account && (
               <span className={`${themeClasses.textFaint}`}>
                 • {account.name}
@@ -356,11 +373,17 @@ function AddMappingDialog({
                 />
               </SelectTrigger>
               <SelectContent>
-                {parentCategories.map((cat: any) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.icon} {cat.name}
-                  </SelectItem>
-                ))}
+                {parentCategories.map((cat: any) => {
+                  const Icon = getCategoryIcon(cat.name);
+                  return (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      <span className="flex items-center gap-2">
+                        <Icon className="w-4 h-4 text-cyan" />
+                        {cat.name}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -375,11 +398,17 @@ function AddMappingDialog({
                   <SelectValue placeholder="Select subcategory" />
                 </SelectTrigger>
                 <SelectContent>
-                  {subcategories.map((sub: any) => (
-                    <SelectItem key={sub.id} value={sub.id}>
-                      {sub.icon} {sub.name}
-                    </SelectItem>
-                  ))}
+                  {subcategories.map((sub: any) => {
+                    const Icon = getCategoryIcon(sub.name);
+                    return (
+                      <SelectItem key={sub.id} value={sub.id}>
+                        <span className="flex items-center gap-2">
+                          <Icon className="w-4 h-4 text-cyan" />
+                          {sub.name}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

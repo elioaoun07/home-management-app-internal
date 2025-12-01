@@ -8,6 +8,7 @@ import {
 } from "@/features/categories/useCategoriesQuery";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useRef, useState } from "react";
 
 type Props = {
@@ -227,7 +228,10 @@ export default function SubcategoryGrid({
                     )}
                     style={{ backgroundColor: themeClasses.defaultAccentColor }}
                   />
-                  {cat.icon && <span className="text-lg ml-1">{cat.icon}</span>}
+                  {(() => {
+                    const Icon = getCategoryIcon(cat.name);
+                    return <Icon className="w-4 h-4 ml-1 text-cyan" />;
+                  })()}
                   <span className={active ? themeClasses.text : ""}>
                     {cat.name}
                   </span>
