@@ -1185,6 +1185,7 @@ export const ShoppingBagIcon = ({ className, size = 24 }: IconProps) => (
   </svg>
 );
 
+// Bills / Receipt icon
 export const BillIcon = ({ className, size = 24 }: IconProps) => (
   <svg
     width={size}
@@ -1194,22 +1195,20 @@ export const BillIcon = ({ className, size = 24 }: IconProps) => (
     className={cn("transition-all duration-300", className)}
     xmlns="http://www.w3.org/2000/svg"
   >
-    <circle
-      cx="12"
-      cy="12"
-      r="10"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
+    {/* Receipt paper with zigzag bottom */}
     <path
-      d="M9.09 9C9.3251 8.33167 9.78915 7.76811 10.4 7.40913C11.0108 7.05016 11.7289 6.91894 12.4272 7.03871C13.1255 7.15849 13.7588 7.52152 14.2151 8.06353C14.6713 8.60553 14.9211 9.29152 14.92 10C14.92 12 11.92 13 11.92 13M12 17H12.01"
+      d="M4 2V22L6 20L8 22L10 20L12 22L14 20L16 22L18 20L20 22V2L18 4L16 2L14 4L12 2L10 4L8 2L6 4L4 2Z"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
+    {/* Bill lines */}
+    <line x1="8" y1="8" x2="16" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <line x1="8" y1="16" x2="12" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    {/* Dollar sign or amount */}
+    <circle cx="15" cy="16" r="1.5" stroke="currentColor" strokeWidth="1" />
   </svg>
 );
 
@@ -1446,6 +1445,867 @@ export const SmartphoneIcon = ({ className, size = 24 }: IconProps) => (
   </svg>
 );
 
+// Subscription icon (recurring calendar)
+export const SubscriptionIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect
+      x="3"
+      y="4"
+      width="18"
+      height="18"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M16 2V6M8 2V6M3 10H21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M8 14L10.5 16.5L16 11"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Travel / Plane icon
+export const TravelIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M21 16V8C21 7.44772 20.5523 7 20 7H16L13 2H11L12 7H8L6 5H4L5 8L4 11H6L8 9H12L11 14H13L16 9H20C20.5523 9 21 9.44772 21 10V16"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M3 21H21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Household / House icon
+export const HouseholdIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M9 22V12H15V22"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="7" r="1.5" fill="currentColor" />
+  </svg>
+);
+
+// Groceries / Cart icon
+export const GroceriesIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <circle cx="9" cy="21" r="1" stroke="currentColor" strokeWidth="2" />
+    <circle cx="20" cy="21" r="1" stroke="currentColor" strokeWidth="2" />
+    <path
+      d="M1 1H5L7.68 14.39C7.77 14.83 8.02 15.22 8.38 15.5C8.74 15.78 9.19 15.93 9.64 15.92H19.4C19.85 15.93 20.28 15.78 20.62 15.5C20.97 15.22 21.2 14.83 21.27 14.39L23 6H6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Restaurant / Utensils icon
+export const RestaurantIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M3 2V11C3 12.1 3.9 13 5 13H7V22H9V13H11C12.1 13 13 12.1 13 11V2H11V9H9V2H7V9H5V2H3Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M17 2V8C17 10.21 18.79 12 21 12V22H19V12C17.9 12 17 11.1 17 10V2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Fuel / Gas pump icon
+export const FuelIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M3 22H15V7C15 5.9 14.1 5 13 5H5C3.9 5 3 5.9 3 7V22Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M6 9H12V13H6V9Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M15 12H17C18.1 12 19 12.9 19 14V18C19 19.1 19.9 20 21 20C22.1 20 23 19.1 23 18V9L19 5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M3 5L5 2H13L15 5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Taxi / Car icon
+export const TaxiIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M10 3H14L16 6H19C20.1 6 21 6.9 21 8V16C21 17.1 20.1 18 19 18H17"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M7 18H5C3.9 18 3 17.1 3 16V8C3 6.9 3.9 6 5 6H8L10 3"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="7" cy="18" r="2" stroke="currentColor" strokeWidth="2" />
+    <circle cx="17" cy="18" r="2" stroke="currentColor" strokeWidth="2" />
+    <path
+      d="M7 14H17"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+// Parking icon
+export const ParkingIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect
+      x="3"
+      y="3"
+      width="18"
+      height="18"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M9 17V7H13C13.7956 7 14.5587 7.31607 15.1213 7.87868C15.6839 8.44129 16 9.20435 16 10C16 10.7956 15.6839 11.5587 15.1213 12.1213C14.5587 12.6839 13.7956 13 13 13H9"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Clothing / Clothes icon
+export const ClothesIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M8 2L4 6L6 8L8 6V22H16V6L18 8L20 6L16 2C16 2 14 4 12 4C10 4 8 2 8 2Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M12 4V8"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Electronics icon
+export const ElectronicsIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect
+      x="2"
+      y="3"
+      width="20"
+      height="14"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M8 21H16M12 17V21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2" />
+  </svg>
+);
+
+// Pharmacy / Pill icon
+export const PharmacyIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M10.5 20.5L3.5 13.5C2.12 12.12 2.12 9.88 3.5 8.5C4.88 7.12 7.12 7.12 8.5 8.5L15.5 15.5C16.88 16.88 16.88 19.12 15.5 20.5C14.12 21.88 11.88 21.88 10.5 20.5Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M6 14L14 6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M16 8L18.5 5.5C19.88 4.12 19.88 1.88 18.5 0.5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      opacity="0.5"
+    />
+  </svg>
+);
+
+// Doctor / Stethoscope icon
+export const DoctorIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M4 4V7C4 10.31 6.69 13 10 13H14C17.31 13 20 10.31 20 7V4"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M12 13V17"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="20" r="2" stroke="currentColor" strokeWidth="2" />
+    <circle cx="4" cy="4" r="2" stroke="currentColor" strokeWidth="2" />
+    <circle cx="20" cy="4" r="2" stroke="currentColor" strokeWidth="2" />
+  </svg>
+);
+
+// Fitness / Dumbbell icon
+export const FitnessIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M6 12H18M2 9H4V15H2V9ZM20 9H22V15H20V9ZM4 7H6V17H4V7ZM18 7H20V17H18V7Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Movies / Film icon
+export const MoviesIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect
+      x="2"
+      y="2"
+      width="20"
+      height="20"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M7 2V22M17 2V22M2 12H22M2 7H7M2 17H7M17 7H22M17 17H22"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Games / Gaming / PS5 Controller icon
+export const GamesIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* PS5 DualSense controller shape */}
+    <path
+      d="M6 8C4 8 2 10 2 13C2 16 3 18 5 19C6 19.5 7 19 7.5 18L9 15H15L16.5 18C17 19 18 19.5 19 19C21 18 22 16 22 13C22 10 20 8 18 8H6Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Left D-pad */}
+    <path
+      d="M6 12H8M7 11V13"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    {/* Right buttons - PlayStation style */}
+    <circle cx="16" cy="11" r="1" fill="currentColor" />
+    <circle cx="18" cy="12" r="1" fill="currentColor" />
+    <circle cx="16" cy="13" r="1" fill="currentColor" />
+    <circle cx="17" cy="12" r="1" stroke="currentColor" strokeWidth="0.5" />
+    {/* Center touchpad */}
+    <rect
+      x="10"
+      y="10"
+      width="4"
+      height="2"
+      rx="0.5"
+      stroke="currentColor"
+      strokeWidth="1"
+    />
+    {/* Analog sticks */}
+    <circle cx="9" cy="14" r="1.5" stroke="currentColor" strokeWidth="1" />
+    <circle cx="15" cy="14" r="1.5" stroke="currentColor" strokeWidth="1" />
+  </svg>
+);
+
+// Music / Note icon
+export const MusicIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <circle cx="6" cy="18" r="3" stroke="currentColor" strokeWidth="2" />
+    <circle cx="18" cy="14" r="3" stroke="currentColor" strokeWidth="2" />
+    <path
+      d="M9 18V5L21 3V14"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Flights / Plane icon
+export const FlightsIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M21 16V8C21 7.44772 20.5523 7 20 7H16L13 2H11L12 7H8L6 5H4L5 8L4 11H6L8 9H12L11 14H13L16 9H20C20.5523 9 21 9.44772 21 10V16"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M3 21H21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Hotels / Bed icon
+export const HotelsIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M2 4V20M2 16H22V20M22 16V12C22 10.3431 20.6569 9 19 9H11V16M2 9H6C7.10457 9 8 9.89543 8 11V16"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="5" cy="11" r="2" stroke="currentColor" strokeWidth="2" />
+  </svg>
+);
+
+// Rent / Housing / Apartment Building icon
+export const RentIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* Main building structure */}
+    <path
+      d="M4 21V8L12 3L20 8V21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Ground line */}
+    <path
+      d="M2 21H22"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    {/* Door */}
+    <path
+      d="M10 21V17C10 16.4 10.4 16 11 16H13C13.6 16 14 16.4 14 17V21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Windows - top row */}
+    <rect
+      x="7"
+      y="9"
+      width="3"
+      height="2.5"
+      rx="0.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <rect
+      x="14"
+      y="9"
+      width="3"
+      height="2.5"
+      rx="0.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    {/* Windows - bottom row */}
+    <rect
+      x="7"
+      y="13"
+      width="3"
+      height="2.5"
+      rx="0.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <rect
+      x="14"
+      y="13"
+      width="3"
+      height="2.5"
+      rx="0.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+  </svg>
+);
+
+// Maintenance / Wrench icon
+export const MaintenanceIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M14.7 6.3C14.5 6.1 14.1 6 13.9 6C12.5 6 11.3 6.7 10.6 7.8C9.9 8.9 9.8 10.3 10.3 11.5L3 18.8L3.5 21L5.7 21.5L13 14.2C14.2 14.7 15.5 14.5 16.6 13.8C17.7 13.1 18.4 11.9 18.4 10.5C18.4 10.3 18.3 9.9 18.1 9.7L15.6 12.2C15.2 12.6 14.6 12.6 14.2 12.2L12.2 10.2C11.8 9.8 11.8 9.2 12.2 8.8L14.7 6.3Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Books icon
+export const BooksIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M4 19.5C4 18.837 4.26339 18.2011 4.73223 17.7322C5.20107 17.2634 5.83696 17 6.5 17H20"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M6.5 2H20V22H6.5C5.83696 22 5.20107 21.7366 4.73223 21.2678C4.26339 20.7989 4 20.163 4 19.5V4.5C4 3.83696 4.26339 3.20107 4.73223 2.73223C5.20107 2.26339 5.83696 2 6.5 2V2Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M8 6H16M8 10H12"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Donations / Heart-hand icon
+export const DonationsIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M12 8C12 6.4 10.6 5 9 5C7.4 5 6 6.4 6 8C6 11 12 14 12 14C12 14 18 11 18 8C18 6.4 16.6 5 15 5C13.4 5 12 6.4 12 8Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M19 14V18C19 19.1 18.1 20 17 20H7C5.9 20 5 19.1 5 18V14"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Internet / Wifi icon
+export const InternetIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M5 12.55C6.97 10.58 9.37 9.5 12 9.5C14.63 9.5 17.03 10.58 19 12.55"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M1.42 9C4.34 6.08 8.03 4.5 12 4.5C15.97 4.5 19.66 6.08 22.58 9"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M8.53 16.11C9.46 15.18 10.68 14.67 12 14.67C13.32 14.67 14.54 15.18 15.47 16.11"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="20" r="1" fill="currentColor" />
+  </svg>
+);
+
+// Electricity / Bolt icon
+export const ElectricityIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M13 2L3 14H12L11 22L21 10H12L13 2Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Water / Droplet icon
+export const WaterIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M12 2.69L17.66 8.35C18.7724 9.45988 19.5275 10.8774 19.8343 12.4214C20.1411 13.9654 19.986 15.5651 19.3885 17.0172C18.791 18.4694 17.7782 19.7096 16.4781 20.5867C15.178 21.4639 13.6479 21.9398 12.08 21.9598H11.92C10.3521 21.9398 8.82199 21.4639 7.52191 20.5867C6.22183 19.7096 5.20898 18.4694 4.61151 17.0172C4.01404 15.5651 3.85892 13.9654 4.16572 12.4214C4.47253 10.8774 5.22761 9.45988 6.34 8.35L12 2.69Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Phone / Mobile icon
+export const PhoneIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect
+      x="5"
+      y="2"
+      width="14"
+      height="20"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M12 18H12.01"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+// Public Transit / Bus icon
+export const PublicTransitIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M4 6C4 4.34315 5.34315 3 7 3H17C18.6569 3 20 4.34315 20 6V16C20 17.1046 19.1046 18 18 18H6C4.89543 18 4 17.1046 4 16V6Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M4 10H20"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <circle cx="7.5" cy="14.5" r="1.5" fill="currentColor" />
+    <circle cx="16.5" cy="14.5" r="1.5" fill="currentColor" />
+    <path
+      d="M6 18V21M18 18V21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+// Tuition / Graduation cap icon
+export const TuitionIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M22 10V16M2 10L12 5L22 10L12 15L2 10Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M6 12V17C6 17 8 19 12 19C16 19 18 17 18 17V12"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 export const MonitorIcon = ({ className, size = 24 }: IconProps) => (
   <svg
     width={size}
@@ -1526,5 +2386,551 @@ export const WatchIcon = ({ className, size = 24 }: IconProps) => (
       strokeLinejoin="round"
     />
     <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+  </svg>
+);
+
+// Midis / Lunch box icon
+export const MidisIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect
+      x="3"
+      y="6"
+      width="18"
+      height="14"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M3 10H21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M8 6V4C8 3.44772 8.44772 3 9 3H15C15.5523 3 16 3.44772 16 4V6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="8" cy="15" r="1.5" fill="currentColor" />
+    <circle cx="16" cy="15" r="1.5" fill="currentColor" />
+  </svg>
+);
+
+// Outing / Social icon
+export const OutingIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="2" />
+    <circle cx="15" cy="7" r="3" stroke="currentColor" strokeWidth="2" />
+    <path
+      d="M3 21V19C3 16.79 4.79 15 7 15H11"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M13 21V19C13 16.79 14.79 15 17 15H17C19.21 15 21 16.79 21 19V21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Delivery / Scooter / Motorcycle icon
+export const DeliveryIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* Front wheel */}
+    <circle cx="5" cy="17" r="3" stroke="currentColor" strokeWidth="2" />
+    {/* Back wheel */}
+    <circle cx="19" cy="17" r="3" stroke="currentColor" strokeWidth="2" />
+    {/* Scooter body frame */}
+    <path
+      d="M8 17L10 12L16 12L19 14"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Seat */}
+    <path
+      d="M10 12L9 10H13L12 12"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Handlebar */}
+    <path
+      d="M5 14V10L3 8"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M5 10L7 8"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    {/* Delivery box on back */}
+    <rect
+      x="14"
+      y="6"
+      width="6"
+      height="5"
+      rx="1"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <path
+      d="M15.5 8.5H19"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+// Generator / Power icon
+export const GeneratorIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect
+      x="3"
+      y="6"
+      width="18"
+      height="12"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M12 9L10 12H14L12 15"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M6 6V4M18 6V4"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M6 18V20M18 18V20"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Utilities / Electric / Power icon
+export const UtilitiesIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* Lightning bolt for electricity */}
+    <path
+      d="M13 2L4 14H11L10 22L19 10H12L13 2Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Water drop */}
+    <path
+      d="M20 14C20 14 22 16.5 22 18C22 19.7 20.7 21 19 21C17.3 21 16 19.7 16 18C16 16.5 18 14 18 14"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Insurance / Shield check icon
+export const InsuranceIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M12 22C12 22 20 18 20 12V5L12 2L4 5V12C4 18 12 22 12 22Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M9 12L11 14L15 10"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// AI / ChatGPT / Robot icon
+export const AIIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect
+      x="4"
+      y="8"
+      width="16"
+      height="12"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="9" cy="13" r="1.5" fill="currentColor" />
+    <circle cx="15" cy="13" r="1.5" fill="currentColor" />
+    <path
+      d="M9 17H15"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M12 4V8"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="3" r="1" fill="currentColor" />
+    <path
+      d="M2 12H4M20 12H22"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Dates / Heart icon
+export const DatesIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M20.84 4.61C20.3292 4.099 19.7228 3.69365 19.0554 3.41708C18.3879 3.14052 17.6725 2.99817 16.95 2.99817C16.2275 2.99817 15.5121 3.14052 14.8446 3.41708C14.1772 3.69365 13.5708 4.099 13.06 4.61L12 5.67L10.94 4.61C9.9083 3.57831 8.50903 2.99871 7.05 2.99871C5.59096 2.99871 4.19169 3.57831 3.16 4.61C2.1283 5.64169 1.54871 7.04097 1.54871 8.5C1.54871 9.95903 2.1283 11.3583 3.16 12.39L4.22 13.45L12 21.23L19.78 13.45L20.84 12.39C21.351 11.8792 21.7563 11.2728 22.0329 10.6054C22.3095 9.93789 22.4518 9.22248 22.4518 8.5C22.4518 7.77752 22.3095 7.06211 22.0329 6.39464C21.7563 5.72718 21.351 5.12075 20.84 4.61V4.61Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="currentColor"
+      fillOpacity="0.2"
+    />
+  </svg>
+);
+
+// Cloud / GoogleOne icon
+export const CloudIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M18 10H16.74C16.36 8.58 15.52 7.35 14.38 6.44C13.25 5.54 11.86 5.01 10.4 5.01C8.94 5.01 7.55 5.54 6.41 6.44C5.27 7.35 4.43 8.58 4.05 10H3C2.20435 10 1.44129 10.3161 0.87868 10.8787C0.316071 11.4413 0 12.2044 0 13C0 13.7956 0.316071 14.5587 0.87868 15.1213C1.44129 15.6839 2.20435 16 3 16H18C18.7956 16 19.5587 15.6839 20.1213 15.1213C20.6839 14.5587 21 13.7956 21 13C21 12.2044 20.6839 11.4413 20.1213 10.8787C19.5587 10.3161 18.7956 10 18 10Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M8 19L10 21L8 23"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M16 19L14 21L16 23"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Lenses / Eye icon
+export const LensesIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M1 12C1 12 5 4 12 4C19 4 23 12 23 12C23 12 19 20 12 20C5 20 1 12 1 12Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r="3"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Streaming / Netflix icon
+export const StreamingIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect
+      x="2"
+      y="4"
+      width="20"
+      height="14"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <polygon points="10,8 16,11 10,14" fill="currentColor" />
+    <path
+      d="M7 21H17"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M12 18V21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Code / GitHub Copilot icon
+export const CodeIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <polyline
+      points="16,18 22,12 16,6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <polyline
+      points="8,6 2,12 8,18"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <line
+      x1="14"
+      y1="4"
+      x2="10"
+      y2="20"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Appliances / Washing Machine icon
+export const AppliancesIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* Main body */}
+    <rect
+      x="3"
+      y="2"
+      width="18"
+      height="20"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Control panel line */}
+    <line x1="3" y1="7" x2="21" y2="7" stroke="currentColor" strokeWidth="2" />
+    {/* Drum door circle */}
+    <circle cx="12" cy="14" r="5" stroke="currentColor" strokeWidth="2" />
+    {/* Inner drum */}
+    <circle cx="12" cy="14" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+    {/* Control buttons */}
+    <circle cx="6" cy="4.5" r="1" fill="currentColor" />
+    <circle cx="9" cy="4.5" r="1" fill="currentColor" />
+    {/* Display/dial */}
+    <rect
+      x="15"
+      y="3.5"
+      width="4"
+      height="2"
+      rx="0.5"
+      stroke="currentColor"
+      strokeWidth="1"
+    />
+  </svg>
+);
+
+// PoG / Church / Christian Community icon
+export const PoGIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* Church building */}
+    <path
+      d="M3 22V12L12 5L21 12V22"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Ground line */}
+    <path
+      d="M1 22H23"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    {/* Church door */}
+    <path
+      d="M9 22V17C9 16.4 9.4 16 10 16H14C14.6 16 15 16.4 15 17V22"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Steeple/tower */}
+    <path
+      d="M10 5V3L12 1L14 3V5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Cross on top */}
+    <path
+      d="M12 1V-1M10.5 0H13.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    {/* Window - circular rose window */}
+    <circle cx="12" cy="11" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+    {/* Cross inside window */}
+    <path
+      d="M12 9V13M10.5 11H13.5"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinecap="round"
+    />
   </svg>
 );

@@ -14,6 +14,7 @@ import {
 } from "@/constants/layout";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format, subDays } from "date-fns";
 import { type CSSProperties } from "react";
 
@@ -109,51 +110,59 @@ export default function ExpenseTagsBar({
             </button>
           )}
 
-          {selectedCategory && (
-            <button
-              onClick={onCategoryClick}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in",
-                themeClasses.border,
-                themeClasses.bgSurface,
-                themeClasses.bgHover
-              )}
-            >
-              <span className={cn("text-[10px]", themeClasses.textMuted)}>
-                Category
-              </span>
-              <span
+          {selectedCategory && (() => {
+            const CategoryIcon = getCategoryIcon(selectedCategory.name);
+            return (
+              <button
+                onClick={onCategoryClick}
                 className={cn(
-                  "font-semibold text-xs",
-                  themeClasses.textHighlight
+                  "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in",
+                  themeClasses.border,
+                  themeClasses.bgSurface,
+                  themeClasses.bgHover
                 )}
               >
-                {selectedCategory.icon} {selectedCategory.name}
-              </span>
-            </button>
-          )}
+                <span className={cn("text-[10px]", themeClasses.textMuted)}>
+                  Category
+                </span>
+                <CategoryIcon className="w-3.5 h-3.5 text-cyan" />
+                <span
+                  className={cn(
+                    "font-semibold text-xs",
+                    themeClasses.textHighlight
+                  )}
+                >
+                  {selectedCategory.name}
+                </span>
+              </button>
+            );
+          })()}
 
-          {selectedSubcategory && (
-            <button
-              className={cn(
-                "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card cursor-default quick-scale-in",
-                themeClasses.border,
-                themeClasses.bgSurface
-              )}
-            >
-              <span className={cn("text-[10px]", themeClasses.textMuted)}>
-                Subcategory
-              </span>
-              <span
+          {selectedSubcategory && (() => {
+            const SubcategoryIcon = getCategoryIcon(selectedSubcategory.name);
+            return (
+              <button
                 className={cn(
-                  "font-semibold text-xs",
-                  themeClasses.textHighlight
+                  "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card cursor-default quick-scale-in",
+                  themeClasses.border,
+                  themeClasses.bgSurface
                 )}
               >
-                {selectedSubcategory.name}
-              </span>
-            </button>
-          )}
+                <span className={cn("text-[10px]", themeClasses.textMuted)}>
+                  Subcategory
+                </span>
+                <SubcategoryIcon className="w-3.5 h-3.5 text-cyan" />
+                <span
+                  className={cn(
+                    "font-semibold text-xs",
+                    themeClasses.textHighlight
+                  )}
+                >
+                  {selectedSubcategory.name}
+                </span>
+              </button>
+            );
+          })()}
 
           <Popover>
             <PopoverTrigger asChild>

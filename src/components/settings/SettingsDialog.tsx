@@ -67,7 +67,8 @@ type SectionType =
   | "accounts"
   | "categories"
   | "steps"
-  | "household";
+  | "household"
+  | "statement";
 
 export function SettingsDialog({ open, onOpenChange }: Props) {
   const { theme: colorTheme, setTheme, isLoading: themeLoading } = useTheme();
@@ -149,6 +150,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     { id: "categories", label: "Categories" },
     { id: "steps", label: "Steps" },
     { id: "household", label: "Household" },
+    { id: "statement", label: "Statement Import" },
   ];
 
   return (
@@ -422,6 +424,9 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
 
             {/* HOUSEHOLD SECTION */}
             {activeSection === "household" && <HouseholdPanel />}
+
+            {/* STATEMENT IMPORT SECTION */}
+            {activeSection === "statement" && <StatementImportPanel />}
           </ScrollArea>
         </div>
       </DialogContent>
@@ -674,6 +679,107 @@ function HouseholdPanel() {
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatementImportPanel() {
+  const themeClasses = useThemeClasses();
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showMappingsDialog, setShowMappingsDialog] = useState(false);
+
+  // Dynamically import the dialogs to avoid circular dependencies
+  const StatementImportDialog =
+    require("@/components/statement-import/StatementImportDialog").StatementImportDialog;
+  const MerchantMappingsManager =
+    require("@/components/statement-import/MerchantMappingsManager").MerchantMappingsManager;
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div>
+        <h3 className={`text-lg font-semibold ${themeClasses.text} mb-1`}>
+          Bank Statement Import
+        </h3>
+        <p className={`text-sm ${themeClasses.textMuted}`}>
+          Upload PDF bank statements to import transactions automatically
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {/* Import Statement Button */}
+        <button
+          onClick={() => setShowImportDialog(true)}
+          className={`
+            w-full neo-card p-5 rounded-xl flex items-center gap-4 transition-all hover:scale-[1.01]
+            hover:bg-[hsl(var(--card)/0.8)]
+          `}
+        >
+          <div
+            className={`w-12 h-12 rounded-xl bg-gradient-to-br ${themeClasses.iconBg} flex items-center justify-center`}
+          >
+            <span className="text-xl">📄</span>
+          </div>
+          <div className="flex-1 text-left">
+            <p className={`font-semibold ${themeClasses.textHighlight}`}>
+              Import Statement
+            </p>
+            <p className={`text-xs ${themeClasses.textFaint}`}>
+              Upload a PDF bank statement
+            </p>
+          </div>
+        </button>
+
+        {/* Manage Mappings Button */}
+        <button
+          onClick={() => setShowMappingsDialog(true)}
+          className={`
+            w-full neo-card p-5 rounded-xl flex items-center gap-4 transition-all hover:scale-[1.01]
+            hover:bg-[hsl(var(--card)/0.8)]
+          `}
+        >
+          <div
+            className={`w-12 h-12 rounded-xl bg-gradient-to-br ${themeClasses.iconBg} flex items-center justify-center`}
+          >
+            <span className="text-xl">🏷️</span>
+          </div>
+          <div className="flex-1 text-left">
+            <p className={`font-semibold ${themeClasses.textHighlight}`}>
+              Merchant Mappings
+            </p>
+            <p className={`text-xs ${themeClasses.textFaint}`}>
+              View and manage learned merchant categories
+            </p>
+          </div>
+        </button>
+      </div>
+
+      {/* Info Box */}
+      <div className={`p-4 rounded-xl ${themeClasses.bgSurface}`}>
+        <h4 className={`font-medium ${themeClasses.text} mb-2`}>
+          💡 How it works:
+        </h4>
+        <ul
+          className={`text-sm space-y-1 ${themeClasses.textMuted} list-disc list-inside`}
+        >
+          <li>Upload your bank statement PDF</li>
+          <li>The system extracts transactions automatically</li>
+          <li>
+            Known merchants (Toters, Spinneys, Alfa...) are auto-categorized
+          </li>
+          <li>Assign categories to unknown merchants to train the system</li>
+          <li>Future imports will remember your choices!</li>
+        </ul>
+      </div>
+
+      {/* Dialogs */}
+      <StatementImportDialog
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+      />
+      <MerchantMappingsManager
+        open={showMappingsDialog}
+        onOpenChange={setShowMappingsDialog}
+      />
     </div>
   );
 }
