@@ -27,13 +27,19 @@ import { MOBILE_CONTENT_BOTTOM_OFFSET } from "@/constants/layout";
 import {
   useDeleteAccount,
   useMyAccounts,
+  useMyAccountsWithHidden,
   useReorderAccounts,
+  useUnhideAccount,
 } from "@/features/accounts/hooks";
 import {
   useDeleteCategory,
   useReorderCategories,
+  useUnhideCategory,
 } from "@/features/categories/hooks";
-import { useCategories } from "@/features/categories/useCategoriesQuery";
+import {
+  useCategories,
+  useCategoriesWithHidden,
+} from "@/features/categories/useCategoriesQuery";
 import {
   useSectionOrder,
   type SectionKey,
@@ -48,7 +54,7 @@ import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format } from "date-fns";
 import { AnimatePresence, Reorder, motion } from "framer-motion";
-import { AlertTriangle, GripVertical, Minus, X } from "lucide-react";
+import { Eye, EyeOff, GripVertical, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -63,6 +69,7 @@ import CalculatorDialog from "./CalculatorDialog";
 import { useExpenseForm } from "./ExpenseFormContext";
 import NewAccountDrawer from "./NewAccountDrawer";
 import NewCategoryDrawer from "./NewCategoryDrawer";
+import NewSubcategoryDrawer from "./NewSubcategoryDrawer";
 import VoiceEntryButton from "./VoiceEntryButton";
 
 type Step = SectionKey | "confirm";
@@ -134,6 +141,8 @@ export default function MobileExpenseForm() {
 
   // Use only the current user's own accounts (not partner's) for the expense form
   const { data: accounts = [], isLoading: accountsLoading } = useMyAccounts();
+  // Also fetch accounts with hidden ones for edit mode
+  const { data: accountsWithHidden = [] } = useMyAccountsWithHidden();
   const defaultAccount = accounts.find((a: any) => a.is_default);
 
   const getFirstValidStep = (flow: Step[], hasDefault: boolean): Step => {
@@ -154,6 +163,8 @@ export default function MobileExpenseForm() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [showNewAccountDrawer, setShowNewAccountDrawer] = useState(false);
   const [showNewCategoryDrawer, setShowNewCategoryDrawer] = useState(false);
+  const [showNewSubcategoryDrawer, setShowNewSubcategoryDrawer] =
+    useState(false);
 
   // Edit mode states for each section
   const [editModeAccount, setEditModeAccount] = useState(false);
@@ -181,10 +192,15 @@ export default function MobileExpenseForm() {
 
   const { data: categories = [], refetch: refetchCategories } =
     useCategories(selectedAccountId);
+  // Also fetch categories with hidden ones for edit mode
+  const { data: categoriesWithHidden = [] } =
+    useCategoriesWithHidden(selectedAccountId);
   const addTransactionMutation = useAddTransaction();
   const deleteTransactionMutation = useDeleteTransaction();
   const deleteAccountMutation = useDeleteAccount();
   const deleteCategoryMutation = useDeleteCategory(selectedAccountId);
+  const unhideAccountMutation = useUnhideAccount();
+  const unhideCategoryMutation = useUnhideCategory(selectedAccountId);
   const reorderAccountsMutation = useReorderAccounts();
   const reorderCategoriesMutation = useReorderCategories(selectedAccountId);
   const themeClasses = useThemeClasses();
@@ -196,7 +212,17 @@ export default function MobileExpenseForm() {
 
   // Sync accounts with ordered list (only when NOT in edit mode and NOT saving)
   useEffect(() => {
-    if (accounts.length > 0 && !editModeAccount && !accountsSaving) {
+    if (editModeAccount) {
+      // In edit mode, show all accounts including hidden ones
+      if (accountsWithHidden.length > 0 && !accountsSaving) {
+        if (lastSavedAccountsRef.current) {
+          lastSavedAccountsRef.current = null;
+          return;
+        }
+        setOrderedAccounts(accountsWithHidden);
+        setAccountsOrderChanged(false);
+      }
+    } else if (accounts.length > 0 && !accountsSaving) {
       // Skip sync if we just saved - keep our local order until next fresh fetch
       if (lastSavedAccountsRef.current) {
         lastSavedAccountsRef.current = null;
@@ -205,15 +231,16 @@ export default function MobileExpenseForm() {
       setOrderedAccounts(accounts);
       setAccountsOrderChanged(false);
     }
-  }, [accounts, editModeAccount, accountsSaving]);
+  }, [accounts, accountsWithHidden, editModeAccount, accountsSaving]);
 
   // Sync categories with ordered list (only when NOT in edit mode and NOT saving)
   useEffect(() => {
-    if (!editModeCategory && !categoriesSaving) {
-      const rootCats = categories.filter((c: any) => !c.parent_id);
-      if (rootCats.length > 0) {
+    if (!categoriesSaving) {
+      const dataSource = editModeCategory ? categoriesWithHidden : categories;
+      const rootCats = dataSource.filter((c: any) => !c.parent_id);
+      if (rootCats.length > 0 || editModeCategory) {
         // Skip sync if we just saved - keep our local order until next fresh fetch
-        if (lastSavedCategoriesRef.current) {
+        if (lastSavedCategoriesRef.current && !editModeCategory) {
           // Just clear the flag, don't sync from stale server data
           lastSavedCategoriesRef.current = null;
           return;
@@ -222,23 +249,26 @@ export default function MobileExpenseForm() {
         setCategoriesOrderChanged(false);
       }
     }
-  }, [categories, editModeCategory, categoriesSaving]);
+  }, [categories, categoriesWithHidden, editModeCategory, categoriesSaving]);
 
   // Sync subcategories with ordered list when category changes (only when NOT in edit mode and NOT saving)
   useEffect(() => {
-    if (!editModeSubcategory && !subcategoriesSaving) {
+    if (!subcategoriesSaving) {
       if (selectedCategoryId) {
-        const subs = categories.filter(
+        const dataSource = editModeSubcategory
+          ? categoriesWithHidden
+          : categories;
+        const subs = dataSource.filter(
           (c: any) => c.parent_id === selectedCategoryId
         );
-        const selectedCategoryData = categories.find(
+        const selectedCategoryData = dataSource.find(
           (c: any) => c.id === selectedCategoryId
         );
         const nestedSubs = (selectedCategoryData as any)?.subcategories || [];
         const newSubs = [...subs, ...nestedSubs];
 
         // Skip sync if we just saved - keep our local order until next fresh fetch
-        if (lastSavedSubcategoriesRef.current) {
+        if (lastSavedSubcategoriesRef.current && !editModeSubcategory) {
           // Just clear the flag, don't sync from stale server data
           lastSavedSubcategoriesRef.current = null;
           return;
@@ -253,6 +283,7 @@ export default function MobileExpenseForm() {
   }, [
     selectedCategoryId,
     categories,
+    categoriesWithHidden,
     editModeSubcategory,
     subcategoriesSaving,
   ]);
@@ -446,7 +477,7 @@ export default function MobileExpenseForm() {
           if (selectedAccountId === deleteConfirm.id) {
             setSelectedAccountId(undefined as any);
           }
-          toast.success("Account deleted", { icon: ToastIcons.delete });
+          toast.success("Account hidden", { icon: ToastIcons.delete });
         } else {
           await deleteCategoryMutation.mutateAsync(deleteConfirm.id);
           if (
@@ -462,7 +493,7 @@ export default function MobileExpenseForm() {
             setSelectedSubcategoryId(undefined);
           }
           toast.success(
-            `${deleteConfirm.type === "category" ? "Category" : "Subcategory"} deleted`,
+            `${deleteConfirm.type === "category" ? "Category" : "Subcategory"} hidden`,
             {
               icon: ToastIcons.delete,
             }
@@ -470,7 +501,7 @@ export default function MobileExpenseForm() {
         }
         setDeleteConfirm(null);
       } catch (error: any) {
-        toast.error(error.message || "Failed to delete", {
+        toast.error(error.message || "Failed to hide", {
           icon: ToastIcons.error,
         });
       } finally {
@@ -920,85 +951,154 @@ export default function MobileExpenseForm() {
                 {editModeAccount && (
                   <p className="text-xs text-cyan-400 animate-in fade-in slide-in-from-top-2">
                     Drag to reorder • Tap{" "}
-                    <span className="inline-flex items-center justify-center w-4 h-4 bg-red-500 rounded-full mx-0.5">
-                      <Minus className="w-3 h-3 text-white" />
+                    <span className="inline-flex items-center justify-center w-4 h-4 bg-amber-500 rounded-full mx-0.5">
+                      <EyeOff className="w-2.5 h-2.5 text-white" />
                     </span>{" "}
-                    to delete
+                    to hide
                   </p>
                 )}
 
                 <div {...accountLongPress} className="space-y-2">
                   {editModeAccount ? (
-                    <Reorder.Group
-                      axis="y"
-                      values={orderedAccounts}
-                      onReorder={handleAccountsReorder}
-                      className="space-y-2"
-                    >
-                      {orderedAccounts.map((account: any) => (
-                        <Reorder.Item
-                          key={account.id}
-                          value={account}
-                          className="relative"
-                          whileDrag={{
-                            scale: 1.02,
-                            boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
-                            zIndex: 50,
-                          }}
-                        >
-                          <motion.div
-                            animate={{
-                              rotate: [0, -0.3, 0.3, 0],
-                            }}
-                            transition={{
-                              rotate: {
-                                repeat: Infinity,
-                                duration: 0.4,
-                                ease: "easeInOut",
-                              },
-                            }}
-                          >
-                            {/* Delete button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteConfirm({
-                                  id: account.id,
-                                  name: account.name,
-                                  type: "account",
-                                  step: "first",
-                                });
+                    <>
+                      <Reorder.Group
+                        axis="y"
+                        values={orderedAccounts.filter(
+                          (a: any) => a.visible !== false
+                        )}
+                        onReorder={handleAccountsReorder}
+                        className="space-y-2"
+                      >
+                        {orderedAccounts
+                          .filter((a: any) => a.visible !== false)
+                          .map((account: any) => (
+                            <Reorder.Item
+                              key={account.id}
+                              value={account}
+                              className="relative"
+                              whileDrag={{
+                                scale: 1.02,
+                                boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+                                zIndex: 50,
                               }}
-                              className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-red-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
                             >
-                              <Minus className="w-4 h-4" strokeWidth={3} />
-                            </button>
+                              <motion.div
+                                animate={{
+                                  rotate: [0, -0.3, 0.3, 0],
+                                }}
+                                transition={{
+                                  rotate: {
+                                    repeat: Infinity,
+                                    duration: 0.4,
+                                    ease: "easeInOut",
+                                  },
+                                }}
+                              >
+                                {/* Hide button - EyeOff icon */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteConfirm({
+                                      id: account.id,
+                                      name: account.name,
+                                      type: "account",
+                                      step: "first",
+                                    });
+                                  }}
+                                  className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-amber-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
+                                >
+                                  <EyeOff
+                                    className="w-3.5 h-3.5"
+                                    strokeWidth={2.5}
+                                  />
+                                </button>
 
-                            <div
-                              className={cn(
-                                "w-full p-2.5 rounded-lg border text-left transition-all flex items-center gap-2",
-                                selectedAccountId === account.id
-                                  ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
-                                  : `neo-card ${themeClasses.border} bg-bg-card-custom`
-                              )}
-                            >
-                              {/* Drag handle */}
-                              <div className="text-slate-500 cursor-grab active:cursor-grabbing">
-                                <GripVertical className="w-5 h-5" />
-                              </div>
-                              <div className="flex-1">
-                                <div className="font-semibold text-base text-white">
-                                  {account.name}
+                                <div
+                                  className={cn(
+                                    "w-full p-2.5 rounded-lg border text-left transition-all flex items-center gap-2",
+                                    selectedAccountId === account.id
+                                      ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
+                                      : `neo-card ${themeClasses.border} bg-bg-card-custom`
+                                  )}
+                                >
+                                  {/* Drag handle */}
+                                  <div className="text-slate-500 cursor-grab active:cursor-grabbing">
+                                    <GripVertical className="w-5 h-5" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="font-semibold text-base text-white">
+                                      {account.name}
+                                    </div>
+                                    <div className="text-xs text-accent/70 capitalize mt-0.5">
+                                      {account.type}
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="text-xs text-accent/70 capitalize mt-0.5">
-                                  {account.type}
+                              </motion.div>
+                            </Reorder.Item>
+                          ))}
+                      </Reorder.Group>
+
+                      {/* Hidden accounts section */}
+                      {orderedAccounts.filter((a: any) => a.visible === false)
+                        .length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-slate-700/50">
+                          <p className="text-xs text-slate-500 mb-2 flex items-center gap-1.5">
+                            <EyeOff className="w-3.5 h-3.5" />
+                            Hidden accounts
+                          </p>
+                          <div className="space-y-2">
+                            {orderedAccounts
+                              .filter((a: any) => a.visible === false)
+                              .map((account: any) => (
+                                <div key={account.id} className="relative">
+                                  {/* Unhide button - Eye icon */}
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        await unhideAccountMutation.mutateAsync(
+                                          account.id
+                                        );
+                                        toast.success("Account restored", {
+                                          icon: ToastIcons.create,
+                                        });
+                                      } catch (error: any) {
+                                        toast.error(
+                                          error.message || "Failed to restore",
+                                          { icon: ToastIcons.error }
+                                        );
+                                      }
+                                    }}
+                                    className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-emerald-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
+                                  >
+                                    <Eye
+                                      className="w-3.5 h-3.5"
+                                      strokeWidth={2.5}
+                                    />
+                                  </button>
+
+                                  <div
+                                    className={cn(
+                                      "w-full p-2.5 rounded-lg border text-left transition-all flex items-center gap-2 opacity-50",
+                                      `neo-card border-slate-700/50 bg-slate-800/30`
+                                    )}
+                                  >
+                                    <div className="flex-1">
+                                      <div className="font-semibold text-base text-slate-400">
+                                        {account.name}
+                                      </div>
+                                      <div className="text-xs text-slate-500 capitalize mt-0.5">
+                                        {account.type}
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        </Reorder.Item>
-                      ))}
-                    </Reorder.Group>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <AnimatePresence mode="popLayout">
                       {accounts.map((account: any, index: number) => (
@@ -1092,95 +1192,171 @@ export default function MobileExpenseForm() {
                 {editModeCategory && (
                   <p className="text-xs text-cyan-400 animate-in fade-in slide-in-from-top-2">
                     Drag to reorder • Tap{" "}
-                    <span className="inline-flex items-center justify-center w-4 h-4 bg-red-500 rounded-full mx-0.5">
-                      <Minus className="w-3 h-3 text-white" />
+                    <span className="inline-flex items-center justify-center w-4 h-4 bg-amber-500 rounded-full mx-0.5">
+                      <EyeOff className="w-2.5 h-2.5 text-white" />
                     </span>{" "}
-                    to delete
+                    to hide
                   </p>
                 )}
 
                 <div {...categoryLongPress}>
                   {editModeCategory ? (
-                    <Reorder.Group
-                      axis="y"
-                      values={orderedCategories}
-                      onReorder={handleCategoriesReorder}
-                      className="space-y-2 pb-4"
-                    >
-                      {orderedCategories.map((category: any) => {
-                        const color = category.color || "#22d3ee";
-                        const IconComponent = getCategoryIcon(
-                          category.name,
-                          category.slug
-                        );
+                    <>
+                      <Reorder.Group
+                        axis="y"
+                        values={orderedCategories.filter(
+                          (c: any) => c.visible !== false
+                        )}
+                        onReorder={handleCategoriesReorder}
+                        className="space-y-2 pb-4"
+                      >
+                        {orderedCategories
+                          .filter((c: any) => c.visible !== false)
+                          .map((category: any) => {
+                            const color = category.color || "#22d3ee";
+                            const IconComponent = getCategoryIcon(
+                              category.name,
+                              category.slug
+                            );
 
-                        return (
-                          <Reorder.Item
-                            key={category.id}
-                            value={category}
-                            className="relative"
-                            whileDrag={{
-                              scale: 1.02,
-                              boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
-                              zIndex: 50,
-                            }}
-                          >
-                            <motion.div
-                              animate={{
-                                rotate: [0, -0.3, 0.3, 0],
-                              }}
-                              transition={{
-                                rotate: {
-                                  repeat: Infinity,
-                                  duration: 0.4,
-                                  ease: "easeInOut",
-                                },
-                              }}
-                            >
-                              {/* Delete button */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteConfirm({
-                                    id: category.id,
-                                    name: category.name,
-                                    color: color,
-                                    type: "category",
-                                    step: "first",
-                                  });
+                            return (
+                              <Reorder.Item
+                                key={category.id}
+                                value={category}
+                                className="relative"
+                                whileDrag={{
+                                  scale: 1.02,
+                                  boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+                                  zIndex: 50,
                                 }}
-                                className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-red-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
                               >
-                                <Minus className="w-4 h-4" strokeWidth={3} />
-                              </button>
-
-                              <div
-                                className={cn(
-                                  "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3",
-                                  `neo-card ${themeClasses.border} bg-bg-card-custom`
-                                )}
-                              >
-                                {/* Drag handle */}
-                                <div className="text-slate-500 cursor-grab active:cursor-grabbing">
-                                  <GripVertical className="w-5 h-5" />
-                                </div>
-                                <div
-                                  style={{
-                                    color: color,
-                                    filter: `drop-shadow(0 0 6px ${color}80)`,
+                                <motion.div
+                                  animate={{
+                                    rotate: [0, -0.3, 0.3, 0],
+                                  }}
+                                  transition={{
+                                    rotate: {
+                                      repeat: Infinity,
+                                      duration: 0.4,
+                                      ease: "easeInOut",
+                                    },
                                   }}
                                 >
-                                  <IconComponent className="w-6 h-6" />
-                                </div>
-                                <span className="font-semibold text-sm text-white flex-1">
-                                  {category.name}
-                                </span>
-                              </div>
-                            </motion.div>
-                          </Reorder.Item>
-                        );
-                      })}
-                    </Reorder.Group>
+                                  {/* Hide button - EyeOff icon */}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteConfirm({
+                                        id: category.id,
+                                        name: category.name,
+                                        color: color,
+                                        type: "category",
+                                        step: "first",
+                                      });
+                                    }}
+                                    className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-amber-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
+                                  >
+                                    <EyeOff
+                                      className="w-3.5 h-3.5"
+                                      strokeWidth={2.5}
+                                    />
+                                  </button>
+
+                                  <div
+                                    className={cn(
+                                      "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3",
+                                      `neo-card ${themeClasses.border} bg-bg-card-custom`
+                                    )}
+                                  >
+                                    {/* Drag handle */}
+                                    <div className="text-slate-500 cursor-grab active:cursor-grabbing">
+                                      <GripVertical className="w-5 h-5" />
+                                    </div>
+                                    <div
+                                      style={{
+                                        color: color,
+                                        filter: `drop-shadow(0 0 6px ${color}80)`,
+                                      }}
+                                    >
+                                      <IconComponent className="w-6 h-6" />
+                                    </div>
+                                    <span className="font-semibold text-sm text-white flex-1">
+                                      {category.name}
+                                    </span>
+                                  </div>
+                                </motion.div>
+                              </Reorder.Item>
+                            );
+                          })}
+                      </Reorder.Group>
+
+                      {/* Hidden categories section */}
+                      {orderedCategories.filter((c: any) => c.visible === false)
+                        .length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-slate-700/50">
+                          <p className="text-xs text-slate-500 mb-2 flex items-center gap-1.5">
+                            <EyeOff className="w-3.5 h-3.5" />
+                            Hidden categories
+                          </p>
+                          <div className="space-y-2">
+                            {orderedCategories
+                              .filter((c: any) => c.visible === false)
+                              .map((category: any) => {
+                                const color = category.color || "#22d3ee";
+                                const IconComponent = getCategoryIcon(
+                                  category.name,
+                                  category.slug
+                                );
+
+                                return (
+                                  <div key={category.id} className="relative">
+                                    {/* Unhide button - Eye icon */}
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await unhideCategoryMutation.mutateAsync(
+                                            category.id
+                                          );
+                                          toast.success("Category restored", {
+                                            icon: ToastIcons.create,
+                                          });
+                                        } catch (error: any) {
+                                          toast.error(
+                                            error.message ||
+                                              "Failed to restore",
+                                            { icon: ToastIcons.error }
+                                          );
+                                        }
+                                      }}
+                                      className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-emerald-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
+                                    >
+                                      <Eye
+                                        className="w-3.5 h-3.5"
+                                        strokeWidth={2.5}
+                                      />
+                                    </button>
+
+                                    <div
+                                      className={cn(
+                                        "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3 opacity-50",
+                                        `neo-card border-slate-700/50 bg-slate-800/30`
+                                      )}
+                                    >
+                                      <div style={{ color: `${color}60` }}>
+                                        <IconComponent className="w-6 h-6" />
+                                      </div>
+                                      <span className="font-semibold text-sm text-slate-400 flex-1">
+                                        {category.name}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="grid grid-cols-2 gap-2 pb-4">
                       {orderedCategories.length === 0 ? (
@@ -1338,95 +1514,169 @@ export default function MobileExpenseForm() {
                     {editModeSubcategory && (
                       <p className="text-xs text-cyan-400 animate-in fade-in slide-in-from-top-2">
                         Drag to reorder • Tap{" "}
-                        <span className="inline-flex items-center justify-center w-4 h-4 bg-red-500 rounded-full mx-0.5">
-                          <Minus className="w-3 h-3 text-white" />
+                        <span className="inline-flex items-center justify-center w-4 h-4 bg-amber-500 rounded-full mx-0.5">
+                          <EyeOff className="w-2.5 h-2.5 text-white" />
                         </span>{" "}
-                        to delete
+                        to hide
                       </p>
                     )}
 
                     <div {...subcategoryLongPress}>
                       {editModeSubcategory ? (
-                        <Reorder.Group
-                          axis="y"
-                          values={orderedSubcategories}
-                          onReorder={handleSubcategoriesReorder}
-                          className="space-y-2"
-                        >
-                          {orderedSubcategories.map((sub: any) => {
-                            const color = sub.color || "#22d3ee";
-                            const IconComponent = getCategoryIcon(sub.name);
+                        <>
+                          <Reorder.Group
+                            axis="y"
+                            values={orderedSubcategories.filter(
+                              (s: any) => s.visible !== false
+                            )}
+                            onReorder={handleSubcategoriesReorder}
+                            className="space-y-2"
+                          >
+                            {orderedSubcategories
+                              .filter((s: any) => s.visible !== false)
+                              .map((sub: any) => {
+                                const color = sub.color || "#22d3ee";
+                                const IconComponent = getCategoryIcon(sub.name);
 
-                            return (
-                              <Reorder.Item
-                                key={sub.id}
-                                value={sub}
-                                className="relative"
-                                whileDrag={{
-                                  scale: 1.02,
-                                  boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
-                                  zIndex: 50,
-                                }}
-                              >
-                                <motion.div
-                                  animate={{
-                                    rotate: [0, -0.3, 0.3, 0],
-                                  }}
-                                  transition={{
-                                    rotate: {
-                                      repeat: Infinity,
-                                      duration: 0.4,
-                                      ease: "easeInOut",
-                                    },
-                                  }}
-                                >
-                                  {/* Delete button */}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDeleteConfirm({
-                                        id: sub.id,
-                                        name: sub.name,
-                                        color: color,
-                                        type: "subcategory",
-                                        step: "first",
-                                      });
+                                return (
+                                  <Reorder.Item
+                                    key={sub.id}
+                                    value={sub}
+                                    className="relative"
+                                    whileDrag={{
+                                      scale: 1.02,
+                                      boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+                                      zIndex: 50,
                                     }}
-                                    className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-red-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
                                   >
-                                    <Minus
-                                      className="w-4 h-4"
-                                      strokeWidth={3}
-                                    />
-                                  </button>
-
-                                  <div
-                                    className={cn(
-                                      "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3",
-                                      `neo-card ${themeClasses.border} bg-bg-card-custom`
-                                    )}
-                                  >
-                                    {/* Drag handle */}
-                                    <div className="text-slate-500 cursor-grab active:cursor-grabbing">
-                                      <GripVertical className="w-5 h-5" />
-                                    </div>
-                                    <div
-                                      style={{
-                                        color: color,
-                                        filter: `drop-shadow(0 0 6px ${color}80)`,
+                                    <motion.div
+                                      animate={{
+                                        rotate: [0, -0.3, 0.3, 0],
+                                      }}
+                                      transition={{
+                                        rotate: {
+                                          repeat: Infinity,
+                                          duration: 0.4,
+                                          ease: "easeInOut",
+                                        },
                                       }}
                                     >
-                                      <IconComponent className="w-5 h-5" />
-                                    </div>
-                                    <span className="font-semibold text-sm text-white flex-1">
-                                      {sub.name}
-                                    </span>
-                                  </div>
-                                </motion.div>
-                              </Reorder.Item>
-                            );
-                          })}
-                        </Reorder.Group>
+                                      {/* Hide button - EyeOff icon */}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDeleteConfirm({
+                                            id: sub.id,
+                                            name: sub.name,
+                                            color: color,
+                                            type: "subcategory",
+                                            step: "first",
+                                          });
+                                        }}
+                                        className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-amber-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
+                                      >
+                                        <EyeOff
+                                          className="w-3.5 h-3.5"
+                                          strokeWidth={2.5}
+                                        />
+                                      </button>
+
+                                      <div
+                                        className={cn(
+                                          "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3",
+                                          `neo-card ${themeClasses.border} bg-bg-card-custom`
+                                        )}
+                                      >
+                                        {/* Drag handle */}
+                                        <div className="text-slate-500 cursor-grab active:cursor-grabbing">
+                                          <GripVertical className="w-5 h-5" />
+                                        </div>
+                                        <div
+                                          style={{
+                                            color: color,
+                                            filter: `drop-shadow(0 0 6px ${color}80)`,
+                                          }}
+                                        >
+                                          <IconComponent className="w-5 h-5" />
+                                        </div>
+                                        <span className="font-semibold text-sm text-white flex-1">
+                                          {sub.name}
+                                        </span>
+                                      </div>
+                                    </motion.div>
+                                  </Reorder.Item>
+                                );
+                              })}
+                          </Reorder.Group>
+
+                          {/* Hidden subcategories section */}
+                          {orderedSubcategories.filter(
+                            (s: any) => s.visible === false
+                          ).length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-slate-700/50">
+                              <p className="text-xs text-slate-500 mb-2 flex items-center gap-1.5">
+                                <EyeOff className="w-3.5 h-3.5" />
+                                Hidden subcategories
+                              </p>
+                              <div className="space-y-2">
+                                {orderedSubcategories
+                                  .filter((s: any) => s.visible === false)
+                                  .map((sub: any) => {
+                                    const color = sub.color || "#22d3ee";
+                                    const IconComponent = getCategoryIcon(
+                                      sub.name
+                                    );
+
+                                    return (
+                                      <div key={sub.id} className="relative">
+                                        {/* Unhide button - Eye icon */}
+                                        <button
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            try {
+                                              await unhideCategoryMutation.mutateAsync(
+                                                sub.id
+                                              );
+                                              toast.success(
+                                                "Subcategory restored",
+                                                { icon: ToastIcons.create }
+                                              );
+                                            } catch (error: any) {
+                                              toast.error(
+                                                error.message ||
+                                                  "Failed to restore",
+                                                { icon: ToastIcons.error }
+                                              );
+                                            }
+                                          }}
+                                          className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full flex items-center justify-center bg-emerald-500 text-white shadow-lg transform transition-transform hover:scale-110 active:scale-95 animate-in fade-in zoom-in duration-200"
+                                        >
+                                          <Eye
+                                            className="w-3.5 h-3.5"
+                                            strokeWidth={2.5}
+                                          />
+                                        </button>
+
+                                        <div
+                                          className={cn(
+                                            "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3 opacity-50",
+                                            `neo-card border-slate-700/50 bg-slate-800/30`
+                                          )}
+                                        >
+                                          <div style={{ color: `${color}60` }}>
+                                            <IconComponent className="w-5 h-5" />
+                                          </div>
+                                          <span className="font-semibold text-sm text-slate-400 flex-1">
+                                            {sub.name}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div className="grid grid-cols-2 gap-2">
                           <button
@@ -1516,6 +1766,14 @@ export default function MobileExpenseForm() {
                               }
                             )}
                           </AnimatePresence>
+                          {/* Add New Subcategory Button */}
+                          <button
+                            onClick={() => setShowNewSubcategoryDrawer(true)}
+                            className="p-2.5 rounded-lg border-2 border-dashed border-slate-600 hover:border-cyan-500/50 text-center transition-all active:scale-95 min-h-[55px] bg-transparent hover:bg-cyan-500/5 flex flex-col items-center justify-center gap-1 category-appear"
+                          >
+                            <PlusIcon className="w-5 h-5 text-slate-400" />
+                            <span className="text-xs text-slate-400">New</span>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1527,6 +1785,29 @@ export default function MobileExpenseForm() {
                         </p>
                       )}
                   </>
+                )}
+
+                {/* Show add button when no subcategories exist */}
+                {orderedSubcategories.length === 0 && (
+                  <div className="space-y-3">
+                    <Label
+                      className={`text-base font-semibold ${themeClasses.text}`}
+                    >
+                      More specific?
+                    </Label>
+                    <button
+                      onClick={() => setShowNewSubcategoryDrawer(true)}
+                      className="w-full p-4 rounded-lg border-2 border-dashed border-slate-600 hover:border-cyan-500/50 text-center transition-all active:scale-95 bg-transparent hover:bg-cyan-500/5 flex flex-col items-center justify-center gap-2"
+                    >
+                      <PlusIcon className="w-6 h-6 text-slate-400" />
+                      <span className="text-sm text-slate-400">
+                        Add subcategory
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        Optional - for more detailed tracking
+                      </span>
+                    </button>
+                  </div>
                 )}
 
                 <div className="space-y-2 pt-2">
@@ -1601,6 +1882,23 @@ export default function MobileExpenseForm() {
             />
           )}
 
+          {selectedAccountId && selectedCategoryId && selectedCategory && (
+            <NewSubcategoryDrawer
+              open={showNewSubcategoryDrawer}
+              onOpenChange={setShowNewSubcategoryDrawer}
+              accountId={selectedAccountId}
+              parentCategoryId={selectedCategoryId}
+              parentCategoryName={selectedCategory.name}
+              parentCategoryColor={selectedCategory.color || "#22d3ee"}
+              onSubcategoryCreated={async (subcategoryId: string) => {
+                // Refetch categories to get the new subcategory
+                await refetchCategories();
+                // Auto-select the newly created subcategory
+                setSelectedSubcategoryId(subcategoryId);
+              }}
+            />
+          )}
+
           {/* Delete Confirmation Drawer */}
           <Drawer
             open={deleteConfirm !== null}
@@ -1608,53 +1906,50 @@ export default function MobileExpenseForm() {
           >
             <DrawerContent className="bg-bg-dark border-t border-slate-800">
               <DrawerHeader className="text-center pb-2">
-                <div className="mx-auto w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-2">
-                  <AlertTriangle className="w-6 h-6 text-red-500" />
+                <div className="mx-auto w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center mb-2">
+                  <EyeOff className="w-6 h-6 text-amber-500" />
                 </div>
                 <DrawerTitle
                   className={cn(
                     "text-lg font-semibold",
                     deleteConfirm?.step === "second"
-                      ? "text-red-400"
+                      ? "text-amber-400"
                       : themeClasses.text
                   )}
                 >
                   {deleteConfirm?.step === "first"
-                    ? `Delete ${deleteConfirm?.type === "account" ? "Account" : deleteConfirm?.type === "category" ? "Category" : "Subcategory"}?`
-                    : "Are you absolutely sure?"}
+                    ? `Hide ${deleteConfirm?.type === "account" ? "Account" : deleteConfirm?.type === "category" ? "Category" : "Subcategory"}?`
+                    : "Confirm hiding?"}
                 </DrawerTitle>
                 <DrawerDescription className="text-slate-400 text-sm">
                   {deleteConfirm?.step === "first" ? (
                     <>
-                      You're about to delete{" "}
+                      You're about to hide{" "}
                       <span
                         className="font-semibold"
                         style={{ color: deleteConfirm?.color || "#22d3ee" }}
                       >
                         {deleteConfirm?.name}
                       </span>
-                      . This action cannot be undone.
+                      . It will be hidden from view but your data is safe.
                     </>
                   ) : (
                     <>
-                      This will permanently remove{" "}
                       <span
                         className="font-semibold"
                         style={{ color: deleteConfirm?.color || "#22d3ee" }}
                       >
                         {deleteConfirm?.name}
                       </span>{" "}
-                      and all associated data.
+                      will be hidden from selection.
                       {deleteConfirm?.type === "category" && (
-                        <span className="block mt-1 text-amber-400">
-                          All subcategories will also be deleted.
+                        <span className="block mt-1 text-slate-500">
+                          Subcategories will also be hidden.
                         </span>
                       )}
-                      {deleteConfirm?.type === "account" && (
-                        <span className="block mt-1 text-amber-400">
-                          All transactions in this account will be orphaned.
-                        </span>
-                      )}
+                      <span className="block mt-1 text-emerald-400">
+                        Your transactions remain safe.
+                      </span>
                     </>
                   )}
                 </DrawerDescription>
@@ -1667,15 +1962,15 @@ export default function MobileExpenseForm() {
                   className={cn(
                     "w-full h-12 text-base font-semibold border-0 shadow-lg transition-all",
                     deleteConfirm?.step === "first"
-                      ? "bg-red-500/80 hover:bg-red-500 text-white"
-                      : "bg-red-600 hover:bg-red-700 text-white animate-pulse"
+                      ? "bg-amber-500/80 hover:bg-amber-500 text-white"
+                      : "bg-amber-600 hover:bg-amber-700 text-white"
                   )}
                 >
                   {isDeleting
-                    ? "Deleting..."
+                    ? "Hiding..."
                     : deleteConfirm?.step === "first"
-                      ? "Yes, Delete"
-                      : "Delete Forever"}
+                      ? "Yes, Hide"
+                      : "Hide from view"}
                 </Button>
                 <DrawerClose asChild>
                   <Button

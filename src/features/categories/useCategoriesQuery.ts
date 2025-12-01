@@ -26,6 +26,20 @@ async function fetchCategories(accountId: string): Promise<UICategory[]> {
   return (data as UICategory[]) || [];
 }
 
+async function fetchCategoriesWithHidden(
+  accountId: string
+): Promise<UICategory[]> {
+  const qs = new URLSearchParams({ accountId, includeHidden: "true" });
+  const res = await fetch(`/api/categories?${qs.toString()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Failed to fetch categories`);
+  }
+
+  const data = (await res.json()) as unknown;
+  return (data as UICategory[]) || [];
+}
+
 /**
  * OPTIMIZED: Categories with smart caching
  * - 1 hour staleTime (categories rarely change)
@@ -37,6 +51,20 @@ export function useCategories(accountId?: string) {
     queryFn: () => fetchCategories(accountId as string),
     enabled: !!accountId,
     staleTime: CACHE_TIMES.CATEGORIES, // 1 hour
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Fetch categories including hidden ones (for edit mode in wiggle)
+ */
+export function useCategoriesWithHidden(accountId?: string) {
+  return useQuery({
+    queryKey: [...qk.categories(accountId), "withHidden"],
+    queryFn: () => fetchCategoriesWithHidden(accountId as string),
+    enabled: !!accountId,
+    staleTime: CACHE_TIMES.CATEGORIES,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });

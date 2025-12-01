@@ -40,6 +40,11 @@ export async function PATCH(
     patch.type = type;
   }
 
+  // Support updating visible field (for unhiding accounts)
+  if (typeof body.visible === "boolean") {
+    patch.visible = body.visible;
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json(
       { error: "No valid fields to update" },
@@ -66,7 +71,7 @@ export async function PATCH(
   });
 }
 
-// DELETE /api/accounts/:id  — delete account (if owned)
+// DELETE /api/accounts/:id  — soft-delete account (set visible=false)
 export async function DELETE(
   _req: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -80,25 +85,20 @@ export async function DELETE(
 
   const { id } = await context.params;
 
+  // Soft-delete: set visible to false instead of hard delete
   const { error } = await supabase
     .from("accounts")
-    .delete()
+    .update({ visible: false })
     .eq("id", id)
     .eq("user_id", user.id);
 
   if (error) {
-    if ((error as any).code === "23505") {
-      return NextResponse.json(
-        { error: "Account name already exists" },
-        { status: 409 }
-      );
-    }
-    console.error("Error updating account:", error);
+    console.error("Error hiding account:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return new NextResponse(null, {
-    status: 204,
-    headers: { "Cache-Control": "no-store" },
-  });
+  return NextResponse.json(
+    { success: true },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

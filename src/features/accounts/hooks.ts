@@ -26,6 +26,16 @@ async function fetchOwnAccounts(): Promise<Account[]> {
   return (await res.json()) as Account[];
 }
 
+// Fetch accounts including hidden ones (for edit mode)
+async function fetchOwnAccountsWithHidden(): Promise<Account[]> {
+  const res = await fetch("/api/accounts?own=true&includeHidden=true");
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return (await res.json()) as Account[];
+}
+
 /**
  * OPTIMIZED: Accounts with smart caching (includes partner's accounts for dashboard)
  * - 1 hour staleTime (accounts rarely change)
@@ -49,6 +59,19 @@ export function useMyAccounts() {
   return useQuery({
     queryKey: [...qk.accounts(), "own"], // separate key from useAccounts
     queryFn: fetchOwnAccounts,
+    staleTime: CACHE_TIMES.ACCOUNTS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Fetch accounts including hidden ones (for edit mode in wiggle)
+ */
+export function useMyAccountsWithHidden() {
+  return useQuery({
+    queryKey: [...qk.accounts(), "own", "withHidden"],
+    queryFn: fetchOwnAccountsWithHidden,
     staleTime: CACHE_TIMES.ACCOUNTS,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
@@ -188,7 +211,11 @@ export function useDeleteAccount() {
     void,
     Error,
     string,
-    { previous?: Account[]; previousOwn?: Account[] }
+    {
+      previous?: Account[];
+      previousOwn?: Account[];
+      previousWithHidden?: Account[];
+    }
   >({
     mutationFn: deleteAccount,
     onMutate: async (accountId) => {
@@ -196,24 +223,68 @@ export function useDeleteAccount() {
 
       const previous = qc.getQueryData<Account[]>(qk.accounts());
       const previousOwn = qc.getQueryData<Account[]>([...qk.accounts(), "own"]);
+      const previousWithHidden = qc.getQueryData<Account[]>([
+        ...qk.accounts(),
+        "own",
+        "withHidden",
+      ]);
 
-      // Optimistically remove from both caches
+      // Optimistically remove from visible caches (soft-delete sets visible=false)
       qc.setQueryData<Account[]>(qk.accounts(), (old = []) =>
         old.filter((a) => a.id !== accountId)
       );
       qc.setQueryData<Account[]>([...qk.accounts(), "own"], (old = []) =>
         old.filter((a) => a.id !== accountId)
       );
+      // Update withHidden to mark as hidden
+      qc.setQueryData<Account[]>(
+        [...qk.accounts(), "own", "withHidden"],
+        (old = []) =>
+          old.map((a) => (a.id === accountId ? { ...a, visible: false } : a))
+      );
 
-      return { previous, previousOwn };
+      return { previous, previousOwn, previousWithHidden };
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.previous) qc.setQueryData(qk.accounts(), ctx.previous);
       if (ctx?.previousOwn)
         qc.setQueryData([...qk.accounts(), "own"], ctx.previousOwn);
+      if (ctx?.previousWithHidden)
+        qc.setQueryData(
+          [...qk.accounts(), "own", "withHidden"],
+          ctx.previousWithHidden
+        );
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: qk.accounts(), refetchType: "active" });
+    },
+  });
+}
+
+// Unhide account mutation
+async function unhideAccount(accountId: string): Promise<void> {
+  const res = await fetch(`/api/accounts/${accountId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ visible: true }),
+  });
+  if (!res.ok) {
+    let msg = "Failed to unhide account";
+    try {
+      const j = await res.json();
+      if (j?.error) msg = j.error;
+    } catch {}
+    throw new Error(msg);
+  }
+}
+
+export function useUnhideAccount() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: unhideAccount,
+    onSuccess: () => {
+      // Invalidate all account queries to refresh
+      qc.invalidateQueries({ queryKey: qk.accounts() });
     },
   });
 }

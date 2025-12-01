@@ -6,7 +6,7 @@ import type { Category } from "@/types/domain";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Single source of truth for the categories query
-export { useCategories } from "./useCategoriesQuery";
+export { useCategories, useCategoriesWithHidden } from "./useCategoriesQuery";
 
 // Category management hooks (CRUD operations with reordering)
 export {
@@ -220,5 +220,34 @@ export function useReorderCategories(accountId?: string) {
       });
     },
     // No onSettled - we trust the optimistic update on success
+  });
+}
+
+/** Unhide a category or subcategory (set visible=true). */
+export function useUnhideCategory(accountId?: string) {
+  const qc = useQueryClient();
+
+  return useMutation<
+    Category, // TData
+    Error, // TError
+    string, // TVariables (id)
+    void // TContext
+  >({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/categories/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visible: true }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return (await res.json()) as Category;
+    },
+    onSuccess: () => {
+      if (!accountId) return;
+      // Invalidate all category queries to refresh
+      qc.invalidateQueries({
+        queryKey: qk.categories(accountId),
+      });
+    },
   });
 }

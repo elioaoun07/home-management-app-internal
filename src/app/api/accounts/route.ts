@@ -21,6 +21,9 @@ export async function GET(req: NextRequest) {
 
   // Check if we should only return the current user's accounts (for add transaction form)
   const ownOnly = req.nextUrl.searchParams.get("own") === "true";
+  // Check if we should include hidden accounts (for edit mode)
+  const includeHidden =
+    req.nextUrl.searchParams.get("includeHidden") === "true";
 
   let userIds: string[] = [user.id];
 
@@ -48,12 +51,19 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("accounts")
     .select(
-      "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position"
+      "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position,visible"
     )
-    .in("user_id", userIds)
+    .in("user_id", userIds);
+
+  // Only filter out hidden accounts if not explicitly including them
+  if (!includeHidden) {
+    query = query.neq("visible", false);
+  }
+
+  const { data, error } = await query
     .order("position", { ascending: true })
     .order("inserted_at", { ascending: false });
 
@@ -63,7 +73,9 @@ export async function GET(req: NextRequest) {
   }
 
   // Check if current user has any accounts (partner might have accounts but we need to seed for new users)
-  const currentUserAccounts = (data || []).filter((a) => a.user_id === user.id);
+  const currentUserAccounts = (data || []).filter(
+    (a) => a.user_id === user.id && a.visible !== false
+  );
 
   // If no accounts exist for the CURRENT USER, seed defaults (persist to DB) and return them
   if (currentUserAccounts.length === 0) {
@@ -139,9 +151,10 @@ export async function GET(req: NextRequest) {
       const { data: seeded, error: seededErr } = await supabase
         .from("accounts")
         .select(
-          "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position"
+          "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position,visible"
         )
         .in("user_id", userIds)
+        .neq("visible", false)
         .order("position", { ascending: true })
         .order("inserted_at", { ascending: false });
       if (seededErr) throw seededErr;

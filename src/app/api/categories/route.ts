@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic"; // no caching
 export async function GET(_req: NextRequest) {
   const supabase = await supabaseServer(await cookies());
   const accountId = _req.nextUrl.searchParams.get("accountId") ?? "";
+  const includeHidden =
+    _req.nextUrl.searchParams.get("includeHidden") === "true";
 
   const {
     data: { user },
@@ -40,12 +42,18 @@ export async function GET(_req: NextRequest) {
     });
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("user_categories")
     .select("id,name,color,parent_id,position,visible,account_id")
     .eq("user_id", user.id)
-    .eq("account_id", accountId)
-    .eq("visible", true)
+    .eq("account_id", accountId);
+
+  // Only filter out hidden categories if not explicitly including them
+  if (!includeHidden) {
+    query = query.eq("visible", true);
+  }
+
+  const { data, error } = await query
     .order("position", { ascending: true, nullsFirst: true })
     .order("id", { ascending: true });
 
@@ -72,6 +80,7 @@ export async function GET(_req: NextRequest) {
     parent_id: c.parent_id,
     position: c.position ?? 0,
     account_id: c.account_id,
+    visible: c.visible,
   }));
 
   return NextResponse.json(categories, {
