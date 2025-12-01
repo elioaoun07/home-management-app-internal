@@ -14,6 +14,14 @@ export interface MerchantMapping {
   updated_at: string;
 }
 
+// A split portion of a transaction
+export interface TransactionSplit {
+  id: string; // unique ID for the split
+  amount: number;
+  category_id?: string | null;
+  subcategory_id?: string | null;
+}
+
 export interface ParsedTransaction {
   id: string; // temporary ID for UI
   date: string; // ISO date string
@@ -28,6 +36,8 @@ export interface ParsedTransaction {
   // Status for UI
   matched: boolean; // true if found in merchant_mappings
   selected: boolean; // true if user wants to import this transaction
+  // Split transaction support
+  splits?: TransactionSplit[]; // if set, import as multiple transactions
 }
 
 export interface StatementImport {

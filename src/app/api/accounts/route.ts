@@ -188,7 +188,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, type, country_code, location_name } = body || {};
+    const { name, type, country_code, location_name, with_default_categories } =
+      body || {};
 
     if (!name || !type) {
       return NextResponse.json(
@@ -205,6 +206,10 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Determine if we should seed default categories
+    // Default to true for backward compatibility, but can be explicitly set to false
+    const shouldSeedCategories = with_default_categories !== false;
 
     const insertData: Record<string, any> = {
       user_id: user.id,
@@ -238,8 +243,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Seed default categories for the new account
-    if (data?.id) {
+    // Seed default categories for the new account (only if requested)
+    if (data?.id && shouldSeedCategories) {
       try {
         let categoryPosition = 0;
         for (const cat of DEFAULT_CATEGORIES) {

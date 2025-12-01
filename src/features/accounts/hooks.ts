@@ -84,6 +84,7 @@ type CreateAccountInput = {
   type: AccountType;
   country_code?: string;
   location_name?: string;
+  with_default_categories?: boolean;
 };
 
 async function createAccount(input: CreateAccountInput): Promise<Account> {

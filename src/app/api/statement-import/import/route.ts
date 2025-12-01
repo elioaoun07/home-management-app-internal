@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
           category_id: t.category_id || null,
           subcategory_id: t.subcategory_id || null,
           is_draft: false,
+          is_imported: true, // Mark as imported from bank statement
         })
         .select()
         .single();

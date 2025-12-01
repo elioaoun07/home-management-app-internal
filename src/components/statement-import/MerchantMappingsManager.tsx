@@ -3,7 +3,13 @@
 // src/components/statement-import/MerchantMappingsManager.tsx
 // UI for viewing and managing trained merchant mappings
 
-import { PlusIcon, SearchIcon, TrashIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  PlusIcon,
+  SearchIcon,
+  TrashIcon,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -45,8 +51,12 @@ export function MerchantMappingsManager({ open, onOpenChange }: Props) {
   const themeClasses = useThemeClasses();
   const [search, setSearch] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [collapsedAccounts, setCollapsedAccounts] = useState<Set<string>>(
+    new Set()
+  );
 
   const { data: mappings = [], isLoading } = useMerchantMappings();
+  const { data: accounts = [] } = useMyAccounts();
   const deleteMutation = useDeleteMerchantMapping();
 
   // Filter mappings by search
@@ -59,6 +69,43 @@ export function MerchantMappingsManager({ open, onOpenChange }: Props) {
         m.merchant_pattern.toLowerCase().includes(lower)
     );
   }, [mappings, search]);
+
+  // Group mappings by account
+  const groupedMappings = useMemo(() => {
+    const groups: Map<
+      string | null,
+      { account: any; mappings: MerchantMapping[] }
+    > = new Map();
+
+    filteredMappings.forEach((mapping) => {
+      const accountId = mapping.account_id;
+      if (!groups.has(accountId)) {
+        const account = accounts.find((a: any) => a.id === accountId);
+        groups.set(accountId, { account: account || null, mappings: [] });
+      }
+      groups.get(accountId)!.mappings.push(mapping);
+    });
+
+    // Sort by account name (null/no account at the end)
+    return Array.from(groups.entries()).sort(([aId, aGroup], [bId, bGroup]) => {
+      if (!aGroup.account) return 1;
+      if (!bGroup.account) return -1;
+      return aGroup.account.name.localeCompare(bGroup.account.name);
+    });
+  }, [filteredMappings, accounts]);
+
+  const toggleAccountCollapse = (accountId: string | null) => {
+    const key = accountId || "__no_account__";
+    setCollapsedAccounts((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   const handleDelete = async (mapping: MerchantMapping) => {
     if (!confirm(`Delete mapping for "${mapping.merchant_name}"?`)) return;
@@ -117,13 +164,13 @@ export function MerchantMappingsManager({ open, onOpenChange }: Props) {
             </div>
           </div>
 
-          {/* Mappings List */}
+          {/* Mappings List - Grouped by Account */}
           <ScrollArea className="flex-1 h-[400px]">
             {isLoading ? (
               <div className={`p-8 text-center ${themeClasses.textMuted}`}>
                 Loading...
               </div>
-            ) : filteredMappings.length === 0 ? (
+            ) : groupedMappings.length === 0 ? (
               <div className={`p-8 text-center ${themeClasses.textMuted}`}>
                 {search
                   ? "No mappings found"
@@ -131,13 +178,53 @@ export function MerchantMappingsManager({ open, onOpenChange }: Props) {
               </div>
             ) : (
               <div className="divide-y divide-[hsl(var(--border)/0.5)]">
-                {filteredMappings.map((mapping) => (
-                  <MappingRow
-                    key={mapping.id}
-                    mapping={mapping}
-                    onDelete={() => handleDelete(mapping)}
-                  />
-                ))}
+                {groupedMappings.map(([accountId, group]) => {
+                  const key = accountId || "__no_account__";
+                  const isCollapsed = collapsedAccounts.has(key);
+                  const accountName = group.account?.name || "No Account";
+
+                  return (
+                    <div key={key}>
+                      {/* Account Group Header */}
+                      <button
+                        onClick={() => toggleAccountCollapse(accountId)}
+                        className={`w-full px-6 py-3 flex items-center gap-3 ${themeClasses.bgSurface} hover:bg-[hsl(var(--accent)/0.05)] transition-colors`}
+                      >
+                        {isCollapsed ? (
+                          <ChevronRightIcon
+                            className={`w-4 h-4 ${themeClasses.textMuted}`}
+                          />
+                        ) : (
+                          <ChevronDownIcon
+                            className={`w-4 h-4 ${themeClasses.textMuted}`}
+                          />
+                        )}
+                        <span className={`font-medium ${themeClasses.text}`}>
+                          {accountName}
+                        </span>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full bg-[hsl(var(--accent)/0.1)] ${themeClasses.textMuted}`}
+                        >
+                          {group.mappings.length}
+                        </span>
+                      </button>
+
+                      {/* Account Group Mappings */}
+                      {!isCollapsed && (
+                        <div className="divide-y divide-[hsl(var(--border)/0.3)]">
+                          {group.mappings.map((mapping) => (
+                            <MappingRow
+                              key={mapping.id}
+                              mapping={mapping}
+                              onDelete={() => handleDelete(mapping)}
+                              hideAccount
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </ScrollArea>
@@ -160,9 +247,11 @@ export function MerchantMappingsManager({ open, onOpenChange }: Props) {
 function MappingRow({
   mapping,
   onDelete,
+  hideAccount = false,
 }: {
   mapping: MerchantMapping;
   onDelete: () => void;
+  hideAccount?: boolean;
 }) {
   const themeClasses = useThemeClasses();
   const { data: accounts = [] } = useMyAccounts();
@@ -177,7 +266,7 @@ function MappingRow({
   );
 
   return (
-    <div className="px-6 py-4 flex items-center gap-4">
+    <div className="px-6 py-3 flex items-center gap-4 pl-12">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className={`font-medium ${themeClasses.text}`}>
@@ -192,31 +281,30 @@ function MappingRow({
         <p className={`text-sm ${themeClasses.textMuted} truncate mt-1`}>
           Pattern: {mapping.merchant_pattern}
         </p>
-        {(category || account) && (
+        {category && (
           <div className="flex items-center gap-2 mt-1 text-sm">
-            {category &&
-              (() => {
-                const CategoryIcon = getCategoryIcon(category.name);
-                return (
-                  <span
-                    className={`flex items-center gap-1 ${themeClasses.textMuted}`}
-                  >
-                    <CategoryIcon className="w-4 h-4 text-cyan" />
-                    {category.name}
-                    {subcategory &&
-                      (() => {
-                        const SubIcon = getCategoryIcon(subcategory.name);
-                        return (
-                          <span className="flex items-center gap-1">
-                            → <SubIcon className="w-3.5 h-3.5 text-cyan" />{" "}
-                            {subcategory.name}
-                          </span>
-                        );
-                      })()}
-                  </span>
-                );
-              })()}
-            {account && (
+            {(() => {
+              const CategoryIcon = getCategoryIcon(category.name);
+              return (
+                <span
+                  className={`flex items-center gap-1 ${themeClasses.textMuted}`}
+                >
+                  <CategoryIcon className="w-4 h-4 text-cyan" />
+                  {category.name}
+                  {subcategory &&
+                    (() => {
+                      const SubIcon = getCategoryIcon(subcategory.name);
+                      return (
+                        <span className="flex items-center gap-1">
+                          → <SubIcon className="w-3.5 h-3.5 text-cyan" />{" "}
+                          {subcategory.name}
+                        </span>
+                      );
+                    })()}
+                </span>
+              );
+            })()}
+            {!hideAccount && account && (
               <span className={`${themeClasses.textFaint}`}>
                 • {account.name}
               </span>

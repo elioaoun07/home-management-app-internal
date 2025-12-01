@@ -17,7 +17,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import type { AccountType } from "@/types/domain";
-import { MapPin } from "lucide-react";
+import { FolderTree, MapPin, PenLine } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -56,6 +56,7 @@ export default function NewAccountDrawer({
   const [countryCode, setCountryCode] = useState("");
   const [locationName, setLocationName] = useState("");
   const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [withDefaultCategories, setWithDefaultCategories] = useState(true);
 
   const resetForm = () => {
     setName("");
@@ -63,6 +64,7 @@ export default function NewAccountDrawer({
     setCountryCode("");
     setLocationName("");
     setShowCountryPicker(false);
+    setWithDefaultCategories(true);
   };
 
   const handleSelectCountry = (code: string, countryName: string) => {
@@ -83,6 +85,7 @@ export default function NewAccountDrawer({
         type,
         country_code: countryCode || undefined,
         location_name: locationName || undefined,
+        with_default_categories: withDefaultCategories,
       },
       {
         onSuccess: (account) => {
@@ -238,6 +241,105 @@ export default function NewAccountDrawer({
               </button>
             </div>
           </div>
+
+          {/* Category Setup (only for expense accounts) */}
+          {type === "expense" && (
+            <div className="space-y-2">
+              <Label className={`text-sm font-medium ${themeClasses.text}`}>
+                Category Setup
+              </Label>
+              <p className="text-[11px] text-slate-500 -mt-1">
+                Choose how to set up categories for this account
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setWithDefaultCategories(true)}
+                  className={cn(
+                    "p-3 rounded-xl border text-center transition-all active:scale-95",
+                    withDefaultCategories
+                      ? `neo-card ${themeClasses.borderActive} bg-gradient-to-br from-blue-500/20 to-cyan-500/10 shadow-lg shadow-blue-500/10`
+                      : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`
+                  )}
+                >
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div
+                      className={cn(
+                        "w-9 h-9 rounded-full flex items-center justify-center",
+                        withDefaultCategories
+                          ? "bg-blue-500/20"
+                          : "bg-slate-700/50"
+                      )}
+                    >
+                      <FolderTree
+                        className={cn(
+                          "w-4 h-4",
+                          withDefaultCategories
+                            ? "text-blue-400"
+                            : "text-slate-400"
+                        )}
+                      />
+                    </div>
+                    <span
+                      className={cn(
+                        "font-semibold text-sm",
+                        withDefaultCategories
+                          ? "text-blue-400"
+                          : "text-slate-300"
+                      )}
+                    >
+                      Default
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      Pre-configured categories
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setWithDefaultCategories(false)}
+                  className={cn(
+                    "p-3 rounded-xl border text-center transition-all active:scale-95",
+                    !withDefaultCategories
+                      ? `neo-card ${themeClasses.borderActive} bg-gradient-to-br from-amber-500/20 to-orange-500/10 shadow-lg shadow-amber-500/10`
+                      : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`
+                  )}
+                >
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div
+                      className={cn(
+                        "w-9 h-9 rounded-full flex items-center justify-center",
+                        !withDefaultCategories
+                          ? "bg-amber-500/20"
+                          : "bg-slate-700/50"
+                      )}
+                    >
+                      <PenLine
+                        className={cn(
+                          "w-4 h-4",
+                          !withDefaultCategories
+                            ? "text-amber-400"
+                            : "text-slate-400"
+                        )}
+                      />
+                    </div>
+                    <span
+                      className={cn(
+                        "font-semibold text-sm",
+                        !withDefaultCategories
+                          ? "text-amber-400"
+                          : "text-slate-300"
+                      )}
+                    >
+                      Empty
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      Create manually
+                    </span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Location / Country (Optional) */}
           <div className="space-y-2">

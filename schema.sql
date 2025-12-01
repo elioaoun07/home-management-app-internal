@@ -172,6 +172,7 @@ CREATE TABLE public.transactions (
   voice_transcript text,
   confidence_score numeric,
   is_private boolean NOT NULL DEFAULT false,
+  is_imported boolean NOT NULL DEFAULT false,
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
   CONSTRAINT transactions_category_fk FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_subcategory_fk FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),

@@ -11,7 +11,11 @@ import {
   FileTextIcon,
   FilterIcon,
   LayersIcon,
+  PlusIcon,
+  ScissorsIcon,
+  Trash2Icon,
   UploadIcon,
+  WalletIcon,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -26,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -78,16 +83,10 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
   const parseStatement = useParseStatement();
   const importTransactions = useImportTransactions();
 
-  // Get expense accounts only
-  const expenseAccounts = useMemo(
-    () => accounts.filter((a: any) => a.type === "expense"),
-    [accounts]
-  );
-
-  // Find the default account
+  // Find the user's default account (can be any type)
   const defaultAccount = useMemo(
-    () => expenseAccounts.find((a: any) => a.is_default) || expenseAccounts[0],
-    [expenseAccounts]
+    () => accounts.find((a: any) => a.is_default) || accounts[0],
+    [accounts]
   );
 
   // Check if transaction is a transfer (USD account to card)
@@ -138,8 +137,8 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
     try {
       const result = await parseStatement.mutateAsync(file);
 
-      // Set default account for all transactions
-      const defaultAccId = defaultAccount?.id || expenseAccounts[0]?.id;
+      // Set default account for all transactions (use user's default account)
+      const defaultAccId = defaultAccount?.id || accounts[0]?.id;
       setDefaultAccountId(defaultAccId);
 
       // Process transactions: auto-unselect transfers
@@ -208,14 +207,25 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
     );
   };
 
-  // Update transaction field
+  // Update transaction field (also updates in keywordGroups)
   const updateTransaction = (
     id: string,
     field: keyof ParsedTransaction,
     value: any
   ) => {
+    // Update main transactions state
     setTransactions((prev) =>
       prev.map((t) => (t.id === id ? { ...t, [field]: value } : t))
+    );
+
+    // Also update transactions inside keywordGroups
+    setKeywordGroups((prev) =>
+      prev.map((group) => ({
+        ...group,
+        transactions: group.transactions.map((t) =>
+          t.id === id ? { ...t, [field]: value } : t
+        ),
+      }))
     );
   };
 
@@ -434,18 +444,43 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
       .filter((t) => t.selected)
       .forEach((txn) => {
         const mapping = categoryMap.get(txn.id);
-        txnsToImport.push({
-          date: txn.date,
-          description: txn.description,
-          amount: txn.type === "debit" ? txn.amount : -txn.amount,
-          category_id: mapping?.category_id || txn.category_id || null,
-          subcategory_id: mapping?.subcategory_id || txn.subcategory_id || null,
-          account_id: txn.account_id!,
-          save_merchant_mapping: !txn.matched && !!mapping?.category_id,
-          merchant_pattern: mapping?.keyword || txn.description,
-          merchant_name:
-            mapping?.keyword || txn.merchant_name || txn.description,
-        });
+        const finalCategoryId = mapping?.category_id || txn.category_id || null;
+        const finalSubcategoryId =
+          mapping?.subcategory_id || txn.subcategory_id || null;
+
+        // Handle split transactions
+        if (txn.splits && txn.splits.length > 0) {
+          // Import each split as a separate transaction
+          txn.splits.forEach((split, index) => {
+            txnsToImport.push({
+              date: txn.date,
+              description: `${txn.description} (Split ${index + 1}/${txn.splits!.length})`,
+              amount: txn.type === "debit" ? split.amount : -split.amount,
+              category_id: split.category_id || finalCategoryId,
+              subcategory_id: split.subcategory_id || finalSubcategoryId,
+              account_id: txn.account_id!,
+              // Don't save merchant mapping for splits (original pattern wouldn't match)
+              save_merchant_mapping: false,
+              merchant_pattern: txn.description,
+              merchant_name: txn.description,
+            });
+          });
+        } else {
+          // Normal transaction (no splits)
+          txnsToImport.push({
+            date: txn.date,
+            description: txn.description,
+            amount: txn.type === "debit" ? txn.amount : -txn.amount,
+            category_id: finalCategoryId,
+            subcategory_id: finalSubcategoryId,
+            account_id: txn.account_id!,
+            // Save merchant mapping if a category was assigned (always save for future matching)
+            save_merchant_mapping: !!finalCategoryId && !!mapping?.keyword,
+            merchant_pattern: mapping?.keyword || txn.description,
+            merchant_name:
+              mapping?.keyword || txn.merchant_name || txn.description,
+          });
+        }
       });
 
     if (txnsToImport.length === 0) {
@@ -674,28 +709,33 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
                   </span>
                 </div>
                 <div className="flex items-center gap-4">
-                  <Select
-                    value={defaultAccountId}
-                    onValueChange={(val) => {
-                      setDefaultAccountId(val);
-                      setTransactions((prev) =>
-                        prev.map((t) =>
-                          !t.account_id ? { ...t, account_id: val } : t
-                        )
-                      );
-                    }}
-                  >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Default Account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {expenseAccounts.map((acc: any) => (
-                        <SelectItem key={acc.id} value={acc.id}>
-                          {acc.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2">
+                    <WalletIcon className="w-4 h-4 text-[hsl(var(--accent))]" />
+                    <span className={`text-sm ${themeClasses.textMuted}`}>
+                      Import to:
+                    </span>
+                    <Select
+                      value={defaultAccountId}
+                      onValueChange={(val) => {
+                        setDefaultAccountId(val);
+                        // Update ALL transactions to use this account
+                        setTransactions((prev) =>
+                          prev.map((t) => ({ ...t, account_id: val }))
+                        );
+                      }}
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Select Account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((acc: any) => (
+                          <SelectItem key={acc.id} value={acc.id}>
+                            {acc.name} ({acc.type})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 
@@ -714,7 +754,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
                       onUpdate={(field, value) =>
                         updateTransaction(txn.id, field, value)
                       }
-                      accounts={expenseAccounts}
+                      accounts={accounts}
                       isTransfer={isTransfer(txn)}
                     />
                   ))}
@@ -755,6 +795,9 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
                       }
                       onUpdateCategory={(field, value) =>
                         updateGroupCategory(group.keyword, field, value)
+                      }
+                      onUpdateTransaction={(txnId, field, value) =>
+                        updateTransaction(txnId, field, value)
                       }
                       accountId={defaultAccountId}
                     />
@@ -925,7 +968,7 @@ function TransactionRow({
           <p className={`text-xs ${themeClasses.textMuted} mb-3 font-mono`}>
             {transaction.description}
           </p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-4 mb-4">
             {/* Account */}
             <div>
               <label className={`text-xs ${themeClasses.textMuted} mb-1 block`}>
@@ -954,12 +997,103 @@ function TransactionRow({
   );
 }
 
+// Custom keyword input component
+function CustomKeywordInput({
+  currentKeyword,
+  suggestedKeywords,
+  onSetKeyword,
+}: {
+  currentKeyword: string;
+  suggestedKeywords: string[];
+  onSetKeyword: (keyword: string) => void;
+}) {
+  const themeClasses = useThemeClasses();
+  const [showInput, setShowInput] = useState(false);
+  const [customKeyword, setCustomKeyword] = useState("");
+
+  const isCustomKeyword = !suggestedKeywords.includes(currentKeyword);
+
+  const handleAddCustom = () => {
+    if (customKeyword.trim()) {
+      onSetKeyword(customKeyword.trim().toUpperCase());
+      setCustomKeyword("");
+      setShowInput(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddCustom();
+    } else if (e.key === "Escape") {
+      setShowInput(false);
+      setCustomKeyword("");
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* Show custom keyword if set */}
+      {isCustomKeyword && (
+        <div className="flex items-center gap-2">
+          <span className={`text-xs ${themeClasses.textMuted}`}>Custom:</span>
+          <span className="px-3 py-1.5 text-sm rounded-lg bg-[hsl(var(--accent))] text-white">
+            {currentKeyword}
+          </span>
+        </div>
+      )}
+
+      {showInput ? (
+        <div className="flex items-center gap-2">
+          <Input
+            type="text"
+            value={customKeyword}
+            onChange={(e) => setCustomKeyword(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Enter custom keyword (e.g., ALFA PREPAID)"
+            className={`flex-1 h-9 text-sm ${themeClasses.bgSurface}`}
+            autoFocus
+          />
+          <Button
+            size="sm"
+            onClick={handleAddCustom}
+            disabled={!customKeyword.trim()}
+            className="h-9"
+          >
+            Add
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setShowInput(false);
+              setCustomKeyword("");
+            }}
+            className="h-9"
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowInput(true)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-dashed ${themeClasses.border} ${themeClasses.textMuted} hover:border-[hsl(var(--accent))] hover:text-[hsl(var(--accent))] transition-colors`}
+        >
+          <PlusIcon className="w-4 h-4" />
+          Add custom keyword
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Keyword Group Card for mapping step
 function KeywordGroupCard({
   group,
   expanded,
   onToggleExpand,
   onUpdateCategory,
+  onUpdateTransaction,
   accountId,
 }: {
   group: KeywordGroup;
@@ -969,10 +1103,16 @@ function KeywordGroupCard({
     field: "category_id" | "subcategory_id" | "selectedKeyword",
     value: string | null
   ) => void;
+  onUpdateTransaction: (
+    txnId: string,
+    field: keyof ParsedTransaction,
+    value: any
+  ) => void;
   accountId: string;
 }) {
   const themeClasses = useThemeClasses();
   const { data: categories = [] } = useCategories(accountId);
+  const [expandedTxn, setExpandedTxn] = useState<string | null>(null);
 
   const parentCategories = useMemo(
     () => categories.filter((c: any) => !c.parent_id && c.visible !== false),
@@ -1105,7 +1245,7 @@ function KeywordGroupCard({
             >
               Choose keyword for mapping:
             </label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mb-3">
               {group.suggestedKeywords.map((kw) => (
                 <button
                   key={kw}
@@ -1120,23 +1260,305 @@ function KeywordGroupCard({
                 </button>
               ))}
             </div>
+
+            {/* Custom keyword input */}
+            <CustomKeywordInput
+              currentKeyword={group.selectedKeyword}
+              suggestedKeywords={group.suggestedKeywords}
+              onSetKeyword={(kw) => onUpdateCategory("selectedKeyword", kw)}
+            />
           </div>
 
-          {/* Transaction list */}
-          <div className="max-h-48 overflow-auto">
+          {/* Transaction list with split support */}
+          <div className="max-h-64 overflow-auto">
             {group.transactions.map((txn, idx) => (
-              <div
-                key={txn.id}
-                className={`px-4 py-2 text-sm flex justify-between ${
-                  idx % 2 === 0 ? "" : themeClasses.bgSurface
-                }`}
-              >
-                <span className={`${themeClasses.textMuted} truncate flex-1`}>
-                  {txn.date} • {txn.description}
-                </span>
-                <span className={`${themeClasses.text} ml-4 flex-shrink-0`}>
-                  ${txn.amount.toFixed(2)}
-                </span>
+              <div key={txn.id}>
+                {/* Transaction row */}
+                <div
+                  className={`px-4 py-2 text-sm flex items-center gap-2 ${
+                    idx % 2 === 0 ? "" : themeClasses.bgSurface
+                  } ${txn.splits && txn.splits.length > 0 ? "bg-purple-500/10" : ""}`}
+                >
+                  <button
+                    onClick={() =>
+                      setExpandedTxn(expandedTxn === txn.id ? null : txn.id)
+                    }
+                    className={`p-0.5 rounded hover:bg-[hsl(var(--accent)/0.1)]`}
+                  >
+                    {expandedTxn === txn.id ? (
+                      <ChevronUpIcon className="w-3 h-3" />
+                    ) : (
+                      <ChevronDownIcon className="w-3 h-3" />
+                    )}
+                  </button>
+                  <span className={`${themeClasses.textMuted} truncate flex-1`}>
+                    {txn.date} • {txn.description}
+                  </span>
+                  {txn.splits && txn.splits.length > 0 && (
+                    <span className="px-1.5 py-0.5 text-xs rounded bg-purple-500/20 text-purple-400">
+                      Split ({txn.splits.length})
+                    </span>
+                  )}
+                  <span
+                    className={`${themeClasses.text} ml-2 flex-shrink-0 font-medium`}
+                  >
+                    ${txn.amount.toFixed(2)}
+                  </span>
+                </div>
+
+                {/* Expanded split section */}
+                {expandedTxn === txn.id && (
+                  <div
+                    className={`px-4 py-3 ${themeClasses.bgSurface} border-t border-b ${themeClasses.border}`}
+                  >
+                    {txn.splits && txn.splits.length > 0 ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className={`text-xs font-medium ${themeClasses.text}`}
+                          >
+                            Split into {txn.splits.length} parts (Total: $
+                            {txn.amount.toFixed(2)})
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              onUpdateTransaction(txn.id, "splits", undefined)
+                            }
+                            className="h-6 text-xs px-2"
+                          >
+                            Remove Split
+                          </Button>
+                        </div>
+
+                        {txn.splits.map((split, splitIdx) => {
+                          const splitSubcategories = split.category_id
+                            ? categories.filter(
+                                (c: any) =>
+                                  c.parent_id === split.category_id &&
+                                  c.visible !== false
+                              )
+                            : [];
+
+                          return (
+                            <div
+                              key={split.id}
+                              className="p-3 rounded-lg bg-[hsl(var(--muted))] space-y-2"
+                            >
+                              {/* Row 1: Amount and Delete */}
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-xs ${themeClasses.textMuted} w-5`}
+                                >
+                                  #{splitIdx + 1}
+                                </span>
+                                <div className="flex items-center gap-1 flex-1">
+                                  <span
+                                    className={`text-xs ${themeClasses.textMuted}`}
+                                  >
+                                    $
+                                  </span>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={split.amount || ""}
+                                    onChange={(e) => {
+                                      const newAmount =
+                                        parseFloat(e.target.value) || 0;
+                                      const newSplits = [...txn.splits!];
+                                      const oldAmount = split.amount;
+                                      const diff = newAmount - oldAmount;
+
+                                      // Update current split
+                                      newSplits[splitIdx] = {
+                                        ...split,
+                                        amount: newAmount,
+                                      };
+
+                                      // If there are exactly 2 splits, adjust the other one
+                                      if (newSplits.length === 2) {
+                                        const otherIdx = splitIdx === 0 ? 1 : 0;
+                                        const otherNewAmount = Math.max(
+                                          0,
+                                          newSplits[otherIdx].amount - diff
+                                        );
+                                        newSplits[otherIdx] = {
+                                          ...newSplits[otherIdx],
+                                          amount: otherNewAmount,
+                                        };
+                                      }
+
+                                      onUpdateTransaction(
+                                        txn.id,
+                                        "splits",
+                                        newSplits
+                                      );
+                                    }}
+                                    className="w-24 h-7 text-xs text-right"
+                                  />
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    const newSplits = txn.splits!.filter(
+                                      (_, i) => i !== splitIdx
+                                    );
+                                    // If only one split remains, give it the full amount
+                                    if (newSplits.length === 1) {
+                                      newSplits[0] = {
+                                        ...newSplits[0],
+                                        amount: txn.amount,
+                                      };
+                                    }
+                                    onUpdateTransaction(
+                                      txn.id,
+                                      "splits",
+                                      newSplits.length > 0
+                                        ? newSplits
+                                        : undefined
+                                    );
+                                  }}
+                                  className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                                >
+                                  <Trash2Icon className="w-3 h-3" />
+                                </Button>
+                              </div>
+
+                              {/* Row 2: Category and Subcategory */}
+                              <div className="flex items-center gap-2 pl-7">
+                                <Select
+                                  value={split.category_id || "__none__"}
+                                  onValueChange={(val) => {
+                                    const newSplits = [...txn.splits!];
+                                    newSplits[splitIdx] = {
+                                      ...split,
+                                      category_id:
+                                        val === "__none__" ? null : val,
+                                      subcategory_id: null, // Reset subcategory when category changes
+                                    };
+                                    onUpdateTransaction(
+                                      txn.id,
+                                      "splits",
+                                      newSplits
+                                    );
+                                  }}
+                                >
+                                  <SelectTrigger className="h-7 text-xs flex-1">
+                                    <SelectValue placeholder="Category" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__">
+                                      Select category...
+                                    </SelectItem>
+                                    {parentCategories.map((cat: any) => {
+                                      const Icon = getCategoryIcon(cat.name);
+                                      return (
+                                        <SelectItem key={cat.id} value={cat.id}>
+                                          <span className="flex items-center gap-2">
+                                            <Icon className="w-3 h-3 text-cyan" />
+                                            {cat.name}
+                                          </span>
+                                        </SelectItem>
+                                      );
+                                    })}
+                                  </SelectContent>
+                                </Select>
+
+                                <Select
+                                  value={split.subcategory_id || "__none__"}
+                                  onValueChange={(val) => {
+                                    const newSplits = [...txn.splits!];
+                                    newSplits[splitIdx] = {
+                                      ...split,
+                                      subcategory_id:
+                                        val === "__none__" ? null : val,
+                                    };
+                                    onUpdateTransaction(
+                                      txn.id,
+                                      "splits",
+                                      newSplits
+                                    );
+                                  }}
+                                  disabled={
+                                    !split.category_id ||
+                                    splitSubcategories.length === 0
+                                  }
+                                >
+                                  <SelectTrigger className="h-7 text-xs flex-1">
+                                    <SelectValue placeholder="Subcategory" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__">
+                                      None
+                                    </SelectItem>
+                                    {splitSubcategories.map((sub: any) => {
+                                      const Icon = getCategoryIcon(sub.name);
+                                      return (
+                                        <SelectItem key={sub.id} value={sub.id}>
+                                          <span className="flex items-center gap-2">
+                                            <Icon className="w-3 h-3 text-cyan" />
+                                            {sub.name}
+                                          </span>
+                                        </SelectItem>
+                                      );
+                                    })}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            // Add a new split, taking amount from the last split
+                            const newSplits = [...txn.splits!];
+                            const lastSplit = newSplits[newSplits.length - 1];
+                            const splitAmount =
+                              Math.floor((lastSplit.amount / 2) * 100) / 100;
+                            newSplits[newSplits.length - 1] = {
+                              ...lastSplit,
+                              amount: lastSplit.amount - splitAmount,
+                            };
+                            newSplits.push({
+                              id: `split-${Date.now()}`,
+                              amount: splitAmount,
+                            });
+                            onUpdateTransaction(txn.id, "splits", newSplits);
+                          }}
+                          className="h-6 text-xs px-2"
+                        >
+                          <PlusIcon className="w-3 h-3 mr-1" />
+                          Add Split
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const halfAmount =
+                            Math.floor((txn.amount / 2) * 100) / 100;
+                          onUpdateTransaction(txn.id, "splits", [
+                            { id: `split-${Date.now()}-1`, amount: halfAmount },
+                            {
+                              id: `split-${Date.now()}-2`,
+                              amount: txn.amount - halfAmount,
+                            },
+                          ]);
+                        }}
+                        className="h-7 text-xs"
+                      >
+                        <ScissorsIcon className="w-3 h-3 mr-1" />
+                        Split This Transaction
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
