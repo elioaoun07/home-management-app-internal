@@ -16,62 +16,6 @@ import { useEffect, useMemo, useState } from "react";
 
 export type WebTab = "dashboard" | "budget" | "goals";
 
-// Mock category budgets for now (will be connected to Supabase later)
-const DEFAULT_CATEGORY_BUDGETS = [
-  {
-    id: "food-dining",
-    name: "Food & Dining",
-    color: "#FF7043",
-    budget: 800,
-    spent: 0,
-  },
-  {
-    id: "transport",
-    name: "Transport",
-    color: "#29B6F6",
-    budget: 300,
-    spent: 0,
-  },
-  { id: "shopping", name: "Shopping", color: "#AB47BC", budget: 500, spent: 0 },
-  {
-    id: "bills-utilities",
-    name: "Bills & Utilities",
-    color: "#FFA726",
-    budget: 400,
-    spent: 0,
-  },
-  { id: "health", name: "Health", color: "#66BB6A", budget: 200, spent: 0 },
-  {
-    id: "entertainment",
-    name: "Entertainment",
-    color: "#EC407A",
-    budget: 300,
-    spent: 0,
-  },
-  { id: "travel", name: "Travel", color: "#42A5F5", budget: 500, spent: 0 },
-  {
-    id: "home-rent",
-    name: "Home & Rent",
-    color: "#8D6E63",
-    budget: 1500,
-    spent: 0,
-  },
-  {
-    id: "education",
-    name: "Education",
-    color: "#42A5F5",
-    budget: 200,
-    spent: 0,
-  },
-  {
-    id: "gifts-charity",
-    name: "Gifts & Charity",
-    color: "#EC407A",
-    budget: 150,
-    spent: 0,
-  },
-];
-
 export default function WebViewContainer() {
   const themeClasses = useThemeClasses();
   const userData = useUser(); // Get user data from context (server-side)
@@ -129,28 +73,8 @@ export default function WebViewContainer() {
     endDate: dateRange.end,
   });
 
-  // Calculate spent amounts per category from transactions
-  const categoryBudgets = useMemo(() => {
-    const spentByCategory: Record<string, number> = {};
-
-    transactions.forEach((tx) => {
-      const category = tx.category || "Uncategorized";
-      spentByCategory[category] = (spentByCategory[category] || 0) + tx.amount;
-    });
-
-    return DEFAULT_CATEGORY_BUDGETS.map((cat) => ({
-      ...cat,
-      spent: spentByCategory[cat.name] || 0,
-    }));
-  }, [transactions]);
-
   const handleDateRangeChange = (start: string, end: string) => {
     setDateRange({ start, end });
-  };
-
-  const handleBudgetChange = (categoryId: string, newBudget: number) => {
-    // TODO: Save to Supabase when schema is ready
-    console.log(`Budget changed for ${categoryId}: $${newBudget}`);
   };
 
   // Loading state
@@ -323,10 +247,7 @@ export default function WebViewContainer() {
 
         {/* Budget View */}
         <div className={activeTab === "budget" ? "block" : "hidden"}>
-          <WebBudget
-            categories={categoryBudgets}
-            onBudgetChange={handleBudgetChange}
-          />
+          <WebBudget />
         </div>
 
         {/* Future Purchases / Goals View */}

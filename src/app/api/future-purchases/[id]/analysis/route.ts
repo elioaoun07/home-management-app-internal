@@ -150,66 +150,206 @@ export async function GET(req: NextRequest, context: RouteContext) {
   const progressPercent =
     (purchase.current_saved / purchase.target_amount) * 100;
 
-  // Apply urgency multiplier to monthly savings
-  // Urgency 1: 1.0x (spread evenly), Urgency 5: 1.5x (front-load savings)
-  const urgencyMultiplier = 1 + ((purchase.urgency - 1) / 4) * 0.5; // Range: 1.0 - 1.5
+  // Base monthly savings (what you need to save evenly per month)
   const baseMonthlySavings = amountRemaining / monthsRemaining;
-  const recommendedMonthlySavings = baseMonthlySavings * urgencyMultiplier;
 
-  // Determine if achievable
+  // URGENCY LOGIC - Front-loading based on urgency
+  // Urgency affects HOW you distribute savings across months, not the total amount
+  // Higher urgency = save more in early months, less in later months
+
+  let recommendedMonthlySavings = baseMonthlySavings;
+  let monthlyAllocationPlan: Array<{ month: number; amount: number }> = [];
+
+  if (purchase.urgency >= 4) {
+    // HIGH/CRITICAL urgency: Front-load 60-70% in first half
+    const frontLoadPercentage = purchase.urgency === 5 ? 0.7 : 0.6;
+    const firstHalfMonths = Math.ceil(monthsRemaining / 2);
+    const secondHalfMonths = monthsRemaining - firstHalfMonths;
+
+    const firstHalfAmount = amountRemaining * frontLoadPercentage;
+    const secondHalfAmount = amountRemaining - firstHalfAmount;
+
+    const firstMonthlyAmount = firstHalfAmount / firstHalfMonths;
+    const secondMonthlyAmount = secondHalfAmount / secondHalfMonths;
+
+    // First recommendation is for the immediate next month
+    recommendedMonthlySavings = firstMonthlyAmount;
+
+    // Build allocation plan
+    for (let i = 1; i <= firstHalfMonths; i++) {
+      monthlyAllocationPlan.push({ month: i, amount: firstMonthlyAmount });
+    }
+    for (let i = firstHalfMonths + 1; i <= monthsRemaining; i++) {
+      monthlyAllocationPlan.push({ month: i, amount: secondMonthlyAmount });
+    }
+  } else if (purchase.urgency >= 2) {
+    // MEDIUM urgency: Slight front-load (55%)
+    const frontLoadPercentage = 0.55;
+    const firstHalfMonths = Math.ceil(monthsRemaining / 2);
+    const secondHalfMonths = monthsRemaining - firstHalfMonths;
+
+    const firstHalfAmount = amountRemaining * frontLoadPercentage;
+    const secondHalfAmount = amountRemaining - firstHalfAmount;
+
+    const firstMonthlyAmount = firstHalfAmount / firstHalfMonths;
+    const secondMonthlyAmount = secondHalfAmount / secondHalfMonths;
+
+    recommendedMonthlySavings = firstMonthlyAmount;
+
+    for (let i = 1; i <= firstHalfMonths; i++) {
+      monthlyAllocationPlan.push({ month: i, amount: firstMonthlyAmount });
+    }
+    for (let i = firstHalfMonths + 1; i <= monthsRemaining; i++) {
+      monthlyAllocationPlan.push({ month: i, amount: secondMonthlyAmount });
+    }
+  } else {
+    // LOW urgency: Even distribution
+    recommendedMonthlySavings = baseMonthlySavings;
+    for (let i = 1; i <= monthsRemaining; i++) {
+      monthlyAllocationPlan.push({ month: i, amount: baseMonthlySavings });
+    }
+  }
+
+  // SMART ANALYSIS: Check against actual financial capacity
+  // 1. Can you afford this based on historical surplus?
   const isAchievable = averageMonthlySurplus >= recommendedMonthlySavings;
+
+  // 2. What % of your surplus will this consume?
   const surplusRatio =
     averageMonthlySurplus > 0
       ? recommendedMonthlySavings / averageMonthlySurplus
       : Infinity;
 
-  // Calculate confidence level
+  // 3. Risk assessment based on spending variance
+  // High variance = unstable finances = higher risk
+  const stabilityScore =
+    monthlyVariance > 0
+      ? Math.min(100, (averageMonthlySurplus / monthlyVariance) * 20)
+      : 100;
+
+  // 4. Calculate confidence level
   let confidenceLevel = 100;
-  if (surplusRatio > 1) confidenceLevel -= (surplusRatio - 1) * 50;
-  if (monthlyVariance > averageMonthlySurplus * 0.5) confidenceLevel -= 20;
-  if (trend === "decreasing") confidenceLevel -= 15;
+
+  // Penalize if you don't have enough surplus
+  if (surplusRatio > 1) {
+    confidenceLevel -= (surplusRatio - 1) * 50;
+  } else if (surplusRatio > 0.8) {
+    confidenceLevel -= 20; // Tight but possible
+  }
+
+  // Penalize if spending is volatile
+  if (stabilityScore < 50) {
+    confidenceLevel -= 30;
+  } else if (stabilityScore < 75) {
+    confidenceLevel -= 15;
+  }
+
+  // Penalize if trend is negative
+  if (trend === "decreasing") {
+    confidenceLevel -= 15;
+  } else if (trend === "increasing") {
+    confidenceLevel += 10; // Bonus for positive trend
+  }
+
   confidenceLevel = Math.max(0, Math.min(100, confidenceLevel));
 
-  // Determine risk level
+  // Determine risk level based on multiple factors
   let riskLevel: "low" | "medium" | "high" = "low";
-  if (surplusRatio > 0.8 || confidenceLevel < 50) riskLevel = "high";
-  else if (surplusRatio > 0.5 || confidenceLevel < 70) riskLevel = "medium";
 
-  // Generate suggestions
+  if (
+    !isAchievable ||
+    surplusRatio > 0.9 ||
+    confidenceLevel < 50 ||
+    stabilityScore < 50
+  ) {
+    riskLevel = "high";
+  } else if (
+    surplusRatio > 0.6 ||
+    confidenceLevel < 70 ||
+    stabilityScore < 75
+  ) {
+    riskLevel = "medium";
+  }
+
+  // Generate SMART suggestions based on actual analysis
   const suggestions: string[] = [];
+
   if (!isAchievable) {
+    const shortfall = recommendedMonthlySavings - averageMonthlySurplus;
     suggestions.push(
-      `Consider extending your target date or reducing the target amount`
+      `⚠️ You need $${recommendedMonthlySavings.toFixed(0)}/mo but only have $${averageMonthlySurplus.toFixed(0)} surplus. Short by $${shortfall.toFixed(0)}/mo`
+    );
+
+    // Suggest realistic alternatives
+    const affordableMonths = Math.ceil(
+      amountRemaining / (averageMonthlySurplus * 0.8)
+    ); // 80% of surplus
+    if (affordableMonths <= 12) {
+      suggestions.push(
+        `💡 Consider extending to ${affordableMonths} months for a comfortable $${(amountRemaining / affordableMonths).toFixed(0)}/mo`
+      );
+    }
+  } else if (surplusRatio > 0.7) {
+    suggestions.push(
+      `📊 This goal will use ${(surplusRatio * 100).toFixed(0)}% of your average surplus - leaves little room for unexpected expenses`
+    );
+  } else if (surplusRatio < 0.5) {
+    suggestions.push(
+      `✅ Great! This only uses ${(surplusRatio * 100).toFixed(0)}% of your surplus - very achievable`
     );
   }
-  if (surplusRatio > 0.7) {
+
+  if (stabilityScore < 75) {
     suggestions.push(
-      `This goal will use ${(surplusRatio * 100).toFixed(0)}% of your typical surplus`
+      `📉 Your monthly surplus varies by $${monthlyVariance.toFixed(0)} - consider a buffer of $${(monthlyVariance * 0.5).toFixed(0)}/mo`
     );
   }
-  if (monthlyVariance > averageMonthlySurplus * 0.3) {
+
+  if (purchase.urgency >= 4) {
+    const firstHalfTotal = monthlyAllocationPlan
+      .slice(0, Math.ceil(monthsRemaining / 2))
+      .reduce((sum, m) => sum + m.amount, 0);
     suggestions.push(
-      `Your monthly savings vary significantly - consider building a buffer`
+      `🚀 High urgency detected: Save $${monthlyAllocationPlan[0].amount.toFixed(0)}/mo initially (${((firstHalfTotal / amountRemaining) * 100).toFixed(0)}% in first half)`
     );
   }
-  if (purchase.urgency >= 4 && !isAchievable) {
-    suggestions.push(
-      `High urgency but challenging timeline - consider prioritizing this purchase`
-    );
-  }
+
   if (trend === "decreasing") {
     suggestions.push(
-      `Your surplus is trending down - monitor spending to stay on track`
+      `⚠️ Your surplus is declining - review your expenses to avoid falling short`
+    );
+  } else if (trend === "increasing") {
+    suggestions.push(
+      `📈 Your surplus is growing! You might reach this goal ahead of schedule`
     );
   }
 
-  // Project completion date based on current savings rate
+  // Suggest expense optimization opportunities
+  if (averageMonthlyExpense > averageMonthlyIncome * 0.7) {
+    const targetExpense = averageMonthlyIncome * 0.7;
+    const potentialSavings = averageMonthlyExpense - targetExpense;
+    suggestions.push(
+      `💰 Your expenses are ${((averageMonthlyExpense / averageMonthlyIncome) * 100).toFixed(0)}% of income. Reducing to 70% could free up $${potentialSavings.toFixed(0)}/mo`
+    );
+  }
+
+  // Project realistic completion date based on actual capacity
   let projectedCompletionDate: string | null = null;
   if (averageMonthlySurplus > 0) {
-    const monthsToComplete = Math.ceil(amountRemaining / averageMonthlySurplus);
+    // Use 80% of surplus for realistic projection (accounts for life happening)
+    const realisticMonthlySaving = averageMonthlySurplus * 0.8;
+    const monthsToComplete = Math.ceil(
+      amountRemaining / realisticMonthlySaving
+    );
     const projectedDate = new Date();
     projectedDate.setMonth(projectedDate.getMonth() + monthsToComplete);
     projectedCompletionDate = format(projectedDate, "yyyy-MM-dd");
+
+    if (monthsToComplete > monthsRemaining + 2) {
+      suggestions.push(
+        `📅 Based on your actual savings rate, you'll likely need ${monthsToComplete} months (vs ${monthsRemaining} target)`
+      );
+    }
   }
 
   const analysis: SavingsAnalysis = {

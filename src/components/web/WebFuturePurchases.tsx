@@ -638,27 +638,52 @@ function AddPurchaseModal({
   );
 
   // Calculate recommended monthly savings based on input
-  // Urgency affects how aggressively we recommend saving:
-  // Urgency 1: 1.0x (spread evenly), Urgency 5: 1.5x (front-load savings)
+  // Urgency affects HOW savings are distributed (front-loading), not the total
   const calculateRecommendation = () => {
     if (!targetAmount || !targetDate) return null;
     const amount = parseFloat(targetAmount);
     const months = differenceInMonths(new Date(targetDate), new Date());
     if (months <= 0) return null;
 
-    // Apply urgency multiplier: higher urgency = save more aggressively
-    const urgencyMultiplier = 1 + ((urgency - 1) / 4) * 0.5; // Range: 1.0 - 1.5
+    // Base savings (total / months)
     const baseMonthlySavings = amount / months;
-    const monthlySavings = baseMonthlySavings * urgencyMultiplier;
+
+    // Urgency-based allocation plan
+    let firstMonthSavings = baseMonthlySavings;
+    let laterMonthSavings = baseMonthlySavings;
+    let allocationDescription = "Evenly distributed";
+
+    if (urgency >= 4) {
+      // HIGH/CRITICAL: Front-load 60-70% in first half
+      const frontLoadPct = urgency === 5 ? 0.7 : 0.6;
+      const firstHalfMonths = Math.ceil(months / 2);
+      const secondHalfMonths = months - firstHalfMonths;
+
+      firstMonthSavings = (amount * frontLoadPct) / firstHalfMonths;
+      laterMonthSavings = (amount * (1 - frontLoadPct)) / secondHalfMonths;
+      allocationDescription = `${(frontLoadPct * 100).toFixed(0)}% in first ${firstHalfMonths} months`;
+    } else if (urgency >= 2) {
+      // MEDIUM: Slight front-load 55%
+      const frontLoadPct = 0.55;
+      const firstHalfMonths = Math.ceil(months / 2);
+      const secondHalfMonths = months - firstHalfMonths;
+
+      firstMonthSavings = (amount * frontLoadPct) / firstHalfMonths;
+      laterMonthSavings = (amount * (1 - frontLoadPct)) / secondHalfMonths;
+      allocationDescription = `55% in first ${firstHalfMonths} months`;
+    }
+
     const surplus = averageSurplus ?? 0;
-    const isFeasible = monthlySavings <= surplus;
+    const isFeasible = firstMonthSavings <= surplus;
 
     return {
-      monthlySavings,
+      firstMonthSavings,
+      laterMonthSavings,
       baseMonthlySavings,
       months,
       isFeasible,
-      urgencyMultiplier,
+      allocationDescription,
+      totalAmount: amount,
     };
   };
 
@@ -803,29 +828,52 @@ function AddPurchaseModal({
                   </div>
 
                   <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">Even distribution:</span>
+                    <span className="text-slate-500">
+                      ${recommendation.baseMonthlySavings.toFixed(2)}/mo
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-400">
-                      With urgency boost ({URGENCY_LABELS[urgency]}):
+                      {URGENCY_LABELS[urgency]} urgency plan:
                     </span>
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        recommendation.isFeasible
-                          ? "text-emerald-400"
-                          : "text-amber-400"
-                      )}
-                    >
-                      ${recommendation.monthlySavings.toFixed(2)}/mo
-                      {recommendation.urgencyMultiplier > 1 && (
-                        <span className="text-xs text-violet-400 ml-1">
-                          (+
-                          {(
-                            (recommendation.urgencyMultiplier - 1) *
-                            100
-                          ).toFixed(0)}
-                          %)
+                    <span className="text-violet-400 font-medium text-xs">
+                      {recommendation.allocationDescription}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 bg-slate-800/30 p-3 rounded-lg">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-400">
+                        First month{recommendation.months > 2 ? "s" : ""}:
+                      </span>
+                      <span
+                        className={cn(
+                          "font-semibold",
+                          recommendation.isFeasible
+                            ? "text-emerald-400"
+                            : "text-amber-400"
+                        )}
+                      >
+                        ${recommendation.firstMonthSavings.toFixed(2)}/mo
+                      </span>
+                    </div>
+                    {recommendation.firstMonthSavings !==
+                      recommendation.laterMonthSavings && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-400">Later months:</span>
+                        <span className="text-cyan-400 font-medium">
+                          ${recommendation.laterMonthSavings.toFixed(2)}/mo
                         </span>
-                      )}
-                    </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-700/50">
+                      <span className="text-slate-500">Total saved:</span>
+                      <span className="text-white font-medium">
+                        ${recommendation.totalAmount.toFixed(2)}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between text-sm">
@@ -881,6 +929,11 @@ function AddPurchaseModal({
                 </button>
               ))}
             </div>
+            {urgency >= 4 && (
+              <p className="text-xs text-violet-400 mt-2">
+                💡 High urgency = save more upfront to reach your goal faster
+              </p>
+            )}
           </div>
 
           {/* Icon Selection */}
