@@ -72,11 +72,30 @@ export function parseStatementText(
     // We need to identify which column has the transaction amount
 
     const amounts = restOfLine.match(amountPattern) || [];
+
+    // Also check for negative amounts (like bank charges: -1.99)
+    const negativeAmountPattern = /-[\d,]+\.?\d*/g;
+    const negativeAmounts = restOfLine.match(negativeAmountPattern) || [];
+
+    // Parse positive amounts
     const numericAmounts = amounts
       .map((a) => parseFloat(a.replace(/,/g, "")))
       .filter((a) => !isNaN(a) && a > 0);
 
-    if (numericAmounts.length === 0) continue;
+    // Parse negative amounts and convert to positive (they're expenses/charges)
+    const numericNegativeAmounts = negativeAmounts
+      .map((a) => Math.abs(parseFloat(a.replace(/,/g, ""))))
+      .filter((a) => !isNaN(a) && a > 0);
+
+    // Combine: prefer positive amounts, but include negatives converted to positive
+    const allAmounts =
+      numericAmounts.length > 0 ? numericAmounts : numericNegativeAmounts;
+
+    // Track if this was originally a negative (bank charge, fee, etc.)
+    const wasNegative =
+      numericAmounts.length === 0 && numericNegativeAmounts.length > 0;
+
+    if (allAmounts.length === 0) continue;
 
     // Extract description (text before the first amount)
     const firstAmountIndex = restOfLine.search(amountPattern);
@@ -92,12 +111,14 @@ export function parseStatementText(
 
     // Determine if debit or credit based on position or keywords
     // This is bank-specific - adjust based on your statement format
+    // Negative amounts in statements are always debits (charges/fees)
     const isCredit =
-      restOfLine.toLowerCase().includes("cr") ||
-      (numericAmounts.length >= 2 && amounts[1] !== "");
+      !wasNegative &&
+      (restOfLine.toLowerCase().includes("cr") ||
+        (allAmounts.length >= 2 && amounts[1] !== ""));
 
     // Take the first non-balance amount (usually the transaction amount)
-    const amount = numericAmounts[0];
+    const amount = allAmounts[0];
 
     // Parse the date
     const parsedDate = parseDate(dateStr);

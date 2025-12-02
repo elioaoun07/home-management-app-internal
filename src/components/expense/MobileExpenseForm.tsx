@@ -219,7 +219,13 @@ export default function MobileExpenseForm() {
           lastSavedAccountsRef.current = null;
           return;
         }
-        setOrderedAccounts(accountsWithHidden);
+        // Only update if content actually changed to prevent infinite loops
+        setOrderedAccounts((prev) => {
+          const prevIds = prev.map((a) => a.id).join(",");
+          const newIds = accountsWithHidden.map((a: any) => a.id).join(",");
+          if (prevIds === newIds) return prev;
+          return accountsWithHidden;
+        });
         setAccountsOrderChanged(false);
       }
     } else if (accounts.length > 0 && !accountsSaving) {
@@ -228,7 +234,13 @@ export default function MobileExpenseForm() {
         lastSavedAccountsRef.current = null;
         return;
       }
-      setOrderedAccounts(accounts);
+      // Only update if content actually changed to prevent infinite loops
+      setOrderedAccounts((prev) => {
+        const prevIds = prev.map((a) => a.id).join(",");
+        const newIds = accounts.map((a: any) => a.id).join(",");
+        if (prevIds === newIds) return prev;
+        return accounts;
+      });
       setAccountsOrderChanged(false);
     }
   }, [accounts, accountsWithHidden, editModeAccount, accountsSaving]);
@@ -245,7 +257,13 @@ export default function MobileExpenseForm() {
           lastSavedCategoriesRef.current = null;
           return;
         }
-        setOrderedCategories(rootCats);
+        // Only update if content actually changed to prevent infinite loops
+        setOrderedCategories((prev) => {
+          const prevIds = prev.map((c) => c.id).join(",");
+          const newIds = rootCats.map((c: any) => c.id).join(",");
+          if (prevIds === newIds) return prev;
+          return rootCats;
+        });
         setCategoriesOrderChanged(false);
       }
     }
@@ -273,7 +291,13 @@ export default function MobileExpenseForm() {
           lastSavedSubcategoriesRef.current = null;
           return;
         }
-        setOrderedSubcategories(newSubs);
+        // Only update if content actually changed to prevent infinite loops
+        setOrderedSubcategories((prev) => {
+          const prevIds = prev.map((s) => s.id).join(",");
+          const newIds = newSubs.map((s: any) => s.id).join(",");
+          if (prevIds === newIds) return prev;
+          return newSubs;
+        });
         setSubcategoriesOrderChanged(false);
       } else {
         // Only clear if not already empty to avoid infinite loop

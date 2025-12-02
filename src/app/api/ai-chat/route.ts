@@ -19,6 +19,7 @@ interface ChatRequest {
   chatHistory?: ChatMessage[];
   includeContext?: boolean;
   sessionId?: string;
+  parentMessageId?: string; // For branching
 }
 
 /**
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
       chatHistory = [],
       includeContext = true,
       sessionId,
+      parentMessageId,
     } = body;
 
     if (!message || typeof message !== "string") {
@@ -108,16 +110,17 @@ export async function POST(req: NextRequest) {
     const outputTokensEstimate = estimateTokens(response);
     const totalTokensEstimate = inputTokensEstimate + outputTokensEstimate;
 
-    // Log the conversation to database
-    await logChatToDatabase(supabase, {
+    // Log messages to new ai_messages table
+    const messageIds = await logMessagesToDatabase(supabase, {
       userId: user.id,
+      sessionId: sessionId || `session_${Date.now()}`,
       userMessage: message,
       assistantResponse: response,
       inputTokens: inputTokensEstimate,
       outputTokens: outputTokensEstimate,
       includedBudgetContext: includeContext && !!budgetContext,
-      sessionId: sessionId || null,
       responseTimeMs: responseTime,
+      parentMessageId: parentMessageId || null,
     });
 
     // Calculate updated usage
@@ -126,6 +129,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       message: response,
       timestamp: new Date().toISOString(),
+      messageIds, // Return the new message IDs for reference
       usage: {
         requestTokens: totalTokensEstimate,
         inputTokens: inputTokensEstimate,
@@ -175,35 +179,47 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const sessionId = searchParams.get("sessionId");
-    const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const limit = parseInt(searchParams.get("limit") || "100", 10);
 
-    // Get chat history
-    let query = supabase
-      .from("ai_chat_logs")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(limit);
+    // Try new ai_messages table first, fall back to ai_chat_logs
+    let messages: Array<{
+      id: string;
+      role: string;
+      content: string;
+      created_at: string;
+      input_tokens?: number;
+      output_tokens?: number;
+      is_edited?: boolean;
+    }> = [];
 
     if (sessionId) {
-      query = query.eq("session_id", sessionId);
+      // Query from ai_messages table
+      const { data: newMessages, error: newError } = await supabase
+        .from("ai_messages")
+        .select(
+          "id, role, content, created_at, input_tokens, output_tokens, is_edited, sequence_num"
+        )
+        .eq("user_id", user.id)
+        .eq("session_id", sessionId)
+        .eq("is_active", true)
+        .order("sequence_num", { ascending: true })
+        .order("created_at", { ascending: true })
+        .limit(limit);
+
+      if (newError) {
+        console.error("Failed to fetch messages:", newError);
+      } else if (newMessages) {
+        messages = newMessages;
+      }
     }
 
-    const { data: chatHistory, error } = await query;
-
-    if (error) {
-      console.error("Failed to fetch chat history:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch chat history" },
-        { status: 500 }
-      );
-    }
-
-    // Get monthly usage
+    // Get monthly usage (from both tables)
     const monthlyUsage = await getMonthlyTokenUsage(supabase, user.id);
 
     return NextResponse.json({
-      chatHistory: chatHistory || [],
+      messages,
+      // Keep chatHistory for backward compatibility
+      chatHistory: messages,
       usage: {
         monthlyUsed: monthlyUsage,
         monthlyLimit: MONTHLY_TOKEN_LIMIT,
@@ -222,44 +238,192 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * Log chat conversation to database
+ * PATCH /api/ai-chat
+ * Edit a message or regenerate a response
  */
-async function logChatToDatabase(
+export async function PATCH(req: NextRequest) {
+  try {
+    const supabase = await supabaseServer(await cookies());
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { messageId, action, newContent } = body;
+
+    if (!messageId) {
+      return NextResponse.json(
+        { error: "Message ID is required" },
+        { status: 400 }
+      );
+    }
+
+    if (action === "edit" && newContent) {
+      // Get original message
+      const { data: original } = await supabase
+        .from("ai_messages")
+        .select("content")
+        .eq("id", messageId)
+        .eq("user_id", user.id)
+        .single();
+
+      // Update the message
+      const { error } = await supabase
+        .from("ai_messages")
+        .update({
+          content: newContent,
+          is_edited: true,
+          edited_at: new Date().toISOString(),
+          original_content: original?.content || null,
+        })
+        .eq("id", messageId)
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("Failed to edit message:", error);
+        return NextResponse.json(
+          { error: "Failed to edit message" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === "deactivate") {
+      // Mark message and all subsequent messages as inactive (for regeneration)
+      const { data: message } = await supabase
+        .from("ai_messages")
+        .select("session_id, sequence_num")
+        .eq("id", messageId)
+        .eq("user_id", user.id)
+        .single();
+
+      if (message) {
+        await supabase
+          .from("ai_messages")
+          .update({ is_active: false })
+          .eq("session_id", message.session_id)
+          .eq("user_id", user.id)
+          .gte("sequence_num", message.sequence_num);
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  } catch (error) {
+    console.error("AI Chat PATCH error:", error);
+    return NextResponse.json(
+      { error: "Failed to update message" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Log messages to the new ai_messages table
+ */
+async function logMessagesToDatabase(
   supabase: Awaited<ReturnType<typeof supabaseServer>>,
   data: {
     userId: string;
+    sessionId: string;
     userMessage: string;
     assistantResponse: string;
     inputTokens: number;
     outputTokens: number;
     includedBudgetContext: boolean;
-    sessionId: string | null;
     responseTimeMs: number;
+    parentMessageId: string | null;
   }
-) {
+): Promise<{
+  userMessageId: string | null;
+  assistantMessageId: string | null;
+}> {
   try {
-    const { error } = await supabase.from("ai_chat_logs").insert({
-      user_id: data.userId,
-      user_message: data.userMessage,
-      assistant_response: data.assistantResponse,
-      input_tokens: data.inputTokens,
-      output_tokens: data.outputTokens,
-      included_budget_context: data.includedBudgetContext,
-      session_id: data.sessionId,
-      response_time_ms: data.responseTimeMs,
-    });
+    // Ensure session exists
+    await supabase.from("ai_sessions").upsert(
+      {
+        id: data.sessionId,
+        user_id: data.userId,
+        title:
+          data.userMessage.slice(0, 50) +
+          (data.userMessage.length > 50 ? "..." : ""),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    );
 
-    if (error) {
-      console.error("Failed to log chat to database:", error);
-      // Don't throw - logging failure shouldn't break the chat
+    // Get the next sequence number
+    const { data: lastMessage } = await supabase
+      .from("ai_messages")
+      .select("sequence_num")
+      .eq("session_id", data.sessionId)
+      .eq("user_id", data.userId)
+      .order("sequence_num", { ascending: false })
+      .limit(1)
+      .single();
+
+    const nextSeq = (lastMessage?.sequence_num || 0) + 1;
+
+    // Insert user message
+    const { data: userMsg, error: userError } = await supabase
+      .from("ai_messages")
+      .insert({
+        user_id: data.userId,
+        session_id: data.sessionId,
+        role: "user",
+        content: data.userMessage,
+        parent_id: data.parentMessageId,
+        sequence_num: nextSeq,
+        input_tokens: data.inputTokens,
+      })
+      .select("id")
+      .single();
+
+    if (userError) {
+      console.error("Failed to insert user message:", userError);
+      return { userMessageId: null, assistantMessageId: null };
     }
+
+    // Insert assistant message
+    const { data: assistantMsg, error: assistantError } = await supabase
+      .from("ai_messages")
+      .insert({
+        user_id: data.userId,
+        session_id: data.sessionId,
+        role: "assistant",
+        content: data.assistantResponse,
+        parent_id: userMsg.id,
+        sequence_num: nextSeq + 1,
+        output_tokens: data.outputTokens,
+        included_budget_context: data.includedBudgetContext,
+        response_time_ms: data.responseTimeMs,
+      })
+      .select("id")
+      .single();
+
+    if (assistantError) {
+      console.error("Failed to insert assistant message:", assistantError);
+    }
+
+    return {
+      userMessageId: userMsg?.id || null,
+      assistantMessageId: assistantMsg?.id || null,
+    };
   } catch (error) {
-    console.error("Failed to log chat:", error);
+    console.error("Failed to log messages:", error);
+    return { userMessageId: null, assistantMessageId: null };
   }
 }
 
 /**
- * Get monthly token usage for a user
+ * Get monthly token usage for a user (from ai_messages table)
  */
 async function getMonthlyTokenUsage(
   supabase: Awaited<ReturnType<typeof supabaseServer>>,
@@ -273,10 +437,13 @@ async function getMonthlyTokenUsage(
       1
     ).toISOString();
 
+    // Try using total_tokens column first (if migration applied)
+    // Fall back to summing input_tokens + output_tokens
     const { data, error } = await supabase
-      .from("ai_chat_logs")
+      .from("ai_messages")
       .select("input_tokens, output_tokens")
       .eq("user_id", userId)
+      .eq("is_active", true)
       .gte("created_at", startOfMonth);
 
     if (error) {
@@ -284,10 +451,12 @@ async function getMonthlyTokenUsage(
       return 0;
     }
 
-    return (data || []).reduce(
-      (sum, row) => sum + (row.input_tokens || 0) + (row.output_tokens || 0),
-      0
-    );
+    // Sum all tokens (input + output) from all messages
+    return (data || []).reduce((sum, row) => {
+      const input = row.input_tokens || 0;
+      const output = row.output_tokens || 0;
+      return sum + input + output;
+    }, 0);
   } catch (error) {
     console.error("Failed to get monthly usage:", error);
     return 0;
@@ -323,10 +492,18 @@ async function fetchBudgetContext(
   // Fetch user's accounts
   const { data: accounts } = await supabase
     .from("accounts")
-    .select("id")
+    .select("id, name, type")
     .eq("user_id", userId);
 
   const accountIds = (accounts || []).map((a) => a.id);
+
+  // Separate expense and income account IDs for proper categorization
+  const expenseAccountIds = new Set(
+    (accounts || []).filter((a) => a.type === "expense").map((a) => a.id)
+  );
+  const incomeAccountIds = new Set(
+    (accounts || []).filter((a) => a.type === "income").map((a) => a.id)
+  );
 
   if (accountIds.length === 0) {
     return {
@@ -337,6 +514,90 @@ async function fetchBudgetContext(
       recentTransactions: [],
       currentMonth,
     };
+  }
+
+  // Fetch account balances (try account_balances table first)
+  let accountBalances: Record<string, number> = {};
+  try {
+    const { data: balances } = await supabase
+      .from("account_balances")
+      .select("account_id, balance")
+      .in("account_id", accountIds);
+
+    if (balances) {
+      balances.forEach((b) => {
+        accountBalances[b.account_id] = b.balance;
+      });
+    }
+  } catch (error) {
+    console.warn("Could not fetch account balances:", error);
+  }
+
+  const accountsWithBalances = (accounts || []).map((a) => ({
+    name: a.name,
+    type: a.type,
+    balance: accountBalances[a.id] || 0,
+  }));
+
+  // Fetch recurring payments
+  let recurringPayments: BudgetContext["recurringPayments"] = [];
+  try {
+    const { data: recurring } = await supabase
+      .from("recurring_payments")
+      .select("name, amount, recurrence_type, next_due_date")
+      .eq("user_id", userId)
+      .eq("is_active", true);
+
+    if (recurring) {
+      recurringPayments = recurring.map((r) => ({
+        name: r.name,
+        amount: r.amount,
+        recurrence: r.recurrence_type,
+        nextDue: r.next_due_date,
+      }));
+    }
+  } catch (error) {
+    console.warn("Could not fetch recurring payments:", error);
+  }
+
+  // Fetch future purchases
+  let futurePurchases: BudgetContext["futurePurchases"] = [];
+  try {
+    const { data: future } = await supabase
+      .from("future_purchases")
+      .select("name, target_amount, current_saved, target_date")
+      .eq("user_id", userId)
+      .neq("status", "cancelled");
+
+    if (future) {
+      futurePurchases = future.map((f) => ({
+        name: f.name,
+        targetAmount: f.target_amount,
+        saved: f.current_saved,
+        targetDate: f.target_date,
+      }));
+    }
+  } catch (error) {
+    console.warn("Could not fetch future purchases:", error);
+  }
+
+  // Fetch draft transactions
+  let draftTransactions: BudgetContext["draftTransactions"] = [];
+  try {
+    const { data: drafts } = await supabase
+      .from("transactions")
+      .select("voice_transcript, confidence_score")
+      .eq("user_id", userId)
+      .eq("is_draft", true);
+
+    if (drafts) {
+      draftTransactions = drafts.map((d) => ({
+        transcript: d.voice_transcript || "Unknown draft",
+        confidence: d.confidence_score || 0,
+      }));
+    }
+  } catch (error) {
+    console.warn("Could not fetch draft transactions:", error);
   }
 
   // Fetch budget allocations
@@ -356,7 +617,7 @@ async function fetchBudgetContext(
   // Fetch current month transactions
   const { data: transactions } = await supabase
     .from("transactions")
-    .select("amount, category_id, description, date")
+    .select("amount, category_id, description, date, account_id")
     .in("account_id", accountIds)
     .gte("date", startDate)
     .lte("date", endDate)
@@ -365,29 +626,57 @@ async function fetchBudgetContext(
   // Fetch LAST MONTH transactions
   const { data: lastMonthTransactions } = await supabase
     .from("transactions")
-    .select("amount, category_id, description, date")
+    .select("amount, category_id, description, date, account_id")
     .in("account_id", accountIds)
     .gte("date", lastMonthStart)
     .lte("date", lastMonthEnd)
     .order("date", { ascending: false });
 
-  // Calculate spending by category (current month)
+  // Separate expense and income transactions (current month)
+  const expenseTransactions = (transactions || []).filter((tx) =>
+    expenseAccountIds.has(tx.account_id)
+  );
+  const incomeTransactions = (transactions || []).filter((tx) =>
+    incomeAccountIds.has(tx.account_id)
+  );
+
+  // Separate expense and income transactions (last month)
+  const lastMonthExpenseTransactions = (lastMonthTransactions || []).filter(
+    (tx) => expenseAccountIds.has(tx.account_id)
+  );
+  const lastMonthIncomeTransactions = (lastMonthTransactions || []).filter(
+    (tx) => incomeAccountIds.has(tx.account_id)
+  );
+
+  // Calculate spending by category (current month - EXPENSES ONLY)
   const categorySpending: Record<string, number> = {};
-  (transactions || []).forEach((tx) => {
+  expenseTransactions.forEach((tx) => {
     if (tx.category_id) {
       categorySpending[tx.category_id] =
         (categorySpending[tx.category_id] || 0) + tx.amount;
     }
   });
 
-  // Calculate spending by category (last month)
+  // Calculate spending by category (last month - EXPENSES ONLY)
   const lastMonthCategorySpending: Record<string, number> = {};
-  (lastMonthTransactions || []).forEach((tx) => {
+  lastMonthExpenseTransactions.forEach((tx) => {
     if (tx.category_id) {
       lastMonthCategorySpending[tx.category_id] =
         (lastMonthCategorySpending[tx.category_id] || 0) + tx.amount;
     }
   });
+
+  // Calculate total income (current month)
+  const totalIncome = incomeTransactions.reduce(
+    (sum, tx) => sum + tx.amount,
+    0
+  );
+
+  // Calculate total income (last month)
+  const lastMonthTotalIncome = lastMonthIncomeTransactions.reduce(
+    (sum, tx) => sum + tx.amount,
+    0
+  );
 
   // Build category budget info
   const categoryBudgets: Record<string, number> = {};
@@ -420,7 +709,7 @@ async function fetchBudgetContext(
       spent: lastMonthCategorySpending[cat.id] || 0,
     }));
 
-  // Calculate totals
+  // Calculate totals (EXPENSES ONLY for spending)
   const totalBudget = categoriesArray.reduce((sum, c) => sum + c.budget, 0);
   const totalSpent = categoriesArray.reduce((sum, c) => sum + c.spent, 0);
   const lastMonthTotalSpent = lastMonthCategoriesArray.reduce(
@@ -428,16 +717,26 @@ async function fetchBudgetContext(
     0
   );
 
-  // Format recent transactions (current month)
-  const recentTransactions = (transactions || []).slice(0, 10).map((tx) => ({
+  // Format recent transactions (current month - EXPENSES ONLY with clear labeling)
+  const recentExpenseTransactions = expenseTransactions
+    .slice(0, 10)
+    .map((tx) => ({
+      description: tx.description || "Unknown",
+      amount: tx.amount,
+      category: categoryNames[tx.category_id] || "Uncategorized",
+      date: tx.date,
+    }));
+
+  // Format recent income transactions (current month)
+  const recentIncomeTransactions = incomeTransactions.slice(0, 5).map((tx) => ({
     description: tx.description || "Unknown",
     amount: tx.amount,
-    category: categoryNames[tx.category_id] || "Uncategorized",
+    category: categoryNames[tx.category_id] || "Income",
     date: tx.date,
   }));
 
-  // Format last month transactions
-  const lastMonthFormattedTransactions = (lastMonthTransactions || [])
+  // Format last month transactions (EXPENSES ONLY)
+  const lastMonthFormattedTransactions = lastMonthExpenseTransactions
     .slice(0, 15)
     .map((tx) => ({
       description: tx.description || "Unknown",
@@ -446,19 +745,38 @@ async function fetchBudgetContext(
       date: tx.date,
     }));
 
+  // Format last month income transactions
+  const lastMonthFormattedIncomeTransactions = lastMonthIncomeTransactions
+    .slice(0, 5)
+    .map((tx) => ({
+      description: tx.description || "Unknown",
+      amount: tx.amount,
+      category: categoryNames[tx.category_id] || "Income",
+      date: tx.date,
+    }));
+
   return {
     totalBudget,
     totalSpent,
     totalRemaining: totalBudget - totalSpent,
     categories: categoriesArray,
-    recentTransactions,
+    recentTransactions: recentExpenseTransactions,
     currentMonth,
+    // Include income data
+    totalIncome,
+    recentIncomeTransactions,
     // Include last month data
     lastMonth: {
       month: lastMonth,
       totalSpent: lastMonthTotalSpent,
+      totalIncome: lastMonthTotalIncome,
       categories: lastMonthCategoriesArray,
       transactions: lastMonthFormattedTransactions,
+      incomeTransactions: lastMonthFormattedIncomeTransactions,
     },
+    recurringPayments,
+    futurePurchases,
+    accounts: accountsWithBalances,
+    draftTransactions,
   };
 }

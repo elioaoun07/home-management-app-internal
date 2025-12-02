@@ -7,13 +7,13 @@ import {
   ArrowDownRightIcon,
   ArrowUpRightIcon,
   BarChart3Icon,
+  ChevronDownIcon,
   DollarSignIcon,
   FilterIcon,
   ListIcon,
   RefreshIcon,
   StarIcon,
   TrendingUpIcon,
-  XIcon,
 } from "@/components/icons/FuturisticIcons";
 import { Card } from "@/components/ui/card";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -30,10 +30,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   endOfMonth,
   endOfWeek,
+  endOfYear,
   format,
   startOfMonth,
   startOfWeek,
+  startOfYear,
   subDays,
+  subMonths,
+  subYears,
 } from "date-fns";
 import { memo, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -99,20 +103,6 @@ const CalendarIcon = ({ className }: { className?: string }) => (
     <line x1="16" x2="16" y1="2" y2="6" />
     <line x1="8" x2="8" y1="2" y2="6" />
     <line x1="3" x2="21" y1="10" y2="10" />
-  </svg>
-);
-
-const ChevronDownIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="m6 9 6 6 6-6" />
   </svg>
 );
 
@@ -511,20 +501,33 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
         {/* Expandable Filters Panel */}
         {showFilters && (
           <div className="px-3 pb-3 space-y-3 animate-in slide-in-from-top-2 duration-200 border-t border-white/5">
-            {/* Date Quick Filters */}
+            {/* Date Quick Filters - Horizontal scroll for mobile */}
             <div className="pt-3">
               <div
-                className={`text-[10px] uppercase tracking-wider ${themeClasses.textMuted} mb-2`}
+                className={`text-[10px] uppercase tracking-wider ${themeClasses.textMuted} mb-2 flex items-center justify-between`}
               >
-                Date Range
+                <span>Date Range</span>
+                <span
+                  className={`text-[9px] ${themeClasses.textMuted} normal-case tracking-normal`}
+                >
+                  {format(new Date(startDate), "MMM d")} -{" "}
+                  {format(new Date(endDate), "MMM d")}
+                </span>
               </div>
               <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
                 {[
                   {
                     label: "Today",
                     getValue: () => {
-                      const today = format(new Date(), "yyyy-MM-dd");
-                      return { start: today, end: today };
+                      const t = format(new Date(), "yyyy-MM-dd");
+                      return { start: t, end: t };
+                    },
+                  },
+                  {
+                    label: "Yesterday",
+                    getValue: () => {
+                      const y = format(subDays(new Date(), 1), "yyyy-MM-dd");
+                      return { start: y, end: y };
                     },
                   },
                   {
@@ -541,6 +544,22 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     }),
                   },
                   {
+                    label: "Last Week",
+                    getValue: () => {
+                      const lw = subDays(new Date(), 7);
+                      return {
+                        start: format(
+                          startOfWeek(lw, { weekStartsOn: 1 }),
+                          "yyyy-MM-dd"
+                        ),
+                        end: format(
+                          endOfWeek(lw, { weekStartsOn: 1 }),
+                          "yyyy-MM-dd"
+                        ),
+                      };
+                    },
+                  },
+                  {
                     label: "This Month",
                     getValue: () => ({
                       start: format(startOfMonth(new Date()), "yyyy-MM-dd"),
@@ -548,18 +567,41 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     }),
                   },
                   {
-                    label: "Last 7 Days",
+                    label: "Last Month",
+                    getValue: () => {
+                      const lm = subMonths(new Date(), 1);
+                      return {
+                        start: format(startOfMonth(lm), "yyyy-MM-dd"),
+                        end: format(endOfMonth(lm), "yyyy-MM-dd"),
+                      };
+                    },
+                  },
+                  {
+                    label: "3 Months",
                     getValue: () => ({
-                      start: format(subDays(new Date(), 7), "yyyy-MM-dd"),
-                      end: format(new Date(), "yyyy-MM-dd"),
+                      start: format(
+                        startOfMonth(subMonths(new Date(), 2)),
+                        "yyyy-MM-dd"
+                      ),
+                      end: format(endOfMonth(new Date()), "yyyy-MM-dd"),
                     }),
                   },
                   {
-                    label: "Last 30 Days",
+                    label: "This Year",
                     getValue: () => ({
-                      start: format(subDays(new Date(), 30), "yyyy-MM-dd"),
-                      end: format(new Date(), "yyyy-MM-dd"),
+                      start: format(startOfYear(new Date()), "yyyy-MM-dd"),
+                      end: format(endOfYear(new Date()), "yyyy-MM-dd"),
                     }),
+                  },
+                  {
+                    label: "Last Year",
+                    getValue: () => {
+                      const ly = subYears(new Date(), 1);
+                      return {
+                        start: format(startOfYear(ly), "yyyy-MM-dd"),
+                        end: format(endOfYear(ly), "yyyy-MM-dd"),
+                      };
+                    },
                   },
                 ].map((preset) => {
                   const range = preset.getValue();
@@ -572,7 +614,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                         onDateRangeChange?.(range.start, range.end)
                       }
                       className={cn(
-                        "px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all",
+                        "px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-all flex-shrink-0",
                         isActive
                           ? `neo-gradient text-white shadow-sm`
                           : `neo-card ${themeClasses.text} hover:bg-white/5`
@@ -583,25 +625,16 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                   );
                 })}
               </div>
-              <div className={`text-[10px] ${themeClasses.textMuted} mt-2`}>
-                <CalendarIcon className="w-3 h-3 inline mr-1" />
-                {format(new Date(startDate), "MMM d")} -{" "}
-                {format(new Date(endDate), "MMM d, yyyy")}
-              </div>
             </div>
 
-            {/* Category & Account Filters */}
-            <div>
-              <div
-                className={`text-[10px] uppercase tracking-wider ${themeClasses.textMuted} mb-2`}
-              >
-                Filters
-              </div>
-              <div className="flex gap-2">
+            {/* Category & Account Filters - Native selects with better styling */}
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
                 <select
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
-                  className={`flex-1 px-3 py-2 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-xs ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all appearance-none`}
+                  className={`w-full px-3 py-2.5 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-xs ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all appearance-none pr-8`}
+                  style={{ WebkitAppearance: "none", MozAppearance: "none" }}
                 >
                   <option value="">All Categories</option>
                   {categories.map((cat) => (
@@ -610,10 +643,14 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     </option>
                   ))}
                 </select>
+                <ChevronDownIcon className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+              <div className="flex-1 relative">
                 <select
                   value={filterAccount}
                   onChange={(e) => setFilterAccount(e.target.value)}
-                  className={`flex-1 px-3 py-2 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-xs ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all appearance-none`}
+                  className={`w-full px-3 py-2.5 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-xs ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all appearance-none pr-8`}
+                  style={{ WebkitAppearance: "none", MozAppearance: "none" }}
                 >
                   <option value="">All Accounts</option>
                   {accountNames.map((acc) => (
@@ -622,59 +659,49 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     </option>
                   ))}
                 </select>
+                <ChevronDownIcon className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
             </div>
 
-            {/* Sort Options */}
-            <div>
-              <div
-                className={`text-[10px] uppercase tracking-wider ${themeClasses.textMuted} mb-2`}
-              >
-                Sort By
+            {/* Sort & Clear Row */}
+            <div className="flex items-center justify-between">
+              <div className="flex gap-1">
+                {(["recent", "date", "amount"] as SortField[]).map((field) => (
+                  <button
+                    key={field}
+                    onClick={() => toggleSort(field)}
+                    className={cn(
+                      "px-2 py-1 rounded text-[10px] font-medium flex items-center gap-0.5 transition-all",
+                      sortField === field
+                        ? `${themeClasses.bgActive} ${themeClasses.textActive}`
+                        : `${themeClasses.textMuted} hover:bg-white/5`
+                    )}
+                  >
+                    {field === "recent"
+                      ? "Recent"
+                      : field.charAt(0).toUpperCase() + field.slice(1)}
+                    {sortField === field &&
+                      (sortOrder === "asc" ? (
+                        <ArrowUpRightIcon className="w-2.5 h-2.5" />
+                      ) : (
+                        <ArrowDownRightIcon className="w-2.5 h-2.5" />
+                      ))}
+                  </button>
+                ))}
               </div>
-              <div className="flex gap-1.5 flex-wrap">
-                {(["recent", "date", "amount", "category"] as SortField[]).map(
-                  (field) => (
-                    <button
-                      key={field}
-                      onClick={() => toggleSort(field)}
-                      className={cn(
-                        "px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 transition-all",
-                        sortField === field
-                          ? `${themeClasses.bgActive} ${themeClasses.textActive}`
-                          : `neo-card ${themeClasses.text} hover:bg-white/5`
-                      )}
-                    >
-                      {field === "recent"
-                        ? "Recent"
-                        : field.charAt(0).toUpperCase() + field.slice(1)}
-                      {sortField === field &&
-                        (sortOrder === "asc" ? (
-                          <ArrowUpRightIcon className="w-3 h-3" />
-                        ) : (
-                          <ArrowDownRightIcon className="w-3 h-3" />
-                        ))}
-                    </button>
-                  )
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] ${themeClasses.textMuted}`}>
+                  {filteredTransactions.length}/{transactions.length}
+                </span>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="text-[10px] text-red-400 hover:text-red-300"
+                  >
+                    Clear
+                  </button>
                 )}
               </div>
-            </div>
-
-            {/* Results & Clear */}
-            <div className="flex items-center justify-between pt-2 border-t border-white/5">
-              <span className={`text-xs ${themeClasses.textMuted}`}>
-                {filteredTransactions.length} of {transactions.length}{" "}
-                transactions
-              </span>
-              {hasActiveFilters && (
-                <button
-                  onClick={clearFilters}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-xs text-red-400 hover:bg-red-500/10 transition-all"
-                >
-                  <XIcon className="w-3 h-3" />
-                  Clear All
-                </button>
-              )}
             </div>
           </div>
         )}

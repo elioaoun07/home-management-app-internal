@@ -23,8 +23,58 @@ CREATE TABLE public.accounts (
   country_code text,
   location_name text,
   position integer NOT NULL DEFAULT 0,
+  visible boolean NOT NULL DEFAULT true,
   CONSTRAINT accounts_pkey PRIMARY KEY (id),
   CONSTRAINT accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.ai_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  session_id text NOT NULL,
+  role text NOT NULL CHECK (role = ANY (ARRAY['user'::text, 'assistant'::text, 'system'::text])),
+  content text NOT NULL,
+  parent_id uuid,
+  sequence_num integer NOT NULL DEFAULT 0,
+  input_tokens integer DEFAULT 0,
+  output_tokens integer DEFAULT 0,
+  included_budget_context boolean DEFAULT false,
+  model_used text DEFAULT 'gemini-2.0-flash'::text,
+  response_time_ms integer,
+  is_edited boolean DEFAULT false,
+  edited_at timestamp with time zone,
+  original_content text,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT ai_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT ai_messages_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.ai_messages(id)
+);
+CREATE TABLE public.ai_sessions (
+  id text NOT NULL,
+  user_id uuid NOT NULL,
+  title text NOT NULL DEFAULT 'New Conversation'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  is_archived boolean DEFAULT false,
+  CONSTRAINT ai_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.budget_allocations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  assigned_to text NOT NULL DEFAULT 'both'::text CHECK (assigned_to = ANY (ARRAY['user'::text, 'partner'::text, 'both'::text])),
+  category_id uuid NOT NULL,
+  subcategory_id uuid,
+  account_id uuid NOT NULL,
+  monthly_budget numeric NOT NULL DEFAULT 0 CHECK (monthly_budget >= 0::numeric),
+  budget_month text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT budget_allocations_pkey PRIMARY KEY (id),
+  CONSTRAINT budget_allocations_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT budget_allocations_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
+  CONSTRAINT budget_allocations_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
+  CONSTRAINT budget_allocations_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
 CREATE TABLE public.default_categories (
   id uuid NOT NULL,
@@ -62,6 +112,26 @@ CREATE TABLE public.events (
   user_id uuid,
   CONSTRAINT events_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.future_purchases (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  target_amount numeric NOT NULL CHECK (target_amount > 0::numeric),
+  current_saved numeric NOT NULL DEFAULT 0 CHECK (current_saved >= 0::numeric),
+  urgency integer NOT NULL DEFAULT 3 CHECK (urgency >= 1 AND urgency <= 5),
+  target_date date NOT NULL,
+  recommended_monthly_savings numeric DEFAULT 0,
+  icon text DEFAULT 'package'::text,
+  color text DEFAULT '#38bdf8'::text,
+  status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'completed'::text, 'cancelled'::text, 'paused'::text])),
+  allocations jsonb DEFAULT '[]'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  completed_at timestamp with time zone,
+  CONSTRAINT future_purchases_pkey PRIMARY KEY (id),
+  CONSTRAINT future_purchases_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.household_links (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   code text NOT NULL UNIQUE,
@@ -74,6 +144,23 @@ CREATE TABLE public.household_links (
   CONSTRAINT household_links_pkey PRIMARY KEY (id),
   CONSTRAINT household_links_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id),
   CONSTRAINT household_links_partner_user_id_fkey FOREIGN KEY (partner_user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.merchant_mappings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  merchant_pattern text NOT NULL,
+  merchant_name text NOT NULL,
+  category_id uuid,
+  subcategory_id uuid,
+  account_id uuid,
+  use_count integer DEFAULT 1,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT merchant_mappings_pkey PRIMARY KEY (id),
+  CONSTRAINT merchant_mappings_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT merchant_mappings_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
+  CONSTRAINT merchant_mappings_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
+  CONSTRAINT merchant_mappings_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
 CREATE TABLE public.recurring_payments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -96,6 +183,16 @@ CREATE TABLE public.recurring_payments (
   CONSTRAINT recurring_payments_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
   CONSTRAINT recurring_payments_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT recurring_payments_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id)
+);
+CREATE TABLE public.statement_imports (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  file_name text NOT NULL,
+  imported_at timestamp with time zone NOT NULL DEFAULT now(),
+  transactions_count integer DEFAULT 0,
+  status text DEFAULT 'completed'::text CHECK (status = ANY (ARRAY['pending'::text, 'processing'::text, 'completed'::text, 'failed'::text])),
+  CONSTRAINT statement_imports_pkey PRIMARY KEY (id),
+  CONSTRAINT statement_imports_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.subtasks (
   id text NOT NULL,
@@ -183,7 +280,6 @@ CREATE TABLE public.user_categories (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   user_id uuid NOT NULL,
   name text NOT NULL,
-  icon text,
   color text DEFAULT '#38bdf8'::text,
   inserted_at timestamp with time zone NOT NULL DEFAULT now(),
   parent_id uuid,
@@ -196,9 +292,10 @@ CREATE TABLE public.user_categories (
   CONSTRAINT user_categories_pkey PRIMARY KEY (id),
   CONSTRAINT user_categories_default_fk FOREIGN KEY (default_category_id) REFERENCES public.default_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id)
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id),
+  CONSTRAINT user_categories_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
 CREATE TABLE public.user_onboarding (
   user_id uuid NOT NULL,

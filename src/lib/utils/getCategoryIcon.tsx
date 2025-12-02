@@ -1,6 +1,7 @@
 import {
   AIIcon,
   AppliancesIcon,
+  BankFeesIcon,
   BillIcon,
   BooksIcon,
   ClothesIcon,
@@ -203,6 +204,16 @@ export function getCategoryIcon(
   }
   if (name.includes("insurance") || slug.includes("insurance")) {
     return InsuranceIcon;
+  }
+  if (
+    name.includes("bank fee") ||
+    slug.includes("bank-fee") ||
+    name.includes("bank charge") ||
+    name.includes("bankfee") ||
+    name.includes("service charge") ||
+    name.includes("account fee")
+  ) {
+    return BankFeesIcon;
   }
 
   // Health subcategories

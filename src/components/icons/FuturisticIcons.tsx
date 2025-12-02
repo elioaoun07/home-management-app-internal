@@ -2646,6 +2646,66 @@ export const InsuranceIcon = ({ className, size = 24 }: IconProps) => (
   </svg>
 );
 
+// Bank Fees / Bank charges icon (building with minus sign)
+export const BankFeesIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* Bank building base */}
+    <path
+      d="M3 21H21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Bank roof/pediment */}
+    <path
+      d="M5 21V11L12 4L19 11V21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Columns */}
+    <path
+      d="M9 21V14"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M15 21V14"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Minus sign representing fee/deduction */}
+    <circle
+      cx="18"
+      cy="7"
+      r="4"
+      fill="currentColor"
+      fillOpacity="0.2"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <path
+      d="M16 7H20"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 // AI / ChatGPT / Robot icon
 export const AIIcon = ({ className, size = 24 }: IconProps) => (
   <svg

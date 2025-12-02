@@ -39,6 +39,7 @@ type DateRangePreset = {
 };
 
 const presets: DateRangePreset[] = [
+  // Today / Yesterday
   {
     label: "Today",
     getValue: () => {
@@ -47,6 +48,14 @@ const presets: DateRangePreset[] = [
     },
   },
   {
+    label: "Yesterday",
+    getValue: () => {
+      const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+      return { start: yesterday, end: yesterday };
+    },
+  },
+  // This Week / Last Week
+  {
     label: "This Week",
     getValue: () => ({
       start: format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"),
@@ -54,24 +63,21 @@ const presets: DateRangePreset[] = [
     }),
   },
   {
+    label: "Last Week",
+    getValue: () => {
+      const lastWeek = subDays(new Date(), 7);
+      return {
+        start: format(startOfWeek(lastWeek, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+        end: format(endOfWeek(lastWeek, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+      };
+    },
+  },
+  // This Month / Last Month / Last 3 Months
+  {
     label: "This Month",
     getValue: () => ({
       start: format(startOfMonth(new Date()), "yyyy-MM-dd"),
       end: format(endOfMonth(new Date()), "yyyy-MM-dd"),
-    }),
-  },
-  {
-    label: "Last 7 Days",
-    getValue: () => ({
-      start: format(subDays(new Date(), 6), "yyyy-MM-dd"),
-      end: format(new Date(), "yyyy-MM-dd"),
-    }),
-  },
-  {
-    label: "Last 30 Days",
-    getValue: () => ({
-      start: format(subDays(new Date(), 29), "yyyy-MM-dd"),
-      end: format(new Date(), "yyyy-MM-dd"),
     }),
   },
   {
@@ -87,10 +93,11 @@ const presets: DateRangePreset[] = [
   {
     label: "Last 3 Months",
     getValue: () => ({
-      start: format(subMonths(new Date(), 3), "yyyy-MM-dd"),
-      end: format(new Date(), "yyyy-MM-dd"),
+      start: format(startOfMonth(subMonths(new Date(), 2)), "yyyy-MM-dd"),
+      end: format(endOfMonth(new Date()), "yyyy-MM-dd"),
     }),
   },
+  // This Year / Last Year
   {
     label: "This Year",
     getValue: () => ({
@@ -317,22 +324,90 @@ export function DateRangePicker({
         sideOffset={8}
       >
         <div className="flex">
-          {/* Presets */}
-          <div className="w-32 border-r border-white/10 p-2 space-y-0.5">
-            {presets.map((preset) => (
+          {/* Presets - grouped horizontally */}
+          <div className="w-44 border-r border-white/10 p-2 space-y-2">
+            {/* Today / Yesterday */}
+            <div className="flex gap-1">
+              {presets.slice(0, 2).map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => handlePresetClick(preset)}
+                  className={cn(
+                    "flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all text-center",
+                    isPendingPreset(preset)
+                      ? "bg-cyan-500/20 text-cyan-400"
+                      : "text-slate-400 hover:bg-white/5 hover:text-white"
+                  )}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            {/* This Week / Last Week */}
+            <div className="flex gap-1">
+              {presets.slice(2, 4).map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => handlePresetClick(preset)}
+                  className={cn(
+                    "flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all text-center",
+                    isPendingPreset(preset)
+                      ? "bg-cyan-500/20 text-cyan-400"
+                      : "text-slate-400 hover:bg-white/5 hover:text-white"
+                  )}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            {/* This Month / Last Month */}
+            <div className="flex gap-1">
+              {presets.slice(4, 6).map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => handlePresetClick(preset)}
+                  className={cn(
+                    "flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all text-center",
+                    isPendingPreset(preset)
+                      ? "bg-cyan-500/20 text-cyan-400"
+                      : "text-slate-400 hover:bg-white/5 hover:text-white"
+                  )}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            {/* Last 3 Months (full width) */}
+            <div>
               <button
-                key={preset.label}
-                onClick={() => handlePresetClick(preset)}
+                onClick={() => handlePresetClick(presets[6])}
                 className={cn(
-                  "w-full px-2 py-1.5 rounded text-xs font-medium transition-all text-left",
-                  isPendingPreset(preset)
+                  "w-full px-2 py-1.5 rounded text-xs font-medium transition-all text-center",
+                  isPendingPreset(presets[6])
                     ? "bg-cyan-500/20 text-cyan-400"
                     : "text-slate-400 hover:bg-white/5 hover:text-white"
                 )}
               >
-                {preset.label}
+                {presets[6].label}
               </button>
-            ))}
+            </div>
+            {/* This Year / Last Year */}
+            <div className="flex gap-1">
+              {presets.slice(7, 9).map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => handlePresetClick(preset)}
+                  className={cn(
+                    "flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all text-center",
+                    isPendingPreset(preset)
+                      ? "bg-cyan-500/20 text-cyan-400"
+                      : "text-slate-400 hover:bg-white/5 hover:text-white"
+                  )}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Calendar + Apply */}
