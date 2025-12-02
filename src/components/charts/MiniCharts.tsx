@@ -1,7 +1,49 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+
+// ==================== ANIMATED VALUE HOOK ====================
+
+function useAnimatedValue(targetValue: number, duration: number = 800) {
+  const [value, setValue] = useState(targetValue);
+  const prevValue = useRef(targetValue);
+  const animationRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const startValue = prevValue.current;
+    const endValue = targetValue;
+    const startTime = performance.now();
+
+    if (startValue === endValue) return;
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeOutExpo = 1 - Math.pow(2, -10 * progress);
+
+      const currentValue = startValue + (endValue - startValue) * easeOutExpo;
+      setValue(currentValue);
+
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        setValue(endValue);
+        prevValue.current = endValue;
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [targetValue, duration]);
+
+  return value;
+}
 
 // ==================== MINI LINE CHART ====================
 
@@ -207,6 +249,43 @@ export const MiniLineChart = memo(function MiniLineChart({
   );
 });
 
+// ==================== ANIMATED BAR ====================
+
+const AnimatedBar = memo(function AnimatedBar({
+  targetHeight,
+  color,
+  isHovered,
+  showValue,
+  value,
+}: {
+  targetHeight: number;
+  color: string;
+  isHovered: boolean;
+  showValue: boolean;
+  value: number;
+}) {
+  const animatedHeight = useAnimatedValue(targetHeight, 600);
+  const animatedValue = useAnimatedValue(value, 600);
+
+  return (
+    <>
+      {showValue && isHovered && (
+        <span className="text-[10px] text-white bg-black/80 px-1.5 py-0.5 rounded tabular-nums">
+          ${animatedValue.toFixed(0)}
+        </span>
+      )}
+      <div
+        className="w-full rounded-t-md transition-colors duration-300"
+        style={{
+          height: `${Math.max(4, animatedHeight)}%`,
+          backgroundColor: color,
+          opacity: isHovered ? 1 : 0.7,
+        }}
+      />
+    </>
+  );
+});
+
 // ==================== MINI BAR CHART ====================
 
 type BarChartPoint = {
@@ -248,33 +327,16 @@ export const MiniBarChart = memo(function MiniBarChart({
           const percentage = (item.value / maxValue) * 100;
           const isHovered = hoveredIndex === i;
           return (
-            <div
+            <HorizontalAnimatedBar
               key={i}
-              className="group"
+              item={item}
+              percentage={percentage}
+              isHovered={isHovered}
+              showValues={showValues}
+              defaultColor={defaultColor}
               onMouseEnter={() => setHoveredIndex(i)}
               onMouseLeave={() => setHoveredIndex(null)}
-            >
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-300 truncate max-w-[120px]">
-                  {item.label}
-                </span>
-                {showValues && (
-                  <span className="text-slate-400 font-medium">
-                    ${item.value.toFixed(0)}
-                  </span>
-                )}
-              </div>
-              <div className="h-2 bg-slate-800/50 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${percentage}%`,
-                    backgroundColor: item.color || defaultColor,
-                    opacity: isHovered ? 1 : 0.8,
-                  }}
-                />
-              </div>
-            </div>
+            />
           );
         })}
       </div>
@@ -296,18 +358,12 @@ export const MiniBarChart = memo(function MiniBarChart({
             onMouseEnter={() => setHoveredIndex(i)}
             onMouseLeave={() => setHoveredIndex(null)}
           >
-            {showValues && isHovered && (
-              <span className="text-[10px] text-white bg-black/80 px-1.5 py-0.5 rounded">
-                ${item.value.toFixed(0)}
-              </span>
-            )}
-            <div
-              className="w-full rounded-t-md transition-all duration-300"
-              style={{
-                height: `${Math.max(4, percentage)}%`,
-                backgroundColor: item.color || defaultColor,
-                opacity: isHovered ? 1 : 0.7,
-              }}
+            <AnimatedBar
+              targetHeight={percentage}
+              color={item.color || defaultColor}
+              isHovered={isHovered}
+              showValue={showValues}
+              value={item.value}
             />
             {showLabels && (
               <span className="text-[9px] text-slate-500 truncate max-w-full">
@@ -317,6 +373,57 @@ export const MiniBarChart = memo(function MiniBarChart({
           </div>
         );
       })}
+    </div>
+  );
+});
+
+// Horizontal bar with animation
+const HorizontalAnimatedBar = memo(function HorizontalAnimatedBar({
+  item,
+  percentage,
+  isHovered,
+  showValues,
+  defaultColor,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  item: BarChartPoint;
+  percentage: number;
+  isHovered: boolean;
+  showValues: boolean;
+  defaultColor: string;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}) {
+  const animatedPercentage = useAnimatedValue(percentage, 600);
+  const animatedValue = useAnimatedValue(item.value, 600);
+
+  return (
+    <div
+      className="group"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-slate-300 truncate max-w-[120px]">
+          {item.label}
+        </span>
+        {showValues && (
+          <span className="text-slate-400 font-medium tabular-nums">
+            ${animatedValue.toFixed(0)}
+          </span>
+        )}
+      </div>
+      <div className="h-2 bg-slate-800/50 rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-colors duration-300"
+          style={{
+            width: `${animatedPercentage}%`,
+            backgroundColor: item.color || defaultColor,
+            opacity: isHovered ? 1 : 0.8,
+          }}
+        />
+      </div>
     </div>
   );
 });
@@ -345,9 +452,15 @@ export const ComparisonBar = memo(function ComparisonBar({
   className,
 }: ComparisonBarProps) {
   const maxValue = Math.max(current, previous, 1);
-  const currentPct = (current / maxValue) * 100;
-  const previousPct = (previous / maxValue) * 100;
+
+  // Animate values
+  const animatedCurrent = useAnimatedValue(current, 800);
+  const animatedPrevious = useAnimatedValue(previous, 800);
+
+  const currentPct = (animatedCurrent / maxValue) * 100;
+  const previousPct = (animatedPrevious / maxValue) * 100;
   const change = previous > 0 ? ((current - previous) / previous) * 100 : 0;
+  const animatedChange = useAnimatedValue(change, 800);
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -358,15 +471,15 @@ export const ComparisonBar = memo(function ComparisonBar({
           style={{ height }}
         >
           <div
-            className="h-full rounded-full transition-all duration-500"
+            className="h-full rounded-full transition-colors duration-300"
             style={{ width: `${currentPct}%`, backgroundColor: currentColor }}
           />
         </div>
         <span
-          className="text-xs font-semibold w-16 text-right"
+          className="text-xs font-semibold w-16 text-right tabular-nums"
           style={{ color: currentColor }}
         >
-          ${current.toFixed(0)}
+          ${animatedCurrent.toFixed(0)}
         </span>
       </div>
       <div className="flex items-center gap-2">
@@ -376,18 +489,18 @@ export const ComparisonBar = memo(function ComparisonBar({
           style={{ height }}
         >
           <div
-            className="h-full rounded-full transition-all duration-500"
+            className="h-full rounded-full transition-colors duration-300"
             style={{ width: `${previousPct}%`, backgroundColor: previousColor }}
           />
         </div>
-        <span className="text-xs font-semibold w-16 text-right text-slate-400">
-          ${previous.toFixed(0)}
+        <span className="text-xs font-semibold w-16 text-right text-slate-400 tabular-nums">
+          ${animatedPrevious.toFixed(0)}
         </span>
       </div>
       <div className="text-right">
         <span
           className={cn(
-            "text-xs font-semibold",
+            "text-xs font-semibold tabular-nums",
             change > 5
               ? "text-red-400"
               : change < -5
@@ -395,8 +508,8 @@ export const ComparisonBar = memo(function ComparisonBar({
                 : "text-slate-400"
           )}
         >
-          {change >= 0 ? "+" : ""}
-          {change.toFixed(1)}%
+          {animatedChange >= 0 ? "+" : ""}
+          {animatedChange.toFixed(1)}%
         </span>
       </div>
     </div>
@@ -472,6 +585,58 @@ type DonutChartProps = {
   className?: string;
 };
 
+// Animated segment component
+const AnimatedDonutSegment = memo(function AnimatedDonutSegment({
+  segment,
+  center,
+  thickness,
+  isHovered,
+  isOtherHovered,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  segment: {
+    label: string;
+    value: number;
+    color: string;
+    percentage: number;
+    length: number;
+    offset: number;
+    radius: number;
+  };
+  center: number;
+  thickness: number;
+  isHovered: boolean;
+  isOtherHovered: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}) {
+  const animatedLength = useAnimatedValue(segment.length, 600);
+  const animatedOffset = useAnimatedValue(segment.offset, 600);
+
+  return (
+    <circle
+      cx={center}
+      cy={center}
+      r={segment.radius}
+      fill="none"
+      stroke={segment.color}
+      strokeWidth={thickness}
+      strokeDasharray={`${animatedLength} ${2 * Math.PI * segment.radius}`}
+      strokeDashoffset={-animatedOffset}
+      strokeLinecap="round"
+      transform={`rotate(-90 ${center} ${center})`}
+      className="transition-opacity duration-300"
+      style={{
+        opacity: !isOtherHovered || isHovered ? 1 : 0.4,
+        filter: isHovered ? "brightness(1.2)" : "none",
+      }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    />
+  );
+});
+
 export const DonutChart = memo(function DonutChart({
   data,
   size = 120,
@@ -509,6 +674,9 @@ export const DonutChart = memo(function DonutChart({
 
   const center = size / 2;
 
+  // Animate center value
+  const animatedTotal = useAnimatedValue(total, 600);
+
   return (
     <div
       className={cn(
@@ -529,23 +697,13 @@ export const DonutChart = memo(function DonutChart({
 
         {/* Segments */}
         {segments.map((seg, i) => (
-          <circle
+          <AnimatedDonutSegment
             key={i}
-            cx={center}
-            cy={center}
-            r={seg.radius}
-            fill="none"
-            stroke={seg.color}
-            strokeWidth={thickness}
-            strokeDasharray={`${seg.length} ${2 * Math.PI * seg.radius}`}
-            strokeDashoffset={-seg.offset}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${center} ${center})`}
-            className="transition-all duration-300"
-            style={{
-              opacity: hoveredIndex === null || hoveredIndex === i ? 1 : 0.4,
-              filter: hoveredIndex === i ? "brightness(1.2)" : "none",
-            }}
+            segment={seg}
+            center={center}
+            thickness={thickness}
+            isHovered={hoveredIndex === i}
+            isOtherHovered={hoveredIndex !== null}
             onMouseEnter={() => setHoveredIndex(i)}
             onMouseLeave={() => setHoveredIndex(null)}
           />
@@ -560,7 +718,7 @@ export const DonutChart = memo(function DonutChart({
               {segments[hoveredIndex].label}
             </span>
             <span
-              className="text-sm font-bold"
+              className="text-sm font-bold tabular-nums"
               style={{ color: segments[hoveredIndex].color }}
             >
               ${segments[hoveredIndex].value.toFixed(0)}
@@ -571,9 +729,13 @@ export const DonutChart = memo(function DonutChart({
             {centerLabel && (
               <span className="text-xs text-slate-400">{centerLabel}</span>
             )}
-            {centerValue && (
-              <span className="text-lg font-bold text-white">
+            {centerValue ? (
+              <span className="text-lg font-bold text-white tabular-nums">
                 {centerValue}
+              </span>
+            ) : (
+              <span className="text-lg font-bold text-white tabular-nums">
+                ${animatedTotal.toFixed(0)}
               </span>
             )}
           </>

@@ -1,5 +1,10 @@
 import { ToastIcons } from "@/lib/toastIcons";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 
 export type Transaction = {
@@ -93,9 +98,9 @@ export function useDashboardTransactions({
     refetchOnWindowFocus: true, // Sync across devices
     refetchOnReconnect: true, // Refetch when reconnecting
     retry: 2,
-    // Don't use stale data as placeholder - wait for fresh fetch
-    // This prevents showing outdated transactions after adding new ones
-    placeholderData: undefined,
+    // Keep showing previous data while fetching new data for smooth transitions
+    // This prevents the skeleton flash when changing date ranges
+    placeholderData: keepPreviousData,
   });
 }
 

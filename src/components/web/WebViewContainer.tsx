@@ -66,6 +66,7 @@ export default function WebViewContainer() {
   const {
     data: transactions = [],
     isLoading,
+    isFetching,
     isError,
     error,
   } = useDashboardTransactions({
@@ -73,12 +74,15 @@ export default function WebViewContainer() {
     endDate: dateRange.end,
   });
 
+  // Only show skeleton on initial load, not on refetch/date change
+  const showSkeleton = isLoading && transactions.length === 0;
+
   const handleDateRangeChange = (start: string, end: string) => {
     setDateRange({ start, end });
   };
 
-  // Loading state
-  if (isLoading && transactions.length === 0) {
+  // Loading state - only show skeleton on initial load, not date range changes
+  if (showSkeleton) {
     return (
       <div className="h-screen flex flex-col">
         <header
@@ -242,6 +246,7 @@ export default function WebViewContainer() {
             endDate={dateRange.end}
             currentUserId={currentUserId}
             onDateRangeChange={handleDateRangeChange}
+            isRefetching={isFetching && !isLoading}
           />
         </div>
 

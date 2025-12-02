@@ -1,3 +1,4 @@
+import AIChatAssistant from "@/components/ai/AIChatAssistant";
 import { ErrorLogger } from "@/components/ErrorLogger";
 import ConditionalHeader from "@/components/layouts/ConditionalHeader";
 import MobileNav from "@/components/layouts/MobileNav";
@@ -140,6 +141,7 @@ export default async function RootLayout({
             )}
             {children}
             <MobileNav />
+            {user && <AIChatAssistant />}
             <Toaster
               richColors
               closeButton

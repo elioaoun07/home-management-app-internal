@@ -12,7 +12,12 @@ import {
 } from "@/components/charts/MiniCharts";
 import CategoryDetailView from "@/components/dashboard/CategoryDetailView";
 import TransactionDetailModal from "@/components/dashboard/TransactionDetailModal";
+import {
+  AnimatedNumber,
+  AnimatedPercentage,
+} from "@/components/ui/animated-number";
 import { Card } from "@/components/ui/card";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
@@ -35,18 +40,7 @@ import {
   getExpenseTransactions,
 } from "@/lib/utils/incomeExpense";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  differenceInDays,
-  endOfMonth,
-  endOfWeek,
-  format,
-  getDay,
-  parseISO,
-  startOfMonth,
-  startOfWeek,
-  subDays,
-  subYears,
-} from "date-fns";
+import { differenceInDays, format, getDay, parseISO, subYears } from "date-fns";
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -55,7 +49,6 @@ import {
   CalendarDays,
   DollarSign,
   Filter,
-  Flame,
   Heart,
   Leaf,
   LineChart,
@@ -63,7 +56,6 @@ import {
   PiggyBank,
   Receipt,
   RefreshCw,
-  Shield,
   Snowflake,
   Sun,
   Target,
@@ -101,6 +93,7 @@ type Props = {
   endDate: string;
   currentUserId?: string;
   onDateRangeChange?: (start: string, end: string) => void;
+  isRefetching?: boolean;
 };
 
 type OwnershipFilter = "all" | "mine" | "partner";
@@ -119,6 +112,7 @@ const WebDashboard = memo(function WebDashboard({
   endDate,
   currentUserId,
   onDateRangeChange,
+  isRefetching = false,
 }: Props) {
   const { theme: currentUserTheme } = useTheme();
   const themeClasses = useThemeClasses();
@@ -329,90 +323,6 @@ const WebDashboard = memo(function WebDashboard({
     };
   }, [filteredTransactions, stats.total, startDate, endDate]);
 
-  // FINANCIAL HEALTH SCORE
-  const healthScore = useMemo(() => {
-    let score = 100;
-    const factors: {
-      name: string;
-      impact: number;
-      status: "good" | "warning" | "bad";
-    }[] = [];
-
-    const dailyAmounts: Record<string, number> = {};
-    filteredTransactions.forEach((t) => {
-      dailyAmounts[t.date] = (dailyAmounts[t.date] || 0) + t.amount;
-    });
-    const dailyValues = Object.values(dailyAmounts);
-    if (dailyValues.length > 1) {
-      const mean = dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
-      const variance =
-        dailyValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
-        dailyValues.length;
-      const cv = mean > 0 ? Math.sqrt(variance) / mean : 0;
-      const consistencyPenalty = Math.min(20, cv * 15);
-      score -= consistencyPenalty;
-      factors.push({
-        name: "Consistency",
-        impact: -Math.round(consistencyPenalty),
-        status:
-          consistencyPenalty < 5
-            ? "good"
-            : consistencyPenalty < 12
-              ? "warning"
-              : "bad",
-      });
-    }
-
-    const categoryShares = Object.values(stats.byCategory).map(
-      (c) => c.amount / stats.total
-    );
-    const maxShare = Math.max(...categoryShares, 0);
-    if (maxShare > 0.5) {
-      const concentrationPenalty = (maxShare - 0.5) * 30;
-      score -= concentrationPenalty;
-      factors.push({
-        name: "Diversification",
-        impact: -Math.round(concentrationPenalty),
-        status:
-          concentrationPenalty < 5
-            ? "good"
-            : concentrationPenalty < 10
-              ? "warning"
-              : "bad",
-      });
-    }
-
-    if (spendingVelocity.weekOverWeekChange > 20) {
-      const trendPenalty = Math.min(
-        15,
-        (spendingVelocity.weekOverWeekChange - 20) * 0.5
-      );
-      score -= trendPenalty;
-      factors.push({
-        name: "Weekly Trend",
-        impact: -Math.round(trendPenalty),
-        status: trendPenalty < 5 ? "warning" : "bad",
-      });
-    } else if (spendingVelocity.weekOverWeekChange < -10) {
-      score += 5;
-      factors.push({ name: "Weekly Trend", impact: 5, status: "good" });
-    }
-
-    return {
-      score: Math.max(0, Math.min(100, Math.round(score))),
-      factors,
-      grade: score >= 80 ? "A" : score >= 60 ? "B" : score >= 40 ? "C" : "D",
-      gradeColor:
-        score >= 80
-          ? "text-emerald-400"
-          : score >= 60
-            ? "text-amber-400"
-            : score >= 40
-              ? "text-orange-400"
-              : "text-red-400",
-    };
-  }, [filteredTransactions, stats, spendingVelocity.weekOverWeekChange]);
-
   // DAY OF WEEK PATTERN
   const dayOfWeekPattern = useMemo(() => {
     const byDay: Record<number, { total: number; count: number }> = {
@@ -534,7 +444,7 @@ const WebDashboard = memo(function WebDashboard({
     }
     if (categoryTrends.growing.length > 0) {
       items.push({
-        icon: Flame,
+        icon: TrendingUp,
         text: `${categoryTrends.growing[0].category} up ${categoryTrends.growing[0].change.toFixed(0)}%`,
         type: "warning",
       });
@@ -677,6 +587,21 @@ const WebDashboard = memo(function WebDashboard({
 
   return (
     <div className={`min-h-full ${themeClasses.pageBg}`}>
+      {/* Loading indicator - subtle animated bar at top */}
+      {isRefetching && (
+        <div className="fixed top-0 left-0 right-0 z-50 h-0.5 bg-slate-800 overflow-hidden">
+          <div
+            className="h-full w-1/3 bg-gradient-to-r from-cyan-500 to-emerald-500 animate-[loading_1s_ease-in-out_infinite]"
+            style={{ animation: "loading 1s ease-in-out infinite" }}
+          />
+          <style>{`
+            @keyframes loading {
+              0% { transform: translateX(-100%); }
+              100% { transform: translateX(400%); }
+            }
+          `}</style>
+        </div>
+      )}
       {/* Header */}
       <div
         className={`sticky top-0 z-20 ${themeClasses.headerGradient} backdrop-blur-xl border-b border-white/5`}
@@ -772,68 +697,15 @@ const WebDashboard = memo(function WebDashboard({
           </div>
           {showFilters && (
             <div className="px-4 pb-3 space-y-3 animate-in slide-in-from-top-2 duration-200 border-t border-white/5">
-              <div className="pt-3 flex flex-wrap gap-2">
-                {[
-                  {
-                    label: "Today",
-                    getValue: () => {
-                      const today = format(new Date(), "yyyy-MM-dd");
-                      return { start: today, end: today };
-                    },
-                  },
-                  {
-                    label: "This Week",
-                    getValue: () => ({
-                      start: format(
-                        startOfWeek(new Date(), { weekStartsOn: 1 }),
-                        "yyyy-MM-dd"
-                      ),
-                      end: format(
-                        endOfWeek(new Date(), { weekStartsOn: 1 }),
-                        "yyyy-MM-dd"
-                      ),
-                    }),
-                  },
-                  {
-                    label: "This Month",
-                    getValue: () => ({
-                      start: format(startOfMonth(new Date()), "yyyy-MM-dd"),
-                      end: format(endOfMonth(new Date()), "yyyy-MM-dd"),
-                    }),
-                  },
-                  {
-                    label: "Last 7 Days",
-                    getValue: () => ({
-                      start: format(subDays(new Date(), 7), "yyyy-MM-dd"),
-                      end: format(new Date(), "yyyy-MM-dd"),
-                    }),
-                  },
-                  {
-                    label: "Last 30 Days",
-                    getValue: () => ({
-                      start: format(subDays(new Date(), 30), "yyyy-MM-dd"),
-                      end: format(new Date(), "yyyy-MM-dd"),
-                    }),
-                  },
-                ].map((preset) => {
-                  const range = preset.getValue();
-                  return (
-                    <button
-                      key={preset.label}
-                      onClick={() =>
-                        onDateRangeChange?.(range.start, range.end)
-                      }
-                      className={cn(
-                        "px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                        startDate === range.start && endDate === range.end
-                          ? "neo-gradient text-white"
-                          : `neo-card ${themeClasses.text} hover:bg-white/5`
-                      )}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
+              {/* Date Range Picker */}
+              <div className="pt-3">
+                <DateRangePicker
+                  startDate={startDate}
+                  endDate={endDate}
+                  onDateRangeChange={(start, end) =>
+                    onDateRangeChange?.(start, end)
+                  }
+                />
               </div>
               <div className="flex gap-2">
                 <select
@@ -870,28 +742,37 @@ const WebDashboard = memo(function WebDashboard({
       <div className="max-w-7xl mx-auto px-4 py-4">
         {/* Row 1: Key Metrics */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-          <Card className="neo-card p-4 bg-gradient-to-br from-emerald-500/10 to-transparent">
+          <Card className="neo-card p-4 bg-gradient-to-br from-red-500/10 to-transparent">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-emerald-500/20">
-                <DollarSign className="w-5 h-5 text-emerald-400" />
+              <div className="p-2 rounded-xl bg-red-500/20">
+                <DollarSign className="w-5 h-5 text-red-400" />
               </div>
               <div>
-                <p className="text-xs text-emerald-300/70">Total Spent</p>
-                <p className="text-2xl font-bold text-emerald-400">
-                  ${stats.total.toFixed(0)}
+                <p className="text-xs text-red-300/70">Total Spent</p>
+                <p className="text-2xl font-bold text-red-400 tabular-nums">
+                  <AnimatedNumber value={stats.total} prefix="$" decimals={0} />
                 </p>
               </div>
             </div>
           </Card>
-          <Card className="neo-card p-4 bg-gradient-to-br from-orange-500/10 to-transparent">
+          <Card className="neo-card p-4 bg-gradient-to-br from-emerald-500/10 to-transparent">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-orange-500/20">
-                <Flame className="w-5 h-5 text-orange-400" />
+              <div className="p-2 rounded-xl bg-emerald-500/20">
+                <PiggyBank className="w-5 h-5 text-emerald-400" />
               </div>
               <div>
-                <p className="text-xs text-orange-300/70">Daily Burn</p>
-                <p className="text-2xl font-bold text-orange-400">
-                  ${spendingVelocity.dailyBurnRate.toFixed(0)}
+                <p className="text-xs text-emerald-300/70">Savings Rate</p>
+                <p
+                  className={cn(
+                    "text-2xl font-bold tabular-nums",
+                    savingsRate >= 20
+                      ? "text-emerald-400"
+                      : savingsRate >= 10
+                        ? "text-amber-400"
+                        : "text-red-400"
+                  )}
+                >
+                  <AnimatedNumber value={savingsRate} suffix="%" decimals={0} />
                 </p>
               </div>
             </div>
@@ -909,7 +790,7 @@ const WebDashboard = memo(function WebDashboard({
                 <p className="text-xs text-violet-300/70">vs Last Week</p>
                 <p
                   className={cn(
-                    "text-2xl font-bold",
+                    "text-2xl font-bold tabular-nums",
                     spendingVelocity.weekOverWeekChange > 10
                       ? "text-red-400"
                       : spendingVelocity.weekOverWeekChange < -10
@@ -917,32 +798,32 @@ const WebDashboard = memo(function WebDashboard({
                         : "text-violet-400"
                   )}
                 >
-                  {spendingVelocity.weekOverWeekChange >= 0 ? "+" : ""}
-                  {spendingVelocity.weekOverWeekChange.toFixed(0)}%
+                  <AnimatedPercentage
+                    value={spendingVelocity.weekOverWeekChange}
+                    showSign={true}
+                  />
                 </p>
               </div>
             </div>
           </Card>
-          <Card className="neo-card p-4 bg-gradient-to-br from-sky-500/10 to-transparent">
+          <Card className="neo-card p-4 bg-gradient-to-br from-amber-500/10 to-transparent">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-sky-500/20">
-                <Shield className="w-5 h-5 text-sky-400" />
+              <div className="p-2 rounded-xl bg-amber-500/20">
+                <Target className="w-5 h-5 text-amber-400" />
               </div>
               <div>
-                <p className="text-xs text-sky-300/70">Health Score</p>
+                <p className="text-xs text-amber-300/70">Top Category</p>
                 <div className="flex items-baseline gap-2">
-                  <p
-                    className={cn("text-2xl font-bold", healthScore.gradeColor)}
-                  >
-                    {healthScore.score}
+                  <p className="text-lg font-bold text-amber-400 truncate max-w-[100px]">
+                    {stats.topCategory?.name || "N/A"}
                   </p>
-                  <span
-                    className={cn(
-                      "text-lg font-semibold",
-                      healthScore.gradeColor
-                    )}
-                  >
-                    {healthScore.grade}
+                  <span className="text-sm text-amber-400/70 tabular-nums">
+                    {stats.total > 0
+                      ? Math.round(
+                          ((stats.topCategory?.amount || 0) / stats.total) * 100
+                        )
+                      : 0}
+                    %
                   </span>
                 </div>
               </div>
@@ -966,8 +847,12 @@ const WebDashboard = memo(function WebDashboard({
               </div>
               <div>
                 <p className="text-xs text-emerald-300/70">Total Income</p>
-                <p className="text-2xl font-bold text-emerald-400">
-                  ${incomeExpenseSummary.totalIncome.toFixed(0)}
+                <p className="text-2xl font-bold text-emerald-400 tabular-nums">
+                  <AnimatedNumber
+                    value={incomeExpenseSummary.totalIncome}
+                    prefix="$"
+                    decimals={0}
+                  />
                 </p>
                 <p className="text-xs text-slate-400">
                   {incomeExpenseSummary.incomeTransactions.length} transactions
@@ -982,8 +867,12 @@ const WebDashboard = memo(function WebDashboard({
               </div>
               <div>
                 <p className="text-xs text-red-300/70">Total Expenses</p>
-                <p className="text-2xl font-bold text-red-400">
-                  ${incomeExpenseSummary.totalExpense.toFixed(0)}
+                <p className="text-2xl font-bold text-red-400 tabular-nums">
+                  <AnimatedNumber
+                    value={incomeExpenseSummary.totalExpense}
+                    prefix="$"
+                    decimals={0}
+                  />
                 </p>
                 <p className="text-xs text-slate-400">
                   {incomeExpenseSummary.expenseTransactions.length} transactions
@@ -1024,17 +913,24 @@ const WebDashboard = memo(function WebDashboard({
                 </p>
                 <p
                   className={cn(
-                    "text-2xl font-bold",
+                    "text-2xl font-bold tabular-nums",
                     incomeExpenseSummary.netBalance >= 0
                       ? "text-cyan-400"
                       : "text-amber-400"
                   )}
                 >
-                  ${Math.abs(incomeExpenseSummary.netBalance).toFixed(0)}
+                  <AnimatedNumber
+                    value={Math.abs(incomeExpenseSummary.netBalance)}
+                    prefix="$"
+                    decimals={0}
+                  />
                 </p>
-                <p className="text-xs text-slate-400">
-                  {savingsRate >= 0 ? savingsRate.toFixed(1) : "0"}% savings
-                  rate
+                <p className="text-xs text-slate-400 tabular-nums">
+                  <AnimatedNumber
+                    value={savingsRate >= 0 ? savingsRate : 0}
+                    decimals={1}
+                    suffix="% savings rate"
+                  />
                 </p>
               </div>
             </div>
@@ -1289,13 +1185,13 @@ const WebDashboard = memo(function WebDashboard({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Current Total</span>
-                <span className="text-lg font-bold text-emerald-400">
-                  ${stats.total.toFixed(0)}
+                <span className="text-lg font-bold text-red-400 tabular-nums">
+                  <AnimatedNumber value={stats.total} prefix="$" decimals={0} />
                 </span>
               </div>
               <div className="h-3 bg-slate-800 rounded-full overflow-hidden relative">
                 <div
-                  className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500"
+                  className="h-full bg-gradient-to-r from-red-500 to-red-400 rounded-full transition-all duration-500"
                   style={{
                     width: `${Math.min(100, (stats.total / spendingVelocity.projectedTotal) * 100)}%`,
                   }}
@@ -1303,21 +1199,31 @@ const WebDashboard = memo(function WebDashboard({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Projected Total</span>
-                <span className="text-lg font-bold text-amber-400">
-                  ${spendingVelocity.projectedTotal.toFixed(0)}
+                <span className="text-lg font-bold text-amber-400 tabular-nums">
+                  <AnimatedNumber
+                    value={spendingVelocity.projectedTotal}
+                    prefix="$"
+                    decimals={0}
+                  />
                 </span>
               </div>
               <div className="pt-2 border-t border-white/5 grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-slate-500">Days Elapsed</p>
-                  <p className="text-sm font-semibold text-slate-300">
-                    {spendingVelocity.daysElapsed}
+                  <p className="text-sm font-semibold text-slate-300 tabular-nums">
+                    <AnimatedNumber
+                      value={spendingVelocity.daysElapsed}
+                      decimals={0}
+                    />
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">Days Left</p>
-                  <p className="text-sm font-semibold text-slate-300">
-                    {spendingVelocity.daysRemaining}
+                  <p className="text-sm font-semibold text-slate-300 tabular-nums">
+                    <AnimatedNumber
+                      value={spendingVelocity.daysRemaining}
+                      decimals={0}
+                    />
                   </p>
                 </div>
               </div>
