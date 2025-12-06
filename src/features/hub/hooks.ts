@@ -1,7 +1,9 @@
 // src/features/hub/hooks.ts
 "use client";
 
+import { supabaseBrowser } from "@/lib/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // Types
 export type HubChatThread = {
@@ -37,6 +39,9 @@ export type HubMessage = {
   is_read: boolean;
   created_at: string;
   reply_to_id: string | null;
+  // New fields for read receipts
+  status?: "sent" | "delivered" | "read"; // For messages I sent
+  is_unread?: boolean; // For messages I received
 };
 
 export type HubFeedItem = {
@@ -94,7 +99,8 @@ export function useHubThreads() {
         current_user_id: string;
       };
     },
-    refetchInterval: 15000, // Poll every 15 seconds for new threads/messages
+    staleTime: 60000, // 1 minute - realtime handles updates via invalidation
+    refetchOnWindowFocus: true, // Refresh when user comes back to app
   });
 }
 
@@ -128,6 +134,7 @@ export function useCreateThread() {
 }
 
 // --- Messages (within a thread) ---
+// Polls for updates every 5 seconds when chat is open (for receipt status changes)
 export function useHubMessages(threadId: string | null) {
   return useQuery({
     queryKey: ["hub", "messages", threadId],
@@ -138,6 +145,8 @@ export function useHubMessages(threadId: string | null) {
           thread_id: null,
           household_id: null,
           current_user_id: "",
+          first_unread_message_id: null,
+          unread_count: 0,
         };
       const res = await fetch(`/api/hub/messages?thread_id=${threadId}`);
       if (!res.ok) throw new Error("Failed to fetch messages");
@@ -147,11 +156,109 @@ export function useHubMessages(threadId: string | null) {
         thread_id: string;
         household_id: string;
         current_user_id: string;
+        first_unread_message_id: string | null;
+        unread_count: number;
       };
     },
     enabled: !!threadId,
-    refetchInterval: 5000, // Poll every 5 seconds for new messages in active thread
+    staleTime: 3000, // Consider stale after 3 seconds
+    refetchInterval: 5000, // Poll every 5 seconds for receipt status updates
+    refetchOnWindowFocus: true,
   });
+}
+
+// Realtime subscription for messages - push-based, no polling!
+export function useRealtimeMessages(threadId: string | null) {
+  const queryClient = useQueryClient();
+  const channelRef = useRef<ReturnType<
+    ReturnType<typeof supabaseBrowser>["channel"]
+  > | null>(null);
+  const [isSubscribed, setIsSubscribed] = useState(false);
+
+  const handleNewMessage = useCallback(
+    (payload: { new: HubMessage }) => {
+      const newMessage = payload.new;
+
+      // Only process messages for the current thread
+      if (newMessage.thread_id !== threadId) return;
+
+      // Update the messages cache optimistically
+      queryClient.setQueryData(
+        ["hub", "messages", threadId],
+        (
+          oldData:
+            | {
+                messages: HubMessage[];
+                thread_id: string;
+                household_id: string;
+                current_user_id: string;
+              }
+            | undefined
+        ) => {
+          if (!oldData) return oldData;
+
+          // Check if message already exists (avoid duplicates)
+          const exists = oldData.messages.some((m) => m.id === newMessage.id);
+          if (exists) return oldData;
+
+          return {
+            ...oldData,
+            messages: [...oldData.messages, newMessage],
+          };
+        }
+      );
+
+      // Also update threads list to show latest message
+      queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
+    },
+    [threadId, queryClient]
+  );
+
+  useEffect(() => {
+    if (!threadId) {
+      setIsSubscribed(false);
+      return;
+    }
+
+    const supabase = supabaseBrowser();
+
+    // Create a unique channel name for this thread
+    const channelName = `hub-messages-${threadId}`;
+
+    // Subscribe to new messages only - receipt status is handled by polling
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "hub_messages",
+          filter: `thread_id=eq.${threadId}`,
+        },
+        (payload) => {
+          handleNewMessage(payload as unknown as { new: HubMessage });
+        }
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          setIsSubscribed(true);
+        }
+      });
+
+    channelRef.current = channel;
+
+    // Cleanup on unmount or thread change
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+        setIsSubscribed(false);
+      }
+    };
+  }, [threadId, handleNewMessage]);
+
+  return { isSubscribed };
 }
 
 export function useSendMessage() {

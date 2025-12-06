@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
   // Get thread_id from query params
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get("thread_id");
+  const markAsRead = searchParams.get("mark_read") !== "false"; // default true
 
   if (!threadId) {
     return NextResponse.json({ error: "thread_id required" }, { status: 400 });
@@ -46,6 +47,34 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
+  // Try to get first unread message ID (gracefully handle if table doesn't exist)
+  let firstUnreadMessageId: string | null = null;
+  let unreadCount = 0;
+
+  try {
+    const { data: firstUnreadData } = await supabase
+      .from("hub_message_receipts")
+      .select("message_id")
+      .eq("user_id", user.id)
+      .neq("status", "read")
+      .limit(1)
+      .maybeSingle();
+
+    firstUnreadMessageId = firstUnreadData?.message_id || null;
+
+    const { count } = await supabase
+      .from("hub_message_receipts")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .neq("status", "read");
+
+    unreadCount = count || 0;
+  } catch {
+    // Table doesn't exist yet, use fallback
+    firstUnreadMessageId = null;
+    unreadCount = 0;
+  }
+
   // Fetch messages for this thread
   const { data: messages, error } = await supabase
     .from("hub_messages")
@@ -58,19 +87,84 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Mark messages from others as read
-  await supabase
-    .from("hub_messages")
-    .update({ is_read: true })
-    .eq("thread_id", threadId)
-    .neq("sender_user_id", user.id)
-    .eq("is_read", false);
+  // Try to mark messages as read (gracefully handle if function/table doesn't exist)
+  if (markAsRead) {
+    try {
+      await supabase.rpc("mark_thread_messages_read", {
+        p_user_id: user.id,
+        p_thread_id: threadId,
+      });
+    } catch {
+      // Function doesn't exist yet, fall back to old method
+      await supabase
+        .from("hub_messages")
+        .update({ is_read: true })
+        .eq("thread_id", threadId)
+        .neq("sender_user_id", user.id)
+        .eq("is_read", false);
+    }
+  }
+
+  // Get receipt statuses for messages I sent (to show sent/delivered/read status)
+  const myMessageIds = (messages || [])
+    .filter((msg) => msg.sender_user_id === user.id)
+    .map((msg) => msg.id);
+
+  let receiptStatuses: Record<string, string> = {};
+
+  if (myMessageIds.length > 0) {
+    try {
+      // Use RPC function that bypasses RLS to get receipt statuses
+      const { data: receipts, error: receiptsError } = await supabase.rpc(
+        "get_message_receipt_statuses",
+        { p_message_ids: myMessageIds }
+      );
+
+      if (receipts && !receiptsError) {
+        // Group receipts by message and find the minimum status
+        const statusPriority: Record<string, number> = {
+          sent: 0,
+          delivered: 1,
+          read: 2,
+        };
+
+        for (const receipt of receipts) {
+          const currentStatus = receiptStatuses[receipt.message_id];
+          if (
+            !currentStatus ||
+            statusPriority[receipt.status] < statusPriority[currentStatus]
+          ) {
+            receiptStatuses[receipt.message_id] = receipt.status;
+          }
+        }
+      }
+    } catch {
+      // Function doesn't exist, leave empty
+    }
+  }
+
+  // Transform messages with proper status
+  const transformedMessages = (messages || []).map((msg) => {
+    const isMine = msg.sender_user_id === user.id;
+
+    return {
+      ...msg,
+      // For my messages: show receipt status (sent/delivered/read), default to "sent" if no receipt yet
+      // For others' messages: no status needed
+      status: isMine
+        ? ((receiptStatuses[msg.id] || "sent") as "sent" | "delivered" | "read")
+        : undefined,
+      is_unread: !isMine && !msg.is_read,
+    };
+  });
 
   return NextResponse.json({
-    messages: messages || [],
+    messages: transformedMessages,
     thread_id: threadId,
     household_id: thread.household_id,
     current_user_id: user.id,
+    first_unread_message_id: firstUnreadMessageId,
+    unread_count: unreadCount || 0,
   });
 }
 
@@ -136,7 +230,11 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Error inserting message:", error);
+    return NextResponse.json(
+      { error: error.message, details: error },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ message });

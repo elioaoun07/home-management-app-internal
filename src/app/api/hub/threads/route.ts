@@ -57,6 +57,7 @@ export async function GET() {
   // Get unread count per thread
   const threadsWithUnread = await Promise.all(
     (threads || []).map(async (thread) => {
+      // Use old is_read column method (works without migration)
       const { count } = await supabase
         .from("hub_messages")
         .select("*", { count: "exact", head: true })
