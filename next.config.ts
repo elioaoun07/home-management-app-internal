@@ -2,9 +2,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true, // ✅ don't fail Vercel builds on ESLint
-  },
   async headers() {
     // Security headers applied to all routes
     // Note: Adjust CSP connect-src/script-src to include any third-party domains you intentionally use.
