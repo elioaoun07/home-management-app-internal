@@ -13,7 +13,6 @@ import {
   ListIcon,
   RefreshIcon,
   StarIcon,
-  TrendingUpIcon,
 } from "@/components/icons/FuturisticIcons";
 import { Card } from "@/components/ui/card";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -178,6 +177,20 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   const incomeExpenseSummary = useMemo(() => {
     return calculateIncomeExpenseSummary(transactions, accounts);
   }, [transactions, accounts]);
+
+  // Filtered income/expense summary that respects ownership filter
+  const filteredIncomeExpenseSummary = useMemo(() => {
+    let filteredTxs = [...transactions];
+
+    // Apply ownership filter
+    if (ownershipFilter === "mine") {
+      filteredTxs = filteredTxs.filter((t) => t.is_owner === true);
+    } else if (ownershipFilter === "partner") {
+      filteredTxs = filteredTxs.filter((t) => t.is_owner === false);
+    }
+
+    return calculateIncomeExpenseSummary(filteredTxs, accounts);
+  }, [transactions, accounts, ownershipFilter]);
 
   // Filter transactions based on account type FIRST
   const typeFilteredTransactions = useMemo(() => {
@@ -711,75 +724,134 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
       <div className="px-3 py-15">
         {viewMode === "widgets" && (
           <div className="space-y-3">
-            {/* Compact Stats Grid */}
-            <div className="grid grid-cols-3 gap-3">
-              <Card className="neo-card p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer bg-gradient-to-br from-emerald-500/10 to-transparent">
-                <div className="flex flex-col items-center justify-center text-center">
-                  <DollarSignIcon className="w-6 h-6 text-emerald-400/80 mb-2 drop-shadow-[0_0_12px_rgba(52,211,153,0.5)]" />
-                  <p className="text-[10px] text-emerald-300/70 mb-1 font-medium uppercase tracking-wide">
-                    Total
+            {/* Income / Expense / Balance - Animated Cards */}
+            <div className="grid grid-cols-3 gap-2">
+              {/* Income */}
+              <Card className="neo-card p-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer bg-gradient-to-br from-emerald-500/10 to-transparent">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center mb-1.5 shadow-[0_0_12px_rgba(52,211,153,0.3)]">
+                    <ArrowDownRightIcon className="w-4 h-4 text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+                  </div>
+                  <p className="text-[9px] text-emerald-300/70 uppercase tracking-wide mb-0.5">
+                    Income
                   </p>
-                  <p className="text-2xl font-bold bg-gradient-to-br from-emerald-400 via-emerald-300 to-teal bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">
-                    ${stats.total.toFixed(0)}
+                  <p className="text-xl font-bold text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]">
+                    ${filteredIncomeExpenseSummary.totalIncome.toFixed(0)}
                   </p>
                 </div>
               </Card>
 
+              {/* Expense */}
               <Card
-                className="neo-card p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer bg-gradient-to-br from-violet-500/10 to-transparent"
+                className="neo-card p-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer bg-gradient-to-br from-red-500/10 to-transparent"
+                style={{ animationDelay: "50ms" }}
+              >
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center mb-1.5 shadow-[0_0_12px_rgba(239,68,68,0.3)]">
+                    <ArrowUpRightIcon className="w-4 h-4 text-red-400 drop-shadow-[0_0_6px_rgba(239,68,68,0.6)]" />
+                  </div>
+                  <p className="text-[9px] text-red-300/70 uppercase tracking-wide mb-0.5">
+                    Expense
+                  </p>
+                  <p className="text-xl font-bold text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]">
+                    ${filteredIncomeExpenseSummary.totalExpense.toFixed(0)}
+                  </p>
+                </div>
+              </Card>
+
+              {/* Balance */}
+              <Card
+                className={cn(
+                  "neo-card p-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer bg-gradient-to-br to-transparent",
+                  filteredIncomeExpenseSummary.netBalance >= 0
+                    ? "from-cyan-500/10"
+                    : "from-orange-500/10"
+                )}
                 style={{ animationDelay: "100ms" }}
               >
-                <div className="flex flex-col items-center justify-center text-center">
-                  <TrendingUpIcon className="w-6 h-6 text-violet-400/80 mb-2 drop-shadow-[0_0_12px_rgba(167,139,250,0.5)]" />
-                  <p className="text-[10px] text-violet-300/70 mb-1 font-medium uppercase tracking-wide">
-                    Count
+                <div className="flex flex-col items-center text-center">
+                  <div
+                    className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center mb-1.5",
+                      filteredIncomeExpenseSummary.netBalance >= 0
+                        ? "bg-cyan-500/20 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                        : "bg-orange-500/20 shadow-[0_0_12px_rgba(249,115,22,0.3)]"
+                    )}
+                  >
+                    <DollarSignIcon
+                      className={cn(
+                        "w-4 h-4",
+                        filteredIncomeExpenseSummary.netBalance >= 0
+                          ? "text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.6)]"
+                          : "text-orange-400 drop-shadow-[0_0_6px_rgba(249,115,22,0.6)]"
+                      )}
+                    />
+                  </div>
+                  <p
+                    className={cn(
+                      "text-[9px] uppercase tracking-wide mb-0.5",
+                      filteredIncomeExpenseSummary.netBalance >= 0
+                        ? "text-cyan-300/70"
+                        : "text-orange-300/70"
+                    )}
+                  >
+                    Balance
                   </p>
-                  <p className="text-2xl font-bold bg-gradient-to-br from-violet-400 via-purple-300 to-violet-300 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(167,139,250,0.3)]">
-                    {stats.count}
-                  </p>
-                </div>
-              </Card>
-
-              <Card
-                className="neo-card p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer bg-gradient-to-br from-sky-500/10 to-transparent"
-                style={{ animationDelay: "200ms" }}
-              >
-                <div className="flex flex-col items-center justify-center text-center">
-                  <BarChart3Icon className="w-6 h-6 text-sky-400/80 mb-2 drop-shadow-[0_0_12px_rgba(56,189,248,0.5)]" />
-                  <p className="text-[10px] text-sky-300/70 mb-1 font-medium uppercase tracking-wide">
-                    Daily
-                  </p>
-                  <p className="text-2xl font-bold bg-gradient-to-br from-sky-400 via-cyan-300 to-blue-300 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(56,189,248,0.3)] truncate">
-                    ${stats.dailyAvg.toFixed(0)}
+                  <p
+                    className={cn(
+                      "text-xl font-bold",
+                      filteredIncomeExpenseSummary.netBalance >= 0
+                        ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]"
+                        : "text-orange-400 drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]"
+                    )}
+                  >
+                    {filteredIncomeExpenseSummary.netBalance >= 0 ? "+" : ""}$
+                    {filteredIncomeExpenseSummary.netBalance.toFixed(0)}
                   </p>
                 </div>
               </Card>
             </div>
 
-            {/* Top Category - More visual */}
-            {stats.topCategory && (
+            {/* Top Category & Daily - Compact animated row */}
+            <div className="grid grid-cols-2 gap-2">
               <Card
-                className="neo-card p-3 bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-transparent hover:from-amber-500/20 hover:via-orange-500/15 transition-all duration-300 hover:-translate-y-1 shadow-[0_0_20px_rgba(251,191,36,0.15)] hover:shadow-[0_0_25px_rgba(251,191,36,0.25)] spring-bounce"
-                style={{ animationDelay: "300ms" }}
+                className="neo-card p-3 transition-all duration-300 hover:-translate-y-0.5 spring-bounce bg-gradient-to-br from-amber-500/8 to-transparent"
+                style={{ animationDelay: "150ms" }}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <StarIcon className="w-6 h-6 text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.6)] animate-pulse" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-amber-300/80 font-medium">
-                        Top Spend
-                      </p>
-                      <p className="text-sm font-semibold bg-gradient-to-r from-amber-200 to-amber-100 bg-clip-text text-transparent truncate">
-                        {stats.topCategory.name}
-                      </p>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                      <StarIcon className="w-3.5 h-3.5 text-amber-400" />
                     </div>
+                    <span className="text-[10px] text-amber-300/70 uppercase tracking-wide">
+                      Top
+                    </span>
                   </div>
-                  <p className="text-xl font-bold bg-gradient-to-br from-amber-400 via-amber-300 to-yellow-300 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(251,191,36,0.4)] ml-2">
-                    ${stats.topCategory.amount.toFixed(0)}
-                  </p>
+                  <span className="text-sm font-bold bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent truncate max-w-[80px]">
+                    {stats.topCategory?.name || "—"}
+                  </span>
                 </div>
               </Card>
-            )}
+
+              <Card
+                className="neo-card p-3 transition-all duration-300 hover:-translate-y-0.5 spring-bounce bg-gradient-to-br from-sky-500/8 to-transparent"
+                style={{ animationDelay: "200ms" }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-sky-500/20 flex items-center justify-center">
+                      <BarChart3Icon className="w-3.5 h-3.5 text-sky-400" />
+                    </div>
+                    <span className="text-[10px] text-sky-300/70 uppercase tracking-wide">
+                      Daily
+                    </span>
+                  </div>
+                  <span className="text-lg font-bold bg-gradient-to-r from-sky-400 to-cyan-300 bg-clip-text text-transparent">
+                    ${stats.dailyAvg.toFixed(0)}
+                  </span>
+                </div>
+              </Card>
+            </div>
 
             {/* Category Breakdown - Clickable with progress bars */}
             <Card className="neo-card p-3 bg-gradient-to-br from-slate-500/5 to-transparent">

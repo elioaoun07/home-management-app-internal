@@ -3018,3 +3018,205 @@ export const PoGIcon = ({ className, size = 24 }: IconProps) => (
     />
   </svg>
 );
+
+// Hub / Social / Community icon (message bubble with people)
+export const HubIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* Chat bubble */}
+    <path
+      d="M21 11.5C21 16.1944 16.9706 20 12 20C10.8053 20 9.66373 19.7965 8.61102 19.4285L3 21L4.39543 16.5917C3.51444 15.1378 3 13.3843 3 11.5C3 6.80558 7.02944 3 12 3C16.9706 3 21 6.80558 21 11.5Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Person 1 */}
+    <circle cx="9" cy="10" r="1.5" fill="currentColor" />
+    <path
+      d="M9 13C7.5 13 6.5 13.5 6.5 14.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    {/* Person 2 */}
+    <circle cx="15" cy="10" r="1.5" fill="currentColor" />
+    <path
+      d="M15 13C16.5 13 17.5 13.5 17.5 14.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+// Message / Chat bubble icon
+export const MessageIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M21 11.5C21 16.1944 16.9706 20 12 20C10.8053 20 9.66373 19.7965 8.61102 19.4285L3 21L4.39543 16.5917C3.51444 15.1378 3 13.3843 3 11.5C3 6.80558 7.02944 3 12 3C16.9706 3 21 6.80558 21 11.5Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M8 10H16M8 14H12"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+// Activity Feed icon
+export const FeedIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect
+      x="3"
+      y="3"
+      width="18"
+      height="5"
+      rx="1"
+      stroke="currentColor"
+      strokeWidth="2"
+    />
+    <rect
+      x="3"
+      y="10"
+      width="18"
+      height="5"
+      rx="1"
+      stroke="currentColor"
+      strokeWidth="2"
+    />
+    <rect
+      x="3"
+      y="17"
+      width="18"
+      height="5"
+      rx="1"
+      stroke="currentColor"
+      strokeWidth="2"
+    />
+    <circle cx="6" cy="5.5" r="1" fill="currentColor" />
+    <circle cx="6" cy="12.5" r="1" fill="currentColor" />
+    <circle cx="6" cy="19.5" r="1" fill="currentColor" />
+  </svg>
+);
+
+// Trophy / Scoreboard icon
+export const TrophyIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M6 9H4C3.44772 9 3 8.55228 3 8V6C3 5.44772 3.44772 5 4 5H6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <path
+      d="M18 9H20C20.5523 9 21 8.55228 21 8V6C21 5.44772 20.5523 5 20 5H18"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <path
+      d="M6 5H18V10C18 13.3137 15.3137 16 12 16C8.68629 16 6 13.3137 6 10V5Z"
+      stroke="currentColor"
+      strokeWidth="2"
+    />
+    <path
+      d="M12 16V19"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <path
+      d="M8 22H16"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <path
+      d="M10 19H14"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+// Bell / Alert icon
+export const AlertBellIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M18 8C18 6.4087 17.3679 4.88258 16.2426 3.75736C15.1174 2.63214 13.5913 2 12 2C10.4087 2 8.88258 2.63214 7.75736 3.75736C6.63214 4.88258 6 6.4087 6 8C6 15 3 17 3 17H21C21 17 18 15 18 8Z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M13.73 21C13.5542 21.3031 13.3019 21.5547 12.9982 21.7295C12.6946 21.9044 12.3504 21.9965 12 21.9965C11.6496 21.9965 11.3054 21.9044 11.0018 21.7295C10.6982 21.5547 10.4458 21.3031 10.27 21"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Notification dot */}
+    <circle cx="18" cy="5" r="3" fill="currentColor" className="text-red-500" />
+  </svg>
+);
+
+export const SendIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);

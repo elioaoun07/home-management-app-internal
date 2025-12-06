@@ -1,6 +1,7 @@
 import AIChatAssistant from "@/components/ai/AIChatAssistant";
 import { ErrorLogger } from "@/components/ErrorLogger";
 import ConditionalHeader from "@/components/layouts/ConditionalHeader";
+import GuestHeader from "@/components/layouts/GuestHeader";
 import MobileNav from "@/components/layouts/MobileNav";
 import { Toaster } from "@/components/ui/sonner";
 import { UserProvider } from "@/contexts/UserContext";
@@ -131,13 +132,15 @@ export default async function RootLayout({
             }
           >
             <ErrorLogger />
-            {/* Conditional header - hidden on expense page */}
-            {user && (
+            {/* Conditional header - show user menu when logged in, login button when logged out */}
+            {user ? (
               <ConditionalHeader
                 userName={userName}
                 userEmail={userEmail}
                 avatarUrl={avatarUrl}
               />
+            ) : (
+              <GuestHeader />
             )}
             {children}
             <MobileNav />
