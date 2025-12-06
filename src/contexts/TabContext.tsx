@@ -28,3 +28,8 @@ export function useTab() {
   }
   return context;
 }
+
+// Safe version that returns null if outside provider
+export function useTabSafe() {
+  return useContext(TabContext);
+}

@@ -12,6 +12,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useTabSafe } from "@/contexts/TabContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import {
@@ -68,6 +69,7 @@ const generateSessionId = () => {
 const MAX_CONTEXT_MESSAGES = 20;
 
 export default function AIChatAssistant() {
+  const tabContext = useTabSafe(); // Safe version that won't throw
   const [isOpen, setIsOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -90,6 +92,41 @@ export default function AIChatAssistant() {
   const editInputRef = useRef<HTMLTextAreaElement>(null);
   const themeClasses = useThemeClasses();
 
+  // Hide AI chat button on Hub tab (Hub has its own AI chat)
+  const isHubTab = tabContext?.activeTab === "hub";
+  const [isExiting, setIsExiting] = useState(false);
+  const [shouldRender, setShouldRender] = useState(true);
+  const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Handle exit/enter animation when switching tabs
+  useEffect(() => {
+    // Clear any pending timer
+    if (exitTimerRef.current) {
+      clearTimeout(exitTimerRef.current);
+      exitTimerRef.current = null;
+    }
+
+    if (isHubTab) {
+      // Going to Hub - start exit animation
+      setIsExiting(true);
+      setShouldRender(true); // Keep rendered during animation
+      exitTimerRef.current = setTimeout(() => {
+        setShouldRender(false);
+        setIsExiting(false);
+      }, 500);
+    } else {
+      // Leaving Hub - show button immediately
+      setIsExiting(false);
+      setShouldRender(true);
+    }
+
+    return () => {
+      if (exitTimerRef.current) {
+        clearTimeout(exitTimerRef.current);
+      }
+    };
+  }, [isHubTab]);
+
   // Fetch initial usage stats when opening
   useEffect(() => {
     if (isOpen && !usage) {
@@ -104,6 +141,18 @@ export default function AIChatAssistant() {
       fetchConversations();
     }
   }, [showHistory]);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Focus input when sheet opens
+  useEffect(() => {
+    if (isOpen && !showHistory) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen, showHistory]);
 
   const fetchUsageStats = async () => {
     try {
@@ -333,18 +382,6 @@ export default function AIChatAssistant() {
     }
   };
 
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // Focus input when sheet opens
-  useEffect(() => {
-    if (isOpen && !showHistory) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [isOpen, showHistory]);
-
   const sendMessage = useCallback(
     async (messageText: string, existingMessages?: ChatMessage[]) => {
       if (!messageText.trim() || isLoading) return;
@@ -437,6 +474,11 @@ export default function AIChatAssistant() {
     return date.toLocaleDateString();
   };
 
+  // Don't render on Hub tab - Hub has its own AI chat integration
+  if (!shouldRender) {
+    return null;
+  }
+
   return (
     <>
       {/* Floating AI Button */}
@@ -447,8 +489,9 @@ export default function AIChatAssistant() {
               "fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg",
               "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500",
               "border border-violet-400/30",
-              "transition-all duration-300 hover:scale-105",
-              "flex items-center justify-center"
+              "transition-all duration-300 hover:scale-110",
+              "flex items-center justify-center",
+              isExiting ? "ai-chat-button-exit" : "ai-chat-button"
             )}
             size="icon"
           >
