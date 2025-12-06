@@ -2,7 +2,7 @@
 
 import { createContext, ReactNode, useContext, useState } from "react";
 
-type Tab = "dashboard" | "expense" | "recurring";
+type Tab = "dashboard" | "expense" | "hub";
 
 interface TabContextType {
   activeTab: Tab;

@@ -9,7 +9,7 @@ import type { Template } from "@/components/expense/TemplateDrawer";
 import TemplateDrawer from "@/components/expense/TemplateDrawer";
 import {
   BarChart3Icon,
-  CalendarClockIcon,
+  HubIcon,
   MicIcon,
   PlusIcon,
 } from "@/components/icons/FuturisticIcons";
@@ -39,7 +39,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-type TabId = "dashboard" | "expense" | "recurring";
+type TabId = "dashboard" | "expense" | "hub";
 
 const navItems: Array<{
   id: TabId;
@@ -49,7 +49,7 @@ const navItems: Array<{
 }> = [
   { id: "dashboard", icon: BarChart3Icon, label: "Dashboard" },
   { id: "expense", icon: PlusIcon, label: "Add", primary: true },
-  { id: "recurring", icon: CalendarClockIcon, label: "Recurring" },
+  { id: "hub", icon: HubIcon, label: "Hub" },
 ];
 
 export default function MobileNav() {

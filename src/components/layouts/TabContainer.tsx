@@ -2,6 +2,7 @@
 
 import DashboardClientPage from "@/app/dashboard/DashboardClientPage";
 import MobileExpenseForm from "@/components/expense/MobileExpenseForm";
+import HubPage from "@/components/hub/HubPage";
 import SimpleWatchView from "@/components/watch/SimpleWatchView";
 import { WatchErrorBoundary } from "@/components/watch/WatchErrorBoundary";
 import WebViewContainer from "@/components/web/WebViewContainer";
@@ -9,10 +10,6 @@ import { useTab } from "@/contexts/TabContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
 import { cn } from "@/lib/utils";
-import { Suspense, lazy } from "react";
-
-// Lazy load pages to reduce bundle size
-const RecurringPage = lazy(() => import("@/app/recurring/page"));
 
 export default function TabContainer() {
   const { viewMode, isLoaded } = useViewMode();
@@ -47,18 +44,6 @@ export default function TabContainer() {
     return <WebViewContainer />;
   }
 
-  // Loading fallback component
-  const LoadingFallback = () => (
-    <div
-      className={cn(
-        "min-h-screen flex items-center justify-center",
-        themeClasses.bgPage
-      )}
-    >
-      <div className={cn("animate-pulse", themeClasses.text)}>Loading...</div>
-    </div>
-  );
-
   // Default mobile view
   return (
     <>
@@ -75,11 +60,9 @@ export default function TabContainer() {
         </main>
       </div>
 
-      {/* Recurring: Add top padding for fixed header */}
-      <div className={activeTab === "recurring" ? "block pt-14" : "hidden"}>
-        <Suspense fallback={<LoadingFallback />}>
-          <RecurringPage />
-        </Suspense>
+      {/* Hub: Add top padding for fixed header */}
+      <div className={activeTab === "hub" ? "block pt-14" : "hidden"}>
+        <HubPage />
       </div>
     </>
   );
