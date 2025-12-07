@@ -13,13 +13,16 @@ import {
 } from "@/components/icons/FuturisticIcons";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
+  useBroadcastReceiptUpdate,
   useCreateThread,
   useDismissAlert,
+  useHouseholdRealtimeMessages,
   useHubAlerts,
   useHubFeed,
   useHubMessages,
   useHubStats,
   useHubThreads,
+  useMarkMessageAsRead,
   useRealtimeMessages,
   useSendMessage,
   type HubAlert,
@@ -29,6 +32,7 @@ import {
 } from "@/features/hub/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -184,6 +188,10 @@ function ChatView({
   const threads = data?.threads || [];
   const householdId = data?.household_id;
 
+  // Subscribe to household-level messages when viewing thread list (not inside a thread)
+  // This ensures we get notified about new messages in ANY thread
+  useHouseholdRealtimeMessages(!activeThreadId ? (householdId ?? null) : null);
+
   // Show AI conversation view
   if (activeThreadId === AI_THREAD_ID) {
     return <AIConversationView onBack={() => setActiveThreadId(null)} />;
@@ -319,7 +327,7 @@ function ThreadItem({
             {thread.title}
           </h3>
           {thread.unread_count > 0 && (
-            <span className="relative flex items-center justify-center">
+            <span className="relative flex items-center justify-center badge-enter">
               <span className="absolute w-5 h-5 rounded-full bg-blue-500/50 animate-ping" />
               <span className="relative px-2 py-0.5 min-w-[20px] text-center rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs font-bold shadow-lg shadow-blue-500/30">
                 {thread.unread_count}
@@ -948,33 +956,127 @@ function ThreadConversation({
   threadId: string;
   onBack: () => void;
 }) {
+  const queryClient = useQueryClient();
   const { data, isLoading } = useHubMessages(threadId);
   const { data: threadsData } = useHubThreads();
   const sendMessage = useSendMessage();
+  const broadcastReceiptUpdate = useBroadcastReceiptUpdate();
+  const markMessageAsRead = useMarkMessageAsRead();
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const unreadSeparatorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
   const hasScrolledToUnread = useRef(false);
+  const hasProcessedUnread = useRef(false);
+
+  // Handler for back button - refetch threads to get updated unread counts
+  const handleBack = useCallback(() => {
+    // Invalidate threads to refetch with fresh unread counts
+    queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
+    onBack();
+  }, [queryClient, onBack]);
+
+  // Store initial unread info as STATE so it triggers re-render
+  const [initialUnreadInfo, setInitialUnreadInfo] = useState<{
+    firstUnreadMessageId: string | null;
+    unreadCount: number;
+  }>({ firstUnreadMessageId: null, unreadCount: 0 });
+
+  // Track when unread header should animate out
+  const [isUnreadHeaderExiting, setIsUnreadHeaderExiting] = useState(false);
+
+  // Capture initial unread state on first data load
+  useEffect(() => {
+    if (data && !hasProcessedUnread.current) {
+      hasProcessedUnread.current = true;
+
+      // Capture the unread info before it gets cleared by marking as read
+      setInitialUnreadInfo({
+        firstUnreadMessageId: data.first_unread_message_id,
+        unreadCount: data.unread_count || 0,
+      });
+
+      // Update the threads cache directly to show 0 unread
+      // This happens immediately since the API already marked them as read
+      queryClient.setQueryData(
+        ["hub", "threads"],
+        (
+          oldData:
+            | {
+                threads: HubChatThread[];
+                household_id: string | null;
+                current_user_id: string;
+              }
+            | undefined
+        ) => {
+          if (!oldData) return oldData;
+          return {
+            ...oldData,
+            threads: oldData.threads.map((t) =>
+              t.id === threadId ? { ...t, unread_count: 0 } : t
+            ),
+          };
+        }
+      );
+    }
+  }, [data, queryClient, threadId]);
+
+  // Reset on thread change
+  useEffect(() => {
+    setInitialUnreadInfo({ firstUnreadMessageId: null, unreadCount: 0 });
+    setIsUnreadHeaderExiting(false);
+    hasProcessedUnread.current = false;
+    hasScrolledToUnread.current = false;
+  }, [threadId]);
+
+  // Callback when a new message from another user arrives while chat is open
+  // We immediately mark it as read in the database AND broadcast the update
+  const handleNewMessageFromOther = useCallback(
+    async (messageId: string) => {
+      // Mark as read in the database via API (so badge count is correct)
+      await markMessageAsRead(messageId);
+      // Broadcast to sender so they see the green checkmarks
+      if (data?.current_user_id) {
+        broadcastReceiptUpdate(
+          threadId,
+          [messageId],
+          "read",
+          data.current_user_id
+        );
+      }
+    },
+    [threadId, broadcastReceiptUpdate, markMessageAsRead, data?.current_user_id]
+  );
 
   // Subscribe to realtime updates - no polling needed!
-  const { isSubscribed } = useRealtimeMessages(threadId);
+  useRealtimeMessages(threadId, handleNewMessageFromOther);
 
-  // Debug: Log subscription status
+  // Broadcast receipt updates when we have unread messages from others
+  // The broadcast function handles deduplication, so we can call this freely
   useEffect(() => {
-    console.log(
-      "[HubPage] Realtime subscription status:",
-      isSubscribed,
-      "threadId:",
-      threadId
-    );
-  }, [isSubscribed, threadId]);
+    if (!data) return;
+
+    const currentUserId = data.current_user_id;
+    const messages = data.messages || [];
+
+    // Find messages from others that are unread (is_unread flag from API)
+    const unreadFromOthers = messages
+      .filter((msg) => msg.sender_user_id !== currentUserId && msg.is_unread)
+      .map((msg) => msg.id);
+
+    if (unreadFromOthers.length > 0 && currentUserId) {
+      broadcastReceiptUpdate(threadId, unreadFromOthers, "read", currentUserId);
+    }
+  }, [data, threadId, broadcastReceiptUpdate]);
 
   const messages = data?.messages || [];
   const currentUserId = data?.current_user_id;
-  const firstUnreadMessageId = data?.first_unread_message_id;
-  const unreadCount = data?.unread_count || 0;
+
+  // Use the captured initial unread info for displaying the separator
+  const firstUnreadMessageId = initialUnreadInfo.firstUnreadMessageId;
+  const unreadCount = initialUnreadInfo.unreadCount;
+
   const thread = threadsData?.threads.find((t) => t.id === threadId);
 
   // Current user's theme determines their bubble color
@@ -1016,10 +1118,20 @@ function ThreadConversation({
 
   const handleSend = () => {
     if (!newMessage.trim()) return;
-    sendMessage.mutate(
-      { content: newMessage, thread_id: threadId },
-      { onSuccess: () => setNewMessage("") }
-    );
+
+    // If there's an unread header visible, animate it out
+    if (unreadCount > 0) {
+      setIsUnreadHeaderExiting(true);
+      // Remove the header after animation completes
+      setTimeout(() => {
+        setInitialUnreadInfo({ firstUnreadMessageId: null, unreadCount: 0 });
+        setIsUnreadHeaderExiting(false);
+      }, 800); // Match animation duration (0.8s)
+    }
+
+    const messageToSend = newMessage;
+    setNewMessage(""); // Clear input immediately (optimistic)
+    sendMessage.mutate({ content: messageToSend, thread_id: threadId });
   };
 
   // Get message bubble styles based on sender and current user's theme
@@ -1081,7 +1193,7 @@ function ThreadConversation({
       {/* Thread Header - Fixed below app header */}
       <div className="fixed top-14 left-0 right-0 z-30 flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-bg-card-custom/95 backdrop-blur-sm">
         <button
-          onClick={onBack}
+          onClick={handleBack}
           className="p-2 rounded-lg hover:bg-white/5 text-white/70 hover:text-white transition-colors"
         >
           <ChevronLeftIcon className="w-5 h-5" />
@@ -1142,7 +1254,10 @@ function ThreadConversation({
                   {isFirstUnread && unreadCount > 0 && (
                     <div
                       ref={unreadSeparatorRef}
-                      className="flex items-center gap-3 py-4 my-2"
+                      className={cn(
+                        "flex items-center gap-3 py-4 my-2",
+                        isUnreadHeaderExiting && "unread-header-exit"
+                      )}
                     >
                       <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
                       <span className="px-3 py-1 text-xs font-medium text-amber-400 bg-amber-500/10 rounded-full border border-amber-500/20 animate-pulse">

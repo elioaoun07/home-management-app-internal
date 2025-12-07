@@ -54,16 +54,42 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Get unread count per thread
+  // Get unread count per thread using hub_message_receipts
+  // Unread = receipts for current user where status != 'read'
   const threadsWithUnread = await Promise.all(
     (threads || []).map(async (thread) => {
-      // Use old is_read column method (works without migration)
-      const { count } = await supabase
+      // Get all messages in this thread
+      const { data: threadMessages } = await supabase
         .from("hub_messages")
-        .select("*", { count: "exact", head: true })
-        .eq("thread_id", thread.id)
-        .neq("sender_user_id", user.id)
-        .eq("is_read", false);
+        .select("id, sender_user_id")
+        .eq("thread_id", thread.id);
+
+      // Get message IDs that are NOT from current user (messages I should have receipts for)
+      const otherUserMessageIds = (threadMessages || [])
+        .filter((m) => m.sender_user_id !== user.id)
+        .map((m) => m.id);
+
+      let unreadCount = 0;
+
+      if (otherUserMessageIds.length > 0) {
+        // Count receipts for these messages where MY status is NOT 'read'
+        const { data: receipts } = await supabase
+          .from("hub_message_receipts")
+          .select("message_id, status")
+          .eq("user_id", user.id)
+          .in("message_id", otherUserMessageIds);
+
+        // Messages with no receipt OR receipt.status != 'read' are unread
+        const readMessageIds = new Set(
+          (receipts || [])
+            .filter((r) => r.status === "read")
+            .map((r) => r.message_id)
+        );
+
+        unreadCount = otherUserMessageIds.filter(
+          (id) => !readMessageIds.has(id)
+        ).length;
+      }
 
       // Get the most recent message for preview
       const lastMessage = Array.isArray(thread.last_message)
@@ -77,7 +103,7 @@ export async function GET() {
       return {
         ...thread,
         last_message: lastMessage || null,
-        unread_count: count || 0,
+        unread_count: unreadCount,
       };
     })
   );

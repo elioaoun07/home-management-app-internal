@@ -235,6 +235,18 @@ CREATE TABLE public.hub_household_goals (
   CONSTRAINT hub_household_goals_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
   CONSTRAINT hub_household_goals_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
+CREATE TABLE public.hub_message_receipts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  message_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  status text NOT NULL DEFAULT 'sent'::text CHECK (status = ANY (ARRAY['sent'::text, 'delivered'::text, 'read'::text])),
+  delivered_at timestamp with time zone,
+  read_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT hub_message_receipts_pkey PRIMARY KEY (id),
+  CONSTRAINT hub_message_receipts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT hub_message_receipts_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.hub_messages(id)
+);
 CREATE TABLE public.hub_messages (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   household_id uuid NOT NULL,
@@ -433,8 +445,8 @@ CREATE TABLE public.user_categories (
   CONSTRAINT user_categories_pkey PRIMARY KEY (id),
   CONSTRAINT user_categories_default_fk FOREIGN KEY (default_category_id) REFERENCES public.default_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
