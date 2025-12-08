@@ -93,7 +93,7 @@ export async function GET() {
   const messagesByThread = (allMessages || []).reduce(
     (acc, msg) => {
       if (!acc[msg.thread_id]) acc[msg.thread_id] = [];
-      acc[msg.thread_id].push(msg);
+      acc[msg.thread_id]!.push(msg);
       return acc;
     },
     {} as Record<string, typeof allMessages>
