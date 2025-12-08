@@ -18,7 +18,7 @@ interface Props {
   onSuccess: (messageId: string) => void;
 }
 
-type ItemType = "reminder" | "event" | "note";
+type ItemType = "reminder" | "event" | "task";
 type ItemPriority = "low" | "normal" | "high" | "urgent";
 
 export default function AddReminderFromMessageModal({
@@ -133,7 +133,7 @@ export default function AddReminderFromMessageModal({
   const typeOptions: { value: ItemType; label: string; icon: string }[] = [
     { value: "reminder", label: "Reminder", icon: "⏰" },
     { value: "event", label: "Event", icon: "📅" },
-    { value: "note", label: "Note", icon: "📝" },
+    { value: "task", label: "Task", icon: "✅" },
   ];
 
   const priorityOptions: {

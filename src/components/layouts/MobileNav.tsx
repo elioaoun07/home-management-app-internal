@@ -1,6 +1,7 @@
 /**
  * Mobile Bottom Navigation
  * Thumb-zone friendly navigation for mobile devices
+ * Now with SemiDonutFAB for creating expenses and reminders
  */
 "use client";
 
@@ -11,8 +12,10 @@ import {
   BarChart3Icon,
   HubIcon,
   MicIcon,
-  PlusIcon,
 } from "@/components/icons/FuturisticIcons";
+import SemiDonutFAB, {
+  type FABSelection,
+} from "@/components/navigation/SemiDonutFAB";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,19 +39,18 @@ import { useViewMode } from "@/hooks/useViewMode";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 
-type TabId = "dashboard" | "expense" | "hub";
+type TabId = "dashboard" | "expense" | "reminder" | "hub";
 
+// Nav items without the primary FAB (now handled by SemiDonutFAB)
 const navItems: Array<{
   id: TabId;
   icon: any;
   label: string;
-  primary?: boolean;
 }> = [
   { id: "dashboard", icon: BarChart3Icon, label: "Dashboard" },
-  { id: "expense", icon: PlusIcon, label: "Add", primary: true },
   { id: "hub", icon: HubIcon, label: "Hub" },
 ];
 
@@ -64,8 +66,6 @@ export default function MobileNav() {
   );
   const [templateAmount, setTemplateAmount] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
-  const [isLongPress, setIsLongPress] = useState(false);
   const { viewMode, isLoaded } = useViewMode();
   const prefetchedRef = useRef({
     dashboard: false,
@@ -103,24 +103,20 @@ export default function MobileNav() {
     }
   };
 
-  const handleTouchStart = () => {
-    setIsLongPress(false);
-    longPressTimer.current = setTimeout(() => {
-      setIsLongPress(true);
-      setShowTemplateDrawer(true);
-      if (navigator.vibrate) navigator.vibrate(50);
-    }, 500);
+  // Handle FAB menu selection - navigate to the appropriate tab
+  const handleFABSelect = (mode: FABSelection) => {
+    if (mode === "expense") {
+      // Navigate to expense tab for adding expense
+      setActiveTab("expense");
+    } else if (mode === "reminder") {
+      // Navigate to reminder tab for adding reminder
+      setActiveTab("reminder");
+    }
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-    }
-    if (!isLongPress) {
-      // Normal tap - switch to expense tab
-      setActiveTab("expense");
-    }
-    e.preventDefault();
+  // Handle FAB long press - open template drawer
+  const handleFABLongPress = () => {
+    setShowTemplateDrawer(true);
   };
 
   const handleTemplateSelect = (template: Template) => {
@@ -211,81 +207,66 @@ export default function MobileNav() {
         }}
       >
         <div className="flex items-center justify-around gap-2 px-4 h-full">
-          {navItems.map((item) => {
-            const isActive = activeTab === item.id;
-            const Icon = item.icon;
+          {/* Dashboard Tab */}
+          <button
+            type="button"
+            onClick={() => {
+              if (navigator.vibrate) navigator.vibrate(10);
+              setActiveTab("dashboard");
+            }}
+            onMouseEnter={handleDashboardPrefetch}
+            onTouchStart={handleDashboardPrefetch}
+            suppressHydrationWarning
+            className={cn(
+              "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-2xl transition-all min-w-[68px] hover:scale-105",
+              "active:scale-95",
+              activeTab === "dashboard"
+                ? "neo-card neo-glow-sm text-[hsl(var(--nav-icon-active))] bg-[hsl(var(--header-bg))]"
+                : "text-[hsl(var(--nav-text-secondary)/0.75)] hover:text-[hsl(var(--nav-text-secondary))]"
+            )}
+          >
+            <div className="relative">
+              <BarChart3Icon className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-medium whitespace-nowrap">
+              Dashboard
+            </span>
+          </button>
 
-            if (item.primary) {
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    // Haptic feedback
-                    if (navigator.vibrate) {
-                      navigator.vibrate(10);
-                    }
-                    setActiveTab("expense");
-                  }}
-                  onMouseEnter={handleExpensePrefetch}
-                  onTouchStart={(e) => {
-                    handleExpensePrefetch();
-                    handleTouchStart();
-                  }}
-                  onTouchEnd={handleTouchEnd}
-                  onTouchCancel={() => {
-                    if (longPressTimer.current) {
-                      clearTimeout(longPressTimer.current);
-                    }
-                  }}
-                  suppressHydrationWarning
-                  className="flex flex-col items-center justify-center cursor-pointer"
-                >
-                  <div className="w-14 h-14 rounded-full neo-gradient text-white neo-glow flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-2xl mb-1">
-                    <Icon className="w-6 h-6" />
-                  </div>
-                  <span className="text-[10px] font-semibold text-[hsl(var(--nav-text-primary))] whitespace-nowrap">
-                    {item.label}
-                  </span>
-                </button>
-              );
-            }
+          {/* Center FAB - SemiDonutFAB */}
+          <div className="flex flex-col items-center justify-center -mt-8">
+            <SemiDonutFAB
+              onSelect={handleFABSelect}
+              onLongPress={handleFABLongPress}
+            />
+            <span className="text-[10px] font-semibold text-[hsl(var(--nav-text-primary))] whitespace-nowrap mt-1">
+              Add
+            </span>
+          </div>
 
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  // Haptic feedback for professional feel
-                  if (navigator.vibrate) {
-                    navigator.vibrate(10);
-                  }
-                  setActiveTab(item.id);
-                }}
-                onMouseEnter={
-                  item.id === "dashboard" ? handleDashboardPrefetch : undefined
-                }
-                onTouchStart={
-                  item.id === "dashboard" ? handleDashboardPrefetch : undefined
-                }
-                suppressHydrationWarning
-                className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-2xl transition-all min-w-[68px] hover:scale-105",
-                  "active:scale-95",
-                  isActive
-                    ? "neo-card neo-glow-sm text-[hsl(var(--nav-icon-active))] bg-[hsl(var(--header-bg))]"
-                    : "text-[hsl(var(--nav-text-secondary)/0.75)] hover:text-[hsl(var(--nav-text-secondary))]"
-                )}
-              >
-                <div className="relative">
-                  <Icon className="w-5 h-5" />
-                </div>
-                <span className="text-[10px] font-medium whitespace-nowrap">
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
+          {/* Hub Tab */}
+          <button
+            type="button"
+            onClick={() => {
+              if (navigator.vibrate) navigator.vibrate(10);
+              setActiveTab("hub");
+            }}
+            suppressHydrationWarning
+            className={cn(
+              "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-2xl transition-all min-w-[68px] hover:scale-105",
+              "active:scale-95",
+              activeTab === "hub"
+                ? "neo-card neo-glow-sm text-[hsl(var(--nav-icon-active))] bg-[hsl(var(--header-bg))]"
+                : "text-[hsl(var(--nav-text-secondary)/0.75)] hover:text-[hsl(var(--nav-text-secondary))]"
+            )}
+          >
+            <div className="relative">
+              <HubIcon className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-medium whitespace-nowrap">
+              Hub
+            </span>
+          </button>
         </div>
         <TemplateDrawer
           open={showTemplateDrawer}

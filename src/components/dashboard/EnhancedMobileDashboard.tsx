@@ -402,9 +402,9 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
 
   return (
     <div className={`min-h-screen ${themeClasses.pageBg} pb-20`}>
-      {/* Sticky Header with Ownership Toggle */}
+      {/* Sticky Header with Ownership Toggle - positioned below app mode toggle */}
       <div
-        className={`sticky top-14 z-20 ${themeClasses.headerGradient} backdrop-blur-xl`}
+        className={`sticky top-[112px] z-20 ${themeClasses.headerGradient} backdrop-blur-xl`}
       >
         {/* Ownership Filter - Subheader */}
         <div className="flex items-center justify-center border-b border-white/5">
@@ -721,7 +721,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
       </div>
 
       {/* Content */}
-      <div className="px-3 py-15">
+      <div className="px-3 py-5">
         {viewMode === "widgets" && (
           <div className="space-y-3">
             {/* Income / Expense / Balance - Animated Cards */}

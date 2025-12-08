@@ -27,16 +27,6 @@ CREATE TABLE public.accounts (
   CONSTRAINT accounts_pkey PRIMARY KEY (id),
   CONSTRAINT accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-CREATE TABLE public.cross_app_user_mappings (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  budget_app_user_id uuid NOT NULL UNIQUE,
-  reminder_app_user_id uuid NOT NULL,
-  display_name text,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT cross_app_user_mappings_pkey PRIMARY KEY (id),
-  CONSTRAINT cross_app_user_mappings_budget_user_fkey FOREIGN KEY (budget_app_user_id) REFERENCES auth.users(id)
-);
 CREATE TABLE public.ai_messages (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -87,6 +77,16 @@ CREATE TABLE public.budget_allocations (
   CONSTRAINT budget_allocations_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT budget_allocations_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
+CREATE TABLE public.cross_app_user_mappings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  budget_app_user_id uuid NOT NULL UNIQUE,
+  reminder_app_user_id uuid NOT NULL,
+  display_name text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT cross_app_user_mappings_pkey PRIMARY KEY (id),
+  CONSTRAINT cross_app_user_mappings_budget_app_user_id_fkey FOREIGN KEY (budget_app_user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.default_categories (
   id uuid NOT NULL,
   name text NOT NULL,
@@ -108,6 +108,15 @@ CREATE TABLE public.error_logs (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT error_logs_pkey PRIMARY KEY (id),
   CONSTRAINT error_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.event_details (
+  item_id uuid NOT NULL,
+  start_at timestamp with time zone NOT NULL,
+  end_at timestamp with time zone NOT NULL,
+  all_day boolean NOT NULL DEFAULT false,
+  location_text text,
+  CONSTRAINT event_details_pkey PRIMARY KEY (item_id),
+  CONSTRAINT event_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
 CREATE TABLE public.events (
   id text NOT NULL,
@@ -142,6 +151,20 @@ CREATE TABLE public.future_purchases (
   completed_at timestamp with time zone,
   CONSTRAINT future_purchases_pkey PRIMARY KEY (id),
   CONSTRAINT future_purchases_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.google_calendar_tokens (
+  user_id uuid NOT NULL,
+  google_refresh_token text NOT NULL,
+  google_calendar_id text NOT NULL,
+  google_access_token text,
+  access_token_expires_at timestamp with time zone,
+  connected_at timestamp with time zone NOT NULL DEFAULT now(),
+  last_synced_at timestamp with time zone,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT google_calendar_tokens_pkey PRIMARY KEY (user_id),
+  CONSTRAINT google_calendar_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.household_links (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -190,7 +213,7 @@ CREATE TABLE public.hub_chat_threads (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   last_message_at timestamp with time zone DEFAULT now(),
-  purpose text DEFAULT 'general'::text CHECK (purpose IN ('general', 'budget', 'reminder', 'shopping', 'travel', 'health', 'other')),
+  purpose text DEFAULT 'general'::text CHECK (purpose = ANY (ARRAY['general'::text, 'budget'::text, 'reminder'::text, 'shopping'::text, 'travel'::text, 'health'::text, 'other'::text])),
   external_url text,
   external_app_name text,
   CONSTRAINT hub_chat_threads_pkey PRIMARY KEY (id),
@@ -248,6 +271,20 @@ CREATE TABLE public.hub_household_goals (
   CONSTRAINT hub_household_goals_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
   CONSTRAINT hub_household_goals_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
+CREATE TABLE public.hub_message_actions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  message_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  action_type text NOT NULL CHECK (action_type = ANY (ARRAY['transaction'::text, 'reminder'::text, 'forward'::text, 'pin'::text])),
+  transaction_id uuid,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT hub_message_actions_pkey PRIMARY KEY (id),
+  CONSTRAINT hub_message_actions_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.hub_messages(id),
+  CONSTRAINT hub_message_actions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT hub_message_actions_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id)
+);
 CREATE TABLE public.hub_message_receipts (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   message_id uuid NOT NULL,
@@ -269,10 +306,12 @@ CREATE TABLE public.hub_messages (
   transaction_id uuid,
   goal_id uuid,
   alert_id uuid,
-  is_read boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now(),
   reply_to_id uuid,
   thread_id uuid,
+  hidden_for ARRAY DEFAULT '{}'::uuid[],
+  deleted_at timestamp with time zone,
+  deleted_by uuid,
   CONSTRAINT hub_messages_pkey PRIMARY KEY (id),
   CONSTRAINT hub_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
   CONSTRAINT hub_messages_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
@@ -310,6 +349,104 @@ CREATE TABLE public.hub_user_stats (
   CONSTRAINT hub_user_stats_pkey PRIMARY KEY (id),
   CONSTRAINT hub_user_stats_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT hub_user_stats_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id)
+);
+CREATE TABLE public.item_alert_presets (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  preset_config jsonb NOT NULL,
+  is_default boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT item_alert_presets_pkey PRIMARY KEY (id),
+  CONSTRAINT item_alert_presets_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.item_alerts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  kind USER-DEFINED NOT NULL,
+  trigger_at timestamp with time zone,
+  offset_minutes integer CHECK (offset_minutes IS NULL OR offset_minutes > 0),
+  relative_to USER-DEFINED,
+  repeat_every_minutes integer CHECK (repeat_every_minutes IS NULL OR repeat_every_minutes > 0),
+  max_repeats integer CHECK (max_repeats IS NULL OR max_repeats > 0),
+  channel USER-DEFINED NOT NULL DEFAULT 'push'::alert_channel_enum,
+  active boolean NOT NULL DEFAULT true,
+  last_fired_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT item_alerts_pkey PRIMARY KEY (id),
+  CONSTRAINT item_alerts_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+);
+CREATE TABLE public.item_attachments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  storage_key text,
+  file_url text,
+  mime_type text,
+  size_bytes bigint,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT item_attachments_pkey PRIMARY KEY (id),
+  CONSTRAINT item_attachments_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+);
+CREATE TABLE public.item_recurrence_exceptions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  rule_id uuid NOT NULL,
+  exdate timestamp with time zone NOT NULL,
+  override_payload_json jsonb,
+  CONSTRAINT item_recurrence_exceptions_pkey PRIMARY KEY (id),
+  CONSTRAINT item_recurrence_exceptions_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.item_recurrence_rules(id)
+);
+CREATE TABLE public.item_recurrence_rules (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  rrule text NOT NULL,
+  start_anchor timestamp with time zone NOT NULL,
+  end_until timestamp with time zone,
+  count integer,
+  CONSTRAINT item_recurrence_rules_pkey PRIMARY KEY (id),
+  CONSTRAINT item_recurrence_rules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+);
+CREATE TABLE public.item_snoozes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  alert_id uuid NOT NULL,
+  item_id uuid NOT NULL,
+  snoozed_until timestamp with time zone NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT item_snoozes_pkey PRIMARY KEY (id),
+  CONSTRAINT item_snoozes_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.item_alerts(id),
+  CONSTRAINT item_snoozes_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+);
+CREATE TABLE public.item_subtasks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  parent_item_id uuid NOT NULL,
+  title text NOT NULL,
+  done_at timestamp with time zone,
+  order_index integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT item_subtasks_pkey PRIMARY KEY (id),
+  CONSTRAINT item_subtasks_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES public.items(id)
+);
+CREATE TABLE public.items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  type USER-DEFINED NOT NULL,
+  title text NOT NULL,
+  description text,
+  priority USER-DEFINED NOT NULL DEFAULT 'normal'::item_priority_enum,
+  status USER-DEFINED,
+  metadata_json jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  archived_at timestamp with time zone,
+  is_public boolean NOT NULL DEFAULT false,
+  responsible_user_id uuid NOT NULL,
+  google_event_id text,
+  CONSTRAINT items_pkey PRIMARY KEY (id),
+  CONSTRAINT items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT items_responsible_user_fkey FOREIGN KEY (responsible_user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.merchant_mappings (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -349,6 +486,15 @@ CREATE TABLE public.recurring_payments (
   CONSTRAINT recurring_payments_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
   CONSTRAINT recurring_payments_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT recurring_payments_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id)
+);
+CREATE TABLE public.reminder_details (
+  item_id uuid NOT NULL,
+  due_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  estimate_minutes integer CHECK (estimate_minutes IS NULL OR estimate_minutes >= 0),
+  has_checklist boolean NOT NULL DEFAULT false,
+  CONSTRAINT reminder_details_pkey PRIMARY KEY (item_id),
+  CONSTRAINT reminder_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
 CREATE TABLE public.statement_imports (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -471,6 +617,26 @@ CREATE TABLE public.user_onboarding (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT user_onboarding_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_onboarding_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.reminder_templates (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  title text NOT NULL,
+  description text,
+  priority text NOT NULL DEFAULT 'normal'::text CHECK (priority = ANY (ARRAY['low'::text, 'normal'::text, 'high'::text, 'urgent'::text])),
+  item_type text NOT NULL DEFAULT 'task'::text CHECK (item_type = ANY (ARRAY['reminder'::text, 'event'::text, 'task'::text])),
+  default_duration_minutes integer,
+  default_start_time time,
+  location_text text,
+  icon text DEFAULT 'clipboard-list'::text,
+  color text DEFAULT '#38bdf8'::text,
+  use_count integer NOT NULL DEFAULT 0,
+  last_used_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT reminder_templates_pkey PRIMARY KEY (id),
+  CONSTRAINT reminder_templates_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.user_preferences (
   user_id uuid NOT NULL,

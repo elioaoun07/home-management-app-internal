@@ -1,5 +1,12 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
+-- 
+-- This schema is from the Reminder App, which has been MERGED into this Budget App.
+-- See migrations/add_items_system.sql for the actual migration to add these tables.
+--
+-- The merged app now supports:
+-- 1. Budget/Expense tracking (existing functionality)
+-- 2. Reminders, Events, and Notes (from Reminder App)
 
 CREATE TABLE public.alert_presets (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

@@ -40,7 +40,7 @@ export function getReminderAppClient(): SupabaseClient {
 }
 
 // Types for Reminder App items
-export type ItemType = "reminder" | "event" | "note";
+export type ItemType = "reminder" | "event" | "task";
 export type ItemPriority = "low" | "normal" | "high" | "urgent";
 export type ItemStatus = "pending" | "in_progress" | "completed" | "cancelled";
 

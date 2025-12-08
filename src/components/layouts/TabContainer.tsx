@@ -3,6 +3,7 @@
 import DashboardClientPage from "@/app/dashboard/DashboardClientPage";
 import MobileExpenseForm from "@/components/expense/MobileExpenseForm";
 import HubPage from "@/components/hub/HubPage";
+import MobileReminderForm from "@/components/reminder/MobileReminderForm";
 import SimpleWatchView from "@/components/watch/SimpleWatchView";
 import { WatchErrorBoundary } from "@/components/watch/WatchErrorBoundary";
 import WebViewContainer from "@/components/web/WebViewContainer";
@@ -57,6 +58,13 @@ export default function TabContainer() {
       <div className={activeTab === "expense" ? "block" : "hidden"}>
         <main className="h-screen">
           <MobileExpenseForm />
+        </main>
+      </div>
+
+      {/* Reminder: Similar to Expense, full page form */}
+      <div className={activeTab === "reminder" ? "block" : "hidden"}>
+        <main className="h-screen">
+          <MobileReminderForm />
         </main>
       </div>
 

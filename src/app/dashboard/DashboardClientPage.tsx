@@ -1,10 +1,16 @@
 "use client";
 
 import EnhancedMobileDashboard from "@/components/dashboard/EnhancedMobileDashboard";
+import { ItemsDashboard } from "@/components/items";
+import AppModeToggle, {
+  ViewModeSelector,
+} from "@/components/navigation/AppModeToggle";
+import { useAppMode } from "@/contexts/AppModeContext";
 import { useUserPreferences } from "@/features/preferences/useUserPreferences";
 import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import { getDefaultDateRange } from "@/lib/utils/date";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -12,9 +18,13 @@ import { useEffect, useMemo, useState } from "react";
 export default function DashboardClientPage() {
   const themeClasses = useThemeClasses();
   const router = useRouter();
+  const { appMode, isBudgetMode, isItemsMode } = useAppMode();
   const [monthStartDay, setMonthStartDay] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(
     undefined
+  );
+  const [viewMode, setViewMode] = useState<"agenda" | "schedule" | "calendar">(
+    "agenda"
   );
   const { data: preferences } = useUserPreferences();
 
@@ -151,14 +161,40 @@ export default function DashboardClientPage() {
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <EnhancedMobileDashboard
-        transactions={transactions}
-        startDate={dateRange.start}
-        endDate={dateRange.end}
-        currentUserId={currentUserId}
-        onDateRangeChange={handleDateRangeChange}
-      />
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 pt-14">
+      {/* App Mode Toggle Header - positioned below main app header */}
+      <div
+        className={cn(
+          "sticky top-14 z-30 py-3 px-4",
+          "bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-md",
+          "border-b border-white/5"
+        )}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <AppModeToggle />
+          <ViewModeSelector
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+          />
+        </div>
+      </div>
+
+      {/* Conditional Dashboard Content */}
+      {isBudgetMode ? (
+        <EnhancedMobileDashboard
+          transactions={transactions}
+          startDate={dateRange.start}
+          endDate={dateRange.end}
+          currentUserId={currentUserId}
+          onDateRangeChange={handleDateRangeChange}
+        />
+      ) : (
+        <ItemsDashboard
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          currentUserId={currentUserId}
+        />
+      )}
     </div>
   );
 }

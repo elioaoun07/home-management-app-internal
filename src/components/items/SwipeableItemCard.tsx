@@ -1,0 +1,604 @@
+"use client";
+
+import { useTheme } from "@/contexts/ThemeContext";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { cn } from "@/lib/utils";
+import type { ItemWithDetails } from "@/types/items";
+import {
+  differenceInDays,
+  differenceInHours,
+  differenceInMinutes,
+  format,
+  isBefore,
+  parseISO,
+} from "date-fns";
+import { useEffect, useRef, useState } from "react";
+
+// Icons
+const CheckIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const CalendarIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+    <line x1="16" x2="16" y1="2" y2="6" />
+    <line x1="8" x2="8" y1="2" y2="6" />
+    <line x1="3" x2="21" y1="10" y2="10" />
+  </svg>
+);
+
+const CheckSquare = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+);
+
+const ClockIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const Edit2Icon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const Trash2Icon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
+
+const LockIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
+const GlobeIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+  </svg>
+);
+
+const AlertIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+// Priority badge colors
+const priorityColors = {
+  low: {
+    bg: "bg-gray-500/20",
+    text: "text-gray-400",
+    border: "border-gray-500/30",
+  },
+  normal: {
+    bg: "bg-cyan-500/20",
+    text: "text-cyan-400",
+    border: "border-cyan-500/30",
+  },
+  high: {
+    bg: "bg-orange-500/20",
+    text: "text-orange-400",
+    border: "border-orange-500/30",
+  },
+  urgent: {
+    bg: "bg-red-500/20",
+    text: "text-red-400",
+    border: "border-red-500/30",
+  },
+};
+
+type Props = {
+  item: ItemWithDetails;
+  onComplete?: () => void;
+  onEdit?: (item: ItemWithDetails) => void;
+  onDelete?: (id: string) => void;
+  onClick?: (item: ItemWithDetails) => void;
+  currentUserId?: string;
+};
+
+// Format countdown/overdue time
+function formatTimeDistance(dateStr: string): {
+  text: string;
+  isOverdue: boolean;
+} {
+  const date = parseISO(dateStr);
+  const now = new Date();
+  const isOverdue = isBefore(date, now);
+
+  const minutes = Math.abs(differenceInMinutes(date, now));
+  const hours = Math.abs(differenceInHours(date, now));
+  const days = Math.abs(differenceInDays(date, now));
+
+  let text: string;
+  if (days >= 1) {
+    text = `${days}d ${hours % 24}h`;
+  } else if (hours >= 1) {
+    text = `${hours}h ${minutes % 60}m`;
+  } else {
+    text = `${minutes}m`;
+  }
+
+  return {
+    text: isOverdue ? `${text} ago` : `in ${text}`,
+    isOverdue,
+  };
+}
+
+export default function SwipeableItemCard({
+  item,
+  onComplete,
+  onEdit,
+  onDelete,
+  onClick,
+  currentUserId,
+}: Props) {
+  const [offset, setOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const startX = useRef(0);
+  const currentX = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const animationFrameRef = useRef<number | undefined>(undefined);
+
+  const { theme: currentUserTheme } = useTheme();
+  const themeClasses = useThemeClasses();
+  const isPink = currentUserTheme === "pink";
+
+  // Determine ownership
+  const isOwner = currentUserId
+    ? item.responsible_user_id === currentUserId ||
+      item.user_id === currentUserId
+    : true;
+
+  const SWIPE_THRESHOLD = 80;
+  const MAX_OFFSET = 120;
+
+  const isReminder = item.type === "reminder";
+  const isEvent = item.type === "event";
+  const isTask = item.type === "task";
+  const isCompleted = item.status === "completed";
+
+  // Get due/start date
+  const dateStr =
+    isReminder || isTask
+      ? item.reminder_details?.due_at
+      : isEvent
+        ? item.event_details?.start_at
+        : null;
+
+  const timeInfo = dateStr ? formatTimeDistance(dateStr) : null;
+
+  // Touch handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!isOwner) return;
+    startX.current = e.touches[0].clientX;
+    currentX.current = offset;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+
+    const touch = e.touches[0];
+    const diff = touch.clientX - startX.current;
+    const newOffset = Math.max(
+      -MAX_OFFSET,
+      Math.min(MAX_OFFSET, currentX.current + diff)
+    );
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    animationFrameRef.current = requestAnimationFrame(() => {
+      setOffset(newOffset);
+    });
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+
+    if (offset < -SWIPE_THRESHOLD) {
+      // Swiped left - Delete
+      setOffset(-MAX_OFFSET);
+      setTimeout(() => onDelete?.(item.id), 200);
+    } else if (offset > SWIPE_THRESHOLD) {
+      // Swiped right - Edit
+      setOffset(MAX_OFFSET);
+      setTimeout(() => {
+        setOffset(0);
+        onEdit?.(item);
+      }, 200);
+    } else {
+      setOffset(0);
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!isOwner) return;
+    startX.current = e.clientX;
+    currentX.current = offset;
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+
+    const diff = e.clientX - startX.current;
+    const newOffset = Math.max(
+      -MAX_OFFSET,
+      Math.min(MAX_OFFSET, currentX.current + diff)
+    );
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    animationFrameRef.current = requestAnimationFrame(() => {
+      setOffset(newOffset);
+    });
+  };
+
+  const handleMouseUp = () => {
+    if (!isDragging) return;
+    handleTouchEnd();
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isDragging]);
+
+  // Owner-based border colors
+  const borderColor = isOwner
+    ? isPink
+      ? "#ec4899" // pink-500
+      : "#3b82f6" // blue-500
+    : isPink
+      ? "#3b82f6" // blue-500 (partner's)
+      : "#ec4899"; // pink-500 (partner's)
+
+  const glowColor = isOwner
+    ? isPink
+      ? "rgba(236,72,153,0.15)"
+      : "rgba(59,130,246,0.15)"
+    : isPink
+      ? "rgba(59,130,246,0.15)"
+      : "rgba(236,72,153,0.15)";
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative overflow-hidden rounded-xl"
+      style={{ touchAction: "pan-y" }}
+    >
+      {/* Background Actions */}
+      <div className="absolute inset-0 flex items-center justify-between px-4">
+        {/* Edit (Right side - revealed by swiping right) */}
+        <div
+          className={cn(
+            "flex items-center gap-2 transition-opacity",
+            offset > 30 ? "opacity-100" : "opacity-0"
+          )}
+        >
+          <Edit2Icon
+            className={cn(
+              "w-5 h-5",
+              isPink ? "text-pink-400" : "text-cyan-400",
+              isPink
+                ? "drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]"
+                : "drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]"
+            )}
+          />
+          <span
+            className={cn(
+              "text-sm font-medium",
+              isPink ? "text-pink-400" : "text-cyan-400"
+            )}
+          >
+            Edit
+          </span>
+        </div>
+
+        {/* Delete (Left side - revealed by swiping left) */}
+        <div
+          className={cn(
+            "flex items-center gap-2 transition-opacity ml-auto",
+            offset < -30 ? "opacity-100" : "opacity-0"
+          )}
+        >
+          <span className="text-sm font-medium text-red-400">Delete</span>
+          <Trash2Icon className="w-5 h-5 text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div
+        className={cn(
+          "relative bg-gradient-to-br from-[#1a2942] to-[#0f1d2e] rounded-xl p-3 cursor-pointer",
+          isCompleted && "opacity-60",
+          "neo-card",
+          isDragging ? "" : "transition-transform duration-200 ease-out"
+        )}
+        style={{
+          transform: `translateX(${offset}px)`,
+          borderLeft: `4px solid ${borderColor}`,
+          boxShadow: `0 0 12px ${glowColor}`,
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onClick={(e) => {
+          if (Math.abs(offset) < 5) {
+            onClick?.(item);
+          }
+        }}
+      >
+        <div className="flex items-start gap-3">
+          {/* Left: Checkbox/Icon */}
+          <div className="flex-shrink-0">
+            {isReminder && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onComplete?.();
+                }}
+                className={cn(
+                  "w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all",
+                  isCompleted
+                    ? "bg-green-500 border-green-500"
+                    : isPink
+                      ? "border-pink-400/50 hover:border-pink-400 hover:bg-pink-500/10"
+                      : "border-cyan-400/50 hover:border-cyan-400 hover:bg-cyan-500/10"
+                )}
+              >
+                {isCompleted && (
+                  <CheckIcon className="w-3.5 h-3.5 text-white" />
+                )}
+              </button>
+            )}
+            {isEvent && (
+              <div
+                className={cn(
+                  "w-8 h-8 rounded-lg flex items-center justify-center",
+                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                )}
+              >
+                <CalendarIcon
+                  className={cn(
+                    "w-4 h-4",
+                    isPink ? "text-pink-400" : "text-cyan-400"
+                  )}
+                />
+              </div>
+            )}
+            {isTask && (
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-purple-500/20">
+                <CheckSquare className="w-4 h-4 text-purple-400" />
+              </div>
+            )}
+          </div>
+
+          {/* Middle: Content */}
+          <div className="flex-1 min-w-0">
+            {/* Title row with priority and visibility */}
+            <div className="flex items-center gap-2">
+              <h3
+                className={cn(
+                  "font-semibold text-white truncate text-sm",
+                  isCompleted && "line-through text-white/50"
+                )}
+              >
+                {item.title}
+              </h3>
+              {/* Priority badge (only if not normal) */}
+              {item.priority !== "normal" && (
+                <span
+                  className={cn(
+                    "px-1.5 py-0.5 rounded text-[10px] font-medium uppercase",
+                    priorityColors[item.priority].bg,
+                    priorityColors[item.priority].text
+                  )}
+                >
+                  {item.priority}
+                </span>
+              )}
+            </div>
+
+            {/* Description */}
+            {item.description && (
+              <p className="text-xs text-white/50 mt-0.5 line-clamp-1">
+                {item.description}
+              </p>
+            )}
+
+            {/* Tags/Categories */}
+            {item.categories && item.categories.length > 0 && (
+              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                {item.categories.slice(0, 3).map((cat) => (
+                  <span
+                    key={cat.id}
+                    className="px-1.5 py-0.5 rounded text-[10px] bg-white/10 text-white/60"
+                    style={{
+                      backgroundColor: cat.color_hex
+                        ? `${cat.color_hex}20`
+                        : undefined,
+                      color: cat.color_hex || undefined,
+                    }}
+                  >
+                    {cat.name}
+                  </span>
+                ))}
+                {item.categories.length > 3 && (
+                  <span className="text-[10px] text-white/40">
+                    +{item.categories.length - 3}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Bottom row: Time + Location + Visibility */}
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              {/* Countdown/Overdue */}
+              {timeInfo && !isCompleted && (
+                <div
+                  className={cn(
+                    "flex items-center gap-1 text-[11px]",
+                    timeInfo.isOverdue
+                      ? "text-red-400"
+                      : isPink
+                        ? "text-pink-400/80"
+                        : "text-cyan-400/80"
+                  )}
+                >
+                  {timeInfo.isOverdue ? (
+                    <AlertIcon className="w-3 h-3" />
+                  ) : (
+                    <ClockIcon className="w-3 h-3" />
+                  )}
+                  <span className="font-medium">{timeInfo.text}</span>
+                </div>
+              )}
+
+              {/* Date/Time display */}
+              {dateStr && (
+                <span className="text-[11px] text-white/40">
+                  {format(parseISO(dateStr), "MMM d, h:mm a")}
+                </span>
+              )}
+
+              {/* Location for events */}
+              {isEvent && item.event_details?.location_text && (
+                <span className="text-[11px] text-white/40 truncate max-w-[80px]">
+                  📍 {item.event_details.location_text}
+                </span>
+              )}
+
+              {/* Visibility indicator */}
+              <div
+                className="ml-auto flex items-center gap-1"
+                title={item.is_public ? "Public" : "Private"}
+              >
+                {item.is_public ? (
+                  <GlobeIcon className="w-3 h-3 text-white/30" />
+                ) : (
+                  <LockIcon className="w-3 h-3 text-white/30" />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Subtasks indicator */}
+          {item.subtasks && item.subtasks.length > 0 && (
+            <div className="flex-shrink-0 text-right">
+              <div className="text-[10px] text-white/40">
+                {item.subtasks.filter((s) => s.done_at).length}/
+                {item.subtasks.length}
+              </div>
+              <div className="w-12 h-1 bg-white/10 rounded-full overflow-hidden mt-1">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    isPink ? "bg-pink-400" : "bg-cyan-400"
+                  )}
+                  style={{
+                    width: `${
+                      (item.subtasks.filter((s) => s.done_at).length /
+                        item.subtasks.length) *
+                      100
+                    }%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
