@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
         title: item.title,
         created_at: item.created_at,
       },
-      message: `${body.type === "event" ? "Event" : body.type === "note" ? "Note" : "Reminder"} created successfully!`,
+      message: `${body.type === "event" ? "Event" : body.type === "task" ? "Task" : "Reminder"} created successfully!`,
     });
   } catch (error) {
     console.error("Create reminder API error:", error);
