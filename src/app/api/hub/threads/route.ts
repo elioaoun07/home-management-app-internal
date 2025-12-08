@@ -90,13 +90,14 @@ export async function GET() {
   );
 
   // Group messages by thread for unread count calculation
+  type MessageType = NonNullable<typeof allMessages>[number];
   const messagesByThread = (allMessages || []).reduce(
     (acc, msg) => {
       if (!acc[msg.thread_id]) acc[msg.thread_id] = [];
       acc[msg.thread_id]!.push(msg);
       return acc;
     },
-    {} as Record<string, typeof allMessages>
+    {} as Record<string, MessageType[]>
   );
 
   // Build final threads with unread counts
