@@ -5,6 +5,16 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// Thread purpose types - determines default actions and external app links
+export type ThreadPurpose =
+  | "general"
+  | "budget"
+  | "reminder"
+  | "shopping"
+  | "travel"
+  | "health"
+  | "other";
+
 // Types
 export type HubChatThread = {
   id: string;
@@ -24,6 +34,10 @@ export type HubChatThread = {
     created_at: string;
   } | null;
   unread_count: number;
+  // New fields for external app integration
+  purpose: ThreadPurpose;
+  external_url: string | null;
+  external_app_name: string | null;
 };
 
 export type HubMessage = {
@@ -41,6 +55,11 @@ export type HubMessage = {
   // New fields for read receipts
   status?: "sent" | "delivered" | "read"; // For messages I sent
   is_unread?: boolean; // For messages I received
+  // New fields for soft delete
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  hidden_for?: string[];
+  is_hidden_by_me?: boolean; // True if current user has hidden this message
 };
 
 export type HubFeedItem = {
@@ -98,10 +117,10 @@ export function useHubThreads() {
         current_user_id: string;
       };
     },
-    staleTime: 0, // Always fetch fresh - ensures new messages appear in thread list
-    gcTime: 0, // Don't cache at all - ensures we always get fresh data on mount
+    staleTime: 30000, // 30 seconds - balance between freshness and performance
+    gcTime: 60000, // Keep in cache for 1 minute
     refetchOnWindowFocus: true, // Refresh when user comes back to app
-    refetchOnMount: "always", // Always refetch when component mounts
+    refetchOnMount: true, // Refetch on mount only if stale
   });
 }
 
@@ -114,16 +133,30 @@ export function useCreateThread() {
       description,
       icon,
       household_id,
+      purpose,
+      external_url,
+      external_app_name,
     }: {
       title: string;
       description?: string;
       icon?: string;
       household_id: string;
+      purpose?: ThreadPurpose;
+      external_url?: string;
+      external_app_name?: string;
     }) => {
       const res = await fetch("/api/hub/threads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, icon, household_id }),
+        body: JSON.stringify({
+          title,
+          description,
+          icon,
+          household_id,
+          purpose,
+          external_url,
+          external_app_name,
+        }),
       });
       if (!res.ok) throw new Error("Failed to create thread");
       return res.json();
@@ -143,6 +176,7 @@ export function useHubMessages(threadId: string | null) {
       if (!threadId)
         return {
           messages: [],
+          message_actions: [],
           thread_id: null,
           household_id: null,
           current_user_id: "",
@@ -154,6 +188,7 @@ export function useHubMessages(threadId: string | null) {
       const data = await res.json();
       return data as {
         messages: HubMessage[];
+        message_actions: any[]; // Actions included in response - no separate API call needed
         thread_id: string;
         household_id: string;
         current_user_id: string;
@@ -163,10 +198,10 @@ export function useHubMessages(threadId: string | null) {
       };
     },
     enabled: !!threadId,
-    staleTime: 0, // Always fetch fresh
-    gcTime: 0, // Don't cache at all - ensures we always get fresh data
+    staleTime: 30000, // 30 seconds - realtime handles live updates
+    gcTime: 60000, // Keep in cache for 1 minute
     refetchOnWindowFocus: true,
-    refetchOnMount: "always", // Always refetch when component mounts
+    refetchOnMount: true, // Refetch on mount only if stale
   });
 }
 
@@ -175,16 +210,13 @@ export function useHubMessages(threadId: string | null) {
 export function useMarkMessageAsRead() {
   return useCallback(async (messageId: string) => {
     try {
-      const res = await fetch("/api/hub/mark-read", {
+      await fetch("/api/hub/mark-read", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message_id: messageId }),
       });
-      if (res.ok) {
-        console.log("[Receipts] ✅ Marked message as read:", messageId);
-      }
     } catch (err) {
-      console.error("[Receipts] ❌ Failed to mark message as read:", err);
+      // Silent fail
     }
   }, []);
 }
@@ -204,9 +236,6 @@ export function useBroadcastReceiptUpdate() {
       );
 
       if (!newMessageIds.length) {
-        console.log(
-          "[Realtime] ⏭️ All messages already have receipts broadcasted, skipping"
-        );
         return;
       }
 
@@ -215,12 +244,6 @@ export function useBroadcastReceiptUpdate() {
 
       const supabase = supabaseBrowser();
       const channelName = `thread-${threadId}`;
-
-      console.log(
-        "[Realtime] 📤 Broadcasting receipt update to:",
-        channelName,
-        { messageIds: newMessageIds, status }
-      );
 
       try {
         // Get or create channel
@@ -243,16 +266,9 @@ export function useBroadcastReceiptUpdate() {
             payload: { messageIds: newMessageIds, status, userId },
           });
         }
-
-        console.log(
-          "[Realtime] ✅ Receipt update broadcasted for",
-          newMessageIds.length,
-          "messages"
-        );
       } catch (err) {
         // On error, remove from set so we can retry
         newMessageIds.forEach((id) => broadcastedReceiptIds.delete(id));
-        console.error("[Realtime] ❌ Failed to broadcast receipt:", err);
       }
     },
     []
@@ -268,7 +284,6 @@ const broadcastedReceiptIds = new Set<string>();
 // Clear broadcasted receipt tracking (call when switching threads)
 export function clearBroadcastedReceipts() {
   broadcastedReceiptIds.clear();
-  console.log("[Realtime] 🧹 Cleared broadcasted receipts tracking");
 }
 
 // Store active channel subscriptions globally to survive React Strict Mode
@@ -306,8 +321,6 @@ export function useRealtimeMessages(
       if (newMessage.thread_id !== currentThreadId) {
         return;
       }
-
-      console.log("[Realtime] 📨 New message received:", newMessage.id);
 
       // Update the messages cache optimistically
       queryClient.setQueryData(
@@ -443,15 +456,6 @@ export function useRealtimeMessages(
             }
           }
 
-          if (updatedCount > 0) {
-            console.log(
-              "[Realtime] ✅ Updated",
-              updatedCount,
-              "message(s) to status:",
-              status
-            );
-          }
-
           if (updatedCount === 0) {
             return oldData;
           }
@@ -480,12 +484,6 @@ export function useRealtimeMessages(
     if (existing) {
       // Increment ref count and reuse
       existing.refCount++;
-      console.log(
-        "[Realtime] ♻️ Reusing channel:",
-        channelName,
-        "refCount:",
-        existing.refCount
-      );
       setIsSubscribed(true);
 
       return () => {
@@ -494,14 +492,7 @@ export function useRealtimeMessages(
           const entry = activeChannels.get(channelName);
           if (entry) {
             entry.refCount--;
-            console.log(
-              "[Realtime] 📉 Decrement refCount:",
-              channelName,
-              "→",
-              entry.refCount
-            );
             if (entry.refCount <= 0) {
-              console.log("[Realtime] 🗑️ Removing channel:", channelName);
               supabase.removeChannel(entry.channel);
               activeChannels.delete(channelName);
               setIsSubscribed(false);
@@ -510,8 +501,6 @@ export function useRealtimeMessages(
         }, 100);
       };
     }
-
-    console.log("[Realtime] 📡 Creating new channel:", channelName);
 
     // Create new channel
     const channel = supabase
@@ -535,9 +524,7 @@ export function useRealtimeMessages(
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
           setIsSubscribed(true);
-          console.log("[Realtime] ✅ Subscribed to:", channelName);
         } else if (status === "CHANNEL_ERROR") {
-          console.error("[Realtime] ❌ Channel error:", err);
         }
       });
 
@@ -550,14 +537,7 @@ export function useRealtimeMessages(
         const entry = activeChannels.get(channelName);
         if (entry) {
           entry.refCount--;
-          console.log(
-            "[Realtime] 📉 Decrement refCount:",
-            channelName,
-            "→",
-            entry.refCount
-          );
           if (entry.refCount <= 0) {
-            console.log("[Realtime] 🗑️ Removing channel:", channelName);
             supabase.removeChannel(entry.channel);
             activeChannels.delete(channelName);
             setIsSubscribed(false);
@@ -590,12 +570,6 @@ export function useHouseholdRealtimeMessages(householdId: string | null) {
     const existing = activeChannels.get(channelName);
     if (existing) {
       existing.refCount++;
-      console.log(
-        "[Realtime] ♻️ Reusing household channel:",
-        channelName,
-        "refCount:",
-        existing.refCount
-      );
       setIsSubscribed(true);
 
       return () => {
@@ -604,17 +578,7 @@ export function useHouseholdRealtimeMessages(householdId: string | null) {
           const entry = activeChannels.get(channelName);
           if (entry) {
             entry.refCount--;
-            console.log(
-              "[Realtime] 📉 Decrement household refCount:",
-              channelName,
-              "→",
-              entry.refCount
-            );
             if (entry.refCount <= 0) {
-              console.log(
-                "[Realtime] 🗑️ Removing household channel:",
-                channelName
-              );
               supabase.removeChannel(entry.channel);
               activeChannels.delete(channelName);
               setIsSubscribed(false);
@@ -624,17 +588,11 @@ export function useHouseholdRealtimeMessages(householdId: string | null) {
       };
     }
 
-    console.log("[Realtime] 📡 Creating new household channel:", channelName);
-
     const channel = supabase
       .channel(channelName)
       .on("broadcast", { event: "new-message" }, (payload) => {
         if (payload.payload) {
           const newMessage = payload.payload as HubMessage;
-          console.log(
-            "[Realtime] 📨 Household: New message in thread:",
-            newMessage.thread_id
-          );
 
           // Invalidate threads to refresh the list with new message preview
           queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
@@ -643,9 +601,7 @@ export function useHouseholdRealtimeMessages(householdId: string | null) {
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
           setIsSubscribed(true);
-          console.log("[Realtime] ✅ Subscribed to household:", channelName);
         } else if (status === "CHANNEL_ERROR") {
-          console.error("[Realtime] ❌ Household channel error:", err);
         }
       });
 
@@ -657,17 +613,7 @@ export function useHouseholdRealtimeMessages(householdId: string | null) {
         const entry = activeChannels.get(channelName);
         if (entry) {
           entry.refCount--;
-          console.log(
-            "[Realtime] 📉 Decrement household refCount:",
-            channelName,
-            "→",
-            entry.refCount
-          );
           if (entry.refCount <= 0) {
-            console.log(
-              "[Realtime] 🗑️ Removing household channel:",
-              channelName
-            );
             supabase.removeChannel(entry.channel);
             activeChannels.delete(channelName);
             setIsSubscribed(false);
@@ -704,13 +650,6 @@ export function useSendMessage() {
         const supabase = supabaseBrowser();
         const threadChannelName = `thread-${thread_id}`;
         const householdChannelName = `household-${data.message.household_id}`;
-
-        console.log(
-          "[Realtime] 📤 Broadcasting new message to:",
-          threadChannelName,
-          "and",
-          householdChannelName
-        );
 
         // Broadcast to thread channel (for users inside the thread)
         const existingThreadChannel = supabase
@@ -753,10 +692,6 @@ export function useSendMessage() {
             payload: data.message,
           });
         }
-
-        console.log(
-          "[Realtime] ✅ Message broadcasted to thread and household"
-        );
       }
 
       return data;
@@ -818,12 +753,6 @@ export function useSendMessage() {
         // Check for any pending receipts for this message
         const pendingStatus = pendingReceipts.get(data.message.id);
         if (pendingStatus) {
-          console.log(
-            "[Realtime] 📦 Applying pending receipt for message:",
-            data.message.id,
-            "→",
-            pendingStatus
-          );
           pendingReceipts.delete(data.message.id);
         }
 

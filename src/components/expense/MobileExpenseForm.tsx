@@ -26,7 +26,6 @@ import { Label } from "@/components/ui/label";
 import { MOBILE_CONTENT_BOTTOM_OFFSET } from "@/constants/layout";
 import {
   useDeleteAccount,
-  useMyAccounts,
   useMyAccountsWithHidden,
   useReorderAccounts,
   useUnhideAccount,
@@ -139,10 +138,14 @@ export default function MobileExpenseForm() {
     return [...sectionOrder];
   }, [sectionOrder]);
 
-  // Use only the current user's own accounts (not partner's) for the expense form
-  const { data: accounts = [], isLoading: accountsLoading } = useMyAccounts();
-  // Also fetch accounts with hidden ones for edit mode
-  const { data: accountsWithHidden = [] } = useMyAccountsWithHidden();
+  // OPTIMIZED: Single API call for accounts - derive visible accounts from it
+  const { data: accountsWithHidden = [], isLoading: accountsLoading } =
+    useMyAccountsWithHidden();
+  // Derive visible accounts (visible !== false) from the full list
+  const accounts = useMemo(
+    () => accountsWithHidden.filter((a: any) => a.visible !== false),
+    [accountsWithHidden]
+  );
   const defaultAccount = accounts.find((a: any) => a.is_default);
 
   const getFirstValidStep = (flow: Step[], hasDefault: boolean): Step => {

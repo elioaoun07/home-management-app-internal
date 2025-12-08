@@ -2,16 +2,21 @@
 
 import {
   AlertBellIcon,
+  CheckIcon,
   ChevronLeftIcon,
+  EyeIcon,
   FeedIcon,
   MessageIcon,
   PlusIcon,
   SendIcon,
   SparklesIcon,
+  Trash2Icon,
   TrophyIcon,
   XIcon,
 } from "@/components/icons/FuturisticIcons";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAccounts } from "@/features/accounts/hooks";
+import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
   useBroadcastReceiptUpdate,
   useCreateThread,
@@ -30,11 +35,26 @@ import {
   type HubFeedItem,
   type HubMessage,
 } from "@/features/hub/hooks";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { ExternalLink, RefreshCw } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+// Lazy load transaction modal to avoid bundle bloat
+const AddTransactionFromMessageModal = dynamic(
+  () => import("@/components/hub/AddTransactionFromMessageModal"),
+  { ssr: false }
+);
+
+// Lazy load reminder modal to avoid bundle bloat
+const AddReminderFromMessageModal = dynamic(
+  () => import("@/components/hub/AddReminderFromMessageModal"),
+  { ssr: false }
+);
 
 // AI Chat Types
 interface AIConversation {
@@ -292,78 +312,134 @@ function ThreadItem({
 }) {
   const lastMessage = thread.last_message;
   const isMyLastMessage = lastMessage?.sender_user_id === currentUserId;
+  const hasExternalApp = !!thread.external_url;
+
+  // Handle external app link click
+  const handleExternalAppClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (thread.external_url) {
+      // Open in same tab for PWA seamless transition
+      window.location.href = thread.external_url;
+    }
+  };
 
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "w-full p-4 rounded-xl neo-card bg-bg-card-custom border transition-all flex items-center gap-3 text-left",
-        thread.unread_count > 0
-          ? "border-blue-500/30 bg-blue-500/5"
-          : "border-white/5 hover:border-white/10"
-      )}
-    >
-      {/* Icon */}
-      <div
+    <div className="relative">
+      <button
+        onClick={onClick}
         className={cn(
-          "w-12 h-12 rounded-full flex items-center justify-center text-xl shrink-0",
+          "w-full p-4 rounded-xl neo-card bg-bg-card-custom border transition-all flex items-center gap-3 text-left",
           thread.unread_count > 0
-            ? "bg-gradient-to-br from-blue-500/30 to-purple-500/30"
-            : "bg-gradient-to-br from-blue-500/20 to-purple-500/20"
+            ? "border-blue-500/30 bg-blue-500/5"
+            : "border-white/5 hover:border-white/10"
         )}
       >
-        {thread.icon}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <h3
-            className={cn(
-              "text-sm font-semibold truncate",
-              thread.unread_count > 0 ? "text-white" : "text-white/90"
-            )}
-          >
-            {thread.title}
-          </h3>
-          {thread.unread_count > 0 && (
-            <span className="relative flex items-center justify-center badge-enter">
-              <span className="absolute w-5 h-5 rounded-full bg-blue-500/50 animate-ping" />
-              <span className="relative px-2 py-0.5 min-w-[20px] text-center rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs font-bold shadow-lg shadow-blue-500/30">
-                {thread.unread_count}
-              </span>
+        {/* Icon */}
+        <div
+          className={cn(
+            "w-12 h-12 rounded-full flex items-center justify-center text-xl shrink-0 relative",
+            thread.unread_count > 0
+              ? "bg-gradient-to-br from-blue-500/30 to-purple-500/30"
+              : "bg-gradient-to-br from-blue-500/20 to-purple-500/20"
+          )}
+        >
+          {thread.icon}
+          {/* External app indicator badge */}
+          {hasExternalApp && (
+            <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center border-2 border-bg-custom">
+              <ExternalLink className="w-2 h-2 text-white" />
             </span>
           )}
         </div>
-        {lastMessage ? (
-          <p
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3
+              className={cn(
+                "text-sm font-semibold truncate",
+                thread.unread_count > 0 ? "text-white" : "text-white/90"
+              )}
+            >
+              {thread.title}
+            </h3>
+            {/* Purpose badge */}
+            {thread.purpose && thread.purpose !== "general" && (
+              <span
+                className={cn(
+                  "px-2 py-0.5 rounded-full text-xs font-medium",
+                  thread.purpose === "budget" &&
+                    "bg-emerald-500/20 text-emerald-400",
+                  thread.purpose === "reminder" &&
+                    "bg-amber-500/20 text-amber-400",
+                  thread.purpose === "shopping" &&
+                    "bg-blue-500/20 text-blue-400",
+                  thread.purpose === "travel" &&
+                    "bg-purple-500/20 text-purple-400",
+                  thread.purpose === "health" && "bg-red-500/20 text-red-400"
+                )}
+              >
+                {thread.purpose}
+              </span>
+            )}
+            {thread.unread_count > 0 && (
+              <span className="relative flex items-center justify-center badge-enter">
+                <span className="absolute w-5 h-5 rounded-full bg-blue-500/50 animate-ping" />
+                <span className="relative px-2 py-0.5 min-w-[20px] text-center rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs font-bold shadow-lg shadow-blue-500/30">
+                  {thread.unread_count}
+                </span>
+              </span>
+            )}
+          </div>
+          {lastMessage ? (
+            <p
+              className={cn(
+                "text-xs truncate mt-0.5",
+                thread.unread_count > 0
+                  ? "text-white/70 font-medium"
+                  : "text-white/50"
+              )}
+            >
+              {isMyLastMessage ? "You: " : ""}
+              {lastMessage.content}
+            </p>
+          ) : (
+            <p className="text-xs text-white/30 italic mt-0.5">
+              No messages yet
+            </p>
+          )}
+        </div>
+
+        {/* Time */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <span
             className={cn(
-              "text-xs truncate mt-0.5",
+              "text-xs",
               thread.unread_count > 0
-                ? "text-white/70 font-medium"
-                : "text-white/50"
+                ? "text-blue-400 font-medium"
+                : "text-white/30"
             )}
           >
-            {isMyLastMessage ? "You: " : ""}
-            {lastMessage.content}
-          </p>
-        ) : (
-          <p className="text-xs text-white/30 italic mt-0.5">No messages yet</p>
-        )}
-      </div>
+            {formatRelativeTime(thread.last_message_at)}
+          </span>
+        </div>
+      </button>
 
-      {/* Time */}
-      <span
-        className={cn(
-          "text-xs shrink-0",
-          thread.unread_count > 0
-            ? "text-blue-400 font-medium"
-            : "text-white/30"
-        )}
-      >
-        {formatRelativeTime(thread.last_message_at)}
-      </span>
-    </button>
+      {/* External app quick-launch button - positioned absolutely outside main button */}
+      {hasExternalApp && (
+        <div
+          onClick={handleExternalAppClick}
+          className="absolute bottom-3 right-3 flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium transition-colors cursor-pointer z-10"
+          title={`Open ${thread.external_app_name || "external app"}`}
+        >
+          <ExternalLink className="w-3 h-3" />
+          <span className="hidden sm:inline">
+            {thread.external_app_name || "Open"}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -970,6 +1046,133 @@ function ThreadConversation({
   const hasScrolledToUnread = useRef(false);
   const hasProcessedUnread = useRef(false);
 
+  // Action menu state
+  const [actionMenuMessage, setActionMenuMessage] = useState<HubMessage | null>(
+    null
+  );
+  const [actionMenuPosition, setActionMenuPosition] = useState<{
+    x: number;
+    y: number;
+    showBelow?: boolean;
+  } | null>(null);
+  const [transactionModalData, setTransactionModalData] = useState<{
+    messageId: string;
+    amount: number;
+    description: string;
+    categoryId: string | null;
+    subcategoryId: string | null;
+    date: string | null;
+  } | null>(null);
+
+  // Reminder modal state
+  const [reminderModalData, setReminderModalData] = useState<{
+    messageId: string;
+    title: string;
+    description: string;
+  } | null>(null);
+
+  // Track locally converted messages for immediate UI feedback
+  const [convertedMessageIds, setConvertedMessageIds] = useState<Set<string>>(
+    new Set()
+  );
+
+  // Filter messages with actions (default: hide them)
+  const [showActionsFilter, setShowActionsFilter] = useLocalStorage(
+    `hub-show-actions-${threadId}`,
+    false
+  );
+
+  // Multi-select mode for deleting messages
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState<Set<string>>(
+    new Set()
+  );
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // Fetch accounts and categories for transaction parsing
+  const { data: accounts = [] } = useAccounts();
+  const defaultAccount = accounts.find((a: any) => a.is_default);
+  const { data: categories = [] } = useCategories(defaultAccount?.id);
+
+  // Long press handler for messages (must be at component level, not in map)
+  const longPressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressRef = useRef(false);
+
+  const handleMessageTouchStart = useCallback(
+    (e: React.TouchEvent | React.MouseEvent, msg: HubMessage) => {
+      isLongPressRef.current = false;
+
+      // Capture the element and its position before setTimeout
+      const element = e.currentTarget as HTMLElement;
+      const rect = element.getBoundingClientRect();
+
+      longPressTimeoutRef.current = setTimeout(() => {
+        isLongPressRef.current = true;
+
+        // Trigger haptic feedback on mobile
+        if ("vibrate" in navigator) {
+          navigator.vibrate(50);
+        }
+
+        // Calculate optimal menu position
+        const menuWidth = 280; // max-width of menu
+        const menuHeight = 180; // approximate height
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const padding = 16; // minimum padding from edges
+
+        // Start with centered position above message
+        let x = rect.left + rect.width / 2;
+        let y = rect.top;
+
+        // Adjust horizontal position if menu would overflow
+        if (x + menuWidth / 2 > viewportWidth - padding) {
+          // Too far right, align to right edge with padding
+          x = viewportWidth - padding - menuWidth / 2;
+        } else if (x - menuWidth / 2 < padding) {
+          // Too far left, align to left edge with padding
+          x = padding + menuWidth / 2;
+        }
+
+        // Adjust vertical position if menu would overflow top
+        let showBelow = false;
+        if (y - menuHeight < padding) {
+          // Not enough space above, show below message instead
+          y = rect.bottom + 10;
+          showBelow = true;
+        } else {
+          // Show above message
+          y = rect.top - 10;
+        }
+
+        // Always show action menu on long-press
+        setActionMenuMessage(msg);
+        setActionMenuPosition({ x, y, showBelow });
+      }, 500);
+    },
+    []
+  );
+
+  const handleMessageTouchEnd = useCallback(
+    (e: React.TouchEvent | React.MouseEvent) => {
+      if (longPressTimeoutRef.current) {
+        clearTimeout(longPressTimeoutRef.current);
+        longPressTimeoutRef.current = null;
+      }
+    },
+    []
+  );
+
+  const handleMessageTouchCancel = useCallback(
+    (e: React.TouchEvent | React.MouseEvent) => {
+      if (longPressTimeoutRef.current) {
+        clearTimeout(longPressTimeoutRef.current);
+        longPressTimeoutRef.current = null;
+      }
+    },
+    []
+  );
+
   // Handler for back button - refetch threads to get updated unread counts
   const handleBack = useCallback(() => {
     // Invalidate threads to refetch with fresh unread counts
@@ -1028,6 +1231,8 @@ function ThreadConversation({
     setIsUnreadHeaderExiting(false);
     hasProcessedUnread.current = false;
     hasScrolledToUnread.current = false;
+    setIsSelectionMode(false);
+    setSelectedMessages(new Set());
   }, [threadId]);
 
   // Callback when a new message from another user arrives while chat is open
@@ -1073,6 +1278,37 @@ function ThreadConversation({
   const messages = data?.messages || [];
   const currentUserId = data?.current_user_id;
 
+  // OPTIMIZED: Use message_actions from messages response instead of separate API call
+  const messageActions = data?.message_actions || [];
+
+  // Combine database actions with local tracking
+  // Check for both transaction AND reminder actions
+  const isMessageConverted = (msgId: string) => {
+    return (
+      convertedMessageIds.has(msgId) ||
+      messageActions.some(
+        (a: any) =>
+          a.message_id === msgId &&
+          (a.action_type === "transaction" || a.action_type === "reminder")
+      )
+    );
+  };
+
+  // Filter messages based on showActionsFilter toggle
+  const filteredMessages = messages.filter((msg) => {
+    // If filter is on (show all), don't filter anything
+    if (showActionsFilter) return true;
+
+    // If filter is off (default), hide messages with ANY actions
+    const hasAnyAction = messageActions.some(
+      (a: any) => a.message_id === msg.id
+    );
+    return !hasAnyAction;
+  });
+
+  // Count hidden messages for visual feedback
+  const hiddenMessagesCount = messages.length - filteredMessages.length;
+
   // Use the captured initial unread info for displaying the separator
   const firstUnreadMessageId = initialUnreadInfo.firstUnreadMessageId;
   const unreadCount = initialUnreadInfo.unreadCount;
@@ -1086,7 +1322,11 @@ function ThreadConversation({
 
   // Scroll to unread separator or bottom on initial load
   useEffect(() => {
-    if (!isLoading && messages.length > 0 && !hasScrolledToUnread.current) {
+    if (
+      !isLoading &&
+      filteredMessages.length > 0 &&
+      !hasScrolledToUnread.current
+    ) {
       hasScrolledToUnread.current = true;
 
       // If there are unread messages, scroll to the separator (centered)
@@ -1108,13 +1348,13 @@ function ThreadConversation({
   }, [threadId]);
 
   // Smooth scroll to bottom when new messages arrive (after initial load)
-  const prevMessagesLength = useRef(messages.length);
+  const prevMessagesLength = useRef(filteredMessages.length);
   useEffect(() => {
-    if (messages.length > prevMessagesLength.current) {
+    if (filteredMessages.length > prevMessagesLength.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-    prevMessagesLength.current = messages.length;
-  }, [messages.length]);
+    prevMessagesLength.current = filteredMessages.length;
+  }, [filteredMessages.length]);
 
   const handleSend = () => {
     if (!newMessage.trim()) return;
@@ -1199,19 +1439,102 @@ function ThreadConversation({
           <ChevronLeftIcon className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center text-lg shrink-0">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center text-lg shrink-0 relative">
             {thread?.icon || "💬"}
+            {/* External app indicator */}
+            {thread?.external_url && (
+              <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center border-2 border-bg-custom">
+                <ExternalLink className="w-2 h-2 text-white" />
+              </span>
+            )}
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-white truncate">
-              {thread?.title || "Chat"}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-white truncate">
+                {thread?.title || "Chat"}
+              </h2>
+              {thread?.purpose && thread.purpose !== "general" && (
+                <span
+                  className={cn(
+                    "px-2 py-0.5 rounded-full text-xs font-medium",
+                    thread.purpose === "budget" &&
+                      "bg-emerald-500/20 text-emerald-400",
+                    thread.purpose === "reminder" &&
+                      "bg-amber-500/20 text-amber-400",
+                    thread.purpose === "shopping" &&
+                      "bg-blue-500/20 text-blue-400"
+                  )}
+                >
+                  {thread.purpose}
+                </span>
+              )}
+            </div>
             {thread?.description && (
               <p className="text-xs text-white/50 truncate">
                 {thread.description}
               </p>
             )}
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* External App Button - prominent when available */}
+          {thread?.external_url && (
+            <a
+              href={thread.external_url}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-medium shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-all"
+              title={`Open ${thread.external_app_name || "external app"}`}
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span className="hidden sm:inline">
+                {thread.external_app_name || "Open App"}
+              </span>
+            </a>
+          )}
+          {isSelectionMode ? (
+            <>
+              <span className="text-sm text-white/70">
+                {selectedMessages.size} selected
+              </span>
+              <button
+                onClick={() => {
+                  setIsSelectionMode(false);
+                  setSelectedMessages(new Set());
+                }}
+                className="px-3 py-1.5 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                disabled={selectedMessages.size === 0}
+                className={cn(
+                  "p-2 rounded-lg transition-all",
+                  selectedMessages.size > 0
+                    ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                    : "bg-white/5 text-white/30 cursor-not-allowed"
+                )}
+              >
+                <Trash2Icon className="w-5 h-5" />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setShowActionsFilter(!showActionsFilter)}
+              className={cn(
+                "p-2 rounded-lg transition-all",
+                showActionsFilter
+                  ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                  : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70"
+              )}
+              title={
+                showActionsFilter
+                  ? "Hide completed actions"
+                  : "Show completed actions"
+              }
+            >
+              <EyeIcon className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1241,12 +1564,30 @@ function ThreadConversation({
                 No messages yet. Start the conversation!
               </p>
             </div>
+          ) : filteredMessages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <EyeIcon className="w-12 h-12 mb-3 text-emerald-400/30" />
+              <p className="text-sm text-white/50">
+                All messages have completed actions.
+              </p>
+              <p className="text-xs text-white/40 mt-1">
+                Toggle the eye icon to show them.
+              </p>
+            </div>
           ) : (
-            messages.map((msg: HubMessage, index: number) => {
+            filteredMessages.map((msg: HubMessage, index: number) => {
               const styles = getMessageStyles(msg);
               const isSystem = msg.message_type === "system";
               const isMe = msg.sender_user_id === currentUserId;
               const isFirstUnread = msg.id === firstUnreadMessageId;
+
+              // Check if this message has actions
+              const msgActions = messageActions.filter(
+                (a: any) => a.message_id === msg.id
+              );
+              const hasTransactionAction = msgActions.some(
+                (a: any) => a.action_type === "transaction"
+              );
 
               return (
                 <div key={msg.id}>
@@ -1267,38 +1608,219 @@ function ThreadConversation({
                     </div>
                   )}
 
-                  <div className={cn("flex", styles.alignment)}>
-                    <div
-                      className={cn(
-                        "px-4 py-2.5 rounded-2xl",
-                        isSystem ? "max-w-[90%]" : "max-w-[80%]",
-                        styles.bubble
-                      )}
-                    >
-                      {isSystem && (
-                        <p className="text-xs text-violet-300 font-medium mb-1">
-                          🤖 System
-                        </p>
-                      )}
-                      <p className="text-sm whitespace-pre-wrap">
-                        {msg.content}
-                      </p>
+                  <div className="flex items-start gap-2">
+                    {/* Checkbox column - fixed width on LEFT */}
+                    {isSelectionMode && (
+                      <div className="w-8 flex-shrink-0 flex justify-center pt-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Cannot select messages with actions or deleted messages
+                            if (msgActions.length > 0 || msg.deleted_at) return;
+
+                            setSelectedMessages((prev) => {
+                              const newSet = new Set(prev);
+                              if (newSet.has(msg.id)) {
+                                newSet.delete(msg.id);
+                              } else {
+                                newSet.add(msg.id);
+                              }
+                              return newSet;
+                            });
+                          }}
+                          disabled={msgActions.length > 0 || !!msg.deleted_at}
+                          className={cn(
+                            "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                            msgActions.length > 0 || msg.deleted_at
+                              ? "bg-white/5 border-white/10 cursor-not-allowed opacity-30"
+                              : selectedMessages.has(msg.id)
+                                ? "bg-blue-500 border-blue-500"
+                                : "bg-white/5 border-white/30 hover:border-white/50"
+                          )}
+                          title={
+                            msgActions.length > 0
+                              ? "Cannot delete: has actions"
+                              : msg.deleted_at
+                                ? "Cannot delete: already deleted"
+                                : ""
+                          }
+                        >
+                          {selectedMessages.has(msg.id) &&
+                            !msgActions.length &&
+                            !msg.deleted_at && (
+                              <CheckIcon className="w-3 h-3 text-white" />
+                            )}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Message content - flexible width */}
+                    <div className={cn("flex-1 flex", styles.alignment)}>
                       <div
+                        onMouseDown={(e) =>
+                          !isSelectionMode && handleMessageTouchStart(e, msg)
+                        }
+                        onMouseUp={handleMessageTouchEnd}
+                        onMouseLeave={handleMessageTouchCancel}
+                        onTouchStart={(e) =>
+                          !isSelectionMode && handleMessageTouchStart(e, msg)
+                        }
+                        onTouchEnd={handleMessageTouchEnd}
+                        onTouchCancel={handleMessageTouchCancel}
+                        onClick={() => {
+                          if (
+                            isSelectionMode &&
+                            msgActions.length === 0 &&
+                            !msg.deleted_at
+                          ) {
+                            setSelectedMessages((prev) => {
+                              const newSet = new Set(prev);
+                              if (newSet.has(msg.id)) {
+                                newSet.delete(msg.id);
+                              } else {
+                                newSet.add(msg.id);
+                              }
+                              return newSet;
+                            });
+                          }
+                        }}
                         className={cn(
-                          "flex items-center gap-1 mt-1",
-                          isMe ? "justify-end" : ""
+                          "px-4 py-2.5 rounded-2xl transition-all relative",
+                          !isSelectionMode && "active:scale-95",
+                          isSelectionMode &&
+                            selectedMessages.has(msg.id) &&
+                            "ring-2 ring-blue-500",
+                          isSelectionMode && "cursor-pointer",
+                          isSystem ? "max-w-[90%]" : "max-w-[80%]",
+                          styles.bubble
                         )}
                       >
-                        <span className={cn("text-xs", styles.timeColor)}>
-                          {new Date(msg.created_at).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                        {/* Message status icons for sent messages */}
-                        {isMe && !isSystem && (
-                          <MessageStatus status={msg.status || "sent"} />
+                        {/* Action badges in top-right corner */}
+                        {msgActions.length > 0 && (
+                          <div className="absolute -top-1 -right-1 flex gap-1">
+                            {msgActions.map((action: any) => (
+                              <div
+                                key={action.id}
+                                className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center border-2 border-bg-custom shadow-lg"
+                                title={`Action: ${action.action_type}`}
+                              >
+                                <span className="text-white text-xs font-bold">
+                                  {action.action_type === "transaction" && "💰"}
+                                  {action.action_type === "reminder" && "⏰"}
+                                  {action.action_type === "forward" && "↗️"}
+                                  {action.action_type === "pin" && "📌"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         )}
+                        {isSystem && (
+                          <p className="text-xs text-violet-300 font-medium mb-1">
+                            🤖 System
+                          </p>
+                        )}
+
+                        {/* Show "This message was deleted/hidden" with undo button */}
+                        {msg.deleted_at || (msg as any).is_hidden_by_me ? (
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm italic text-white/40">
+                              🗑️{" "}
+                              {msg.deleted_at
+                                ? "This message was deleted"
+                                : "Message hidden"}
+                            </p>
+                            {/* Show undo button for own deletions or hidden messages */}
+                            {(msg.deleted_by === currentUserId ||
+                              (msg as any).is_hidden_by_me) && (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const isHidden = (msg as any)
+                                      .is_hidden_by_me;
+                                    const response = await fetch(
+                                      "/api/hub/messages",
+                                      {
+                                        method: "PATCH",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify({
+                                          messageIds: [msg.id],
+                                          action: isHidden ? "unhide" : "undo",
+                                        }),
+                                      }
+                                    );
+
+                                    if (!response.ok) {
+                                      throw new Error(
+                                        isHidden
+                                          ? "Failed to unhide message"
+                                          : "Failed to undo deletion"
+                                      );
+                                    }
+
+                                    queryClient.invalidateQueries({
+                                      queryKey: ["hub", "messages", threadId],
+                                    });
+                                  } catch (error) {
+                                    alert(
+                                      error instanceof Error
+                                        ? error.message
+                                        : "Failed to undo"
+                                    );
+                                  }
+                                }}
+                                className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg transition-colors shadow-lg"
+                              >
+                                Undo
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-sm whitespace-pre-wrap">
+                            {msg.content}
+                          </p>
+                        )}
+
+                        {/* Action badges */}
+                        {msgActions.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {msgActions.map((action: any) => (
+                              <span
+                                key={action.id}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                title={`Action: ${action.action_type}`}
+                              >
+                                {action.action_type === "transaction" && "💰"}
+                                {action.action_type === "reminder" && "⏰"}
+                                {action.action_type === "forward" && "↗️"}
+                                {action.action_type === "pin" && "📌"}
+                                <span className="capitalize">
+                                  {action.action_type}
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div
+                          className={cn(
+                            "flex items-center gap-1 mt-1",
+                            isMe ? "justify-end" : ""
+                          )}
+                        >
+                          <span className={cn("text-xs", styles.timeColor)}>
+                            {new Date(msg.created_at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          {/* Message status icons for sent messages */}
+                          {isMe && !isSystem && (
+                            <MessageStatus status={msg.status || "sent"} />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1335,11 +1857,410 @@ function ThreadConversation({
           </button>
         </div>
       </div>
+
+      {/* Action Menu - Shows on long press */}
+      {actionMenuMessage && actionMenuPosition && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+            onClick={() => {
+              setActionMenuMessage(null);
+              setActionMenuPosition(null);
+            }}
+          />
+
+          {/* Action Menu */}
+          <div
+            className="fixed z-50 bg-bg-card-custom/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            style={{
+              left: `${actionMenuPosition.x}px`,
+              top: `${actionMenuPosition.y}px`,
+              transform: actionMenuPosition.showBelow
+                ? "translate(-50%, 0%)"
+                : "translate(-50%, -100%)",
+              minWidth: "240px",
+              maxWidth: "280px",
+            }}
+          >
+            {(() => {
+              // Check if message already has transaction action (database OR local)
+              const hasTransactionAction = isMessageConverted(
+                actionMenuMessage.id
+              );
+
+              // Determine action based on thread purpose
+              const threadPurpose = thread?.purpose || "general";
+              const isReminderThread = threadPurpose === "reminder";
+              const isBudgetThread = threadPurpose === "budget";
+
+              // For reminder threads, show "Add Reminder" action
+              // For budget threads or general, show "Add Transaction" action
+              const actionLabel = isReminderThread
+                ? "Add as Reminder"
+                : "Add as Transaction";
+              const actionDescription = isReminderThread
+                ? "Create reminder entry"
+                : "Create expense entry";
+              const actionIcon = isReminderThread ? "⏰" : "💰";
+              const actionCompleteLabel = isReminderThread
+                ? "Reminder Added"
+                : "Transaction Added";
+
+              return (
+                <div className="p-2">
+                  {/* Add as Transaction/Reminder Action */}
+                  <button
+                    onClick={() => {
+                      if (hasTransactionAction) return;
+
+                      if (isReminderThread) {
+                        // For reminder threads, open reminder modal
+                        setReminderModalData({
+                          messageId: actionMenuMessage.id,
+                          title: actionMenuMessage.content?.slice(0, 100) || "",
+                          description: actionMenuMessage.content || "",
+                        });
+
+                        // Close action menu
+                        setActionMenuMessage(null);
+                        setActionMenuPosition(null);
+                      } else {
+                        // For budget/transaction threads
+                        // Parse message for transaction data
+                        const parsed = parseMessageForTransaction(
+                          actionMenuMessage.content || "",
+                          categories as any[]
+                        );
+
+                        // Open transaction modal with prefilled data
+                        setTransactionModalData({
+                          messageId: actionMenuMessage.id,
+                          amount: parsed.amount || 0,
+                          description: parsed.description,
+                          categoryId: parsed.categoryId,
+                          subcategoryId: parsed.subcategoryId,
+                          date: parsed.date,
+                        });
+
+                        // Close action menu
+                        setActionMenuMessage(null);
+                        setActionMenuPosition(null);
+                      }
+                    }}
+                    disabled={hasTransactionAction}
+                    className={cn(
+                      "w-full px-4 py-3 flex items-center gap-3 rounded-xl transition-all",
+                      hasTransactionAction
+                        ? "opacity-50 cursor-not-allowed bg-white/5"
+                        : "hover:bg-white/10 active:scale-[0.98]"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                        hasTransactionAction
+                          ? "bg-emerald-500/20"
+                          : isReminderThread
+                            ? "bg-gradient-to-br from-amber-500/20 to-orange-500/20"
+                            : myTheme === "pink"
+                              ? "bg-gradient-to-br from-pink-500/20 to-rose-500/20"
+                              : "bg-gradient-to-br from-blue-500/20 to-cyan-500/20"
+                      )}
+                    >
+                      {hasTransactionAction ? (
+                        <CheckIcon className="w-5 h-5 text-emerald-400" />
+                      ) : (
+                        <span className="text-xl">{actionIcon}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-semibold text-white">
+                        {hasTransactionAction
+                          ? actionCompleteLabel
+                          : actionLabel}
+                      </p>
+                      <p className="text-xs text-white/60 mt-0.5">
+                        {hasTransactionAction
+                          ? "Already created"
+                          : actionDescription}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Select Message Action - only if message has no actions */}
+                  {!hasTransactionAction && (
+                    <button
+                      onClick={() => {
+                        // Enter selection mode and select this message
+                        setIsSelectionMode(true);
+                        setSelectedMessages(new Set([actionMenuMessage.id]));
+
+                        // Close action menu
+                        setActionMenuMessage(null);
+                        setActionMenuPosition(null);
+                      }}
+                      className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10 active:scale-[0.98] transition-all mt-1"
+                    >
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-red-500/20 to-orange-500/20 shrink-0">
+                        <Trash2Icon className="w-5 h-5 text-red-400" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-semibold text-white">
+                          Select to Delete
+                        </p>
+                        <p className="text-xs text-white/60 mt-0.5">
+                          Choose messages to remove
+                        </p>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </>
+      )}
+
+      {/* Transaction Modal */}
+      {transactionModalData && (
+        <AddTransactionFromMessageModal
+          messageId={transactionModalData.messageId}
+          initialAmount={transactionModalData.amount}
+          initialDescription={transactionModalData.description}
+          initialCategoryId={transactionModalData.categoryId}
+          initialSubcategoryId={transactionModalData.subcategoryId}
+          initialDate={transactionModalData.date}
+          onClose={() => setTransactionModalData(null)}
+          onSuccess={(messageId) => {
+            // Add to local tracking for immediate UI feedback
+            setConvertedMessageIds((prev) => new Set(prev).add(messageId));
+            setTransactionModalData(null);
+          }}
+        />
+      )}
+
+      {/* Reminder Modal */}
+      {reminderModalData && (
+        <AddReminderFromMessageModal
+          messageId={reminderModalData.messageId}
+          initialTitle={reminderModalData.title}
+          initialDescription={reminderModalData.description}
+          onClose={() => setReminderModalData(null)}
+          onSuccess={(messageId) => {
+            // Add to local tracking for immediate UI feedback
+            setConvertedMessageIds((prev) => new Set(prev).add(messageId));
+            setReminderModalData(null);
+          }}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowDeleteModal(false)}
+        >
+          <div
+            className="w-full max-w-md mx-4 mb-[88px] sm:mb-8 bg-bg-card-custom rounded-2xl border border-white/10 overflow-hidden animate-in slide-in-from-bottom-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-white/10">
+              <h3 className="text-lg font-semibold text-white text-center">
+                Delete {selectedMessages.size} message
+                {selectedMessages.size > 1 ? "s" : ""}?
+              </h3>
+            </div>
+
+            <div className="p-2">
+              {/* Delete for me */}
+              <button
+                onClick={async () => {
+                  const idsToDelete = Array.from(selectedMessages);
+
+                  if (idsToDelete.length === 0) {
+                    return;
+                  }
+
+                  try {
+                    const response = await fetch("/api/hub/messages", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        messageIds: idsToDelete,
+                        action: "hide",
+                      }),
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                      throw new Error(
+                        result.error || "Failed to delete messages"
+                      );
+                    }
+
+                    queryClient.invalidateQueries({
+                      queryKey: ["hub", "messages", threadId],
+                    });
+                    setSelectedMessages(new Set());
+                    setIsSelectionMode(false);
+                    setShowDeleteModal(false);
+                  } catch (error) {
+                    alert(
+                      error instanceof Error
+                        ? error.message
+                        : "Failed to delete messages"
+                    );
+                  }
+                }}
+                className="w-full p-4 text-left hover:bg-white/5 rounded-xl transition-colors"
+              >
+                <p className="text-sm font-medium text-white">Delete for me</p>
+                <p className="text-xs text-white/50 mt-0.5">
+                  Messages will be hidden from your view only
+                </p>
+              </button>
+
+              {/* Delete for everyone - only if ALL selected messages are mine */}
+              {(() => {
+                const selectedMsgs = filteredMessages.filter((m) =>
+                  selectedMessages.has(m.id)
+                );
+                const allMine = selectedMsgs.every(
+                  (m) => m.sender_user_id === currentUserId
+                );
+
+                return (
+                  <button
+                    onClick={async () => {
+                      if (!allMine) return;
+
+                      const idsToDelete = Array.from(selectedMessages);
+
+                      if (idsToDelete.length === 0) {
+                        return;
+                      }
+
+                      try {
+                        const response = await fetch("/api/hub/messages", {
+                          method: "DELETE",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ messageIds: idsToDelete }),
+                        });
+
+                        const result = await response.json();
+
+                        if (!response.ok) {
+                          throw new Error(
+                            result.error || "Failed to delete messages"
+                          );
+                        }
+
+                        queryClient.invalidateQueries({
+                          queryKey: ["hub", "messages", threadId],
+                        });
+                        setSelectedMessages(new Set());
+                        setIsSelectionMode(false);
+                        setShowDeleteModal(false);
+                      } catch (error) {
+                        alert(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to delete messages"
+                        );
+                      }
+                    }}
+                    disabled={!allMine}
+                    className={cn(
+                      "w-full p-4 text-left rounded-xl transition-colors",
+                      allMine
+                        ? "hover:bg-red-500/10"
+                        : "opacity-40 cursor-not-allowed"
+                    )}
+                  >
+                    <p
+                      className={cn(
+                        "text-sm font-medium",
+                        allMine ? "text-red-400" : "text-white/50"
+                      )}
+                    >
+                      Delete for everyone
+                    </p>
+                    <p className="text-xs text-white/50 mt-0.5">
+                      {allMine
+                        ? "Messages will be permanently deleted for all participants"
+                        : "You can only delete your own messages for everyone"}
+                    </p>
+                  </button>
+                );
+              })()}
+            </div>
+
+            <div className="p-2 border-t border-white/10">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="w-full p-3 text-center text-white/70 hover:text-white hover:bg-white/5 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // Create Thread Modal
+// Purpose configuration with external app URLs
+const PURPOSE_CONFIG = {
+  general: {
+    label: "General",
+    icon: "💬",
+    external_url: null,
+    external_app_name: null,
+  },
+  budget: {
+    label: "Budget",
+    icon: "💰",
+    external_url: "https://home-management-app-internal.vercel.app/expense",
+    external_app_name: "Budget App",
+  },
+  reminder: {
+    label: "Reminder",
+    icon: "⏰",
+    external_url: "https://home-manager-pwa.vercel.app/",
+    external_app_name: "Reminder App",
+  },
+  shopping: {
+    label: "Shopping",
+    icon: "🛒",
+    external_url: null,
+    external_app_name: null,
+  },
+  travel: {
+    label: "Travel",
+    icon: "✈️",
+    external_url: null,
+    external_app_name: null,
+  },
+  health: {
+    label: "Health",
+    icon: "🏥",
+    external_url: null,
+    external_app_name: null,
+  },
+  other: {
+    label: "Other",
+    icon: "📋",
+    external_url: null,
+    external_app_name: null,
+  },
+} as const;
+
+type ThreadPurpose = keyof typeof PURPOSE_CONFIG;
+
 function CreateThreadModal({
   householdId,
   onClose,
@@ -1352,6 +2273,7 @@ function CreateThreadModal({
   const createThread = useCreateThread();
   const [title, setTitle] = useState("");
   const [icon, setIcon] = useState("💬");
+  const [purpose, setPurpose] = useState<ThreadPurpose>("general");
 
   const iconOptions = [
     "💬",
@@ -1368,13 +2290,27 @@ function CreateThreadModal({
     "🏥",
   ];
 
+  // Update icon when purpose changes (optional auto-select)
+  const handlePurposeChange = (newPurpose: ThreadPurpose) => {
+    setPurpose(newPurpose);
+    // Auto-select matching icon
+    const config = PURPOSE_CONFIG[newPurpose];
+    if (config.icon && iconOptions.includes(config.icon)) {
+      setIcon(config.icon);
+    }
+  };
+
   const handleCreate = () => {
     if (!title.trim()) return;
+    const config = PURPOSE_CONFIG[purpose];
     createThread.mutate(
       {
         title: title.trim(),
         icon,
         household_id: householdId,
+        purpose,
+        external_url: config.external_url ?? undefined,
+        external_app_name: config.external_app_name ?? undefined,
       },
       {
         onSuccess: (data) => {
@@ -1384,8 +2320,10 @@ function CreateThreadModal({
     );
   };
 
+  const selectedConfig = PURPOSE_CONFIG[purpose];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pb-[72px] sm:pb-0">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -1393,7 +2331,7 @@ function CreateThreadModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full sm:max-w-md mx-auto sm:mx-4 bg-bg-card-custom border border-white/10 rounded-t-3xl sm:rounded-2xl p-6 animate-slide-up">
+      <div className="relative w-full sm:max-w-md mx-auto sm:mx-4 bg-bg-card-custom border border-white/10 rounded-t-3xl sm:rounded-2xl p-6 animate-slide-up max-h-[calc(100vh-88px)] sm:max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-white">New Conversation</h2>
@@ -1404,6 +2342,57 @@ function CreateThreadModal({
             <XIcon className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Purpose Picker */}
+        <div className="mb-4">
+          <label className="block text-xs text-white/50 mb-2">
+            Conversation Purpose
+          </label>
+          <div className="grid grid-cols-4 gap-2">
+            {(Object.keys(PURPOSE_CONFIG) as ThreadPurpose[]).map((key) => {
+              const config = PURPOSE_CONFIG[key];
+              const isSelected = purpose === key;
+              const hasExternalApp = !!config.external_url;
+              return (
+                <button
+                  key={key}
+                  onClick={() => handlePurposeChange(key)}
+                  className={cn(
+                    "flex flex-col items-center gap-1 p-2 rounded-xl transition-all",
+                    isSelected
+                      ? "bg-gradient-to-r from-blue-500/30 to-purple-500/30 ring-2 ring-blue-500"
+                      : "bg-white/5 hover:bg-white/10"
+                  )}
+                >
+                  <span className="text-lg">{config.icon}</span>
+                  <span className="text-xs text-white/70">{config.label}</span>
+                  {hasExternalApp && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
+                      App
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* External App Info */}
+        {selectedConfig.external_url && (
+          <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-400">🔗</span>
+              <div className="flex-1">
+                <p className="text-xs text-emerald-300 font-medium">
+                  Linked to {selectedConfig.external_app_name}
+                </p>
+                <p className="text-xs text-white/50">
+                  Opens external app for actions
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Icon Picker */}
         <div className="mb-4">

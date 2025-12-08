@@ -54,59 +54,75 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Get unread count per thread using hub_message_receipts
-  // Unread = receipts for current user where status != 'read'
-  const threadsWithUnread = await Promise.all(
-    (threads || []).map(async (thread) => {
-      // Get all messages in this thread
-      const { data: threadMessages } = await supabase
-        .from("hub_messages")
-        .select("id, sender_user_id")
-        .eq("thread_id", thread.id);
+  // OPTIMIZED: Batch fetch all messages and receipts for all threads at once
+  // instead of N+1 queries per thread
+  const threadIds = (threads || []).map((t) => t.id);
 
-      // Get message IDs that are NOT from current user (messages I should have receipts for)
-      const otherUserMessageIds = (threadMessages || [])
-        .filter((m) => m.sender_user_id !== user.id)
-        .map((m) => m.id);
+  // Single query to get all messages from all threads
+  const { data: allMessages } =
+    threadIds.length > 0
+      ? await supabase
+          .from("hub_messages")
+          .select("id, sender_user_id, thread_id")
+          .in("thread_id", threadIds)
+      : { data: [] };
 
-      let unreadCount = 0;
+  // Get all message IDs from other users (messages I need receipts for)
+  const otherUserMessageIds = (allMessages || [])
+    .filter((m) => m.sender_user_id !== user.id)
+    .map((m) => m.id);
 
-      if (otherUserMessageIds.length > 0) {
-        // Count receipts for these messages where MY status is NOT 'read'
-        const { data: receipts } = await supabase
+  // Single query to get all my read receipts
+  const { data: allReceipts } =
+    otherUserMessageIds.length > 0
+      ? await supabase
           .from("hub_message_receipts")
           .select("message_id, status")
           .eq("user_id", user.id)
-          .in("message_id", otherUserMessageIds);
+          .in("message_id", otherUserMessageIds)
+      : { data: [] };
 
-        // Messages with no receipt OR receipt.status != 'read' are unread
-        const readMessageIds = new Set(
-          (receipts || [])
-            .filter((r) => r.status === "read")
-            .map((r) => r.message_id)
-        );
-
-        unreadCount = otherUserMessageIds.filter(
-          (id) => !readMessageIds.has(id)
-        ).length;
-      }
-
-      // Get the most recent message for preview
-      const lastMessage = Array.isArray(thread.last_message)
-        ? thread.last_message.sort(
-            (a: any, b: any) =>
-              new Date(b.created_at).getTime() -
-              new Date(a.created_at).getTime()
-          )[0]
-        : thread.last_message;
-
-      return {
-        ...thread,
-        last_message: lastMessage || null,
-        unread_count: unreadCount,
-      };
-    })
+  // Build a Set of read message IDs for O(1) lookup
+  const readMessageIds = new Set(
+    (allReceipts || [])
+      .filter((r) => r.status === "read")
+      .map((r) => r.message_id)
   );
+
+  // Group messages by thread for unread count calculation
+  const messagesByThread = (allMessages || []).reduce(
+    (acc, msg) => {
+      if (!acc[msg.thread_id]) acc[msg.thread_id] = [];
+      acc[msg.thread_id].push(msg);
+      return acc;
+    },
+    {} as Record<string, typeof allMessages>
+  );
+
+  // Build final threads with unread counts
+  const threadsWithUnread = (threads || []).map((thread) => {
+    const threadMessages = messagesByThread[thread.id] || [];
+    const otherUserMsgs = threadMessages.filter(
+      (m) => m.sender_user_id !== user.id
+    );
+    const unreadCount = otherUserMsgs.filter(
+      (m) => !readMessageIds.has(m.id)
+    ).length;
+
+    // Get the most recent message for preview
+    const lastMessage = Array.isArray(thread.last_message)
+      ? thread.last_message.sort(
+          (a: any, b: any) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )[0]
+      : thread.last_message;
+
+    return {
+      ...thread,
+      last_message: lastMessage || null,
+      unread_count: unreadCount,
+    };
+  });
 
   return NextResponse.json({
     threads: threadsWithUnread,
@@ -127,7 +143,15 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { title, description, icon, household_id } = body;
+  const {
+    title,
+    description,
+    icon,
+    household_id,
+    purpose,
+    external_url,
+    external_app_name,
+  } = body;
 
   if (!title?.trim()) {
     return NextResponse.json(
@@ -156,7 +180,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid household" }, { status: 403 });
   }
 
-  // Create thread
+  // Create thread with purpose and external app info
   const { data: thread, error } = await supabase
     .from("hub_chat_threads")
     .insert({
@@ -165,12 +189,14 @@ export async function POST(request: NextRequest) {
       title: title.trim(),
       description: description?.trim() || null,
       icon: icon || "💬",
+      purpose: purpose || "general",
+      external_url: external_url || null,
+      external_app_name: external_app_name || null,
     })
     .select()
     .single();
 
   if (error) {
-    console.error("Error creating thread:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

@@ -65,8 +65,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // CHANGED: Don't filter out hidden messages - include them so we can show undo button
+  // Mark each message as hidden or visible for the current user
+  const visibleMessages = (messages || []).map((msg) => {
+    const hiddenFor = msg.hidden_for || [];
+    return {
+      ...msg,
+      is_hidden_by_me: hiddenFor.includes(user.id),
+    };
+  });
+
   // Get all message IDs from others (messages I need receipts for)
-  const otherUserMessageIds = (messages || [])
+  const otherUserMessageIds = visibleMessages
     .filter((m) => m.sender_user_id !== user.id)
     .map((m) => m.id);
 
@@ -90,7 +100,7 @@ export async function GET(request: NextRequest) {
   let unreadCount = 0;
   const unreadMessageIds: string[] = [];
 
-  for (const msg of messages || []) {
+  for (const msg of visibleMessages) {
     if (msg.sender_user_id !== user.id) {
       const myStatus = myReceipts[msg.id];
       if (myStatus !== "read") {
@@ -107,35 +117,43 @@ export async function GET(request: NextRequest) {
   let markedAsReadIds: string[] = [];
   if (markAsRead && unreadMessageIds.length > 0) {
     markedAsReadIds = unreadMessageIds;
+    const readAt = new Date().toISOString();
 
-    // Upsert receipts for each unread message
-    for (const msgId of unreadMessageIds) {
-      const existingStatus = myReceipts[msgId];
+    // OPTIMIZED: Batch upsert all receipts at once instead of loop
+    // Separate new receipts from updates
+    const newReceiptIds = unreadMessageIds.filter(
+      (msgId) => !myReceipts[msgId]
+    );
+    const updateReceiptIds = unreadMessageIds.filter(
+      (msgId) => myReceipts[msgId] && myReceipts[msgId] !== "read"
+    );
 
-      if (!existingStatus) {
-        // Create new receipt
-        await supabase.from("hub_message_receipts").insert({
-          message_id: msgId,
-          user_id: user.id,
+    // Batch insert new receipts
+    if (newReceiptIds.length > 0) {
+      const newReceipts = newReceiptIds.map((msgId) => ({
+        message_id: msgId,
+        user_id: user.id,
+        status: "read",
+        read_at: readAt,
+      }));
+      await supabase.from("hub_message_receipts").insert(newReceipts);
+    }
+
+    // Batch update existing receipts (update all at once using IN clause)
+    if (updateReceiptIds.length > 0) {
+      await supabase
+        .from("hub_message_receipts")
+        .update({
           status: "read",
-          read_at: new Date().toISOString(),
-        });
-      } else if (existingStatus !== "read") {
-        // Update existing receipt
-        await supabase
-          .from("hub_message_receipts")
-          .update({
-            status: "read",
-            read_at: new Date().toISOString(),
-          })
-          .eq("message_id", msgId)
-          .eq("user_id", user.id);
-      }
+          read_at: readAt,
+        })
+        .eq("user_id", user.id)
+        .in("message_id", updateReceiptIds);
     }
   }
 
   // Get receipt statuses for messages I sent (to show sent/delivered/read to me)
-  const myMessageIds = (messages || [])
+  const myMessageIds = visibleMessages
     .filter((msg) => msg.sender_user_id === user.id)
     .map((msg) => msg.id);
 
@@ -154,8 +172,19 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // OPTIMIZED: Fetch message actions inline to avoid separate API call
+  const allMessageIds = visibleMessages.map((msg) => msg.id);
+  let messageActions: any[] = [];
+  if (allMessageIds.length > 0) {
+    const { data: actions } = await supabase
+      .from("hub_message_actions")
+      .select("*")
+      .in("message_id", allMessageIds);
+    messageActions = actions || [];
+  }
+
   // Transform messages with proper status
-  const transformedMessages = (messages || []).map((msg) => {
+  const transformedMessages = visibleMessages.map((msg) => {
     const isMine = msg.sender_user_id === user.id;
 
     return {
@@ -175,6 +204,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     messages: transformedMessages,
+    message_actions: messageActions, // Include actions in response
     thread_id: threadId,
     household_id: thread.household_id,
     current_user_id: user.id,
@@ -252,7 +282,6 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    console.error("Error inserting message:", error);
     return NextResponse.json(
       { error: error.message, details: error },
       { status: 500 }
@@ -282,4 +311,320 @@ export async function POST(request: NextRequest) {
       status: "delivered",
     },
   });
+}
+
+/**
+ * DELETE - Soft delete messages for everyone (mark as deleted)
+ * Body: { messageIds: string[] }
+ * Only message owners can delete their own messages for everyone
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await supabaseServer(await cookies());
+
+    // Get authenticated user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { messageIds } = body;
+
+    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+      return NextResponse.json(
+        { error: "messageIds array is required" },
+        { status: 400 }
+      );
+    }
+
+    // First verify user has access to all messages
+    const { data: messages, error: verifyError } = await supabase
+      .from("hub_messages")
+      .select(
+        `
+        id,
+        thread_id,
+        sender_user_id,
+        hub_chat_threads!inner (
+          id,
+          household_id
+        )
+      `
+      )
+      .in("id", messageIds);
+
+    if (verifyError) {
+      return NextResponse.json(
+        { error: "Failed to verify messages" },
+        { status: 500 }
+      );
+    }
+
+    if (!messages || messages.length === 0) {
+      return NextResponse.json({ error: "No messages found" }, { status: 404 });
+    }
+
+    // Check that user belongs to the household
+    const householdIds = [
+      ...new Set(messages.map((m: any) => m.hub_chat_threads.household_id)),
+    ];
+
+    for (const householdId of householdIds) {
+      const { data: link } = await supabase
+        .from("household_links")
+        .select("id, owner_user_id, partner_user_id")
+        .eq("id", householdId)
+        .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
+        .eq("active", true)
+        .maybeSingle();
+
+      if (!link) {
+        return NextResponse.json(
+          { error: "Unauthorized to delete messages in this household" },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Only allow users to delete their own messages
+    const unauthorizedMessages = messages.filter(
+      (m: any) => m.sender_user_id !== user.id
+    );
+
+    if (unauthorizedMessages.length > 0) {
+      return NextResponse.json(
+        { error: "You can only delete your own messages" },
+        { status: 403 }
+      );
+    }
+
+    // Soft delete: mark messages as deleted instead of removing them
+    const { error: deleteError } = await supabase
+      .from("hub_messages")
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: user.id,
+      })
+      .in("id", messageIds);
+
+    if (deleteError) {
+      return NextResponse.json(
+        { error: "Failed to delete messages" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      deletedCount: messageIds.length,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PATCH - Handle message actions (hide, unhide, or undo)
+ * Body: { messageIds: string[], action: 'hide' | 'unhide' | 'undo' }
+ *
+ * - 'hide': Adds the current user's ID to the hidden_for array (both users can hide any message)
+ * - 'unhide': Removes the current user's ID from the hidden_for array (undo "delete for me")
+ * - 'undo': Removes deleted_at/deleted_by for message owners to undo deletion
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabase = await supabaseServer(await cookies());
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { messageIds, action } = body;
+
+    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+      return NextResponse.json(
+        { error: "messageIds array is required" },
+        { status: 400 }
+      );
+    }
+
+    if (action !== "hide" && action !== "unhide" && action !== "undo") {
+      return NextResponse.json(
+        { error: "Invalid action. Use 'hide', 'unhide', or 'undo'." },
+        { status: 400 }
+      );
+    }
+
+    // Verify user has access to all messages
+    const { data: messages, error: verifyError } = await supabase
+      .from("hub_messages")
+      .select(
+        `
+        id,
+        sender_user_id,
+        hub_chat_threads!inner (
+          id,
+          household_id
+        )
+      `
+      )
+      .in("id", messageIds);
+
+    if (verifyError) {
+      return NextResponse.json(
+        { error: "Failed to verify messages" },
+        { status: 500 }
+      );
+    }
+
+    if (!messages || messages.length === 0) {
+      return NextResponse.json({ error: "No messages found" }, { status: 404 });
+    }
+
+    // Check household membership
+    const householdIds = [
+      ...new Set(messages.map((m: any) => m.hub_chat_threads.household_id)),
+    ];
+
+    for (const householdId of householdIds) {
+      const { data: link } = await supabase
+        .from("household_links")
+        .select("id, owner_user_id, partner_user_id")
+        .eq("id", householdId)
+        .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
+        .eq("active", true)
+        .maybeSingle();
+
+      if (!link) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      }
+    }
+
+    // Handle undo action
+    if (action === "undo") {
+      // Only allow users to undo their own deletions
+      const unauthorizedMessages = messages.filter(
+        (m: any) => m.sender_user_id !== user.id
+      );
+
+      if (unauthorizedMessages.length > 0) {
+        return NextResponse.json(
+          { error: "You can only undo your own deletions" },
+          { status: 403 }
+        );
+      }
+
+      // Remove deletion markers
+      const { error: undoError } = await supabase
+        .from("hub_messages")
+        .update({
+          deleted_at: null,
+          deleted_by: null,
+        })
+        .in("id", messageIds);
+
+      if (undoError) {
+        return NextResponse.json(
+          { error: "Failed to undo deletion" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        undoCount: messageIds.length,
+      });
+    }
+
+    // Handle unhide action
+    if (action === "unhide") {
+      // Remove user ID from hidden_for array for each message
+      for (const messageId of messageIds) {
+        const { data: currentMessage } = await supabase
+          .from("hub_messages")
+          .select("hidden_for")
+          .eq("id", messageId)
+          .single();
+
+        const currentHiddenFor = currentMessage?.hidden_for || [];
+
+        // Remove user ID from the array
+        const updatedHiddenFor = currentHiddenFor.filter(
+          (id: string) => id !== user.id
+        );
+
+        const { error: updateError } = await supabase
+          .from("hub_messages")
+          .update({ hidden_for: updatedHiddenFor })
+          .eq("id", messageId);
+
+        if (updateError) {
+          return NextResponse.json(
+            { error: "Failed to unhide message" },
+            { status: 500 }
+          );
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        unhiddenCount: messageIds.length,
+      });
+    }
+
+    // Handle hide action
+    // Add user ID to hidden_for array for each message
+    // This allows both household users to hide messages ("delete for me")
+    for (const messageId of messageIds) {
+      // First get the current hidden_for array
+      const { data: currentMessage } = await supabase
+        .from("hub_messages")
+        .select("hidden_for")
+        .eq("id", messageId)
+        .single();
+
+      const currentHiddenFor = currentMessage?.hidden_for || [];
+
+      // Add user ID if not already in the array
+      if (!currentHiddenFor.includes(user.id)) {
+        const updatedHiddenFor = [...currentHiddenFor, user.id];
+
+        const { error: updateError } = await supabase
+          .from("hub_messages")
+          .update({ hidden_for: updatedHiddenFor })
+          .eq("id", messageId);
+
+        if (updateError) {
+          return NextResponse.json(
+            { error: "Failed to hide message" },
+            { status: 500 }
+          );
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      hiddenCount: messageIds.length,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
 }

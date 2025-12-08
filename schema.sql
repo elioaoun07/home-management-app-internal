@@ -27,6 +27,16 @@ CREATE TABLE public.accounts (
   CONSTRAINT accounts_pkey PRIMARY KEY (id),
   CONSTRAINT accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.cross_app_user_mappings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  budget_app_user_id uuid NOT NULL UNIQUE,
+  reminder_app_user_id uuid NOT NULL,
+  display_name text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT cross_app_user_mappings_pkey PRIMARY KEY (id),
+  CONSTRAINT cross_app_user_mappings_budget_user_fkey FOREIGN KEY (budget_app_user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.ai_messages (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -180,6 +190,9 @@ CREATE TABLE public.hub_chat_threads (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   last_message_at timestamp with time zone DEFAULT now(),
+  purpose text DEFAULT 'general'::text CHECK (purpose IN ('general', 'budget', 'reminder', 'shopping', 'travel', 'health', 'other')),
+  external_url text,
+  external_app_name text,
   CONSTRAINT hub_chat_threads_pkey PRIMARY KEY (id),
   CONSTRAINT hub_chat_threads_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
   CONSTRAINT hub_chat_threads_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
