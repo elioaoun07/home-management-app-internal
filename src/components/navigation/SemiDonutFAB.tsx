@@ -3,7 +3,7 @@
 import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * SemiDonutFAB - A floating action button that expands into a semi-donut menu
@@ -13,6 +13,9 @@ import { useCallback, useRef, useState } from "react";
 
 // Selection type for FAB menu
 export type FABSelection = "expense" | "reminder";
+
+// LocalStorage key for persisting user's last selection
+const FAB_SELECTION_KEY = "fab-last-selection";
 
 // Icons for each create option
 const ExpenseIcon = ({ className }: { className?: string }) => (
@@ -121,15 +124,52 @@ export default function SemiDonutFAB({
   const { theme } = useTheme();
   const isPink = theme === "pink";
   const [isOpen, setIsOpen] = useState(false);
+  const [lastSelection, setLastSelection] = useState<FABSelection | null>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const clickCountRef = useRef(0);
 
-  const handleToggle = useCallback(() => {
-    setIsOpen((prev) => !prev);
-    // Haptic feedback
-    if (navigator.vibrate) {
-      navigator.vibrate(10);
+  // Load last selection from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(
+      FAB_SELECTION_KEY
+    ) as FABSelection | null;
+    if (stored === "expense" || stored === "reminder") {
+      setLastSelection(stored);
+    } else {
+      // Default to expense if nothing stored
+      setLastSelection("expense");
+      localStorage.setItem(FAB_SELECTION_KEY, "expense");
     }
   }, []);
+
+  const handleToggle = useCallback(() => {
+    clickCountRef.current += 1;
+
+    // Clear any existing timeout
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+    }
+
+    // Wait to see if this is a double click
+    clickTimeoutRef.current = setTimeout(() => {
+      if (clickCountRef.current === 1) {
+        // Single click - use last selection
+        if (lastSelection && !isOpen) {
+          if (navigator.vibrate) navigator.vibrate(10);
+          onSelect?.(lastSelection);
+        } else if (isOpen) {
+          // Close if already open
+          setIsOpen(false);
+        }
+      } else if (clickCountRef.current >= 2) {
+        // Double click - open menu to change selection
+        if (navigator.vibrate) navigator.vibrate(20);
+        setIsOpen((prev) => !prev);
+      }
+      clickCountRef.current = 0;
+    }, 250); // 250ms window for double click
+  }, [lastSelection, isOpen, onSelect]);
 
   const handleLongPressStart = useCallback(() => {
     longPressTimerRef.current = setTimeout(() => {
@@ -150,6 +190,13 @@ export default function SemiDonutFAB({
   const handleSelect = useCallback(
     (mode: FABSelection) => {
       setIsOpen(false);
+      // Save selection to localStorage and state
+      localStorage.setItem(FAB_SELECTION_KEY, mode);
+      setLastSelection(mode);
+
+      // Dispatch custom event to notify other components
+      window.dispatchEvent(new Event("fab-selection-changed"));
+
       // Haptic feedback
       if (navigator.vibrate) {
         navigator.vibrate(20);
@@ -323,6 +370,26 @@ export default function SemiDonutFAB({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Selection Indicator Badge */}
+          {!isOpen && lastSelection && (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className={cn(
+                "absolute -top-1 -right-1",
+                "w-5 h-5 rounded-full",
+                "flex items-center justify-center",
+                "text-[9px] font-bold",
+                "border-2 border-[hsl(var(--nav-bg))]",
+                lastSelection === "expense"
+                  ? "bg-green-500 text-white"
+                  : "bg-purple-500 text-white"
+              )}
+            >
+              {lastSelection === "expense" ? "$" : "✓"}
+            </motion.div>
+          )}
         </motion.button>
       </div>
     </>

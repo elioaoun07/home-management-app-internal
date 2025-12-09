@@ -30,14 +30,24 @@ export default function LaunchTemplateDialog({
   template,
   onLaunch,
 }: LaunchTemplateDialogProps) {
-  const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("");
   const [launching, setLaunching] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
-  // Reset form when template changes
+  // Initialize form when dialog opens for the first time with this template
   useEffect(() => {
-    if (!open || !template) return;
+    if (!open) {
+      // Reset initialization flag when dialog closes
+      setInitialized(false);
+      return;
+    }
+
+    if (!template || initialized) return;
+
+    // Only initialize once per dialog open
+    setInitialized(true);
 
     const now = new Date();
     setStartDate(format(now, "yyyy-MM-dd"));
@@ -56,7 +66,7 @@ export default function LaunchTemplateDialog({
 
     // Use default duration if available
     setDurationMinutes(template.default_duration_minutes?.toString() || "60");
-  }, [open, template]);
+  }, [open, template, initialized]);
 
   const handleLaunch = async (e: React.FormEvent) => {
     e.preventDefault();

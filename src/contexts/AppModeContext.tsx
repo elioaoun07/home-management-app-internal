@@ -5,6 +5,7 @@ import {
   ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useState,
 } from "react";
 
@@ -49,7 +50,16 @@ interface AppModeContextType {
 const AppModeContext = createContext<AppModeContextType | undefined>(undefined);
 
 export function AppModeProvider({ children }: { children: ReactNode }) {
-  const [appMode, setAppMode] = useState<AppMode>("budget");
+  // Initialize appMode based on FAB selection from localStorage
+  const [appMode, setAppMode] = useState<AppMode>(() => {
+    if (typeof window !== "undefined") {
+      const fabSelection = localStorage.getItem("fab-last-selection");
+      if (fabSelection === "reminder") {
+        return "items";
+      }
+    }
+    return "budget"; // Default to budget for expense mode or no selection
+  });
   const [itemsSubMode, setItemsSubMode] = useState<ItemsSubMode>("all");
   const [createMode, setCreateMode] = useState<CreateMode>(null);
 
@@ -63,6 +73,29 @@ export function AppModeProvider({ children }: { children: ReactNode }) {
 
   const closeCreateForm = useCallback(() => {
     setCreateMode(null);
+  }, []);
+
+  // Listen for FAB selection changes and sync appMode
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const fabSelection = localStorage.getItem("fab-last-selection");
+      if (fabSelection === "expense") {
+        setAppMode("budget");
+      } else if (fabSelection === "reminder") {
+        setAppMode("items");
+      }
+    };
+
+    // Listen for storage events from other tabs/windows
+    window.addEventListener("storage", handleStorageChange);
+
+    // Also listen for custom event within same tab
+    window.addEventListener("fab-selection-changed", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("fab-selection-changed", handleStorageChange);
+    };
   }, []);
 
   const value: AppModeContextType = {

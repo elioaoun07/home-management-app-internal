@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 
 // Helper function to parse date string with multiple format attempts
 function parseDateTime(dateStr: string): Date | null {
-  // Try parsing as ISO string first
+  // The dateStr comes in format "2025-12-13T10:00:00" (local time, no timezone)
+  // We want to treat this as the user's local time and convert to UTC for storage
+
+  // Try parsing as ISO string first (this will interpret as local time)
   let date = new Date(dateStr);
   if (isValid(date)) return date;
 

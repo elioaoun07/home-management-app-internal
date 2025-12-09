@@ -18,7 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 export default function DashboardClientPage() {
   const themeClasses = useThemeClasses();
   const router = useRouter();
-  const { appMode, isBudgetMode, isItemsMode } = useAppMode();
+  const { appMode, setAppMode, isBudgetMode, isItemsMode } = useAppMode();
   const [monthStartDay, setMonthStartDay] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(
     undefined

@@ -65,9 +65,29 @@ export default function TemplateDrawer({
   // Common state
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
-  const [templateMode, setTemplateMode] = useState<TemplateMode>("budget");
+  const [templateMode, setTemplateMode] = useState<TemplateMode>(() => {
+    // Initialize based on FAB selection
+    if (typeof window !== "undefined") {
+      const fabSelection = localStorage.getItem("fab-last-selection");
+      return fabSelection === "reminder" ? "task" : "budget";
+    }
+    return "budget";
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const itemHeight = 80;
+
+  // Sync template mode with FAB selection
+  useEffect(() => {
+    const handleFABChange = () => {
+      const fabSelection = localStorage.getItem("fab-last-selection");
+      setTemplateMode(fabSelection === "reminder" ? "task" : "budget");
+    };
+
+    window.addEventListener("fab-selection-changed", handleFABChange);
+    return () => {
+      window.removeEventListener("fab-selection-changed", handleFABChange);
+    };
+  }, []);
 
   // Load budget templates from localStorage or fetch from API
   useEffect(() => {

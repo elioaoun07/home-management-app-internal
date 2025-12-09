@@ -27,6 +27,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import EditItemDialog from "./EditItemDialog";
 import ItemDetailModal from "./ItemDetailModal";
 import SwipeableItemCard from "./SwipeableItemCard";
 
@@ -242,6 +243,7 @@ export default function ItemsDashboard({
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
     null
   );
+  const [editingItem, setEditingItem] = useState<ItemWithDetails | null>(null);
 
   // Fetch all items (reminders, events, and tasks)
   const { data: allItems = [], isLoading: allLoading } = useItems();
@@ -519,9 +521,9 @@ export default function ItemsDashboard({
   };
 
   const handleEdit = (item: ItemWithDetails) => {
-    // For now, clicking edit will show the detail modal where editing can be done
-    // In future, this could open a dedicated edit form
-    setSelectedItem(item);
+    // Open the edit form for this item
+    setEditingItem(item);
+    setSelectedItem(null);
   };
 
   if (allLoading) {
@@ -891,7 +893,6 @@ export default function ItemsDashboard({
           onClose={() => setSelectedItem(null)}
           onEdit={() => {
             handleEdit(selectedItem);
-            setSelectedItem(null);
           }}
           onComplete={() => {
             handleComplete(selectedItem.id);
@@ -903,6 +904,15 @@ export default function ItemsDashboard({
           }}
         />
       )}
+
+      {/* Edit Item Dialog */}
+      <EditItemDialog
+        item={editingItem}
+        open={!!editingItem}
+        onOpenChange={(open) => {
+          if (!open) setEditingItem(null);
+        }}
+      />
     </div>
   );
 }

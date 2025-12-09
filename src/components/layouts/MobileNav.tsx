@@ -213,6 +213,10 @@ export default function MobileNav() {
             onClick={() => {
               if (navigator.vibrate) navigator.vibrate(10);
               setActiveTab("dashboard");
+
+              // Set dashboard mode based on FAB selection
+              const fabSelection = localStorage.getItem("fab-last-selection");
+              // This will be picked up by DashboardClientPage on mount
             }}
             onMouseEnter={handleDashboardPrefetch}
             onTouchStart={handleDashboardPrefetch}
