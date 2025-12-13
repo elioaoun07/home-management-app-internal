@@ -1,7 +1,7 @@
 // Service Worker for Push Notifications
 // Handles push events and displays notifications with alarm-like behavior
 
-const SW_VERSION = "1.0.0";
+const SW_VERSION = "1.0.1";
 
 // ============================================
 // INSTALL & ACTIVATE
@@ -16,6 +16,36 @@ self.addEventListener("activate", (event) => {
   console.log("[SW] Activating service worker v" + SW_VERSION);
   event.waitUntil(clients.claim());
 });
+
+// ============================================
+// ALARM SOUND - Notify clients to play sound
+// ============================================
+
+async function notifyClientsToPlaySound(data) {
+  const allClients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+
+  console.log(
+    "[SW] Notifying",
+    allClients.length,
+    "clients to play alarm sound"
+  );
+
+  for (const client of allClients) {
+    client.postMessage({
+      type: "PLAY_ALARM_SOUND",
+      data: data,
+    });
+  }
+
+  // If no clients are open, we can't play sound directly
+  // The notification vibration will have to suffice
+  if (allClients.length === 0) {
+    console.log("[SW] No clients open - relying on system notification sound");
+  }
+}
 
 // ============================================
 // PUSH NOTIFICATION HANDLING
@@ -77,8 +107,13 @@ self.addEventListener("push", (event) => {
       : Date.now(),
   };
 
-  // Show the notification
-  event.waitUntil(self.registration.showNotification(data.title, options));
+  // Show the notification and play alarm sound
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(data.title, options),
+      notifyClientsToPlaySound(data),
+    ])
+  );
 });
 
 // ============================================
