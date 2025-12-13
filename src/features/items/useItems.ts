@@ -351,7 +351,10 @@ export function useCreateReminder() {
         if (alertsError) throw alertsError;
       } else if (input.due_at) {
         // Auto-create a push alert at the due time if no alerts provided
-        console.log("[useCreateReminder] Creating auto-alert for due_at:", input.due_at);
+        console.log(
+          "[useCreateReminder] Creating auto-alert for due_at:",
+          input.due_at
+        );
         const { data: alertData, error: alertsError } = await supabase
           .from("item_alerts")
           .insert({
@@ -363,11 +366,13 @@ export function useCreateReminder() {
           })
           .select()
           .single();
-        
+
         if (alertsError) {
           console.error("Failed to create auto-alert:", alertsError);
           // Still throw so user knows there was an issue
-          throw new Error(`Reminder created but alert failed: ${alertsError.message}`);
+          throw new Error(
+            `Reminder created but alert failed: ${alertsError.message}`
+          );
         } else {
           console.log("[useCreateReminder] Auto-alert created:", alertData);
         }
