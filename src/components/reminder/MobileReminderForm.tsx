@@ -333,6 +333,12 @@ export default function MobileReminderForm() {
           return;
         }
 
+        // Convert local date/time to ISO string with timezone
+        const startAtIso = new Date(
+          `${startDate}T${startTime}:00`
+        ).toISOString();
+        const endAtIso = new Date(`${endDate}T${endTime}:00`).toISOString();
+
         const input: CreateEventInput = {
           type: "event",
           title: title.trim(),
@@ -340,8 +346,8 @@ export default function MobileReminderForm() {
           priority,
           status,
           is_public: !isPrivate,
-          start_at: `${startDate}T${startTime}:00`,
-          end_at: `${endDate}T${endTime}:00`,
+          start_at: startAtIso,
+          end_at: endAtIso,
           category_ids:
             selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
         };
@@ -353,6 +359,14 @@ export default function MobileReminderForm() {
         });
       } else {
         // Create Reminder
+        // Convert local date/time to ISO string with timezone
+        let dueAtIso: string | undefined;
+        if (dueDate && dueTime) {
+          // Create a Date object from local date/time - this preserves the local timezone
+          const localDate = new Date(`${dueDate}T${dueTime}:00`);
+          dueAtIso = localDate.toISOString();
+        }
+
         const input: CreateReminderInput = {
           type: "reminder",
           title: title.trim(),
@@ -360,7 +374,7 @@ export default function MobileReminderForm() {
           priority,
           status,
           is_public: !isPrivate,
-          due_at: dueDate && dueTime ? `${dueDate}T${dueTime}:00` : undefined,
+          due_at: dueAtIso,
           category_ids:
             selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
         };
