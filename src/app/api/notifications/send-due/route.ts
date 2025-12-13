@@ -34,7 +34,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = supabaseAdmin();
+  let supabase;
+  try {
+    supabase = supabaseAdmin();
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: "Database not configured",
+        details: e instanceof Error ? e.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
 
   try {
     // Get all due alerts that haven't been fired recently
@@ -77,7 +88,7 @@ export async function POST(req: NextRequest) {
     if (alertsError) {
       console.error("Failed to get due alerts:", alertsError);
       return NextResponse.json(
-        { error: "Failed to get due alerts" },
+        { error: "Failed to get due alerts", details: alertsError.message },
         { status: 500 }
       );
     }
