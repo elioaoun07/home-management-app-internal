@@ -48,12 +48,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Get all due alerts that haven't been fired recently
+    // Get all due alerts that haven't been fired yet
     // We look for alerts where:
     // - trigger_at is in the past (due)
     // - trigger_at is within the last hour (not too old)
     // - active is true
-    // - last_fired_at is null OR was before trigger_at (needs to fire)
+    // - last_fired_at is null (hasn't been sent yet)
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       .eq("channel", "push")
       .lte("trigger_at", now.toISOString())
       .gte("trigger_at", oneHourAgo.toISOString())
-      .or(`last_fired_at.is.null,last_fired_at.lt.trigger_at`);
+      .is("last_fired_at", null);
 
     if (alertsError) {
       console.error("Failed to get due alerts:", alertsError);
