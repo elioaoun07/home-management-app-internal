@@ -3,6 +3,7 @@ import { ErrorLogger } from "@/components/ErrorLogger";
 import ConditionalHeader from "@/components/layouts/ConditionalHeader";
 import GuestHeader from "@/components/layouts/GuestHeader";
 import MobileNav from "@/components/layouts/MobileNav";
+import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { Toaster } from "@/components/ui/sonner";
 import { UserProvider } from "@/contexts/UserContext";
 import { supabaseServerRSC } from "@/lib/supabase/server";
@@ -131,6 +132,7 @@ export default async function RootLayout({
               user ? { name: userName, email: userEmail, avatarUrl } : null
             }
           >
+            <ServiceWorkerRegistration />
             <ErrorLogger />
             {/* Conditional header - show user menu when logged in, login button when logged out */}
             {user ? (

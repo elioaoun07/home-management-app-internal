@@ -8,6 +8,7 @@ import {
   WatchIcon,
 } from "@/components/icons/FuturisticIcons";
 import { CategoryManagement } from "@/components/settings/CategoryManagement";
+import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -66,6 +67,7 @@ type SectionType =
   | "view"
   | "accounts"
   | "categories"
+  | "notifications"
   | "steps"
   | "household"
   | "statement";
@@ -148,6 +150,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     { id: "view", label: "View" },
     { id: "accounts", label: "Accounts" },
     { id: "categories", label: "Categories" },
+    { id: "notifications", label: "Notifications" },
     { id: "steps", label: "Steps" },
     { id: "household", label: "Household" },
     { id: "statement", label: "Statement Import" },
@@ -419,6 +422,23 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                     {updatePreferences.isPending ? "Saving..." : "Save Order"}
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {/* NOTIFICATIONS SECTION */}
+            {activeSection === "notifications" && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <div>
+                  <h3
+                    className={`text-lg font-semibold ${themeClasses.text} mb-1`}
+                  >
+                    Push Notifications
+                  </h3>
+                  <p className={`text-sm ${themeClasses.textMuted}`}>
+                    Get alerted when your reminders are due
+                  </p>
+                </div>
+                <NotificationSettings />
               </div>
             )}
 
