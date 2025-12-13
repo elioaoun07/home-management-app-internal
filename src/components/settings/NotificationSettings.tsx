@@ -11,6 +11,7 @@ import {
   BellOff,
   BellRing,
   CheckCircle,
+  Clock,
   Loader2,
   XCircle,
 } from "lucide-react";
@@ -31,6 +32,7 @@ export function NotificationSettings() {
   } = usePushNotifications();
 
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [isCheckingDue, setIsCheckingDue] = useState(false);
 
   const handleSubscribe = async () => {
     const success = await subscribe();
@@ -67,6 +69,37 @@ export function NotificationSettings() {
       });
     } finally {
       setIsSendingTest(false);
+    }
+  };
+
+  const handleCheckDueReminders = async () => {
+    setIsCheckingDue(true);
+    try {
+      const response = await fetch("/api/notifications/send-due", {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to check due reminders");
+      }
+
+      if (data.sent > 0) {
+        toast.success(`Sent ${data.sent} notification(s)!`, {
+          description: `Found ${data.alerts_processed} due reminder(s)`,
+        });
+      } else {
+        toast.info("No due reminders found", {
+          description:
+            "All caught up! Reminders will trigger at their scheduled time.",
+        });
+      }
+    } catch (error) {
+      toast.error("Failed to check due reminders", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setIsCheckingDue(false);
     }
   };
 
@@ -223,6 +256,19 @@ export function NotificationSettings() {
                 <BellRing className="w-5 h-5 mr-2" />
               )}
               Send Test Notification
+            </Button>
+            <Button
+              onClick={handleCheckDueReminders}
+              disabled={isCheckingDue}
+              variant="outline"
+              className={`w-full ${themeClasses.border} border rounded-xl py-3`}
+            >
+              {isCheckingDue ? (
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              ) : (
+                <Clock className="w-5 h-5 mr-2" />
+              )}
+              Check Due Reminders Now
             </Button>
             <Button
               onClick={handleUnsubscribe}
