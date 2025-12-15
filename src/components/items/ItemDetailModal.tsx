@@ -557,18 +557,12 @@ export default function ItemDetailModal({
           {/* Categories/Tags */}
           {item.categories && item.categories.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {item.categories.map((cat) => (
+              {item.categories.map((catId) => (
                 <span
-                  key={cat.id}
-                  className="px-2 py-1 rounded-lg text-xs font-medium bg-white/10 text-white/70"
-                  style={{
-                    backgroundColor: cat.color_hex
-                      ? `${cat.color_hex}20`
-                      : undefined,
-                    color: cat.color_hex || undefined,
-                  }}
+                  key={catId}
+                  className="px-2 py-1 rounded-lg text-xs font-medium bg-white/10 text-white/70 capitalize"
                 >
-                  {cat.name}
+                  {catId}
                 </span>
               ))}
             </div>

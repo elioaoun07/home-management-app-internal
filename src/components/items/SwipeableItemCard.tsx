@@ -557,18 +557,12 @@ export default function SwipeableItemCard({
             {/* Tags/Categories */}
             {item.categories && item.categories.length > 0 && (
               <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                {item.categories.slice(0, 3).map((cat) => (
+                {item.categories.slice(0, 3).map((catId) => (
                   <span
-                    key={cat.id}
-                    className="px-1.5 py-0.5 rounded text-[10px] bg-white/10 text-white/60"
-                    style={{
-                      backgroundColor: cat.color_hex
-                        ? `${cat.color_hex}20`
-                        : undefined,
-                      color: cat.color_hex || undefined,
-                    }}
+                    key={catId}
+                    className="px-1.5 py-0.5 rounded text-[10px] bg-white/10 text-white/60 capitalize"
                   >
-                    {cat.name}
+                    {catId}
                   </span>
                 ))}
                 {item.categories.length > 3 && (
