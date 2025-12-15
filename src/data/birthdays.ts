@@ -34,7 +34,7 @@ export const BIRTHDAYS: Birthday[] = [
     month: 12,
     day: 16,
     category: "friends",
-    //year: ,
+    year: 1998,
   },
 
   // {

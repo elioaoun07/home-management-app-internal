@@ -1,4 +1,5 @@
 import AIChatAssistant from "@/components/ai/AIChatAssistant";
+import { EagerDataPrefetch } from "@/components/EagerDataPrefetch";
 import { ErrorLogger } from "@/components/ErrorLogger";
 import ConditionalHeader from "@/components/layouts/ConditionalHeader";
 import GuestHeader from "@/components/layouts/GuestHeader";
@@ -132,6 +133,8 @@ export default async function RootLayout({
               user ? { name: userName, email: userEmail, avatarUrl } : null
             }
           >
+            {/* Eager prefetch critical data immediately on app load */}
+            {user && <EagerDataPrefetch />}
             <ServiceWorkerRegistration />
             <ErrorLogger />
             {/* Conditional header - show user menu when logged in, login button when logged out */}

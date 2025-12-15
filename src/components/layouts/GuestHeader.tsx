@@ -6,11 +6,11 @@ import { useViewMode } from "@/hooks/useViewMode";
 import Link from "next/link";
 
 export default function GuestHeader() {
-  const { viewMode, isLoaded } = useViewMode();
+  const { viewMode } = useViewMode();
   const themeClasses = useThemeClasses();
 
   // Hide header in watch/web mode - after all hooks are called
-  if (!isLoaded || viewMode === "watch" || viewMode === "web") {
+  if (viewMode === "watch" || viewMode === "web") {
     return null;
   }
 

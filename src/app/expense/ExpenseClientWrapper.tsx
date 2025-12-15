@@ -3,22 +3,13 @@
 import MobileExpenseForm from "@/components/expense/MobileExpenseForm";
 import { WatchErrorBoundary } from "@/components/watch/WatchErrorBoundary";
 import WatchView from "@/components/watch/WatchView";
-import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
 
 export default function ExpenseClientWrapper() {
-  const themeClasses = useThemeClasses();
-  const { viewMode, isLoaded } = useViewMode();
+  const { viewMode } = useViewMode();
 
-  if (!isLoaded) {
-    return (
-      <div
-        className={`min-h-screen ${themeClasses.pageBg} flex items-center justify-center`}
-      >
-        <div className={themeClasses.loadingText}>Loading...</div>
-      </div>
-    );
-  }
+  // No loading state - render immediately
+  // Data loading happens inside the components with skeleton UI
 
   if (viewMode === "watch") {
     return (

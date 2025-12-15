@@ -66,7 +66,7 @@ export default function MobileNav() {
   );
   const [templateAmount, setTemplateAmount] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
-  const { viewMode, isLoaded } = useViewMode();
+  const { viewMode } = useViewMode();
   const prefetchedRef = useRef({
     dashboard: false,
     expense: false,
@@ -169,7 +169,7 @@ export default function MobileNav() {
   };
 
   // Hide nav in watch/web mode - after all hooks are called
-  if (!isLoaded || viewMode === "watch" || viewMode === "web") {
+  if (viewMode === "watch" || viewMode === "web") {
     return null;
   }
 

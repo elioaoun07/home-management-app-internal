@@ -316,6 +316,7 @@ export default function SemiDonutFAB({
         {/* Main FAB Button */}
         <motion.button
           type="button"
+          suppressHydrationWarning
           onClick={handleToggle}
           onMouseDown={handleLongPressStart}
           onMouseUp={handleLongPressEnd}
