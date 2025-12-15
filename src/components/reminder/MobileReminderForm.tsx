@@ -220,6 +220,11 @@ const statusConfig: Record<
     icon: "❌",
     gradient: "from-gray-500/20 to-slate-500/20",
   },
+  archived: {
+    label: "Archived",
+    icon: "📦",
+    gradient: "from-gray-500/20 to-slate-500/20",
+  },
 };
 
 // Hardcoded categories - default for all users

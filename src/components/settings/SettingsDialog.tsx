@@ -63,8 +63,8 @@ const SECTION_LABELS: Record<SectionKey, string> = {
 };
 
 type SectionType =
-  | "theme"
   | "view"
+  | "theme"
   | "accounts"
   | "categories"
   | "notifications"
@@ -76,7 +76,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
   const { theme: colorTheme, setTheme, isLoading: themeLoading } = useTheme();
   const themeClasses = useThemeClasses();
   const { viewMode, updateViewMode } = useViewMode();
-  const [activeSection, setActiveSection] = useState<SectionType>("theme");
+  const [activeSection, setActiveSection] = useState<SectionType>("view");
 
   // Section order state
   const { data: serverOrderArray } = useSectionOrder();
@@ -146,8 +146,8 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
   }
 
   const sections: { id: SectionType; label: string }[] = [
-    { id: "theme", label: "Theme" },
     { id: "view", label: "View" },
+    { id: "theme", label: "Theme" },
     { id: "accounts", label: "Accounts" },
     { id: "categories", label: "Categories" },
     { id: "notifications", label: "Notifications" },

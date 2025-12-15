@@ -3,6 +3,10 @@
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
+  isOccurrenceCompleted,
+  useAllOccurrenceActions,
+} from "@/features/items/useItemActions";
+import {
   useCompleteReminder,
   useCreateEvent,
   useCreateReminder,
@@ -106,6 +110,107 @@ const TrashIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const FilterIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+  </svg>
+);
+
+const XIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+const UserIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+const HomeIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>
+);
+
+const UsersIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
+const HeartIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+  </svg>
+);
+
+const BriefcaseIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
+    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+  </svg>
+);
+
+// Category configuration for filtering
+const CATEGORIES = [
+  { id: "personal", name: "Personal", color: "#8B5CF6", icon: UserIcon },
+  { id: "home", name: "Home", color: "#1E90FF", icon: HomeIcon },
+  { id: "family", name: "Family", color: "#FFA500", icon: UsersIcon },
+  { id: "community", name: "Community", color: "#22C55E", icon: HeartIcon },
+  { id: "friends", name: "Friends", color: "#EC4899", icon: UsersIcon },
+  { id: "work", name: "Work", color: "#FF3B30", icon: BriefcaseIcon },
+] as const;
+
 const ChevronDownIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
@@ -157,6 +262,7 @@ const statusColors: Record<ItemStatus, { bg: string; text: string }> = {
   in_progress: { bg: "bg-amber-500/20", text: "text-amber-400" },
   completed: { bg: "bg-green-500/20", text: "text-green-400" },
   cancelled: { bg: "bg-gray-500/20", text: "text-gray-400" },
+  archived: { bg: "bg-gray-500/20", text: "text-gray-400" },
 };
 
 // Helper to format relative date
@@ -245,8 +351,17 @@ export default function ItemsDashboard({
   );
   const [editingItem, setEditingItem] = useState<ItemWithDetails | null>(null);
 
+  // Category filter state - All selected by default EXCEPT work
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [selectedCategoryFilters, setSelectedCategoryFilters] = useState<
+    string[]
+  >(CATEGORIES.filter((cat) => cat.id !== "work").map((cat) => cat.id));
+
   // Fetch all items (reminders, events, and tasks)
   const { data: allItems = [], isLoading: allLoading } = useItems();
+
+  // Fetch occurrence actions for filtering completed recurring items
+  const { data: occurrenceActions = [] } = useAllOccurrenceActions();
 
   // Mutations
   const completeReminder = useCompleteReminder();
@@ -269,11 +384,41 @@ export default function ItemsDashboard({
     }));
   };
 
-  // Filter items by time range
+  // Toggle category filter
+  const toggleCategoryFilter = (categoryId: string) => {
+    setSelectedCategoryFilters((prev) =>
+      prev.includes(categoryId)
+        ? prev.filter((id) => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
+  // Solo select one category (double-click)
+  const soloSelectCategory = (categoryId: string) => {
+    setSelectedCategoryFilters([categoryId]);
+  };
+
+  // Select all categories except work
+  const selectAllExceptWork = () => {
+    setSelectedCategoryFilters(
+      CATEGORIES.filter((cat) => cat.id !== "work").map((cat) => cat.id)
+    );
+  };
+
+  // Filter items by time range and categories
   const filteredItems = useMemo(() => {
     const now = new Date();
 
     return allItems.filter((item) => {
+      // Category filter - only show items that match selected categories
+      if (selectedCategoryFilters.length > 0) {
+        const itemCategories = item.categories || [];
+        const hasMatchingCategory = selectedCategoryFilters.some((catId) =>
+          itemCategories.includes(catId)
+        );
+        if (!hasMatchingCategory) return false;
+      }
+
       const dateStr =
         item.type === "reminder" || item.type === "task"
           ? item.reminder_details?.due_at
@@ -299,15 +444,23 @@ export default function ItemsDashboard({
           return false;
       }
     });
-  }, [allItems, timeRange]);
+  }, [allItems, timeRange, selectedCategoryFilters]);
 
   // Group items by DATE instead of time of day for better organization
   const groupedByDate = useMemo(() => {
     const now = new Date();
+
+    // Calculate start of current week (Monday at midnight)
+    const weekStart = new Date(now);
+    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const daysFromMonday = (dayOfWeek + 6) % 7; // Convert to Monday-based (0 = Monday)
+    weekStart.setDate(now.getDate() - daysFromMonday);
+    weekStart.setHours(0, 0, 0, 0);
+
     const overdue: ItemWithDetails[] = [];
     const today: ItemWithDetails[] = [];
     const tomorrow: ItemWithDetails[] = [];
-    const upcoming: Map<string, ItemWithDetails[]> = new Map(); // by date key
+    const upcoming: Map<string, ItemWithDetails[]> = new Map();
     const completed: ItemWithDetails[] = [];
 
     const sortByDateTime = (a: ItemWithDetails, b: ItemWithDetails) => {
@@ -324,39 +477,61 @@ export default function ItemsDashboard({
       return parseISO(dateA).getTime() - parseISO(dateB).getTime();
     };
 
-    filteredItems.forEach((item) => {
-      if (item.status === "completed") {
-        completed.push(item);
-        return;
-      }
-
+    // Helper to get item's due/start date
+    const getItemDate = (item: ItemWithDetails): Date | null => {
       const dateStr =
         item.type === "reminder" || item.type === "task"
           ? item.reminder_details?.due_at
           : item.type === "event"
             ? item.event_details?.start_at
             : null;
+      return dateStr ? parseISO(dateStr) : null;
+    };
 
-      if (!dateStr) {
+    filteredItems.forEach((item) => {
+      // Skip archived items entirely
+      if (item.status === "archived") return;
+
+      const itemDate = getItemDate(item);
+      const isRecurring = !!item.recurrence_rule?.rrule;
+
+      // Check if this item/occurrence is completed
+      const isItemCompleted =
+        item.status === "completed" ||
+        (isRecurring &&
+          itemDate &&
+          isOccurrenceCompleted(item.id, itemDate, occurrenceActions));
+
+      // If completed, check if due date was before this week → auto-archive (hide)
+      if (isItemCompleted) {
+        // Items with due date before this week are auto-archived (not shown)
+        if (itemDate && itemDate < weekStart) {
+          return; // Auto-archive: don't show
+        }
+        // This week's completed items go to completed section
+        completed.push(item);
+        return;
+      }
+
+      // Not completed - categorize by date
+      if (!itemDate) {
         today.push(item); // Default to today for items without time
         return;
       }
 
-      const date = parseISO(dateStr);
-
-      // Check if overdue
-      if (isBefore(date, now) && !isToday(date)) {
+      // Check if overdue (before today, not completed)
+      if (isBefore(itemDate, now) && !isToday(itemDate)) {
         overdue.push(item);
         return;
       }
 
-      if (isToday(date)) {
+      if (isToday(itemDate)) {
         today.push(item);
-      } else if (isTomorrow(date)) {
+      } else if (isTomorrow(itemDate)) {
         tomorrow.push(item);
       } else {
         // Group by date for upcoming items
-        const dateKey = format(date, "yyyy-MM-dd");
+        const dateKey = format(itemDate, "yyyy-MM-dd");
         if (!upcoming.has(dateKey)) {
           upcoming.set(dateKey, []);
         }
@@ -389,7 +564,7 @@ export default function ItemsDashboard({
       });
 
     return { overdue, today, tomorrow, upcoming: sortedUpcoming, completed };
-  }, [filteredItems]);
+  }, [filteredItems, occurrenceActions]);
 
   // Calculate progress stats
   const progressStats = useMemo(() => {
@@ -546,7 +721,7 @@ export default function ItemsDashboard({
     return <EmptyState />;
   }
 
-  // Collapsible Section Header Component
+  // Minimal Collapsible Section Header Component
   const SectionHeader = ({
     sectionKey,
     label,
@@ -564,46 +739,39 @@ export default function ItemsDashboard({
       type="button"
       onClick={() => toggleSection(sectionKey)}
       className={cn(
-        "w-full flex items-center gap-2 py-2 px-1 rounded-lg transition-colors",
-        "hover:bg-white/5"
+        "w-full flex items-center gap-2 py-1.5 transition-colors",
+        "hover:opacity-80"
       )}
     >
       <motion.div
         animate={{ rotate: expandedSections[sectionKey] ? 0 : -90 }}
-        transition={{ duration: 0.2 }}
+        transition={{ duration: 0.15 }}
+        className="w-4 h-4 flex items-center justify-center"
       >
         <ChevronDownIcon
           className={cn(
-            "w-4 h-4",
-            isOverdue
-              ? "text-red-400"
-              : isPink
-                ? "text-pink-400"
-                : "text-cyan-400"
+            "w-3.5 h-3.5",
+            isOverdue ? "text-red-400" : "text-white/40"
           )}
         />
       </motion.div>
-      {emoji && <span className="text-sm">{emoji}</span>}
+      {emoji && <span className="text-xs">{emoji}</span>}
       <span
         className={cn(
-          "text-xs font-semibold",
-          isOverdue
-            ? "text-red-400"
-            : isPink
-              ? "text-pink-400"
-              : "text-cyan-400"
+          "text-[11px] font-medium tracking-wide uppercase",
+          isOverdue ? "text-red-400" : "text-white/50"
         )}
       >
         {label}
       </span>
       <span
         className={cn(
-          "ml-auto text-xs px-2 py-0.5 rounded-full",
+          "ml-auto text-[10px] font-medium",
           isOverdue
-            ? "bg-red-500/20 text-red-400"
+            ? "text-red-400"
             : isPink
-              ? "bg-pink-500/20 text-pink-400"
-              : "bg-cyan-500/20 text-cyan-400"
+              ? "text-pink-400/60"
+              : "text-cyan-400/60"
         )}
       >
         {count}
@@ -613,66 +781,140 @@ export default function ItemsDashboard({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Time Range Pills + Progress Bar - Only show for Agenda view */}
+      {/* Minimal Sticky Header - Only show for Agenda view */}
       {viewMode === "agenda" && (
-        <div className="sticky top-0 z-10 bg-bg-dark/95 backdrop-blur-xl border-b border-white/10 px-3 py-2 space-y-2">
-          {/* Time range selector */}
-          <div className="flex gap-1.5">
-            {(["today", "week", "month"] as const).map((range) => (
-              <button
-                key={range}
-                type="button"
-                onClick={() => setTimeRange(range)}
+        <div className="sticky top-0 z-10 bg-bg-dark/95 backdrop-blur-xl border-b border-white/5 px-3 py-2">
+          {/* Compact time range + filter + progress in one row */}
+          <div className="flex items-center gap-2">
+            {/* Time range pills - minimal style */}
+            <div className="flex bg-white/5 rounded-lg p-0.5">
+              {(["today", "week", "month"] as const).map((range) => (
+                <button
+                  key={range}
+                  type="button"
+                  onClick={() => setTimeRange(range)}
+                  className={cn(
+                    "px-3 py-1 rounded-md text-[11px] font-medium transition-all",
+                    timeRange === range
+                      ? isPink
+                        ? "bg-pink-500/30 text-pink-300"
+                        : "bg-cyan-500/30 text-cyan-300"
+                      : "text-white/40 hover:text-white/60"
+                  )}
+                >
+                  {range === "today"
+                    ? "Today"
+                    : range === "week"
+                      ? "Week"
+                      : "Month"}
+                </button>
+              ))}
+            </div>
+
+            {/* Inline progress indicator */}
+            <div className="flex-1 flex items-center gap-2">
+              <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                  className={cn(
+                    "h-full rounded-full",
+                    progressStats.percentage === 100
+                      ? "bg-green-400"
+                      : isPink
+                        ? "bg-pink-400"
+                        : "bg-cyan-400"
+                  )}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressStats.percentage}%` }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                />
+              </div>
+              <span
                 className={cn(
-                  "flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-all",
-                  timeRange === range
-                    ? isPink
-                      ? "bg-pink-500/20 text-pink-400 border border-pink-400/40"
-                      : "bg-cyan-500/20 text-cyan-400 border border-cyan-400/40"
-                    : "bg-white/5 text-white/50 border border-transparent hover:text-white/80"
+                  "text-[10px] font-medium tabular-nums",
+                  progressStats.percentage === 100
+                    ? "text-green-400"
+                    : "text-white/40"
                 )}
               >
-                {range === "today"
-                  ? "Today"
-                  : range === "week"
-                    ? "This Week"
-                    : "This Month"}
-              </button>
-            ))}
+                {progressStats.percentage}%
+              </span>
+            </div>
+
+            {/* Filter button - minimal */}
+            <button
+              type="button"
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              className={cn(
+                "relative p-1.5 rounded-md transition-all",
+                isFilterOpen
+                  ? isPink
+                    ? "bg-pink-500/20 text-pink-400"
+                    : "bg-cyan-500/20 text-cyan-400"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/5"
+              )}
+            >
+              <FilterIcon className="w-3.5 h-3.5" />
+              {selectedCategoryFilters.includes("work") && (
+                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-500" />
+              )}
+            </button>
           </div>
 
-          {/* Progress bar */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-white/50">
-                {progressStats.completedCount} of {progressStats.total} complete
-              </span>
-              {progressStats.percentage === 100 && progressStats.total > 0 ? (
-                <span className="text-green-400 font-medium">
-                  All caught up! ✨
-                </span>
-              ) : (
-                <span className={isPink ? "text-pink-400" : "text-cyan-400"}>
-                  {progressStats.percentage}%
-                </span>
-              )}
-            </div>
-            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+          {/* Collapsible Category Filter */}
+          <AnimatePresence>
+            {isFilterOpen && (
               <motion.div
-                className={cn(
-                  "h-full rounded-full",
-                  progressStats.percentage === 100
-                    ? "bg-gradient-to-r from-green-400 to-emerald-400"
-                    : isPink
-                      ? "bg-gradient-to-r from-pink-500 to-pink-400"
-                      : "bg-gradient-to-r from-cyan-500 to-cyan-400"
-                )}
-                initial={{ width: 0 }}
-                animate={{ width: `${progressStats.percentage}%` }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-              />
-            </div>
-          </div>
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="overflow-hidden"
+              >
+                <div className="pt-2 pb-1">
+                  <div className="flex flex-wrap gap-1.5">
+                    {CATEGORIES.map((category) => {
+                      const isSelected = selectedCategoryFilters.includes(
+                        category.id
+                      );
+                      const IconComponent = category.icon;
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          onClick={() => toggleCategoryFilter(category.id)}
+                          onDoubleClick={() => soloSelectCategory(category.id)}
+                          className={cn(
+                            "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all",
+                            isSelected ? "" : "bg-white/5 text-white/40"
+                          )}
+                          style={{
+                            backgroundColor: isSelected
+                              ? `${category.color}20`
+                              : undefined,
+                            color: isSelected ? category.color : undefined,
+                          }}
+                        >
+                          <IconComponent className="w-3 h-3" />
+                          {category.name}
+                        </button>
+                      );
+                    })}
+                    {/* Reset button inline */}
+                    {selectedCategoryFilters.length !==
+                      CATEGORIES.filter((cat) => cat.id !== "work").length && (
+                      <button
+                        type="button"
+                        onClick={selectAllExceptWork}
+                        className="px-2 py-1 rounded-md text-[10px] text-white/30 hover:text-white/50 transition-colors"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 

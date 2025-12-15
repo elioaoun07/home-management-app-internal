@@ -11,7 +11,12 @@ export type ItemType = "reminder" | "event" | "task";
 
 export type ItemPriority = "low" | "normal" | "high" | "urgent";
 
-export type ItemStatus = "pending" | "in_progress" | "completed" | "cancelled";
+export type ItemStatus =
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "cancelled"
+  | "archived";
 
 export type AlertChannel = "push" | "email" | "sms" | "in_app";
 
@@ -345,6 +350,7 @@ export const STATUS_COLORS: Record<ItemStatus, { blue: string; pink: string }> =
     in_progress: { blue: "text-amber-400", pink: "text-amber-400" },
     completed: { blue: "text-green-400", pink: "text-green-400" },
     cancelled: { blue: "text-gray-400", pink: "text-gray-400" },
+    archived: { blue: "text-gray-500", pink: "text-gray-500" },
   };
 
 // ============================================

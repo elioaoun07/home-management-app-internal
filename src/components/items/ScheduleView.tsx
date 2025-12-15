@@ -1,20 +1,22 @@
 "use client";
 
 import { useTheme } from "@/contexts/ThemeContext";
+import {
+  isOccurrenceCompleted,
+  useAllOccurrenceActions,
+} from "@/features/items/useItemActions";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
 import {
   addDays,
-  differenceInMinutes,
   format,
-  getHours,
-  getMinutes,
   isSameDay,
   isToday,
+  isTomorrow,
   parseISO,
   startOfDay,
 } from "date-fns";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
 
 interface ScheduleViewProps {
@@ -23,10 +25,35 @@ interface ScheduleViewProps {
 
 type DayRange = 1 | 3 | 7;
 
+// Priority sphere styles
+const prioritySphereStyles = {
+  low: {
+    background:
+      "radial-gradient(circle at 30% 30%, #9ca3af, #4b5563 60%, #374151)",
+    shadow: "0 2px 6px rgba(156,163,175,0.3)",
+  },
+  normal: {
+    background:
+      "radial-gradient(circle at 30% 30%, #67e8f9, #22d3ee 40%, #0891b2)",
+    shadow: "0 2px 6px rgba(34,211,238,0.4)",
+  },
+  high: {
+    background:
+      "radial-gradient(circle at 30% 30%, #fdba74, #fb923c 40%, #ea580c)",
+    shadow: "0 2px 6px rgba(251,146,60,0.4)",
+  },
+  urgent: {
+    background:
+      "radial-gradient(circle at 30% 30%, #fca5a5, #f87171 40%, #dc2626)",
+    shadow: "0 2px 6px rgba(248,113,113,0.5)",
+  },
+};
+
 export function ScheduleView({ items }: ScheduleViewProps) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
-  const [dayRange, setDayRange] = useState<DayRange>(1);
+  const [dayRange, setDayRange] = useState<DayRange>(7);
+  const { data: occurrenceActions = [] } = useAllOccurrenceActions();
 
   // Generate array of days to display
   const daysToShow = useMemo(() => {
@@ -38,11 +65,14 @@ export function ScheduleView({ items }: ScheduleViewProps) {
     return days;
   }, [dayRange]);
 
-  // Get items for the selected day range
+  // Get items for the selected day range (exclude archived and check occurrence actions)
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
+      // Skip archived items
+      if (item.status === "archived") return false;
+
       const dateStr =
-        item.type === "reminder"
+        item.type === "reminder" || item.type === "task"
           ? item.reminder_details?.due_at
           : item.type === "event"
             ? item.event_details?.start_at
@@ -51,9 +81,26 @@ export function ScheduleView({ items }: ScheduleViewProps) {
       if (!dateStr) return false;
 
       const itemDate = parseISO(dateStr);
-      return daysToShow.some((day) => isSameDay(itemDate, day));
+
+      // Check if item is in the day range
+      const isInRange = daysToShow.some((day) => isSameDay(itemDate, day));
+      if (!isInRange) return false;
+
+      // For recurring items, check if this occurrence was completed/cancelled
+      const isRecurring = !!item.recurrence_rule?.rrule;
+      if (
+        isRecurring &&
+        isOccurrenceCompleted(item.id, itemDate, occurrenceActions)
+      ) {
+        return false;
+      }
+
+      // For non-recurring completed items, don't show
+      if (item.status === "completed") return false;
+
+      return true;
     });
-  }, [items, daysToShow]);
+  }, [items, daysToShow, occurrenceActions]);
 
   // Group items by day
   const itemsByDay = useMemo(() => {
@@ -66,7 +113,7 @@ export function ScheduleView({ items }: ScheduleViewProps) {
 
     filteredItems.forEach((item) => {
       const dateStr =
-        item.type === "reminder"
+        item.type === "reminder" || item.type === "task"
           ? item.reminder_details?.due_at
           : item.event_details?.start_at;
 
@@ -80,15 +127,15 @@ export function ScheduleView({ items }: ScheduleViewProps) {
       }
     });
 
-    // Sort items within each day
+    // Sort items within each day by time
     grouped.forEach((dayItems) => {
       dayItems.sort((a, b) => {
         const dateA =
-          a.type === "reminder"
+          a.type === "reminder" || a.type === "task"
             ? a.reminder_details?.due_at
             : a.event_details?.start_at;
         const dateB =
-          b.type === "reminder"
+          b.type === "reminder" || b.type === "task"
             ? b.reminder_details?.due_at
             : b.event_details?.start_at;
         if (!dateA || !dateB) return 0;
@@ -99,434 +146,225 @@ export function ScheduleView({ items }: ScheduleViewProps) {
     return grouped;
   }, [filteredItems, daysToShow]);
 
-  // Calculate the time range to display (2 hours before first event, 2 hours after last)
-  const { startHour, endHour, timeSlots, currentTimePosition } = useMemo(() => {
-    const now = new Date();
-    const currentHour = getHours(now);
-    const currentMinute = getMinutes(now);
-
-    if (filteredItems.length === 0) {
-      // Default: show 2 hours before and after current time
-      const start = Math.max(0, currentHour - 2);
-      const end = Math.min(24, currentHour + 3);
-      const slots = [];
-      for (let h = start; h <= end; h++) {
-        slots.push(h);
-      }
-      // Current time position as percentage
-      const position =
-        ((currentHour - start + currentMinute / 60) / (end - start)) * 100;
-      return {
-        startHour: start,
-        endHour: end,
-        timeSlots: slots,
-        currentTimePosition: position,
-      };
-    }
-
-    // Find earliest and latest events across all days
-    let earliest = 24;
-    let latest = 0;
-
-    filteredItems.forEach((item) => {
-      const dateStr =
-        item.type === "reminder"
-          ? item.reminder_details?.due_at
-          : item.event_details?.start_at;
-      const endStr = item.event_details?.end_at;
-
-      if (dateStr) {
-        const startTime = parseISO(dateStr);
-        const hour = getHours(startTime);
-        earliest = Math.min(earliest, hour);
-
-        if (endStr) {
-          const endTime = parseISO(endStr);
-          latest = Math.max(latest, getHours(endTime) + 1);
-        } else {
-          latest = Math.max(latest, hour + 1);
-        }
-      }
-    });
-
-    // Add 2 hour padding
-    const start = Math.max(0, earliest - 2);
-    const end = Math.min(24, latest + 2);
-
-    const slots = [];
-    for (let h = start; h <= end; h++) {
-      slots.push(h);
-    }
-
-    // Current time position
-    const position =
-      ((currentHour - start + currentMinute / 60) / (end - start)) * 100;
-
-    return {
-      startHour: start,
-      endHour: end,
-      timeSlots: slots,
-      currentTimePosition: Math.max(0, Math.min(100, position)),
-    };
-  }, [filteredItems]);
-
-  // Calculate position and height for each event
-  const getEventStyle = (item: ItemWithDetails) => {
-    const dateStr =
-      item.type === "reminder"
-        ? item.reminder_details?.due_at
-        : item.event_details?.start_at;
-    const endStr = item.event_details?.end_at;
-
-    if (!dateStr) return { top: "0%", height: "40px" };
-
-    const startTime = parseISO(dateStr);
-    const startMinutes =
-      (getHours(startTime) - startHour) * 60 + getMinutes(startTime);
-    const totalMinutes = (endHour - startHour) * 60;
-
-    let durationMinutes = 60; // Default 1 hour
-    if (endStr) {
-      const endTime = parseISO(endStr);
-      durationMinutes = differenceInMinutes(endTime, startTime);
-    }
-
-    const top = (startMinutes / totalMinutes) * 100;
-    const height = Math.max((durationMinutes / totalMinutes) * 100, 5); // Min 5%
-
-    return {
-      top: `${top}%`,
-      height: `${height}%`,
-      minHeight: "40px",
-    };
-  };
-
-  const formatHour = (hour: number) => {
-    if (hour === 0) return "12 AM";
-    if (hour === 12) return "12 PM";
-    if (hour < 12) return `${hour} AM`;
-    return `${hour - 12} PM`;
+  // Get day label
+  const getDayLabel = (day: Date) => {
+    if (isToday(day)) return "Today";
+    if (isTomorrow(day)) return "Tomorrow";
+    return format(day, "EEEE");
   };
 
   return (
-    <div className="flex flex-col h-full p-3 pb-32 overflow-hidden">
-      {/* Header with Day Range Selector */}
-      <div className="flex items-center justify-between mb-3 flex-shrink-0">
+    <div className="flex flex-col h-full pb-32 overflow-hidden">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
         <div>
           <h2
             className={cn(
-              "text-lg font-bold",
+              "text-sm font-semibold",
               isPink ? "text-pink-300" : "text-cyan-300"
             )}
           >
-            {dayRange === 1
-              ? format(new Date(), "EEEE")
-              : `${format(daysToShow[0], "MMM d")} - ${format(daysToShow[daysToShow.length - 1], "MMM d")}`}
+            {dayRange === 1 ? "Today" : dayRange === 3 ? "3 Days" : "This Week"}
           </h2>
-          <p className="text-xs text-white/50">
-            {format(new Date(), "MMMM d, yyyy")}
+          <p className="text-[10px] text-white/40">
+            {filteredItems.length}{" "}
+            {filteredItems.length === 1 ? "item" : "items"}
           </p>
         </div>
-        <div
-          className={cn(
-            "px-3 py-1.5 rounded-full text-xs font-medium",
-            isPink
-              ? "bg-pink-500/20 text-pink-300 border border-pink-500/30"
-              : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
-          )}
-        >
-          {filteredItems.length} item{filteredItems.length !== 1 ? "s" : ""}
+        {/* Day range selector */}
+        <div className="flex bg-white/5 rounded-lg p-0.5">
+          {([1, 3, 7] as DayRange[]).map((range) => (
+            <button
+              key={range}
+              type="button"
+              onClick={() => setDayRange(range)}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-[10px] font-medium transition-all",
+                dayRange === range
+                  ? isPink
+                    ? "bg-pink-500/30 text-pink-300"
+                    : "bg-cyan-500/30 text-cyan-300"
+                  : "text-white/40 hover:text-white/60"
+              )}
+            >
+              {range}d
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Day Range Selector */}
-      <div className="flex gap-1.5 mb-3 flex-shrink-0">
-        {([1, 3, 7] as DayRange[]).map((range) => (
-          <button
-            key={range}
-            type="button"
-            onClick={() => setDayRange(range)}
-            className={cn(
-              "flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-all",
-              dayRange === range
-                ? isPink
-                  ? "bg-pink-500/20 text-pink-400 border border-pink-400/40"
-                  : "bg-cyan-500/20 text-cyan-400 border border-cyan-400/40"
-                : "bg-white/5 text-white/50 border border-transparent hover:text-white/80"
-            )}
-          >
-            {range} day{range > 1 ? "s" : ""}
-          </button>
-        ))}
-      </div>
+      {/* Days List - Vertical scrolling card-based layout */}
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3">
+        {daysToShow.map((day) => {
+          const dayKey = format(day, "yyyy-MM-dd");
+          const dayItems = itemsByDay.get(dayKey) || [];
+          const isDayToday = isToday(day);
 
-      {/* Timeline Container */}
-      <div className="flex-1 overflow-y-auto relative">
-        <div className="flex h-full min-h-[400px]">
-          {/* Time Labels */}
-          <div className="w-14 flex-shrink-0 relative">
-            {timeSlots.map((hour, idx) => (
-              <div
-                key={hour}
-                className="absolute left-0 right-0 text-right pr-2"
-                style={{
-                  top: `${(idx / (timeSlots.length - 1)) * 100}%`,
-                  transform: "translateY(-50%)",
-                }}
-              >
-                <span className="text-[10px] font-medium text-white/40">
-                  {formatHour(hour)}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Days Grid */}
-          <div className="flex-1 flex gap-0.5 border-l border-white/10">
-            {daysToShow.map((day, dayIndex) => {
-              const dayKey = format(day, "yyyy-MM-dd");
-              const dayItems = itemsByDay.get(dayKey) || [];
-              const isDayToday = isToday(day);
-
-              return (
+          return (
+            <div key={dayKey}>
+              {/* Day Header */}
+              <div className="flex items-center gap-2 mb-1.5">
                 <div
-                  key={dayKey}
-                  className="flex-1 relative border-r border-white/5 last:border-r-0"
-                >
-                  {/* Day header (for multi-day view) */}
-                  {dayRange > 1 && (
-                    <div
-                      className={cn(
-                        "sticky top-0 z-30 text-center py-1 border-b border-white/10",
-                        isDayToday
-                          ? isPink
-                            ? "bg-pink-500/10 border-pink-500/20"
-                            : "bg-cyan-500/10 border-cyan-500/20"
-                          : "bg-bg-dark/95"
-                      )}
-                    >
-                      <p
-                        className={cn(
-                          "text-[10px] font-medium",
-                          isDayToday
-                            ? isPink
-                              ? "text-pink-400"
-                              : "text-cyan-400"
-                            : "text-white/60"
-                        )}
-                      >
-                        {format(day, "EEE")}
-                      </p>
-                      <p
-                        className={cn(
-                          "text-xs font-bold",
-                          isDayToday
-                            ? isPink
-                              ? "text-pink-300"
-                              : "text-cyan-300"
-                            : "text-white/80"
-                        )}
-                      >
-                        {format(day, "d")}
-                      </p>
-                    </div>
+                  className={cn(
+                    "w-9 h-9 rounded-lg flex flex-col items-center justify-center text-center",
+                    isDayToday
+                      ? isPink
+                        ? "bg-pink-500/20 border border-pink-500/30"
+                        : "bg-cyan-500/20 border border-cyan-500/30"
+                      : "bg-white/5"
                   )}
-
-                  {/* Hour lines */}
-                  {timeSlots.map((hour, idx) => (
-                    <div
-                      key={hour}
-                      className="absolute left-0 right-0 border-t border-white/5"
-                      style={{
-                        top: `${(idx / (timeSlots.length - 1)) * 100}%`,
-                      }}
-                    />
-                  ))}
-
-                  {/* Current time indicator (only for today) */}
-                  {isDayToday &&
-                    currentTimePosition >= 0 &&
-                    currentTimePosition <= 100 && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="absolute left-0 right-0 z-20 flex items-center"
-                        style={{ top: `${currentTimePosition}%` }}
-                      >
-                        <div
-                          className={cn(
-                            "w-2 h-2 rounded-full -ml-1 shadow-lg",
-                            isPink
-                              ? "bg-pink-500 shadow-pink-500/50"
-                              : "bg-cyan-500 shadow-cyan-500/50"
-                          )}
-                        />
-                        <div
-                          className={cn(
-                            "flex-1 h-0.5",
-                            isPink ? "bg-pink-500/60" : "bg-cyan-500/60"
-                          )}
-                        />
-                      </motion.div>
+                >
+                  <span
+                    className={cn(
+                      "text-[9px] font-medium uppercase leading-none",
+                      isDayToday
+                        ? isPink
+                          ? "text-pink-400"
+                          : "text-cyan-400"
+                        : "text-white/40"
                     )}
+                  >
+                    {format(day, "EEE")}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-sm font-bold leading-none mt-0.5",
+                      isDayToday
+                        ? isPink
+                          ? "text-pink-300"
+                          : "text-cyan-300"
+                        : "text-white/70"
+                    )}
+                  >
+                    {format(day, "d")}
+                  </span>
+                </div>
+                <div className="flex-1">
+                  <span
+                    className={cn(
+                      "text-xs font-medium",
+                      isDayToday
+                        ? isPink
+                          ? "text-pink-300"
+                          : "text-cyan-300"
+                        : "text-white/60"
+                    )}
+                  >
+                    {getDayLabel(day)}
+                  </span>
+                  {dayItems.length > 0 && (
+                    <span className="text-[10px] text-white/30 ml-2">
+                      • {dayItems.length}{" "}
+                      {dayItems.length === 1 ? "item" : "items"}
+                    </span>
+                  )}
+                </div>
+              </div>
 
-                  {/* Events for this day */}
-                  <div className="absolute inset-0 px-1">
+              {/* Items for this day */}
+              {dayItems.length > 0 ? (
+                <div className="space-y-1.5 ml-11">
+                  <AnimatePresence>
                     {dayItems.map((item, idx) => {
-                      const style = getEventStyle(item);
                       const isReminder = item.type === "reminder";
                       const isEvent = item.type === "event";
+                      const isTask = item.type === "task";
                       const dateStr =
-                        item.type === "reminder"
+                        isReminder || isTask
                           ? item.reminder_details?.due_at
                           : item.event_details?.start_at;
 
                       return (
                         <motion.div
                           key={item.id}
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: dayIndex * 0.1 + idx * 0.05 }}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -10 }}
+                          transition={{ delay: idx * 0.03 }}
                           className={cn(
-                            "absolute left-1 right-1 rounded-lg p-1.5 overflow-hidden",
-                            "border backdrop-blur-sm cursor-pointer",
-                            "transition-all hover:scale-105 hover:z-10",
-                            dayRange === 1 ? "p-2" : "p-1",
+                            "flex items-center gap-2 p-2.5 rounded-xl cursor-pointer",
+                            "bg-white/5 hover:bg-white/10 transition-all",
+                            "border-l-[3px]",
                             isReminder
-                              ? "bg-gradient-to-r from-cyan-500/20 to-cyan-500/10 border-cyan-500/30"
+                              ? "border-l-cyan-400"
                               : isEvent
                                 ? isPink
-                                  ? "bg-gradient-to-r from-pink-500/20 to-pink-500/10 border-pink-500/30"
-                                  : "bg-gradient-to-r from-cyan-500/20 to-cyan-500/10 border-cyan-500/30"
-                                : "bg-gradient-to-r from-purple-500/20 to-purple-500/10 border-purple-500/30"
+                                  ? "border-l-pink-400"
+                                  : "border-l-emerald-400"
+                                : "border-l-purple-400"
                           )}
-                          style={style}
                         >
-                          <div className="flex items-start gap-1.5 h-full">
-                            {/* Time indicator */}
-                            <div
-                              className={cn(
-                                "w-1 rounded-full self-stretch flex-shrink-0",
-                                isReminder
-                                  ? "bg-cyan-400"
-                                  : isEvent
-                                    ? isPink
-                                      ? "bg-pink-400"
-                                      : "bg-cyan-400"
-                                    : "bg-purple-400"
-                              )}
-                            />
-                            <div className="flex-1 min-w-0 overflow-hidden">
-                              <p
-                                className={cn(
-                                  "font-semibold text-white truncate",
-                                  dayRange === 1 ? "text-xs" : "text-[10px]"
-                                )}
-                              >
-                                {item.title}
-                              </p>
-                              {dayRange === 1 && dateStr && (
-                                <p className="text-[10px] text-white/50 mt-0.5">
-                                  {format(parseISO(dateStr), "h:mm a")}
-                                  {item.event_details?.end_at &&
-                                    ` - ${format(parseISO(item.event_details.end_at), "h:mm a")}`}
-                                </p>
-                              )}
-                              {dayRange === 1 &&
-                                item.event_details?.location_text && (
-                                  <p className="text-[10px] text-white/40 truncate mt-0.5">
-                                    📍 {item.event_details.location_text}
-                                  </p>
-                                )}
-                            </div>
+                          {/* Time */}
+                          <span className="text-[11px] text-white/40 w-14 flex-shrink-0 font-medium">
+                            {dateStr ? format(parseISO(dateStr), "h:mm a") : ""}
+                          </span>
+
+                          {/* Title & Location */}
+                          <div className="flex-1 min-w-0">
+                            <span className="text-xs text-white truncate font-medium block">
+                              {item.title}
+                            </span>
+                            {isEvent && item.event_details?.location_text && (
+                              <span className="text-[10px] text-white/30 truncate block mt-0.5">
+                                📍 {item.event_details.location_text}
+                              </span>
+                            )}
                           </div>
+
+                          {/* Priority sphere (high/urgent only) */}
+                          {(item.priority === "high" ||
+                            item.priority === "urgent") && (
+                            <div
+                              className="w-3 h-3 rounded-full flex-shrink-0"
+                              style={{
+                                background:
+                                  prioritySphereStyles[item.priority]
+                                    .background,
+                                boxShadow:
+                                  prioritySphereStyles[item.priority].shadow,
+                              }}
+                            />
+                          )}
+
+                          {/* Type indicator */}
+                          <span className="text-[10px]">
+                            {isReminder ? "🔔" : isEvent ? "📅" : "✓"}
+                          </span>
                         </motion.div>
                       );
                     })}
-                  </div>
-
-                  {/* Empty state for day */}
-                  {dayItems.length === 0 && dayRange === 1 && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <div
-                          className={cn(
-                            "w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center",
-                            isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
-                          )}
-                        >
-                          <span className="text-2xl">📅</span>
-                        </div>
-                        <p className="text-sm text-white/50">No events today</p>
-                        <p className="text-xs text-white/30 mt-1">
-                          Your schedule is clear
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                  </AnimatePresence>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+              ) : (
+                <div className="ml-11 py-1.5">
+                  <span className="text-[10px] text-white/20 italic">
+                    No scheduled items
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
-      {/* Quick Stats */}
-      {filteredItems.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-3 pt-3 border-t border-white/10 flex-shrink-0"
-        >
-          <div className="flex justify-around text-center">
-            <div>
-              <p
-                className={cn(
-                  "text-lg font-bold",
-                  isPink ? "text-pink-400" : "text-cyan-400"
-                )}
-              >
-                {filteredItems.filter((i) => i.type === "reminder").length}
-              </p>
-              <p className="text-[10px] text-white/40">Reminders</p>
-            </div>
+        {/* Empty state if no items at all */}
+        {filteredItems.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12">
             <div
               className={cn(
-                "w-px",
-                isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                "w-16 h-16 rounded-2xl flex items-center justify-center mb-4",
+                isPink ? "bg-pink-500/10" : "bg-cyan-500/10"
               )}
-            />
-            <div>
-              <p
-                className={cn(
-                  "text-lg font-bold",
-                  isPink ? "text-pink-400" : "text-cyan-400"
-                )}
-              >
-                {filteredItems.filter((i) => i.type === "event").length}
-              </p>
-              <p className="text-[10px] text-white/40">Events</p>
+            >
+              <span className="text-3xl">📅</span>
             </div>
-            <div
-              className={cn(
-                "w-px",
-                isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
-              )}
-            />
-            <div>
-              <p
-                className={cn(
-                  "text-lg font-bold",
-                  isPink ? "text-pink-400" : "text-cyan-400"
-                )}
-              >
-                {filteredItems.filter((i) => i.status === "completed").length}
-              </p>
-              <p className="text-[10px] text-white/40">Done</p>
-            </div>
+            <p className="text-sm text-white/50 font-medium">All clear!</p>
+            <p className="text-[11px] text-white/30 mt-1">
+              No items scheduled for{" "}
+              {dayRange === 1 ? "today" : `the next ${dayRange} days`}
+            </p>
           </div>
-        </motion.div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

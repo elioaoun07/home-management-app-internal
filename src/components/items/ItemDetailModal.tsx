@@ -1,6 +1,10 @@
 "use client";
 
 import { useTheme } from "@/contexts/ThemeContext";
+import {
+  useItemActionsWithToast,
+  type PostponeType,
+} from "@/features/items/useItemActions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
@@ -14,6 +18,7 @@ import {
 } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import ItemActionsSheet from "./ItemActionsSheet";
 
 // Icons
 const XIcon = ({ className }: { className?: string }) => (
@@ -177,6 +182,7 @@ const statusColors = {
   in_progress: { bg: "bg-amber-500/20", text: "text-amber-400" },
   completed: { bg: "bg-green-500/20", text: "text-green-400" },
   cancelled: { bg: "bg-gray-500/20", text: "text-gray-400" },
+  archived: { bg: "bg-gray-500/20", text: "text-gray-400" },
 };
 
 type Props = {
@@ -228,6 +234,15 @@ export default function ItemDetailModal({
   const { theme } = useTheme();
   const isPink = theme === "pink";
   const [isClosing, setIsClosing] = useState(false);
+  const [showActionsSheet, setShowActionsSheet] = useState(false);
+
+  // Item actions hook
+  const {
+    handleComplete: doComplete,
+    handlePostpone: doPostpone,
+    handleCancel: doCancel,
+    handleDelete: doDelete,
+  } = useItemActionsWithToast();
 
   // Determine ownership
   const isOwner = currentUserId
@@ -240,6 +255,7 @@ export default function ItemDetailModal({
   const isEvent = item.type === "event";
   const isTask = item.type === "task";
   const isCompleted = item.status === "completed";
+  const isRecurring = !!item.recurrence_rule?.rrule;
 
   // Get due/start date
   const dateStr =
@@ -251,6 +267,11 @@ export default function ItemDetailModal({
 
   const endDateStr = isEvent ? item.event_details?.end_at : null;
   const timeInfo = dateStr ? formatTimeDistance(dateStr) : null;
+
+  // Get occurrence date for actions
+  const getOccurrenceDate = useCallback(() => {
+    return dateStr || new Date().toISOString();
+  }, [dateStr]);
 
   // Animated close handler
   const handleClose = useCallback(() => {
@@ -284,6 +305,60 @@ export default function ItemDetailModal({
       onDelete();
     }, 200);
   }, [onClose, onDelete]);
+
+  // Action handlers with toast support
+  const handleCompleteAction = useCallback(
+    async (reason?: string) => {
+      setShowActionsSheet(false);
+      setIsClosing(true);
+      await doComplete(item, getOccurrenceDate(), reason);
+      setTimeout(onClose, 200);
+    },
+    [doComplete, getOccurrenceDate, item, onClose]
+  );
+
+  const handlePostponeAction = useCallback(
+    async (type: PostponeType, reason?: string) => {
+      setShowActionsSheet(false);
+      setIsClosing(true);
+      await doPostpone(item, getOccurrenceDate(), type, reason);
+      setTimeout(onClose, 200);
+    },
+    [doPostpone, getOccurrenceDate, item, onClose]
+  );
+
+  const handleCancelAction = useCallback(
+    async (reason?: string) => {
+      setShowActionsSheet(false);
+      setIsClosing(true);
+      await doCancel(item, getOccurrenceDate(), reason);
+      setTimeout(onClose, 200);
+    },
+    [doCancel, getOccurrenceDate, item, onClose]
+  );
+
+  const handleDeleteWithActions = useCallback(async () => {
+    setShowActionsSheet(false);
+    setIsClosing(true);
+    await doDelete(item);
+    setTimeout(onClose, 200);
+  }, [doDelete, item, onClose]);
+
+  // Quick action handlers
+  const handleQuickComplete = useCallback(async () => {
+    setIsClosing(true);
+    await doComplete(item, getOccurrenceDate());
+    setTimeout(onClose, 200);
+  }, [doComplete, getOccurrenceDate, item, onClose]);
+
+  const handleQuickPostpone = useCallback(
+    async (type: PostponeType) => {
+      setIsClosing(true);
+      await doPostpone(item, getOccurrenceDate(), type);
+      setTimeout(onClose, 200);
+    },
+    [doPostpone, getOccurrenceDate, item, onClose]
+  );
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -645,46 +720,90 @@ export default function ItemDetailModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-white/10 flex gap-2">
+        <div className="p-4 border-t border-white/10">
           {isOwner ? (
-            <>
-              {isReminder && !isCompleted && (
+            <div className="space-y-3">
+              {/* Primary Actions Row */}
+              <div className="flex gap-2">
+                {!isCompleted && (
+                  <button
+                    type="button"
+                    onClick={() => setShowActionsSheet(true)}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-green-500/20 text-green-400 font-medium hover:bg-green-500/30 transition-colors"
+                  >
+                    <CheckIcon className="w-5 h-5" />
+                    Actions
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleComplete}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-green-500/20 text-green-400 font-medium hover:bg-green-500/30 transition-colors"
+                  onClick={handleEdit}
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-colors",
+                    isPink
+                      ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
+                      : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30"
+                  )}
                 >
-                  <CheckIcon className="w-5 h-5" />
-                  Complete
+                  <Edit2Icon className="w-5 h-5" />
+                  Edit
                 </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteWithActions}
+                  className="px-4 py-3 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                >
+                  <Trash2Icon className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Quick Actions for incomplete items */}
+              {!isCompleted && (
+                <div className="flex gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickComplete()}
+                    className="flex-1 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
+                  >
+                    ✓ Complete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickPostpone("tomorrow")}
+                    className="flex-1 py-2 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors"
+                  >
+                    → Tomorrow
+                  </button>
+                  {isRecurring && (
+                    <button
+                      type="button"
+                      onClick={() => handleQuickPostpone("next_occurrence")}
+                      className="flex-1 py-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                    >
+                      ⏭ Next Time
+                    </button>
+                  )}
+                </div>
               )}
-              <button
-                type="button"
-                onClick={handleEdit}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-colors",
-                  isPink
-                    ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
-                    : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30"
-                )}
-              >
-                <Edit2Icon className="w-5 h-5" />
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="px-4 py-3 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
-              >
-                <Trash2Icon className="w-5 h-5" />
-              </button>
-            </>
+            </div>
           ) : (
             <div className="flex-1 text-center text-white/40 py-3">
               This item belongs to your partner
             </div>
           )}
         </div>
+
+        {/* Actions Sheet */}
+        <ItemActionsSheet
+          item={item}
+          occurrenceDate={getOccurrenceDate()}
+          isOpen={showActionsSheet}
+          onClose={() => setShowActionsSheet(false)}
+          onComplete={handleCompleteAction}
+          onPostpone={handlePostponeAction}
+          onCancel={handleCancelAction}
+          onDelete={handleDeleteWithActions}
+        />
       </div>
 
       {/* Animation styles */}

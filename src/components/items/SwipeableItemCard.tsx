@@ -1,11 +1,16 @@
 "use client";
 
 import { useTheme } from "@/contexts/ThemeContext";
+import {
+  useItemActionsWithToast,
+  type PostponeType,
+} from "@/features/items/useItemActions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
 import { format, isBefore, parseISO } from "date-fns";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import ItemActionsSheet from "./ItemActionsSheet";
 
 // Icons
 const CheckIcon = ({ className }: { className?: string }) => (
@@ -143,7 +148,31 @@ const AlertIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-// Priority badge colors
+// Priority 3D sphere gradient styles
+const prioritySphereStyles = {
+  low: {
+    background:
+      "radial-gradient(circle at 30% 30%, #9ca3af, #4b5563 60%, #374151)",
+    shadow: "0 2px 8px rgba(156,163,175,0.3)",
+  },
+  normal: {
+    background:
+      "radial-gradient(circle at 30% 30%, #67e8f9, #22d3ee 40%, #0891b2)",
+    shadow: "0 2px 8px rgba(34,211,238,0.4)",
+  },
+  high: {
+    background:
+      "radial-gradient(circle at 30% 30%, #fdba74, #fb923c 40%, #ea580c)",
+    shadow: "0 2px 8px rgba(251,146,60,0.4)",
+  },
+  urgent: {
+    background:
+      "radial-gradient(circle at 30% 30%, #fca5a5, #f87171 40%, #dc2626)",
+    shadow: "0 2px 8px rgba(248,113,113,0.5)",
+  },
+};
+
+// Legacy priority colors for backward compatibility
 const priorityColors = {
   low: {
     bg: "bg-gray-500/20",
@@ -173,7 +202,9 @@ type Props = {
   onEdit?: (item: ItemWithDetails) => void;
   onDelete?: (id: string) => void;
   onClick?: (item: ItemWithDetails) => void;
+  onActionsOpen?: (item: ItemWithDetails) => void;
   currentUserId?: string;
+  showActionsOnLongPress?: boolean;
 };
 
 // Format countdown/overdue time with seconds
@@ -216,18 +247,97 @@ export default function SwipeableItemCard({
   onEdit,
   onDelete,
   onClick,
+  onActionsOpen,
   currentUserId,
+  showActionsOnLongPress = true,
 }: Props) {
   const [offset, setOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [showActionsSheet, setShowActionsSheet] = useState(false);
   const startX = useRef(0);
   const currentX = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressRef = useRef(false);
 
   const { theme: currentUserTheme } = useTheme();
   const themeClasses = useThemeClasses();
   const isPink = currentUserTheme === "pink";
+
+  // Item actions hook
+  const {
+    handleComplete: doComplete,
+    handlePostpone: doPostpone,
+    handleCancel: doCancel,
+    handleDelete: doDelete,
+  } = useItemActionsWithToast();
+
+  // Get occurrence date for actions
+  const getOccurrenceDate = useCallback(() => {
+    const isReminder = item.type === "reminder";
+    const isEvent = item.type === "event";
+    const isTask = item.type === "task";
+
+    const dateStr =
+      isReminder || isTask
+        ? item.reminder_details?.due_at
+        : isEvent
+          ? item.event_details?.start_at
+          : null;
+
+    return dateStr || new Date().toISOString();
+  }, [item]);
+
+  // Long press detection
+  const handleLongPressStart = useCallback(() => {
+    if (!showActionsOnLongPress) return;
+
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      // Haptic feedback
+      if (navigator.vibrate) navigator.vibrate(50);
+      setShowActionsSheet(true);
+      onActionsOpen?.(item);
+    }, 500);
+  }, [item, onActionsOpen, showActionsOnLongPress]);
+
+  const handleLongPressEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  // Action handlers
+  const handleCompleteAction = useCallback(
+    async (reason?: string) => {
+      setShowActionsSheet(false);
+      await doComplete(item, getOccurrenceDate(), reason);
+    },
+    [doComplete, getOccurrenceDate, item]
+  );
+
+  const handlePostponeAction = useCallback(
+    async (type: PostponeType, reason?: string) => {
+      setShowActionsSheet(false);
+      await doPostpone(item, getOccurrenceDate(), type, reason);
+    },
+    [doPostpone, getOccurrenceDate, item]
+  );
+
+  const handleCancelAction = useCallback(
+    async (reason?: string) => {
+      setShowActionsSheet(false);
+      await doCancel(item, getOccurrenceDate(), reason);
+    },
+    [doCancel, getOccurrenceDate, item]
+  );
+
+  const handleDeleteAction = useCallback(async () => {
+    setShowActionsSheet(false);
+    await doDelete(item);
+  }, [doDelete, item]);
 
   // Determine ownership
   const isOwner = currentUserId
@@ -280,10 +390,15 @@ export default function SwipeableItemCard({
     startX.current = e.touches[0].clientX;
     currentX.current = offset;
     setIsDragging(true);
+    isLongPressRef.current = false;
+    handleLongPressStart();
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!isDragging) return;
+
+    // Cancel long press if user moves
+    handleLongPressEnd();
 
     const touch = e.touches[0];
     const diff = touch.clientX - startX.current;
@@ -303,6 +418,13 @@ export default function SwipeableItemCard({
 
   const handleTouchEnd = () => {
     setIsDragging(false);
+    handleLongPressEnd();
+
+    // Don't trigger swipe actions if it was a long press
+    if (isLongPressRef.current) {
+      isLongPressRef.current = false;
+      return;
+    }
 
     if (offset < -SWIPE_THRESHOLD) {
       // Swiped left - Delete
@@ -325,12 +447,19 @@ export default function SwipeableItemCard({
     startX.current = e.clientX;
     currentX.current = offset;
     setIsDragging(true);
+    isLongPressRef.current = false;
+    handleLongPressStart();
   };
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging) return;
 
+    // Cancel long press if user moves significantly
     const diff = e.clientX - startX.current;
+    if (Math.abs(diff) > 10) {
+      handleLongPressEnd();
+    }
+
     const newOffset = Math.max(
       -MAX_OFFSET,
       Math.min(MAX_OFFSET, currentX.current + diff)
@@ -347,6 +476,7 @@ export default function SwipeableItemCard({
 
   const handleMouseUp = () => {
     if (!isDragging) return;
+    handleLongPressEnd();
     handleTouchEnd();
   };
 
@@ -431,15 +561,15 @@ export default function SwipeableItemCard({
       {/* Main Content */}
       <div
         className={cn(
-          "relative bg-gradient-to-br from-[#1a2942] to-[#0f1d2e] rounded-xl p-3 cursor-pointer",
+          "relative bg-gradient-to-br from-[#1a2942]/90 to-[#0f1d2e]/90 rounded-xl p-2.5 cursor-pointer",
           isCompleted && "opacity-60",
           "neo-card",
           isDragging ? "" : "transition-transform duration-200 ease-out"
         )}
         style={{
           transform: `translateX(${offset}px)`,
-          borderLeft: `4px solid ${borderColor}`,
-          boxShadow: `0 0 12px ${glowColor}`,
+          borderLeft: `3px solid ${borderColor}`,
+          boxShadow: `0 0 8px ${glowColor}`,
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -451,7 +581,7 @@ export default function SwipeableItemCard({
           }
         }}
       >
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-2.5">
           {/* Left: Checkbox/Icon */}
           <div className="flex-shrink-0">
             {isReminder && (
@@ -459,67 +589,77 @@ export default function SwipeableItemCard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onComplete?.();
+                  // Use the new complete action with undo support
+                  handleCompleteAction();
                 }}
                 className={cn(
-                  "w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all",
+                  "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
                   isCompleted
                     ? "bg-green-500 border-green-500"
                     : isPink
-                      ? "border-pink-400/50 hover:border-pink-400 hover:bg-pink-500/10"
-                      : "border-cyan-400/50 hover:border-cyan-400 hover:bg-cyan-500/10"
+                      ? "border-pink-400/40 hover:border-pink-400 hover:bg-pink-500/10"
+                      : "border-cyan-400/40 hover:border-cyan-400 hover:bg-cyan-500/10"
                 )}
               >
-                {isCompleted && (
-                  <CheckIcon className="w-3.5 h-3.5 text-white" />
-                )}
+                {isCompleted && <CheckIcon className="w-3 h-3 text-white" />}
               </button>
             )}
             {isEvent && (
-              <div
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowActionsSheet(true);
+                }}
                 className={cn(
-                  "w-8 h-8 rounded-lg flex items-center justify-center",
-                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                  "w-7 h-7 rounded-lg flex items-center justify-center",
+                  isPink ? "bg-pink-500/15" : "bg-cyan-500/15"
                 )}
               >
                 <CalendarIcon
                   className={cn(
-                    "w-4 h-4",
+                    "w-3.5 h-3.5",
                     isPink ? "text-pink-400" : "text-cyan-400"
                   )}
                 />
-              </div>
+              </button>
             )}
             {isTask && (
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-purple-500/20">
-                <CheckSquare className="w-4 h-4 text-purple-400" />
-              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCompleteAction();
+                }}
+                className="w-7 h-7 rounded-lg flex items-center justify-center bg-purple-500/15"
+              >
+                <CheckSquare className="w-3.5 h-3.5 text-purple-400" />
+              </button>
             )}
           </div>
 
           {/* Middle: Content */}
           <div className="flex-1 min-w-0">
-            {/* Title row with priority and map icon */}
+            {/* Title row with priority sphere */}
             <div className="flex items-center gap-2">
               <h3
                 className={cn(
-                  "font-semibold text-white truncate text-sm",
+                  "font-semibold text-white truncate text-sm flex-1",
                   isCompleted && "line-through text-white/50"
                 )}
               >
                 {item.title}
               </h3>
-              {/* Priority badge (only if not normal) */}
-              {item.priority !== "normal" && (
-                <span
-                  className={cn(
-                    "px-1.5 py-0.5 rounded text-[10px] font-medium uppercase",
-                    priorityColors[item.priority].bg,
-                    priorityColors[item.priority].text
-                  )}
-                >
-                  {item.priority}
-                </span>
+              {/* 3D Priority Sphere (only if not normal/low) */}
+              {(item.priority === "high" || item.priority === "urgent") && (
+                <div
+                  className="w-3 h-3 rounded-full flex-shrink-0"
+                  style={{
+                    background: prioritySphereStyles[item.priority].background,
+                    boxShadow: prioritySphereStyles[item.priority].shadow,
+                  }}
+                  title={item.priority}
+                />
               )}
               {/* Location map icon - top right */}
               {isEvent && item.event_details?.location_text && (
@@ -579,27 +719,27 @@ export default function SwipeableItemCard({
               {timeInfo && !isCompleted && (
                 <div
                   className={cn(
-                    "flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium",
+                    "flex items-center gap-1 text-[11px] font-medium",
                     timeInfo.isOverdue
-                      ? "bg-red-500/15 text-red-400"
+                      ? "text-red-400"
                       : isPink
-                        ? "bg-pink-500/15 text-pink-400"
-                        : "bg-cyan-500/15 text-cyan-400"
+                        ? "text-pink-400/80"
+                        : "text-cyan-400/80"
                   )}
                 >
                   {timeInfo.isOverdue ? (
                     <AlertIcon className="w-3 h-3" />
                   ) : (
-                    <ClockIcon className="w-3 h-3" />
+                    <ClockIcon className="w-3 h-3 opacity-60" />
                   )}
                   <span className="tabular-nums">{timeInfo.text}</span>
                 </div>
               )}
 
-              {/* Date/Time display */}
+              {/* Time only (not full date since it's in section header) */}
               {dateStr && (
                 <span className="text-[11px] text-white/40">
-                  {format(parseISO(dateStr), "MMM d, h:mm a")}
+                  {format(parseISO(dateStr), "h:mm a")}
                 </span>
               )}
 
@@ -643,6 +783,18 @@ export default function SwipeableItemCard({
           )}
         </div>
       </div>
+
+      {/* Actions Sheet */}
+      <ItemActionsSheet
+        item={item}
+        occurrenceDate={getOccurrenceDate()}
+        isOpen={showActionsSheet}
+        onClose={() => setShowActionsSheet(false)}
+        onComplete={handleCompleteAction}
+        onPostpone={handlePostponeAction}
+        onCancel={handleCancelAction}
+        onDelete={handleDeleteAction}
+      />
     </div>
   );
 }
