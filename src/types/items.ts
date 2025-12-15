@@ -39,6 +39,7 @@ export interface Item {
   is_public: boolean;
   responsible_user_id: UUID;
   google_event_id?: string | null;
+  categories?: string[]; // Array of category IDs (e.g., ["work", "personal"])
 }
 
 /** Item with related data for display */
@@ -46,7 +47,6 @@ export interface ItemWithDetails extends Item {
   reminder_details?: ReminderDetails | null;
   event_details?: EventDetails | null;
   subtasks?: Subtask[];
-  categories?: ItemCategory[];
   alerts?: ItemAlert[];
   recurrence_rule?: RecurrenceRule | null;
   attachments?: ItemAttachment[];
@@ -193,6 +193,7 @@ export interface CreateReminderInput extends CreateItemInput {
   subtasks?: CreateSubtaskInput[];
   alerts?: CreateAlertInput[];
   category_ids?: UUID[];
+  recurrence_rule?: CreateRecurrenceInput;
 }
 
 /** Input for creating an event */
@@ -213,6 +214,7 @@ export interface CreateTaskInput extends CreateItemInput {
   due_at?: string | null;
   estimate_minutes?: number | null;
   category_ids?: UUID[];
+  recurrence_rule?: CreateRecurrenceInput;
 }
 
 /** Input for creating a subtask */
@@ -249,6 +251,7 @@ export interface UpdateItemInput {
   metadata_json?: Record<string, unknown> | null;
   is_public?: boolean;
   archived_at?: string | null;
+  categories?: string[];
 }
 
 /** Input for updating reminder details */

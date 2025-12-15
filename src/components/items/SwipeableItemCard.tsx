@@ -4,14 +4,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
-import {
-  differenceInDays,
-  differenceInHours,
-  differenceInMinutes,
-  format,
-  isBefore,
-  parseISO,
-} from "date-fns";
+import { format, isBefore, parseISO } from "date-fns";
 import { useEffect, useRef, useState } from "react";
 
 // Icons
@@ -123,6 +116,19 @@ const GlobeIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const MapPinIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);
+
 const AlertIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
@@ -170,7 +176,7 @@ type Props = {
   currentUserId?: string;
 };
 
-// Format countdown/overdue time
+// Format countdown/overdue time with seconds
 function formatTimeDistance(dateStr: string): {
   text: string;
   isOverdue: boolean;
@@ -179,17 +185,23 @@ function formatTimeDistance(dateStr: string): {
   const now = new Date();
   const isOverdue = isBefore(date, now);
 
-  const minutes = Math.abs(differenceInMinutes(date, now));
-  const hours = Math.abs(differenceInHours(date, now));
-  const days = Math.abs(differenceInDays(date, now));
+  const totalSeconds = Math.abs(
+    Math.floor((date.getTime() - now.getTime()) / 1000)
+  );
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
 
   let text: string;
   if (days >= 1) {
-    text = `${days}d ${hours % 24}h`;
+    text = `${days}d ${hours}h ${minutes}m`;
   } else if (hours >= 1) {
-    text = `${hours}h ${minutes % 60}m`;
+    text = `${hours}h ${minutes}m ${seconds}s`;
+  } else if (minutes >= 1) {
+    text = `${minutes}m ${seconds}s`;
   } else {
-    text = `${minutes}m`;
+    text = `${seconds}s`;
   }
 
   return {
@@ -239,7 +251,28 @@ export default function SwipeableItemCard({
         ? item.event_details?.start_at
         : null;
 
-  const timeInfo = dateStr ? formatTimeDistance(dateStr) : null;
+  // Live countdown timer state
+  const [timeInfo, setTimeInfo] = useState<{
+    text: string;
+    isOverdue: boolean;
+  } | null>(dateStr ? formatTimeDistance(dateStr) : null);
+
+  // Update countdown every second
+  useEffect(() => {
+    if (!dateStr || isCompleted) return;
+
+    const updateTime = () => {
+      setTimeInfo(formatTimeDistance(dateStr));
+    };
+
+    // Update immediately
+    updateTime();
+
+    // Update every second
+    const interval = setInterval(updateTime, 1000);
+
+    return () => clearInterval(interval);
+  }, [dateStr, isCompleted]);
 
   // Touch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -466,7 +499,7 @@ export default function SwipeableItemCard({
 
           {/* Middle: Content */}
           <div className="flex-1 min-w-0">
-            {/* Title row with priority and visibility */}
+            {/* Title row with priority and map icon */}
             <div className="flex items-center gap-2">
               <h3
                 className={cn(
@@ -488,14 +521,38 @@ export default function SwipeableItemCard({
                   {item.priority}
                 </span>
               )}
+              {/* Location map icon - top right */}
+              {isEvent && item.event_details?.location_text && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const location = item.event_details?.location_text;
+                    if (location) {
+                      if (
+                        location.startsWith("http://") ||
+                        location.startsWith("https://")
+                      ) {
+                        window.open(location, "_blank");
+                      } else {
+                        window.open(
+                          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`,
+                          "_blank"
+                        );
+                      }
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center justify-center w-6 h-6 rounded-md transition-all ml-auto",
+                    "bg-emerald-500/20 hover:bg-emerald-500/30",
+                    "active:scale-95"
+                  )}
+                  title={item.event_details.location_text}
+                >
+                  <MapPinIcon className="w-3.5 h-3.5 text-emerald-400" />
+                </button>
+              )}
             </div>
-
-            {/* Description */}
-            {item.description && (
-              <p className="text-xs text-white/50 mt-0.5 line-clamp-1">
-                {item.description}
-              </p>
-            )}
 
             {/* Tags/Categories */}
             {item.categories && item.categories.length > 0 && (
@@ -524,16 +581,16 @@ export default function SwipeableItemCard({
 
             {/* Bottom row: Time + Location + Visibility */}
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              {/* Countdown/Overdue */}
+              {/* Countdown/Overdue - Live updating with seconds */}
               {timeInfo && !isCompleted && (
                 <div
                   className={cn(
-                    "flex items-center gap-1 text-[11px]",
+                    "flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium",
                     timeInfo.isOverdue
-                      ? "text-red-400"
+                      ? "bg-red-500/15 text-red-400"
                       : isPink
-                        ? "text-pink-400/80"
-                        : "text-cyan-400/80"
+                        ? "bg-pink-500/15 text-pink-400"
+                        : "bg-cyan-500/15 text-cyan-400"
                   )}
                 >
                   {timeInfo.isOverdue ? (
@@ -541,7 +598,7 @@ export default function SwipeableItemCard({
                   ) : (
                     <ClockIcon className="w-3 h-3" />
                   )}
-                  <span className="font-medium">{timeInfo.text}</span>
+                  <span className="tabular-nums">{timeInfo.text}</span>
                 </div>
               )}
 
@@ -549,13 +606,6 @@ export default function SwipeableItemCard({
               {dateStr && (
                 <span className="text-[11px] text-white/40">
                   {format(parseISO(dateStr), "MMM d, h:mm a")}
-                </span>
-              )}
-
-              {/* Location for events */}
-              {isEvent && item.event_details?.location_text && (
-                <span className="text-[11px] text-white/40 truncate max-w-[80px]">
-                  📍 {item.event_details.location_text}
                 </span>
               )}
 

@@ -16,6 +16,7 @@ import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import type {
   CreateEventInput,
+  CreateRecurrenceInput,
   CreateReminderInput,
   ItemPriority,
   ItemStatus,
@@ -62,6 +63,21 @@ const BellIcon = ({ className }: { className?: string }) => (
   >
     <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
     <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+  </svg>
+);
+
+const RepeatIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M17 2l4 4-4 4" />
+    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+    <path d="M7 22l-4-4 4-4" />
+    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
   </svg>
 );
 
@@ -244,6 +260,9 @@ export default function MobileReminderForm() {
   // Categories (multi-select)
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
 
+  // Recurrence state
+  const [recurrenceRule, setRecurrenceRule] = useState("");
+
   // Date for tags bar calendar
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
@@ -310,6 +329,7 @@ export default function MobileReminderForm() {
     setEndDate("");
     setEndTime("");
     setSelectedCategoryIds([]);
+    setRecurrenceRule("");
   }, []);
 
   // Toggle category selection
@@ -339,6 +359,15 @@ export default function MobileReminderForm() {
         ).toISOString();
         const endAtIso = new Date(`${endDate}T${endTime}:00`).toISOString();
 
+        // Build recurrence rule if set
+        let recurrence_rule: CreateRecurrenceInput | undefined;
+        if (recurrenceRule) {
+          recurrence_rule = {
+            rrule: recurrenceRule,
+            start_anchor: startAtIso,
+          };
+        }
+
         const input: CreateEventInput = {
           type: "event",
           title: title.trim(),
@@ -350,6 +379,7 @@ export default function MobileReminderForm() {
           end_at: endAtIso,
           category_ids:
             selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
+          recurrence_rule,
         };
 
         await createEvent.mutateAsync(input);
@@ -367,6 +397,15 @@ export default function MobileReminderForm() {
           dueAtIso = localDate.toISOString();
         }
 
+        // Build recurrence rule if set
+        let recurrence_rule: CreateRecurrenceInput | undefined;
+        if (recurrenceRule && dueAtIso) {
+          recurrence_rule = {
+            rrule: recurrenceRule,
+            start_anchor: dueAtIso,
+          };
+        }
+
         const input: CreateReminderInput = {
           type: "reminder",
           title: title.trim(),
@@ -377,6 +416,7 @@ export default function MobileReminderForm() {
           due_at: dueAtIso,
           category_ids:
             selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
+          recurrence_rule,
         };
 
         await createReminder.mutateAsync(input);
@@ -818,6 +858,53 @@ export default function MobileReminderForm() {
                       </div>
                     </>
                   )}
+                </div>
+
+                {/* Recurrence Section - for both reminders and events */}
+                <div
+                  className="neo-card p-4 rounded-xl space-y-3 category-appear"
+                  style={{ animationDelay: "100ms" }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <RepeatIcon className={cn("w-4 h-4", themeClasses.text)} />
+                    <Label
+                      className={cn(
+                        "text-sm font-semibold",
+                        themeClasses.headerText
+                      )}
+                    >
+                      Repeat
+                    </Label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: "Never", value: "" },
+                      { label: "Daily", value: "FREQ=DAILY" },
+                      {
+                        label: "Weekdays",
+                        value: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+                      },
+                      { label: "Weekly", value: "FREQ=WEEKLY" },
+                      { label: "Bi-weekly", value: "FREQ=WEEKLY;INTERVAL=2" },
+                      { label: "Monthly", value: "FREQ=MONTHLY" },
+                      { label: "Quarterly", value: "FREQ=MONTHLY;INTERVAL=3" },
+                      { label: "Yearly", value: "FREQ=YEARLY" },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setRecurrenceRule(preset.value)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95",
+                          recurrenceRule === preset.value
+                            ? "neo-gradient text-white shadow-md"
+                            : `neo-card ${themeClasses.border} ${themeClasses.text} ${themeClasses.borderHover}`
+                        )}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <Button

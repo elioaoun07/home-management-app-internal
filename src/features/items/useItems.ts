@@ -57,7 +57,8 @@ async function fetchItems(
       reminder_details (*),
       event_details (*),
       item_subtasks (*),
-      item_alerts (*)
+      item_alerts (*),
+      item_recurrence_rules (*)
     `
     )
     .eq("user_id", user.id)
@@ -113,9 +114,10 @@ async function fetchItems(
   // Transform the data to match our types
   return (data || []).map((item: any) => ({
     ...item,
-    categories: [], // Categories are now hardcoded, not stored per item
+    categories: item.categories || [],
     subtasks: item.item_subtasks || [],
     alerts: item.item_alerts || [],
+    recurrence_rule: item.item_recurrence_rules?.[0] || null,
   }));
 }
 
@@ -145,7 +147,7 @@ async function fetchItemById(id: string): Promise<ItemWithDetails | null> {
 
   return {
     ...data,
-    categories: [], // Categories are now hardcoded, not stored per item
+    categories: data.categories || [],
     subtasks: data.item_subtasks || [],
     alerts: data.item_alerts || [],
     recurrence_rule: data.item_recurrence_rules?.[0] || null,
@@ -302,6 +304,7 @@ export function useCreateReminder() {
           metadata_json: input.metadata_json,
           is_public: input.is_public || false,
           responsible_user_id: input.responsible_user_id || user.id,
+          categories: input.category_ids || [],
         })
         .select()
         .single();
@@ -335,16 +338,26 @@ export function useCreateReminder() {
 
       // Create alerts if provided
       if (input.alerts?.length) {
-        const alerts = input.alerts.map((a) => ({
-          item_id: item.id,
-          kind: a.kind,
-          trigger_at: a.trigger_at,
-          offset_minutes: a.offset_minutes,
-          relative_to: a.relative_to,
-          repeat_every_minutes: a.repeat_every_minutes,
-          max_repeats: a.max_repeats,
-          channel: a.channel || "push",
-        }));
+        const alerts = input.alerts.map((a) => {
+          // For relative alerts, compute the actual trigger_at based on due_at
+          let computedTriggerAt = a.trigger_at;
+          if (a.kind === "relative" && a.offset_minutes && input.due_at) {
+            const baseTime = new Date(input.due_at);
+            computedTriggerAt = new Date(
+              baseTime.getTime() - a.offset_minutes * 60 * 1000
+            ).toISOString();
+          }
+          return {
+            item_id: item.id,
+            kind: a.kind,
+            trigger_at: computedTriggerAt,
+            offset_minutes: a.offset_minutes,
+            relative_to: a.relative_to,
+            repeat_every_minutes: a.repeat_every_minutes,
+            max_repeats: a.max_repeats,
+            channel: a.channel || "push",
+          };
+        });
         const { error: alertsError } = await supabase
           .from("item_alerts")
           .insert(alerts);
@@ -375,6 +388,22 @@ export function useCreateReminder() {
           );
         } else {
           console.log("[useCreateReminder] Auto-alert created:", alertData);
+        }
+      }
+
+      // Create recurrence rule if provided
+      if (input.recurrence_rule?.rrule) {
+        const { error: recurrenceError } = await supabase
+          .from("item_recurrence_rules")
+          .insert({
+            item_id: item.id,
+            rrule: input.recurrence_rule.rrule,
+            start_anchor: input.due_at || new Date().toISOString(),
+            end_until: input.recurrence_rule.end_until,
+            count: input.recurrence_rule.count,
+          });
+        if (recurrenceError) {
+          console.error("Failed to create recurrence rule:", recurrenceError);
         }
       }
 
@@ -411,6 +440,7 @@ export function useCreateEvent() {
           metadata_json: input.metadata_json,
           is_public: input.is_public || false,
           responsible_user_id: input.responsible_user_id || user.id,
+          categories: input.category_ids || [],
         })
         .select()
         .single();
@@ -446,16 +476,30 @@ export function useCreateEvent() {
 
       // Create alerts if provided
       if (input.alerts?.length) {
-        const alerts = input.alerts.map((a) => ({
-          item_id: item.id,
-          kind: a.kind,
-          trigger_at: a.trigger_at,
-          offset_minutes: a.offset_minutes,
-          relative_to: a.relative_to,
-          repeat_every_minutes: a.repeat_every_minutes,
-          max_repeats: a.max_repeats,
-          channel: a.channel || "push",
-        }));
+        const alerts = input.alerts.map((a) => {
+          // For relative alerts, compute the actual trigger_at based on start_at or end_at
+          let computedTriggerAt = a.trigger_at;
+          if (a.kind === "relative" && a.offset_minutes) {
+            const baseTimeStr =
+              a.relative_to === "end" ? input.end_at : input.start_at;
+            if (baseTimeStr) {
+              const baseTime = new Date(baseTimeStr);
+              computedTriggerAt = new Date(
+                baseTime.getTime() - a.offset_minutes * 60 * 1000
+              ).toISOString();
+            }
+          }
+          return {
+            item_id: item.id,
+            kind: a.kind,
+            trigger_at: computedTriggerAt,
+            offset_minutes: a.offset_minutes,
+            relative_to: a.relative_to,
+            repeat_every_minutes: a.repeat_every_minutes,
+            max_repeats: a.max_repeats,
+            channel: a.channel || "push",
+          };
+        });
         const { error: alertsError } = await supabase
           .from("item_alerts")
           .insert(alerts);
@@ -495,6 +539,7 @@ export function useCreateTask() {
           metadata_json: input.metadata_json,
           is_public: input.is_public || false,
           responsible_user_id: input.responsible_user_id || user.id,
+          categories: input.category_ids || [],
         })
         .select()
         .single();
@@ -513,6 +558,21 @@ export function useCreateTask() {
           });
 
         if (detailsError) throw detailsError;
+      }
+
+      // Create recurrence rule if provided
+      if (input.recurrence_rule) {
+        const { error: recurrenceError } = await supabase
+          .from("item_recurrence_rules")
+          .insert({
+            item_id: item.id,
+            rrule: input.recurrence_rule.rrule,
+            start_anchor: input.recurrence_rule.start_anchor,
+            end_until: input.recurrence_rule.end_until,
+            count: input.recurrence_rule.count,
+          });
+
+        if (recurrenceError) throw recurrenceError;
       }
 
       return item as Item;

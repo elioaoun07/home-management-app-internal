@@ -390,6 +390,13 @@ CREATE TABLE public.item_attachments (
   CONSTRAINT item_attachments_pkey PRIMARY KEY (id),
   CONSTRAINT item_attachments_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
+CREATE TABLE public.item_categories (
+  item_id uuid NOT NULL,
+  category_id text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT item_categories_pkey PRIMARY KEY (item_id, category_id),
+  CONSTRAINT item_categories_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+);
 CREATE TABLE public.item_recurrence_exceptions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   rule_id uuid NOT NULL,
@@ -465,6 +472,40 @@ CREATE TABLE public.merchant_mappings (
   CONSTRAINT merchant_mappings_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT merchant_mappings_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
+CREATE TABLE public.notification_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  alert_id uuid,
+  subscription_id uuid,
+  title text NOT NULL,
+  body text,
+  tag text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'sent'::text, 'failed'::text, 'clicked'::text, 'dismissed'::text])),
+  error_message text,
+  sent_at timestamp with time zone,
+  clicked_at timestamp with time zone,
+  dismissed_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT notification_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT notification_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT notification_logs_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.item_alerts(id),
+  CONSTRAINT notification_logs_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.push_subscriptions(id)
+);
+CREATE TABLE public.push_subscriptions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  endpoint text NOT NULL,
+  p256dh text NOT NULL,
+  auth text NOT NULL,
+  device_name text,
+  user_agent text,
+  is_active boolean NOT NULL DEFAULT true,
+  last_used_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id),
+  CONSTRAINT push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.recurring_payments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -495,6 +536,26 @@ CREATE TABLE public.reminder_details (
   has_checklist boolean NOT NULL DEFAULT false,
   CONSTRAINT reminder_details_pkey PRIMARY KEY (item_id),
   CONSTRAINT reminder_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+);
+CREATE TABLE public.reminder_templates (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  title text NOT NULL,
+  description text,
+  priority text NOT NULL DEFAULT 'normal'::text CHECK (priority = ANY (ARRAY['low'::text, 'normal'::text, 'high'::text, 'urgent'::text])),
+  item_type text NOT NULL DEFAULT 'task'::text CHECK (item_type = ANY (ARRAY['reminder'::text, 'event'::text, 'task'::text])),
+  default_duration_minutes integer,
+  default_start_time time without time zone,
+  location_text text,
+  icon text DEFAULT 'clipboard-list'::text,
+  color text DEFAULT '#38bdf8'::text,
+  use_count integer NOT NULL DEFAULT 0,
+  last_used_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT reminder_templates_pkey PRIMARY KEY (id),
+  CONSTRAINT reminder_templates_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.statement_imports (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -604,8 +665,8 @@ CREATE TABLE public.user_categories (
   CONSTRAINT user_categories_pkey PRIMARY KEY (id),
   CONSTRAINT user_categories_default_fk FOREIGN KEY (default_category_id) REFERENCES public.default_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
@@ -617,26 +678,6 @@ CREATE TABLE public.user_onboarding (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT user_onboarding_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_onboarding_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);
-CREATE TABLE public.reminder_templates (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  name text NOT NULL,
-  title text NOT NULL,
-  description text,
-  priority text NOT NULL DEFAULT 'normal'::text CHECK (priority = ANY (ARRAY['low'::text, 'normal'::text, 'high'::text, 'urgent'::text])),
-  item_type text NOT NULL DEFAULT 'task'::text CHECK (item_type = ANY (ARRAY['reminder'::text, 'event'::text, 'task'::text])),
-  default_duration_minutes integer,
-  default_start_time time,
-  location_text text,
-  icon text DEFAULT 'clipboard-list'::text,
-  color text DEFAULT '#38bdf8'::text,
-  use_count integer NOT NULL DEFAULT 0,
-  last_used_at timestamp with time zone,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT reminder_templates_pkey PRIMARY KEY (id),
-  CONSTRAINT reminder_templates_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.user_preferences (
   user_id uuid NOT NULL,

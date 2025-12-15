@@ -510,12 +510,39 @@ export default function ItemDetailModal({
             </div>
           )}
 
-          {/* Location for events */}
+          {/* Location for events - clickable map icon */}
           {isEvent && item.event_details?.location_text && (
-            <div className="flex items-center gap-2 text-white/70">
-              <MapPinIcon className="w-4 h-4" />
-              <span>{item.event_details.location_text}</span>
-            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const location = item.event_details?.location_text;
+                if (location) {
+                  if (
+                    location.startsWith("http://") ||
+                    location.startsWith("https://")
+                  ) {
+                    window.open(location, "_blank");
+                  } else {
+                    window.open(
+                      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`,
+                      "_blank"
+                    );
+                  }
+                }
+              }}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg transition-all",
+                "bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30",
+                "active:scale-95"
+              )}
+              title={item.event_details.location_text}
+            >
+              <MapPinIcon className="w-5 h-5 text-emerald-400" />
+              <span className="text-sm font-medium text-emerald-300">
+                Open Location
+              </span>
+            </button>
           )}
 
           {/* Description */}

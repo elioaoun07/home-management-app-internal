@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import type {
   CreateAlertInput,
   CreateEventInput,
+  CreateRecurrenceInput,
   CreateReminderInput,
   CreateTaskInput,
   ItemPriority,
@@ -106,6 +107,21 @@ const LocationIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const RepeatIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M17 2l4 4-4 4" />
+    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+    <path d="M7 22l-4-4 4-4" />
+    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+  </svg>
+);
+
 const BellIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
@@ -173,6 +189,9 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
   const [enableAlert, setEnableAlert] = useState(true);
   const [alertMinutes, setAlertMinutes] = useState(15);
 
+  // Recurrence state
+  const [recurrenceRule, setRecurrenceRule] = useState("");
+
   // Mutations
   const createReminder = useCreateReminder();
   const createEvent = useCreateEvent();
@@ -203,6 +222,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
       setLocation("");
       setEnableAlert(true);
       setAlertMinutes(15);
+      setRecurrenceRule("");
     }
   }, [isOpen]);
 
@@ -264,6 +284,15 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           });
         }
 
+        // Build recurrence rule if set
+        let recurrence_rule: CreateRecurrenceInput | undefined;
+        if (recurrenceRule && dueDate && dueTime) {
+          recurrence_rule = {
+            rrule: recurrenceRule,
+            start_anchor: `${dueDate}T${dueTime}:00`,
+          };
+        }
+
         const input: CreateReminderInput = {
           type: "reminder",
           title: title.trim(),
@@ -271,6 +300,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           priority,
           due_at: dueDate && dueTime ? `${dueDate}T${dueTime}:00` : undefined,
           alerts: alerts.length > 0 ? alerts : undefined,
+          recurrence_rule,
         };
 
         await createReminder.mutateAsync(input);
@@ -286,6 +316,18 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           });
         }
 
+        // Build recurrence rule if set
+        let recurrence_rule: CreateRecurrenceInput | undefined;
+        if (recurrenceRule) {
+          const startAnchor = allDay
+            ? `${startDate}T00:00:00`
+            : `${startDate}T${startTime}:00`;
+          recurrence_rule = {
+            rrule: recurrenceRule,
+            start_anchor: startAnchor,
+          };
+        }
+
         const input: CreateEventInput = {
           type: "event",
           title: title.trim(),
@@ -298,6 +340,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           all_day: allDay,
           location_text: location.trim() || undefined,
           alerts: alerts.length > 0 ? alerts : undefined,
+          recurrence_rule,
         };
 
         await createEvent.mutateAsync(input);
@@ -622,6 +665,52 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                   </>
                 )}
 
+                {/* Recurrence - for both events and reminders */}
+                {(isEvent || isReminder) && (
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <div className="flex items-center gap-2">
+                      <RepeatIcon className="w-4 h-4 text-white/60" />
+                      <Label className="text-sm font-medium text-white/80">
+                        Repeat
+                      </Label>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: "Never", value: "" },
+                        { label: "Daily", value: "FREQ=DAILY" },
+                        {
+                          label: "Weekdays",
+                          value: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+                        },
+                        { label: "Weekly", value: "FREQ=WEEKLY" },
+                        { label: "Bi-weekly", value: "FREQ=WEEKLY;INTERVAL=2" },
+                        { label: "Monthly", value: "FREQ=MONTHLY" },
+                        {
+                          label: "Quarterly",
+                          value: "FREQ=MONTHLY;INTERVAL=3",
+                        },
+                        { label: "Yearly", value: "FREQ=YEARLY" },
+                      ].map((preset) => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => setRecurrenceRule(preset.value)}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs transition-all",
+                            recurrenceRule === preset.value
+                              ? isPink
+                                ? "bg-pink-500/30 text-pink-300 border border-pink-400/50"
+                                : "bg-cyan-500/30 text-cyan-300 border border-cyan-400/50"
+                              : "bg-white/10 text-white/60 border border-transparent"
+                          )}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Alert setting */}
                 {(isReminder || isEvent) && (
                   <div className="space-y-3 pt-2 border-t border-white/10">
@@ -829,6 +918,32 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                     >
                       {priorityConfig[priority].label} priority
                     </div>
+
+                    {recurrenceRule && (
+                      <div className="flex items-center gap-2 text-white/60">
+                        <RepeatIcon className="w-4 h-4" />
+                        <span>
+                          Repeats{" "}
+                          {recurrenceRule.includes("DAILY")
+                            ? "daily"
+                            : recurrenceRule.includes("BYDAY=MO,TU,WE,TH,FR")
+                              ? "weekdays"
+                              : recurrenceRule.includes("INTERVAL=2") &&
+                                  recurrenceRule.includes("WEEKLY")
+                                ? "bi-weekly"
+                                : recurrenceRule.includes("INTERVAL=3") &&
+                                    recurrenceRule.includes("MONTHLY")
+                                  ? "quarterly"
+                                  : recurrenceRule.includes("WEEKLY")
+                                    ? "weekly"
+                                    : recurrenceRule.includes("MONTHLY")
+                                      ? "monthly"
+                                      : recurrenceRule.includes("YEARLY")
+                                        ? "yearly"
+                                        : "custom"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>

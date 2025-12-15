@@ -3,6 +3,7 @@
 import UserMenuClient from "@/components/auth/UserMenuClient";
 import WebBudget from "@/components/web/WebBudget";
 import WebDashboard from "@/components/web/WebDashboard";
+import WebEvents from "@/components/web/WebEvents";
 import WebFuturePurchases from "@/components/web/WebFuturePurchases";
 import { useUser } from "@/contexts/UserContext";
 import { useUserPreferences } from "@/features/preferences/useUserPreferences";
@@ -11,14 +12,19 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { getDefaultDateRange } from "@/lib/utils/date";
-import { BarChart3, Rocket, Wallet } from "lucide-react";
+import { BarChart3, CalendarDays, Rocket, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+// Top-level view modes - Budget or Events
+export type WebViewMode = "budget" | "events";
+
+// Tabs within Budget view
 export type WebTab = "dashboard" | "budget" | "goals";
 
 export default function WebViewContainer() {
   const themeClasses = useThemeClasses();
   const userData = useUser(); // Get user data from context (server-side)
+  const [viewMode, setViewMode] = useState<WebViewMode>("budget");
   const [activeTab, setActiveTab] = useState<WebTab>("dashboard");
   const [monthStartDay, setMonthStartDay] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(
@@ -218,12 +224,42 @@ export default function WebViewContainer() {
         className={`flex-shrink-0 w-full ${themeClasses.headerGradient} backdrop-blur-xl border-b ${themeClasses.border}`}
       >
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          {/* Logo/Title */}
-          <div className="flex items-center gap-3">
+          {/* Logo/Title with View Mode Toggle */}
+          <div className="flex items-center gap-6">
             <div
               className={`text-xl font-bold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
             >
-              Budget Manager
+              {viewMode === "budget" ? "Budget Manager" : "Events & Reminders"}
+            </div>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center p-1 rounded-xl bg-black/20 border border-white/10">
+              <button
+                type="button"
+                onClick={() => setViewMode("budget")}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  viewMode === "budget"
+                    ? "neo-gradient text-white shadow-lg"
+                    : "text-white/60 hover:text-white hover:bg-white/10"
+                )}
+              >
+                <Wallet className="w-4 h-4" />
+                Budget
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("events")}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  viewMode === "events"
+                    ? "neo-gradient text-white shadow-lg"
+                    : "text-white/60 hover:text-white hover:bg-white/10"
+                )}
+              >
+                <CalendarDays className="w-4 h-4" />
+                Events
+              </button>
             </div>
           </div>
 
@@ -238,104 +274,114 @@ export default function WebViewContainer() {
 
       {/* Scrollable Content Area */}
       <main className="flex-1 overflow-y-auto">
-        {/* Dashboard View */}
-        <div className={activeTab === "dashboard" ? "block" : "hidden"}>
-          <WebDashboard
-            transactions={transactions}
-            startDate={dateRange.start}
-            endDate={dateRange.end}
-            currentUserId={currentUserId}
-            onDateRangeChange={handleDateRangeChange}
-            isRefetching={isFetching && !isLoading}
-          />
-        </div>
+        {/* Events View */}
+        {viewMode === "events" && <WebEvents />}
 
-        {/* Budget View */}
-        <div className={activeTab === "budget" ? "block" : "hidden"}>
-          <WebBudget />
-        </div>
+        {/* Budget Views */}
+        {viewMode === "budget" && (
+          <>
+            {/* Dashboard View */}
+            <div className={activeTab === "dashboard" ? "block" : "hidden"}>
+              <WebDashboard
+                transactions={transactions}
+                startDate={dateRange.start}
+                endDate={dateRange.end}
+                currentUserId={currentUserId}
+                onDateRangeChange={handleDateRangeChange}
+                isRefetching={isFetching && !isLoading}
+              />
+            </div>
 
-        {/* Future Purchases / Goals View */}
-        <div className={activeTab === "goals" ? "block" : "hidden"}>
-          <WebFuturePurchases />
-        </div>
+            {/* Budget View */}
+            <div className={activeTab === "budget" ? "block" : "hidden"}>
+              <WebBudget />
+            </div>
+
+            {/* Future Purchases / Goals View */}
+            <div className={activeTab === "goals" ? "block" : "hidden"}>
+              <WebFuturePurchases />
+            </div>
+          </>
+        )}
       </main>
 
-      {/* Bottom Navigation - Fixed at bottom, outside scroll */}
-      <nav
-        className={`flex-shrink-0 w-full bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-xl border-t ${themeClasses.border}`}
-      >
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center gap-4 px-6 h-16">
-            <button
-              type="button"
-              onClick={() => {
-                if (navigator.vibrate) navigator.vibrate(10);
-                setActiveTab("dashboard");
-              }}
-              className={cn(
-                "flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300",
-                "hover:scale-105 active:scale-95",
-                activeTab === "dashboard"
-                  ? "neo-gradient text-white shadow-lg shadow-primary/30"
-                  : `neo-card ${themeClasses.text} hover:bg-white/5`
-              )}
-            >
-              <BarChart3
+      {/* Bottom Navigation - Only show for Budget mode */}
+      {viewMode === "budget" && (
+        <nav
+          className={`flex-shrink-0 w-full bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-xl border-t ${themeClasses.border}`}
+        >
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-center gap-4 px-6 h-16">
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(10);
+                  setActiveTab("dashboard");
+                }}
                 className={cn(
-                  "w-5 h-5",
-                  activeTab === "dashboard" && "drop-shadow-lg"
+                  "flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300",
+                  "hover:scale-105 active:scale-95",
+                  activeTab === "dashboard"
+                    ? "neo-gradient text-white shadow-lg shadow-primary/30"
+                    : `neo-card ${themeClasses.text} hover:bg-white/5`
                 )}
-              />
-              <span className="text-sm font-semibold">Dashboard</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (navigator.vibrate) navigator.vibrate(10);
-                setActiveTab("budget");
-              }}
-              className={cn(
-                "flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300",
-                "hover:scale-105 active:scale-95",
-                activeTab === "budget"
-                  ? "neo-gradient text-white shadow-lg shadow-primary/30"
-                  : `neo-card ${themeClasses.text} hover:bg-white/5`
-              )}
-            >
-              <Wallet
+              >
+                <BarChart3
+                  className={cn(
+                    "w-5 h-5",
+                    activeTab === "dashboard" && "drop-shadow-lg"
+                  )}
+                />
+                <span className="text-sm font-semibold">Dashboard</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(10);
+                  setActiveTab("budget");
+                }}
                 className={cn(
-                  "w-5 h-5",
-                  activeTab === "budget" && "drop-shadow-lg"
+                  "flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300",
+                  "hover:scale-105 active:scale-95",
+                  activeTab === "budget"
+                    ? "neo-gradient text-white shadow-lg shadow-primary/30"
+                    : `neo-card ${themeClasses.text} hover:bg-white/5`
                 )}
-              />
-              <span className="text-sm font-semibold">Budget</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (navigator.vibrate) navigator.vibrate(10);
-                setActiveTab("goals");
-              }}
-              className={cn(
-                "flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300",
-                "hover:scale-105 active:scale-95",
-                activeTab === "goals"
-                  ? "bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg shadow-violet-500/30"
-                  : `neo-card ${themeClasses.text} hover:bg-white/5`
-              )}
-            >
-              <Rocket
+              >
+                <Wallet
+                  className={cn(
+                    "w-5 h-5",
+                    activeTab === "budget" && "drop-shadow-lg"
+                  )}
+                />
+                <span className="text-sm font-semibold">Budget</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(10);
+                  setActiveTab("goals");
+                }}
                 className={cn(
-                  "w-5 h-5",
-                  activeTab === "goals" && "drop-shadow-lg"
+                  "flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300",
+                  "hover:scale-105 active:scale-95",
+                  activeTab === "goals"
+                    ? "bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg shadow-violet-500/30"
+                    : `neo-card ${themeClasses.text} hover:bg-white/5`
                 )}
-              />
-              <span className="text-sm font-semibold">Goals</span>
-            </button>
+              >
+                <Rocket
+                  className={cn(
+                    "w-5 h-5",
+                    activeTab === "goals" && "drop-shadow-lg"
+                  )}
+                />
+                <span className="text-sm font-semibold">Goals</span>
+              </button>
+            </div>
           </div>
-        </div>
-      </nav>
+        </nav>
+      )}
     </div>
   );
 }
