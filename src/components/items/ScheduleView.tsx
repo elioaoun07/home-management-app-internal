@@ -25,7 +25,7 @@ interface ScheduleViewProps {
 
 type DayRange = 1 | 3 | 7;
 
-// Priority sphere styles
+// Priority sphere style
 const prioritySphereStyles = {
   low: {
     background:
