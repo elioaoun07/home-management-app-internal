@@ -56,6 +56,15 @@ const AddReminderFromMessageModal = dynamic(
   { ssr: false }
 );
 
+// Lazy load shopping list view
+const ShoppingListView = dynamic(
+  () =>
+    import("@/components/hub/ShoppingListView").then((m) => ({
+      default: m.ShoppingListView,
+    })),
+  { ssr: false }
+);
+
 // AI Chat Types
 interface AIConversation {
   id: string;
@@ -1315,6 +1324,9 @@ function ThreadConversation({
 
   const thread = threadsData?.threads.find((t) => t.id === threadId);
 
+  // Check if this is a shopping list thread
+  const isShoppingThread = thread?.purpose === "shopping";
+
   // Current user's theme determines their bubble color
   // Blue theme user = blue bubbles for "me", pink for partner
   // Pink theme user = pink bubbles for "me", blue for partner
@@ -1373,6 +1385,35 @@ function ThreadConversation({
     setNewMessage(""); // Clear input immediately (optimistic)
     sendMessage.mutate({ content: messageToSend, thread_id: threadId });
   };
+
+  // Shopping list handlers
+  const handleAddShoppingItem = useCallback(
+    (content: string) => {
+      // Just send a simple text message
+      sendMessage.mutate({ content, thread_id: threadId });
+    },
+    [sendMessage, threadId]
+  );
+
+  const handleDeleteShoppingItem = useCallback(
+    async (messageId: string) => {
+      // Soft delete the message (hide it)
+      try {
+        await fetch("/api/hub/messages", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message_ids: [messageId] }),
+        });
+        // Refetch messages to update UI
+        queryClient.invalidateQueries({
+          queryKey: ["hub", "messages", threadId],
+        });
+      } catch (error) {
+        console.error("Failed to delete message:", error);
+      }
+    },
+    [threadId, queryClient]
+  );
 
   // Get message bubble styles based on sender and current user's theme
   const getMessageStyles = (msg: HubMessage) => {
@@ -1541,322 +1582,358 @@ function ThreadConversation({
       {/* Spacer for fixed header */}
       <div className="h-16" />
 
-      {/* Messages - Scrollable area, messages stick to bottom like WhatsApp */}
-      <div className="flex-1 overflow-y-auto px-4 pb-36 flex flex-col">
-        {/* Spacer to push messages to bottom when few messages */}
-        <div className="flex-1" />
+      {/* Conditional rendering: Shopping List View or Normal Messages */}
+      {isShoppingThread ? (
+        <ShoppingListView
+          messages={messages}
+          currentUserId={currentUserId || ""}
+          onAddItem={handleAddShoppingItem}
+          onDeleteItem={handleDeleteShoppingItem}
+          isLoading={isLoading}
+        />
+      ) : (
+        <>
+          {/* Messages - Scrollable area, messages stick to bottom like WhatsApp */}
+          <div className="flex-1 overflow-y-auto px-4 pb-36 flex flex-col">
+            {/* Spacer to push messages to bottom when few messages */}
+            <div className="flex-1" />
 
-        {/* Messages container */}
-        <div className="space-y-3 py-4">
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-12 bg-white/5 rounded-xl animate-pulse"
-                />
-              ))}
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <MessageIcon className="w-12 h-12 mb-3 text-blue-400/30" />
-              <p className="text-sm text-white/50">
-                No messages yet. Start the conversation!
-              </p>
-            </div>
-          ) : filteredMessages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <EyeIcon className="w-12 h-12 mb-3 text-emerald-400/30" />
-              <p className="text-sm text-white/50">
-                All messages have completed actions.
-              </p>
-              <p className="text-xs text-white/40 mt-1">
-                Toggle the eye icon to show them.
-              </p>
-            </div>
-          ) : (
-            filteredMessages.map((msg: HubMessage, index: number) => {
-              const styles = getMessageStyles(msg);
-              const isSystem = msg.message_type === "system";
-              const isMe = msg.sender_user_id === currentUserId;
-              const isFirstUnread = msg.id === firstUnreadMessageId;
-
-              // Check if this message has actions
-              const msgActions = messageActions.filter(
-                (a: any) => a.message_id === msg.id
-              );
-              const hasTransactionAction = msgActions.some(
-                (a: any) => a.action_type === "transaction"
-              );
-
-              return (
-                <div key={msg.id}>
-                  {/* Unread messages separator */}
-                  {isFirstUnread && unreadCount > 0 && (
+            {/* Messages container */}
+            <div className="space-y-3 py-4">
+              {isLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
                     <div
-                      ref={unreadSeparatorRef}
-                      className={cn(
-                        "flex items-center gap-3 py-4 my-2",
-                        isUnreadHeaderExiting && "unread-header-exit"
-                      )}
-                    >
-                      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
-                      <span className="px-3 py-1 text-xs font-medium text-amber-400 bg-amber-500/10 rounded-full border border-amber-500/20 animate-pulse">
-                        {unreadCount} unread message{unreadCount > 1 ? "s" : ""}
-                      </span>
-                      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
-                    </div>
-                  )}
+                      key={i}
+                      className="h-12 bg-white/5 rounded-xl animate-pulse"
+                    />
+                  ))}
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <MessageIcon className="w-12 h-12 mb-3 text-blue-400/30" />
+                  <p className="text-sm text-white/50">
+                    No messages yet. Start the conversation!
+                  </p>
+                </div>
+              ) : filteredMessages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <EyeIcon className="w-12 h-12 mb-3 text-emerald-400/30" />
+                  <p className="text-sm text-white/50">
+                    All messages have completed actions.
+                  </p>
+                  <p className="text-xs text-white/40 mt-1">
+                    Toggle the eye icon to show them.
+                  </p>
+                </div>
+              ) : (
+                filteredMessages.map((msg: HubMessage, index: number) => {
+                  const styles = getMessageStyles(msg);
+                  const isSystem = msg.message_type === "system";
+                  const isMe = msg.sender_user_id === currentUserId;
+                  const isFirstUnread = msg.id === firstUnreadMessageId;
 
-                  <div className="flex items-start gap-2">
-                    {/* Checkbox column - fixed width on LEFT */}
-                    {isSelectionMode && (
-                      <div className="w-8 flex-shrink-0 flex justify-center pt-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Cannot select messages with actions or deleted messages
-                            if (msgActions.length > 0 || msg.deleted_at) return;
+                  // Check if this message has actions
+                  const msgActions = messageActions.filter(
+                    (a: any) => a.message_id === msg.id
+                  );
+                  const hasTransactionAction = msgActions.some(
+                    (a: any) => a.action_type === "transaction"
+                  );
 
-                            setSelectedMessages((prev) => {
-                              const newSet = new Set(prev);
-                              if (newSet.has(msg.id)) {
-                                newSet.delete(msg.id);
-                              } else {
-                                newSet.add(msg.id);
-                              }
-                              return newSet;
-                            });
-                          }}
-                          disabled={msgActions.length > 0 || !!msg.deleted_at}
-                          className={cn(
-                            "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-                            msgActions.length > 0 || msg.deleted_at
-                              ? "bg-white/5 border-white/10 cursor-not-allowed opacity-30"
-                              : selectedMessages.has(msg.id)
-                                ? "bg-blue-500 border-blue-500"
-                                : "bg-white/5 border-white/30 hover:border-white/50"
-                          )}
-                          title={
-                            msgActions.length > 0
-                              ? "Cannot delete: has actions"
-                              : msg.deleted_at
-                                ? "Cannot delete: already deleted"
-                                : ""
-                          }
-                        >
-                          {selectedMessages.has(msg.id) &&
-                            !msgActions.length &&
-                            !msg.deleted_at && (
-                              <CheckIcon className="w-3 h-3 text-white" />
-                            )}
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Message content - flexible width */}
-                    <div className={cn("flex-1 flex", styles.alignment)}>
-                      <div
-                        onMouseDown={(e) =>
-                          !isSelectionMode && handleMessageTouchStart(e, msg)
-                        }
-                        onMouseUp={handleMessageTouchEnd}
-                        onMouseLeave={handleMessageTouchCancel}
-                        onTouchStart={(e) =>
-                          !isSelectionMode && handleMessageTouchStart(e, msg)
-                        }
-                        onTouchEnd={handleMessageTouchEnd}
-                        onTouchCancel={handleMessageTouchCancel}
-                        onClick={() => {
-                          if (
-                            isSelectionMode &&
-                            msgActions.length === 0 &&
-                            !msg.deleted_at
-                          ) {
-                            setSelectedMessages((prev) => {
-                              const newSet = new Set(prev);
-                              if (newSet.has(msg.id)) {
-                                newSet.delete(msg.id);
-                              } else {
-                                newSet.add(msg.id);
-                              }
-                              return newSet;
-                            });
-                          }
-                        }}
-                        className={cn(
-                          "px-4 py-2.5 rounded-2xl transition-all relative",
-                          !isSelectionMode && "active:scale-95",
-                          isSelectionMode &&
-                            selectedMessages.has(msg.id) &&
-                            "ring-2 ring-blue-500",
-                          isSelectionMode && "cursor-pointer",
-                          isSystem ? "max-w-[90%]" : "max-w-[80%]",
-                          styles.bubble
-                        )}
-                      >
-                        {/* Action badges in top-right corner */}
-                        {msgActions.length > 0 && (
-                          <div className="absolute -top-1 -right-1 flex gap-1">
-                            {msgActions.map((action: any) => (
-                              <div
-                                key={action.id}
-                                className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center border-2 border-bg-custom shadow-lg"
-                                title={`Action: ${action.action_type}`}
-                              >
-                                <span className="text-white text-xs font-bold">
-                                  {action.action_type === "transaction" && "💰"}
-                                  {action.action_type === "reminder" && "⏰"}
-                                  {action.action_type === "forward" && "↗️"}
-                                  {action.action_type === "pin" && "📌"}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {isSystem && (
-                          <p className="text-xs text-violet-300 font-medium mb-1">
-                            🤖 System
-                          </p>
-                        )}
-
-                        {/* Show "This message was deleted/hidden" with undo button */}
-                        {msg.deleted_at || (msg as any).is_hidden_by_me ? (
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm italic text-white/40">
-                              🗑️{" "}
-                              {msg.deleted_at
-                                ? "This message was deleted"
-                                : "Message hidden"}
-                            </p>
-                            {/* Show undo button for own deletions or hidden messages */}
-                            {(msg.deleted_by === currentUserId ||
-                              (msg as any).is_hidden_by_me) && (
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  try {
-                                    const isHidden = (msg as any)
-                                      .is_hidden_by_me;
-                                    const response = await fetch(
-                                      "/api/hub/messages",
-                                      {
-                                        method: "PATCH",
-                                        headers: {
-                                          "Content-Type": "application/json",
-                                        },
-                                        body: JSON.stringify({
-                                          messageIds: [msg.id],
-                                          action: isHidden ? "unhide" : "undo",
-                                        }),
-                                      }
-                                    );
-
-                                    if (!response.ok) {
-                                      throw new Error(
-                                        isHidden
-                                          ? "Failed to unhide message"
-                                          : "Failed to undo deletion"
-                                      );
-                                    }
-
-                                    queryClient.invalidateQueries({
-                                      queryKey: ["hub", "messages", threadId],
-                                    });
-                                  } catch (error) {
-                                    alert(
-                                      error instanceof Error
-                                        ? error.message
-                                        : "Failed to undo"
-                                    );
-                                  }
-                                }}
-                                className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg transition-colors shadow-lg"
-                              >
-                                Undo
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-sm whitespace-pre-wrap">
-                            {msg.content}
-                          </p>
-                        )}
-
-                        {/* Action badges */}
-                        {msgActions.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {msgActions.map((action: any) => (
-                              <span
-                                key={action.id}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                title={`Action: ${action.action_type}`}
-                              >
-                                {action.action_type === "transaction" && "💰"}
-                                {action.action_type === "reminder" && "⏰"}
-                                {action.action_type === "forward" && "↗️"}
-                                {action.action_type === "pin" && "📌"}
-                                <span className="capitalize">
-                                  {action.action_type}
-                                </span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
+                  return (
+                    <div key={msg.id}>
+                      {/* Unread messages separator */}
+                      {isFirstUnread && unreadCount > 0 && (
                         <div
+                          ref={unreadSeparatorRef}
                           className={cn(
-                            "flex items-center gap-1 mt-1",
-                            isMe ? "justify-end" : ""
+                            "flex items-center gap-3 py-4 my-2",
+                            isUnreadHeaderExiting && "unread-header-exit"
                           )}
                         >
-                          <span className={cn("text-xs", styles.timeColor)}>
-                            {new Date(msg.created_at).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+                          <span className="px-3 py-1 text-xs font-medium text-amber-400 bg-amber-500/10 rounded-full border border-amber-500/20 animate-pulse">
+                            {unreadCount} unread message
+                            {unreadCount > 1 ? "s" : ""}
                           </span>
-                          {/* Message status icons for sent messages */}
-                          {isMe && !isSystem && (
-                            <MessageStatus status={msg.status || "sent"} />
-                          )}
+                          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+                        </div>
+                      )}
+
+                      <div className="flex items-start gap-2">
+                        {/* Checkbox column - fixed width on LEFT */}
+                        {isSelectionMode && (
+                          <div className="w-8 flex-shrink-0 flex justify-center pt-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Cannot select messages with actions or deleted messages
+                                if (msgActions.length > 0 || msg.deleted_at)
+                                  return;
+
+                                setSelectedMessages((prev) => {
+                                  const newSet = new Set(prev);
+                                  if (newSet.has(msg.id)) {
+                                    newSet.delete(msg.id);
+                                  } else {
+                                    newSet.add(msg.id);
+                                  }
+                                  return newSet;
+                                });
+                              }}
+                              disabled={
+                                msgActions.length > 0 || !!msg.deleted_at
+                              }
+                              className={cn(
+                                "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                                msgActions.length > 0 || msg.deleted_at
+                                  ? "bg-white/5 border-white/10 cursor-not-allowed opacity-30"
+                                  : selectedMessages.has(msg.id)
+                                    ? "bg-blue-500 border-blue-500"
+                                    : "bg-white/5 border-white/30 hover:border-white/50"
+                              )}
+                              title={
+                                msgActions.length > 0
+                                  ? "Cannot delete: has actions"
+                                  : msg.deleted_at
+                                    ? "Cannot delete: already deleted"
+                                    : ""
+                              }
+                            >
+                              {selectedMessages.has(msg.id) &&
+                                !msgActions.length &&
+                                !msg.deleted_at && (
+                                  <CheckIcon className="w-3 h-3 text-white" />
+                                )}
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Message content - flexible width */}
+                        <div className={cn("flex-1 flex", styles.alignment)}>
+                          <div
+                            onMouseDown={(e) =>
+                              !isSelectionMode &&
+                              handleMessageTouchStart(e, msg)
+                            }
+                            onMouseUp={handleMessageTouchEnd}
+                            onMouseLeave={handleMessageTouchCancel}
+                            onTouchStart={(e) =>
+                              !isSelectionMode &&
+                              handleMessageTouchStart(e, msg)
+                            }
+                            onTouchEnd={handleMessageTouchEnd}
+                            onTouchCancel={handleMessageTouchCancel}
+                            onClick={() => {
+                              if (
+                                isSelectionMode &&
+                                msgActions.length === 0 &&
+                                !msg.deleted_at
+                              ) {
+                                setSelectedMessages((prev) => {
+                                  const newSet = new Set(prev);
+                                  if (newSet.has(msg.id)) {
+                                    newSet.delete(msg.id);
+                                  } else {
+                                    newSet.add(msg.id);
+                                  }
+                                  return newSet;
+                                });
+                              }
+                            }}
+                            className={cn(
+                              "px-4 py-2.5 rounded-2xl transition-all relative",
+                              !isSelectionMode && "active:scale-95",
+                              isSelectionMode &&
+                                selectedMessages.has(msg.id) &&
+                                "ring-2 ring-blue-500",
+                              isSelectionMode && "cursor-pointer",
+                              isSystem ? "max-w-[90%]" : "max-w-[80%]",
+                              styles.bubble
+                            )}
+                          >
+                            {/* Action badges in top-right corner */}
+                            {msgActions.length > 0 && (
+                              <div className="absolute -top-1 -right-1 flex gap-1">
+                                {msgActions.map((action: any) => (
+                                  <div
+                                    key={action.id}
+                                    className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center border-2 border-bg-custom shadow-lg"
+                                    title={`Action: ${action.action_type}`}
+                                  >
+                                    <span className="text-white text-xs font-bold">
+                                      {action.action_type === "transaction" &&
+                                        "💰"}
+                                      {action.action_type === "reminder" &&
+                                        "⏰"}
+                                      {action.action_type === "forward" && "↗️"}
+                                      {action.action_type === "pin" && "📌"}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {isSystem && (
+                              <p className="text-xs text-violet-300 font-medium mb-1">
+                                🤖 System
+                              </p>
+                            )}
+
+                            {/* Show "This message was deleted/hidden" with undo button */}
+                            {msg.deleted_at || (msg as any).is_hidden_by_me ? (
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm italic text-white/40">
+                                  🗑️{" "}
+                                  {msg.deleted_at
+                                    ? "This message was deleted"
+                                    : "Message hidden"}
+                                </p>
+                                {/* Show undo button for own deletions or hidden messages */}
+                                {(msg.deleted_by === currentUserId ||
+                                  (msg as any).is_hidden_by_me) && (
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        const isHidden = (msg as any)
+                                          .is_hidden_by_me;
+                                        const response = await fetch(
+                                          "/api/hub/messages",
+                                          {
+                                            method: "PATCH",
+                                            headers: {
+                                              "Content-Type":
+                                                "application/json",
+                                            },
+                                            body: JSON.stringify({
+                                              messageIds: [msg.id],
+                                              action: isHidden
+                                                ? "unhide"
+                                                : "undo",
+                                            }),
+                                          }
+                                        );
+
+                                        if (!response.ok) {
+                                          throw new Error(
+                                            isHidden
+                                              ? "Failed to unhide message"
+                                              : "Failed to undo deletion"
+                                          );
+                                        }
+
+                                        queryClient.invalidateQueries({
+                                          queryKey: [
+                                            "hub",
+                                            "messages",
+                                            threadId,
+                                          ],
+                                        });
+                                      } catch (error) {
+                                        alert(
+                                          error instanceof Error
+                                            ? error.message
+                                            : "Failed to undo"
+                                        );
+                                      }
+                                    }}
+                                    className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg transition-colors shadow-lg"
+                                  >
+                                    Undo
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm whitespace-pre-wrap">
+                                {msg.content}
+                              </p>
+                            )}
+
+                            {/* Action badges */}
+                            {msgActions.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {msgActions.map((action: any) => (
+                                  <span
+                                    key={action.id}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                    title={`Action: ${action.action_type}`}
+                                  >
+                                    {action.action_type === "transaction" &&
+                                      "💰"}
+                                    {action.action_type === "reminder" && "⏰"}
+                                    {action.action_type === "forward" && "↗️"}
+                                    {action.action_type === "pin" && "📌"}
+                                    <span className="capitalize">
+                                      {action.action_type}
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <div
+                              className={cn(
+                                "flex items-center gap-1 mt-1",
+                                isMe ? "justify-end" : ""
+                              )}
+                            >
+                              <span className={cn("text-xs", styles.timeColor)}>
+                                {new Date(msg.created_at).toLocaleTimeString(
+                                  [],
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )}
+                              </span>
+                              {/* Message status icons for sent messages */}
+                              {isMe && !isSystem && (
+                                <MessageStatus status={msg.status || "sent"} />
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
+                  );
+                })
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
 
-      {/* Input - Fixed at bottom, above navigation bar */}
-      <div className="fixed bottom-[72px] left-0 right-0 px-4 py-2 border-t border-white/5 bg-bg-card-custom/95 backdrop-blur-sm z-20">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder="Type a message..."
-            className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
-          />
-          <button
-            onClick={handleSend}
-            disabled={!newMessage.trim() || sendMessage.isPending}
-            className={cn(
-              "px-4 py-3 rounded-xl text-white disabled:opacity-50 disabled:cursor-not-allowed",
-              myTheme === "pink"
-                ? "bg-gradient-to-r from-pink-500 to-rose-500"
-                : "bg-gradient-to-r from-blue-500 to-cyan-500"
-            )}
-          >
-            <SendIcon className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
+          {/* Input - Fixed at bottom, above navigation bar (only for non-shopping threads) */}
+          {!isShoppingThread && (
+            <div className="fixed bottom-[72px] left-0 right-0 px-4 py-2 border-t border-white/5 bg-bg-card-custom/95 backdrop-blur-sm z-20">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && !e.shiftKey && handleSend()
+                  }
+                  placeholder="Type a message..."
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!newMessage.trim() || sendMessage.isPending}
+                  className={cn(
+                    "px-4 py-3 rounded-xl text-white disabled:opacity-50 disabled:cursor-not-allowed",
+                    myTheme === "pink"
+                      ? "bg-gradient-to-r from-pink-500 to-rose-500"
+                      : "bg-gradient-to-r from-blue-500 to-cyan-500"
+                  )}
+                >
+                  <SendIcon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Action Menu - Shows on long press */}
       {actionMenuMessage && actionMenuPosition && (
@@ -2248,6 +2325,12 @@ const PURPOSE_CONFIG = {
   health: {
     label: "Health",
     icon: "🏥",
+    external_url: null,
+    external_app_name: null,
+  },
+  notes: {
+    label: "Notes",
+    icon: "📝",
     external_url: null,
     external_app_name: null,
   },

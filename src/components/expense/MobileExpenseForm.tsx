@@ -692,6 +692,11 @@ export default function MobileExpenseForm() {
   // NO SKELETON - Form renders instantly with cached data
   // Only the balance component shows loading state while APIs run in background
 
+  // Prevent hydration mismatch by showing consistent UI during initial render
+  const showBackButton = isInitialized && step !== firstValidStep;
+  // Use 0 during initial render to match server, then actual progress after initialization
+  const progressWidth = isInitialized ? progress() : 0;
+
   return (
     <div className="fixed inset-0 top-14 bg-bg-dark flex flex-col">
       <>
@@ -700,13 +705,12 @@ export default function MobileExpenseForm() {
           className={`fixed top-0 left-0 right-0 z-[100] bg-gradient-to-b from-bg-card-custom to-bg-medium border-b ${themeClasses.border} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top`}
         >
           <div className="flex items-center justify-between mb-2 pt-16">
-            {step !== firstValidStep ? (
+            {showBackButton ? (
               <button
                 onClick={() => {
                   if (navigator.vibrate) navigator.vibrate(5);
                   goBack();
                 }}
-                suppressHydrationWarning
                 className={`p-1.5 -ml-2 rounded-lg ${themeClasses.bgSurface} hover:bg-opacity-30 active:scale-95 transition-all duration-200 ${themeClasses.border} hover:shadow-md`}
               >
                 <ChevronLeftIcon
@@ -748,7 +752,7 @@ export default function MobileExpenseForm() {
           <div className="h-0.5 bg-bg-card-custom rounded-full overflow-hidden relative">
             <div
               className={`h-full bg-gradient-to-r ${themeClasses.activeItemGradient} transition-all duration-500 ease-out neo-glow-sm glow-pulse-primary`}
-              style={{ width: `${progress()}%` }}
+              style={{ width: `${progressWidth}%` }}
             />
           </div>
           {selectedAccountId && step === "amount" && (
@@ -891,6 +895,7 @@ export default function MobileExpenseForm() {
               <div className="flex items-center justify-end px-1 py-2">
                 <button
                   onClick={() => setIsPrivate(!isPrivate)}
+                  suppressHydrationWarning
                   className={cn(
                     "group relative p-3 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2.5 overflow-hidden",
                     isPrivate

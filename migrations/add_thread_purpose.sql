@@ -9,7 +9,7 @@
 -- Purpose values: 'budget', 'reminder', 'general', etc.
 ALTER TABLE public.hub_chat_threads 
 ADD COLUMN IF NOT EXISTS purpose TEXT DEFAULT 'general' 
-CHECK (purpose IN ('general', 'budget', 'reminder', 'shopping', 'travel', 'health', 'other'));
+CHECK (purpose IN ('general', 'budget', 'reminder', 'shopping', 'travel', 'health', 'notes', 'other'));
 
 -- 2. Add external_url column for PWA deep links
 -- Stores the URL to navigate to when opening the external app

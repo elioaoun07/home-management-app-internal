@@ -47,7 +47,7 @@ export default function DraftsDrawer({
   onOpenChange,
 }: DraftsDrawerProps) {
   const themeClasses = useThemeClasses();
-  const { data: drafts = [], isLoading } = useDrafts();
+  const { data: draftsData = [], isLoading } = useDrafts();
   const deleteDraftMutation = useDeleteDraft();
   const confirmDraftMutation = useConfirmDraft();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -61,6 +61,9 @@ export default function DraftsDrawer({
   });
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories(editForm.account_id);
+
+  // Ensure drafts is always an array
+  const drafts = Array.isArray(draftsData) ? draftsData : [];
 
   // Get parent categories (no parent_id)
   const parentCategories = categories.filter((c: any) => !c.parent_id);

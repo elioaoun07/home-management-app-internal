@@ -213,7 +213,7 @@ CREATE TABLE public.hub_chat_threads (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   last_message_at timestamp with time zone DEFAULT now(),
-  purpose text DEFAULT 'general'::text CHECK (purpose = ANY (ARRAY['general'::text, 'budget'::text, 'reminder'::text, 'shopping'::text, 'travel'::text, 'health'::text, 'other'::text])),
+  purpose text DEFAULT 'general'::text CHECK (purpose = ANY (ARRAY['general'::text, 'budget'::text, 'reminder'::text, 'shopping'::text, 'travel'::text, 'health'::text, 'notes'::text, 'other'::text])),
   external_url text,
   external_app_name text,
   CONSTRAINT hub_chat_threads_pkey PRIMARY KEY (id),

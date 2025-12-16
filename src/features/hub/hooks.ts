@@ -13,6 +13,7 @@ export type ThreadPurpose =
   | "shopping"
   | "travel"
   | "health"
+  | "notes"
   | "other";
 
 // Types
