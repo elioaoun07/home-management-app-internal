@@ -104,7 +104,7 @@ const StableNoteInput = React.memo(function StableNoteInput({
       placeholder="Write a note..."
       className="flex-1 bg-transparent border-none text-white text-lg sm:text-xl placeholder:text-white/30 focus:outline-none font-handwriting leading-relaxed ml-2 py-2"
       style={{
-        fontFamily: "'Caveat', 'Patrick Hand', cursive",
+        fontFamily: "'Kalam', cursive",
       }}
       autoComplete="off"
       enterKeyHint="send"
@@ -208,23 +208,13 @@ export function NotesListView({
   } | null>(null);
 
   const triggerFlip = useCallback((direction: "prev" | "next") => {
-    try {
-      const api = flipBookRef.current?.pageFlip?.();
-      if (!api) return;
+    const api = flipBookRef.current?.pageFlip?.();
+    if (!api) return;
 
-      if (direction === "prev") api.flipPrev?.();
-      else api.flipNext?.();
-
-      // Keep local state in sync even if onFlip doesn't fire
-      setTimeout(() => {
-        try {
-          setCurrentPageIndex(api.getCurrentPageIndex?.() ?? 0);
-        } catch {
-          // ignore
-        }
-      }, 0);
-    } catch {
-      // ignore
+    if (direction === "prev") {
+      api.flipPrev?.();
+    } else {
+      api.flipNext?.();
     }
   }, []);
 
@@ -358,6 +348,7 @@ export function NotesListView({
   };
 
   const handleFlip = useCallback((e: { data: number }) => {
+    console.log("[handleFlip] Page flipped to:", e.data);
     setCurrentPageIndex(e.data);
   }, []);
 
@@ -609,9 +600,13 @@ export function NotesListView({
   const handleDelete = useCallback(
     (messageId: string, e?: React.MouseEvent) => {
       console.log("[NotesListView] Delete clicked for:", messageId);
+      console.log("[NotesListView] Event:", e);
+      console.log("[NotesListView] onDeleteItem function:", onDeleteItem);
       e?.stopPropagation();
       e?.preventDefault();
+      console.log("[NotesListView] Calling onDeleteItem now...");
       onDeleteItem(messageId);
+      console.log("[NotesListView] onDeleteItem called");
     },
     [onDeleteItem]
   );
@@ -716,7 +711,9 @@ export function NotesListView({
   // Toggle check state via API with instant optimistic UI
   const toggleCheck = useCallback(
     async (itemId: string) => {
+      console.log("[NotesListView] toggleCheck clicked for:", itemId);
       const queryKey = ["hub", "messages", threadId];
+      console.log("[NotesListView] queryKey:", queryKey);
 
       // Track pending toggle count for this item
       setPendingToggles((prev) => {
@@ -733,8 +730,19 @@ export function NotesListView({
       const shouldCheck = !currentMessage?.checked_at;
 
       // Optimistically update UI immediately - no delay
+      console.log(
+        "[NotesListView] Optimistically updating, shouldCheck:",
+        shouldCheck
+      );
       queryClient.setQueryData<{ messages: HubMessage[] }>(queryKey, (old) => {
-        if (!old) return old;
+        if (!old) {
+          console.log("[NotesListView] No cache data found");
+          return old;
+        }
+        console.log(
+          "[NotesListView] Updating cache, message count:",
+          old.messages.length
+        );
         return {
           ...old,
           messages: old.messages.map((msg) =>
@@ -748,9 +756,11 @@ export function NotesListView({
           ),
         };
       });
+      console.log("[NotesListView] Cache updated");
 
       try {
         // Fire and forget - don't await or refetch
+        console.log("[NotesListView] Making API call to toggle check");
         fetch("/api/hub/messages", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -955,7 +965,7 @@ export function NotesListView({
                     <p
                       className="text-center text-xs text-white/30 mt-6 font-handwriting"
                       style={{
-                        fontFamily: "'Caveat', 'Patrick Hand', cursive",
+                        fontFamily: "'Kalam', cursive",
                       }}
                     >
                       Loading your notes...
@@ -972,7 +982,7 @@ export function NotesListView({
                         <p
                           className="text-xl text-white/50 font-handwriting"
                           style={{
-                            fontFamily: "'Caveat', 'Patrick Hand', cursive",
+                            fontFamily: "'Kalam', cursive",
                           }}
                         >
                           Your notebook is empty
@@ -980,7 +990,7 @@ export function NotesListView({
                         <p
                           className="text-lg text-white/30 mt-1 font-handwriting"
                           style={{
-                            fontFamily: "'Caveat', 'Patrick Hand', cursive",
+                            fontFamily: "'Kalam', cursive",
                           }}
                         >
                           Start writing below
@@ -1037,8 +1047,7 @@ export function NotesListView({
                                       onBlur={saveEdit}
                                       className="flex-1 bg-transparent border-none text-white focus:outline-none text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1"
                                       style={{
-                                        fontFamily:
-                                          "'Caveat', 'Patrick Hand', cursive",
+                                        fontFamily: "'Kalam', cursive",
                                       }}
                                     />
                                   ) : (
@@ -1046,8 +1055,7 @@ export function NotesListView({
                                       onClick={() => startEditing(item)}
                                       className="flex-1 text-white text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words"
                                       style={{
-                                        fontFamily:
-                                          "'Caveat', 'Patrick Hand', cursive",
+                                        fontFamily: "'Kalam', cursive",
                                       }}
                                     >
                                       {highlightText(item.content)}
@@ -1073,7 +1081,14 @@ export function NotesListView({
                           <NotebookLine key={item.id}>
                             <div className="flex items-center w-full group px-3">
                               <button
-                                onClick={() => toggleCheck(item.id)}
+                                onClick={(e) => {
+                                  console.log(
+                                    "[Checkbox] Clicked for item:",
+                                    item.id
+                                  );
+                                  e.stopPropagation();
+                                  toggleCheck(item.id);
+                                }}
                                 className={cn(
                                   "w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0",
                                   themeClasses.border,
@@ -1107,8 +1122,7 @@ export function NotesListView({
                                   onBlur={saveEdit}
                                   className="flex-1 bg-transparent border-none text-white focus:outline-none text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1"
                                   style={{
-                                    fontFamily:
-                                      "'Caveat', 'Patrick Hand', cursive",
+                                    fontFamily: "'Kalam', cursive",
                                   }}
                                 />
                               ) : (
@@ -1116,8 +1130,7 @@ export function NotesListView({
                                   onClick={() => startEditing(item)}
                                   className="flex-1 text-white text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words"
                                   style={{
-                                    fontFamily:
-                                      "'Caveat', 'Patrick Hand', cursive",
+                                    fontFamily: "'Kalam', cursive",
                                   }}
                                 >
                                   {highlightText(item.content)}
@@ -1142,8 +1155,7 @@ export function NotesListView({
                               <span
                                 className="text-base text-white/40 font-handwriting"
                                 style={{
-                                  fontFamily:
-                                    "'Caveat', 'Patrick Hand', cursive",
+                                  fontFamily: "'Kalam', cursive",
                                 }}
                               >
                                 Completed ({checkedItemsList.length})
@@ -1186,8 +1198,7 @@ export function NotesListView({
                                       onBlur={saveEdit}
                                       className="flex-1 bg-transparent border-none text-white/60 focus:outline-none text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1"
                                       style={{
-                                        fontFamily:
-                                          "'Caveat', 'Patrick Hand', cursive",
+                                        fontFamily: "'Kalam', cursive",
                                       }}
                                     />
                                   ) : (
@@ -1195,8 +1206,7 @@ export function NotesListView({
                                       onClick={() => startEditing(item)}
                                       className="flex-1 text-white/60 text-lg sm:text-xl font-handwriting leading-relaxed line-through decoration-white/40 decoration-2 ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words"
                                       style={{
-                                        fontFamily:
-                                          "'Caveat', 'Patrick Hand', cursive",
+                                        fontFamily: "'Kalam', cursive",
                                       }}
                                     >
                                       {highlightText(item.content)}
@@ -1280,12 +1290,12 @@ export function NotesListView({
           className="absolute inset-0 book-index-sidebar shadow-2xl border-r"
           style={{
             borderColor: themeClasses.text.includes("pink")
-              ? "rgba(236, 72, 153, 0.15)"
-              : "rgba(6, 182, 212, 0.15)",
+              ? "rgba(236, 72, 153, 0.4)"
+              : "rgba(6, 182, 212, 0.4)",
             boxShadow: `
-              inset -20px 0 30px rgba(0, 0, 0, 0.4),
-              8px 0 30px rgba(0, 0, 0, 0.6),
-              0 0 60px ${themeClasses.text.includes("pink") ? "rgba(236, 72, 153, 0.12)" : "rgba(6, 182, 212, 0.12)"}
+              inset -20px 0 30px rgba(0, 0, 0, 0.5),
+              8px 0 30px rgba(0, 0, 0, 0.8),
+              0 0 60px ${themeClasses.text.includes("pink") ? "rgba(236, 72, 153, 0.2)" : "rgba(6, 182, 212, 0.2)"}
             `,
           }}
         />
@@ -1299,7 +1309,7 @@ export function NotesListView({
               <p
                 className="text-xs mt-1 font-handwriting tracking-wide"
                 style={{
-                  fontFamily: "'Caveat', 'Patrick Hand', cursive",
+                  fontFamily: "'Kalam', cursive",
                   color: themeClasses.text.includes("pink")
                     ? "rgba(251, 191, 36, 0.6)"
                     : "rgba(6, 182, 212, 0.6)",
@@ -1332,7 +1342,7 @@ export function NotesListView({
             <span className="text-base mr-2">📒</span>
             <span
               className="font-handwriting text-lg"
-              style={{ fontFamily: "'Caveat', 'Patrick Hand', cursive" }}
+              style={{ fontFamily: "'Kalam', cursive" }}
             >
               All Notes
             </span>
@@ -1394,7 +1404,7 @@ export function NotesListView({
                 <p
                   className="text-base font-handwriting"
                   style={{
-                    fontFamily: "'Caveat', 'Patrick Hand', cursive",
+                    fontFamily: "'Kalam', cursive",
                     color: themeClasses.text.includes("pink")
                       ? "rgba(251, 191, 36, 0.6)"
                       : "rgba(6, 182, 212, 0.6)",
@@ -1405,7 +1415,7 @@ export function NotesListView({
                 <p
                   className="text-sm font-handwriting mt-1"
                   style={{
-                    fontFamily: "'Caveat', 'Patrick Hand', cursive",
+                    fontFamily: "'Kalam', cursive",
                     color: themeClasses.text.includes("pink")
                       ? "rgba(236, 72, 153, 0.4)"
                       : "rgba(6, 182, 212, 0.4)",
@@ -1427,7 +1437,7 @@ export function NotesListView({
                   <span className="text-base mr-2">{topic.icon}</span>
                   <span
                     className="font-handwriting text-lg truncate"
-                    style={{ fontFamily: "'Caveat', 'Patrick Hand', cursive" }}
+                    style={{ fontFamily: "'Kalam', cursive" }}
                   >
                     {topic.title}
                   </span>
@@ -1459,7 +1469,7 @@ export function NotesListView({
             <p
               className="text-xs mb-2 font-handwriting"
               style={{
-                fontFamily: "'Caveat', 'Patrick Hand', cursive",
+                fontFamily: "'Kalam', cursive",
                 color: themeClasses.text.includes("pink")
                   ? "rgba(251, 191, 36, 0.6)"
                   : "rgba(6, 182, 212, 0.6)",
@@ -1476,7 +1486,7 @@ export function NotesListView({
                 placeholder="Chapter title..."
                 className="flex-1 rounded-lg px-3 py-2.5 text-base font-handwriting focus:outline-none transition-colors"
                 style={{
-                  fontFamily: "'Caveat', 'Patrick Hand', cursive",
+                  fontFamily: "'Kalam', cursive",
                   background: "rgba(0, 0, 0, 0.3)",
                   border: themeClasses.text.includes("pink")
                     ? "1px solid rgba(236, 72, 153, 0.2)"
@@ -1491,7 +1501,7 @@ export function NotesListView({
                 disabled={isCreatingTopic || !newTopicTitle.trim()}
                 className="px-3 py-2 rounded-lg transition-all font-handwriting text-sm"
                 style={{
-                  fontFamily: "'Caveat', 'Patrick Hand', cursive",
+                  fontFamily: "'Kalam', cursive",
                   background: newTopicTitle.trim()
                     ? themeClasses.text.includes("pink")
                       ? "rgba(236, 72, 153, 0.2)"
@@ -1550,7 +1560,7 @@ export function NotesListView({
             </span>
             <span
               className="font-handwriting text-lg text-white truncate"
-              style={{ fontFamily: "'Caveat', 'Patrick Hand', cursive" }}
+              style={{ fontFamily: "'Kalam', cursive" }}
             >
               {activeTopic
                 ? topics.find((t) => t.id === activeTopic)?.title ||
@@ -1563,14 +1573,26 @@ export function NotesListView({
           {topics.length > 0 && (
             <div className="flex items-center gap-1">
               <button
-                onClick={() => triggerFlip("prev")}
+                onClick={() => {
+                  console.log(
+                    "[ChevronLeft] Clicked! currentPageIndex:",
+                    currentPageIndex
+                  );
+                  triggerFlip("prev");
+                }}
                 disabled={currentPageIndex <= 0}
                 className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-all disabled:opacity-30"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button
-                onClick={() => triggerFlip("next")}
+                onClick={() => {
+                  console.log(
+                    "[ChevronRight] Clicked! currentPageIndex:",
+                    currentPageIndex
+                  );
+                  triggerFlip("next");
+                }}
                 disabled={currentPageIndex >= topics.length}
                 className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-all disabled:opacity-30"
               >
@@ -1599,10 +1621,13 @@ export function NotesListView({
             showCover={false}
             usePortrait={true}
             drawShadow={true}
+            // drawShadow={false}
             // Max shadow helps the page feel "solid" rather than see-through.
             maxShadowOpacity={1}
+            // maxShadowOpacity={0}
             // Slightly slower feels heavier/more paper-like.
             flippingTime={650}
+            // flippingTime={1}
             // Shorter swipe distance makes the gesture feel decisive.
             swipeDistance={10}
             mobileScrollSupport={true}
@@ -1611,7 +1636,7 @@ export function NotesListView({
             // We re-enable swipe via edge gutters that trigger flipNext/flipPrev.
             useMouseEvents={false}
             showPageCorners={true}
-            disableFlipByClick={true}
+            disableFlipByClick={false}
             onFlip={handleFlip}
             onChangeState={handleChangeState}
           >
@@ -1629,6 +1654,7 @@ export function NotesListView({
           </HTMLFlipBook>
 
           {/* Swipe gutters: swipe on edges to flip pages (animation preserved) */}
+          {/* DISABLED: These gutters block clicks on checkboxes and delete buttons
           <div className="absolute inset-0 pointer-events-none">
             <div
               className="absolute inset-y-0 left-0 w-10 pointer-events-auto"
@@ -1647,6 +1673,7 @@ export function NotesListView({
               onPointerCancel={onGutterPointerUpOrCancel}
             />
           </div>
+          */}
         </div>
       </div>
     </div>
