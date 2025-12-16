@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get("thread_id");
   const markAsRead = searchParams.get("mark_read") !== "false"; // default true
+  const includeArchived = searchParams.get("include_archived") === "true"; // default false
 
   if (!threadId) {
     return NextResponse.json({ error: "thread_id required" }, { status: 400 });
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
   // Verify user has access to this thread's household
   const { data: thread } = await supabase
     .from("hub_chat_threads")
-    .select("id, household_id")
+    .select("id, household_id, purpose")
     .eq("id", threadId)
     .maybeSingle();
 
@@ -54,12 +55,21 @@ export async function GET(request: NextRequest) {
       : household.owner_user_id;
 
   // Fetch messages for this thread
-  const { data: messages, error } = await supabase
+  // By default, exclude archived messages for performance
+  let query = supabase
     .from("hub_messages")
     .select("*")
     .eq("thread_id", threadId)
+    .is("deleted_at", null) // Exclude soft-deleted messages
     .order("created_at", { ascending: true })
     .limit(200);
+
+  // Only include archived if explicitly requested
+  if (!includeArchived) {
+    query = query.is("archived_at", null);
+  }
+
+  const { data: messages, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -226,7 +236,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { content, thread_id } = body;
+  const { content, thread_id, topic_id } = body;
 
   if (!content?.trim()) {
     return NextResponse.json(
@@ -268,16 +278,23 @@ export async function POST(request: NextRequest) {
       ? household.partner_user_id
       : household.owner_user_id;
 
-  // Insert message
+  // Insert message (with optional topic_id)
+  const insertData: Record<string, unknown> = {
+    household_id: thread.household_id,
+    thread_id,
+    sender_user_id: user.id,
+    message_type: "text",
+    content: content.trim(),
+  };
+
+  // Add topic_id if provided
+  if (topic_id) {
+    insertData.topic_id = topic_id;
+  }
+
   const { data: message, error } = await supabase
     .from("hub_messages")
-    .insert({
-      household_id: thread.household_id,
-      thread_id,
-      sender_user_id: user.id,
-      message_type: "text",
-      content: content.trim(),
-    })
+    .insert(insertData)
     .select()
     .single();
 
@@ -342,88 +359,39 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // First verify user has access to all messages
-    const { data: messages, error: verifyError } = await supabase
-      .from("hub_messages")
-      .select(
-        `
-        id,
-        thread_id,
-        sender_user_id,
-        hub_chat_threads!inner (
-          id,
-          household_id
-        )
-      `
-      )
-      .in("id", messageIds);
-
-    if (verifyError) {
-      return NextResponse.json(
-        { error: "Failed to verify messages" },
-        { status: 500 }
-      );
-    }
-
-    if (!messages || messages.length === 0) {
-      return NextResponse.json({ error: "No messages found" }, { status: 404 });
-    }
-
-    // Check that user belongs to the household
-    const householdIds = [
-      ...new Set(messages.map((m: any) => m.hub_chat_threads.household_id)),
-    ];
-
-    for (const householdId of householdIds) {
-      const { data: link } = await supabase
-        .from("household_links")
-        .select("id, owner_user_id, partner_user_id")
-        .eq("id", householdId)
-        .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
-        .eq("active", true)
-        .maybeSingle();
-
-      if (!link) {
-        return NextResponse.json(
-          { error: "Unauthorized to delete messages in this household" },
-          { status: 403 }
-        );
-      }
-    }
-
+    // Optimized: Single query to verify ownership and delete
     // Only allow users to delete their own messages
-    const unauthorizedMessages = messages.filter(
-      (m: any) => m.sender_user_id !== user.id
-    );
-
-    if (unauthorizedMessages.length > 0) {
-      return NextResponse.json(
-        { error: "You can only delete your own messages" },
-        { status: 403 }
-      );
-    }
-
-    // Soft delete: mark messages as deleted instead of removing them
-    const { error: deleteError } = await supabase
+    const { data: deletedMessages, error: deleteError } = await supabase
       .from("hub_messages")
       .update({
         deleted_at: new Date().toISOString(),
         deleted_by: user.id,
       })
-      .in("id", messageIds);
+      .in("id", messageIds)
+      .eq("sender_user_id", user.id) // Only delete own messages
+      .select("id, thread_id");
 
     if (deleteError) {
+      console.error("Delete error:", deleteError);
       return NextResponse.json(
         { error: "Failed to delete messages" },
         { status: 500 }
       );
     }
 
+    if (!deletedMessages || deletedMessages.length === 0) {
+      return NextResponse.json(
+        { error: "No messages found or unauthorized" },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
-      deletedCount: messageIds.length,
+      deletedCount: deletedMessages.length,
     });
   } catch (error) {
+    console.error("DELETE /api/hub/messages error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -432,12 +400,22 @@ export async function DELETE(request: NextRequest) {
 }
 
 /**
- * PATCH - Handle message actions (hide, unhide, or undo)
- * Body: { messageIds: string[], action: 'hide' | 'unhide' | 'undo' }
+ * PATCH - Handle message actions
  *
- * - 'hide': Adds the current user's ID to the hidden_for array (both users can hide any message)
- * - 'unhide': Removes the current user's ID from the hidden_for array (undo "delete for me")
- * - 'undo': Removes deleted_at/deleted_by for message owners to undo deletion
+ * For hide/unhide/undo actions:
+ *   Body: { messageIds: string[], action: 'hide' | 'unhide' | 'undo' }
+ *
+ * For shopping/archiving actions:
+ *   Body: { action: 'toggle_check' | 'clear_checked' | 'archive' | 'unarchive', message_id?: string, thread_id?: string }
+ *
+ * Actions:
+ * - 'hide': Adds the current user's ID to the hidden_for array
+ * - 'unhide': Removes the current user's ID from the hidden_for array
+ * - 'undo': Removes deleted_at/deleted_by for message owners
+ * - 'toggle_check': Toggle check state for shopping items
+ * - 'clear_checked': Archive all checked items in a thread
+ * - 'archive': Archive specific messages
+ * - 'unarchive': Restore archived messages
  */
 export async function PATCH(request: NextRequest) {
   try {
@@ -453,20 +431,337 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { messageIds, action } = body;
+    const { action, messageIds, message_id, message_ids, thread_id, reason } =
+      body;
 
-    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+    if (!action) {
       return NextResponse.json(
-        { error: "messageIds array is required" },
+        { error: "action is required" },
         { status: 400 }
       );
     }
 
-    if (action !== "hide" && action !== "unhide" && action !== "undo") {
+    // Handle shopping/archiving actions first (they use different parameters)
+    if (
+      [
+        "toggle_check",
+        "toggle_pin",
+        "clear_checked",
+        "archive",
+        "unarchive",
+        "set_item_url",
+        "update_content",
+      ].includes(action)
+    ) {
+      switch (action) {
+        case "set_item_url": {
+          if (!message_id) {
+            return NextResponse.json(
+              { error: "message_id is required" },
+              { status: 400 }
+            );
+          }
+
+          const { item_url } = body;
+
+          // Validate URL if provided (allow null to clear)
+          if (item_url !== null && item_url !== undefined && item_url !== "") {
+            try {
+              new URL(item_url);
+            } catch {
+              return NextResponse.json(
+                { error: "Invalid URL format" },
+                { status: 400 }
+              );
+            }
+          }
+
+          const { error: updateError } = await supabase
+            .from("hub_messages")
+            .update({
+              item_url: item_url || null,
+            })
+            .eq("id", message_id);
+
+          if (updateError) {
+            return NextResponse.json(
+              { error: "Failed to set item URL" },
+              { status: 500 }
+            );
+          }
+
+          return NextResponse.json({
+            success: true,
+            message_id,
+            item_url: item_url || null,
+          });
+        }
+
+        case "toggle_pin": {
+          if (!message_id) {
+            return NextResponse.json(
+              { error: "message_id is required" },
+              { status: 400 }
+            );
+          }
+
+          const { data: message, error: fetchError } = await supabase
+            .from("hub_messages")
+            .select("pinned_at, thread_id")
+            .eq("id", message_id)
+            .single();
+
+          if (fetchError || !message) {
+            return NextResponse.json(
+              { error: "Message not found" },
+              { status: 404 }
+            );
+          }
+
+          const isCurrentlyPinned = !!message.pinned_at;
+          const { error: updateError } = await supabase
+            .from("hub_messages")
+            .update({
+              pinned_at: isCurrentlyPinned ? null : new Date().toISOString(),
+            })
+            .eq("id", message_id);
+
+          if (updateError) {
+            return NextResponse.json(
+              { error: "Failed to toggle pin" },
+              { status: 500 }
+            );
+          }
+
+          return NextResponse.json({
+            success: true,
+            pinned: !isCurrentlyPinned,
+            message_id,
+          });
+        }
+
+        case "toggle_check": {
+          if (!message_id) {
+            return NextResponse.json(
+              { error: "message_id is required" },
+              { status: 400 }
+            );
+          }
+
+          const { data: message, error: fetchError } = await supabase
+            .from("hub_messages")
+            .select("checked_at, thread_id")
+            .eq("id", message_id)
+            .single();
+
+          if (fetchError || !message) {
+            return NextResponse.json(
+              { error: "Message not found" },
+              { status: 404 }
+            );
+          }
+
+          const isCurrentlyChecked = !!message.checked_at;
+          const { error: updateError } = await supabase
+            .from("hub_messages")
+            .update({
+              checked_at: isCurrentlyChecked ? null : new Date().toISOString(),
+              checked_by: isCurrentlyChecked ? null : user.id,
+            })
+            .eq("id", message_id);
+
+          if (updateError) {
+            return NextResponse.json(
+              { error: "Failed to toggle check" },
+              { status: 500 }
+            );
+          }
+
+          return NextResponse.json({
+            success: true,
+            checked: !isCurrentlyChecked,
+            message_id,
+          });
+        }
+
+        case "update_content": {
+          if (!message_id) {
+            return NextResponse.json(
+              { error: "message_id is required" },
+              { status: 400 }
+            );
+          }
+
+          const { content } = body;
+          if (typeof content !== "string") {
+            console.error("Invalid content type:", typeof content, content);
+            return NextResponse.json(
+              { error: "content must be a string" },
+              { status: 400 }
+            );
+          }
+
+          // Verify the message exists and user can edit it
+          const { data: message, error: fetchError } = await supabase
+            .from("hub_messages")
+            .select("sender_user_id, thread_id")
+            .eq("id", message_id)
+            .single();
+
+          if (fetchError || !message) {
+            return NextResponse.json(
+              { error: "Message not found" },
+              { status: 404 }
+            );
+          }
+
+          // Only allow editing own messages
+          if (message.sender_user_id !== user.id) {
+            return NextResponse.json(
+              { error: "Can only edit your own messages" },
+              { status: 403 }
+            );
+          }
+
+          console.log(
+            "Updating message:",
+            message_id,
+            "with content:",
+            content
+          );
+
+          // Update content only (don't include edited_at as column may not exist)
+          const { error: updateError } = await supabase
+            .from("hub_messages")
+            .update({ content: content.trim() })
+            .eq("id", message_id);
+
+          if (updateError) {
+            console.error("Update message error:", {
+              error: updateError,
+              message_id,
+              content_length: content.length,
+            });
+            return NextResponse.json(
+              {
+                error: "Failed to update message",
+                details: updateError.message || String(updateError),
+              },
+              { status: 500 }
+            );
+          }
+
+          console.log("Message updated successfully:", message_id);
+          return NextResponse.json({
+            success: true,
+            message_id,
+          });
+        }
+
+        case "clear_checked": {
+          if (!thread_id) {
+            return NextResponse.json(
+              { error: "thread_id is required" },
+              { status: 400 }
+            );
+          }
+
+          const { data: updated, error: updateError } = await supabase
+            .from("hub_messages")
+            .update({
+              archived_at: new Date().toISOString(),
+              archived_reason: "shopping_cleared",
+            })
+            .eq("thread_id", thread_id)
+            .not("checked_at", "is", null)
+            .is("archived_at", null)
+            .select("id");
+
+          if (updateError) {
+            return NextResponse.json(
+              { error: "Failed to clear items" },
+              { status: 500 }
+            );
+          }
+
+          return NextResponse.json({
+            success: true,
+            archivedCount: updated?.length || 0,
+          });
+        }
+
+        case "archive": {
+          const ids = message_ids || (message_id ? [message_id] : []);
+          if (ids.length === 0) {
+            return NextResponse.json(
+              { error: "message_id(s) required" },
+              { status: 400 }
+            );
+          }
+
+          const { error: updateError } = await supabase
+            .from("hub_messages")
+            .update({
+              archived_at: new Date().toISOString(),
+              archived_reason: reason || "manual",
+            })
+            .in("id", ids);
+
+          if (updateError) {
+            return NextResponse.json(
+              { error: "Failed to archive" },
+              { status: 500 }
+            );
+          }
+
+          return NextResponse.json({
+            success: true,
+            archivedCount: ids.length,
+          });
+        }
+
+        case "unarchive": {
+          const ids = message_ids || (message_id ? [message_id] : []);
+          if (ids.length === 0) {
+            return NextResponse.json(
+              { error: "message_id(s) required" },
+              { status: 400 }
+            );
+          }
+
+          const { error: updateError } = await supabase
+            .from("hub_messages")
+            .update({
+              archived_at: null,
+              archived_reason: null,
+            })
+            .in("id", ids);
+
+          if (updateError) {
+            return NextResponse.json(
+              { error: "Failed to unarchive" },
+              { status: 500 }
+            );
+          }
+
+          return NextResponse.json({
+            success: true,
+            restoredCount: ids.length,
+          });
+        }
+      }
+    }
+
+    // Handle hide/unhide/undo actions (require messageIds array)
+    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
       return NextResponse.json(
-        { error: "Invalid action. Use 'hide', 'unhide', or 'undo'." },
+        { error: "messageIds array is required for hide/unhide/undo actions" },
         { status: 400 }
       );
+    }
+
+    if (!["hide", "unhide", "undo"].includes(action)) {
+      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
     // Verify user has access to all messages

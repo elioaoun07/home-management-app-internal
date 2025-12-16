@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
       `script-src ${scriptSrc.join(" ")}`,
       `style-src ${styleSrc.join(" ")}`,
       "img-src 'self' data: blob: https:",
-      "font-src 'self' data:",
+      "font-src 'self' data: https://fonts.gstatic.com",
       `connect-src ${connectSrc.join(" ")}`,
       "object-src 'none'",
       "frame-ancestors 'none'",

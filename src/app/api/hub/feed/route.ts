@@ -28,9 +28,15 @@ export async function GET() {
   }
 
   // Fetch feed items for this household
+  // IMPORTANT: Exclude private transactions from the feed
   const { data: feed, error } = await supabase
     .from("hub_feed")
-    .select("*")
+    .select(
+      `
+      *,
+      transactions!left(is_private)
+    `
+    )
     .eq("household_id", household.id)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -39,8 +45,18 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Filter out private transactions
+  const filteredFeed = (feed || []).filter((item) => {
+    // If it's a transaction-related activity, check if it's private
+    if (item.transaction_id && item.transactions) {
+      return !item.transactions.is_private;
+    }
+    // Non-transaction activities are always shown
+    return true;
+  });
+
   return NextResponse.json({
-    feed: feed || [],
+    feed: filteredFeed,
     household_id: household.id,
     current_user_id: user.id,
   });

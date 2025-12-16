@@ -24,7 +24,9 @@ export type HubChatThread = {
   title: string;
   description: string | null;
   icon: string;
+  color?: string; // Thread color for visual theming
   is_archived: boolean;
+  is_private?: boolean; // Private chats only visible to creator
   created_at: string;
   updated_at: string;
   last_message_at: string;
@@ -35,10 +37,8 @@ export type HubChatThread = {
     created_at: string;
   } | null;
   unread_count: number;
-  // New fields for external app integration
   purpose: ThreadPurpose;
-  external_url: string | null;
-  external_app_name: string | null;
+  enable_item_urls?: boolean; // Setting to enable/disable item URLs for shopping lists
 };
 
 export type HubMessage = {
@@ -61,6 +61,20 @@ export type HubMessage = {
   deleted_by?: string | null;
   hidden_for?: string[];
   is_hidden_by_me?: boolean; // True if current user has hidden this message
+  // New fields for archiving
+  archived_at?: string | null;
+  archived_reason?:
+    | "shopping_cleared"
+    | "transaction_created"
+    | "reminder_completed"
+    | "monthly_cleanup"
+    | "manual"
+    | null;
+  // New fields for shopping list
+  checked_at?: string | null;
+  checked_by?: string | null;
+  item_url?: string | null; // Hyperlink for shopping items
+  topic_id?: string | null; // Topic/section within notes thread
 };
 
 export type HubFeedItem = {
@@ -135,16 +149,14 @@ export function useCreateThread() {
       icon,
       household_id,
       purpose,
-      external_url,
-      external_app_name,
+      is_private,
     }: {
       title: string;
       description?: string;
       icon?: string;
       household_id: string;
       purpose?: ThreadPurpose;
-      external_url?: string;
-      external_app_name?: string;
+      is_private?: boolean;
     }) => {
       const res = await fetch("/api/hub/threads", {
         method: "POST",
@@ -155,8 +167,7 @@ export function useCreateThread() {
           icon,
           household_id,
           purpose,
-          external_url,
-          external_app_name,
+          is_private,
         }),
       });
       if (!res.ok) throw new Error("Failed to create thread");
@@ -199,10 +210,10 @@ export function useHubMessages(threadId: string | null) {
       };
     },
     enabled: !!threadId,
-    staleTime: 30000, // 30 seconds - realtime handles live updates
-    gcTime: 60000, // Keep in cache for 1 minute
-    refetchOnWindowFocus: true,
-    refetchOnMount: true, // Refetch on mount only if stale
+    staleTime: 60000, // 1 minute - realtime handles live updates
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on focus - rely on realtime
+    refetchOnMount: false, // Use cached data - realtime keeps it fresh
   });
 }
 
@@ -634,14 +645,16 @@ export function useSendMessage() {
     mutationFn: async ({
       content,
       thread_id,
+      topic_id,
     }: {
       content: string;
       thread_id: string;
+      topic_id?: string;
     }) => {
       const res = await fetch("/api/hub/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, thread_id }),
+        body: JSON.stringify({ content, thread_id, topic_id }),
       });
       if (!res.ok) throw new Error("Failed to send message");
       const data = await res.json();
@@ -704,24 +717,23 @@ export function useSendMessage() {
         queryKey: ["hub", "messages", variables.thread_id],
       });
 
-      // Snapshot the previous value
-      const previousMessages = queryClient.getQueryData([
+      // Get current user ID from cache
+      const currentData = queryClient.getQueryData([
         "hub",
         "messages",
         variables.thread_id,
-      ]);
-
-      // Get current user ID from cache
-      const currentData = previousMessages as
-        | { current_user_id: string; messages: HubMessage[] }
-        | undefined;
+      ]) as { current_user_id: string; messages: HubMessage[] } | undefined;
       const currentUserId = currentData?.current_user_id;
+
+      const optimisticId = `temp-${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}`;
 
       if (currentUserId) {
         // Optimistically add the new message
         const optimisticMessage: HubMessage = {
-          id: `temp-${Date.now()}`, // Temporary ID
-          household_id: "",
+          id: optimisticId, // Temporary ID
+          household_id: currentData?.messages?.[0]?.household_id ?? "",
           thread_id: variables.thread_id,
           sender_user_id: currentUserId,
           message_type: "text",
@@ -732,6 +744,7 @@ export function useSendMessage() {
           created_at: new Date().toISOString(),
           reply_to_id: null,
           status: "sent", // Show as sent immediately
+          topic_id: variables.topic_id ?? null,
         };
 
         queryClient.setQueryData(
@@ -746,10 +759,10 @@ export function useSendMessage() {
         );
       }
 
-      return { previousMessages };
+      return { optimisticId };
     },
     // On success, replace the optimistic message with the real one
-    onSuccess: (data, variables) => {
+    onSuccess: (data, variables, context) => {
       if (data.message) {
         // Check for any pending receipts for this message
         const pendingStatus = pendingReceipts.get(data.message.id);
@@ -767,10 +780,14 @@ export function useSendMessage() {
             old: { messages: HubMessage[]; [key: string]: unknown } | undefined
           ) => {
             if (!old) return old;
-            // Remove any temp messages and add the real one
-            const filteredMessages = old.messages.filter(
-              (m) => !m.id.startsWith("temp-")
-            );
+            // Remove only the optimistic message for this mutation.
+            const optimisticId = (
+              context as { optimisticId?: string } | undefined
+            )?.optimisticId;
+            const filteredMessages = optimisticId
+              ? old.messages.filter((m) => m.id !== optimisticId)
+              : old.messages;
+
             // Check if real message already exists (from broadcast)
             const existingIndex = filteredMessages.findIndex(
               (m) => m.id === data.message.id
@@ -798,12 +815,21 @@ export function useSendMessage() {
     },
     // On error, roll back to previous state
     onError: (_, variables, context) => {
-      if (context?.previousMessages) {
-        queryClient.setQueryData(
-          ["hub", "messages", variables.thread_id],
-          context.previousMessages
-        );
-      }
+      const optimisticId = (context as { optimisticId?: string } | undefined)
+        ?.optimisticId;
+      if (!optimisticId) return;
+      queryClient.setQueryData(
+        ["hub", "messages", variables.thread_id],
+        (
+          old: { messages: HubMessage[]; [key: string]: unknown } | undefined
+        ) => {
+          if (!old) return old;
+          return {
+            ...old,
+            messages: old.messages.filter((m) => m.id !== optimisticId),
+          };
+        }
+      );
     },
   });
 }

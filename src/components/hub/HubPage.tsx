@@ -40,9 +40,10 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { Link as LinkIcon, RefreshCw, Settings } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 // Lazy load transaction modal to avoid bundle bloat
 const AddTransactionFromMessageModal = dynamic(
@@ -61,6 +62,15 @@ const ShoppingListView = dynamic(
   () =>
     import("@/components/hub/ShoppingListView").then((m) => ({
       default: m.ShoppingListView,
+    })),
+  { ssr: false }
+);
+
+// Lazy load notes list view
+const NotesListView = dynamic(
+  () =>
+    import("@/components/hub/NotesListView").then((m) => ({
+      default: m.NotesListView,
     })),
   { ssr: false }
 );
@@ -203,6 +213,49 @@ function DailyPulse() {
   );
 }
 
+// Helper function to format date separators
+function formatDateSeparator(date: Date): string {
+  const now = new Date();
+  const messageDate = new Date(date);
+
+  // Reset time to midnight for accurate day comparison
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const msgDay = new Date(
+    messageDate.getFullYear(),
+    messageDate.getMonth(),
+    messageDate.getDate()
+  );
+
+  if (msgDay.getTime() === today.getTime()) {
+    return "Today";
+  } else if (msgDay.getTime() === yesterday.getTime()) {
+    return "Yesterday";
+  } else {
+    // Format as "Dec 14" or "Dec 14, 2024" if different year
+    const options: Intl.DateTimeFormatOptions = {
+      month: "short",
+      day: "numeric",
+    };
+    if (messageDate.getFullYear() !== now.getFullYear()) {
+      options.year = "numeric";
+    }
+    return messageDate.toLocaleDateString("en-US", options);
+  }
+}
+
+// Helper to check if two dates are on different days
+function isDifferentDay(date1: Date | string, date2: Date | string): boolean {
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  return (
+    d1.getDate() !== d2.getDate() ||
+    d1.getMonth() !== d2.getMonth() ||
+    d1.getFullYear() !== d2.getFullYear()
+  );
+}
+
 // Chat View with Threads
 function ChatView({
   activeThreadId,
@@ -213,9 +266,35 @@ function ChatView({
 }) {
   const { data, isLoading } = useHubThreads();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [purposeFilter, setPurposeFilter] = useState<string>("all");
+  const [visibilityFilter, setVisibilityFilter] = useState<
+    "all" | "public" | "private"
+  >("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const threads = data?.threads || [];
   const householdId = data?.household_id;
+
+  // Filter threads by purpose, visibility, and search query
+  const filteredThreads = threads.filter((thread) => {
+    // Purpose filter
+    const matchesPurpose =
+      purposeFilter === "all" || thread.purpose === purposeFilter;
+    // Visibility filter
+    const matchesVisibility =
+      visibilityFilter === "all" ||
+      (visibilityFilter === "private" && thread.is_private) ||
+      (visibilityFilter === "public" && !thread.is_private);
+    // Search filter
+    const matchesSearch =
+      !searchQuery.trim() ||
+      thread.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (thread.last_message?.content || "")
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+
+    return matchesPurpose && matchesVisibility && matchesSearch;
+  });
 
   // Subscribe to household-level messages when viewing thread list (not inside a thread)
   // This ensures we get notified about new messages in ANY thread
@@ -267,13 +346,208 @@ function ChatView({
         )}
       </div>
 
+      {/* Search Bar */}
+      {householdId && threads.length > 0 && (
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2.5 pl-10 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50 transition-all"
+            />
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-white/10 text-white/40 hover:text-white/60 transition-all"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Purpose Filter */}
+      {householdId && threads.length > 0 && (
+        <div className="mb-4">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            <button
+              onClick={() => setPurposeFilter("all")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+                purposeFilter === "all"
+                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setPurposeFilter("shopping")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                purposeFilter === "shopping"
+                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              <span>🛒</span> Shopping
+            </button>
+            <button
+              onClick={() => setPurposeFilter("budget")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                purposeFilter === "budget"
+                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              <span>💰</span> Budget
+            </button>
+            <button
+              onClick={() => setPurposeFilter("reminder")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                purposeFilter === "reminder"
+                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              <span>⏰</span> Reminder
+            </button>
+            <button
+              onClick={() => setPurposeFilter("travel")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                purposeFilter === "travel"
+                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              <span>✈️</span> Travel
+            </button>
+            <button
+              onClick={() => setPurposeFilter("health")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                purposeFilter === "health"
+                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              <span>🏥</span> Health
+            </button>
+            <button
+              onClick={() => setPurposeFilter("notes")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                purposeFilter === "notes"
+                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              <span>📝</span> Notes
+            </button>
+            <button
+              onClick={() => setPurposeFilter("general")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                purposeFilter === "general"
+                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              <span>💬</span> General
+            </button>
+            <button
+              onClick={() => setPurposeFilter("other")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                purposeFilter === "other"
+                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              <span>📋</span> Other
+            </button>
+          </div>
+
+          {/* Visibility Filter - Public/Private */}
+          <div className="flex gap-2 mt-2 pt-2 border-t border-white/5">
+            <button
+              onClick={() => setVisibilityFilter("all")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                visibilityFilter === "all"
+                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setVisibilityFilter("public")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                visibilityFilter === "public"
+                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Public
+            </button>
+            <button
+              onClick={() => setVisibilityFilter("private")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                visibilityFilter === "private"
+                  ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              Private
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* AI Assistant - Always First */}
       <AIAssistantItem onClick={() => setActiveThreadId(AI_THREAD_ID)} />
 
       {/* Household Threads */}
-      {householdId && threads.length > 0 && (
+      {householdId && filteredThreads.length > 0 && (
         <div className="space-y-2 mt-2">
-          {threads.map((thread) => (
+          {filteredThreads.map((thread) => (
             <ThreadItem
               key={thread.id}
               thread={thread}
@@ -283,6 +557,19 @@ function ChatView({
           ))}
         </div>
       )}
+
+      {/* No results message */}
+      {householdId &&
+        threads.length > 0 &&
+        filteredThreads.length === 0 &&
+        purposeFilter !== "all" && (
+          <div className="p-6 rounded-2xl neo-card bg-bg-card-custom border border-white/5 text-center mt-4">
+            <MessageIcon className="w-10 h-10 mx-auto mb-2 text-blue-400/30" />
+            <p className="text-sm text-white/50">
+              No {purposeFilter} conversations yet
+            </p>
+          </div>
+        )}
 
       {/* No household message - but AI is still available */}
       {!householdId && (
@@ -321,45 +608,37 @@ function ThreadItem({
 }) {
   const lastMessage = thread.last_message;
   const isMyLastMessage = lastMessage?.sender_user_id === currentUserId;
-  const hasExternalApp = !!thread.external_url;
 
-  // Handle external app link click
-  const handleExternalAppClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (thread.external_url) {
-      // Open in same tab for PWA seamless transition
-      window.location.href = thread.external_url;
-    }
-  };
+  // Get purpose icon and color
+  const purposeConfig =
+    PURPOSE_CONFIG[thread.purpose] || PURPOSE_CONFIG.general;
+  const IconComponent = PurposeIcons[thread.purpose] || PurposeIcons.general;
+  // Use thread.color from database, fallback to default purpose color
+  const threadColor = thread.color || purposeConfig.defaultColor;
 
   return (
     <div className="relative">
       <button
         onClick={onClick}
-        className={cn(
-          "w-full p-4 rounded-xl neo-card bg-bg-card-custom border transition-all flex items-center gap-3 text-left",
-          thread.unread_count > 0
-            ? "border-blue-500/30 bg-blue-500/5"
-            : "border-white/5 hover:border-white/10"
-        )}
+        className="w-full p-4 rounded-xl neo-card bg-bg-card-custom border transition-all flex items-center gap-3 text-left"
+        style={{
+          borderColor:
+            thread.unread_count > 0
+              ? `${threadColor}30`
+              : "rgba(255,255,255,0.05)",
+          backgroundColor:
+            thread.unread_count > 0 ? `${threadColor}05` : undefined,
+        }}
       >
         {/* Icon */}
         <div
-          className={cn(
-            "w-12 h-12 rounded-full flex items-center justify-center text-xl shrink-0 relative",
-            thread.unread_count > 0
-              ? "bg-gradient-to-br from-blue-500/30 to-purple-500/30"
-              : "bg-gradient-to-br from-blue-500/20 to-purple-500/20"
-          )}
+          className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 relative transition-all"
+          style={{
+            backgroundColor: `${threadColor}25`,
+            color: threadColor,
+          }}
         >
-          {thread.icon}
-          {/* External app indicator badge */}
-          {hasExternalApp && (
-            <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center border-2 border-bg-custom">
-              <ExternalLink className="w-2 h-2 text-white" />
-            </span>
-          )}
+          <IconComponent className="w-6 h-6" />
         </div>
 
         {/* Content */}
@@ -373,6 +652,20 @@ function ThreadItem({
             >
               {thread.title}
             </h3>
+            {/* Private indicator */}
+            {thread.is_private && (
+              <svg
+                className="w-4 h-4 text-purple-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <title>Private - only you can see this</title>
+                <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            )}
             {/* Purpose badge */}
             {thread.purpose && thread.purpose !== "general" && (
               <span
@@ -386,7 +679,10 @@ function ThreadItem({
                     "bg-blue-500/20 text-blue-400",
                   thread.purpose === "travel" &&
                     "bg-purple-500/20 text-purple-400",
-                  thread.purpose === "health" && "bg-red-500/20 text-red-400"
+                  thread.purpose === "health" && "bg-red-500/20 text-red-400",
+                  thread.purpose === "notes" &&
+                    "bg-yellow-500/20 text-yellow-400",
+                  thread.purpose === "other" && "bg-slate-500/20 text-slate-400"
                 )}
               >
                 {thread.purpose}
@@ -434,20 +730,6 @@ function ThreadItem({
           </span>
         </div>
       </button>
-
-      {/* External app quick-launch button - positioned absolutely outside main button */}
-      {hasExternalApp && (
-        <div
-          onClick={handleExternalAppClick}
-          className="absolute bottom-3 right-3 flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium transition-colors cursor-pointer z-10"
-          title={`Open ${thread.external_app_name || "external app"}`}
-        >
-          <ExternalLink className="w-3 h-3" />
-          <span className="hidden sm:inline">
-            {thread.external_app_name || "Open"}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
@@ -1042,7 +1324,7 @@ function ThreadConversation({
   onBack: () => void;
 }) {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useHubMessages(threadId);
+  const { data, isLoading, isFetching } = useHubMessages(threadId);
   const { data: threadsData } = useHubThreads();
   const sendMessage = useSendMessage();
   const broadcastReceiptUpdate = useBroadcastReceiptUpdate();
@@ -1097,6 +1379,38 @@ function ThreadConversation({
     new Set()
   );
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // Thread settings modal
+  const [showThreadSettings, setShowThreadSettings] = useState(false);
+
+  // Search within messages
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus search input when opened
+  useEffect(() => {
+    if (isSearchOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isSearchOpen]);
+
+  // Helper to highlight search terms in message content
+  const highlightSearchTerms = (text: string, query: string) => {
+    if (!query.trim()) return text;
+    const parts = text.split(
+      new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi")
+    );
+    return parts.map((part, i) =>
+      part.toLowerCase() === query.toLowerCase() ? (
+        <mark key={i} className="bg-yellow-400 text-black px-0.5 rounded">
+          {part}
+        </mark>
+      ) : (
+        part
+      )
+    );
+  };
 
   // Fetch accounts and categories for transaction parsing
   const { data: accounts = [] } = useAccounts();
@@ -1315,6 +1629,13 @@ function ThreadConversation({
     return !hasAnyAction;
   });
 
+  // Further filter by search query
+  const searchFilteredMessages = searchQuery.trim()
+    ? filteredMessages.filter((msg) =>
+        msg.content?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : filteredMessages;
+
   // Count hidden messages for visual feedback
   const hiddenMessagesCount = messages.length - filteredMessages.length;
 
@@ -1327,6 +1648,9 @@ function ThreadConversation({
   // Check if this is a shopping list thread
   const isShoppingThread = thread?.purpose === "shopping";
 
+  // Check if this is a notes thread
+  const isNotesThread = thread?.purpose === "notes";
+
   // Current user's theme determines their bubble color
   // Blue theme user = blue bubbles for "me", pink for partner
   // Pink theme user = pink bubbles for "me", blue for partner
@@ -1336,7 +1660,7 @@ function ThreadConversation({
   useEffect(() => {
     if (
       !isLoading &&
-      filteredMessages.length > 0 &&
+      searchFilteredMessages.length > 0 &&
       !hasScrolledToUnread.current
     ) {
       hasScrolledToUnread.current = true;
@@ -1352,7 +1676,12 @@ function ThreadConversation({
         messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
       }
     }
-  }, [isLoading, messages.length, firstUnreadMessageId]);
+  }, [
+    isLoading,
+    messages.length,
+    firstUnreadMessageId,
+    searchFilteredMessages.length,
+  ]);
 
   // Reset scroll tracker when changing threads
   useEffect(() => {
@@ -1360,13 +1689,13 @@ function ThreadConversation({
   }, [threadId]);
 
   // Smooth scroll to bottom when new messages arrive (after initial load)
-  const prevMessagesLength = useRef(filteredMessages.length);
+  const prevMessagesLength = useRef(searchFilteredMessages.length);
   useEffect(() => {
-    if (filteredMessages.length > prevMessagesLength.current) {
+    if (searchFilteredMessages.length > prevMessagesLength.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-    prevMessagesLength.current = filteredMessages.length;
-  }, [filteredMessages.length]);
+    prevMessagesLength.current = searchFilteredMessages.length;
+  }, [searchFilteredMessages.length]);
 
   const handleSend = () => {
     if (!newMessage.trim()) return;
@@ -1388,32 +1717,159 @@ function ThreadConversation({
 
   // Shopping list handlers
   const handleAddShoppingItem = useCallback(
-    (content: string) => {
-      // Just send a simple text message
-      sendMessage.mutate({ content, thread_id: threadId });
+    (content: string, topicId?: string) => {
+      // Send a text message, optionally with a topic_id for notes
+      sendMessage.mutate({ content, thread_id: threadId, topic_id: topicId });
     },
     [sendMessage, threadId]
   );
 
   const handleDeleteShoppingItem = useCallback(
     async (messageId: string) => {
-      // Soft delete the message (hide it)
+      console.log("[DELETE] Starting delete for message:", messageId);
+      const queryKey = ["hub", "messages", threadId];
+
+      // Store previous state for rollback on error
+      const previousData = queryClient.getQueryData<{
+        messages: HubMessage[];
+      }>(queryKey);
+
+      // Optimistically remove from UI immediately
+      queryClient.setQueryData<{
+        messages: HubMessage[];
+        [key: string]: unknown;
+      }>(queryKey, (old) => {
+        if (!old) {
+          console.log("[DELETE] No cache data found");
+          return old;
+        }
+        console.log(
+          "[DELETE] Removing from cache, before count:",
+          old.messages.length
+        );
+        const filtered = old.messages.filter((msg) => msg.id !== messageId);
+        console.log("[DELETE] After filter count:", filtered.length);
+        return {
+          ...old,
+          messages: filtered,
+        };
+      });
+
       try {
-        await fetch("/api/hub/messages", {
+        // Soft delete the message
+        const res = await fetch("/api/hub/messages", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message_ids: [messageId] }),
+          body: JSON.stringify({ messageIds: [messageId] }),
         });
-        // Refetch messages to update UI
-        queryClient.invalidateQueries({
-          queryKey: ["hub", "messages", threadId],
+
+        if (!res.ok) {
+          // Rollback on error
+          console.error("[DELETE] API error, status:", res.status);
+          if (previousData) {
+            queryClient.setQueryData(queryKey, previousData);
+          }
+          const errorData = await res.json().catch(() => ({}));
+          console.error("[DELETE] Error data:", errorData);
+          toast.error(errorData.error || "Failed to delete note");
+          return;
+        }
+        console.log("[DELETE] API success");
+
+        // Show undo toast
+        toast.message("Note deleted", {
+          duration: 10000,
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              const undoRes = await fetch("/api/hub/messages", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  messageIds: [messageId],
+                  action: "undo",
+                }),
+              });
+              if (undoRes.ok) {
+                queryClient.invalidateQueries({ queryKey });
+                toast.success("Note restored");
+              } else {
+                toast.error("Failed to restore note");
+              }
+            },
+          },
         });
       } catch (error) {
+        // Rollback on network error
+        if (previousData) {
+          queryClient.setQueryData(queryKey, previousData);
+        }
         console.error("Failed to delete message:", error);
+        toast.error("Network error - failed to delete note");
       }
     },
     [threadId, queryClient]
   );
+
+  // Toggle item URLs for shopping thread
+  const handleToggleItemUrls = useCallback(async () => {
+    if (!thread) return;
+
+    const newValue = !thread.enable_item_urls;
+
+    try {
+      // Optimistic update
+      queryClient.setQueryData<{ threads: HubChatThread[] }>(
+        ["hub", "threads"],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            threads: old.threads.map((t) =>
+              t.id === threadId ? { ...t, enable_item_urls: newValue } : t
+            ),
+          };
+        }
+      );
+
+      const res = await fetch("/api/hub/threads", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thread_id: threadId,
+          enable_item_urls: newValue,
+        }),
+      });
+
+      if (!res.ok) {
+        let errorMessage = "Failed to update setting";
+        try {
+          const errorData = await res.json();
+          console.error("Toggle error:", errorData);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+
+          // If migration required, show specific message
+          if (errorData.error === "Database migration required") {
+            errorMessage =
+              "Please run the database migration first. Check console for details.";
+            console.error("Migration required:", errorData.message);
+          }
+        } catch (e) {
+          console.error("Error parsing response:", e);
+        }
+        throw new Error(errorMessage);
+      }
+
+      toast.success(newValue ? "Item links enabled" : "Item links disabled");
+    } catch (error) {
+      console.error("Failed to toggle item URLs:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to update setting";
+      toast.error(errorMessage);
+      // Rollback on error
+      queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
+    }
+  }, [thread, threadId, queryClient]);
 
   // Get message bubble styles based on sender and current user's theme
   const getMessageStyles = (msg: HubMessage) => {
@@ -1471,143 +1927,350 @@ function ThreadConversation({
 
   return (
     <div ref={containerRef} className="flex flex-col min-h-[calc(100vh-56px)]">
-      {/* Thread Header - Fixed below app header */}
-      <div className="fixed top-14 left-0 right-0 z-30 flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-bg-card-custom/95 backdrop-blur-sm">
-        <button
-          onClick={handleBack}
-          className="p-2 rounded-lg hover:bg-white/5 text-white/70 hover:text-white transition-colors"
-        >
-          <ChevronLeftIcon className="w-5 h-5" />
-        </button>
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center text-lg shrink-0 relative">
-            {thread?.icon || "💬"}
-            {/* External app indicator */}
-            {thread?.external_url && (
-              <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center border-2 border-bg-custom">
-                <ExternalLink className="w-2 h-2 text-white" />
-              </span>
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-white truncate">
-                {thread?.title || "Chat"}
-              </h2>
-              {thread?.purpose && thread.purpose !== "general" && (
-                <span
-                  className={cn(
-                    "px-2 py-0.5 rounded-full text-xs font-medium",
-                    thread.purpose === "budget" &&
-                      "bg-emerald-500/20 text-emerald-400",
-                    thread.purpose === "reminder" &&
-                      "bg-amber-500/20 text-amber-400",
-                    thread.purpose === "shopping" &&
-                      "bg-blue-500/20 text-blue-400"
-                  )}
+      {/* Thread Header - Fixed below app header with solid background and color accent */}
+      <div
+        className="fixed top-14 left-0 right-0 z-30 flex items-center gap-3 px-4 py-3 border-b transition-all duration-300"
+        style={{
+          borderBottomColor: thread?.color
+            ? `${thread.color}40`
+            : "rgba(255,255,255,0.1)",
+          backgroundColor: thread?.color
+            ? `color-mix(in srgb, ${thread.color} 8%, rgb(15, 23, 42))`
+            : "rgb(15, 23, 42)",
+          boxShadow: thread?.color ? `0 4px 20px ${thread.color}20` : "none",
+        }}
+      >
+        {isSearchOpen ? (
+          /* Search Mode Header - Replace everything with search input */
+          <>
+            <button
+              onClick={() => {
+                setIsSearchOpen(false);
+                setSearchQuery("");
+              }}
+              className="p-2 rounded-lg hover:bg-white/5 text-white/70 hover:text-white transition-colors"
+            >
+              <ChevronLeftIcon className="w-5 h-5" />
+            </button>
+            <div className="flex-1 relative">
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search in chat..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 pl-10 rounded-xl bg-white/10 border border-white/10 text-white placeholder:text-white/40 focus:outline-none focus:border-blue-500/50 transition-all text-sm"
+              />
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-white/10 text-white/40 hover:text-white/60 transition-all"
                 >
-                  {thread.purpose}
-                </span>
+                  <XIcon className="w-4 h-4" />
+                </button>
               )}
             </div>
-            {thread?.description && (
-              <p className="text-xs text-white/50 truncate">
-                {thread.description}
-              </p>
+            {searchQuery.trim() && (
+              <span className="text-xs text-white/50 whitespace-nowrap">
+                {searchFilteredMessages.length} found
+              </span>
             )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* External App Button - prominent when available */}
-          {thread?.external_url && (
-            <a
-              href={thread.external_url}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-medium shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-all"
-              title={`Open ${thread.external_app_name || "external app"}`}
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span className="hidden sm:inline">
-                {thread.external_app_name || "Open App"}
-              </span>
-            </a>
-          )}
-          {isSelectionMode ? (
-            <>
-              <span className="text-sm text-white/70">
-                {selectedMessages.size} selected
-              </span>
-              <button
-                onClick={() => {
-                  setIsSelectionMode(false);
-                  setSelectedMessages(new Set());
-                }}
-                className="px-3 py-1.5 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                disabled={selectedMessages.size === 0}
-                className={cn(
-                  "p-2 rounded-lg transition-all",
-                  selectedMessages.size > 0
-                    ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                    : "bg-white/5 text-white/30 cursor-not-allowed"
-                )}
-              >
-                <Trash2Icon className="w-5 h-5" />
-              </button>
-            </>
-          ) : (
+          </>
+        ) : (
+          /* Normal Header */
+          <>
             <button
-              onClick={() => setShowActionsFilter(!showActionsFilter)}
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                showActionsFilter
-                  ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
-                  : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70"
-              )}
-              title={
-                showActionsFilter
-                  ? "Hide completed actions"
-                  : "Show completed actions"
-              }
+              onClick={handleBack}
+              className="p-2 rounded-lg hover:bg-white/5 text-white/70 hover:text-white transition-colors"
             >
-              <EyeIcon className="w-5 h-5" />
+              <ChevronLeftIcon className="w-5 h-5" />
             </button>
-          )}
-        </div>
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              {/* Thread Icon with Color */}
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all duration-300"
+                style={{
+                  backgroundColor: thread?.color
+                    ? `${thread.color}25`
+                    : "rgba(59, 130, 246, 0.2)",
+                  color: thread?.color || "#3b82f6",
+                }}
+              >
+                {thread?.purpose && PurposeIcons[thread.purpose] ? (
+                  React.createElement(PurposeIcons[thread.purpose], {
+                    className: "w-5 h-5",
+                  })
+                ) : (
+                  <span className="text-lg">{thread?.icon || "💬"}</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-semibold text-white truncate">
+                  {thread?.title || "Chat"}
+                </h2>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {thread?.purpose && thread.purpose !== "general" && (
+                    <span
+                      className="px-2 py-0.5 rounded-full text-xs font-medium transition-all duration-300"
+                      style={{
+                        backgroundColor: thread.color
+                          ? `${thread.color}20`
+                          : undefined,
+                        color: thread.color || undefined,
+                      }}
+                    >
+                      {thread.purpose}
+                    </span>
+                  )}
+                  {/* Item Links Toggle for Shopping Threads */}
+                  {thread?.purpose === "shopping" && (
+                    <button
+                      onClick={handleToggleItemUrls}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-medium transition-all",
+                        thread.enable_item_urls
+                          ? "text-blue-400 hover:bg-blue-500/30"
+                          : "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60"
+                      )}
+                      style={
+                        thread.enable_item_urls && thread.color
+                          ? {
+                              backgroundColor: `${thread.color}20`,
+                              color: thread.color,
+                            }
+                          : undefined
+                      }
+                      title={
+                        thread.enable_item_urls
+                          ? "Item links enabled"
+                          : "Enable item links"
+                      }
+                    >
+                      <LinkIcon className="w-3 h-3" />
+                      {thread.enable_item_urls && (
+                        <span className="hidden sm:inline">Links</span>
+                      )}
+                    </button>
+                  )}
+                  {thread?.description && (
+                    <span className="text-xs text-white/50 truncate">
+                      {thread.description}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {isSelectionMode ? (
+                <>
+                  <span className="text-sm text-white/70">
+                    {selectedMessages.size} selected
+                  </span>
+                  <button
+                    onClick={() => {
+                      setIsSelectionMode(false);
+                      setSelectedMessages(new Set());
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteModal(true)}
+                    disabled={selectedMessages.size === 0}
+                    className={cn(
+                      "p-2 rounded-lg transition-all",
+                      selectedMessages.size > 0
+                        ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                        : "bg-white/5 text-white/30 cursor-not-allowed"
+                    )}
+                  >
+                    <Trash2Icon className="w-5 h-5" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Search Button */}
+                  <button
+                    onClick={() => {
+                      setIsSearchOpen(!isSearchOpen);
+                      if (isSearchOpen) {
+                        setSearchQuery("");
+                      }
+                    }}
+                    className={cn(
+                      "p-2 rounded-lg transition-all",
+                      isSearchOpen
+                        ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30"
+                        : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70"
+                    )}
+                    title="Search messages"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </button>
+                  {/* Eye icon only for budget and reminder chats */}
+                  {thread?.purpose &&
+                    (thread.purpose === "budget" ||
+                      thread.purpose === "reminder") && (
+                      <button
+                        onClick={() => setShowActionsFilter(!showActionsFilter)}
+                        className={cn(
+                          "p-2 rounded-lg transition-all",
+                          showActionsFilter
+                            ? "text-emerald-400 hover:bg-emerald-500/30"
+                            : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70"
+                        )}
+                        style={
+                          showActionsFilter && thread.color
+                            ? {
+                                backgroundColor: `${thread.color}20`,
+                                color: thread.color,
+                              }
+                            : undefined
+                        }
+                        title={
+                          showActionsFilter
+                            ? "Hide completed actions"
+                            : "Show completed actions"
+                        }
+                      >
+                        <EyeIcon className="w-5 h-5" />
+                      </button>
+                    )}
+                  {/* Settings Button - Far Right */}
+                  <button
+                    onClick={() => setShowThreadSettings(true)}
+                    className="p-2 rounded-lg bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70 transition-all"
+                    title="Chat appearance"
+                  >
+                    <Settings className="w-5 h-5" />
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Spacer for fixed header */}
       <div className="h-16" />
 
-      {/* Conditional rendering: Shopping List View or Normal Messages */}
+      {/* Conditional rendering: Shopping List View, Notes View, or Normal Messages */}
       {isShoppingThread ? (
         <ShoppingListView
           messages={messages}
           currentUserId={currentUserId || ""}
+          threadId={thread?.id || ""}
+          thread={thread}
           onAddItem={handleAddShoppingItem}
           onDeleteItem={handleDeleteShoppingItem}
           isLoading={isLoading}
         />
+      ) : isNotesThread ? (
+        <NotesListView
+          messages={messages}
+          currentUserId={currentUserId || ""}
+          threadId={thread?.id || ""}
+          thread={thread}
+          onAddItem={handleAddShoppingItem}
+          onDeleteItem={handleDeleteShoppingItem}
+          isLoading={isLoading}
+          searchQuery={searchQuery}
+          onUpdateItem={async (messageId: string, content: string) => {
+            try {
+              const res = await fetch("/api/hub/messages", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "update_content",
+                  message_id: messageId,
+                  content,
+                }),
+              });
+
+              if (!res.ok) {
+                let errorData;
+                try {
+                  errorData = await res.json();
+                } catch (e) {
+                  errorData = {
+                    error: `HTTP ${res.status}: ${res.statusText}`,
+                  };
+                }
+                console.error("Update failed:", {
+                  status: res.status,
+                  statusText: res.statusText,
+                  errorData,
+                  messageId,
+                  contentLength: content.length,
+                });
+                throw new Error(errorData.error || "Failed to update");
+              }
+
+              return true;
+            } catch (error) {
+              console.error("Failed to update message:", error);
+              return false;
+            }
+          }}
+        />
       ) : (
         <>
           {/* Messages - Scrollable area, messages stick to bottom like WhatsApp */}
-          <div className="flex-1 overflow-y-auto px-4 pb-36 flex flex-col">
+          <div
+            className="flex-1 overflow-y-auto px-4 pb-36 flex flex-col transition-all duration-300"
+            style={{
+              background: thread?.color
+                ? `linear-gradient(to bottom, ${thread.color}03, transparent 200px)`
+                : undefined,
+            }}
+          >
             {/* Spacer to push messages to bottom when few messages */}
             <div className="flex-1" />
 
             {/* Messages container */}
             <div className="space-y-3 py-4">
               {isLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
+                <div className="space-y-4">
+                  {[1, 2, 3, 4, 5].map((i) => (
                     <div
                       key={i}
-                      className="h-12 bg-white/5 rounded-xl animate-pulse"
-                    />
+                      className={cn(
+                        "rounded-2xl p-4 animate-pulse",
+                        i % 2 === 0
+                          ? "ml-auto max-w-[80%]"
+                          : "mr-auto max-w-[80%]"
+                      )}
+                      style={{
+                        backgroundColor: thread?.color
+                          ? `${thread.color}15`
+                          : "rgba(255, 255, 255, 0.05)",
+                      }}
+                    >
+                      <div className="h-4 bg-white/10 rounded w-3/4 mb-2" />
+                      <div className="h-3 bg-white/5 rounded w-1/2" />
+                    </div>
                   ))}
+                  <p className="text-center text-xs text-white/30 mt-4">
+                    Loading messages...
+                  </p>
                 </div>
               ) : messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -1616,7 +2279,7 @@ function ThreadConversation({
                     No messages yet. Start the conversation!
                   </p>
                 </div>
-              ) : filteredMessages.length === 0 ? (
+              ) : searchFilteredMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <EyeIcon className="w-12 h-12 mb-3 text-emerald-400/30" />
                   <p className="text-sm text-white/50">
@@ -1627,7 +2290,7 @@ function ThreadConversation({
                   </p>
                 </div>
               ) : (
-                filteredMessages.map((msg: HubMessage, index: number) => {
+                searchFilteredMessages.map((msg: HubMessage, index: number) => {
                   const styles = getMessageStyles(msg);
                   const isSystem = msg.message_type === "system";
                   const isMe = msg.sender_user_id === currentUserId;
@@ -1641,8 +2304,29 @@ function ThreadConversation({
                     (a: any) => a.action_type === "transaction"
                   );
 
+                  // Date separator logic - only for reminder and budget chats
+                  const showDateSeparator =
+                    (thread?.purpose === "reminder" ||
+                      thread?.purpose === "budget") &&
+                    (index === 0 ||
+                      isDifferentDay(
+                        msg.created_at,
+                        searchFilteredMessages[index - 1].created_at
+                      ));
+
                   return (
                     <div key={msg.id}>
+                      {/* Date separator */}
+                      {showDateSeparator && (
+                        <div className="flex items-center gap-3 py-3 my-2">
+                          <div className="flex-1 h-px bg-white/5" />
+                          <span className="px-3 py-1 text-xs font-medium text-white/40 bg-white/5 rounded-full">
+                            {formatDateSeparator(new Date(msg.created_at))}
+                          </span>
+                          <div className="flex-1 h-px bg-white/5" />
+                        </div>
+                      )}
+
                       {/* Unread messages separator */}
                       {isFirstUnread && unreadCount > 0 && (
                         <div
@@ -1846,7 +2530,12 @@ function ThreadConversation({
                               </div>
                             ) : (
                               <p className="text-sm whitespace-pre-wrap">
-                                {msg.content}
+                                {searchQuery.trim()
+                                  ? highlightSearchTerms(
+                                      msg.content || "",
+                                      searchQuery
+                                    )
+                                  : msg.content}
                               </p>
                             )}
 
@@ -1903,9 +2592,19 @@ function ThreadConversation({
             </div>
           </div>
 
-          {/* Input - Fixed at bottom, above navigation bar (only for non-shopping threads) */}
-          {!isShoppingThread && (
-            <div className="fixed bottom-[72px] left-0 right-0 px-4 py-2 border-t border-white/5 bg-bg-card-custom/95 backdrop-blur-sm z-20">
+          {/* Input - Fixed at bottom, above navigation bar (only for non-shopping/non-notes threads) */}
+          {!isShoppingThread && !isNotesThread && (
+            <div
+              className="fixed bottom-[72px] left-0 right-0 px-4 py-2 border-t backdrop-blur-sm z-20 transition-all duration-300"
+              style={{
+                borderTopColor: thread?.color
+                  ? `${thread.color}15`
+                  : "rgba(255,255,255,0.05)",
+                backgroundColor: thread?.color
+                  ? `${thread.color}05`
+                  : "rgba(var(--bg-card-custom), 0.95)",
+              }}
+            >
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -1915,17 +2614,36 @@ function ThreadConversation({
                     e.key === "Enter" && !e.shiftKey && handleSend()
                   }
                   placeholder="Type a message..."
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border text-white placeholder:text-white/30 focus:outline-none transition-all duration-300"
+                  style={{
+                    borderColor: thread?.color
+                      ? `${thread.color}30`
+                      : "rgba(255,255,255,0.1)",
+                  }}
+                  onFocus={(e) => {
+                    if (thread?.color) {
+                      e.target.style.borderColor = `${thread.color}80`;
+                      e.target.style.boxShadow = `0 0 20px ${thread.color}15`;
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (thread?.color) {
+                      e.target.style.borderColor = `${thread.color}30`;
+                      e.target.style.boxShadow = "none";
+                    }
+                  }}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!newMessage.trim() || sendMessage.isPending}
-                  className={cn(
-                    "px-4 py-3 rounded-xl text-white disabled:opacity-50 disabled:cursor-not-allowed",
-                    myTheme === "pink"
-                      ? "bg-gradient-to-r from-pink-500 to-rose-500"
-                      : "bg-gradient-to-r from-blue-500 to-cyan-500"
-                  )}
+                  className="px-4 py-3 rounded-xl text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
+                  style={
+                    thread?.color
+                      ? {
+                          background: `linear-gradient(135deg, ${thread.color}, ${thread.color}dd)`,
+                        }
+                      : undefined
+                  }
                 >
                   <SendIcon className="w-5 h-5" />
                 </button>
@@ -2066,32 +2784,131 @@ function ThreadConversation({
                   </button>
 
                   {/* Select Message Action - only if message has no actions */}
-                  {!hasTransactionAction && (
-                    <button
-                      onClick={() => {
-                        // Enter selection mode and select this message
-                        setIsSelectionMode(true);
-                        setSelectedMessages(new Set([actionMenuMessage.id]));
+                  {!hasTransactionAction &&
+                    (threadPurpose === "shopping" ||
+                      threadPurpose === "notes") && (
+                      <button
+                        onClick={() => {
+                          // Enter selection mode and select this message
+                          setIsSelectionMode(true);
+                          setSelectedMessages(new Set([actionMenuMessage.id]));
 
-                        // Close action menu
-                        setActionMenuMessage(null);
-                        setActionMenuPosition(null);
-                      }}
-                      className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10 active:scale-[0.98] transition-all mt-1"
-                    >
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-red-500/20 to-orange-500/20 shrink-0">
-                        <Trash2Icon className="w-5 h-5 text-red-400" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className="text-sm font-semibold text-white">
-                          Select to Delete
-                        </p>
-                        <p className="text-xs text-white/60 mt-0.5">
-                          Choose messages to remove
-                        </p>
-                      </div>
-                    </button>
-                  )}
+                          // Close action menu
+                          setActionMenuMessage(null);
+                          setActionMenuPosition(null);
+                        }}
+                        className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10 active:scale-[0.98] transition-all mt-1"
+                      >
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-red-500/20 to-orange-500/20 shrink-0">
+                          <Trash2Icon className="w-5 h-5 text-red-400" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="text-sm font-semibold text-white">
+                            Select to Delete
+                          </p>
+                          <p className="text-xs text-white/60 mt-0.5">
+                            Choose messages to remove
+                          </p>
+                        </div>
+                      </button>
+                    )}
+
+                  {/* Delete Message - For all other chats (budget, reminder, general, etc) */}
+                  {!hasTransactionAction &&
+                    threadPurpose !== "shopping" &&
+                    threadPurpose !== "notes" && (
+                      <>
+                        {/* Delete for me */}
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await fetch("/api/hub/messages", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  messageIds: [actionMenuMessage.id],
+                                  action: "hide",
+                                }),
+                              });
+
+                              if (!res.ok) {
+                                throw new Error("Failed to hide message");
+                              }
+
+                              queryClient.invalidateQueries({
+                                queryKey: ["hub", "messages", threadId],
+                              });
+
+                              setActionMenuMessage(null);
+                              setActionMenuPosition(null);
+                            } catch (error) {
+                              console.error("Failed to hide message:", error);
+                            }
+                          }}
+                          className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10 active:scale-[0.98] transition-all mt-1"
+                        >
+                          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-orange-500/20 to-red-500/20 shrink-0">
+                            <Trash2Icon className="w-5 h-5 text-orange-400" />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <p className="text-sm font-semibold text-white">
+                              Delete for me
+                            </p>
+                            <p className="text-xs text-white/60 mt-0.5">
+                              Hide from your view only
+                            </p>
+                          </div>
+                        </button>
+
+                        {/* Delete for everyone - only if it's my message */}
+                        {actionMenuMessage.sender_user_id === currentUserId && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch("/api/hub/messages", {
+                                  method: "DELETE",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    messageIds: [actionMenuMessage.id],
+                                  }),
+                                });
+
+                                if (!res.ok) {
+                                  throw new Error("Failed to delete message");
+                                }
+
+                                queryClient.invalidateQueries({
+                                  queryKey: ["hub", "messages", threadId],
+                                });
+
+                                setActionMenuMessage(null);
+                                setActionMenuPosition(null);
+                              } catch (error) {
+                                console.error(
+                                  "Failed to delete message:",
+                                  error
+                                );
+                              }
+                            }}
+                            className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10 active:scale-[0.98] transition-all"
+                          >
+                            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-red-500/20 to-pink-500/20 shrink-0">
+                              <Trash2Icon className="w-5 h-5 text-red-400" />
+                            </div>
+                            <div className="flex-1 text-left">
+                              <p className="text-sm font-semibold text-white">
+                                Delete for everyone
+                              </p>
+                              <p className="text-xs text-white/60 mt-0.5">
+                                Remove permanently
+                              </p>
+                            </div>
+                          </button>
+                        )}
+                      </>
+                    )}
                 </div>
               );
             })()}
@@ -2152,44 +2969,46 @@ function ThreadConversation({
             <div className="p-2">
               {/* Delete for me */}
               <button
-                onClick={async () => {
+                onClick={() => {
                   const idsToDelete = Array.from(selectedMessages);
+                  if (idsToDelete.length === 0) return;
 
-                  if (idsToDelete.length === 0) {
-                    return;
-                  }
+                  const queryKey = ["hub", "messages", threadId];
 
-                  try {
-                    const response = await fetch("/api/hub/messages", {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        messageIds: idsToDelete,
-                        action: "hide",
-                      }),
-                    });
-
-                    const result = await response.json();
-
-                    if (!response.ok) {
-                      throw new Error(
-                        result.error || "Failed to delete messages"
-                      );
+                  // Optimistically hide messages
+                  queryClient.setQueryData<{ messages: HubMessage[] }>(
+                    queryKey,
+                    (old) => {
+                      if (!old) return old;
+                      return {
+                        ...old,
+                        messages: old.messages.map((msg) =>
+                          idsToDelete.includes(msg.id)
+                            ? { ...msg, is_hidden_by_me: true }
+                            : msg
+                        ),
+                      };
                     }
+                  );
 
-                    queryClient.invalidateQueries({
-                      queryKey: ["hub", "messages", threadId],
-                    });
-                    setSelectedMessages(new Set());
-                    setIsSelectionMode(false);
-                    setShowDeleteModal(false);
-                  } catch (error) {
-                    alert(
-                      error instanceof Error
-                        ? error.message
-                        : "Failed to delete messages"
-                    );
-                  }
+                  // Fire and forget
+                  fetch("/api/hub/messages", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      messageIds: idsToDelete,
+                      action: "hide",
+                    }),
+                  }).then((res) => {
+                    if (!res.ok) {
+                      console.error("Failed to hide messages");
+                      queryClient.invalidateQueries({ queryKey });
+                    }
+                  });
+
+                  setSelectedMessages(new Set());
+                  setIsSelectionMode(false);
+                  setShowDeleteModal(false);
                 }}
                 className="w-full p-4 text-left hover:bg-white/5 rounded-xl transition-colors"
               >
@@ -2201,7 +3020,7 @@ function ThreadConversation({
 
               {/* Delete for everyone - only if ALL selected messages are mine */}
               {(() => {
-                const selectedMsgs = filteredMessages.filter((m) =>
+                const selectedMsgs = searchFilteredMessages.filter((m) =>
                   selectedMessages.has(m.id)
                 );
                 const allMine = selectedMsgs.every(
@@ -2210,43 +3029,42 @@ function ThreadConversation({
 
                 return (
                   <button
-                    onClick={async () => {
+                    onClick={() => {
                       if (!allMine) return;
-
                       const idsToDelete = Array.from(selectedMessages);
+                      if (idsToDelete.length === 0) return;
 
-                      if (idsToDelete.length === 0) {
-                        return;
-                      }
+                      const queryKey = ["hub", "messages", threadId];
 
-                      try {
-                        const response = await fetch("/api/hub/messages", {
-                          method: "DELETE",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ messageIds: idsToDelete }),
-                        });
-
-                        const result = await response.json();
-
-                        if (!response.ok) {
-                          throw new Error(
-                            result.error || "Failed to delete messages"
-                          );
+                      // Optimistically remove messages
+                      queryClient.setQueryData<{ messages: HubMessage[] }>(
+                        queryKey,
+                        (old) => {
+                          if (!old) return old;
+                          return {
+                            ...old,
+                            messages: old.messages.filter(
+                              (msg) => !idsToDelete.includes(msg.id)
+                            ),
+                          };
                         }
+                      );
 
-                        queryClient.invalidateQueries({
-                          queryKey: ["hub", "messages", threadId],
-                        });
-                        setSelectedMessages(new Set());
-                        setIsSelectionMode(false);
-                        setShowDeleteModal(false);
-                      } catch (error) {
-                        alert(
-                          error instanceof Error
-                            ? error.message
-                            : "Failed to delete messages"
-                        );
-                      }
+                      // Fire and forget
+                      fetch("/api/hub/messages", {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ messageIds: idsToDelete }),
+                      }).then((res) => {
+                        if (!res.ok) {
+                          console.error("Failed to delete messages");
+                          queryClient.invalidateQueries({ queryKey });
+                        }
+                      });
+
+                      setSelectedMessages(new Set());
+                      setIsSelectionMode(false);
+                      setShowDeleteModal(false);
                     }}
                     disabled={!allMine}
                     className={cn(
@@ -2285,64 +3103,504 @@ function ThreadConversation({
           </div>
         </div>
       )}
+
+      {/* Thread Settings Modal */}
+      {showThreadSettings && thread && (
+        <ThreadSettingsModal
+          thread={thread}
+          onClose={() => setShowThreadSettings(false)}
+          onDeleted={() => {
+            setShowThreadSettings(false);
+            onBack();
+          }}
+        />
+      )}
     </div>
   );
 }
 
 // Create Thread Modal
-// Purpose configuration with external app URLs
+// Purpose configuration
+// SVG Icon components for each purpose
+const PurposeIcons = {
+  general: ({ className }: { className?: string }) => (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  ),
+  budget: ({ className }: { className?: string }) => (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  reminder: ({ className }: { className?: string }) => (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    </svg>
+  ),
+  shopping: ({ className }: { className?: string }) => (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  ),
+  travel: ({ className }: { className?: string }) => (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+    </svg>
+  ),
+  health: ({ className }: { className?: string }) => (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+    </svg>
+  ),
+  notes: ({ className }: { className?: string }) => (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+  ),
+  other: ({ className }: { className?: string }) => (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+};
+
 const PURPOSE_CONFIG = {
   general: {
     label: "General",
     icon: "💬",
-    external_url: null,
-    external_app_name: null,
+    defaultColor: "#6366f1", // Indigo
   },
   budget: {
     label: "Budget",
     icon: "💰",
-    external_url: "https://home-management-app-internal.vercel.app/expense",
-    external_app_name: "Budget App",
+    defaultColor: "#10b981", // Emerald
   },
   reminder: {
     label: "Reminder",
     icon: "⏰",
-    external_url: "https://home-manager-pwa.vercel.app/",
-    external_app_name: "Reminder App",
+    defaultColor: "#f59e0b", // Amber
   },
   shopping: {
     label: "Shopping",
     icon: "🛒",
-    external_url: null,
-    external_app_name: null,
+    defaultColor: "#3b82f6", // Blue
   },
   travel: {
     label: "Travel",
     icon: "✈️",
-    external_url: null,
-    external_app_name: null,
+    defaultColor: "#8b5cf6", // Purple
   },
   health: {
     label: "Health",
     icon: "🏥",
-    external_url: null,
-    external_app_name: null,
+    defaultColor: "#ef4444", // Red
   },
   notes: {
     label: "Notes",
     icon: "📝",
-    external_url: null,
-    external_app_name: null,
+    defaultColor: "#eab308", // Yellow
   },
   other: {
     label: "Other",
     icon: "📋",
-    external_url: null,
-    external_app_name: null,
+    defaultColor: "#64748b", // Slate
   },
 } as const;
 
 type ThreadPurpose = keyof typeof PURPOSE_CONFIG;
+
+// Thread Settings Modal for editing icon/color
+function ThreadSettingsModal({
+  thread,
+  onClose,
+  onDeleted,
+}: {
+  thread: HubChatThread;
+  onClose: () => void;
+  onDeleted?: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const themeClasses = useThemeClasses();
+  const [icon, setIcon] = useState(thread.icon);
+  const [color, setColor] = useState<string>(
+    thread.color || PURPOSE_CONFIG[thread.purpose]?.defaultColor || "#6366f1"
+  );
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const COLOR_PALETTE = [
+    "#FF7043",
+    "#FF5252",
+    "#E91E63",
+    "#9C27B0",
+    "#673AB7",
+    "#3F51B5",
+    "#2196F3",
+    "#03A9F4",
+    "#00BCD4",
+    "#009688",
+    "#4CAF50",
+    "#8BC34A",
+    "#CDDC39",
+    "#FFEB3B",
+    "#FFC107",
+    "#FF9800",
+    "#795548",
+    "#607D8B",
+    "#9E9E9E",
+    "#22d3ee",
+  ];
+
+  const IconComponent = PurposeIcons[thread.purpose] || PurposeIcons.general;
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      // Optimistic update
+      queryClient.setQueryData<{ threads: HubChatThread[] }>(
+        ["hub", "threads"],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            threads: old.threads.map((t) =>
+              t.id === thread.id ? { ...t, icon, color } : t
+            ),
+          };
+        }
+      );
+
+      const res = await fetch("/api/hub/threads", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thread_id: thread.id,
+          icon,
+          color,
+        }),
+      });
+
+      if (!res.ok) {
+        let errorMessage = "Failed to update thread";
+        try {
+          const errorData = await res.json();
+          console.error("Thread update error:", errorData);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+
+          // If migration required, show specific message
+          if (errorData.error === "Database migration required") {
+            errorMessage =
+              "Please run the database migration to add the 'color' column. Check console for details.";
+            console.error("Migration required:", errorData.message);
+          }
+        } catch (e) {
+          console.error("Error parsing response:", e);
+        }
+        throw new Error(errorMessage);
+      }
+
+      toast.success("Chat appearance updated");
+      onClose();
+    } catch (error) {
+      console.error("Failed to update thread:", error);
+      toast.error("Failed to update appearance");
+      queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      // Optimistic update - remove from list
+      queryClient.setQueryData<{ threads: HubChatThread[] }>(
+        ["hub", "threads"],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            threads: old.threads.filter((t) => t.id !== thread.id),
+          };
+        }
+      );
+
+      const res = await fetch(`/api/hub/threads?thread_id=${thread.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete");
+      }
+
+      // Store thread id for undo
+      const deletedThreadId = thread.id;
+
+      // Show undo toast with action
+      toast.message("Chat deleted", {
+        duration: 10000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            const undoRes = await fetch(
+              `/api/hub/threads?thread_id=${deletedThreadId}&undo=true`,
+              { method: "DELETE" }
+            );
+            if (undoRes.ok) {
+              queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
+              toast.success("Chat restored");
+            } else {
+              toast.error("Failed to restore chat");
+            }
+          },
+        },
+      });
+
+      onClose();
+      onDeleted?.();
+    } catch (error) {
+      console.error("Failed to delete thread:", error);
+      toast.error("Failed to delete chat");
+      queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pb-[72px] sm:pb-0">
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative w-full sm:max-w-md mx-auto bg-bg-dark border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl animate-slide-up max-h-[calc(100vh-88px)] sm:max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="px-6 pt-6 pb-2 border-b border-slate-800/50">
+          <div className="flex items-center justify-between mb-2">
+            <h2
+              className={`text-lg font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
+            >
+              Chat Appearance
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-white/5 text-white/50 hover:text-white transition-colors"
+            >
+              <XIcon className="w-5 h-5" />
+            </button>
+          </div>
+          <p className="text-slate-400 text-sm">{thread.title}</p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+          {/* Preview */}
+          <div className="flex items-center justify-center py-4">
+            <div
+              className="flex items-center gap-3 px-5 py-3 rounded-xl border-2 transition-all duration-300"
+              style={{
+                borderColor: color,
+                backgroundColor: `${color}15`,
+              }}
+            >
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300"
+                style={{
+                  backgroundColor: `${color}30`,
+                  color: color,
+                }}
+              >
+                <IconComponent className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <div className="text-white font-semibold">{thread.title}</div>
+                <div className="text-xs text-slate-400">
+                  {PURPOSE_CONFIG[thread.purpose].label}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Emoji Icon (read-only display, users can't change it) */}
+          <div>
+            <label className={`block text-xs mb-2 ${themeClasses.textFaint}`}>
+              Icon
+            </label>
+            <div className="w-full px-4 py-3 rounded-xl border bg-slate-900/50 border-slate-700">
+              <div className="flex items-center gap-3">
+                <div style={{ color }}>
+                  <IconComponent className="w-6 h-6" />
+                </div>
+                <span className="text-white">
+                  {PURPOSE_CONFIG[thread.purpose].label} Icon
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Color Picker */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className={`text-xs ${themeClasses.textFaint}`}>
+                Color Theme
+              </label>
+              <button
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+              >
+                {showColorPicker ? "Hide" : "Show"} Palette
+              </button>
+            </div>
+            <div
+              className="w-full px-4 py-3 rounded-xl border cursor-pointer transition-all"
+              style={{
+                borderColor: color,
+                backgroundColor: `${color}20`,
+              }}
+              onClick={() => setShowColorPicker(true)}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-8 h-8 rounded-lg"
+                  style={{ backgroundColor: color }}
+                />
+                <span className="text-white font-medium">
+                  {color.toUpperCase()}
+                </span>
+              </div>
+            </div>
+            {showColorPicker && (
+              <div className="flex flex-wrap gap-2 p-3 mt-2 rounded-xl bg-slate-900/50 border border-slate-700">
+                {COLOR_PALETTE.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setColor(c)}
+                    className={cn(
+                      "w-10 h-10 rounded-lg transition-all duration-200 active:scale-95",
+                      color === c
+                        ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-110"
+                        : "hover:scale-105"
+                    )}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Delete Chat Section */}
+          <div className="pt-4 border-t border-slate-800/50">
+            {!showDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all border border-red-500/20"
+              >
+                <Trash2Icon className="w-5 h-5" />
+                <span>Delete Chat</span>
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-red-400 text-center">
+                  Are you sure? This action can be undone within 1 day.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="flex-1 px-4 py-2 rounded-xl bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 transition-all border border-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="flex-1 px-4 py-2 rounded-xl bg-red-500 text-white hover:bg-red-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-800/50 bg-slate-900/30 flex gap-3">
+          <button
+            onClick={onClose}
+            className={cn(
+              "flex-1 px-4 py-3 rounded-xl font-medium transition-all",
+              "bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 hover:text-white",
+              "border border-slate-700 hover:border-slate-600"
+            )}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className={cn(
+              "flex-1 px-4 py-3 rounded-xl font-semibold transition-all",
+              "bg-gradient-to-r from-cyan-500 to-blue-500 text-white",
+              "hover:from-cyan-400 hover:to-blue-400",
+              "disabled:opacity-50 disabled:cursor-not-allowed",
+              "shadow-lg shadow-cyan-500/25"
+            )}
+          >
+            {isSaving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CreateThreadModal({
   householdId,
@@ -2354,46 +3612,57 @@ function CreateThreadModal({
   onCreated: (threadId: string) => void;
 }) {
   const createThread = useCreateThread();
+  const themeClasses = useThemeClasses();
   const [title, setTitle] = useState("");
   const [icon, setIcon] = useState("💬");
   const [purpose, setPurpose] = useState<ThreadPurpose>("general");
+  const [color, setColor] = useState<string>(
+    PURPOSE_CONFIG.general.defaultColor
+  );
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
 
-  const iconOptions = [
-    "💬",
-    "🏠",
-    "💰",
-    "🛒",
-    "🍽️",
-    "🎉",
-    "❤️",
-    "📋",
-    "🎯",
-    "✈️",
-    "🚗",
-    "🏥",
+  // Color palette matching NewCategoryDrawer
+  const COLOR_PALETTE = [
+    "#FF7043", // Deep Orange
+    "#FF5252", // Red
+    "#E91E63", // Pink
+    "#9C27B0", // Purple
+    "#673AB7", // Deep Purple
+    "#3F51B5", // Indigo
+    "#2196F3", // Blue
+    "#03A9F4", // Light Blue
+    "#00BCD4", // Cyan
+    "#009688", // Teal
+    "#4CAF50", // Green
+    "#8BC34A", // Light Green
+    "#CDDC39", // Lime
+    "#FFEB3B", // Yellow
+    "#FFC107", // Amber
+    "#FF9800", // Orange
+    "#795548", // Brown
+    "#607D8B", // Blue Grey
+    "#9E9E9E", // Grey
+    "#22d3ee", // Theme cyan
   ];
 
-  // Update icon when purpose changes (optional auto-select)
+  // Update color when purpose changes
   const handlePurposeChange = (newPurpose: ThreadPurpose) => {
     setPurpose(newPurpose);
-    // Auto-select matching icon
     const config = PURPOSE_CONFIG[newPurpose];
-    if (config.icon && iconOptions.includes(config.icon)) {
-      setIcon(config.icon);
-    }
+    setColor(config.defaultColor);
+    setIcon(config.icon);
   };
 
   const handleCreate = () => {
     if (!title.trim()) return;
-    const config = PURPOSE_CONFIG[purpose];
     createThread.mutate(
       {
         title: title.trim(),
         icon,
         household_id: householdId,
         purpose,
-        external_url: config.external_url ?? undefined,
-        external_app_name: config.external_app_name ?? undefined,
+        is_private: isPrivate,
       },
       {
         onSuccess: (data) => {
@@ -2403,7 +3672,7 @@ function CreateThreadModal({
     );
   };
 
-  const selectedConfig = PURPOSE_CONFIG[purpose];
+  const IconComponent = PurposeIcons[purpose];
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pb-[72px] sm:pb-0">
@@ -2413,122 +3682,254 @@ function CreateThreadModal({
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="relative w-full sm:max-w-md mx-auto sm:mx-4 bg-bg-card-custom border border-white/10 rounded-t-3xl sm:rounded-2xl p-6 animate-slide-up max-h-[calc(100vh-88px)] sm:max-h-[90vh] overflow-y-auto">
+      {/* Modal - Drawer style */}
+      <div className="relative w-full sm:max-w-md mx-auto bg-bg-dark border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl animate-slide-up max-h-[calc(100vh-88px)] sm:max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-white">New Conversation</h2>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/5 text-white/50 hover:text-white"
-          >
-            <XIcon className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Purpose Picker */}
-        <div className="mb-4">
-          <label className="block text-xs text-white/50 mb-2">
-            Conversation Purpose
-          </label>
-          <div className="grid grid-cols-4 gap-2">
-            {(Object.keys(PURPOSE_CONFIG) as ThreadPurpose[]).map((key) => {
-              const config = PURPOSE_CONFIG[key];
-              const isSelected = purpose === key;
-              const hasExternalApp = !!config.external_url;
-              return (
-                <button
-                  key={key}
-                  onClick={() => handlePurposeChange(key)}
-                  className={cn(
-                    "flex flex-col items-center gap-1 p-2 rounded-xl transition-all",
-                    isSelected
-                      ? "bg-gradient-to-r from-blue-500/30 to-purple-500/30 ring-2 ring-blue-500"
-                      : "bg-white/5 hover:bg-white/10"
-                  )}
-                >
-                  <span className="text-lg">{config.icon}</span>
-                  <span className="text-xs text-white/70">{config.label}</span>
-                  {hasExternalApp && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
-                      App
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+        <div className="px-6 pt-6 pb-2 border-b border-slate-800/50">
+          <div className="flex items-center justify-between mb-2">
+            <h2
+              className={`text-lg font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
+            >
+              New Conversation
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-white/5 text-white/50 hover:text-white transition-colors"
+            >
+              <XIcon className="w-5 h-5" />
+            </button>
           </div>
+          <p className="text-slate-400 text-sm">
+            Create a chat for your household
+          </p>
         </div>
 
-        {/* External App Info */}
-        {selectedConfig.external_url && (
-          <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-            <div className="flex items-center gap-2">
-              <span className="text-emerald-400">🔗</span>
-              <div className="flex-1">
-                <p className="text-xs text-emerald-300 font-medium">
-                  Linked to {selectedConfig.external_app_name}
-                </p>
-                <p className="text-xs text-white/50">
-                  Opens external app for actions
-                </p>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+          {/* Preview Card */}
+          <div className="flex items-center justify-center py-4">
+            <div
+              className="flex items-center gap-3 px-5 py-3 rounded-xl border-2 transition-all duration-300"
+              style={{
+                borderColor: color,
+                backgroundColor: `${color}15`,
+              }}
+            >
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300"
+                style={{
+                  backgroundColor: `${color}30`,
+                  color: color,
+                }}
+              >
+                <IconComponent className="w-6 h-6" />
               </div>
+              <div className="flex-1 min-w-[120px]">
+                <div className="text-white font-semibold">
+                  {title || "Conversation Name"}
+                </div>
+                <div className="text-xs text-slate-400">
+                  {PURPOSE_CONFIG[purpose].label}
+                </div>
+              </div>
+              {isPrivate && (
+                <svg
+                  className="w-4 h-4 text-purple-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              )}
             </div>
           </div>
-        )}
 
-        {/* Icon Picker */}
-        <div className="mb-4">
-          <label className="block text-xs text-white/50 mb-2">
-            Choose an Icon
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {iconOptions.map((emoji) => (
+          {/* Title Input */}
+          <div>
+            <label className={`block text-xs mb-2 ${themeClasses.textFaint}`}>
+              Conversation Name
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g., Weekly Groceries, Bill Reminders..."
+              className={cn(
+                "w-full px-4 py-3 rounded-xl border transition-all",
+                "bg-slate-900/50 text-white placeholder:text-slate-500",
+                "border-slate-700 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+              )}
+              autoFocus
+            />
+          </div>
+
+          {/* Purpose Picker */}
+          <div>
+            <label className={`block text-xs mb-2 ${themeClasses.textFaint}`}>
+              Purpose
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {(Object.keys(PURPOSE_CONFIG) as ThreadPurpose[]).map((key) => {
+                const config = PURPOSE_CONFIG[key];
+                const Icon = PurposeIcons[key];
+                const isSelected = purpose === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handlePurposeChange(key)}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-200 active:scale-95",
+                      isSelected
+                        ? "border-cyan-500 bg-cyan-500/10 shadow-lg shadow-cyan-500/20"
+                        : "border-slate-700 bg-slate-900/50 hover:bg-slate-800/50 hover:border-slate-600"
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "w-5 h-5 transition-colors",
+                        isSelected ? "text-cyan-400" : "text-slate-400"
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "text-xs font-medium",
+                        isSelected ? "text-white" : "text-slate-400"
+                      )}
+                    >
+                      {config.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Color Picker */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className={`text-xs ${themeClasses.textFaint}`}>
+                Color
+              </label>
               <button
-                key={emoji}
-                onClick={() => setIcon(emoji)}
-                className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-all",
-                  icon === emoji
-                    ? "bg-gradient-to-r from-blue-500/30 to-purple-500/30 ring-2 ring-blue-500"
-                    : "bg-white/5 hover:bg-white/10"
-                )}
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
               >
-                {emoji}
+                {showColorPicker ? "Hide" : "Show"} Palette
               </button>
-            ))}
+            </div>
+            {showColorPicker && (
+              <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-slate-900/50 border border-slate-700">
+                {COLOR_PALETTE.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setColor(c)}
+                    className={cn(
+                      "w-10 h-10 rounded-lg transition-all duration-200 active:scale-95",
+                      color === c
+                        ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-110"
+                        : "hover:scale-105"
+                    )}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Privacy Toggle */}
+          <div>
+            <label className={`block text-xs mb-2 ${themeClasses.textFaint}`}>
+              Privacy
+            </label>
+            <button
+              onClick={() => setIsPrivate(!isPrivate)}
+              suppressHydrationWarning
+              className={cn(
+                "w-full group relative p-3 rounded-xl border transition-all duration-300 active:scale-[0.98] flex items-center gap-3 overflow-hidden",
+                isPrivate
+                  ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow}`
+                  : `border-slate-700 bg-slate-900/50 hover:bg-slate-800/50 hover:border-slate-600`
+              )}
+            >
+              {isPrivate && (
+                <div
+                  className={`absolute inset-0 bg-gradient-to-r ${themeClasses.iconBg} animate-[shimmer_3s_ease-in-out_infinite]`}
+                />
+              )}
+
+              <svg
+                className={cn(
+                  "relative w-5 h-5 transition-all duration-500 shrink-0",
+                  isPrivate
+                    ? `${themeClasses.textActive} drop-shadow-[0_0_10px_rgba(20,184,166,0.8)] animate-pulse`
+                    : "text-slate-400"
+                )}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                {isPrivate ? (
+                  <>
+                    <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </>
+                ) : (
+                  <>
+                    <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                  </>
+                )}
+              </svg>
+
+              <div className="flex-1 text-left">
+                <div
+                  className={cn(
+                    "relative text-sm font-semibold tracking-wide transition-all duration-300",
+                    isPrivate
+                      ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]`
+                      : "text-white"
+                  )}
+                >
+                  {isPrivate ? "Private" : "Public"}
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  {isPrivate
+                    ? "Only you can see this chat"
+                    : "Visible to all household members"}
+                </div>
+              </div>
+            </button>
           </div>
         </div>
 
-        {/* Title Input */}
-        <div className="mb-6">
-          <label className="block text-xs text-white/50 mb-2">
-            Conversation Name
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g., Groceries, Bills, Trip Planning..."
-            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
-            autoFocus
-          />
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-3">
+        {/* Footer Actions */}
+        <div className="px-6 py-4 border-t border-slate-800/50 bg-slate-900/30 flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 rounded-xl bg-white/5 text-white/70 hover:bg-white/10 transition-colors"
+            className={cn(
+              "flex-1 px-4 py-3 rounded-xl font-medium transition-all",
+              "bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 hover:text-white",
+              "border border-slate-700 hover:border-slate-600"
+            )}
           >
             Cancel
           </button>
           <button
             onClick={handleCreate}
             disabled={!title.trim() || createThread.isPending}
-            className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className={cn(
+              "flex-1 px-4 py-3 rounded-xl font-semibold transition-all",
+              "bg-gradient-to-r from-cyan-500 to-blue-500 text-white",
+              "hover:from-cyan-400 hover:to-blue-400",
+              "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-cyan-500 disabled:hover:to-blue-500",
+              "shadow-lg shadow-cyan-500/25"
+            )}
           >
-            {createThread.isPending ? "Creating..." : "Create"}
+            {createThread.isPending ? "Creating..." : "Create Chat"}
           </button>
         </div>
       </div>

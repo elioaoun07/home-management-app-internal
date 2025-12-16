@@ -72,6 +72,17 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className="scroll-smooth">
       <head>
+        {/* Google Fonts - Handwriting for Notes */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Patrick+Hand&display=swap"
+          rel="stylesheet"
+        />
         {/* Critical early CSS to prevent ANY flash of wrong theme color */}
         <script
           dangerouslySetInnerHTML={{

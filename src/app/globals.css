@@ -43,6 +43,11 @@ body.theme-loaded {
     z-index: 45;
   }
 
+  /* Handwriting font for notebook-style notes */
+  .font-handwriting {
+    font-family: "Caveat", "Patrick Hand", cursive;
+  }
+
   /* Hide scrollbar */
   .scrollbar-hide {
     -ms-overflow-style: none;
@@ -91,6 +96,688 @@ body.theme-loaded {
     100% {
       transform: translateX(100%);
     }
+  }
+
+  /* ============================================
+     ADVANCED 3D PAGE FLIP ANIMATION SYSTEM
+     A realistic book page flip effect
+     ============================================ */
+
+  /* Page flip container base styles */
+  .page-flip-container {
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+
+  /* Page curl shadow effect during flip */
+  .page-curl-shadow {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(0, 0, 0, 0.1) 40%,
+      rgba(0, 0, 0, 0.3) 50%,
+      rgba(0, 0, 0, 0.1) 60%,
+      transparent 100%
+    );
+  }
+
+  /* Soft page edge glow */
+  .page-edge-glow {
+    box-shadow:
+      inset 2px 0 8px rgba(255, 255, 255, 0.1),
+      inset -2px 0 8px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Paper fold line effect */
+  .paper-fold-line {
+    background: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(255, 255, 255, 0.05) 49%,
+      rgba(0, 0, 0, 0.15) 50%,
+      rgba(0, 0, 0, 0.1) 51%,
+      transparent 100%
+    );
+  }
+
+  /* Keyframe for paper wobble on settle */
+  @keyframes page-settle-wobble {
+    0% {
+      transform: rotateY(-3deg) rotateX(0deg);
+    }
+    25% {
+      transform: rotateY(2deg) rotateX(0.5deg);
+    }
+    50% {
+      transform: rotateY(-1deg) rotateX(0deg);
+    }
+    75% {
+      transform: rotateY(0.5deg) rotateX(-0.3deg);
+    }
+    100% {
+      transform: rotateY(0deg) rotateX(0deg);
+    }
+  }
+
+  /* Shadow animation during flip */
+  @keyframes flip-shadow-move {
+    0% {
+      opacity: 0;
+      transform: scaleX(1) translateY(0);
+    }
+    30% {
+      opacity: 0.5;
+      transform: scaleX(0.8) translateY(-20px);
+    }
+    50% {
+      opacity: 0.7;
+      transform: scaleX(0.6) translateY(-40px);
+    }
+    70% {
+      opacity: 0.5;
+      transform: scaleX(0.8) translateY(-20px);
+    }
+    100% {
+      opacity: 0;
+      transform: scaleX(1) translateY(0);
+    }
+  }
+
+  /* Page lift animation before flip */
+  @keyframes page-lift {
+    0% {
+      transform: perspective(2000px) rotateY(0deg) rotateX(0deg) translateZ(0);
+      box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+    }
+    100% {
+      transform: perspective(2000px) rotateY(-5deg) rotateX(-2deg)
+        translateZ(30px);
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  /* Clean page flip right - flip through 90deg */
+  @keyframes flip-right {
+    0% {
+      transform: rotateY(0deg);
+      opacity: 1;
+    }
+    50% {
+      transform: rotateY(-90deg);
+      opacity: 0.5;
+    }
+    100% {
+      transform: rotateY(0deg);
+      opacity: 1;
+    }
+  }
+
+  /* Clean page flip left - flip through 90deg */
+  @keyframes flip-left {
+    0% {
+      transform: rotateY(0deg);
+      opacity: 1;
+    }
+    50% {
+      transform: rotateY(90deg);
+      opacity: 0.5;
+    }
+    100% {
+      transform: rotateY(0deg);
+      opacity: 1;
+    }
+  }
+
+  /* Minimal page flip animations */
+  .animate-flip-right {
+    animation: flip-right 0.6s ease-in-out forwards;
+    transform-origin: left center;
+  }
+
+  .animate-flip-left {
+    animation: flip-left 0.6s ease-in-out forwards;
+    transform-origin: left center;
+  }
+
+  /* ============================================
+     JAW-DROPPING PAGE FLIP ANIMATION SYSTEM
+     Premium StPageFlip / react-pageflip overrides
+     with dramatic shadows, smooth curves, and
+     realistic paper physics.
+     ============================================ */
+
+  /* Notebook flipbook container - sets perspective for 3D effect */
+  .notebook-flipbook-container {
+    perspective: 2500px;
+    perspective-origin: center center;
+    transform-style: preserve-3d;
+  }
+
+  /* Individual notebook page styling */
+  .notebook-page {
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+    will-change: transform;
+  }
+
+  /* Main flipbook wrapper - full viewport with perspective */
+  .stf__parent {
+    width: 100% !important;
+    height: 100% !important;
+    overflow: visible !important;
+    touch-action: pan-y;
+    perspective: 2500px !important;
+    perspective-origin: center center !important;
+    /* App theme stage */
+    background: #0a1628 !important;
+  }
+
+  /* Pink theme stage - deeper burgundy leather */
+  :root[data-theme="pink"] .stf__parent {
+    background: #1a0a14 !important;
+  }
+
+  /* page-flip uses sft__wrapper; keep both for safety */
+  .sft__wrapper,
+  .stf__wrapper {
+    width: 100% !important;
+    height: 100% !important;
+    overflow: visible !important;
+    background: #0a1628 !important;
+    transform-style: preserve-3d !important;
+  }
+
+  :root[data-theme="pink"] .sft__wrapper,
+  :root[data-theme="pink"] .stf__wrapper {
+    background: #1a0a14 !important;
+  }
+
+  .stf__block {
+    background: #0a1628 !important;
+    transform-style: preserve-3d !important;
+  }
+
+  :root[data-theme="pink"] .stf__block {
+    background: #1a0a14 !important;
+  }
+
+  .stf__item {
+    background: #0f1d2e !important;
+    transform-style: preserve-3d !important;
+    backface-visibility: hidden !important;
+    opacity: 1 !important;
+    border-right: 1px solid rgba(6, 182, 212, 0.15) !important;
+  }
+
+  /* The flipping element is the item itself. Keep it fully opaque + "paper" even while
+     the library overwrites inline style.cssText during animation frames. */
+  .stf__item.notebook-page {
+    background: linear-gradient(
+      165deg,
+      rgba(10, 22, 40, 1) 0%,
+      rgba(15, 29, 46, 1) 40%,
+      rgba(10, 22, 40, 1) 100%
+    ) !important;
+    border-radius: 3px !important;
+    box-shadow:
+      inset 0 0 100px rgba(0, 0, 0, 0.55),
+      inset 0 0 40px rgba(6, 182, 212, 0.06),
+      inset 2px 0 0 rgba(6, 182, 212, 0.12),
+      inset -1px 0 0 rgba(0, 0, 0, 0.35),
+      0 2px 18px rgba(0, 0, 0, 0.55),
+      0 0 45px rgba(6, 182, 212, 0.08) !important;
+    opacity: 1 !important;
+  }
+
+  :root[data-theme="pink"] .stf__item.notebook-page {
+    background: linear-gradient(
+      165deg,
+      rgba(26, 10, 20, 1) 0%,
+      rgba(45, 27, 41, 1) 40%,
+      rgba(26, 10, 20, 1) 100%
+    ) !important;
+    box-shadow:
+      inset 0 0 100px rgba(0, 0, 0, 0.55),
+      inset 0 0 40px rgba(236, 72, 153, 0.06),
+      inset 2px 0 0 rgba(236, 72, 153, 0.12),
+      inset -1px 0 0 rgba(0, 0, 0, 0.35),
+      0 2px 18px rgba(0, 0, 0, 0.55),
+      0 0 45px rgba(236, 72, 153, 0.08) !important;
+  }
+
+  .stf__page {
+    background: linear-gradient(
+      165deg,
+      rgba(35, 28, 22, 1) 0%,
+      rgba(26, 22, 18, 1) 40%,
+      rgba(32, 26, 20, 1) 100%
+    ) !important;
+    transform-style: preserve-3d !important;
+    /* VIKING: Deep aged leather shadow */
+    box-shadow:
+      0 0 30px rgba(0, 0, 0, 0.6),
+      0 0 60px rgba(0, 0, 0, 0.4),
+      inset 0 0 80px rgba(0, 0, 0, 0.3) !important;
+    border-radius: 2px !important;
+  }
+
+  /* Page during active flip - Viking dramatic leather lighting */
+  .stf__page--flipping {
+    background: linear-gradient(
+      165deg,
+      rgba(35, 28, 22, 1) 0%,
+      rgba(26, 22, 18, 1) 40%,
+      rgba(32, 26, 20, 1) 100%
+    ) !important;
+    box-shadow:
+      0 20px 60px rgba(0, 0, 0, 0.8),
+      0 8px 25px rgba(0, 0, 0, 0.6),
+      -15px 0 50px rgba(0, 0, 0, 0.5),
+      inset 0 0 100px rgba(0, 0, 0, 0.35) !important;
+  }
+
+  /* Page fold shadow - VIKING: Antique bronze crease shimmer on curl */
+  .stf__innerShadow {
+    opacity: 1 !important;
+    background: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.88) 0%,
+      rgba(0, 0, 0, 0.7) 12%,
+      rgba(180, 140, 90, 0.15) 34%,
+      rgba(26, 22, 18, 0.98) 55%,
+      rgba(26, 22, 18, 1) 100%
+    ) !important;
+    pointer-events: none;
+  }
+
+  /* PINK THEME: Rose-gold crease shimmer */
+  :root[data-theme="pink"] .stf__innerShadow {
+    background: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.88) 0%,
+      rgba(0, 0, 0, 0.7) 12%,
+      rgba(200, 150, 170, 0.15) 34%,
+      rgba(26, 18, 20, 0.98) 55%,
+      rgba(26, 18, 20, 1) 100%
+    ) !important;
+  }
+
+  /* Outer page shadow - soft ambient glow */
+  .stf__outerShadow {
+    opacity: 1 !important;
+    background: radial-gradient(
+      ellipse at center,
+      rgba(0, 0, 0, 0.6) 0%,
+      rgba(0, 0, 0, 0.4) 30%,
+      rgba(0, 0, 0, 0.2) 50%,
+      transparent 70%
+    ) !important;
+    pointer-events: none;
+  }
+
+  /* Hard-page mode shadows - VIKING: Bronze shimmer on hard flip */
+  .stf__hardInnerShadow {
+    opacity: 1 !important;
+    background: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.78) 0%,
+      rgba(0, 0, 0, 0.58) 10%,
+      rgba(180, 140, 90, 0.1) 30%,
+      rgba(26, 22, 18, 0.98) 55%,
+      rgba(26, 22, 18, 1) 100%
+    ) !important;
+    pointer-events: none;
+  }
+
+  :root[data-theme="pink"] .stf__hardInnerShadow {
+    background: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.78) 0%,
+      rgba(0, 0, 0, 0.58) 10%,
+      rgba(200, 150, 170, 0.1) 30%,
+      rgba(26, 18, 20, 0.98) 55%,
+      rgba(26, 18, 20, 1) 100%
+    ) !important;
+  }
+
+  .stf__hardShadow {
+    opacity: 1 !important;
+    pointer-events: none;
+  }
+
+  /* Corner fold hint - VIKING: Antique gold ember glow */
+  .stf__corner {
+    background: linear-gradient(
+      135deg,
+      rgba(180, 140, 90, 0.2) 0%,
+      rgba(139, 90, 43, 0.1) 50%,
+      transparent 100%
+    ) !important;
+    border-radius: 0 0 0 8px !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+
+  .stf__corner:hover {
+    background: linear-gradient(
+      135deg,
+      rgba(212, 165, 116, 0.3) 0%,
+      rgba(180, 140, 90, 0.15) 50%,
+      transparent 100%
+    ) !important;
+  }
+
+  /* Pink theme corner - rose-gold ember */
+  :root[data-theme="pink"] .stf__corner {
+    background: linear-gradient(
+      135deg,
+      rgba(200, 150, 170, 0.2) 0%,
+      rgba(180, 100, 130, 0.1) 50%,
+      transparent 100%
+    ) !important;
+  }
+
+  :root[data-theme="pink"] .stf__corner:hover {
+    background: linear-gradient(
+      135deg,
+      rgba(220, 180, 190, 0.3) 0%,
+      rgba(200, 150, 170, 0.15) 50%,
+      transparent 100%
+    ) !important;
+  }
+
+  /* Smooth flip animation timing override */
+  .stf__block canvas {
+    filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.5)) !important;
+  }
+
+  /* Input placeholder styling for notebook pages (match app theme) */
+  .notebook-page input::placeholder,
+  .dark-paper input::placeholder {
+    color: rgba(6, 182, 212, 0.45) !important;
+  }
+
+  :root[data-theme="pink"] .notebook-page input::placeholder,
+  :root[data-theme="pink"] .dark-paper input::placeholder {
+    color: rgba(236, 72, 153, 0.45) !important;
+  }
+
+  /* Page turn sound visual feedback - VIKING: Bronze ember pulse */
+  @keyframes page-turn-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(180, 140, 90, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 20px 10px rgba(180, 140, 90, 0.1);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(180, 140, 90, 0);
+    }
+  }
+
+  :root[data-theme="pink"] .notebook-flipbook-container {
+    --page-pulse-color: rgba(236, 72, 153, 0.3);
+  }
+
+  /* Page edge texture - realistic paper stack on right side */
+  .notebook-flipbook::after {
+    content: "";
+    position: absolute;
+    right: -3px;
+    top: 5%;
+    bottom: 5%;
+    width: 8px;
+    background:
+      linear-gradient(to right, rgba(0, 0, 0, 0.3) 0%, transparent 100%),
+      repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.04) 0px,
+        rgba(255, 255, 255, 0.04) 1px,
+        rgba(0, 0, 0, 0.08) 1px,
+        rgba(0, 0, 0, 0.08) 2px
+      );
+    border-radius: 0 3px 3px 0;
+    pointer-events: none;
+    z-index: 50;
+  }
+
+  /* Solid paper page during flip - fully opaque, no transparency */
+  /* VIKING: Aged leather/parchment base */
+  .stf__page,
+  .stf__item,
+  .notebook-page {
+    background: linear-gradient(
+      165deg,
+      rgba(35, 28, 22, 1) 0%,
+      rgba(26, 22, 18, 1) 40%,
+      rgba(32, 26, 20, 1) 100%
+    ) !important;
+    opacity: 1 !important;
+  }
+
+  /* Pink theme Viking leather */
+  :root[data-theme="pink"] .stf__page,
+  :root[data-theme="pink"] .stf__item,
+  :root[data-theme="pink"] .notebook-page {
+    background: linear-gradient(
+      165deg,
+      rgba(35, 22, 26, 1) 0%,
+      rgba(26, 18, 20, 1) 40%,
+      rgba(32, 22, 24, 1) 100%
+    ) !important;
+  }
+
+  /* Paper texture overlay for realistic feel */
+  .notebook-page::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.02;
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  /* ============================================
+      BOOK INDEX SIDEBAR STYLES
+      Solid index page - no transparency
+      ============================================ */
+
+  .book-index-sidebar {
+    background: linear-gradient(
+      180deg,
+      rgba(10, 22, 40, 1) 0%,
+      rgba(15, 29, 46, 1) 45%,
+      rgba(10, 22, 40, 1) 100%
+    );
+    position: relative;
+  }
+
+  :root[data-theme="pink"] .book-index-sidebar {
+    background: linear-gradient(
+      180deg,
+      rgba(26, 10, 20, 1) 0%,
+      rgba(45, 27, 41, 1) 45%,
+      rgba(26, 10, 20, 1) 100%
+    );
+  }
+
+  /* Paper grain texture */
+  .book-index-sidebar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.04;
+    pointer-events: none;
+  }
+
+  /* Binding edge effect */
+  .book-index-sidebar::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 16px;
+    background: linear-gradient(
+      to left,
+      rgba(10, 22, 40, 1) 0%,
+      rgba(15, 29, 46, 0.85) 45%,
+      rgba(6, 182, 212, 0.08) 75%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  :root[data-theme="pink"] .book-index-sidebar::after {
+    background: linear-gradient(
+      to left,
+      rgba(26, 10, 20, 1) 0%,
+      rgba(45, 27, 41, 0.85) 45%,
+      rgba(236, 72, 153, 0.08) 75%,
+      transparent 100%
+    );
+  }
+
+  /* Index title styling */
+  .book-index-title {
+    font-family: "Caveat", "Patrick Hand", cursive;
+    letter-spacing: 0.08em;
+    color: rgba(6, 182, 212, 0.9) !important;
+    text-shadow:
+      0 0 25px rgba(6, 182, 212, 0.35),
+      0 0 50px rgba(6, 182, 212, 0.15),
+      0 2px 4px rgba(0, 0, 0, 0.7);
+    border-bottom: 2px solid rgba(6, 182, 212, 0.3);
+    padding-bottom: 0.75rem;
+  }
+
+  /* Pink theme */
+  :root[data-theme="pink"] .book-index-title {
+    color: rgba(236, 72, 153, 0.9) !important;
+    text-shadow:
+      0 0 25px rgba(236, 72, 153, 0.35),
+      0 0 50px rgba(236, 72, 153, 0.15),
+      0 2px 4px rgba(0, 0, 0, 0.7);
+    border-bottom: 2px solid rgba(236, 72, 153, 0.3);
+  }
+
+  /* Index entry text */
+  .book-index-entry {
+    position: relative;
+    padding-left: 0.5rem;
+    border-left: 2px solid transparent;
+    transition: all 0.2s ease;
+    color: rgba(255, 255, 255, 0.7) !important;
+  }
+
+  .book-index-entry:hover {
+    color: rgba(6, 182, 212, 0.95) !important;
+  }
+
+  .book-index-entry.active {
+    color: rgba(6, 182, 212, 1) !important;
+    border-left-color: rgba(6, 182, 212, 0.5);
+  }
+
+  /* Pink theme entries */
+  :root[data-theme="pink"] .book-index-entry {
+    color: rgba(255, 255, 255, 0.7) !important;
+  }
+
+  :root[data-theme="pink"] .book-index-entry:hover {
+    color: rgba(236, 72, 153, 0.95) !important;
+  }
+
+  :root[data-theme="pink"] .book-index-entry.active {
+    color: rgba(236, 72, 153, 1) !important;
+    border-left-color: rgba(236, 72, 153, 0.5);
+  }
+
+  .book-index-entry::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 0;
+    height: 0;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 0px solid;
+    transform: translateY(-50%);
+    transition: all 0.2s ease;
+    opacity: 0;
+  }
+
+  .book-index-entry:hover::before,
+  .book-index-entry.active::before {
+    border-left-width: 6px;
+    opacity: 1;
+  }
+
+  .book-index-entry.active {
+    border-left-color: currentColor;
+  }
+
+  /* Dotted leader line effect */
+  .book-index-leader {
+    flex: 1;
+    margin: 0 0.5rem;
+    border-bottom: 1px dotted rgba(6, 182, 212, 0.25);
+    min-width: 20px;
+  }
+
+  :root[data-theme="pink"] .book-index-leader {
+    border-bottom: 1px dotted rgba(236, 72, 153, 0.25);
+  }
+
+  /* Page number badge */
+  .book-index-page-num {
+    font-family: "Caveat", "Patrick Hand", cursive;
+    font-size: 0.875rem;
+    opacity: 0.5;
+    min-width: 1.5rem;
+    text-align: right;
+  }
+
+  /* Legacy classes for compatibility */
+  .animate-page-flip-right {
+    animation: flip-right 0.35s ease-out forwards;
+    transform-origin: left center;
+  }
+
+  .animate-page-flip-left {
+    animation: flip-left 0.35s ease-out forwards;
+    transform-origin: right center;
+  }
+
+  .animate-page-settle {
+    animation: none;
+  }
+
+  .animate-flip-shadow {
+    animation: flip-shadow-move 0.7s ease-in-out forwards;
+  }
+
+  /* Dark paper texture effect */
+  .dark-paper {
+    background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 47px,
+      rgba(6, 182, 212, 0.08) 47px,
+      rgba(6, 182, 212, 0.08) 48px
+    );
+  }
+
+  :root[data-theme="pink"] .dark-paper {
+    background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 47px,
+      rgba(236, 72, 153, 0.08) 47px,
+      rgba(236, 72, 153, 0.08) 48px
+    );
   }
 
   /* 3D transform utilities */

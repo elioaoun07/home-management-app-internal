@@ -312,6 +312,10 @@ CREATE TABLE public.hub_messages (
   hidden_for ARRAY DEFAULT '{}'::uuid[],
   deleted_at timestamp with time zone,
   deleted_by uuid,
+  archived_at timestamp with time zone,
+  archived_reason text CHECK (archived_reason IS NULL OR archived_reason = ANY (ARRAY['shopping_cleared'::text, 'transaction_created'::text, 'reminder_completed'::text, 'monthly_cleanup'::text, 'manual'::text])),
+  checked_at timestamp with time zone,
+  checked_by uuid,
   CONSTRAINT hub_messages_pkey PRIMARY KEY (id),
   CONSTRAINT hub_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
   CONSTRAINT hub_messages_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
@@ -319,7 +323,8 @@ CREATE TABLE public.hub_messages (
   CONSTRAINT hub_messages_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id),
   CONSTRAINT hub_messages_goal_id_fkey FOREIGN KEY (goal_id) REFERENCES public.hub_household_goals(id),
   CONSTRAINT hub_messages_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.hub_alerts(id),
-  CONSTRAINT hub_messages_reply_to_id_fkey FOREIGN KEY (reply_to_id) REFERENCES public.hub_messages(id)
+  CONSTRAINT hub_messages_reply_to_id_fkey FOREIGN KEY (reply_to_id) REFERENCES public.hub_messages(id),
+  CONSTRAINT hub_messages_checked_by_fkey FOREIGN KEY (checked_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.hub_reactions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

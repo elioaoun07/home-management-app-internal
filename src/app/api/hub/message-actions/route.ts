@@ -68,6 +68,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Also update the message itself with the linked ID based on action type
+    if (transactionId && actionType === "transaction") {
+      await supabase
+        .from("hub_messages")
+        .update({ transaction_id: transactionId })
+        .eq("id", messageId);
+    } else if (metadata?.goalId && actionType === "goal") {
+      await supabase
+        .from("hub_messages")
+        .update({ goal_id: metadata.goalId })
+        .eq("id", messageId);
+    } else if (metadata?.alertId && actionType === "reminder") {
+      await supabase
+        .from("hub_messages")
+        .update({ alert_id: metadata.alertId })
+        .eq("id", messageId);
+    }
+
     return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(
