@@ -538,11 +538,13 @@ export default function MobileExpenseForm() {
   };
 
   useEffect(() => {
-    if (stepFlow.length > 0 && !accountsLoading) {
+    // INSTANT INIT - Don't wait for accounts to load
+    // Set initialized immediately, accounts will populate when ready
+    if (stepFlow.length > 0) {
       setStep(firstValidStep);
       setIsInitialized(true);
     }
-  }, [stepFlow, firstValidStep, accountsLoading]);
+  }, [stepFlow, firstValidStep]);
 
   useEffect(() => {
     if (defaultAccount && !selectedAccountId) {
@@ -687,85 +689,8 @@ export default function MobileExpenseForm() {
     bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_CONTENT_BOTTOM_OFFSET}px)`,
   };
 
-  // Skeleton loading state - shows immediately while data loads
-  // User can still start typing amount
-  if (!isInitialized) {
-    return (
-      <div className="fixed inset-0 top-14 bg-bg-dark flex flex-col">
-        {/* Skeleton Header */}
-        <div
-          className={`fixed top-0 left-0 right-0 z-[100] bg-gradient-to-b from-bg-card-custom to-bg-medium border-b ${themeClasses.border} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl`}
-        >
-          <div className="flex items-center justify-between mb-2 pt-16">
-            <div className="w-8" />
-            <h1
-              className={`text-sm font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
-            >
-              New Expense
-            </h1>
-            <div className="w-8" />
-          </div>
-          <div className="h-0.5 bg-bg-card-custom rounded-full overflow-hidden relative">
-            <div
-              className={`h-full bg-gradient-to-r ${themeClasses.activeItemGradient} w-[25%]`}
-            />
-          </div>
-        </div>
-
-        {/* Skeleton Content - Amount input ready immediately */}
-        <div
-          className="flex-1 overflow-y-auto pt-28 px-4 pb-6"
-          style={contentAreaStyles}
-        >
-          <div className="space-y-4 fade-in">
-            {/* Amount Input - Functional immediately */}
-            <div className="relative">
-              <div
-                className={`flex items-center justify-center gap-2 p-4 rounded-2xl neo-card ${themeClasses.border} ${themeClasses.borderActive}`}
-              >
-                <span className={`text-3xl font-bold ${themeClasses.text}`}>
-                  $
-                </span>
-                <Input
-                  autoFocus
-                  type="text"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (/^\d*\.?\d{0,2}$/.test(val) || val === "") {
-                      setAmount(val);
-                    }
-                  }}
-                  placeholder="0.00"
-                  className={cn(
-                    "text-4xl font-bold bg-transparent border-0 text-center focus:ring-0 focus-visible:ring-0 w-40 p-0",
-                    themeClasses.text
-                  )}
-                />
-              </div>
-            </div>
-
-            {/* Quick amounts - skeleton */}
-            <div className="grid grid-cols-4 gap-1.5">
-              {[5, 10, 20, 50].map((val) => (
-                <div
-                  key={val}
-                  className={cn(
-                    "h-9 rounded-lg neo-card animate-pulse",
-                    themeClasses.border
-                  )}
-                />
-              ))}
-            </div>
-
-            {/* Next button - skeleton */}
-            <div className="h-12 rounded-lg bg-white/5 animate-pulse" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // NO SKELETON - Form renders instantly with cached data
+  // Only the balance component shows loading state while APIs run in background
 
   return (
     <div className="fixed inset-0 top-14 bg-bg-dark flex flex-col">
