@@ -114,6 +114,9 @@ export type HubAlert = {
   action_taken: boolean;
   created_at: string;
   expires_at: string | null;
+  action_type?: "transaction_reminder" | "confirm" | "navigate" | null;
+  action_url?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 export type HubStats = {
@@ -991,6 +994,26 @@ export function useDismissAlert() {
         body: JSON.stringify({ id: alertId, is_dismissed: true }),
       });
       if (!res.ok) throw new Error("Failed to dismiss alert");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hub", "alerts"] });
+    },
+  });
+}
+
+// --- Transaction Reminder Actions ---
+export function useConfirmTransactions() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (alertId: string) => {
+      const res = await fetch("/api/notifications/transaction-reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirm", alertId }),
+      });
+      if (!res.ok) throw new Error("Failed to confirm transactions");
       return res.json();
     },
     onSuccess: () => {

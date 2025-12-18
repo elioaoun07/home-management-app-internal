@@ -333,11 +333,23 @@ function InAppNotificationPreferences() {
   const updatePreference = useUpdateNotificationPreference();
 
   const preferences = data?.preferences || [];
-  const templates = data?.templates || [];
+
+  const getPreference = (key: string) => {
+    return preferences.find((p) => p.preference_key === key);
+  };
 
   const getPreferenceValue = (key: string, defaultEnabled = true): boolean => {
-    const pref = preferences.find((p) => p.preference_key === key);
+    const pref = getPreference(key);
     return pref ? pref.enabled : defaultEnabled;
+  };
+
+  const getPreferredTime = (key: string, defaultTime = "20:00"): string => {
+    const pref = getPreference(key);
+    // preferred_time comes as "HH:mm:ss", we need "HH:mm"
+    if (pref?.preferred_time) {
+      return pref.preferred_time.substring(0, 5);
+    }
+    return defaultTime;
   };
 
   const handleToggle = async (key: string, enabled: boolean) => {
@@ -352,6 +364,26 @@ function InAppNotificationPreferences() {
     }
   };
 
+  const handleTimeChange = async (key: string, time: string) => {
+    try {
+      await updatePreference.mutateAsync({
+        preference_key: key,
+        preferred_time: time + ":00", // Add seconds
+      });
+      toast.success(`Reminder time updated to ${formatTime(time)}`);
+    } catch {
+      toast.error("Failed to update reminder time");
+    }
+  };
+
+  // Format time for display (e.g., "18:00" -> "6:00 PM")
+  const formatTime = (time: string): string => {
+    const [hours, minutes] = time.split(":").map(Number);
+    const period = hours >= 12 ? "PM" : "AM";
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes.toString().padStart(2, "0")} ${period}`;
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-4">
@@ -360,15 +392,8 @@ function InAppNotificationPreferences() {
     );
   }
 
-  // Define notification types with their settings
+  // Other notification types (excluding daily transaction reminder which has special UI)
   const notificationTypes = [
-    {
-      key: "daily_transaction_reminder",
-      title: "Daily Transaction Reminder",
-      description: "Remind me to log my transactions each day",
-      icon: Pencil,
-      iconColor: "text-cyan-400",
-    },
     {
       key: "weekly_summary",
       title: "Weekly Summary",
@@ -385,6 +410,21 @@ function InAppNotificationPreferences() {
     },
   ];
 
+  // Preset times for quick selection
+  const presetTimes = [
+    { label: "6 PM", value: "18:00" },
+    { label: "7 PM", value: "19:00" },
+    { label: "8 PM", value: "20:00" },
+    { label: "9 PM", value: "21:00" },
+    { label: "10 PM", value: "22:00" },
+  ];
+
+  const isReminderEnabled = getPreferenceValue("daily_transaction_reminder");
+  const currentReminderTime = getPreferredTime(
+    "daily_transaction_reminder",
+    "18:00"
+  );
+
   return (
     <div className="space-y-4 pt-4 border-t border-white/10">
       <div className="flex items-center gap-2">
@@ -398,6 +438,89 @@ function InAppNotificationPreferences() {
       </p>
 
       <div className="space-y-3">
+        {/* Daily Transaction Reminder with Time Picker */}
+        <div
+          className={`p-4 rounded-xl ${themeClasses.bgSurface} ${themeClasses.border} border`}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-white/5">
+                <Pencil className="w-5 h-5 text-cyan-400" />
+              </div>
+              <div>
+                <h5 className={`font-medium text-sm ${themeClasses.text}`}>
+                  Daily Transaction Reminder
+                </h5>
+                <p className={`text-xs ${themeClasses.textMuted}`}>
+                  "Did you add all your transactions?"
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isReminderEnabled}
+              onCheckedChange={(checked) =>
+                handleToggle("daily_transaction_reminder", checked)
+              }
+              disabled={updatePreference.isPending}
+            />
+          </div>
+
+          {/* Time picker - only show when enabled */}
+          {isReminderEnabled && (
+            <div className="ml-12 space-y-3">
+              <div className="flex items-center gap-2">
+                <Clock className={`w-4 h-4 ${themeClasses.textMuted}`} />
+                <span className={`text-sm ${themeClasses.textMuted}`}>
+                  Remind me at
+                </span>
+              </div>
+
+              {/* Quick preset buttons */}
+              <div className="flex flex-wrap gap-2">
+                {presetTimes.map((preset) => (
+                  <button
+                    key={preset.value}
+                    onClick={() =>
+                      handleTimeChange(
+                        "daily_transaction_reminder",
+                        preset.value
+                      )
+                    }
+                    disabled={updatePreference.isPending}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      currentReminderTime === preset.value
+                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white"
+                        : `${themeClasses.bgSurface} ${themeClasses.textMuted} hover:bg-white/10`
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom time input */}
+              <div className="flex items-center gap-2">
+                <span className={`text-xs ${themeClasses.textMuted}`}>
+                  Or custom:
+                </span>
+                <input
+                  type="time"
+                  value={currentReminderTime}
+                  onChange={(e) =>
+                    handleTimeChange(
+                      "daily_transaction_reminder",
+                      e.target.value
+                    )
+                  }
+                  disabled={updatePreference.isPending}
+                  className={`px-3 py-1.5 rounded-lg text-sm ${themeClasses.bgSurface} ${themeClasses.text} ${themeClasses.border} border focus:outline-none focus:ring-2 focus:ring-cyan-500/50`}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Other notification types */}
         {notificationTypes.map((type) => {
           const Icon = type.icon;
           const isEnabled = getPreferenceValue(type.key);

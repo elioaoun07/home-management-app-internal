@@ -74,22 +74,41 @@ self.addEventListener("push", (event) => {
     }
   }
 
-  // Create alarm-like notification options
+  // Determine notification type and set appropriate actions
+  const isTransactionReminder = data.data?.type === "transaction_reminder";
+
+  // Create notification options based on type
   const options = {
     body: data.body,
     icon: data.icon || "/appicon-192.png",
     badge: data.badge || "/appicon-192.png",
     tag: data.tag,
     data: data.data,
-    // Make notification persistent and attention-grabbing
-    requireInteraction: true, // Don't auto-dismiss - user must interact
-    renotify: true, // Always notify even if same tag
-    silent: false, // Make sound
-    // Vibration pattern for alarm-like effect (works on Android)
-    // Pattern: vibrate 500ms, pause 200ms, vibrate 500ms, pause 200ms, vibrate 500ms
-    vibrate: [500, 200, 500, 200, 500, 200, 500, 200, 500],
-    // Actions for quick response
-    actions: [
+    requireInteraction: true,
+    renotify: true,
+    silent: false,
+    timestamp: Date.now(),
+  };
+
+  if (isTransactionReminder) {
+    // Transaction reminder - Yes/Not Yet actions
+    options.vibrate = [200, 100, 200]; // Gentle vibration
+    options.actions = [
+      {
+        action: "confirm_transactions",
+        title: "✓ Yes, all done!",
+        icon: "/appicon-192.png",
+      },
+      {
+        action: "add_expense",
+        title: "➕ Not yet",
+        icon: "/appicon-192.png",
+      },
+    ];
+  } else {
+    // Regular reminder - Snooze/Dismiss actions
+    options.vibrate = [500, 200, 500, 200, 500, 200, 500, 200, 500];
+    options.actions = [
       {
         action: "snooze",
         title: "⏰ Snooze 5min",
@@ -100,18 +119,19 @@ self.addEventListener("push", (event) => {
         title: "✓ Dismiss",
         icon: "/appicon-192.png",
       },
-    ],
-    // Timestamp for when the reminder was due
-    timestamp: data.data?.due_at
+    ];
+    options.timestamp = data.data?.due_at
       ? new Date(data.data.due_at).getTime()
-      : Date.now(),
-  };
+      : Date.now();
+  }
 
-  // Show the notification and play alarm sound
+  // Show the notification (and play sound for regular reminders)
   event.waitUntil(
     Promise.all([
       self.registration.showNotification(data.title, options),
-      notifyClientsToPlaySound(data),
+      isTransactionReminder
+        ? Promise.resolve()
+        : notifyClientsToPlaySound(data),
     ])
   );
 });
@@ -136,9 +156,20 @@ self.addEventListener("notificationclick", (event) => {
   } else if (action === "dismiss") {
     // Mark as dismissed - send to server
     event.waitUntil(handleDismiss(data));
+  } else if (action === "confirm_transactions") {
+    // User confirmed they added all transactions
+    event.waitUntil(handleConfirmTransactions(data));
+  } else if (action === "add_expense") {
+    // User needs to add expenses - open add expense form
+    event.waitUntil(openAddExpense(data));
   } else {
-    // Default click - open the app to the item
-    event.waitUntil(openApp(data));
+    // Default click - open the app based on notification type
+    if (data.type === "transaction_reminder") {
+      // Open Hub Alerts view
+      event.waitUntil(openApp({ ...data, url: "/hub?view=alerts" }));
+    } else {
+      event.waitUntil(openApp(data));
+    }
   }
 });
 
@@ -205,12 +236,73 @@ async function handleDismiss(data) {
   }
 }
 
+// Handle "Yes, all done!" action for transaction reminders
+async function handleConfirmTransactions(data) {
+  console.log("[SW] Confirming transactions:", data);
+
+  try {
+    const response = await fetch("/api/notifications/transaction-reminder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "confirm",
+        alert_id: data.alert_id,
+      }),
+    });
+
+    if (response.ok) {
+      // Show a celebratory confirmation
+      await self.registration.showNotification("Great job! 🎉", {
+        body: "Your finances are up to date!",
+        icon: "/appicon-192.png",
+        tag: "transaction-confirm",
+        requireInteraction: false,
+        silent: true,
+      });
+    }
+  } catch (error) {
+    console.error("[SW] Error confirming transactions:", error);
+  }
+}
+
+// Handle "Not yet" action - open add expense form
+async function openAddExpense(data) {
+  console.log("[SW] Opening add expense:", data);
+
+  const url = "/dashboard?action=add-expense";
+
+  // Try to focus existing window or open new one
+  const clients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+
+  // Check if app is already open
+  for (const client of clients) {
+    if (client.url.includes(self.location.origin)) {
+      await client.focus();
+      client.postMessage({
+        type: "NAVIGATE",
+        url: url,
+      });
+      return;
+    }
+  }
+
+  // Open new window to add expense
+  await self.clients.openWindow(url);
+}
+
 async function openApp(data) {
   console.log("[SW] Opening app:", data);
 
   // Determine URL to open
   let url = "/";
-  if (data.item_id) {
+
+  // Check for custom URL (e.g., from transaction reminder)
+  if (data.url) {
+    url = data.url;
+  } else if (data.item_id) {
     url = `/dashboard?item=${data.item_id}`;
   }
 
@@ -224,8 +316,8 @@ async function openApp(data) {
   for (const client of clients) {
     if (client.url.includes(self.location.origin)) {
       await client.focus();
-      // Navigate to the item if needed
-      if (data.item_id) {
+      // Navigate if we have a specific URL
+      if (url !== "/") {
         client.postMessage({
           type: "NAVIGATE",
           url: url,

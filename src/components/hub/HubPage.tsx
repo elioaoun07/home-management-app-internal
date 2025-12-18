@@ -20,6 +20,7 @@ import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
   useBroadcastReceiptUpdate,
+  useConfirmTransactions,
   useCreateThread,
   useDismissAlert,
   useHouseholdRealtimeMessages,
@@ -203,34 +204,6 @@ function DailyPulse() {
       </div>
     );
   }
-
-  const streak = stats?.logging_streak || 0;
-
-  return (
-    <div className="p-4 rounded-2xl neo-card bg-bg-card-custom border border-white/5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-white/50 font-medium">YOUR STREAK</p>
-          <p className="text-2xl font-bold text-white">
-            {streak} {streak === 1 ? "day" : "days"}
-            <span className="text-lg ml-2">🔥</span>
-          </p>
-        </div>
-        <div
-          className={cn(
-            "w-12 h-12 rounded-full flex items-center justify-center",
-            streak > 7
-              ? "bg-green-500/20 text-green-400"
-              : streak > 0
-                ? "bg-yellow-500/20 text-yellow-400"
-                : "bg-white/5 text-white/30"
-          )}
-        >
-          <span className="text-lg font-bold">{streak}</span>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // Helper function to format date separators
@@ -292,9 +265,138 @@ function ChatView({
     "all" | "public" | "private"
   >("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
   const threads = data?.threads || [];
   const householdId = data?.household_id;
+
+  // Purpose options for dropdown
+  const purposeOptions = [
+    { value: "all", label: "All Categories", icon: null },
+    {
+      value: "shopping",
+      label: "Shopping",
+      icon: (
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
+    },
+    {
+      value: "budget",
+      label: "Budget",
+      icon: (
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    },
+    {
+      value: "reminder",
+      label: "Reminders",
+      icon: (
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+      ),
+    },
+    {
+      value: "travel",
+      label: "Travel",
+      icon: (
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+        </svg>
+      ),
+    },
+    {
+      value: "health",
+      label: "Health",
+      icon: (
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+        </svg>
+      ),
+    },
+    {
+      value: "notes",
+      label: "Notes",
+      icon: (
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+      ),
+    },
+    {
+      value: "general",
+      label: "General",
+      icon: (
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      ),
+    },
+    {
+      value: "other",
+      label: "Other",
+      icon: (
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      ),
+    },
+  ];
+
+  const selectedPurpose =
+    purposeOptions.find((p) => p.value === purposeFilter) || purposeOptions[0];
 
   // Sync threads to localStorage cache when data loads
   useEffect(() => {
@@ -406,120 +508,18 @@ function ChatView({
         </div>
       )}
 
-      {/* Purpose Filter */}
+      {/* Clean Filters */}
       {householdId && threads.length > 0 && (
-        <div className="mb-4">
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            <button
-              onClick={() => setPurposeFilter("all")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
-                purposeFilter === "all"
-                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
-              )}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setPurposeFilter("shopping")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
-                purposeFilter === "shopping"
-                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
-              )}
-            >
-              <span>🛒</span> Shopping
-            </button>
-            <button
-              onClick={() => setPurposeFilter("budget")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
-                purposeFilter === "budget"
-                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
-              )}
-            >
-              <span>💰</span> Budget
-            </button>
-            <button
-              onClick={() => setPurposeFilter("reminder")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
-                purposeFilter === "reminder"
-                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
-              )}
-            >
-              <span>⏰</span> Reminder
-            </button>
-            <button
-              onClick={() => setPurposeFilter("travel")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
-                purposeFilter === "travel"
-                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
-              )}
-            >
-              <span>✈️</span> Travel
-            </button>
-            <button
-              onClick={() => setPurposeFilter("health")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
-                purposeFilter === "health"
-                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
-              )}
-            >
-              <span>🏥</span> Health
-            </button>
-            <button
-              onClick={() => setPurposeFilter("notes")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
-                purposeFilter === "notes"
-                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
-              )}
-            >
-              <span>📝</span> Notes
-            </button>
-            <button
-              onClick={() => setPurposeFilter("general")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
-                purposeFilter === "general"
-                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
-              )}
-            >
-              <span>💬</span> General
-            </button>
-            <button
-              onClick={() => setPurposeFilter("other")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
-                purposeFilter === "other"
-                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
-              )}
-            >
-              <span>📋</span> Other
-            </button>
-          </div>
-
-          {/* Visibility Filter - Public/Private */}
-          <div className="flex gap-2 mt-2 pt-2 border-t border-white/5">
+        <div className="mb-3 flex items-center gap-2">
+          {/* Visibility Toggle - Segmented Control */}
+          <div className="flex bg-white/5 rounded-lg p-0.5 shrink-0">
             <button
               onClick={() => setVisibilityFilter("all")}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
                 visibilityFilter === "all"
-                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
+                  ? "bg-gradient-to-r from-blue-500/30 to-purple-500/30 text-white border border-blue-500/30"
+                  : "text-white/50 hover:text-white/70"
               )}
             >
               All
@@ -527,34 +527,33 @@ function ChatView({
             <button
               onClick={() => setVisibilityFilter("public")}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1",
                 visibilityFilter === "public"
-                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
+                  ? "bg-gradient-to-r from-cyan-500/30 to-blue-500/30 text-cyan-300 border border-cyan-500/30"
+                  : "text-white/50 hover:text-white/70"
               )}
             >
               <svg
-                className="w-3.5 h-3.5"
+                className="w-3 h-3"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
                 strokeWidth={2}
               >
-                <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                <path d="M8 11V7a4 4 0 018 0m-4 8v2m-6-2a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2v-6a2 2 0 00-2-2H6z" />
               </svg>
-              Public
             </button>
             <button
               onClick={() => setVisibilityFilter("private")}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5",
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1",
                 visibilityFilter === "private"
-                  ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
+                  ? "bg-gradient-to-r from-purple-500/30 to-pink-500/30 text-pink-300 border border-purple-500/30"
+                  : "text-white/50 hover:text-white/70"
               )}
             >
               <svg
-                className="w-3.5 h-3.5"
+                className="w-3 h-3"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -563,8 +562,78 @@ function ChatView({
                 <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              Private
             </button>
+          </div>
+
+          {/* Category Dropdown */}
+          <div className="relative flex-1">
+            <button
+              onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+              className={cn(
+                "w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                purposeFilter !== "all"
+                  ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white border border-blue-500/30"
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              )}
+            >
+              <span className="flex items-center gap-1.5">
+                {selectedPurpose.icon}
+                {selectedPurpose.label}
+              </span>
+              <svg
+                className={cn(
+                  "w-3 h-3 transition-transform",
+                  showCategoryDropdown && "rotate-180"
+                )}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Dropdown Menu */}
+            {showCategoryDropdown && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowCategoryDropdown(false)}
+                />
+                <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl z-20 py-1 max-h-60 overflow-y-auto">
+                  {purposeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setPurposeFilter(option.value);
+                        setShowCategoryDropdown(false);
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-3 py-2 text-xs transition-all",
+                        purposeFilter === option.value
+                          ? "bg-blue-500/20 text-white"
+                          : "text-white/70 hover:bg-white/5 hover:text-white"
+                      )}
+                    >
+                      {option.icon}
+                      {option.label}
+                      {purposeFilter === option.value && (
+                        <svg
+                          className="w-3 h-3 ml-auto text-blue-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -4218,7 +4287,23 @@ function LeaderboardRow({
 function AlertsView() {
   const { data, isLoading } = useHubAlerts();
   const dismissAlert = useDismissAlert();
+  const confirmTransactions = useConfirmTransactions();
+  const [showCelebration, setShowCelebration] = useState<string | null>(null);
   const alerts = data?.alerts || [];
+
+  const handleConfirmTransactions = async (alertId: string) => {
+    setShowCelebration(alertId);
+    await confirmTransactions.mutateAsync(alertId);
+    // Let animation play before removing
+    setTimeout(() => {
+      setShowCelebration(null);
+    }, 2000);
+  };
+
+  const handleNotYet = () => {
+    // Navigate to add expense
+    window.location.href = "/dashboard?action=add-expense";
+  };
 
   if (isLoading) {
     return (
@@ -4259,6 +4344,8 @@ function AlertsView() {
         return "📊";
       case "bill_due":
         return "📅";
+      case "transaction_reminder":
+        return "📝";
       default:
         return "💡";
     }
@@ -4271,7 +4358,7 @@ function AlertsView() {
       case "success":
         return "border-green-500/20";
       case "action":
-        return "border-red-500/20";
+        return "border-cyan-500/30";
       default:
         return "border-blue-500/20";
     }
@@ -4279,32 +4366,100 @@ function AlertsView() {
 
   return (
     <div className="space-y-3">
-      {alerts.map((alert: HubAlert) => (
-        <div
-          key={alert.id}
-          className={cn(
-            "p-4 rounded-xl neo-card bg-bg-card-custom flex items-start gap-3 border",
-            getBorderColor(alert.severity)
-          )}
-        >
-          <div className="text-2xl">{getIcon(alert.alert_type)}</div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <p className="text-sm font-semibold text-white">{alert.title}</p>
+      {alerts.map((alert: HubAlert) => {
+        const isCelebrating = showCelebration === alert.id;
+        const isTransactionReminder =
+          alert.action_type === "transaction_reminder";
+
+        // Special UI for transaction reminder
+        if (isTransactionReminder) {
+          return (
+            <div
+              key={alert.id}
+              className={cn(
+                "p-4 rounded-xl neo-card bg-bg-card-custom border relative overflow-hidden transition-all duration-300",
+                isCelebrating
+                  ? "border-green-500/50 bg-green-500/10"
+                  : "border-cyan-500/30"
+              )}
+            >
+              {/* Celebration animation overlay */}
+              {isCelebrating && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-green-500/20 to-cyan-500/20 backdrop-blur-sm z-10">
+                  <div className="text-center animate-bounce">
+                    <div className="text-4xl mb-2">🎉</div>
+                    <p className="text-green-400 font-semibold">Great job!</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">📝</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-sm font-semibold text-white">
+                      {alert.title}
+                    </p>
+                  </div>
+                  <p className="text-sm text-white/60">{alert.message}</p>
+                  <p className="text-xs text-white/30 mt-1">
+                    {formatRelativeTime(alert.created_at)}
+                  </p>
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => handleConfirmTransactions(alert.id)}
+                      disabled={confirmTransactions.isPending || isCelebrating}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-medium hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50"
+                    >
+                      <CheckIcon className="w-4 h-4" />
+                      Yes, all done!
+                    </button>
+                    <button
+                      onClick={handleNotYet}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/10 text-white/80 text-sm font-medium hover:bg-white/20 transition-all"
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      Not yet
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-white/60">{alert.message}</p>
-            <p className="text-xs text-white/30 mt-1">
-              {formatRelativeTime(alert.created_at)}
-            </p>
-          </div>
-          <button
-            onClick={() => dismissAlert.mutate(alert.id)}
-            className="text-white/30 hover:text-white/60 text-lg"
+          );
+        }
+
+        // Regular alert UI
+        return (
+          <div
+            key={alert.id}
+            className={cn(
+              "p-4 rounded-xl neo-card bg-bg-card-custom flex items-start gap-3 border",
+              getBorderColor(alert.severity)
+            )}
           >
-            ×
-          </button>
-        </div>
-      ))}
+            <div className="text-2xl">{getIcon(alert.alert_type)}</div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-semibold text-white">
+                  {alert.title}
+                </p>
+              </div>
+              <p className="text-sm text-white/60">{alert.message}</p>
+              <p className="text-xs text-white/30 mt-1">
+                {formatRelativeTime(alert.created_at)}
+              </p>
+            </div>
+            <button
+              onClick={() => dismissAlert.mutate(alert.id)}
+              className="text-white/30 hover:text-white/60 text-lg"
+            >
+              ×
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
