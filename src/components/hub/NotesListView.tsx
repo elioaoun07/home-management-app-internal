@@ -104,7 +104,7 @@ const StableNoteInput = React.memo(function StableNoteInput({
       placeholder="Write a note..."
       className="flex-1 bg-transparent border-none text-white text-lg sm:text-xl placeholder:text-white/30 focus:outline-none font-handwriting leading-relaxed ml-2 py-2"
       style={{
-        fontFamily: "'Kalam', cursive",
+        fontFamily: "'Caveat', cursive",
       }}
       autoComplete="off"
       enterKeyHint="send"
@@ -953,7 +953,7 @@ export function NotesListView({
                     <p
                       className="text-center text-xs text-white/30 mt-6 font-handwriting"
                       style={{
-                        fontFamily: "'Kalam', cursive",
+                        fontFamily: "'Caveat', cursive",
                       }}
                     >
                       Loading your notes...
@@ -970,7 +970,7 @@ export function NotesListView({
                         <p
                           className="text-xl text-white/50 font-handwriting"
                           style={{
-                            fontFamily: "'Kalam', cursive",
+                            fontFamily: "'Caveat', cursive",
                           }}
                         >
                           Your notebook is empty
@@ -978,7 +978,7 @@ export function NotesListView({
                         <p
                           className="text-lg text-white/30 mt-1 font-handwriting"
                           style={{
-                            fontFamily: "'Kalam', cursive",
+                            fontFamily: "'Caveat', cursive",
                           }}
                         >
                           Start writing below
@@ -1035,7 +1035,7 @@ export function NotesListView({
                                       onBlur={saveEdit}
                                       className="flex-1 bg-transparent border-none text-white focus:outline-none text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1"
                                       style={{
-                                        fontFamily: "'Kalam', cursive",
+                                        fontFamily: "'Caveat', cursive",
                                       }}
                                     />
                                   ) : (
@@ -1043,7 +1043,7 @@ export function NotesListView({
                                       onClick={() => startEditing(item)}
                                       className="flex-1 text-white text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words"
                                       style={{
-                                        fontFamily: "'Kalam', cursive",
+                                        fontFamily: "'Caveat', cursive",
                                       }}
                                     >
                                       {highlightText(item.content)}
@@ -1106,7 +1106,7 @@ export function NotesListView({
                                   onBlur={saveEdit}
                                   className="flex-1 bg-transparent border-none text-white focus:outline-none text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1"
                                   style={{
-                                    fontFamily: "'Kalam', cursive",
+                                    fontFamily: "'Caveat', cursive",
                                   }}
                                 />
                               ) : (
@@ -1114,7 +1114,7 @@ export function NotesListView({
                                   onClick={() => startEditing(item)}
                                   className="flex-1 text-white text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words"
                                   style={{
-                                    fontFamily: "'Kalam', cursive",
+                                    fontFamily: "'Caveat', cursive",
                                   }}
                                 >
                                   {highlightText(item.content)}
@@ -1139,7 +1139,7 @@ export function NotesListView({
                               <span
                                 className="text-base text-white/40 font-handwriting"
                                 style={{
-                                  fontFamily: "'Kalam', cursive",
+                                  fontFamily: "'Caveat', cursive",
                                 }}
                               >
                                 Completed ({checkedItemsList.length})
@@ -1182,7 +1182,7 @@ export function NotesListView({
                                       onBlur={saveEdit}
                                       className="flex-1 bg-transparent border-none text-white/60 focus:outline-none text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1"
                                       style={{
-                                        fontFamily: "'Kalam', cursive",
+                                        fontFamily: "'Caveat', cursive",
                                       }}
                                     />
                                   ) : (
@@ -1190,7 +1190,7 @@ export function NotesListView({
                                       onClick={() => startEditing(item)}
                                       className="flex-1 text-white/60 text-lg sm:text-xl font-handwriting leading-relaxed line-through decoration-white/40 decoration-2 ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words"
                                       style={{
-                                        fontFamily: "'Kalam', cursive",
+                                        fontFamily: "'Caveat', cursive",
                                       }}
                                     >
                                       {highlightText(item.content)}
@@ -1293,7 +1293,7 @@ export function NotesListView({
               <p
                 className="text-xs mt-1 font-handwriting tracking-wide"
                 style={{
-                  fontFamily: "'Kalam', cursive",
+                  fontFamily: "'Caveat', cursive",
                   color: themeClasses.text.includes("pink")
                     ? "rgba(251, 191, 36, 0.6)"
                     : "rgba(6, 182, 212, 0.6)",
@@ -1326,7 +1326,7 @@ export function NotesListView({
             <span className="text-base mr-2">📒</span>
             <span
               className="font-handwriting text-lg"
-              style={{ fontFamily: "'Kalam', cursive" }}
+              style={{ fontFamily: "'Caveat', cursive" }}
             >
               All Notes
             </span>
@@ -1388,7 +1388,7 @@ export function NotesListView({
                 <p
                   className="text-base font-handwriting"
                   style={{
-                    fontFamily: "'Kalam', cursive",
+                    fontFamily: "'Caveat', cursive",
                     color: themeClasses.text.includes("pink")
                       ? "rgba(251, 191, 36, 0.6)"
                       : "rgba(6, 182, 212, 0.6)",
@@ -1399,7 +1399,7 @@ export function NotesListView({
                 <p
                   className="text-sm font-handwriting mt-1"
                   style={{
-                    fontFamily: "'Kalam', cursive",
+                    fontFamily: "'Caveat', cursive",
                     color: themeClasses.text.includes("pink")
                       ? "rgba(236, 72, 153, 0.4)"
                       : "rgba(6, 182, 212, 0.4)",
@@ -1421,7 +1421,7 @@ export function NotesListView({
                   <span className="text-base mr-2">{topic.icon}</span>
                   <span
                     className="font-handwriting text-lg truncate"
-                    style={{ fontFamily: "'Kalam', cursive" }}
+                    style={{ fontFamily: "'Caveat', cursive" }}
                   >
                     {topic.title}
                   </span>
@@ -1453,7 +1453,7 @@ export function NotesListView({
             <p
               className="text-xs mb-2 font-handwriting"
               style={{
-                fontFamily: "'Kalam', cursive",
+                fontFamily: "'Caveat', cursive",
                 color: themeClasses.text.includes("pink")
                   ? "rgba(251, 191, 36, 0.6)"
                   : "rgba(6, 182, 212, 0.6)",
@@ -1470,7 +1470,7 @@ export function NotesListView({
                 placeholder="Chapter title..."
                 className="flex-1 rounded-lg px-3 py-2.5 text-base font-handwriting focus:outline-none transition-colors"
                 style={{
-                  fontFamily: "'Kalam', cursive",
+                  fontFamily: "'Caveat', cursive",
                   background: "rgba(0, 0, 0, 0.3)",
                   border: themeClasses.text.includes("pink")
                     ? "1px solid rgba(236, 72, 153, 0.2)"
@@ -1485,7 +1485,7 @@ export function NotesListView({
                 disabled={isCreatingTopic || !newTopicTitle.trim()}
                 className="px-3 py-2 rounded-lg transition-all font-handwriting text-sm"
                 style={{
-                  fontFamily: "'Kalam', cursive",
+                  fontFamily: "'Caveat', cursive",
                   background: newTopicTitle.trim()
                     ? themeClasses.text.includes("pink")
                       ? "rgba(236, 72, 153, 0.2)"
@@ -1544,7 +1544,7 @@ export function NotesListView({
             </span>
             <span
               className="font-handwriting text-lg text-white truncate"
-              style={{ fontFamily: "'Kalam', cursive" }}
+              style={{ fontFamily: "'Caveat', cursive" }}
             >
               {activeTopic
                 ? topics.find((t) => t.id === activeTopic)?.title ||
