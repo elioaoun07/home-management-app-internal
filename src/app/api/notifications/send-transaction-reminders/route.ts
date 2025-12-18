@@ -80,17 +80,21 @@ export async function POST(req: NextRequest) {
     const currentMinute = now.getUTCMinutes();
 
     // Format current time as HH:MM for comparison
-    const currentTimeStart = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}:00`;
-    const currentTimeEnd = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}:59`;
+    const currentTime = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}:00`;
 
-    // Find users with daily_transaction_reminder preference set for this time
+    console.log(`[Transaction Reminders] Current UTC time: ${currentTime}`);
+
+    // Find users with daily_transaction_reminder preference set for this exact minute
     const { data: duePreferences, error: prefError } = await supabase
       .from("notification_preferences")
       .select("*")
       .eq("preference_key", "daily_transaction_reminder")
       .eq("enabled", true)
-      .gte("preferred_time", currentTimeStart)
-      .lte("preferred_time", currentTimeEnd);
+      .eq("preferred_time", currentTime);
+
+    console.log(
+      `[Transaction Reminders] Found ${duePreferences?.length || 0} matching preferences`
+    );
 
     if (prefError) {
       console.error("Failed to get due preferences:", prefError);
@@ -105,6 +109,7 @@ export async function POST(req: NextRequest) {
         success: true,
         sent: 0,
         message: "No transaction reminders due",
+        current_utc_time: currentTime,
       });
     }
 
