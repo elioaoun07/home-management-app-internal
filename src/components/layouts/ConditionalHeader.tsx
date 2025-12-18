@@ -1,6 +1,7 @@
 "use client";
 
 import UserMenuClient from "@/components/auth/UserMenuClient";
+import { NotificationCenter } from "@/components/notifications";
 import { useTab } from "@/contexts/TabContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
@@ -38,7 +39,14 @@ export default function ConditionalHeader({
           Budget Manager
         </h1>
       </div>
-      <UserMenuClient name={userName} email={userEmail} avatarUrl={avatarUrl} />
+      <div className="flex items-center gap-1">
+        <NotificationCenter />
+        <UserMenuClient
+          name={userName}
+          email={userEmail}
+          avatarUrl={avatarUrl}
+        />
+      </div>
     </header>
   );
 }

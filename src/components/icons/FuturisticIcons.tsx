@@ -3174,7 +3174,11 @@ export const TrophyIcon = ({ className, size = 24 }: IconProps) => (
 );
 
 // Bell / Alert icon
-export const AlertBellIcon = ({ className, size = 24 }: IconProps) => (
+export const AlertBellIcon = ({
+  className,
+  size = 24,
+  showDot = true,
+}: IconProps & { showDot?: boolean }) => (
   <svg
     width={size}
     height={size}
@@ -3198,7 +3202,15 @@ export const AlertBellIcon = ({ className, size = 24 }: IconProps) => (
       strokeLinejoin="round"
     />
     {/* Notification dot */}
-    <circle cx="18" cy="5" r="3" fill="currentColor" className="text-red-500" />
+    {showDot && (
+      <circle
+        cx="18"
+        cy="5"
+        r="3"
+        fill="currentColor"
+        className="text-red-500"
+      />
+    )}
   </svg>
 );
 

@@ -4,6 +4,15 @@
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  addMessageToLocalCache,
+  getCachedMessages,
+  getCachedThreads,
+  updateThreadLastMessageInCache,
+} from "./useHubPersistence";
+
+// Hub View type for navigation
+export type HubView = "chat" | "feed" | "score" | "alerts";
 
 // Thread purpose types - determines default actions and external app links
 export type ThreadPurpose =
@@ -120,6 +129,19 @@ export type HubStats = {
 
 // --- Chat Threads ---
 export function useHubThreads() {
+  // Get cached data for initialData (instant display before fetch)
+  const getCachedInitialData = () => {
+    const cached = getCachedThreads();
+    if (cached && cached.threads?.length > 0) {
+      return {
+        threads: cached.threads,
+        household_id: cached.household_id,
+        current_user_id: cached.current_user_id,
+      };
+    }
+    return undefined;
+  };
+
   return useQuery({
     queryKey: ["hub", "threads"],
     queryFn: async () => {
@@ -132,10 +154,12 @@ export function useHubThreads() {
         current_user_id: string;
       };
     },
+    initialData: getCachedInitialData(),
+    initialDataUpdatedAt: 0, // Always refetch in background
     staleTime: 30000, // 30 seconds - balance between freshness and performance
     gcTime: 60000, // Keep in cache for 1 minute
     refetchOnWindowFocus: true, // Refresh when user comes back to app
-    refetchOnMount: true, // Refetch on mount only if stale
+    refetchOnMount: "always", // Always refetch but show cached first
   });
 }
 
@@ -182,6 +206,24 @@ export function useCreateThread() {
 // --- Messages (within a thread) ---
 // No more polling needed - realtime handles updates!
 export function useHubMessages(threadId: string | null) {
+  // Get cached data for initialData (instant display before fetch)
+  const getCachedInitialData = () => {
+    if (!threadId) return undefined;
+    const cached = getCachedMessages(threadId);
+    if (cached && cached.messages?.length > 0) {
+      return {
+        messages: cached.messages,
+        message_actions: [],
+        thread_id: cached.thread_id,
+        household_id: cached.household_id,
+        current_user_id: cached.current_user_id,
+        first_unread_message_id: null,
+        unread_count: 0,
+      };
+    }
+    return undefined;
+  };
+
   return useQuery({
     queryKey: ["hub", "messages", threadId],
     queryFn: async () => {
@@ -210,10 +252,12 @@ export function useHubMessages(threadId: string | null) {
       };
     },
     enabled: !!threadId,
+    initialData: getCachedInitialData(),
+    initialDataUpdatedAt: 0, // Always refetch in background to get fresh data
     staleTime: 60000, // 1 minute - realtime handles live updates
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
     refetchOnWindowFocus: false, // Don't refetch on focus - rely on realtime
-    refetchOnMount: false, // Use cached data - realtime keeps it fresh
+    refetchOnMount: "always", // Always refetch to get fresh unread counts, but show cached first
   });
 }
 
@@ -333,6 +377,10 @@ export function useRealtimeMessages(
       if (newMessage.thread_id !== currentThreadId) {
         return;
       }
+
+      // Persist to localStorage cache for offline-first experience
+      addMessageToLocalCache(currentThreadId, newMessage);
+      updateThreadLastMessageInCache(currentThreadId, newMessage);
 
       // Update the messages cache optimistically
       queryClient.setQueryData(
@@ -482,6 +530,56 @@ export function useRealtimeMessages(
     [queryClient]
   );
 
+  // Handle item check updates (shopping list items marked as checked/unchecked)
+  const handleItemCheckUpdate = useCallback(
+    (payload: {
+      message_id: string;
+      thread_id: string;
+      checked_at: string | null;
+      checked_by: string | null;
+      updated_by: string;
+    }) => {
+      const currentThreadId = threadIdRef.current;
+      const { message_id, checked_at, checked_by, updated_by } = payload;
+
+      // Update the message in cache
+      queryClient.setQueryData(
+        ["hub", "messages", currentThreadId],
+        (
+          oldData:
+            | {
+                messages: HubMessage[];
+                thread_id: string;
+                household_id: string;
+                current_user_id: string;
+              }
+            | undefined
+        ) => {
+          if (!oldData) return oldData;
+
+          // Don't update if this is our own update (we already have optimistic update)
+          if (updated_by === oldData.current_user_id) {
+            return oldData;
+          }
+
+          return {
+            ...oldData,
+            messages: oldData.messages.map((msg) =>
+              msg.id === message_id
+                ? {
+                    ...msg,
+                    checked_at,
+                    checked_by,
+                  }
+                : msg
+            ),
+          };
+        }
+      );
+    },
+    [queryClient]
+  );
+
   useEffect(() => {
     if (!threadId) {
       setIsSubscribed(false);
@@ -533,6 +631,19 @@ export function useRealtimeMessages(
           );
         }
       })
+      .on("broadcast", { event: "item-check-update" }, (payload) => {
+        if (payload.payload) {
+          handleItemCheckUpdate(
+            payload.payload as {
+              message_id: string;
+              thread_id: string;
+              checked_at: string | null;
+              checked_by: string | null;
+              updated_by: string;
+            }
+          );
+        }
+      })
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
           setIsSubscribed(true);
@@ -557,7 +668,7 @@ export function useRealtimeMessages(
         }
       }, 100);
     };
-  }, [threadId, handleNewMessage, handleReceiptUpdate]);
+  }, [threadId, handleNewMessage, handleReceiptUpdate, handleItemCheckUpdate]);
 
   return { isSubscribed };
 }
@@ -605,6 +716,9 @@ export function useHouseholdRealtimeMessages(householdId: string | null) {
       .on("broadcast", { event: "new-message" }, (payload) => {
         if (payload.payload) {
           const newMessage = payload.payload as HubMessage;
+
+          // Update localStorage cache with the new thread's last message
+          updateThreadLastMessageInCache(newMessage.thread_id, newMessage);
 
           // Invalidate threads to refresh the list with new message preview
           queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });

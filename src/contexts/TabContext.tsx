@@ -3,19 +3,25 @@
 import { createContext, ReactNode, useContext, useState } from "react";
 
 type Tab = "dashboard" | "expense" | "reminder" | "hub";
+type HubView = "chat" | "feed" | "score" | "alerts";
 
 interface TabContextType {
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
+  hubDefaultView: HubView | null;
+  setHubDefaultView: (view: HubView | null) => void;
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
 
 export function TabProvider({ children }: { children: ReactNode }) {
   const [activeTab, setActiveTab] = useState<Tab>("expense");
+  const [hubDefaultView, setHubDefaultView] = useState<HubView | null>(null);
 
   return (
-    <TabContext.Provider value={{ activeTab, setActiveTab }}>
+    <TabContext.Provider
+      value={{ activeTab, setActiveTab, hubDefaultView, setHubDefaultView }}
+    >
       {children}
     </TabContext.Provider>
   );

@@ -2396,3 +2396,164 @@ body.theme-loaded {
     } */
   }
 }
+
+/* ============================================
+   NOTIFICATION BELL ANIMATIONS
+   ============================================ */
+
+@keyframes notification-ring {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  10%,
+  30% {
+    transform: rotate(15deg);
+  }
+  20%,
+  40% {
+    transform: rotate(-10deg);
+  }
+  50%,
+  60% {
+    transform: rotate(5deg);
+  }
+  70% {
+    transform: rotate(-5deg);
+  }
+}
+
+@keyframes notification-badge {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes notification-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.1;
+  }
+}
+
+@keyframes check-draw {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes circle-draw {
+  0% {
+    stroke-dasharray: 0 100;
+    opacity: 0;
+  }
+  100% {
+    stroke-dasharray: 100 100;
+    opacity: 1;
+  }
+}
+
+@keyframes sparkle-1 {
+  0%,
+  100% {
+    transform: scale(0) translateY(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1) translateY(-8px);
+    opacity: 1;
+  }
+}
+
+@keyframes sparkle-2 {
+  0%,
+  100% {
+    transform: scale(0) translateX(0);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1) translateX(8px);
+    opacity: 1;
+  }
+}
+
+@keyframes sparkle-3 {
+  0%,
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes sparkle-4 {
+  0%,
+  100% {
+    transform: scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1) rotate(45deg);
+    opacity: 1;
+  }
+}
+
+/* Animation utility classes */
+.animate-notification-ring {
+  animation: notification-ring 1s ease-in-out infinite;
+}
+
+.animate-notification-badge {
+  animation: notification-badge 0.4s ease-out forwards;
+}
+
+.animate-notification-pulse {
+  animation: notification-pulse 2s ease-in-out infinite;
+}
+
+.animate-check-draw {
+  animation: check-draw 0.5s ease-out forwards;
+}
+
+.animate-circle-draw {
+  animation: circle-draw 0.4s ease-out forwards;
+}
+
+.animate-sparkle-1 {
+  animation: sparkle-1 0.8s ease-out forwards;
+}
+
+.animate-sparkle-2 {
+  animation: sparkle-2 0.8s ease-out 0.1s forwards;
+}
+
+.animate-sparkle-3 {
+  animation: sparkle-3 0.8s ease-out 0.2s forwards;
+}
+
+.animate-sparkle-4 {
+  animation: sparkle-4 0.8s ease-out 0.15s forwards;
+}

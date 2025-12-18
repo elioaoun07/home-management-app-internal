@@ -14,6 +14,7 @@ import {
   TrophyIcon,
   XIcon,
 } from "@/components/icons/FuturisticIcons";
+import { useTab } from "@/contexts/TabContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
@@ -35,6 +36,11 @@ import {
   type HubFeedItem,
   type HubMessage,
 } from "@/features/hub/hooks";
+import {
+  useCacheSync,
+  useHubCacheInit,
+  useHubState,
+} from "@/features/hub/useHubPersistence";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
@@ -117,8 +123,22 @@ const viewOptions: Array<{
 
 export default function HubPage() {
   const themeClasses = useThemeClasses();
-  const [activeView, setActiveView] = useState<HubView>("chat");
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const { hubDefaultView, setHubDefaultView } = useTab();
+
+  // Initialize hub cache from localStorage on mount
+  useHubCacheInit();
+
+  // Use persistent state for Hub UI
+  const { activeView, setActiveView, activeThreadId, setActiveThreadId } =
+    useHubState();
+
+  // Check for default view from notification modal (via context)
+  useEffect(() => {
+    if (hubDefaultView) {
+      setActiveView(hubDefaultView);
+      setHubDefaultView(null); // Clear after using
+    }
+  }, [hubDefaultView, setHubDefaultView, setActiveView]);
 
   return (
     <div className={cn("min-h-screen pb-24", themeClasses.bgPage)}>
@@ -265,6 +285,7 @@ function ChatView({
   setActiveThreadId: (id: string | null) => void;
 }) {
   const { data, isLoading } = useHubThreads();
+  const { syncThreadsToCache } = useCacheSync();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [purposeFilter, setPurposeFilter] = useState<string>("all");
   const [visibilityFilter, setVisibilityFilter] = useState<
@@ -274,6 +295,13 @@ function ChatView({
 
   const threads = data?.threads || [];
   const householdId = data?.household_id;
+
+  // Sync threads to localStorage cache when data loads
+  useEffect(() => {
+    if (data && data.threads && data.threads.length > 0) {
+      syncThreadsToCache(data);
+    }
+  }, [data, syncThreadsToCache]);
 
   // Filter threads by purpose, visibility, and search query
   const filteredThreads = threads.filter((thread) => {
@@ -1326,6 +1354,7 @@ function ThreadConversation({
   const queryClient = useQueryClient();
   const { data, isLoading, isFetching } = useHubMessages(threadId);
   const { data: threadsData } = useHubThreads();
+  const { syncMessagesToCache } = useCacheSync();
   const sendMessage = useSendMessage();
   const broadcastReceiptUpdate = useBroadcastReceiptUpdate();
   const markMessageAsRead = useMarkMessageAsRead();
@@ -1336,6 +1365,24 @@ function ThreadConversation({
   const { theme } = useTheme();
   const hasScrolledToUnread = useRef(false);
   const hasProcessedUnread = useRef(false);
+
+  // Sync messages to localStorage cache when data loads
+  useEffect(() => {
+    if (
+      data &&
+      data.messages &&
+      data.messages.length > 0 &&
+      data.thread_id &&
+      data.household_id
+    ) {
+      syncMessagesToCache(threadId, {
+        messages: data.messages,
+        thread_id: data.thread_id,
+        household_id: data.household_id,
+        current_user_id: data.current_user_id,
+      });
+    }
+  }, [data, threadId, syncMessagesToCache]);
 
   // Action menu state
   const [actionMenuMessage, setActionMenuMessage] = useState<HubMessage | null>(

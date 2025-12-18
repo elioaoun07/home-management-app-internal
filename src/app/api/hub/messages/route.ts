@@ -562,11 +562,16 @@ export async function PATCH(request: NextRequest) {
           }
 
           const isCurrentlyChecked = !!message.checked_at;
+          const newCheckedAt = isCurrentlyChecked
+            ? null
+            : new Date().toISOString();
+          const newCheckedBy = isCurrentlyChecked ? null : user.id;
+
           const { error: updateError } = await supabase
             .from("hub_messages")
             .update({
-              checked_at: isCurrentlyChecked ? null : new Date().toISOString(),
-              checked_by: isCurrentlyChecked ? null : user.id,
+              checked_at: newCheckedAt,
+              checked_by: newCheckedBy,
             })
             .eq("id", message_id);
 
@@ -576,6 +581,24 @@ export async function PATCH(request: NextRequest) {
               { status: 500 }
             );
           }
+
+          // Broadcast the item check update to other users in the thread
+          const threadChannelName = `thread-${message.thread_id}`;
+          const realtimeChannel = supabase.channel(threadChannelName);
+
+          await realtimeChannel.subscribe();
+          await realtimeChannel.send({
+            type: "broadcast",
+            event: "item-check-update",
+            payload: {
+              message_id,
+              thread_id: message.thread_id,
+              checked_at: newCheckedAt,
+              checked_by: newCheckedBy,
+              updated_by: user.id,
+            },
+          });
+          await supabase.removeChannel(realtimeChannel);
 
           return NextResponse.json({
             success: true,

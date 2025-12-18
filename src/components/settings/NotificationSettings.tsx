@@ -4,6 +4,11 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import {
+  useNotificationPreferences,
+  useUpdateNotificationPreference,
+} from "@/hooks/useNotifications";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import {
@@ -13,6 +18,8 @@ import {
   CheckCircle,
   Clock,
   Loader2,
+  MessageSquare,
+  Pencil,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
@@ -311,6 +318,116 @@ export function NotificationSettings() {
             <span>Works even when the app is closed</span>
           </li>
         </ul>
+      </div>
+
+      {/* In-App Notification Preferences */}
+      <InAppNotificationPreferences />
+    </div>
+  );
+}
+
+// Sub-component for in-app notification preferences
+function InAppNotificationPreferences() {
+  const themeClasses = useThemeClasses();
+  const { data, isLoading } = useNotificationPreferences();
+  const updatePreference = useUpdateNotificationPreference();
+
+  const preferences = data?.preferences || [];
+  const templates = data?.templates || [];
+
+  const getPreferenceValue = (key: string, defaultEnabled = true): boolean => {
+    const pref = preferences.find((p) => p.preference_key === key);
+    return pref ? pref.enabled : defaultEnabled;
+  };
+
+  const handleToggle = async (key: string, enabled: boolean) => {
+    try {
+      await updatePreference.mutateAsync({
+        preference_key: key,
+        enabled,
+      });
+      toast.success(enabled ? "Notification enabled" : "Notification disabled");
+    } catch {
+      toast.error("Failed to update preference");
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-4">
+        <Loader2 className={`w-5 h-5 animate-spin ${themeClasses.textMuted}`} />
+      </div>
+    );
+  }
+
+  // Define notification types with their settings
+  const notificationTypes = [
+    {
+      key: "daily_transaction_reminder",
+      title: "Daily Transaction Reminder",
+      description: "Remind me to log my transactions each day",
+      icon: Pencil,
+      iconColor: "text-cyan-400",
+    },
+    {
+      key: "weekly_summary",
+      title: "Weekly Summary",
+      description: "Get a summary of your spending each week",
+      icon: MessageSquare,
+      iconColor: "text-blue-400",
+    },
+    {
+      key: "budget_warning",
+      title: "Budget Alerts",
+      description: "Alert me when I'm approaching or exceeding my budget",
+      icon: Bell,
+      iconColor: "text-orange-400",
+    },
+  ];
+
+  return (
+    <div className="space-y-4 pt-4 border-t border-white/10">
+      <div className="flex items-center gap-2">
+        <MessageSquare className={`w-5 h-5 ${themeClasses.headerText}`} />
+        <h4 className={`font-medium ${themeClasses.text}`}>
+          In-App Notifications
+        </h4>
+      </div>
+      <p className={`text-sm ${themeClasses.textMuted}`}>
+        Customize which notifications appear in your notification center.
+      </p>
+
+      <div className="space-y-3">
+        {notificationTypes.map((type) => {
+          const Icon = type.icon;
+          const isEnabled = getPreferenceValue(type.key);
+
+          return (
+            <div
+              key={type.key}
+              className={`flex items-center justify-between p-4 rounded-xl ${themeClasses.bgSurface} ${themeClasses.border} border`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg bg-white/5`}>
+                  <Icon className={`w-5 h-5 ${type.iconColor}`} />
+                </div>
+                <div>
+                  <h5 className={`font-medium text-sm ${themeClasses.text}`}>
+                    {type.title}
+                  </h5>
+                  <p className={`text-xs ${themeClasses.textMuted}`}>
+                    {type.description}
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={isEnabled}
+                onCheckedChange={(checked) => handleToggle(type.key, checked)}
+                disabled={updatePreference.isPending}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
