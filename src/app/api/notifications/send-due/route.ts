@@ -48,15 +48,43 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Time window for due alerts
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+    // OPTIMIZATION: Quick existence check using the has_pending_alerts function
+    // This uses the partial index and returns immediately if nothing is due
+    // Avoids expensive JOINs when there's nothing to process
+    const { data: hasAlerts, error: checkError } = await supabase.rpc(
+      "has_pending_alerts",
+      {
+        p_since: oneHourAgo.toISOString(),
+        p_until: now.toISOString(),
+      }
+    );
+
+    if (checkError) {
+      // Fallback: if the function doesn't exist yet, continue with regular query
+      console.log(
+        "[Send-Due] has_pending_alerts not available, using fallback"
+      );
+    } else if (!hasAlerts) {
+      // Fast path: no pending alerts, return immediately
+      return NextResponse.json({
+        success: true,
+        sent: 0,
+        message: "No due alerts",
+        optimized: true,
+      });
+    }
+
     // Get all due alerts that haven't been fired yet
     // We look for alerts where:
     // - trigger_at is in the past (due)
     // - trigger_at is within the last hour (not too old)
     // - active is true
     // - last_fired_at is null (hasn't been sent yet)
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-
+    // NOTE: This query uses idx_item_alerts_pending_notifications partial index
     const { data: dueAlerts, error: alertsError } = await supabase
       .from("item_alerts")
       .select(
