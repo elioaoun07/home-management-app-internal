@@ -102,10 +102,7 @@ const StableNoteInput = React.memo(function StableNoteInput({
         }
       }}
       placeholder="Write a note..."
-      className="flex-1 bg-transparent border-none text-white text-lg sm:text-xl placeholder:text-white/30 focus:outline-none font-handwriting leading-relaxed ml-2 py-2"
-      style={{
-        fontFamily: "'Caveat', cursive",
-      }}
+      className="flex-1 bg-transparent border-none text-white text-lg sm:text-xl placeholder:text-white/30 focus:outline-none leading-relaxed ml-2 py-2 font-handwriting"
       autoComplete="off"
       enterKeyHint="send"
     />
@@ -950,12 +947,7 @@ export function NotesListView({
                         </div>
                       </NotebookLine>
                     ))}
-                    <p
-                      className="text-center text-xs text-white/30 mt-6 font-handwriting"
-                      style={{
-                        fontFamily: "'Caveat', cursive",
-                      }}
-                    >
+                    <p className="text-center text-xs text-white/30 mt-6 font-handwriting">
                       Loading your notes...
                     </p>
                   </div>
@@ -967,20 +959,10 @@ export function NotesListView({
                     checkedItemsList.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-20 text-center">
                         <span className="text-5xl mb-3">📝</span>
-                        <p
-                          className="text-xl text-white/50 font-handwriting"
-                          style={{
-                            fontFamily: "'Caveat', cursive",
-                          }}
-                        >
+                        <p className="text-xl text-white/50 font-handwriting">
                           Your notebook is empty
                         </p>
-                        <p
-                          className="text-lg text-white/30 mt-1 font-handwriting"
-                          style={{
-                            fontFamily: "'Caveat', cursive",
-                          }}
-                        >
+                        <p className="text-lg text-white/30 mt-1 font-handwriting">
                           Start writing below
                         </p>
                       </div>
@@ -991,7 +973,7 @@ export function NotesListView({
                           <>
                             <div
                               className={cn(
-                                "px-4 py-2 text-base font-handwriting flex items-center gap-2",
+                                "px-4 py-2 text-base flex items-center gap-2",
                                 themeClasses.textFaint
                               )}
                             >
@@ -1033,18 +1015,12 @@ export function NotesListView({
                                       }}
                                       onKeyDown={handleEditKeyPress}
                                       onBlur={saveEdit}
-                                      className="flex-1 bg-transparent border-none text-white focus:outline-none text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1"
-                                      style={{
-                                        fontFamily: "'Caveat', cursive",
-                                      }}
+                                      className="flex-1 bg-transparent border-none text-white focus:outline-none text-lg sm:text-xl leading-relaxed ml-2 py-1 font-handwriting"
                                     />
                                   ) : (
                                     <span
                                       onClick={() => startEditing(item)}
-                                      className="flex-1 text-white text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words"
-                                      style={{
-                                        fontFamily: "'Caveat', cursive",
-                                      }}
+                                      className="flex-1 text-white text-lg sm:text-xl leading-relaxed ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words font-handwriting"
                                     >
                                       {highlightText(item.content)}
                                     </span>
@@ -1104,18 +1080,12 @@ export function NotesListView({
                                   }}
                                   onKeyDown={handleEditKeyPress}
                                   onBlur={saveEdit}
-                                  className="flex-1 bg-transparent border-none text-white focus:outline-none text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1"
-                                  style={{
-                                    fontFamily: "'Caveat', cursive",
-                                  }}
+                                  className="flex-1 bg-transparent border-none text-white focus:outline-none text-lg sm:text-xl leading-relaxed ml-2 py-1 font-handwriting"
                                 />
                               ) : (
                                 <span
                                   onClick={() => startEditing(item)}
-                                  className="flex-1 text-white text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words"
-                                  style={{
-                                    fontFamily: "'Caveat', cursive",
-                                  }}
+                                  className="flex-1 text-white text-lg sm:text-xl leading-relaxed ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words font-handwriting"
                                 >
                                   {highlightText(item.content)}
                                 </span>
@@ -1136,12 +1106,7 @@ export function NotesListView({
                         {checkedItemsList.length > 0 && (
                           <>
                             <div className="flex items-center justify-between py-4 mt-4 border-t border-amber-200/10 px-4">
-                              <span
-                                className="text-base text-white/40 font-handwriting"
-                                style={{
-                                  fontFamily: "'Caveat', cursive",
-                                }}
-                              >
+                              <span className="text-base text-white/40 font-handwriting">
                                 Completed ({checkedItemsList.length})
                               </span>
                               <button
@@ -1180,18 +1145,12 @@ export function NotesListView({
                                       }}
                                       onKeyDown={handleEditKeyPress}
                                       onBlur={saveEdit}
-                                      className="flex-1 bg-transparent border-none text-white/60 focus:outline-none text-lg sm:text-xl font-handwriting leading-relaxed ml-2 py-1"
-                                      style={{
-                                        fontFamily: "'Caveat', cursive",
-                                      }}
+                                      className="flex-1 bg-transparent border-none text-white/60 focus:outline-none text-lg sm:text-xl leading-relaxed ml-2 py-1 font-handwriting"
                                     />
                                   ) : (
                                     <span
                                       onClick={() => startEditing(item)}
-                                      className="flex-1 text-white/60 text-lg sm:text-xl font-handwriting leading-relaxed line-through decoration-white/40 decoration-2 ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words"
-                                      style={{
-                                        fontFamily: "'Caveat', cursive",
-                                      }}
+                                      className="flex-1 text-white/60 text-lg sm:text-xl leading-relaxed line-through decoration-white/40 decoration-2 ml-2 py-1 cursor-text hover:bg-white/5 rounded px-1 -mx-1 transition-colors break-words font-handwriting"
                                     >
                                       {highlightText(item.content)}
                                     </span>
@@ -1291,9 +1250,8 @@ export function NotesListView({
             <div className="flex-1">
               <h2 className="book-index-title text-2xl">✦ Index ✦</h2>
               <p
-                className="text-xs mt-1 font-handwriting tracking-wide"
+                className="text-xs mt-1 tracking-wide font-handwriting"
                 style={{
-                  fontFamily: "'Caveat', cursive",
                   color: themeClasses.text.includes("pink")
                     ? "rgba(251, 191, 36, 0.6)"
                     : "rgba(6, 182, 212, 0.6)",
@@ -1324,12 +1282,7 @@ export function NotesListView({
             )}
           >
             <span className="text-base mr-2">📒</span>
-            <span
-              className="font-handwriting text-lg"
-              style={{ fontFamily: "'Caveat', cursive" }}
-            >
-              All Notes
-            </span>
+            <span className="text-lg font-handwriting">All Notes</span>
             <span className="book-index-leader" />
             <span className="book-index-page-num" style={{ color: "#8b7355" }}>
               1
@@ -1347,7 +1300,7 @@ export function NotesListView({
               }}
             />
             <span
-              className="text-[10px] uppercase tracking-[0.2em]"
+              className="text-[10px] uppercase tracking-[0.2em] font-handwriting"
               style={{
                 color: themeClasses.text.includes("pink")
                   ? "rgba(251, 191, 36, 0.5)"
@@ -1388,7 +1341,6 @@ export function NotesListView({
                 <p
                   className="text-base font-handwriting"
                   style={{
-                    fontFamily: "'Caveat', cursive",
                     color: themeClasses.text.includes("pink")
                       ? "rgba(251, 191, 36, 0.6)"
                       : "rgba(6, 182, 212, 0.6)",
@@ -1397,9 +1349,8 @@ export function NotesListView({
                   No chapters yet
                 </p>
                 <p
-                  className="text-sm font-handwriting mt-1"
+                  className="text-sm mt-1 font-handwriting"
                   style={{
-                    fontFamily: "'Caveat', cursive",
                     color: themeClasses.text.includes("pink")
                       ? "rgba(236, 72, 153, 0.4)"
                       : "rgba(6, 182, 212, 0.4)",
@@ -1419,10 +1370,7 @@ export function NotesListView({
                   )}
                 >
                   <span className="text-base mr-2">{topic.icon}</span>
-                  <span
-                    className="font-handwriting text-lg truncate"
-                    style={{ fontFamily: "'Caveat', cursive" }}
-                  >
+                  <span className="text-lg truncate font-handwriting">
                     {topic.title}
                   </span>
                   <span className="book-index-leader" />
@@ -1453,7 +1401,6 @@ export function NotesListView({
             <p
               className="text-xs mb-2 font-handwriting"
               style={{
-                fontFamily: "'Caveat', cursive",
                 color: themeClasses.text.includes("pink")
                   ? "rgba(251, 191, 36, 0.6)"
                   : "rgba(6, 182, 212, 0.6)",
@@ -1468,9 +1415,8 @@ export function NotesListView({
                 onChange={(e) => setNewTopicTitle(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && createTopic()}
                 placeholder="Chapter title..."
-                className="flex-1 rounded-lg px-3 py-2.5 text-base font-handwriting focus:outline-none transition-colors"
+                className="flex-1 rounded-lg px-3 py-2.5 text-base focus:outline-none transition-colors font-handwriting"
                 style={{
-                  fontFamily: "'Caveat', cursive",
                   background: "rgba(0, 0, 0, 0.3)",
                   border: themeClasses.text.includes("pink")
                     ? "1px solid rgba(236, 72, 153, 0.2)"
@@ -1483,9 +1429,8 @@ export function NotesListView({
               <button
                 onClick={createTopic}
                 disabled={isCreatingTopic || !newTopicTitle.trim()}
-                className="px-3 py-2 rounded-lg transition-all font-handwriting text-sm"
+                className="px-3 py-2 rounded-lg transition-all text-sm font-handwriting"
                 style={{
-                  fontFamily: "'Caveat', cursive",
                   background: newTopicTitle.trim()
                     ? themeClasses.text.includes("pink")
                       ? "rgba(236, 72, 153, 0.2)"
@@ -1542,10 +1487,7 @@ export function NotesListView({
                 ? topics.find((t) => t.id === activeTopic)?.icon || "📄"
                 : "📒"}
             </span>
-            <span
-              className="font-handwriting text-lg text-white truncate"
-              style={{ fontFamily: "'Caveat', cursive" }}
-            >
+            <span className="text-lg text-white truncate font-handwriting">
               {activeTopic
                 ? topics.find((t) => t.id === activeTopic)?.title ||
                   "Loading..."
