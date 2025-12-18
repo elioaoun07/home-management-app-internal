@@ -51,7 +51,7 @@ interface NoteItem {
 
 // Notebook line component - defined outside to prevent re-creation on each render
 const NotebookLine = ({ children }: { children: React.ReactNode }) => (
-  <div className="relative min-h-[48px] flex items-center transition-all duration-200 py-2">
+  <div className="relative min-h-[48px] flex items-center transition-all duration-200 py-2 border-b border-cyan-500/5">
     {children}
   </div>
 );
@@ -207,16 +207,23 @@ export function NotesListView({
     direction: "prev" | "next";
   } | null>(null);
 
-  const triggerFlip = useCallback((direction: "prev" | "next") => {
-    const api = flipBookRef.current?.pageFlip?.();
-    if (!api) return;
+  const triggerFlip = useCallback(
+    (direction: "prev" | "next") => {
+      const api = flipBookRef.current?.pageFlip?.();
+      if (!api) return;
 
-    if (direction === "prev") {
-      api.flipPrev?.();
-    } else {
-      api.flipNext?.();
-    }
-  }, []);
+      // Calculate next page index
+      const nextIndex =
+        direction === "prev"
+          ? Math.max(0, currentPageIndex - 1)
+          : Math.min(topics.length, currentPageIndex + 1);
+
+      // Use turnToPage for instant jump (no animation)
+      api.turnToPage?.(nextIndex);
+      setCurrentPageIndex(nextIndex);
+    },
+    [currentPageIndex, topics.length]
+  );
 
   const onGutterPointerDown = useCallback(
     (direction: "prev" | "next") => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -348,7 +355,6 @@ export function NotesListView({
   };
 
   const handleFlip = useCallback((e: { data: number }) => {
-    console.log("[handleFlip] Page flipped to:", e.data);
     setCurrentPageIndex(e.data);
   }, []);
 
@@ -599,14 +605,9 @@ export function NotesListView({
   // Delete handler with logging
   const handleDelete = useCallback(
     (messageId: string, e?: React.MouseEvent) => {
-      console.log("[NotesListView] Delete clicked for:", messageId);
-      console.log("[NotesListView] Event:", e);
-      console.log("[NotesListView] onDeleteItem function:", onDeleteItem);
       e?.stopPropagation();
       e?.preventDefault();
-      console.log("[NotesListView] Calling onDeleteItem now...");
       onDeleteItem(messageId);
-      console.log("[NotesListView] onDeleteItem called");
     },
     [onDeleteItem]
   );
@@ -711,9 +712,7 @@ export function NotesListView({
   // Toggle check state via API with instant optimistic UI
   const toggleCheck = useCallback(
     async (itemId: string) => {
-      console.log("[NotesListView] toggleCheck clicked for:", itemId);
       const queryKey = ["hub", "messages", threadId];
-      console.log("[NotesListView] queryKey:", queryKey);
 
       // Track pending toggle count for this item
       setPendingToggles((prev) => {
@@ -730,19 +729,10 @@ export function NotesListView({
       const shouldCheck = !currentMessage?.checked_at;
 
       // Optimistically update UI immediately - no delay
-      console.log(
-        "[NotesListView] Optimistically updating, shouldCheck:",
-        shouldCheck
-      );
       queryClient.setQueryData<{ messages: HubMessage[] }>(queryKey, (old) => {
         if (!old) {
-          console.log("[NotesListView] No cache data found");
           return old;
         }
-        console.log(
-          "[NotesListView] Updating cache, message count:",
-          old.messages.length
-        );
         return {
           ...old,
           messages: old.messages.map((msg) =>
@@ -756,11 +746,9 @@ export function NotesListView({
           ),
         };
       });
-      console.log("[NotesListView] Cache updated");
 
       try {
         // Fire and forget - don't await or refetch
-        console.log("[NotesListView] Making API call to toggle check");
         fetch("/api/hub/messages", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -1082,10 +1070,6 @@ export function NotesListView({
                             <div className="flex items-center w-full group px-3">
                               <button
                                 onClick={(e) => {
-                                  console.log(
-                                    "[Checkbox] Clicked for item:",
-                                    item.id
-                                  );
                                   e.stopPropagation();
                                   toggleCheck(item.id);
                                 }}
@@ -1574,10 +1558,6 @@ export function NotesListView({
             <div className="flex items-center gap-1">
               <button
                 onClick={() => {
-                  console.log(
-                    "[ChevronLeft] Clicked! currentPageIndex:",
-                    currentPageIndex
-                  );
                   triggerFlip("prev");
                 }}
                 disabled={currentPageIndex <= 0}
@@ -1587,10 +1567,6 @@ export function NotesListView({
               </button>
               <button
                 onClick={() => {
-                  console.log(
-                    "[ChevronRight] Clicked! currentPageIndex:",
-                    currentPageIndex
-                  );
                   triggerFlip("next");
                 }}
                 disabled={currentPageIndex >= topics.length}
@@ -1620,14 +1596,14 @@ export function NotesListView({
             autoSize={true}
             showCover={false}
             usePortrait={true}
-            drawShadow={true}
-            // drawShadow={false}
+            drawShadow={false}
+            // drawShadow={true}
             // Max shadow helps the page feel "solid" rather than see-through.
-            maxShadowOpacity={1}
-            // maxShadowOpacity={0}
-            // Slightly slower feels heavier/more paper-like.
-            flippingTime={650}
-            // flippingTime={1}
+            maxShadowOpacity={0}
+            // maxShadowOpacity={1}
+            // Disable animation: instant page flip instead of 650ms animation
+            flippingTime={1}
+            // flippingTime={650}
             // Shorter swipe distance makes the gesture feel decisive.
             swipeDistance={10}
             mobileScrollSupport={true}
