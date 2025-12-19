@@ -39,10 +39,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Check env vars
-    if (
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      !process.env.SUPABASE_SERVICE_ROLE_KEY
-    ) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey =
+      process.env.NEXT_SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
       console.error("[Daily Reminder] Missing Supabase credentials");
       return NextResponse.json(
         { error: "Server configuration error: Missing Supabase credentials" },
@@ -50,10 +52,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const now = new Date();
     const todayUTC = now.toISOString().split("T")[0];
