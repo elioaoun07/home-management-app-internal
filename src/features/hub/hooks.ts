@@ -105,8 +105,10 @@ export type HubAlert = {
   id: string;
   user_id: string;
   household_id: string | null;
-  alert_type: string;
-  severity: "action" | "warning" | "info" | "success";
+  notification_type: string | null;
+  // Legacy field - maps to notification_type
+  alert_type?: string;
+  severity: "action" | "warning" | "info" | "success" | "error";
   title: string;
   message: string | null;
   is_read: boolean;
@@ -114,9 +116,19 @@ export type HubAlert = {
   action_taken: boolean;
   created_at: string;
   expires_at: string | null;
-  action_type?: "transaction_reminder" | "confirm" | "navigate" | null;
+  action_type?:
+    | "transaction_reminder"
+    | "confirm"
+    | "navigate"
+    | "log_transaction"
+    | null;
   action_url?: string | null;
-  metadata?: Record<string, unknown> | null;
+  action_data?: Record<string, unknown> | null;
+  snoozed_until?: string | null;
+  item_id?: string | null;
+  transaction_id?: string | null;
+  recurring_payment_id?: string | null;
+  category_id?: string | null;
 };
 
 export type HubStats = {
@@ -1002,22 +1014,90 @@ export function useDismissAlert() {
   });
 }
 
+// Snooze a notification/alert
+export function useSnoozeAlert() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      notificationId,
+      snoozeMinutes,
+    }: {
+      notificationId: string;
+      snoozeMinutes: number;
+    }) => {
+      const res = await fetch("/api/notifications/snooze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notification_id: notificationId,
+          snooze_minutes: snoozeMinutes,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to snooze");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hub", "alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+// Update notification preference (e.g., daily reminder time)
+export function useUpdateNotificationTime() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      preferenceKey,
+      preferredTime,
+      enabled,
+    }: {
+      preferenceKey: string;
+      preferredTime?: string;
+      enabled?: boolean;
+    }) => {
+      const res = await fetch("/api/notifications/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          preference_key: preferenceKey,
+          preferred_time: preferredTime,
+          enabled,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update preference");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["notifications", "preferences"],
+      });
+    },
+  });
+}
+
 // --- Transaction Reminder Actions ---
 export function useConfirmTransactions() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (alertId: string) => {
+    mutationFn: async (notificationId: string) => {
       const res = await fetch("/api/notifications/transaction-reminder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "confirm", alertId }),
+        body: JSON.stringify({
+          action: "confirm",
+          notification_id: notificationId,
+        }),
       });
       if (!res.ok) throw new Error("Failed to confirm transactions");
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["hub", "alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 }

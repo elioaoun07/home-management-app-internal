@@ -1,9 +1,10 @@
 /**
  * Daily Transaction Logging Reminder
- * Cron endpoint that generates in-app notifications for users
- * to remind them to log their daily transactions
+ * Cron endpoint that creates notifications for users to log their transactions
  *
- * This should be called once per day, ideally in the evening (e.g., 8 PM user time)
+ * This should be called by a cron job. It:
+ * 1. Creates an in-app notification (shows in bell icon)
+ * 2. Optionally sends a push notification (if user has subscriptions)
  *
  * Vercel Cron config in vercel.json:
  * {
@@ -16,11 +17,19 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import webpush from "web-push";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // 60 seconds max
+export const maxDuration = 60;
 
 const CRON_SECRET = process.env.CRON_SECRET;
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
 
 export async function GET(req: NextRequest) {
   // Verify cron secret for security
@@ -29,17 +38,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Use service role for server-side operations
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
   const today = new Date().toISOString().split("T")[0];
-  const groupKey = `daily_transaction_reminder_${today}`;
+  const groupKey = `daily_reminder_${today}`;
 
   try {
-    // Get all users who have enabled this notification (or haven't explicitly disabled it)
+    // Get all users
     const { data: users, error: usersError } = await supabase
       .from("profiles")
       .select("id, full_name, timezone")
@@ -54,7 +62,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: "No users to notify", count: 0 });
     }
 
-    // Get users who have explicitly disabled this notification
+    // Get users who have disabled this notification
     const { data: disabledPrefs } = await supabase
       .from("notification_preferences")
       .select("user_id")
@@ -67,7 +75,7 @@ export async function GET(req: NextRequest) {
 
     // Get users who already have today's notification
     const { data: existingNotifications } = await supabase
-      .from("in_app_notifications")
+      .from("notifications")
       .select("user_id")
       .eq("group_key", groupKey);
 
@@ -75,7 +83,7 @@ export async function GET(req: NextRequest) {
       (existingNotifications || []).map((n) => n.user_id)
     );
 
-    // Filter users who should receive the notification
+    // Filter eligible users
     const eligibleUsers = users.filter(
       (user) => !disabledUserIds.has(user.id) && !existingUserIds.has(user.id)
     );
@@ -87,60 +95,136 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // For each eligible user, check if they logged any transactions today
-    const notificationsToCreate = [];
+    let notificationsCreated = 0;
+    let pushSent = 0;
 
     for (const user of eligibleUsers) {
-      // Check if user has logged transactions today
+      // Check if user logged transactions today
       const { count: todayTransactions } = await supabase
         .from("transactions")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id)
-        .gte("created_at", `${today}T00:00:00Z`)
-        .lte("created_at", `${today}T23:59:59Z`);
+        .gte("date", today);
 
-      // Create notification based on whether they've logged today
       const hasLoggedToday = (todayTransactions || 0) > 0;
 
-      notificationsToCreate.push({
-        user_id: user.id,
-        title: hasLoggedToday
-          ? "Great job logging today! 🎉"
-          : "Don't forget to log your transactions!",
-        message: hasLoggedToday
-          ? `You've logged ${todayTransactions} transaction${todayTransactions === 1 ? "" : "s"} today. Keep up the good work!`
-          : "Take a moment to log your spending for today. It helps you stay on top of your budget!",
-        icon: hasLoggedToday ? "✅" : "📝",
-        source: "system",
-        priority: hasLoggedToday ? "low" : "normal",
-        action_type: hasLoggedToday ? "confirm" : "log_transaction",
-        action_data: hasLoggedToday
-          ? { transactions_count: todayTransactions }
-          : { route: "/expense", date: today },
-        group_key: groupKey,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Expires in 24 hours
-      });
-    }
+      const title = hasLoggedToday
+        ? "Great job logging today! 🎉"
+        : "Did you log all your spending today?";
 
-    // Batch insert notifications
-    if (notificationsToCreate.length > 0) {
-      const { error: insertError } = await supabase
-        .from("in_app_notifications")
-        .insert(notificationsToCreate);
+      const message = hasLoggedToday
+        ? `You've logged ${todayTransactions} transaction${todayTransactions === 1 ? "" : "s"} today. Keep it up!`
+        : "Take a moment to log your spending. It helps you stay on budget!";
+
+      // Create unified notification
+      const { data: notification, error: insertError } = await supabase
+        .from("notifications")
+        .insert({
+          user_id: user.id,
+          notification_type: "daily_reminder",
+          title,
+          message,
+          icon: hasLoggedToday ? "✅" : "📝",
+          severity: hasLoggedToday ? "success" : "info",
+          source: "system",
+          priority: hasLoggedToday ? "low" : "normal",
+          action_type: hasLoggedToday ? "confirm" : "log_transaction",
+          action_url: hasLoggedToday ? null : "/expense",
+          action_data: hasLoggedToday
+            ? { transactions_count: todayTransactions }
+            : { route: "/expense", date: today },
+          group_key: groupKey,
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          push_status: "pending", // Mark for push sending
+        })
+        .select()
+        .single();
 
       if (insertError) {
-        console.error("Error inserting notifications:", insertError);
-        return NextResponse.json(
-          { error: insertError.message },
-          { status: 500 }
+        console.error(
+          `Error creating notification for ${user.id}:`,
+          insertError
         );
+        continue;
+      }
+
+      notificationsCreated++;
+
+      // Send push notification if user has subscriptions
+      if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY && !hasLoggedToday) {
+        const { data: subscriptions } = await supabase
+          .from("push_subscriptions")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("is_active", true);
+
+        if (subscriptions && subscriptions.length > 0) {
+          const payload = JSON.stringify({
+            title,
+            body: message,
+            icon: "/appicon-192.png",
+            badge: "/appicon-192.png",
+            tag: `daily-reminder-${user.id}`,
+            data: {
+              type: "daily_reminder",
+              notification_id: notification?.id,
+              action_url: "/expense",
+            },
+          });
+
+          for (const sub of subscriptions) {
+            try {
+              await webpush.sendNotification(
+                {
+                  endpoint: sub.endpoint,
+                  keys: { p256dh: sub.p256dh, auth: sub.auth },
+                },
+                payload
+              );
+              pushSent++;
+
+              // Update notification push status
+              await supabase
+                .from("notifications")
+                .update({
+                  push_status: "sent",
+                  push_sent_at: new Date().toISOString(),
+                })
+                .eq("id", notification?.id);
+            } catch (error: unknown) {
+              console.error(`Push failed for ${user.id}:`, error);
+
+              const statusCode =
+                error && typeof error === "object" && "statusCode" in error
+                  ? (error as { statusCode: number }).statusCode
+                  : null;
+
+              if (statusCode === 404 || statusCode === 410) {
+                await supabase
+                  .from("push_subscriptions")
+                  .update({ is_active: false })
+                  .eq("id", sub.id);
+              }
+
+              await supabase
+                .from("notifications")
+                .update({
+                  push_status: "failed",
+                  push_error:
+                    error instanceof Error ? error.message : "Unknown error",
+                })
+                .eq("id", notification?.id);
+            }
+          }
+        }
       }
     }
 
     return NextResponse.json({
       success: true,
-      message: `Created ${notificationsToCreate.length} daily reminder notifications`,
-      count: notificationsToCreate.length,
+      message: `Created ${notificationsCreated} notifications, sent ${pushSent} push notifications`,
+      notifications_created: notificationsCreated,
+      push_sent: pushSent,
       date: today,
     });
   } catch (error) {

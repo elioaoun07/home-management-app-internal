@@ -77,16 +77,6 @@ CREATE TABLE public.budget_allocations (
   CONSTRAINT budget_allocations_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT budget_allocations_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
-CREATE TABLE public.cross_app_user_mappings (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  budget_app_user_id uuid NOT NULL UNIQUE,
-  reminder_app_user_id uuid NOT NULL,
-  display_name text,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT cross_app_user_mappings_pkey PRIMARY KEY (id),
-  CONSTRAINT cross_app_user_mappings_budget_app_user_id_fkey FOREIGN KEY (budget_app_user_id) REFERENCES auth.users(id)
-);
 CREATE TABLE public.default_categories (
   id uuid NOT NULL,
   name text NOT NULL,
@@ -195,6 +185,9 @@ CREATE TABLE public.hub_alerts (
   action_taken boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now(),
   expires_at timestamp with time zone,
+  action_type text,
+  action_url text,
+  metadata jsonb DEFAULT '{}'::jsonb,
   CONSTRAINT hub_alerts_pkey PRIMARY KEY (id),
   CONSTRAINT hub_alerts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT hub_alerts_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
@@ -216,6 +209,10 @@ CREATE TABLE public.hub_chat_threads (
   purpose text DEFAULT 'general'::text CHECK (purpose = ANY (ARRAY['general'::text, 'budget'::text, 'reminder'::text, 'shopping'::text, 'travel'::text, 'health'::text, 'notes'::text, 'other'::text])),
   external_url text,
   external_app_name text,
+  enable_item_urls boolean DEFAULT false,
+  is_private boolean DEFAULT false,
+  color text,
+  deleted_at timestamp with time zone,
   CONSTRAINT hub_chat_threads_pkey PRIMARY KEY (id),
   CONSTRAINT hub_chat_threads_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
   CONSTRAINT hub_chat_threads_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
@@ -313,9 +310,11 @@ CREATE TABLE public.hub_messages (
   deleted_at timestamp with time zone,
   deleted_by uuid,
   archived_at timestamp with time zone,
-  archived_reason text CHECK (archived_reason IS NULL OR archived_reason = ANY (ARRAY['shopping_cleared'::text, 'transaction_created'::text, 'reminder_completed'::text, 'monthly_cleanup'::text, 'manual'::text])),
+  archived_reason text CHECK (archived_reason IS NULL OR (archived_reason = ANY (ARRAY['shopping_cleared'::text, 'transaction_created'::text, 'reminder_completed'::text, 'monthly_cleanup'::text, 'manual'::text]))),
   checked_at timestamp with time zone,
   checked_by uuid,
+  item_url text,
+  topic_id uuid,
   CONSTRAINT hub_messages_pkey PRIMARY KEY (id),
   CONSTRAINT hub_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
   CONSTRAINT hub_messages_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
@@ -324,7 +323,22 @@ CREATE TABLE public.hub_messages (
   CONSTRAINT hub_messages_goal_id_fkey FOREIGN KEY (goal_id) REFERENCES public.hub_household_goals(id),
   CONSTRAINT hub_messages_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.hub_alerts(id),
   CONSTRAINT hub_messages_reply_to_id_fkey FOREIGN KEY (reply_to_id) REFERENCES public.hub_messages(id),
-  CONSTRAINT hub_messages_checked_by_fkey FOREIGN KEY (checked_by) REFERENCES auth.users(id)
+  CONSTRAINT hub_messages_checked_by_fkey FOREIGN KEY (checked_by) REFERENCES auth.users(id),
+  CONSTRAINT hub_messages_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES public.hub_notes_topics(id)
+);
+CREATE TABLE public.hub_notes_topics (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  thread_id uuid NOT NULL,
+  created_by uuid NOT NULL,
+  title text NOT NULL DEFAULT 'Untitled'::text,
+  icon text DEFAULT '📄'::text,
+  color text DEFAULT '#3b82f6'::text,
+  position integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT hub_notes_topics_pkey PRIMARY KEY (id),
+  CONSTRAINT hub_notes_topics_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
+  CONSTRAINT hub_notes_topics_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.hub_reactions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -354,6 +368,31 @@ CREATE TABLE public.hub_user_stats (
   CONSTRAINT hub_user_stats_pkey PRIMARY KEY (id),
   CONSTRAINT hub_user_stats_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT hub_user_stats_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id)
+);
+CREATE TABLE public.in_app_notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  title text NOT NULL,
+  message text,
+  icon text DEFAULT 'bell'::text,
+  source USER-DEFINED NOT NULL DEFAULT 'system'::notification_source_enum,
+  priority USER-DEFINED NOT NULL DEFAULT 'normal'::item_priority_enum,
+  action_type USER-DEFINED,
+  action_data jsonb,
+  action_completed_at timestamp with time zone,
+  alert_id uuid,
+  item_id uuid,
+  transaction_id uuid,
+  is_read boolean DEFAULT false,
+  is_dismissed boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  expires_at timestamp with time zone,
+  group_key text,
+  CONSTRAINT in_app_notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT in_app_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT in_app_notifications_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.hub_alerts(id),
+  CONSTRAINT in_app_notifications_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
+  CONSTRAINT in_app_notifications_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id)
 );
 CREATE TABLE public.item_alert_presets (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -395,12 +434,19 @@ CREATE TABLE public.item_attachments (
   CONSTRAINT item_attachments_pkey PRIMARY KEY (id),
   CONSTRAINT item_attachments_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
-CREATE TABLE public.item_categories (
+CREATE TABLE public.item_occurrence_actions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
   item_id uuid NOT NULL,
-  category_id text NOT NULL,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT item_categories_pkey PRIMARY KEY (item_id, category_id),
-  CONSTRAINT item_categories_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+  occurrence_date timestamp with time zone NOT NULL,
+  action_type text NOT NULL CHECK (action_type = ANY (ARRAY['completed'::text, 'postponed'::text, 'cancelled'::text, 'skipped'::text])),
+  postponed_to timestamp with time zone,
+  postpone_type text CHECK (postpone_type = ANY (ARRAY['next_occurrence'::text, 'tomorrow'::text, 'custom'::text, 'ai_slot'::text])),
+  reason text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT item_occurrence_actions_pkey PRIMARY KEY (id),
+  CONSTRAINT item_occurrence_actions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
+  CONSTRAINT item_occurrence_actions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.item_recurrence_exceptions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -456,6 +502,7 @@ CREATE TABLE public.items (
   is_public boolean NOT NULL DEFAULT false,
   responsible_user_id uuid NOT NULL,
   google_event_id text,
+  categories ARRAY DEFAULT '{}'::text[],
   CONSTRAINT items_pkey PRIMARY KEY (id),
   CONSTRAINT items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT items_responsible_user_fkey FOREIGN KEY (responsible_user_id) REFERENCES auth.users(id)
@@ -495,6 +542,39 @@ CREATE TABLE public.notification_logs (
   CONSTRAINT notification_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT notification_logs_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.item_alerts(id),
   CONSTRAINT notification_logs_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.push_subscriptions(id)
+);
+CREATE TABLE public.notification_preferences (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  preference_key text NOT NULL,
+  enabled boolean DEFAULT true,
+  frequency text DEFAULT 'daily'::text,
+  custom_cron text,
+  preferred_time time without time zone DEFAULT '20:00:00'::time without time zone,
+  timezone text DEFAULT 'UTC'::text,
+  days_of_week ARRAY DEFAULT ARRAY[1, 2, 3, 4, 5, 6, 7],
+  quiet_start time without time zone,
+  quiet_end time without time zone,
+  metadata jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notification_preferences_pkey PRIMARY KEY (id),
+  CONSTRAINT notification_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.notification_templates (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  template_key text NOT NULL UNIQUE,
+  title text NOT NULL,
+  message_template text,
+  icon text DEFAULT 'bell'::text,
+  default_action_type USER-DEFINED,
+  default_priority USER-DEFINED DEFAULT 'normal'::item_priority_enum,
+  default_frequency text DEFAULT 'daily'::text,
+  default_time time without time zone DEFAULT '20:00:00'::time without time zone,
+  is_system boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notification_templates_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.push_subscriptions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

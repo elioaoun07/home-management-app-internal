@@ -4,12 +4,37 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export type InAppNotification = {
+// Notification types (maps to notification_type_enum in database)
+export type NotificationType =
+  | "daily_reminder"
+  | "weekly_summary"
+  | "monthly_summary"
+  | "budget_warning"
+  | "budget_exceeded"
+  | "bill_due"
+  | "bill_overdue"
+  | "item_reminder"
+  | "item_due"
+  | "item_overdue"
+  | "goal_milestone"
+  | "goal_completed"
+  | "chat_message"
+  | "chat_mention"
+  | "transaction_pending"
+  | "info"
+  | "success"
+  | "warning"
+  | "error";
+
+// Unified notification type (combines old hub_alerts and in_app_notifications)
+export type Notification = {
   id: string;
   user_id: string;
   title: string;
   message: string | null;
   icon: string;
+  notification_type: NotificationType | null;
+  severity: "info" | "success" | "warning" | "error" | "action";
   source:
     | "system"
     | "cron"
@@ -28,18 +53,28 @@ export type InAppNotification = {
     | "dismiss"
     | null;
   action_data: Record<string, unknown> | null;
+  action_url: string | null;
   action_completed_at: string | null;
-  alert_id: string | null;
+  action_taken: boolean;
   item_id: string | null;
   transaction_id: string | null;
+  recurring_payment_id: string | null;
+  category_id: string | null;
+  household_id: string | null;
   is_read: boolean;
   is_dismissed: boolean;
   created_at: string;
   expires_at: string | null;
   group_key: string | null;
+  snoozed_until: string | null;
+  push_status: "pending" | "sent" | "failed" | "clicked" | "dismissed" | null;
+  push_sent_at: string | null;
 };
 
-// GET - Fetch in-app notifications for user
+// Legacy type alias for backward compatibility
+export type InAppNotification = Notification;
+
+// GET - Fetch notifications for user
 export async function GET(request: NextRequest) {
   const supabase = await supabaseServer(await cookies());
   const {
@@ -51,12 +86,13 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const limit = parseInt(searchParams.get("limit") || "10", 10);
+  const limit = parseInt(searchParams.get("limit") || "20", 10);
   const includeRead = searchParams.get("include_read") === "true";
+  const type = searchParams.get("type"); // Filter by notification_type
 
-  // Build query
+  // Build query - use unified 'notifications' table
   let query = supabase
-    .from("in_app_notifications")
+    .from("notifications")
     .select("*")
     .eq("user_id", user.id)
     .eq("is_dismissed", false)
@@ -68,10 +104,16 @@ export async function GET(request: NextRequest) {
     query = query.eq("is_read", false);
   }
 
-  // Filter out expired notifications
-  query = query.or(
-    `expires_at.is.null,expires_at.gt.${new Date().toISOString()}`
-  );
+  // Filter by type if provided
+  if (type) {
+    query = query.eq("notification_type", type);
+  }
+
+  // Filter out expired and snoozed notifications
+  const now = new Date().toISOString();
+  query = query
+    .or(`expires_at.is.null,expires_at.gt.${now}`)
+    .or(`snoozed_until.is.null,snoozed_until.lte.${now}`);
 
   const { data: notifications, error } = await query;
 
@@ -82,12 +124,13 @@ export async function GET(request: NextRequest) {
 
   // Get unread count
   const { count: unreadCount } = await supabase
-    .from("in_app_notifications")
+    .from("notifications")
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id)
     .eq("is_dismissed", false)
     .eq("is_read", false)
-    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+    .or(`expires_at.is.null,expires_at.gt.${now}`)
+    .or(`snoozed_until.is.null,snoozed_until.lte.${now}`);
 
   return NextResponse.json({
     notifications: notifications || [],
@@ -95,7 +138,7 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// POST - Create a new notification (for testing or manual creation)
+// POST - Create a new notification
 export async function POST(request: NextRequest) {
   const supabase = await supabaseServer(await cookies());
   const {
@@ -111,12 +154,20 @@ export async function POST(request: NextRequest) {
     title,
     message,
     icon = "bell",
+    notification_type = "info",
+    severity = "info",
     source = "system",
     priority = "normal",
     action_type,
     action_data,
+    action_url,
     group_key,
     expires_at,
+    item_id,
+    transaction_id,
+    recurring_payment_id,
+    category_id,
+    send_push = false,
   } = body;
 
   if (!title) {
@@ -126,10 +177,11 @@ export async function POST(request: NextRequest) {
   // Check for duplicate if group_key is provided
   if (group_key) {
     const { data: existing } = await supabase
-      .from("in_app_notifications")
+      .from("notifications")
       .select("id")
       .eq("user_id", user.id)
       .eq("group_key", group_key)
+      .eq("is_dismissed", false)
       .single();
 
     if (existing) {
@@ -141,18 +193,26 @@ export async function POST(request: NextRequest) {
   }
 
   const { data: notification, error } = await supabase
-    .from("in_app_notifications")
+    .from("notifications")
     .insert({
       user_id: user.id,
       title,
       message,
       icon,
+      notification_type,
+      severity,
       source,
       priority,
       action_type,
       action_data,
+      action_url,
       group_key,
       expires_at,
+      item_id,
+      transaction_id,
+      recurring_payment_id,
+      category_id,
+      push_status: send_push ? "pending" : null,
     })
     .select()
     .single();
@@ -165,7 +225,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ notification });
 }
 
-// PATCH - Update notification (mark as read, complete action, dismiss)
+// PATCH - Update notification (mark as read, complete action, dismiss, snooze)
 export async function PATCH(request: NextRequest) {
   const supabase = await supabaseServer(await cookies());
   const {
@@ -177,18 +237,22 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { id, ids, is_read, is_dismissed, action_completed } = body;
+  const { id, ids, is_read, is_dismissed, action_completed, snoozed_until } =
+    body;
 
   // Handle bulk update
   if (ids && Array.isArray(ids) && ids.length > 0) {
-    const updates: Record<string, boolean | string> = {};
+    const updates: Record<string, boolean | string | null> = {};
     if (is_read !== undefined) updates.is_read = is_read;
     if (is_dismissed !== undefined) updates.is_dismissed = is_dismissed;
-    if (action_completed)
+    if (action_completed) {
       updates.action_completed_at = new Date().toISOString();
+      updates.action_taken = true;
+    }
+    if (snoozed_until !== undefined) updates.snoozed_until = snoozed_until;
 
     const { error } = await supabase
-      .from("in_app_notifications")
+      .from("notifications")
       .update(updates)
       .eq("user_id", user.id)
       .in("id", ids);
@@ -209,13 +273,17 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  const updates: Record<string, boolean | string> = {};
+  const updates: Record<string, boolean | string | null> = {};
   if (is_read !== undefined) updates.is_read = is_read;
   if (is_dismissed !== undefined) updates.is_dismissed = is_dismissed;
-  if (action_completed) updates.action_completed_at = new Date().toISOString();
+  if (action_completed) {
+    updates.action_completed_at = new Date().toISOString();
+    updates.action_taken = true;
+  }
+  if (snoozed_until !== undefined) updates.snoozed_until = snoozed_until;
 
   const { error } = await supabase
-    .from("in_app_notifications")
+    .from("notifications")
     .update(updates)
     .eq("id", id)
     .eq("user_id", user.id);
@@ -250,7 +318,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   const { error } = await supabase
-    .from("in_app_notifications")
+    .from("notifications")
     .delete()
     .eq("id", id)
     .eq("user_id", user.id);

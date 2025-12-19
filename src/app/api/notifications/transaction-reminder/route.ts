@@ -1,6 +1,5 @@
 // src/app/api/notifications/transaction-reminder/route.ts
 // API routes for daily transaction reminder actions (confirm/add-expense)
-// Settings are managed via the general /api/notifications/preferences endpoint
 
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
@@ -20,25 +19,26 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { action, alert_id } = body;
+  const { action, notification_id } = body;
 
   if (action === "confirm") {
-    // User clicked "Yes, all done!" - mark alert as complete
-    if (alert_id) {
+    // User clicked "Yes, all done!" - mark notification as complete
+    if (notification_id) {
       await supabase
-        .from("hub_alerts")
-        .update({ action_taken: true, is_dismissed: true })
-        .eq("id", alert_id)
+        .from("notifications")
+        .update({ action_taken: true, is_dismissed: true, is_read: true })
+        .eq("id", notification_id)
         .eq("user_id", user.id);
     }
 
-    // Also mark any in_app_notifications for today as read
+    // Also mark any daily reminders for today as done
     const today = new Date().toISOString().split("T")[0];
     await supabase
-      .from("in_app_notifications")
+      .from("notifications")
       .update({ is_read: true, action_taken: true })
       .eq("user_id", user.id)
-      .like("group_key", `daily_transaction_reminder_${today}%`);
+      .eq("notification_type", "daily_reminder")
+      .gte("created_at", `${today}T00:00:00Z`);
 
     return NextResponse.json({
       success: true,
@@ -48,10 +48,9 @@ export async function POST(req: NextRequest) {
 
   if (action === "add-expense") {
     // User clicked "Not yet" - just return the redirect URL
-    // The alert stays visible until they confirm
     return NextResponse.json({
       success: true,
-      redirect: "/dashboard?action=add-expense",
+      redirect: "/expense",
     });
   }
 

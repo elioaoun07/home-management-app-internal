@@ -76,6 +76,7 @@ self.addEventListener("push", (event) => {
 
   // Determine notification type and set appropriate actions
   const isTransactionReminder = data.data?.type === "transaction_reminder";
+  const isDailyReminder = data.data?.type === "daily_reminder";
 
   // Create notification options based on type
   const options = {
@@ -90,18 +91,18 @@ self.addEventListener("push", (event) => {
     timestamp: Date.now(),
   };
 
-  if (isTransactionReminder) {
-    // Transaction reminder - Yes/Not Yet actions
+  if (isTransactionReminder || isDailyReminder) {
+    // Transaction/Daily reminder - Log/Snooze/Settings actions
     options.vibrate = [200, 100, 200]; // Gentle vibration
     options.actions = [
       {
-        action: "confirm_transactions",
-        title: "✓ Yes, all done!",
+        action: "add_expense",
+        title: "➕ Log Expense",
         icon: "/appicon-192.png",
       },
       {
-        action: "add_expense",
-        title: "➕ Not yet",
+        action: "snooze_1h",
+        title: "⏰ Snooze 1h",
         icon: "/appicon-192.png",
       },
     ];
@@ -152,7 +153,13 @@ self.addEventListener("notificationclick", (event) => {
 
   if (action === "snooze") {
     // Snooze for 5 minutes - send to server to reschedule
-    event.waitUntil(handleSnooze(data));
+    event.waitUntil(handleSnooze(data, 5));
+  } else if (action === "snooze_1h") {
+    // Snooze for 1 hour
+    event.waitUntil(handleSnooze(data, 60));
+  } else if (action === "snooze_3h") {
+    // Snooze for 3 hours
+    event.waitUntil(handleSnooze(data, 180));
   } else if (action === "dismiss") {
     // Mark as dismissed - send to server
     event.waitUntil(handleDismiss(data));
@@ -162,9 +169,15 @@ self.addEventListener("notificationclick", (event) => {
   } else if (action === "add_expense") {
     // User needs to add expenses - open add expense form
     event.waitUntil(openAddExpense(data));
+  } else if (action === "settings") {
+    // Open notification settings
+    event.waitUntil(openApp({ ...data, url: "/settings/notifications" }));
   } else {
     // Default click - open the app based on notification type
-    if (data.type === "transaction_reminder") {
+    if (
+      data.type === "transaction_reminder" ||
+      data.type === "daily_reminder"
+    ) {
       // Open Hub Alerts view
       event.waitUntil(openApp({ ...data, url: "/hub?view=alerts" }));
     } else {
@@ -183,19 +196,34 @@ self.addEventListener("notificationclose", (event) => {
 // ACTION HANDLERS
 // ============================================
 
-async function handleSnooze(data) {
-  console.log("[SW] Snoozing notification:", data);
+async function handleSnooze(data, minutes = 5) {
+  console.log("[SW] Snoozing notification for", minutes, "minutes:", data);
 
   // Try to send snooze request to server
   try {
-    if (data.item_id && data.alert_id) {
+    // Use notification_id for unified notifications
+    if (data.notification_id) {
+      const response = await fetch("/api/notifications/snooze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notification_id: data.notification_id,
+          snooze_minutes: minutes,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error("[SW] Failed to snooze:", await response.text());
+      }
+    } else if (data.item_id && data.alert_id) {
+      // Legacy: item alerts
       const response = await fetch("/api/notifications/snooze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           item_id: data.item_id,
           alert_id: data.alert_id,
-          snooze_minutes: 5,
+          snooze_minutes: minutes,
         }),
       });
 
@@ -207,9 +235,15 @@ async function handleSnooze(data) {
     console.error("[SW] Error snoozing:", error);
   }
 
+  // Format snooze time for display
+  const timeDisplay =
+    minutes >= 60
+      ? `${minutes / 60} hour${minutes > 60 ? "s" : ""}`
+      : `${minutes} minutes`;
+
   // Show a confirmation notification
   await self.registration.showNotification("Snoozed", {
-    body: "Reminder snoozed for 5 minutes",
+    body: `Reminder snoozed for ${timeDisplay}`,
     icon: "/appicon-192.png",
     tag: "snooze-confirm",
     requireInteraction: false,
@@ -246,7 +280,8 @@ async function handleConfirmTransactions(data) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "confirm",
-        alert_id: data.alert_id,
+        notification_id: data.notification_id,
+        alert_id: data.alert_id, // Legacy fallback
       }),
     });
 

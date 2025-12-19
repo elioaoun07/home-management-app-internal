@@ -1,5 +1,5 @@
 // src/app/api/notifications/snooze/route.ts
-// API route to snooze a reminder notification
+// API route to snooze a notification
 
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
@@ -19,19 +19,42 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { item_id, alert_id, snooze_minutes = 5 } = body;
-
-    if (!item_id || !alert_id) {
-      return NextResponse.json(
-        { error: "Missing item_id or alert_id" },
-        { status: 400 }
-      );
-    }
+    const { notification_id, item_id, alert_id, snooze_minutes = 5 } = body;
 
     // Calculate snooze until time
     const snoozedUntil = new Date(Date.now() + snooze_minutes * 60 * 1000);
 
-    // Create a snooze record
+    // If notification_id is provided, snooze the notification directly
+    if (notification_id) {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ snoozed_until: snoozedUntil.toISOString() })
+        .eq("id", notification_id)
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("Failed to snooze notification:", error);
+        return NextResponse.json(
+          { error: "Failed to snooze" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        snoozed_until: snoozedUntil.toISOString(),
+      });
+    }
+
+    // Legacy: handle item_id and alert_id for item_alerts
+    if (!item_id || !alert_id) {
+      return NextResponse.json(
+        { error: "Missing notification_id or (item_id and alert_id)" },
+        { status: 400 }
+      );
+    }
+
+    // Create a snooze record for item_alerts
     const { data: snooze, error: snoozeError } = await supabase
       .from("item_snoozes")
       .insert({
@@ -51,7 +74,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Update the alert's trigger_at to the snooze time
-    // This ensures the scheduler picks it up again
     const { error: alertError } = await supabase
       .from("item_alerts")
       .update({
@@ -62,7 +84,6 @@ export async function POST(req: NextRequest) {
 
     if (alertError) {
       console.error("Failed to update alert:", alertError);
-      // Don't fail - snooze was created
     }
 
     return NextResponse.json({

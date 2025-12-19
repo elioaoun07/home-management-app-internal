@@ -28,7 +28,7 @@ import {
   useInAppNotifications,
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
-  type InAppNotification,
+  type Notification,
 } from "@/hooks/useNotifications";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
@@ -62,17 +62,14 @@ export default function NotificationModal({
   const notifications = data?.notifications || [];
   const unreadCount = data?.unread_count || 0;
 
-  const handleNotificationClick = (notification: InAppNotification) => {
+  const handleNotificationClick = (notification: Notification) => {
     // Mark as read
     if (!notification.is_read) {
       markRead.mutate(notification.id);
     }
 
-    // Get route if applicable
-    const route = getActionRoute(
-      notification.action_type,
-      notification.action_data
-    );
+    // Get route from the notification
+    const route = getActionRoute(notification);
 
     if (route) {
       onOpenChange(false);
@@ -90,7 +87,7 @@ export default function NotificationModal({
     }
   };
 
-  const handleActionClick = (notification: InAppNotification) => {
+  const handleActionClick = (notification: Notification) => {
     // Complete the action
     completeAction.mutate({
       notificationId: notification.id,
@@ -100,10 +97,7 @@ export default function NotificationModal({
     });
 
     // Handle navigation if needed
-    const route = getActionRoute(
-      notification.action_type,
-      notification.action_data
-    );
+    const route = getActionRoute(notification);
     if (
       route &&
       notification.action_type !== "confirm" &&
@@ -142,12 +136,46 @@ export default function NotificationModal({
     }
   };
 
-  const getNotificationIcon = (notification: InAppNotification): string => {
+  const getNotificationIcon = (notification: Notification): string => {
     if (notification.icon && notification.icon.length <= 4) {
       return notification.icon; // Emoji
     }
 
-    // Map icon names to emojis
+    // Map icon names or notification types to emojis
+    if (notification.notification_type) {
+      switch (notification.notification_type) {
+        case "daily_reminder":
+          return "📝";
+        case "budget_warning":
+          return "⚠️";
+        case "budget_exceeded":
+          return "🚨";
+        case "bill_due":
+        case "bill_overdue":
+          return "💳";
+        case "item_reminder":
+        case "item_due":
+          return "⏰";
+        case "item_overdue":
+          return "❗";
+        case "goal_milestone":
+        case "goal_completed":
+          return "🎯";
+        case "chat_message":
+        case "chat_mention":
+          return "💬";
+        case "success":
+          return "✅";
+        case "warning":
+          return "⚠️";
+        case "error":
+          return "❌";
+        default:
+          break;
+      }
+    }
+
+    // Fallback to icon field mapping
     switch (notification.icon) {
       case "bell":
         return "🔔";

@@ -45,22 +45,17 @@ COMMENT ON COLUMN public.hub_chat_threads.external_url IS 'URL to external PWA a
 COMMENT ON COLUMN public.hub_chat_threads.external_app_name IS 'Display name of the external app';
 
 -- ============================================
--- RECOMMENDED EXTERNAL APP CONFIGURATION
+-- THREAD PURPOSE CONFIGURATION
 -- ============================================
 -- 
--- Budget App URL: https://home-management-app-internal.vercel.app/expense
--- - Purpose: 'budget'
+-- Purpose: 'budget'
 -- - Default action: 'transaction'
 -- - When user long-presses a message, suggest "Add Transaction"
 --
--- Reminder App URL: https://home-manager-pwa.vercel.app/
--- - Purpose: 'reminder'  
--- - Default action: 'reminder'
--- - When user long-presses a message, suggest "Add Reminder"
+-- Purpose: 'shopping'
+-- - Default action: 'add_to_list'
+-- - Shopping list functionality
 --
--- Note on Cross-App Authentication:
--- Both apps use Supabase Auth. As long as:
--- 1. User is logged in on both PWAs (installed on mobile)
--- 2. The session cookie/token is valid
--- The user will remain authenticated when navigating between apps.
--- If session expires, user will need to re-authenticate on that specific app.
+-- Purpose: 'notes'
+-- - Default action: none
+-- - General notes/messaging

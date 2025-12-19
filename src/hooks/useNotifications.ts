@@ -1,20 +1,26 @@
 /**
- * In-App Notifications Hooks
- * Provides hooks for fetching and managing in-app notifications
+ * Unified Notifications Hooks
+ * Provides hooks for fetching and managing notifications (both in-app and push)
  */
-import type { InAppNotification } from "@/app/api/notifications/in-app/route";
+import type {
+  InAppNotification,
+  Notification,
+  NotificationType,
+} from "@/app/api/notifications/in-app/route";
 import type { NotificationPreference } from "@/app/api/notifications/preferences/route";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Query keys
 export const notificationKeys = {
   all: ["notifications"] as const,
-  inApp: () => [...notificationKeys.all, "in-app"] as const,
+  list: () => [...notificationKeys.all, "list"] as const,
   preferences: () => [...notificationKeys.all, "preferences"] as const,
-  unreadCount: () => [...notificationKeys.inApp(), "unread-count"] as const,
+  unreadCount: () => [...notificationKeys.all, "unread-count"] as const,
+  // Legacy alias
+  inApp: () => notificationKeys.list(),
 };
 
-// Types
+// Types - re-export from API
 export type NotificationActionType =
   | "confirm"
   | "complete_task"
@@ -32,50 +38,55 @@ export type NotificationSource =
   | "budget"
   | "household";
 
-export { type InAppNotification, type NotificationPreference };
+export {
+  type InAppNotification,
+  type Notification,
+  type NotificationPreference,
+  type NotificationType,
+};
 
-// Sync notifications from cron/push to in-app on mount
-async function syncNotifications(): Promise<void> {
-  try {
-    await fetch("/api/notifications/sync", { method: "POST" });
-  } catch (error) {
-    // Silently fail - sync is best effort
-    console.debug("Notification sync failed:", error);
-  }
-}
+// No more sync needed - all notifications are in one table now
 
-// Fetch in-app notifications
+// Fetch notifications
 export function useInAppNotifications(options?: {
   limit?: number;
   includeRead?: boolean;
   enabled?: boolean;
+  type?: NotificationType;
 }) {
-  const { limit = 10, includeRead = true, enabled = true } = options || {};
+  const {
+    limit = 20,
+    includeRead = true,
+    enabled = true,
+    type,
+  } = options || {};
 
   return useQuery({
-    queryKey: [...notificationKeys.inApp(), { limit, includeRead }],
+    queryKey: [...notificationKeys.list(), { limit, includeRead, type }],
     queryFn: async () => {
-      // Sync notifications from cron/push first (non-blocking)
-      syncNotifications();
-
       const params = new URLSearchParams({
         limit: limit.toString(),
         include_read: includeRead.toString(),
       });
+      if (type) params.set("type", type);
+
       const res = await fetch(`/api/notifications/in-app?${params}`);
       if (!res.ok) throw new Error("Failed to fetch notifications");
       return res.json() as Promise<{
-        notifications: InAppNotification[];
+        notifications: Notification[];
         unread_count: number;
       }>;
     },
     staleTime: 30000, // 30 seconds
     gcTime: 60000, // 1 minute
     refetchOnWindowFocus: true,
-    refetchInterval: 60000, // Poll every minute for new notifications
+    refetchInterval: 60000, // Poll every minute
     enabled,
   });
 }
+
+// Alias for backward compatibility
+export const useNotifications = useInAppNotifications;
 
 // Get just the unread count (lightweight query)
 export function useUnreadNotificationCount() {
@@ -111,12 +122,12 @@ export function useMarkNotificationRead() {
     },
     onMutate: async (notificationId) => {
       // Optimistic update
-      await queryClient.cancelQueries({ queryKey: notificationKeys.inApp() });
+      await queryClient.cancelQueries({ queryKey: notificationKeys.list() });
 
       queryClient.setQueriesData<{
-        notifications: InAppNotification[];
+        notifications: Notification[];
         unread_count: number;
-      }>({ queryKey: notificationKeys.inApp() }, (old) => {
+      }>({ queryKey: notificationKeys.list() }, (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -128,7 +139,7 @@ export function useMarkNotificationRead() {
       });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.inApp() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
     },
   });
 }
@@ -148,12 +159,12 @@ export function useMarkAllNotificationsRead() {
       return res.json();
     },
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: notificationKeys.inApp() });
+      await queryClient.cancelQueries({ queryKey: notificationKeys.list() });
 
       queryClient.setQueriesData<{
-        notifications: InAppNotification[];
+        notifications: Notification[];
         unread_count: number;
-      }>({ queryKey: notificationKeys.inApp() }, (old) => {
+      }>({ queryKey: notificationKeys.list() }, (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -166,7 +177,7 @@ export function useMarkAllNotificationsRead() {
       });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.inApp() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
     },
   });
 }
@@ -186,12 +197,12 @@ export function useDismissNotification() {
       return res.json();
     },
     onMutate: async (notificationId) => {
-      await queryClient.cancelQueries({ queryKey: notificationKeys.inApp() });
+      await queryClient.cancelQueries({ queryKey: notificationKeys.list() });
 
       queryClient.setQueriesData<{
-        notifications: InAppNotification[];
+        notifications: Notification[];
         unread_count: number;
-      }>({ queryKey: notificationKeys.inApp() }, (old) => {
+      }>({ queryKey: notificationKeys.list() }, (old) => {
         if (!old) return old;
         const notification = old.notifications.find(
           (n) => n.id === notificationId
@@ -209,7 +220,7 @@ export function useDismissNotification() {
       });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.inApp() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
     },
   });
 }
@@ -240,7 +251,59 @@ export function useCompleteNotificationAction() {
       return res.json();
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.inApp() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
+    },
+  });
+}
+
+// Snooze notification
+export function useSnoozeNotification() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      notificationId,
+      snoozedUntil,
+    }: {
+      notificationId: string;
+      snoozedUntil: string; // ISO date string
+    }) => {
+      const res = await fetch("/api/notifications/in-app", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: notificationId,
+          snoozed_until: snoozedUntil,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to snooze");
+      return res.json();
+    },
+    onMutate: async ({ notificationId }) => {
+      await queryClient.cancelQueries({ queryKey: notificationKeys.list() });
+
+      queryClient.setQueriesData<{
+        notifications: Notification[];
+        unread_count: number;
+      }>({ queryKey: notificationKeys.list() }, (old) => {
+        if (!old) return old;
+        const notification = old.notifications.find(
+          (n) => n.id === notificationId
+        );
+        const wasUnread = notification && !notification.is_read;
+        return {
+          ...old,
+          notifications: old.notifications.filter(
+            (n) => n.id !== notificationId
+          ),
+          unread_count: wasUnread
+            ? Math.max(0, old.unread_count - 1)
+            : old.unread_count,
+        };
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
     },
   });
 }
@@ -318,22 +381,40 @@ export function getActionButtonText(
 }
 
 // Helper to get action route
-export function getActionRoute(
-  actionType: NotificationActionType | null,
-  actionData?: Record<string, unknown> | null
-): string | null {
-  switch (actionType) {
-    case "log_transaction":
-      return "/expense"; // Navigate to expense tab
-    case "view_details":
-      if (actionData?.route) return actionData.route as string;
-      if (
-        actionData?.alert_type === "budget_warning" ||
-        actionData?.alert_type === "budget_exceeded"
-      ) {
-        return "/budget";
-      }
-      return "/hub?view=alerts";
+export function getActionRoute(notification: Notification): string | null {
+  // First check action_url (new unified field)
+  if (notification.action_url) {
+    return notification.action_url;
+  }
+
+  // Fallback to action_data.route for backward compatibility
+  if (notification.action_data?.route) {
+    return notification.action_data.route as string;
+  }
+
+  // Map notification types to routes
+  switch (notification.notification_type) {
+    case "daily_reminder":
+    case "transaction_pending":
+      return "/expense";
+    case "budget_warning":
+    case "budget_exceeded":
+      return "/budget";
+    case "bill_due":
+    case "bill_overdue":
+      return "/recurring";
+    case "item_reminder":
+    case "item_due":
+    case "item_overdue":
+      return notification.item_id
+        ? `/reminders/${notification.item_id}`
+        : "/reminders";
+    case "goal_milestone":
+    case "goal_completed":
+      return "/hub?view=goals";
+    case "chat_message":
+    case "chat_mention":
+      return "/hub?view=chat";
     default:
       return null;
   }

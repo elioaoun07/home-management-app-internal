@@ -32,6 +32,8 @@ import {
   useMarkMessageAsRead,
   useRealtimeMessages,
   useSendMessage,
+  useSnoozeAlert,
+  useUpdateNotificationTime,
   type HubAlert,
   type HubChatThread,
   type HubFeedItem,
@@ -55,12 +57,6 @@ import { toast } from "sonner";
 // Lazy load transaction modal to avoid bundle bloat
 const AddTransactionFromMessageModal = dynamic(
   () => import("@/components/hub/AddTransactionFromMessageModal"),
-  { ssr: false }
-);
-
-// Lazy load reminder modal to avoid bundle bloat
-const AddReminderFromMessageModal = dynamic(
-  () => import("@/components/hub/AddReminderFromMessageModal"),
   { ssr: false }
 );
 
@@ -1471,13 +1467,6 @@ function ThreadConversation({
     date: string | null;
   } | null>(null);
 
-  // Reminder modal state
-  const [reminderModalData, setReminderModalData] = useState<{
-    messageId: string;
-    title: string;
-    description: string;
-  } | null>(null);
-
   // Track locally converted messages for immediate UI feedback
   const [convertedMessageIds, setConvertedMessageIds] = useState<Set<string>>(
     new Set()
@@ -2802,62 +2791,40 @@ function ThreadConversation({
 
               // Determine action based on thread purpose
               const threadPurpose = thread?.purpose || "general";
-              const isReminderThread = threadPurpose === "reminder";
               const isBudgetThread = threadPurpose === "budget";
 
-              // For reminder threads, show "Add Reminder" action
               // For budget threads or general, show "Add Transaction" action
-              const actionLabel = isReminderThread
-                ? "Add as Reminder"
-                : "Add as Transaction";
-              const actionDescription = isReminderThread
-                ? "Create reminder entry"
-                : "Create expense entry";
-              const actionIcon = isReminderThread ? "⏰" : "💰";
-              const actionCompleteLabel = isReminderThread
-                ? "Reminder Added"
-                : "Transaction Added";
+              const actionLabel = "Add as Transaction";
+              const actionDescription = "Create expense entry";
+              const actionIcon = "💰";
+              const actionCompleteLabel = "Transaction Added";
 
               return (
                 <div className="p-2">
-                  {/* Add as Transaction/Reminder Action */}
+                  {/* Add as Transaction Action */}
                   <button
                     onClick={() => {
                       if (hasTransactionAction) return;
 
-                      if (isReminderThread) {
-                        // For reminder threads, open reminder modal
-                        setReminderModalData({
-                          messageId: actionMenuMessage.id,
-                          title: actionMenuMessage.content?.slice(0, 100) || "",
-                          description: actionMenuMessage.content || "",
-                        });
+                      // Parse message for transaction data
+                      const parsed = parseMessageForTransaction(
+                        actionMenuMessage.content || "",
+                        categories as any[]
+                      );
 
-                        // Close action menu
-                        setActionMenuMessage(null);
-                        setActionMenuPosition(null);
-                      } else {
-                        // For budget/transaction threads
-                        // Parse message for transaction data
-                        const parsed = parseMessageForTransaction(
-                          actionMenuMessage.content || "",
-                          categories as any[]
-                        );
+                      // Open transaction modal with prefilled data
+                      setTransactionModalData({
+                        messageId: actionMenuMessage.id,
+                        amount: parsed.amount || 0,
+                        description: parsed.description,
+                        categoryId: parsed.categoryId,
+                        subcategoryId: parsed.subcategoryId,
+                        date: parsed.date,
+                      });
 
-                        // Open transaction modal with prefilled data
-                        setTransactionModalData({
-                          messageId: actionMenuMessage.id,
-                          amount: parsed.amount || 0,
-                          description: parsed.description,
-                          categoryId: parsed.categoryId,
-                          subcategoryId: parsed.subcategoryId,
-                          date: parsed.date,
-                        });
-
-                        // Close action menu
-                        setActionMenuMessage(null);
-                        setActionMenuPosition(null);
-                      }
+                      // Close action menu
+                      setActionMenuMessage(null);
+                      setActionMenuPosition(null);
                     }}
                     disabled={hasTransactionAction}
                     className={cn(
@@ -2872,11 +2839,9 @@ function ThreadConversation({
                         "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
                         hasTransactionAction
                           ? "bg-emerald-500/20"
-                          : isReminderThread
-                            ? "bg-gradient-to-br from-amber-500/20 to-orange-500/20"
-                            : myTheme === "pink"
-                              ? "bg-gradient-to-br from-pink-500/20 to-rose-500/20"
-                              : "bg-gradient-to-br from-blue-500/20 to-cyan-500/20"
+                          : myTheme === "pink"
+                            ? "bg-gradient-to-br from-pink-500/20 to-rose-500/20"
+                            : "bg-gradient-to-br from-blue-500/20 to-cyan-500/20"
                       )}
                     >
                       {hasTransactionAction ? (
@@ -3046,21 +3011,6 @@ function ThreadConversation({
             // Add to local tracking for immediate UI feedback
             setConvertedMessageIds((prev) => new Set(prev).add(messageId));
             setTransactionModalData(null);
-          }}
-        />
-      )}
-
-      {/* Reminder Modal */}
-      {reminderModalData && (
-        <AddReminderFromMessageModal
-          messageId={reminderModalData.messageId}
-          initialTitle={reminderModalData.title}
-          initialDescription={reminderModalData.description}
-          onClose={() => setReminderModalData(null)}
-          onSuccess={(messageId) => {
-            // Add to local tracking for immediate UI feedback
-            setConvertedMessageIds((prev) => new Set(prev).add(messageId));
-            setReminderModalData(null);
           }}
         />
       )}
@@ -4288,7 +4238,12 @@ function AlertsView() {
   const { data, isLoading } = useHubAlerts();
   const dismissAlert = useDismissAlert();
   const confirmTransactions = useConfirmTransactions();
+  const snoozeAlert = useSnoozeAlert();
+  const updateNotificationTime = useUpdateNotificationTime();
   const [showCelebration, setShowCelebration] = useState<string | null>(null);
+  const [showSnoozeMenu, setShowSnoozeMenu] = useState<string | null>(null);
+  const [showTimeSettings, setShowTimeSettings] = useState<string | null>(null);
+  const [selectedTime, setSelectedTime] = useState("20:00");
   const alerts = data?.alerts || [];
 
   const handleConfirmTransactions = async (alertId: string) => {
@@ -4303,6 +4258,26 @@ function AlertsView() {
   const handleNotYet = () => {
     // Navigate to add expense
     window.location.href = "/dashboard?action=add-expense";
+  };
+
+  const handleSnooze = async (alertId: string, minutes: number) => {
+    await snoozeAlert.mutateAsync({
+      notificationId: alertId,
+      snoozeMinutes: minutes,
+    });
+    setShowSnoozeMenu(null);
+    toast.success(
+      `Snoozed for ${minutes >= 60 ? `${minutes / 60}h` : `${minutes}m`}`
+    );
+  };
+
+  const handleUpdateTime = async (time: string) => {
+    await updateNotificationTime.mutateAsync({
+      preferenceKey: "daily_transaction_reminder",
+      preferredTime: `${time}:00`,
+    });
+    setShowTimeSettings(null);
+    toast.success(`Reminder time updated to ${time}`);
   };
 
   if (isLoading) {
@@ -4332,20 +4307,27 @@ function AlertsView() {
     );
   }
 
-  const getIcon = (type: string) => {
+  const getIcon = (type: string | null | undefined) => {
     switch (type) {
       case "budget_warning":
       case "budget_exceeded":
         return "⚠️";
       case "goal_milestone":
+      case "goal_completed":
         return "🎉";
       case "weekly_summary":
       case "monthly_summary":
         return "📊";
       case "bill_due":
+      case "bill_overdue":
         return "📅";
+      case "daily_reminder":
       case "transaction_reminder":
         return "📝";
+      case "item_reminder":
+      case "item_due":
+      case "item_overdue":
+        return "⏰";
       default:
         return "💡";
     }
@@ -4368,11 +4350,17 @@ function AlertsView() {
     <div className="space-y-3">
       {alerts.map((alert: HubAlert) => {
         const isCelebrating = showCelebration === alert.id;
+        // Check for transaction reminder type
         const isTransactionReminder =
-          alert.action_type === "transaction_reminder";
+          alert.action_type === "transaction_reminder" ||
+          alert.action_type === "log_transaction" ||
+          alert.notification_type === "daily_reminder";
 
         // Special UI for transaction reminder
         if (isTransactionReminder) {
+          const isSnoozeMenuOpen = showSnoozeMenu === alert.id;
+          const isTimeSettingsOpen = showTimeSettings === alert.id;
+
           return (
             <div
               key={alert.id}
@@ -4406,7 +4394,7 @@ function AlertsView() {
                     {formatRelativeTime(alert.created_at)}
                   </p>
 
-                  {/* Action buttons */}
+                  {/* Main Action buttons */}
                   <div className="flex gap-2 mt-3">
                     <button
                       onClick={() => handleConfirmTransactions(alert.id)}
@@ -4421,9 +4409,84 @@ function AlertsView() {
                       className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/10 text-white/80 text-sm font-medium hover:bg-white/20 transition-all"
                     >
                       <PlusIcon className="w-4 h-4" />
-                      Not yet
+                      Log Expense
                     </button>
                   </div>
+
+                  {/* Secondary actions: Snooze & Settings */}
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() =>
+                        setShowSnoozeMenu(isSnoozeMenuOpen ? null : alert.id)
+                      }
+                      className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white/70 transition-all"
+                    >
+                      ⏰ Snooze
+                    </button>
+                    <button
+                      onClick={() =>
+                        setShowTimeSettings(
+                          isTimeSettingsOpen ? null : alert.id
+                        )
+                      }
+                      className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white/70 transition-all"
+                    >
+                      <Settings className="w-3 h-3" /> Change Time
+                    </button>
+                  </div>
+
+                  {/* Snooze menu */}
+                  {isSnoozeMenuOpen && (
+                    <div className="mt-2 p-2 rounded-lg bg-white/5 border border-white/10">
+                      <p className="text-xs text-white/40 mb-2">Snooze for:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { label: "1h", minutes: 60 },
+                          { label: "3h", minutes: 180 },
+                          { label: "6h", minutes: 360 },
+                          { label: "Tomorrow", minutes: 60 * 24 },
+                        ].map((option) => (
+                          <button
+                            key={option.label}
+                            onClick={() =>
+                              handleSnooze(alert.id, option.minutes)
+                            }
+                            disabled={snoozeAlert.isPending}
+                            className="px-3 py-1 rounded-md bg-white/10 text-white/70 text-xs hover:bg-white/20 transition-all disabled:opacity-50"
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Time settings */}
+                  {isTimeSettingsOpen && (
+                    <div className="mt-2 p-2 rounded-lg bg-white/5 border border-white/10">
+                      <p className="text-xs text-white/40 mb-2">
+                        Daily reminder time:
+                      </p>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="time"
+                          value={selectedTime}
+                          onChange={(e) => setSelectedTime(e.target.value)}
+                          className="flex-1 px-3 py-1.5 rounded-md bg-white/10 text-white text-sm border border-white/10 focus:outline-none focus:border-cyan-500/50"
+                        />
+                        <button
+                          onClick={() => handleUpdateTime(selectedTime)}
+                          disabled={updateNotificationTime.isPending}
+                          className="px-4 py-1.5 rounded-md bg-cyan-500/20 text-cyan-400 text-sm font-medium hover:bg-cyan-500/30 transition-all disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                      </div>
+                      <p className="text-xs text-white/30 mt-1">
+                        You&apos;ll be reminded at this time every day
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -4439,7 +4502,9 @@ function AlertsView() {
               getBorderColor(alert.severity)
             )}
           >
-            <div className="text-2xl">{getIcon(alert.alert_type)}</div>
+            <div className="text-2xl">
+              {getIcon(alert.notification_type || alert.alert_type)}
+            </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <p className="text-sm font-semibold text-white">

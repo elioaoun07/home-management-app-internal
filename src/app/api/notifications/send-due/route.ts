@@ -193,13 +193,37 @@ export async function POST(req: NextRequest) {
           badge: "/appicon-192.png",
           tag: `reminder-${item.id}`,
           data: {
-            type: "reminder",
+            type: "item_reminder",
             item_id: item.id,
             alert_id: alert.id,
             due_at: item.reminder_details?.due_at || alert.trigger_at,
             priority: item.priority,
           },
         });
+
+        // Create unified notification entry
+        const { data: notification } = await supabase
+          .from("notifications")
+          .insert({
+            user_id: userId,
+            notification_type: "item_reminder",
+            title: `${priorityEmoji} ${item.title}`,
+            message: item.description || "Reminder is due now",
+            icon: priorityEmoji,
+            severity:
+              item.priority === "urgent"
+                ? "error"
+                : item.priority === "high"
+                  ? "warning"
+                  : "info",
+            source: "item",
+            priority: item.priority as "low" | "normal" | "high" | "urgent",
+            action_url: `/reminders/${item.id}`,
+            item_id: item.id,
+            push_status: "pending",
+          })
+          .select()
+          .single();
 
         // Send to all user's subscriptions
         for (const sub of subscriptions) {
@@ -215,17 +239,16 @@ export async function POST(req: NextRequest) {
               payload
             );
 
-            // Log the notification
-            await supabase.from("notification_logs").insert({
-              user_id: userId,
-              alert_id: alert.id,
-              subscription_id: sub.id,
-              title: item.title,
-              body: item.description || "Reminder is due now",
-              tag: `reminder-${item.id}`,
-              status: "sent",
-              sent_at: new Date().toISOString(),
-            });
+            // Update notification with push status
+            if (notification) {
+              await supabase
+                .from("notifications")
+                .update({
+                  push_status: "sent",
+                  push_sent_at: new Date().toISOString(),
+                })
+                .eq("id", notification.id);
+            }
 
             totalSent++;
           } catch (error: unknown) {
@@ -247,18 +270,17 @@ export async function POST(req: NextRequest) {
                 .eq("id", sub.id);
             }
 
-            // Log the failed notification
-            await supabase.from("notification_logs").insert({
-              user_id: userId,
-              alert_id: alert.id,
-              subscription_id: sub.id,
-              title: item.title,
-              body: item.description,
-              tag: `reminder-${item.id}`,
-              status: "failed",
-              error_message:
-                error instanceof Error ? error.message : "Unknown error",
-            });
+            // Update notification with failure
+            if (notification) {
+              await supabase
+                .from("notifications")
+                .update({
+                  push_status: "failed",
+                  push_error:
+                    error instanceof Error ? error.message : "Unknown error",
+                })
+                .eq("id", notification.id);
+            }
           }
         }
 
