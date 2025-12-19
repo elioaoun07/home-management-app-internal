@@ -194,20 +194,34 @@ export async function GET(req: NextRequest) {
     let pushSent = 0;
     let pushFailed = 0;
     let skippedDuplicate = 0;
+    let skippedNoPushSubs = 0;
 
     // Step 6: Process each user
     for (const [userId, userThreads] of groupedByUser) {
+      console.log(
+        `[Chat Notifications] Processing user ${userId} with ${userThreads.size} threads`
+      );
+
       // Get user's push subscriptions
-      const { data: subscriptions } = await supabase
+      const { data: subscriptions, error: subsError } = await supabase
         .from("push_subscriptions")
         .select("id, endpoint, p256dh, auth")
         .eq("user_id", userId)
         .eq("is_active", true);
 
+      if (subsError) {
+        console.error(
+          `[Chat Notifications] Error fetching subscriptions for user ${userId}:`,
+          subsError
+        );
+        continue;
+      }
+
       if (!subscriptions || subscriptions.length === 0) {
         console.log(
-          `[Chat Notifications] User ${userId}: No active push subscriptions`
+          `[Chat Notifications] User ${userId}: No active push subscriptions - SKIPPING`
         );
+        skippedNoPushSubs++;
         continue;
       }
 
@@ -367,6 +381,7 @@ export async function GET(req: NextRequest) {
       push_sent: pushSent,
       push_failed: pushFailed,
       skipped_duplicate: skippedDuplicate,
+      skipped_no_push_subs: skippedNoPushSubs,
       checked_at: now.toISOString(),
     });
   } catch (error) {
