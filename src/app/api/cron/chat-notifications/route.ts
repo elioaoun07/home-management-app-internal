@@ -10,9 +10,10 @@
  * Logic:
  * 1. Find all unread messages (receipts with status != 'read')
  * 2. Group by thread_id
- * 3. For each thread: create ONE notification showing count + last message
- * 4. Send push notification
- * 5. Use deduplication to avoid sending same notification multiple times
+ * 3. Skip private threads (only creator sees them, no push needed)
+ * 4. For each thread: create ONE notification showing count + last message
+ * 5. Send push notification
+ * 6. Use deduplication to avoid sending same notification multiple times
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -66,28 +67,11 @@ export async function GET(req: NextRequest) {
     const supabase = createClient(supabaseUrl, supabaseKey);
     const now = new Date();
 
-    // Get all unread message receipts (status != 'read')
-    // Join with messages to get content, thread, sender
+    // Step 1: Get all unread receipts
     const { data: unreadReceipts, error: receiptsError } = await supabase
       .from("hub_message_receipts")
-      .select(
-        `
-        id,
-        message_id,
-        user_id,
-        status,
-        hub_messages (
-          id,
-          content,
-          sender_user_id,
-          thread_id,
-          created_at,
-          household_id
-        )
-      `
-      )
-      .neq("status", "read")
-      .order("created_at", { ascending: false });
+      .select("id, message_id, user_id, status")
+      .neq("status", "read");
 
     if (receiptsError) {
       console.error("Error fetching unread receipts:", receiptsError);
@@ -101,31 +85,86 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         success: true,
         message: "No unread messages",
+        unread_count: 0,
         checked_at: now.toISOString(),
       });
     }
 
     console.log(
-      `[Chat Notifications] ${unreadReceipts.length} unread message receipts found`
+      `[Chat Notifications] Found ${unreadReceipts.length} unread receipts`
     );
 
-    // Group by user_id + thread_id
-    type Receipt = (typeof unreadReceipts)[0] & {
-      hub_messages: {
-        id: string;
-        content: string | null;
-        sender_user_id: string;
-        thread_id: string;
-        created_at: string;
-        household_id: string;
-      };
+    // Step 2: Get the messages for these receipts
+    const messageIds = [...new Set(unreadReceipts.map((r) => r.message_id))];
+
+    const { data: messages, error: messagesError } = await supabase
+      .from("hub_messages")
+      .select(
+        "id, content, sender_user_id, thread_id, created_at, household_id"
+      )
+      .in("id", messageIds);
+
+    if (messagesError) {
+      console.error("Error fetching messages:", messagesError);
+      return NextResponse.json(
+        { error: messagesError.message },
+        { status: 500 }
+      );
+    }
+
+    // Create a message lookup map
+    const messageMap = new Map(messages?.map((m) => [m.id, m]) || []);
+
+    // Step 3: Get thread details (including is_private)
+    const threadIds = [
+      ...new Set(messages?.map((m) => m.thread_id).filter(Boolean) || []),
+    ];
+
+    const { data: threads } = await supabase
+      .from("hub_chat_threads")
+      .select("id, title, is_private, created_by")
+      .in("id", threadIds);
+
+    // Create thread lookup map
+    const threadMap = new Map(threads?.map((t) => [t.id, t]) || []);
+
+    // Step 4: Get sender profiles
+    const senderIds = [
+      ...new Set(messages?.map((m) => m.sender_user_id) || []),
+    ];
+
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, display_name, email")
+      .in("id", senderIds);
+
+    // Create profile lookup map
+    const profileMap = new Map(profiles?.map((p) => [p.id, p]) || []);
+
+    // Step 5: Group receipts by user_id + thread_id
+    type GroupedReceipt = {
+      receipt_id: string;
+      message_id: string;
+      content: string | null;
+      sender_user_id: string;
+      created_at: string;
     };
 
-    const groupedByUser = new Map<string, Map<string, Receipt[]>>();
+    const groupedByUser = new Map<string, Map<string, GroupedReceipt[]>>();
 
     for (const receipt of unreadReceipts) {
-      const message = receipt.hub_messages as Receipt["hub_messages"];
-      if (!message) continue;
+      const message = messageMap.get(receipt.message_id);
+      if (!message || !message.thread_id) continue;
+
+      const thread = threadMap.get(message.thread_id);
+
+      // Skip private threads (only creator can see them, no push to others)
+      if (thread?.is_private) {
+        console.log(
+          `[Chat Notifications] Skipping private thread ${message.thread_id}`
+        );
+        continue;
+      }
 
       const userId = receipt.user_id;
       const threadId = message.thread_id;
@@ -138,15 +177,26 @@ export async function GET(req: NextRequest) {
       if (!userThreads.has(threadId)) {
         userThreads.set(threadId, []);
       }
-      userThreads.get(threadId)!.push(receipt as Receipt);
+      userThreads.get(threadId)!.push({
+        receipt_id: receipt.id,
+        message_id: message.id,
+        content: message.content,
+        sender_user_id: message.sender_user_id,
+        created_at: message.created_at,
+      });
     }
+
+    console.log(
+      `[Chat Notifications] ${groupedByUser.size} users with unread messages`
+    );
 
     let notificationsSent = 0;
     let pushSent = 0;
     let pushFailed = 0;
+    let skippedDuplicate = 0;
 
-    // For each user
-    for (const [userId, threads] of groupedByUser) {
+    // Step 6: Process each user
+    for (const [userId, userThreads] of groupedByUser) {
       // Get user's push subscriptions
       const { data: subscriptions } = await supabase
         .from("push_subscriptions")
@@ -161,38 +211,30 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // For each thread with unread messages
-      for (const [threadId, receipts] of threads) {
-        const unreadCount = receipts.length;
+      console.log(
+        `[Chat Notifications] User ${userId}: ${subscriptions.length} subscriptions, ${userThreads.size} threads`
+      );
 
-        // Get the last (most recent) message
+      // Process each thread
+      for (const [threadId, receipts] of userThreads) {
+        const unreadCount = receipts.length;
+        const thread = threadMap.get(threadId);
+
+        // Sort by created_at to get the last message
         const sortedReceipts = receipts.sort(
           (a, b) =>
-            new Date(b.hub_messages.created_at).getTime() -
-            new Date(a.hub_messages.created_at).getTime()
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
         const lastReceipt = sortedReceipts[0];
-        const lastMessage = lastReceipt.hub_messages;
-
-        // Get thread details (name, sender profile)
-        const { data: thread } = await supabase
-          .from("hub_chat_threads")
-          .select("id, name, household_id")
-          .eq("id", threadId)
-          .single();
-
-        // Get sender's profile
-        const { data: senderProfile } = await supabase
-          .from("profiles")
-          .select("display_name, email")
-          .eq("id", lastMessage.sender_user_id)
-          .single();
+        const senderProfile = profileMap.get(lastReceipt.sender_user_id);
 
         const senderName =
-          senderProfile?.display_name || senderProfile?.email || "Someone";
-        const threadName = thread?.name || "Chat";
+          senderProfile?.display_name ||
+          senderProfile?.email?.split("@")[0] ||
+          "Someone";
+        const threadName = thread?.title || "Chat";
 
-        // Build notification content
+        // Build notification content (WhatsApp style)
         const title =
           unreadCount === 1
             ? `${senderName} • ${threadName}`
@@ -200,12 +242,11 @@ export async function GET(req: NextRequest) {
 
         const body =
           unreadCount === 1
-            ? lastMessage.content || "(Media)"
-            : `${senderName}: ${lastMessage.content || "(Media)"}`;
+            ? lastReceipt.content || "(Media)"
+            : `${senderName}: ${lastReceipt.content || "(Media)"}`;
 
-        // Check if notification was already sent (deduplication)
-        // Use group_key to track: chat_{threadId}_{lastMessageId}
-        const groupKey = `chat_${threadId}_${lastMessage.id}`;
+        // Deduplication: Check if notification already sent for this message
+        const groupKey = `chat_${threadId}_${lastReceipt.message_id}`;
 
         const { data: existingNotif } = await supabase
           .from("notifications")
@@ -215,10 +256,8 @@ export async function GET(req: NextRequest) {
           .maybeSingle();
 
         if (existingNotif) {
-          console.log(
-            `[Chat Notifications] Already sent notification for thread ${threadId}, skipping`
-          );
-          continue; // Already sent
+          skippedDuplicate++;
+          continue;
         }
 
         // Create notification in unified table
@@ -238,12 +277,12 @@ export async function GET(req: NextRequest) {
             action_data: {
               thread_id: threadId,
               message_count: unreadCount,
-              last_message_id: lastMessage.id,
+              last_message_id: lastReceipt.message_id,
             },
             group_key: groupKey,
             expires_at: new Date(
               now.getTime() + 7 * 24 * 60 * 60 * 1000
-            ).toISOString(), // 7 days
+            ).toISOString(),
             push_status: "pending",
           })
           .select()
@@ -322,9 +361,12 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      unread_receipts: unreadReceipts.length,
+      users_with_unread: groupedByUser.size,
       notifications_sent: notificationsSent,
       push_sent: pushSent,
       push_failed: pushFailed,
+      skipped_duplicate: skippedDuplicate,
       checked_at: now.toISOString(),
     });
   } catch (error) {
