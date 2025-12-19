@@ -28,30 +28,43 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 }
 
 export async function GET(req: NextRequest) {
-  // Verify cron secret
-  const authHeader = req.headers.get("authorization");
-  if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
-  const now = new Date();
-  const todayUTC = now.toISOString().split("T")[0];
-  const groupKey = `daily_reminder_${todayUTC}`;
-
-  // Current UTC time (hour and minute)
-  const currentHour = now.getUTCHours();
-  const currentMinute = now.getUTCMinutes();
-
-  console.log(
-    `[Daily Reminder] Running at ${currentHour}:${String(currentMinute).padStart(2, "0")} UTC`
-  );
-
   try {
+    console.log("[Daily Reminder] Starting execution");
+    
+    // Verify cron secret
+    const authHeader = req.headers.get("authorization");
+    if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+      console.log("[Daily Reminder] Unauthorized request");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check env vars
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("[Daily Reminder] Missing Supabase credentials");
+      return NextResponse.json(
+        { error: "Server configuration error: Missing Supabase credentials" },
+        { status: 500 }
+      );
+    }
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    const now = new Date();
+    const todayUTC = now.toISOString().split("T")[0];
+    const groupKey = `daily_reminder_${todayUTC}`;
+
+    // Current UTC time (hour and minute)
+    const currentHour = now.getUTCHours();
+    const currentMinute = now.getUTCMinutes();
+
+    console.log(
+      `[Daily Reminder] Running at ${currentHour}:${String(currentMinute).padStart(2, "0")} UTC`
+    );
+
+    try {
     // Get all users with daily_transaction_reminder enabled
     const { data: preferences, error: prefError } = await supabase
       .from("notification_preferences")
@@ -275,7 +288,21 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error("Daily reminder cron error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { 
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined
+      },
+      { status: 500 }
+    );
+  }
+  } catch (outerError) {
+    console.error("Daily reminder fatal error:", outerError);
+    return NextResponse.json(
+      { 
+        error: "Fatal error in daily reminder",
+        message: outerError instanceof Error ? outerError.message : "Unknown error",
+        stack: outerError instanceof Error ? outerError.stack : undefined
+      },
       { status: 500 }
     );
   }
