@@ -34,12 +34,9 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 
 export async function GET(req: NextRequest) {
   try {
-    console.log("[Chat Notifications] Starting execution");
-
     // Verify cron secret
     const authHeader = req.headers.get("authorization");
     if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
-      console.log("[Chat Notifications] Unauthorized request");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -50,7 +47,6 @@ export async function GET(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error("[Chat Notifications] Missing Supabase credentials");
       return NextResponse.json(
         { error: "Server configuration error: Missing Supabase credentials" },
         { status: 500 }
@@ -74,7 +70,6 @@ export async function GET(req: NextRequest) {
       .neq("status", "read");
 
     if (receiptsError) {
-      console.error("Error fetching unread receipts:", receiptsError);
       return NextResponse.json(
         { error: receiptsError.message },
         { status: 500 }
@@ -90,10 +85,6 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.log(
-      `[Chat Notifications] Found ${unreadReceipts.length} unread receipts`
-    );
-
     // Step 2: Get the messages for these receipts
     const messageIds = [...new Set(unreadReceipts.map((r) => r.message_id))];
 
@@ -105,7 +96,6 @@ export async function GET(req: NextRequest) {
       .in("id", messageIds);
 
     if (messagesError) {
-      console.error("Error fetching messages:", messagesError);
       return NextResponse.json(
         { error: messagesError.message },
         { status: 500 }
@@ -128,22 +118,24 @@ export async function GET(req: NextRequest) {
     // Create thread lookup map
     const threadMap = new Map(threads?.map((t) => [t.id, t]) || []);
 
-    console.log(`[Chat Notifications] Thread map contents:`);
-    for (const [tid, t] of threadMap) {
-      console.log(
-        `  Thread ${tid}: is_private=${t.is_private}, title=${t.title}`
-      );
-    }
-
     // Step 4: Get sender profiles
     const senderIds = [
       ...new Set(messages?.map((m) => m.sender_user_id) || []),
     ];
 
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select("id, display_name, email")
       .in("id", senderIds);
+
+    if (profilesError) {
+      console.error(
+        "[Chat Notifications] Error fetching profiles:",
+        profilesError
+      );
+    }
+
+    console.log("[Chat Notifications] Fetched profiles:", profiles);
 
     // Create profile lookup map
     const profileMap = new Map(profiles?.map((p) => [p.id, p]) || []);
@@ -159,41 +151,14 @@ export async function GET(req: NextRequest) {
 
     const groupedByUser = new Map<string, Map<string, GroupedReceipt[]>>();
 
-    console.log(
-      `[Chat Notifications] Processing ${unreadReceipts.length} receipts...`
-    );
-    console.log(
-      `[Chat Notifications] Message map has ${messageMap.size} messages`
-    );
-    console.log(
-      `[Chat Notifications] Thread map has ${threadMap.size} threads`
-    );
-
     for (const receipt of unreadReceipts) {
-      console.log(
-        `[Chat Notifications] Receipt: message_id=${receipt.message_id}, user_id=${receipt.user_id}`
-      );
-
       const message = messageMap.get(receipt.message_id);
-      if (!message || !message.thread_id) {
-        console.log(
-          `[Chat Notifications] SKIP: No message found or no thread_id. message=${!!message}, thread_id=${message?.thread_id}`
-        );
-        continue;
-      }
+      if (!message || !message.thread_id) continue;
 
       const thread = threadMap.get(message.thread_id);
-      console.log(
-        `[Chat Notifications] Thread lookup: ${message.thread_id} => is_private=${thread?.is_private}`
-      );
 
       // Skip private threads (only creator can see them, no push to others)
-      if (thread?.is_private) {
-        console.log(
-          `[Chat Notifications] Skipping private thread ${message.thread_id}`
-        );
-        continue;
-      }
+      if (thread?.is_private) continue;
 
       const userId = receipt.user_id;
       const threadId = message.thread_id;
@@ -215,29 +180,14 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.log(
-      `[Chat Notifications] ${groupedByUser.size} users with unread messages`
-    );
-
-    // Log which users have unread
-    for (const [uid, ut] of groupedByUser) {
-      console.log(`[Chat Notifications] - User ${uid} has ${ut.size} threads`);
-    }
-
     let notificationsSent = 0;
     let pushSent = 0;
     let pushFailed = 0;
     let skippedDuplicate = 0;
     let skippedNoPushSubs = 0;
-    const debugTrace: string[] = [];
 
     // Step 6: Process each user
     for (const [userId, userThreads] of groupedByUser) {
-      debugTrace.push(`PROCESS_USER:${userId}:threads=${userThreads.size}`);
-      console.log(
-        `[Chat Notifications] === PROCESSING user ${userId} with ${userThreads.size} threads ===`
-      );
-
       // Get user's push subscriptions
       const { data: subscriptions, error: subsError } = await supabase
         .from("push_subscriptions")
@@ -245,61 +195,17 @@ export async function GET(req: NextRequest) {
         .eq("user_id", userId)
         .eq("is_active", true);
 
-      debugTrace.push(
-        `PUSH_SUBS:count=${subscriptions?.length || 0}:error=${subsError?.message || "none"}`
-      );
-
-      console.log(
-        `[Chat Notifications] Push subs query: count=${subscriptions?.length || 0}, error=${subsError?.message || "none"}`
-      );
-
-      if (subsError) {
-        debugTrace.push(`SKIP_SUBS_ERROR`);
-        console.error(
-          `[Chat Notifications] Error fetching subscriptions for user ${userId}:`,
-          subsError
-        );
-        continue;
-      }
+      if (subsError) continue;
 
       if (!subscriptions || subscriptions.length === 0) {
-        debugTrace.push(`SKIP_NO_SUBS`);
-        console.log(
-          `[Chat Notifications] User ${userId}: No active push subscriptions - SKIPPING`
-        );
         skippedNoPushSubs++;
         continue;
       }
 
-      debugTrace.push(`HAS_SUBS:${subscriptions.length}`);
-      console.log(
-        `[Chat Notifications] User ${userId}: ${subscriptions.length} subscriptions, ${userThreads.size} threads`
-      );
-
-      console.log(
-        `[Chat Notifications] !!! ABOUT TO ITERATE THREADS for user ${userId} !!!`
-      );
-
       // Process each thread
-      let threadIterations = 0;
       for (const [threadId, receipts] of userThreads) {
-        threadIterations++;
-        debugTrace.push(`THREAD_ITER:${threadId}:receipts=${receipts.length}`);
-        console.log(
-          `[Chat Notifications] !!! THREAD ITERATION ${threadIterations}: threadId=${threadId}, receipts=${receipts.length} !!!`
-        );
-        console.log(
-          `[Chat Notifications] Processing thread ${threadId} with ${receipts.length} unread`
-        );
-
         const unreadCount = receipts.length;
         const thread = threadMap.get(threadId);
-
-        console.log(`[Chat Notifications] Thread details:`, {
-          threadId,
-          threadTitle: thread?.title,
-          threadFound: !!thread,
-        });
 
         // Sort by created_at to get the last message
         const sortedReceipts = receipts.sort(
@@ -309,10 +215,10 @@ export async function GET(req: NextRequest) {
         const lastReceipt = sortedReceipts[0];
         const senderProfile = profileMap.get(lastReceipt.sender_user_id);
 
-        console.log(`[Chat Notifications] Last receipt:`, {
-          messageId: lastReceipt.message_id,
-          senderId: lastReceipt.sender_user_id,
-          senderName: senderProfile?.display_name,
+        console.log("[Chat Notifications] Sender lookup:", {
+          sender_user_id: lastReceipt.sender_user_id,
+          profile: senderProfile,
+          profileMapSize: profileMap.size,
         });
 
         const senderName =
@@ -332,27 +238,17 @@ export async function GET(req: NextRequest) {
             ? lastReceipt.content || "(Media)"
             : `${senderName}: ${lastReceipt.content || "(Media)"}`;
 
-        console.log(`[Chat Notifications] Notification content:`, {
-          title,
-          body,
-        });
         // Deduplication: Check if notification already sent for this message
         const groupKey = `chat_${threadId}_${lastReceipt.message_id}`;
-        debugTrace.push(`GROUP_KEY:${groupKey}`);
 
-        const { data: existingNotif, error: existingError } = await supabase
+        const { data: existingNotif } = await supabase
           .from("notifications")
           .select("id")
           .eq("user_id", userId)
           .eq("group_key", groupKey)
           .maybeSingle();
 
-        debugTrace.push(
-          `EXISTING_CHECK:found=${!!existingNotif}:error=${existingError?.message || "none"}`
-        );
-
         if (existingNotif) {
-          debugTrace.push(`SKIP_DUPLICATE`);
           skippedDuplicate++;
           continue;
         }
@@ -385,13 +281,6 @@ export async function GET(req: NextRequest) {
           .select()
           .single();
 
-        if (insertError) {
-          debugTrace.push(`INSERT_ERROR:${insertError.message}`);
-          console.error(`Failed to create notification:`, insertError);
-          continue;
-        }
-
-        debugTrace.push(`INSERT_SUCCESS:id=${notification.id}`);
         notificationsSent++;
 
         // Send push notification
@@ -431,7 +320,6 @@ export async function GET(req: NextRequest) {
               .eq("id", notification.id);
           } catch (error: unknown) {
             pushFailed++;
-            console.error(`Push failed for user ${userId}:`, error);
 
             const statusCode =
               error && typeof error === "object" && "statusCode" in error
@@ -458,32 +346,20 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Debug: collect user thread counts
-    const userThreadCounts: Record<string, number> = {};
-    for (const [uid, threads] of groupedByUser) {
-      userThreadCounts[uid] = threads.size;
-    }
-
     return NextResponse.json({
       success: true,
       unread_receipts: unreadReceipts.length,
       users_with_unread: groupedByUser.size,
-      user_thread_counts: userThreadCounts,
       notifications_sent: notificationsSent,
       push_sent: pushSent,
       push_failed: pushFailed,
       skipped_duplicate: skippedDuplicate,
       skipped_no_push_subs: skippedNoPushSubs,
-      debug_trace: debugTrace,
       checked_at: now.toISOString(),
     });
   } catch (error) {
-    console.error("Chat notifications cron error:", error);
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined,
-      },
+      { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }
