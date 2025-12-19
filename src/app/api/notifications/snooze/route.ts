@@ -2,13 +2,12 @@
 // API route to snooze a notification
 
 import { supabaseServer } from "@/lib/supabase/server";
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const supabase = await supabaseServer(await cookies());
+  const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
