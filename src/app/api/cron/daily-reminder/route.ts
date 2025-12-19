@@ -204,13 +204,17 @@ export async function GET(req: NextRequest) {
 
       notificationsSent++;
 
-      // Send push notification (only if not already logged)
-      if (!hasLogged && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+      // Send push notification
+      if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
         const { data: subscriptions } = await supabase
           .from("push_subscriptions")
           .select("id, endpoint, p256dh, auth")
           .eq("user_id", userId)
           .eq("is_active", true);
+
+        console.log(
+          `[Daily Reminder] User ${userId}: Found ${subscriptions?.length || 0} active push subscriptions`
+        );
 
         if (subscriptions && subscriptions.length > 0) {
           const payload = JSON.stringify({
@@ -272,13 +276,15 @@ export async function GET(req: NextRequest) {
                 .eq("id", notification.id);
             }
           }
+        } else {
+          console.log(
+            `[Daily Reminder] User ${userId}: No active push subscriptions found`
+          );
         }
-      } else if (hasLogged) {
-        // User already logged, mark push as skipped
-        await supabase
-          .from("notifications")
-          .update({ push_status: "skipped" })
-          .eq("id", notification.id);
+      } else {
+        console.log(
+          `[Daily Reminder] VAPID keys not configured, skipping push`
+        );
       }
     }
 
