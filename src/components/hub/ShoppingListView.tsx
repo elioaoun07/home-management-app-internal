@@ -144,6 +144,11 @@ export function ShoppingListView({
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
 
+    // Debug logging
+    console.log("📋 Paste detected:");
+    console.log("Total lines:", lines.length);
+    console.log("First 5 lines:", lines.slice(0, 5));
+
     // Detect if this looks like a list:
     // - Multiple lines (2 or more)
     // - OR has bullet points/numbers even if single line with bullets
@@ -164,15 +169,35 @@ export function ShoppingListView({
       let items: Array<{ content: string; quantity?: string }> = [];
 
       // Check for ChatGPT table format (alternating lines: ingredient, quantity, ingredient, quantity...)
-      // Header pattern: "Ingredient" and "Quantity" on first two lines
-      const hasTableHeader =
-        lines.length >= 2 &&
-        lines[0].toLowerCase().includes("ingredient") &&
-        lines[1].toLowerCase().includes("quantity");
+      // More flexible header detection - check if first two lines are headers
+      const headerPattern = /^(ingredient|quantity|item|name|amount)s?$/i;
+      const firstLineIsHeader =
+        lines.length > 0 && headerPattern.test(lines[0]);
+      const secondLineIsHeader =
+        lines.length > 1 && headerPattern.test(lines[1]);
 
-      if (hasTableHeader) {
+      // Also check for single-line header case: "Ingredient	Quantity" (tab-separated headers)
+      const firstLineHasBothHeaders =
+        lines.length > 0 &&
+        /ingredient/i.test(lines[0]) &&
+        /quantity/i.test(lines[0]);
+
+      const hasTableHeader =
+        (firstLineIsHeader && secondLineIsHeader) || firstLineHasBothHeaders;
+
+      console.log("🔍 Table header detected:", hasTableHeader);
+      console.log("First line:", lines[0]);
+      console.log("Second line:", lines[1]);
+      console.log("First is header:", firstLineIsHeader);
+      console.log("Second is header:", secondLineIsHeader);
+
+      // MOBILE FORMAT: Alternating lines with headers
+      if (firstLineIsHeader && secondLineIsHeader) {
         // Skip header rows and parse alternating pairs
         const dataLines = lines.slice(2);
+
+        console.log("📱 Parsing MOBILE table format (alternating lines)");
+        console.log("Data lines count:", dataLines.length);
 
         // Parse in pairs: [ingredient, quantity, ingredient, quantity, ...]
         for (let i = 0; i < dataLines.length; i += 2) {
@@ -180,12 +205,36 @@ export function ShoppingListView({
           const quantity = dataLines[i + 1]; // Next line is quantity
 
           if (ingredient) {
+            console.log(
+              `  ✓ Item ${i / 2 + 1}: "${ingredient}" → "${quantity || "no qty"}"`
+            );
             items.push({
               content: ingredient.trim(),
               quantity: quantity ? quantity.trim() : undefined,
             });
           }
         }
+      }
+      // DESKTOP FORMAT: Tab-separated with optional header row
+      else if (lines.some((line) => line.includes("\t"))) {
+        console.log("💻 Parsing DESKTOP table format (tab-separated)");
+
+        // Skip first line if it's a header
+        const startIndex = firstLineHasBothHeaders ? 1 : 0;
+        const dataLines = lines.slice(startIndex);
+
+        items = dataLines
+          .filter((line) => line.includes("\t"))
+          .map((line) => {
+            const parts = line.split("\t").map((p) => p.trim());
+            return {
+              content: parts[0],
+              quantity: parts.length > 1 ? parts[1] : undefined,
+            };
+          })
+          .filter((item) => item.content.length > 0);
+
+        console.log(`  ✓ Parsed ${items.length} tab-separated items`);
       } else {
         // Original parsing logic for other formats
         items = lines
