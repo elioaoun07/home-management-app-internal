@@ -46,6 +46,7 @@ body.theme-loaded {
   /* Handwriting font for notebook-style notes */
   .font-handwriting {
     font-family: "Handlee", cursive;
+    font-weight: 600;
   }
 
   /* Hide scrollbar */

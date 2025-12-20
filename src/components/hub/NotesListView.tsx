@@ -947,7 +947,7 @@ export function NotesListView({
                         </div>
                       </NotebookLine>
                     ))}
-                    <p className="text-center text-xs text-white/30 mt-6 font-handwriting">
+                    <p className="text-center text-xs text-white/30 mt-6">
                       Loading your notes...
                     </p>
                   </div>
@@ -959,10 +959,10 @@ export function NotesListView({
                     checkedItemsList.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-20 text-center">
                         <span className="text-5xl mb-3">📝</span>
-                        <p className="text-xl text-white/50 font-handwriting">
+                        <p className="text-xl text-white/50">
                           Your notebook is empty
                         </p>
-                        <p className="text-lg text-white/30 mt-1 font-handwriting">
+                        <p className="text-lg text-white/30 mt-1">
                           Start writing below
                         </p>
                       </div>
@@ -1106,7 +1106,7 @@ export function NotesListView({
                         {checkedItemsList.length > 0 && (
                           <>
                             <div className="flex items-center justify-between py-4 mt-4 border-t border-amber-200/10 px-4">
-                              <span className="text-base text-white/40 font-handwriting">
+                              <span className="text-base text-white/40">
                                 Completed ({checkedItemsList.length})
                               </span>
                               <button
@@ -1250,7 +1250,7 @@ export function NotesListView({
             <div className="flex-1">
               <h2 className="book-index-title text-2xl">✦ Index ✦</h2>
               <p
-                className="text-xs mt-1 tracking-wide font-handwriting"
+                className="text-xs mt-1 tracking-wide"
                 style={{
                   color: themeClasses.text.includes("pink")
                     ? "rgba(251, 191, 36, 0.6)"
@@ -1282,7 +1282,7 @@ export function NotesListView({
             )}
           >
             <span className="text-base mr-2">📒</span>
-            <span className="text-lg font-handwriting">All Notes</span>
+            <span className="text-lg">All Notes</span>
             <span className="book-index-leader" />
             <span className="book-index-page-num" style={{ color: "#8b7355" }}>
               1
@@ -1300,7 +1300,7 @@ export function NotesListView({
               }}
             />
             <span
-              className="text-[10px] uppercase tracking-[0.2em] font-handwriting"
+              className="text-[10px] uppercase tracking-[0.2em]"
               style={{
                 color: themeClasses.text.includes("pink")
                   ? "rgba(251, 191, 36, 0.5)"
@@ -1339,7 +1339,7 @@ export function NotesListView({
               <div className="text-center py-8">
                 <span className="text-3xl mb-2 block">📖</span>
                 <p
-                  className="text-base font-handwriting"
+                  className="text-base"
                   style={{
                     color: themeClasses.text.includes("pink")
                       ? "rgba(251, 191, 36, 0.6)"
@@ -1349,7 +1349,7 @@ export function NotesListView({
                   No chapters yet
                 </p>
                 <p
-                  className="text-sm mt-1 font-handwriting"
+                  className="text-sm mt-1"
                   style={{
                     color: themeClasses.text.includes("pink")
                       ? "rgba(236, 72, 153, 0.4)"
@@ -1370,9 +1370,7 @@ export function NotesListView({
                   )}
                 >
                   <span className="text-base mr-2">{topic.icon}</span>
-                  <span className="text-lg truncate font-handwriting">
-                    {topic.title}
-                  </span>
+                  <span className="text-lg truncate">{topic.title}</span>
                   <span className="book-index-leader" />
                   <span
                     className="book-index-page-num"
@@ -1399,7 +1397,7 @@ export function NotesListView({
             }}
           >
             <p
-              className="text-xs mb-2 font-handwriting"
+              className="text-xs mb-2"
               style={{
                 color: themeClasses.text.includes("pink")
                   ? "rgba(251, 191, 36, 0.6)"
@@ -1429,7 +1427,7 @@ export function NotesListView({
               <button
                 onClick={createTopic}
                 disabled={isCreatingTopic || !newTopicTitle.trim()}
-                className="px-3 py-2 rounded-lg transition-all text-sm font-handwriting"
+                className="px-3 py-2 rounded-lg transition-all text-sm"
                 style={{
                   background: newTopicTitle.trim()
                     ? themeClasses.text.includes("pink")
@@ -1487,7 +1485,7 @@ export function NotesListView({
                 ? topics.find((t) => t.id === activeTopic)?.icon || "📄"
                 : "📒"}
             </span>
-            <span className="text-lg text-white truncate font-handwriting">
+            <span className="text-lg text-white truncate">
               {activeTopic
                 ? topics.find((t) => t.id === activeTopic)?.title ||
                   "Loading..."
