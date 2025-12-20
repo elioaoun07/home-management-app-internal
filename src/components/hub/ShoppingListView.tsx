@@ -161,41 +161,68 @@ export function ShoppingListView({
       // Prevent default paste behavior
       e.preventDefault();
 
-      // Parse each line and extract item text and quantity
-      const items = lines
-        .map((line) => {
-          // Remove common list markers
-          let cleaned = line
-            .replace(/^[-•*●○■□▪▫★☆✓✗◆◇→⇒]\s*/, "") // Remove bullet points
-            .replace(/^\d+[.)]\s*/, "") // Remove numbers like "1." or "1)"
-            .replace(/^[a-zA-Z][.)]\s*/, "") // Remove letters like "a." or "a)"
-            .trim();
+      let items: Array<{ content: string; quantity?: string }> = [];
 
-          // Check for 2-column format (tab or pipe separated)
-          // Format: "ingredient \t quantity" or "ingredient | quantity"
-          let content = cleaned;
-          let quantity: string | undefined = undefined;
+      // Check for ChatGPT table format (alternating lines: ingredient, quantity, ingredient, quantity...)
+      // Header pattern: "Ingredient" and "Quantity" on first two lines
+      const hasTableHeader =
+        lines.length >= 2 &&
+        lines[0].toLowerCase().includes("ingredient") &&
+        lines[1].toLowerCase().includes("quantity");
 
-          // Try tab separation first
-          if (cleaned.includes("\t")) {
-            const parts = cleaned.split("\t").map((p) => p.trim());
-            if (parts.length >= 2) {
-              content = parts[0];
-              quantity = parts[1];
-            }
+      if (hasTableHeader) {
+        // Skip header rows and parse alternating pairs
+        const dataLines = lines.slice(2);
+
+        // Parse in pairs: [ingredient, quantity, ingredient, quantity, ...]
+        for (let i = 0; i < dataLines.length; i += 2) {
+          const ingredient = dataLines[i];
+          const quantity = dataLines[i + 1]; // Next line is quantity
+
+          if (ingredient) {
+            items.push({
+              content: ingredient.trim(),
+              quantity: quantity ? quantity.trim() : undefined,
+            });
           }
-          // Try pipe separation
-          else if (cleaned.includes("|")) {
-            const parts = cleaned.split("|").map((p) => p.trim());
-            if (parts.length >= 2) {
-              content = parts[0];
-              quantity = parts[1];
-            }
-          }
+        }
+      } else {
+        // Original parsing logic for other formats
+        items = lines
+          .map((line) => {
+            // Remove common list markers
+            let cleaned = line
+              .replace(/^[-•*●○■□▪▫★☆✓✗◆◇→⇒]\s*/, "") // Remove bullet points
+              .replace(/^\d+[.)]\s*/, "") // Remove numbers like "1." or "1)"
+              .replace(/^[a-zA-Z][.)]\s*/, "") // Remove letters like "a." or "a)"
+              .trim();
 
-          return { content, quantity };
-        })
-        .filter((item) => item.content.length > 0);
+            // Check for 2-column format (tab or pipe separated)
+            // Format: "ingredient \t quantity" or "ingredient | quantity"
+            let content = cleaned;
+            let quantity: string | undefined = undefined;
+
+            // Try tab separation first
+            if (cleaned.includes("\t")) {
+              const parts = cleaned.split("\t").map((p) => p.trim());
+              if (parts.length >= 2) {
+                content = parts[0];
+                quantity = parts[1];
+              }
+            }
+            // Try pipe separation
+            else if (cleaned.includes("|")) {
+              const parts = cleaned.split("|").map((p) => p.trim());
+              if (parts.length >= 2) {
+                content = parts[0];
+                quantity = parts[1];
+              }
+            }
+
+            return { content, quantity };
+          })
+          .filter((item) => item.content.length > 0);
+      }
 
       // Add each item to the shopping list
       if (items.length > 0) {
