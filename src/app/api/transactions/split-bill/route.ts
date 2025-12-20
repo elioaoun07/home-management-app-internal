@@ -100,26 +100,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify the user is the collaborator on this transaction
+    // Fetch the transaction where the current user is the collaborator
+    // This query explicitly filters by collaborator_id to work with RLS policies
     const { data: transaction, error: fetchError } = await supabase
       .from("transactions")
       .select(
         "id, split_requested, collaborator_id, split_completed_at, user_id, amount"
       )
       .eq("id", transaction_id)
+      .eq("collaborator_id", user.id)
       .single();
 
-    if (fetchError || !transaction) {
-      return NextResponse.json(
-        { error: "Transaction not found" },
-        { status: 404 }
-      );
-    }
+    console.log("[Split Bill Debug]", {
+      transaction_id,
+      user_id: user.id,
+      fetchError: fetchError?.message,
+      transaction: transaction ? "found" : "not found",
+    });
 
-    if (transaction.collaborator_id !== user.id) {
+    if (fetchError || !transaction) {
+      console.error("[Split Bill Error]", {
+        error: fetchError,
+        transaction_id,
+        user_id: user.id,
+      });
       return NextResponse.json(
-        { error: "You are not authorized to complete this split" },
-        { status: 403 }
+        {
+          error: "Transaction not found or you are not the collaborator",
+          debug: {
+            transaction_id,
+            user_id: user.id,
+            fetchError: fetchError?.message,
+          },
+        },
+        { status: 404 }
       );
     }
 
@@ -143,6 +157,7 @@ export async function POST(req: NextRequest) {
       .update({
         collaborator_amount: amount,
         collaborator_description: description || null,
+        collaborator_account_id: account_id,
         split_completed_at: new Date().toISOString(),
       })
       .eq("id", transaction_id)
@@ -157,8 +172,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Deduct the amount from the collaborator's account
-    // We do this manually instead of RPC to avoid migration requirement
+    // Deduct the amount from the collaborator's account balance
     const { data: currentBalance, error: balanceFetchError } = await supabase
       .from("account_balances")
       .select("balance")

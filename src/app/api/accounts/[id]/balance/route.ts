@@ -83,26 +83,8 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // SIMPLE LOGIC:
-  // 1. User sets their balance (e.g., $40 on Nov 21)
-  // 2. We only subtract transactions that were INSERTED after balance_set_at
-  // 3. This ensures we don't double-count old transactions
-
-  const balanceSetAt = balanceData.balance_set_at;
-
-  // Get confirmed transactions inserted AFTER balance was set
-  // Use accountOwnerId since transactions belong to the account owner
-  const { data: newTransactions, error: transError } = await supabase
-    .from("transactions")
-    .select("amount")
-    .eq("account_id", accountId)
-    .eq("user_id", accountOwnerId)
-    .eq("is_draft", false)
-    .gt("inserted_at", balanceSetAt);
-
-  if (transError) {
-    console.error("Error fetching transactions for balance:", transError);
-  }
+  // The balance field is now kept in sync directly when transactions are created/deleted
+  // We only need to account for pending draft transactions here
 
   // Get pending draft transactions (always count all drafts)
   const { data: draftTransactions, error: draftError } = await supabase
@@ -116,38 +98,27 @@ export async function GET(
     console.error("Error fetching draft transactions:", draftError);
   }
 
-  const totalNewTransactions =
-    newTransactions?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
   const totalDrafts =
     draftTransactions?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
-  // Calculate current balance
-  // For expense accounts: balance - expenses
-  // For income accounts: balance + income (not typical, but supported)
-  const accountType = account.type || "expense";
-  const currentBalance =
-    accountType === "expense"
-      ? Number(balanceData.balance) - totalNewTransactions - totalDrafts
-      : Number(balanceData.balance) + totalNewTransactions + totalDrafts;
+  // Current balance = stored balance - pending drafts
+  // The stored balance already includes all confirmed transactions and split bill contributions
+  const currentBalance = Number(balanceData.balance) - totalDrafts;
 
   return NextResponse.json({
     account_id: accountId,
     balance: currentBalance,
     pending_drafts: totalDrafts,
     draft_count: draftTransactions?.length || 0,
-    balance_set_at: balanceSetAt,
+    balance_set_at: balanceData.balance_set_at,
     created_at: balanceData.created_at,
     updated_at: balanceData.updated_at,
     // DEBUG - check what's in the database
     _debug: {
       user_id: user.id,
       stored_balance: balanceData.balance,
-      balance_set_at: balanceSetAt,
-      new_transactions_count: newTransactions?.length || 0,
-      new_transactions_total: totalNewTransactions,
       drafts_count: draftTransactions?.length || 0,
       drafts_total: totalDrafts,
-      account_type: accountType,
     },
   });
 }

@@ -108,20 +108,6 @@ CREATE TABLE public.event_details (
   CONSTRAINT event_details_pkey PRIMARY KEY (item_id),
   CONSTRAINT event_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
-CREATE TABLE public.events (
-  id text NOT NULL,
-  title text NOT NULL,
-  notes text,
-  start_at bigint NOT NULL,
-  end_at bigint NOT NULL,
-  all_day integer DEFAULT 0,
-  repeat_rule text,
-  timezone text,
-  created_at bigint NOT NULL DEFAULT ((EXTRACT(epoch FROM now()) * (1000)::numeric))::bigint,
-  updated_at bigint NOT NULL DEFAULT ((EXTRACT(epoch FROM now()) * (1000)::numeric))::bigint,
-  user_id uuid,
-  CONSTRAINT events_pkey PRIMARY KEY (id)
-);
 CREATE TABLE public.future_purchases (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -142,20 +128,6 @@ CREATE TABLE public.future_purchases (
   CONSTRAINT future_purchases_pkey PRIMARY KEY (id),
   CONSTRAINT future_purchases_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-CREATE TABLE public.google_calendar_tokens (
-  user_id uuid NOT NULL,
-  google_refresh_token text NOT NULL,
-  google_calendar_id text NOT NULL,
-  google_access_token text,
-  access_token_expires_at timestamp with time zone,
-  connected_at timestamp with time zone NOT NULL DEFAULT now(),
-  last_synced_at timestamp with time zone,
-  is_active boolean NOT NULL DEFAULT true,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT google_calendar_tokens_pkey PRIMARY KEY (user_id),
-  CONSTRAINT google_calendar_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);
 CREATE TABLE public.household_links (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   code text NOT NULL UNIQUE,
@@ -168,32 +140,6 @@ CREATE TABLE public.household_links (
   CONSTRAINT household_links_pkey PRIMARY KEY (id),
   CONSTRAINT household_links_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id),
   CONSTRAINT household_links_partner_user_id_fkey FOREIGN KEY (partner_user_id) REFERENCES auth.users(id)
-);
-CREATE TABLE public.hub_alerts (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  household_id uuid,
-  alert_type text NOT NULL CHECK (alert_type = ANY (ARRAY['bill_due'::text, 'budget_warning'::text, 'budget_exceeded'::text, 'unusual_spending'::text, 'goal_milestone'::text, 'streak_at_risk'::text, 'weekly_summary'::text, 'monthly_summary'::text])),
-  severity text NOT NULL DEFAULT 'info'::text CHECK (severity = ANY (ARRAY['action'::text, 'warning'::text, 'info'::text, 'success'::text])),
-  title text NOT NULL,
-  message text,
-  recurring_payment_id uuid,
-  category_id uuid,
-  transaction_id uuid,
-  is_read boolean DEFAULT false,
-  is_dismissed boolean DEFAULT false,
-  action_taken boolean DEFAULT false,
-  created_at timestamp with time zone DEFAULT now(),
-  expires_at timestamp with time zone,
-  action_type text,
-  action_url text,
-  metadata jsonb DEFAULT '{}'::jsonb,
-  CONSTRAINT hub_alerts_pkey PRIMARY KEY (id),
-  CONSTRAINT hub_alerts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT hub_alerts_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
-  CONSTRAINT hub_alerts_recurring_payment_id_fkey FOREIGN KEY (recurring_payment_id) REFERENCES public.recurring_payments(id),
-  CONSTRAINT hub_alerts_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
-  CONSTRAINT hub_alerts_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id)
 );
 CREATE TABLE public.hub_chat_threads (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -217,19 +163,6 @@ CREATE TABLE public.hub_chat_threads (
   CONSTRAINT hub_chat_threads_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
   CONSTRAINT hub_chat_threads_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
-CREATE TABLE public.hub_daily_pulse (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  pulse_date date NOT NULL DEFAULT CURRENT_DATE,
-  amount_available numeric,
-  spent_yesterday numeric,
-  under_budget_streak integer DEFAULT 0,
-  has_due_bills boolean DEFAULT false,
-  bills_due_today jsonb DEFAULT '[]'::jsonb,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT hub_daily_pulse_pkey PRIMARY KEY (id),
-  CONSTRAINT hub_daily_pulse_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);
 CREATE TABLE public.hub_feed (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   household_id uuid NOT NULL,
@@ -246,27 +179,7 @@ CREATE TABLE public.hub_feed (
   CONSTRAINT hub_feed_pkey PRIMARY KEY (id),
   CONSTRAINT hub_feed_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
   CONSTRAINT hub_feed_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT hub_feed_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id),
-  CONSTRAINT hub_feed_goal_id_fkey FOREIGN KEY (goal_id) REFERENCES public.hub_household_goals(id)
-);
-CREATE TABLE public.hub_household_goals (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  household_id uuid NOT NULL,
-  created_by uuid NOT NULL,
-  name text NOT NULL,
-  description text,
-  target_amount numeric NOT NULL CHECK (target_amount > 0::numeric),
-  current_amount numeric DEFAULT 0,
-  target_date date,
-  icon text DEFAULT 'target'::text,
-  color text DEFAULT '#38bdf8'::text,
-  status text DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'completed'::text, 'cancelled'::text])),
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  completed_at timestamp with time zone,
-  CONSTRAINT hub_household_goals_pkey PRIMARY KEY (id),
-  CONSTRAINT hub_household_goals_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
-  CONSTRAINT hub_household_goals_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+  CONSTRAINT hub_feed_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id)
 );
 CREATE TABLE public.hub_message_actions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -315,13 +228,12 @@ CREATE TABLE public.hub_messages (
   checked_by uuid,
   item_url text,
   topic_id uuid,
+  item_quantity text,
   CONSTRAINT hub_messages_pkey PRIMARY KEY (id),
   CONSTRAINT hub_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
   CONSTRAINT hub_messages_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
   CONSTRAINT hub_messages_sender_user_id_fkey FOREIGN KEY (sender_user_id) REFERENCES auth.users(id),
   CONSTRAINT hub_messages_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id),
-  CONSTRAINT hub_messages_goal_id_fkey FOREIGN KEY (goal_id) REFERENCES public.hub_household_goals(id),
-  CONSTRAINT hub_messages_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.hub_alerts(id),
   CONSTRAINT hub_messages_reply_to_id_fkey FOREIGN KEY (reply_to_id) REFERENCES public.hub_messages(id),
   CONSTRAINT hub_messages_checked_by_fkey FOREIGN KEY (checked_by) REFERENCES auth.users(id),
   CONSTRAINT hub_messages_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES public.hub_notes_topics(id)
@@ -340,17 +252,6 @@ CREATE TABLE public.hub_notes_topics (
   CONSTRAINT hub_notes_topics_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
   CONSTRAINT hub_notes_topics_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
-CREATE TABLE public.hub_reactions (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  feed_item_id uuid NOT NULL,
-  user_id uuid NOT NULL,
-  reaction_type text NOT NULL CHECK (reaction_type = ANY (ARRAY['like'::text, 'comment'::text])),
-  comment_text text,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT hub_reactions_pkey PRIMARY KEY (id),
-  CONSTRAINT hub_reactions_feed_item_id_fkey FOREIGN KEY (feed_item_id) REFERENCES public.hub_feed(id),
-  CONSTRAINT hub_reactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);
 CREATE TABLE public.hub_user_stats (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -368,43 +269,6 @@ CREATE TABLE public.hub_user_stats (
   CONSTRAINT hub_user_stats_pkey PRIMARY KEY (id),
   CONSTRAINT hub_user_stats_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT hub_user_stats_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id)
-);
-CREATE TABLE public.in_app_notifications (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  title text NOT NULL,
-  message text,
-  icon text DEFAULT 'bell'::text,
-  source USER-DEFINED NOT NULL DEFAULT 'system'::notification_source_enum,
-  priority USER-DEFINED NOT NULL DEFAULT 'normal'::item_priority_enum,
-  action_type USER-DEFINED,
-  action_data jsonb,
-  action_completed_at timestamp with time zone,
-  alert_id uuid,
-  item_id uuid,
-  transaction_id uuid,
-  is_read boolean DEFAULT false,
-  is_dismissed boolean DEFAULT false,
-  created_at timestamp with time zone DEFAULT now(),
-  expires_at timestamp with time zone,
-  group_key text,
-  CONSTRAINT in_app_notifications_pkey PRIMARY KEY (id),
-  CONSTRAINT in_app_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT in_app_notifications_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.hub_alerts(id),
-  CONSTRAINT in_app_notifications_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
-  CONSTRAINT in_app_notifications_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id)
-);
-CREATE TABLE public.item_alert_presets (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  name text NOT NULL,
-  description text,
-  preset_config jsonb NOT NULL,
-  is_default boolean DEFAULT false,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT item_alert_presets_pkey PRIMARY KEY (id),
-  CONSTRAINT item_alert_presets_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.item_alerts (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -447,14 +311,6 @@ CREATE TABLE public.item_occurrence_actions (
   CONSTRAINT item_occurrence_actions_pkey PRIMARY KEY (id),
   CONSTRAINT item_occurrence_actions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
   CONSTRAINT item_occurrence_actions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
-);
-CREATE TABLE public.item_recurrence_exceptions (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  rule_id uuid NOT NULL,
-  exdate timestamp with time zone NOT NULL,
-  override_payload_json jsonb,
-  CONSTRAINT item_recurrence_exceptions_pkey PRIMARY KEY (id),
-  CONSTRAINT item_recurrence_exceptions_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.item_recurrence_rules(id)
 );
 CREATE TABLE public.item_recurrence_rules (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -524,25 +380,6 @@ CREATE TABLE public.merchant_mappings (
   CONSTRAINT merchant_mappings_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT merchant_mappings_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
-CREATE TABLE public.notification_logs (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  alert_id uuid,
-  subscription_id uuid,
-  title text NOT NULL,
-  body text,
-  tag text,
-  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'sent'::text, 'failed'::text, 'clicked'::text, 'dismissed'::text])),
-  error_message text,
-  sent_at timestamp with time zone,
-  clicked_at timestamp with time zone,
-  dismissed_at timestamp with time zone,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT notification_logs_pkey PRIMARY KEY (id),
-  CONSTRAINT notification_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT notification_logs_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.item_alerts(id),
-  CONSTRAINT notification_logs_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.push_subscriptions(id)
-);
 CREATE TABLE public.notification_preferences (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -558,23 +395,48 @@ CREATE TABLE public.notification_preferences (
   metadata jsonb,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  last_sent_at timestamp with time zone,
   CONSTRAINT notification_preferences_pkey PRIMARY KEY (id),
   CONSTRAINT notification_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-CREATE TABLE public.notification_templates (
+CREATE TABLE public.notifications (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  template_key text NOT NULL UNIQUE,
+  user_id uuid NOT NULL,
   title text NOT NULL,
-  message_template text,
+  message text,
   icon text DEFAULT 'bell'::text,
-  default_action_type USER-DEFINED,
-  default_priority USER-DEFINED DEFAULT 'normal'::item_priority_enum,
-  default_frequency text DEFAULT 'daily'::text,
-  default_time time without time zone DEFAULT '20:00:00'::time without time zone,
-  is_system boolean DEFAULT false,
+  source USER-DEFINED NOT NULL DEFAULT 'system'::notification_source_enum,
+  priority USER-DEFINED NOT NULL DEFAULT 'normal'::item_priority_enum,
+  action_type USER-DEFINED,
+  action_data jsonb,
+  action_completed_at timestamp with time zone,
+  alert_id uuid,
+  item_id uuid,
+  transaction_id uuid,
+  is_read boolean DEFAULT false,
+  is_dismissed boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT notification_templates_pkey PRIMARY KEY (id)
+  expires_at timestamp with time zone,
+  group_key text,
+  notification_type USER-DEFINED DEFAULT 'info'::notification_type_enum,
+  push_sent_at timestamp with time zone,
+  push_status text CHECK (push_status IS NULL OR (push_status = ANY (ARRAY['pending'::text, 'sent'::text, 'failed'::text, 'clicked'::text, 'dismissed'::text]))),
+  push_error text,
+  severity text DEFAULT 'info'::text CHECK (severity = ANY (ARRAY['info'::text, 'success'::text, 'warning'::text, 'error'::text, 'action'::text])),
+  recurring_payment_id uuid,
+  category_id uuid,
+  household_id uuid,
+  message_id uuid,
+  action_url text,
+  action_taken boolean DEFAULT false,
+  snoozed_until timestamp with time zone,
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT in_app_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT in_app_notifications_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
+  CONSTRAINT in_app_notifications_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id),
+  CONSTRAINT notifications_recurring_payment_id_fkey FOREIGN KEY (recurring_payment_id) REFERENCES public.recurring_payments(id),
+  CONSTRAINT notifications_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
+  CONSTRAINT notifications_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id)
 );
 CREATE TABLE public.push_subscriptions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -652,50 +514,6 @@ CREATE TABLE public.statement_imports (
   CONSTRAINT statement_imports_pkey PRIMARY KEY (id),
   CONSTRAINT statement_imports_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-CREATE TABLE public.subtasks (
-  id text NOT NULL,
-  task_id text NOT NULL,
-  title text NOT NULL,
-  done integer DEFAULT 0,
-  position integer DEFAULT 0,
-  CONSTRAINT subtasks_pkey PRIMARY KEY (id),
-  CONSTRAINT subtasks_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id)
-);
-CREATE TABLE public.tags (
-  id text NOT NULL,
-  name text NOT NULL UNIQUE,
-  user_id uuid,
-  CONSTRAINT tags_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.task_tags (
-  task_id text NOT NULL,
-  tag_id text NOT NULL,
-  CONSTRAINT task_tags_pkey PRIMARY KEY (task_id, tag_id),
-  CONSTRAINT task_tags_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id),
-  CONSTRAINT task_tags_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.tags(id)
-);
-CREATE TABLE public.tasks (
-  id text NOT NULL,
-  title text NOT NULL,
-  notes text,
-  status text NOT NULL DEFAULT 'todo'::text CHECK (status = ANY (ARRAY['todo'::text, 'done'::text])),
-  priority integer DEFAULT 0,
-  due_at bigint,
-  start_at bigint,
-  all_day integer DEFAULT 0,
-  list_id text,
-  repeat_rule text,
-  timezone text,
-  remind_at bigint,
-  snooze_until bigint,
-  created_at bigint NOT NULL DEFAULT ((EXTRACT(epoch FROM now()) * (1000)::numeric))::bigint,
-  updated_at bigint NOT NULL DEFAULT ((EXTRACT(epoch FROM now()) * (1000)::numeric))::bigint,
-  completed_at bigint,
-  search tsvector,
-  user_id uuid NOT NULL DEFAULT auth.uid(),
-  CONSTRAINT tasks_pkey PRIMARY KEY (id),
-  CONSTRAINT tasks_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);
 CREATE TABLE public.transaction_templates (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   user_id uuid NOT NULL,
@@ -728,11 +546,17 @@ CREATE TABLE public.transactions (
   confidence_score numeric,
   is_private boolean NOT NULL DEFAULT false,
   is_imported boolean NOT NULL DEFAULT false,
+  split_requested boolean DEFAULT false,
+  collaborator_id uuid,
+  collaborator_amount numeric,
+  collaborator_description text,
+  split_completed_at timestamp with time zone,
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
   CONSTRAINT transactions_category_fk FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_subcategory_fk FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
-  CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+  CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT transactions_collaborator_id_fkey FOREIGN KEY (collaborator_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.user_categories (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -772,15 +596,4 @@ CREATE TABLE public.user_preferences (
   date_start text DEFAULT '''mon-1''::text'::text,
   CONSTRAINT user_preferences_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);
-CREATE TABLE public.webauthn_credentials (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  user_id uuid NOT NULL DEFAULT auth.uid(),
-  credential_id text NOT NULL UNIQUE,
-  public_key text NOT NULL,
-  counter integer NOT NULL,
-  transports ARRAY,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT webauthn_credentials_pkey PRIMARY KEY (id),
-  CONSTRAINT webauthn_credentials_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );

@@ -49,6 +49,20 @@ async function fetchItems(
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
+  // Fetch partner ID to include their public items
+  const { data: link } = await supabase
+    .from("household_links")
+    .select("owner_user_id, partner_user_id")
+    .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
+    .eq("active", true)
+    .maybeSingle();
+
+  const partnerId = link
+    ? link.owner_user_id === user.id
+      ? link.partner_user_id
+      : link.owner_user_id
+    : null;
+
   let query = supabase
     .from("items")
     .select(
@@ -61,8 +75,18 @@ async function fetchItems(
       item_recurrence_rules (*)
     `
     )
-    .eq("user_id", user.id)
     .is("archived_at", null);
+
+  if (partnerId) {
+    // Fetch my items OR partner's public items
+    // Using separate filter: my items, or partner items that are public
+    query = query.or(`user_id.eq.${user.id},user_id.eq.${partnerId}`);
+  } else {
+    query = query.eq("user_id", user.id);
+  }
+
+  // Fetch the data first, then filter partner's private items on the client
+  // This is needed because Supabase doesn't support complex AND/OR nesting well
 
   // Apply filters
   if (filters?.type) {
@@ -111,8 +135,20 @@ async function fetchItems(
   const { data, error } = await query;
   if (error) throw error;
 
+  // Filter out partner's private items on the client side
+  // (Supabase doesn't support complex AND/OR nesting in .or())
+  const filteredData = (data || []).filter((item: any) => {
+    // Always include my own items
+    if (item.user_id === user.id) return true;
+    // Only include partner's items if they are public
+    if (partnerId && item.user_id === partnerId) {
+      return item.is_public === true;
+    }
+    return false;
+  });
+
   // Transform the data to match our types
-  return (data || []).map((item: any) => ({
+  return filteredData.map((item: any) => ({
     ...item,
     categories: item.categories || [],
     subtasks: item.item_subtasks || [],

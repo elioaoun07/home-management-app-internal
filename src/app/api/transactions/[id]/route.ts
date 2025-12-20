@@ -1,3 +1,4 @@
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -155,10 +156,12 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // First, get the transaction to check if it's a draft and get account_id
+    // First, get the transaction to check if it's a draft, split bill, and account info
     const { data: transaction, error: fetchError } = await supabase
       .from("transactions")
-      .select("account_id, is_draft")
+      .select(
+        "account_id, amount, is_draft, split_requested, split_completed_at, collaborator_amount, collaborator_account_id"
+      )
       .eq("id", id)
       .eq("user_id", user.id)
       .single();
@@ -185,12 +188,112 @@ export async function DELETE(
       );
     }
 
-    // Update account_balances.updated_at only for confirmed (non-draft) transactions
+    // Restore account balances for confirmed (non-draft) transactions
     if (!transaction.is_draft) {
-      await supabase
+      console.log("[Delete Transaction] Restoring balances for transaction:", {
+        transaction_id: id,
+        owner_account_id: transaction.account_id,
+        owner_amount: transaction.amount,
+        is_split: transaction.split_requested,
+        split_completed: !!transaction.split_completed_at,
+        collab_account_id: transaction.collaborator_account_id,
+        collab_amount: transaction.collaborator_amount,
+      });
+
+      // Restore owner's account balance (add back the transaction amount)
+      const { data: ownerBalance, error: ownerFetchError } = await supabase
         .from("account_balances")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("account_id", transaction.account_id);
+        .select("balance")
+        .eq("account_id", transaction.account_id)
+        .single();
+
+      if (ownerFetchError) {
+        console.error(
+          "[Delete Transaction] Error fetching owner balance:",
+          ownerFetchError
+        );
+      } else if (ownerBalance) {
+        const restoredOwnerBalance =
+          Number(ownerBalance.balance) + Number(transaction.amount);
+        console.log("[Delete Transaction] Restoring owner balance:", {
+          current: ownerBalance.balance,
+          amount_to_add: transaction.amount,
+          new_balance: restoredOwnerBalance,
+        });
+
+        const { error: updateError } = await supabase
+          .from("account_balances")
+          .update({
+            balance: restoredOwnerBalance,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("account_id", transaction.account_id);
+
+        if (updateError) {
+          console.error(
+            "[Delete Transaction] Error updating owner balance:",
+            updateError
+          );
+        }
+      }
+
+      // If this was a completed split bill, also restore collaborator's balance
+      if (
+        transaction.split_requested &&
+        transaction.split_completed_at &&
+        transaction.collaborator_amount &&
+        transaction.collaborator_account_id
+      ) {
+        console.log(
+          "[Delete Transaction] This is a completed split bill, restoring collaborator balance"
+        );
+
+        // Use admin client to bypass RLS when updating collaborator's balance
+        // (owner doesn't have permission to update partner's account_balances)
+        const adminClient = supabaseAdmin();
+
+        const { data: collabBalance, error: collabFetchError } =
+          await adminClient
+            .from("account_balances")
+            .select("balance")
+            .eq("account_id", transaction.collaborator_account_id)
+            .single();
+
+        if (collabFetchError) {
+          console.error(
+            "[Delete Transaction] Error fetching collaborator balance:",
+            collabFetchError
+          );
+        } else if (collabBalance) {
+          const restoredCollabBalance =
+            Number(collabBalance.balance) +
+            Number(transaction.collaborator_amount);
+          console.log("[Delete Transaction] Restoring collaborator balance:", {
+            current: collabBalance.balance,
+            amount_to_add: transaction.collaborator_amount,
+            new_balance: restoredCollabBalance,
+          });
+
+          const { error: updateError } = await adminClient
+            .from("account_balances")
+            .update({
+              balance: restoredCollabBalance,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("account_id", transaction.collaborator_account_id);
+
+          if (updateError) {
+            console.error(
+              "[Delete Transaction] Error updating collaborator balance:",
+              updateError
+            );
+          } else {
+            console.log(
+              "[Delete Transaction] Successfully restored collaborator balance"
+            );
+          }
+        }
+      }
     }
 
     return NextResponse.json({ success: true });

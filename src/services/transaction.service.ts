@@ -36,6 +36,44 @@ export class SupabaseTransactionService implements TransactionService {
   constructor(private supabase: SupabaseClient) {}
 
   /**
+   * Deducts an amount from the account balance (for expense transactions)
+   */
+  private async deductFromAccountBalance(
+    accountId: string,
+    amount: number
+  ): Promise<void> {
+    try {
+      const { data: currentBalance, error: fetchError } = await this.supabase
+        .from("account_balances")
+        .select("balance")
+        .eq("account_id", accountId)
+        .single();
+
+      if (fetchError) {
+        console.error("Error fetching account balance:", fetchError);
+        return;
+      }
+
+      if (currentBalance) {
+        const newBalance = Number(currentBalance.balance) - amount;
+        const { error: updateError } = await this.supabase
+          .from("account_balances")
+          .update({
+            balance: newBalance,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("account_id", accountId);
+
+        if (updateError) {
+          console.error("Error updating account balance:", updateError);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to deduct from account balance:", e);
+    }
+  }
+
+  /**
    * Updates the updated_at timestamp on account_balances when a confirmed transaction
    * affects the balance. Draft transactions should NOT trigger this update.
    */
@@ -429,9 +467,9 @@ export class SupabaseTransactionService implements TransactionService {
       });
     }
 
-    // Update account_balances.updated_at for confirmed transactions
+    // Deduct the transaction amount from the account balance
     // Note: Transactions created via this service are always confirmed (not drafts)
-    await this.touchAccountBalanceUpdatedAt(account_id);
+    await this.deductFromAccountBalance(account_id, amount);
 
     // Fetch the category and subcategory names to return a complete transaction object
     // This is needed for optimistic UI to work correctly

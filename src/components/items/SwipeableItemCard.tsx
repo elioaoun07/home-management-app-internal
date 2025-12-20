@@ -9,7 +9,8 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
 import { format, isBefore, parseISO } from "date-fns";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RRule } from "rrule";
 import ItemActionsSheet from "./ItemActionsSheet";
 
 // Icons
@@ -352,6 +353,7 @@ export default function SwipeableItemCard({
   const isEvent = item.type === "event";
   const isTask = item.type === "task";
   const isCompleted = item.status === "completed";
+  const isRecurring = !!item.recurrence_rule?.rrule;
 
   // Get due/start date
   const dateStr =
@@ -361,18 +363,50 @@ export default function SwipeableItemCard({
         ? item.event_details?.start_at
         : null;
 
+  // Calculate next occurrence date for recurring completed items
+  const nextOccurrenceDate = useMemo((): string | null => {
+    if (
+      !isCompleted ||
+      !isRecurring ||
+      !item.recurrence_rule?.rrule ||
+      !dateStr
+    ) {
+      return null;
+    }
+
+    try {
+      const rrule = RRule.fromString(item.recurrence_rule.rrule);
+      const now = new Date();
+      const nextOccurrence = rrule.after(now, true);
+      return nextOccurrence ? nextOccurrence.toISOString() : null;
+    } catch (error) {
+      console.error("Failed to parse recurrence rule:", error);
+      return null;
+    }
+  }, [isCompleted, isRecurring, item.recurrence_rule?.rrule, dateStr]);
+
+  // Determine which date to show in the countdown
+  const countdownDate =
+    isCompleted && isRecurring ? nextOccurrenceDate : dateStr;
+
   // Live countdown timer state
   const [timeInfo, setTimeInfo] = useState<{
     text: string;
     isOverdue: boolean;
-  } | null>(dateStr ? formatTimeDistance(dateStr) : null);
+  } | null>(countdownDate ? formatTimeDistance(countdownDate) : null);
 
   // Update countdown every second
   useEffect(() => {
-    if (!dateStr || isCompleted) return;
+    // Don't show timer for non-recurring completed items
+    if (isCompleted && !isRecurring) {
+      setTimeInfo(null);
+      return;
+    }
+
+    if (!countdownDate) return;
 
     const updateTime = () => {
-      setTimeInfo(formatTimeDistance(dateStr));
+      setTimeInfo(formatTimeDistance(countdownDate));
     };
 
     // Update immediately
@@ -382,7 +416,7 @@ export default function SwipeableItemCard({
     const interval = setInterval(updateTime, 1000);
 
     return () => clearInterval(interval);
-  }, [dateStr, isCompleted]);
+  }, [countdownDate, isCompleted, isRecurring]);
 
   // Touch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -716,7 +750,7 @@ export default function SwipeableItemCard({
             {/* Bottom row: Time + Location + Visibility */}
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               {/* Countdown/Overdue - Live updating with seconds */}
-              {timeInfo && !isCompleted && (
+              {timeInfo && (
                 <div
                   className={cn(
                     "flex items-center gap-1 text-[11px] font-medium",
@@ -724,7 +758,8 @@ export default function SwipeableItemCard({
                       ? "text-red-400"
                       : isPink
                         ? "text-pink-400/80"
-                        : "text-cyan-400/80"
+                        : "text-cyan-400/80",
+                    isCompleted && isRecurring && "opacity-50"
                   )}
                 >
                   {timeInfo.isOverdue ? (
@@ -732,7 +767,11 @@ export default function SwipeableItemCard({
                   ) : (
                     <ClockIcon className="w-3 h-3 opacity-60" />
                   )}
-                  <span className="tabular-nums">{timeInfo.text}</span>
+                  <span className="tabular-nums">
+                    {isCompleted && isRecurring
+                      ? `Next: ${timeInfo.text}`
+                      : timeInfo.text}
+                  </span>
                 </div>
               )}
 
