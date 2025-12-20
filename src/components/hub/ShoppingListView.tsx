@@ -182,21 +182,35 @@ export function ShoppingListView({
         /ingredient/i.test(lines[0]) &&
         /quantity/i.test(lines[0]);
 
-      const hasTableHeader =
-        (firstLineIsHeader && secondLineIsHeader) || firstLineHasBothHeaders;
+      // Quantity pattern - matches things like "1 cup", "2 tablespoons", "¼ teaspoon", "1 large", etc.
+      const quantityPattern =
+        /^[\d¼½¾⅓⅔⅛⅜⅝⅞]+\s*(cup|cups|tablespoon|tablespoons|tbsp|teaspoon|teaspoons|tsp|oz|ounce|ounces|lb|lbs|pound|pounds|g|gram|grams|kg|ml|liter|liters|large|medium|small|pieces?|whole|cloves?|slices?|pinch|dash)?s?$/i;
 
-      console.log("🔍 Table header detected:", hasTableHeader);
-      console.log("First line:", lines[0]);
-      console.log("Second line:", lines[1]);
+      // Check if alternating lines follow ingredient/quantity pattern (even lines are quantities)
+      const hasAlternatingPattern =
+        lines.length >= 4 &&
+        !quantityPattern.test(lines[0]) && // First line is NOT a quantity (ingredient)
+        quantityPattern.test(lines[1]) && // Second line IS a quantity
+        !quantityPattern.test(lines[2]) && // Third line is NOT a quantity (ingredient)
+        quantityPattern.test(lines[3]); // Fourth line IS a quantity
+
+      console.log("🔍 Detection results:");
+      console.log("First line:", JSON.stringify(lines[0]));
+      console.log("Second line:", JSON.stringify(lines[1]));
       console.log("First is header:", firstLineIsHeader);
       console.log("Second is header:", secondLineIsHeader);
+      console.log("Has alternating pattern:", hasAlternatingPattern);
+      console.log("Line 0 is quantity:", quantityPattern.test(lines[0]));
+      console.log("Line 1 is quantity:", quantityPattern.test(lines[1]));
 
-      // MOBILE FORMAT: Alternating lines with headers
-      if (firstLineIsHeader && secondLineIsHeader) {
-        // Skip header rows and parse alternating pairs
-        const dataLines = lines.slice(2);
+      // MOBILE FORMAT: Alternating lines with headers OR detected alternating pattern
+      if ((firstLineIsHeader && secondLineIsHeader) || hasAlternatingPattern) {
+        // Skip header rows if present
+        const skipCount = firstLineIsHeader && secondLineIsHeader ? 2 : 0;
+        const dataLines = lines.slice(skipCount);
 
         console.log("📱 Parsing MOBILE table format (alternating lines)");
+        console.log("Skip count:", skipCount);
         console.log("Data lines count:", dataLines.length);
 
         // Parse in pairs: [ingredient, quantity, ingredient, quantity, ...]
@@ -204,7 +218,7 @@ export function ShoppingListView({
           const ingredient = dataLines[i];
           const quantity = dataLines[i + 1]; // Next line is quantity
 
-          if (ingredient) {
+          if (ingredient && !quantityPattern.test(ingredient)) {
             console.log(
               `  ✓ Item ${i / 2 + 1}: "${ingredient}" → "${quantity || "no qty"}"`
             );
