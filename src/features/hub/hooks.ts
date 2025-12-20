@@ -83,6 +83,7 @@ export type HubMessage = {
   checked_at?: string | null;
   checked_by?: string | null;
   item_url?: string | null; // Hyperlink for shopping items
+  item_quantity?: string | null; // Quantity for shopping items (e.g., "2 bags", "1 lb")
   topic_id?: string | null; // Topic/section within notes thread
 };
 
@@ -775,15 +776,17 @@ export function useSendMessage() {
       content,
       thread_id,
       topic_id,
+      item_quantity,
     }: {
       content: string;
       thread_id: string;
       topic_id?: string;
+      item_quantity?: string;
     }) => {
       const res = await fetch("/api/hub/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, thread_id, topic_id }),
+        body: JSON.stringify({ content, thread_id, topic_id, item_quantity }),
       });
       if (!res.ok) throw new Error("Failed to send message");
       const data = await res.json();

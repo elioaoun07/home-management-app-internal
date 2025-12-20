@@ -6,6 +6,9 @@ export type ViewMode = "mobile" | "web" | "watch";
 
 const VIEW_MODE_KEY = "app-view-mode";
 
+// Listeners for manual updates
+let listeners: Array<() => void> = [];
+
 // Get stored value (client only)
 function getStoredViewMode(): ViewMode {
   if (typeof window === "undefined") return "mobile";
@@ -20,10 +23,28 @@ function getStoredViewMode(): ViewMode {
   return "mobile";
 }
 
-// Subscribe to storage events for cross-tab sync
+// Subscribe to storage events for cross-tab sync AND manual updates
 function subscribe(callback: () => void) {
-  window.addEventListener("storage", callback);
-  return () => window.removeEventListener("storage", callback);
+  // Add to listeners array for manual updates
+  listeners.push(callback);
+
+  // Listen to storage events from other tabs
+  const storageHandler = (e: StorageEvent) => {
+    if (e.key === VIEW_MODE_KEY) {
+      callback();
+    }
+  };
+  window.addEventListener("storage", storageHandler);
+
+  return () => {
+    listeners = listeners.filter((l) => l !== callback);
+    window.removeEventListener("storage", storageHandler);
+  };
+}
+
+// Notify all listeners
+function notifyListeners() {
+  listeners.forEach((listener) => listener());
 }
 
 // Server snapshot always returns "mobile" to match initial client render
@@ -50,8 +71,8 @@ export function useViewMode() {
   // Save to localStorage when changed
   const updateViewMode = (mode: ViewMode) => {
     localStorage.setItem(VIEW_MODE_KEY, mode);
-    // Trigger re-render by dispatching storage event
-    window.dispatchEvent(new StorageEvent("storage", { key: VIEW_MODE_KEY }));
+    // Manually notify all subscribers (for same-window updates)
+    notifyListeners();
   };
 
   return { viewMode, updateViewMode, isLoaded };

@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { content, thread_id, topic_id } = body;
+  const { content, thread_id, topic_id, item_quantity } = body;
 
   if (!content?.trim()) {
     return NextResponse.json(
@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
       ? household.partner_user_id
       : household.owner_user_id;
 
-  // Insert message (with optional topic_id)
+  // Insert message (with optional topic_id and item_quantity)
   const insertData: Record<string, unknown> = {
     household_id: thread.household_id,
     thread_id,
@@ -290,6 +290,11 @@ export async function POST(request: NextRequest) {
   // Add topic_id if provided
   if (topic_id) {
     insertData.topic_id = topic_id;
+  }
+
+  // Add item_quantity if provided (for shopping lists)
+  if (item_quantity) {
+    insertData.item_quantity = item_quantity;
   }
 
   const { data: message, error } = await supabase
@@ -450,10 +455,43 @@ export async function PATCH(request: NextRequest) {
         "archive",
         "unarchive",
         "set_item_url",
+        "set_quantity",
         "update_content",
       ].includes(action)
     ) {
       switch (action) {
+        case "set_quantity": {
+          if (!message_id) {
+            return NextResponse.json(
+              { error: "message_id is required" },
+              { status: 400 }
+            );
+          }
+
+          const { quantity } = body;
+
+          // Update item quantity
+          const { error: updateError } = await supabase
+            .from("hub_messages")
+            .update({
+              item_quantity: quantity || null,
+            })
+            .eq("id", message_id);
+
+          if (updateError) {
+            return NextResponse.json(
+              { error: "Failed to set quantity" },
+              { status: 500 }
+            );
+          }
+
+          return NextResponse.json({
+            success: true,
+            message_id,
+            quantity: quantity || null,
+          });
+        }
+
         case "set_item_url": {
           if (!message_id) {
             return NextResponse.json(

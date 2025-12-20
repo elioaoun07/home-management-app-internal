@@ -19,6 +19,7 @@ import { toast } from "sonner";
 interface ShoppingItem {
   id: string;
   content: string;
+  quantity: string | null; // Quantity for the item (e.g., "2 bags", "1 lb")
   checked: boolean;
   checkedAt: string | null;
   checkedBy: string | null;
@@ -32,7 +33,7 @@ interface ShoppingListViewProps {
   currentUserId: string;
   threadId: string;
   thread?: HubChatThread | null;
-  onAddItem: (content: string) => void;
+  onAddItem: (content: string, quantity?: string) => void;
   onDeleteItem: (messageId: string) => void;
   isLoading?: boolean;
 }
@@ -54,6 +55,10 @@ export function ShoppingListView({
   );
   const [editingUrlFor, setEditingUrlFor] = useState<string | null>(null);
   const [urlInputValue, setUrlInputValue] = useState("");
+  const [editingQuantityFor, setEditingQuantityFor] = useState<string | null>(
+    null
+  );
+  const [quantityInputValue, setQuantityInputValue] = useState("");
 
   const enableItemUrls = thread?.enable_item_urls ?? false;
 
@@ -70,6 +75,7 @@ export function ShoppingListView({
     .map((msg) => ({
       id: msg.id,
       content: msg.content || "",
+      quantity: msg.item_quantity || null,
       checked: !!msg.checked_at,
       checkedAt: msg.checked_at || null,
       checkedBy: msg.checked_by || null,
@@ -91,7 +97,33 @@ export function ShoppingListView({
 
   const handleAddItem = () => {
     if (!newItem.trim()) return;
-    onAddItem(newItem.trim());
+
+    // Smart quantity parsing from input
+    const input = newItem.trim();
+    let content = input;
+    let quantity: string | undefined = undefined;
+
+    // Pattern 1: "2 bags pasta" or "2 bags of pasta"
+    const quantityFirstPattern =
+      /^([\d.]+\s*(?:bags?|bottles?|lbs?|kg|g|oz|pieces?|packs?|boxes?|cans?|jars?|units?|items?)(?:\s+of)?)\s+(.+)$/i;
+    const match1 = input.match(quantityFirstPattern);
+
+    if (match1) {
+      quantity = match1[1].trim();
+      content = match1[2].trim();
+    } else {
+      // Pattern 2: "pasta 2 bags" or "pasta - 2 bags"
+      const quantityLastPattern =
+        /^(.+?)\s*[-:]?\s+([\d.]+\s*(?:bags?|bottles?|lbs?|kg|g|oz|pieces?|packs?|boxes?|cans?|jars?|units?|items?))$/i;
+      const match2 = input.match(quantityLastPattern);
+
+      if (match2) {
+        content = match2[1].trim();
+        quantity = match2[2].trim();
+      }
+    }
+
+    onAddItem(content, quantity);
     setNewItem("");
   };
 
@@ -100,6 +132,87 @@ export function ShoppingListView({
       e.preventDefault();
       handleAddItem();
     }
+  };
+
+  // Handle paste event to detect and parse lists
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedText = e.clipboardData.getData("text");
+
+    // Split by newlines and clean up
+    const lines = pastedText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    // Detect if this looks like a list:
+    // - Multiple lines (2 or more)
+    // - OR has bullet points/numbers even if single line with bullets
+    const hasMultipleLines = lines.length > 1;
+    const hasListMarkers = lines.some(
+      (line) =>
+        /^[-•*●○■□▪▫★☆✓✗◆◇→⇒]/.test(line) || // Bullet points
+        /^\d+[.)]/.test(line) || // Numbered lists like "1." or "1)"
+        /^[a-zA-Z][.)]/.test(line) // Lettered lists like "a." or "a)"
+    );
+
+    const isList = hasMultipleLines || hasListMarkers;
+
+    if (isList) {
+      // Prevent default paste behavior
+      e.preventDefault();
+
+      // Parse each line and extract item text and quantity
+      const items = lines
+        .map((line) => {
+          // Remove common list markers
+          let cleaned = line
+            .replace(/^[-•*●○■□▪▫★☆✓✗◆◇→⇒]\s*/, "") // Remove bullet points
+            .replace(/^\d+[.)]\s*/, "") // Remove numbers like "1." or "1)"
+            .replace(/^[a-zA-Z][.)]\s*/, "") // Remove letters like "a." or "a)"
+            .trim();
+
+          // Check for 2-column format (tab or pipe separated)
+          // Format: "ingredient \t quantity" or "ingredient | quantity"
+          let content = cleaned;
+          let quantity: string | undefined = undefined;
+
+          // Try tab separation first
+          if (cleaned.includes("\t")) {
+            const parts = cleaned.split("\t").map((p) => p.trim());
+            if (parts.length >= 2) {
+              content = parts[0];
+              quantity = parts[1];
+            }
+          }
+          // Try pipe separation
+          else if (cleaned.includes("|")) {
+            const parts = cleaned.split("|").map((p) => p.trim());
+            if (parts.length >= 2) {
+              content = parts[0];
+              quantity = parts[1];
+            }
+          }
+
+          return { content, quantity };
+        })
+        .filter((item) => item.content.length > 0);
+
+      // Add each item to the shopping list
+      if (items.length > 0) {
+        items.forEach(({ content, quantity }) => {
+          onAddItem(content, quantity);
+        });
+
+        // Clear the input
+        setNewItem("");
+
+        // Show success message
+        toast.success(
+          `Added ${items.length} item${items.length > 1 ? "s" : ""} to list`
+        );
+      }
+    }
+    // If it's not a list (single line, no markers), let the default paste behavior happen
   };
 
   // Toggle check state via API with instant optimistic UI
@@ -190,6 +303,48 @@ export function ShoppingListView({
       }
     },
     [queryClient, threadId, currentUserId]
+  );
+
+  // Set item quantity
+  const setItemQuantity = useCallback(
+    async (itemId: string, quantity: string | null) => {
+      const queryKey = ["hub", "messages", threadId];
+
+      // Optimistic update
+      queryClient.setQueryData<{ messages: HubMessage[] }>(queryKey, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          messages: old.messages.map((msg) =>
+            msg.id === itemId ? { ...msg, item_quantity: quantity } : msg
+          ),
+        };
+      });
+
+      try {
+        const res = await fetch("/api/hub/messages", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "set_quantity",
+            message_id: itemId,
+            quantity: quantity,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to update quantity");
+        }
+
+        toast.success(quantity ? "Quantity updated" : "Quantity removed");
+      } catch (error) {
+        console.error("Error updating quantity:", error);
+        toast.error("Failed to update quantity");
+        // Rollback on error
+        queryClient.invalidateQueries({ queryKey });
+      }
+    },
+    [queryClient, threadId]
   );
 
   // Set item URL
@@ -294,14 +449,25 @@ export function ShoppingListView({
       {/* Add Item Input - Fixed at top */}
       <div className="p-4 border-b border-white/5 bg-bg-card-custom/95 backdrop-blur-sm">
         <div className="flex gap-2">
-          <input
-            type="text"
+          <textarea
             value={newItem}
             onChange={(e) => setNewItem(e.target.value)}
             onKeyDown={handleKeyPress}
-            placeholder="Add item to shopping list..."
+            onPaste={handlePaste}
+            placeholder="Add new item..."
             disabled={isLoading}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50 disabled:opacity-50"
+            rows={1}
+            className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50 disabled:opacity-50 resize-none overflow-hidden"
+            style={{
+              minHeight: "42px",
+              maxHeight: "120px",
+            }}
+            onInput={(e) => {
+              // Auto-resize textarea
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = "42px";
+              target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+            }}
             autoFocus
           />
           <button
@@ -380,6 +546,60 @@ export function ShoppingListView({
                           <span className="text-white text-sm">
                             {item.content}
                           </span>
+
+                          {/* Quantity - editable */}
+                          {editingQuantityFor === item.id ? (
+                            <input
+                              type="text"
+                              value={quantityInputValue}
+                              onChange={(e) =>
+                                setQuantityInputValue(e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  const trimmedQuantity =
+                                    quantityInputValue.trim();
+                                  setItemQuantity(
+                                    item.id,
+                                    trimmedQuantity || null
+                                  );
+                                  setEditingQuantityFor(null);
+                                  setQuantityInputValue("");
+                                } else if (e.key === "Escape") {
+                                  setEditingQuantityFor(null);
+                                  setQuantityInputValue("");
+                                }
+                              }}
+                              onBlur={() => {
+                                const trimmedQuantity =
+                                  quantityInputValue.trim();
+                                setItemQuantity(
+                                  item.id,
+                                  trimmedQuantity || null
+                                );
+                                setEditingQuantityFor(null);
+                                setQuantityInputValue("");
+                              }}
+                              placeholder="e.g., 2 bags"
+                              className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium border border-blue-400/50 focus:outline-none focus:border-blue-400 w-24"
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingQuantityFor(item.id);
+                                setQuantityInputValue(item.quantity || "");
+                              }}
+                              className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium hover:bg-blue-500/30 transition-all"
+                              title="Click to edit quantity"
+                            >
+                              {item.quantity || "+ qty"}
+                            </button>
+                          )}
+
                           {enableItemUrls &&
                             item.itemUrl &&
                             editingUrlFor !== item.id && (
@@ -514,6 +734,71 @@ export function ShoppingListView({
                           <span className="text-white/50 text-sm line-through">
                             {item.content}
                           </span>
+
+                          {/* Quantity - editable even when checked */}
+                          {editingQuantityFor === item.id ? (
+                            <input
+                              type="text"
+                              value={quantityInputValue}
+                              onChange={(e) =>
+                                setQuantityInputValue(e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  const trimmedQuantity =
+                                    quantityInputValue.trim();
+                                  setItemQuantity(
+                                    item.id,
+                                    trimmedQuantity || null
+                                  );
+                                  setEditingQuantityFor(null);
+                                  setQuantityInputValue("");
+                                } else if (e.key === "Escape") {
+                                  setEditingQuantityFor(null);
+                                  setQuantityInputValue("");
+                                }
+                              }}
+                              onBlur={() => {
+                                const trimmedQuantity =
+                                  quantityInputValue.trim();
+                                setItemQuantity(
+                                  item.id,
+                                  trimmedQuantity || null
+                                );
+                                setEditingQuantityFor(null);
+                                setQuantityInputValue("");
+                              }}
+                              placeholder="e.g., 2 bags"
+                              className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium border border-blue-400/50 focus:outline-none focus:border-blue-400 w-24"
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : item.quantity ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingQuantityFor(item.id);
+                                setQuantityInputValue(item.quantity || "");
+                              }}
+                              className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300/50 text-xs font-medium line-through hover:bg-blue-500/20 transition-all"
+                              title="Click to edit quantity"
+                            >
+                              {item.quantity}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingQuantityFor(item.id);
+                                setQuantityInputValue("");
+                              }}
+                              className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300/40 text-xs font-medium hover:bg-blue-500/20 transition-all opacity-0 group-hover:opacity-100"
+                              title="Click to add quantity"
+                            >
+                              + qty
+                            </button>
+                          )}
                           {enableItemUrls && item.itemUrl && (
                             <a
                               href={item.itemUrl}

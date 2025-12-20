@@ -40,6 +40,8 @@ import {
   type HubMessage,
 } from "@/features/hub/hooks";
 import {
+  addDismissedAlert,
+  getDismissedAlerts,
   useCacheSync,
   useHubCacheInit,
   useHubState,
@@ -1822,11 +1824,22 @@ function ThreadConversation({
 
   // Shopping list handlers
   const handleAddShoppingItem = useCallback(
-    (content: string, topicId?: string) => {
-      // Send a text message, optionally with a topic_id for notes
-      sendMessage.mutate({ content, thread_id: threadId, topic_id: topicId });
+    (content: string, quantityOrTopicId?: string, topicId?: string) => {
+      // Handle both old signature (content, topicId) and new (content, quantity, topicId)
+      // If called from notes, quantityOrTopicId is topicId
+      // If called from shopping, quantityOrTopicId is quantity
+      const isNotesThread = thread?.purpose === "notes";
+      const actualTopicId = isNotesThread ? quantityOrTopicId : topicId;
+      const quantity = isNotesThread ? undefined : quantityOrTopicId;
+
+      sendMessage.mutate({
+        content,
+        thread_id: threadId,
+        topic_id: actualTopicId,
+        item_quantity: quantity,
+      });
     },
-    [sendMessage, threadId]
+    [sendMessage, threadId, thread?.purpose]
   );
 
   const handleDeleteShoppingItem = useCallback(
@@ -3340,6 +3353,7 @@ function ThreadSettingsModal({
   const [color, setColor] = useState<string>(
     thread.color || PURPOSE_CONFIG[thread.purpose]?.defaultColor || "#6366f1"
   );
+  const [isPrivate, setIsPrivate] = useState(thread.is_private ?? false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -3381,7 +3395,9 @@ function ThreadSettingsModal({
           return {
             ...old,
             threads: old.threads.map((t) =>
-              t.id === thread.id ? { ...t, icon, color } : t
+              t.id === thread.id
+                ? { ...t, icon, color, is_private: isPrivate }
+                : t
             ),
           };
         }
@@ -3394,6 +3410,7 @@ function ThreadSettingsModal({
           thread_id: thread.id,
           icon,
           color,
+          is_private: isPrivate,
         }),
       });
 
@@ -3601,6 +3618,68 @@ function ThreadSettingsModal({
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Visibility Toggle */}
+          <div>
+            <label className={`block text-xs mb-2 ${themeClasses.textFaint}`}>
+              Visibility
+            </label>
+            <div className="flex items-center justify-end">
+              <button
+                onClick={() => setIsPrivate(!isPrivate)}
+                className={cn(
+                  "group relative p-3 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2.5 overflow-hidden",
+                  isPrivate
+                    ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow} hover:shadow-[0_0_25px_rgba(168,85,247,0.35),0_0_50px_rgba(147,51,234,0.2)]`
+                    : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`
+                )}
+              >
+                {/* Animated background glow when private */}
+                {isPrivate && (
+                  <div
+                    className={`absolute inset-0 bg-gradient-to-r ${themeClasses.iconBg} animate-[shimmer_3s_ease-in-out_infinite]`}
+                  />
+                )}
+
+                <span
+                  className={cn(
+                    "relative text-sm font-semibold tracking-wide transition-all duration-300",
+                    isPrivate
+                      ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(168,85,247,0.6)]`
+                      : `${themeClasses.textFaint} ${themeClasses.textHover}`
+                  )}
+                >
+                  {isPrivate ? "Private" : "Public"}
+                </span>
+                <svg
+                  className={cn(
+                    "relative w-5 h-5 transition-all duration-500",
+                    isPrivate
+                      ? `${themeClasses.textActive} drop-shadow-[0_0_10px_rgba(168,85,247,0.8)] animate-pulse`
+                      : `${themeClasses.textFaint} ${themeClasses.textHover}`
+                  )}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  {isPrivate ? (
+                    // Locked icon
+                    <>
+                      <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </>
+                  ) : (
+                    // Unlocked icon
+                    <>
+                      <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                    </>
+                  )}
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Delete Chat Section */}
@@ -4244,7 +4323,16 @@ function AlertsView() {
   const [showSnoozeMenu, setShowSnoozeMenu] = useState<string | null>(null);
   const [showTimeSettings, setShowTimeSettings] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState("20:00");
-  const alerts = data?.alerts || [];
+
+  // Track dismissed alerts in localStorage
+  const [dismissedInSession, setDismissedInSession] = useState<Set<string>>(
+    () => getDismissedAlerts()
+  );
+
+  // Filter out alerts that have been dismissed in this session
+  const alerts = (data?.alerts || []).filter(
+    (alert) => !dismissedInSession.has(alert.id)
+  );
 
   const handleConfirmTransactions = async (alertId: string) => {
     setShowCelebration(alertId);
@@ -4278,6 +4366,15 @@ function AlertsView() {
     });
     setShowTimeSettings(null);
     toast.success(`Reminder time updated to ${time}`);
+  };
+
+  const handleDismiss = (alertId: string) => {
+    // Add to localStorage cache
+    addDismissedAlert(alertId);
+    // Update local state to hide immediately
+    setDismissedInSession((prev) => new Set([...prev, alertId]));
+    // Also dismiss on server
+    dismissAlert.mutate(alertId);
   };
 
   if (isLoading) {
@@ -4517,7 +4614,7 @@ function AlertsView() {
               </p>
             </div>
             <button
-              onClick={() => dismissAlert.mutate(alert.id)}
+              onClick={() => handleDismiss(alert.id)}
               className="text-white/30 hover:text-white/60 text-lg"
             >
               ×

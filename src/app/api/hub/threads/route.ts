@@ -222,7 +222,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { thread_id, enable_item_urls, icon, color } = body;
+  const { thread_id, enable_item_urls, icon, color, is_private } = body;
 
   if (!thread_id) {
     return NextResponse.json({ error: "thread_id required" }, { status: 400 });
@@ -264,6 +264,9 @@ export async function PATCH(request: NextRequest) {
   }
   if (color !== undefined) {
     updates.color = color;
+  }
+  if (is_private !== undefined) {
+    updates.is_private = is_private;
   }
 
   if (Object.keys(updates).length === 0) {

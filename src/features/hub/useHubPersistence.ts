@@ -22,6 +22,7 @@ const STORAGE_KEYS = {
   MESSAGES_CACHE_PREFIX: "hub-messages-",
   LAST_SYNC: "hub-last-sync",
   DRAFT_PREFIX: "hub-draft-",
+  DISMISSED_ALERTS: "hub-dismissed-alerts",
 } as const;
 
 // Types for cached data
@@ -98,6 +99,32 @@ export function getCachedMessages(threadId: string): CachedMessages | null {
  */
 export function getCachedThreads(): CachedThreads | null {
   return getStorageItem<CachedThreads | null>(STORAGE_KEYS.THREADS_CACHE, null);
+}
+
+/**
+ * Get dismissed alerts from localStorage
+ */
+export function getDismissedAlerts(): Set<string> {
+  const dismissed = getStorageItem<string[]>(STORAGE_KEYS.DISMISSED_ALERTS, []);
+  return new Set(dismissed);
+}
+
+/**
+ * Save dismissed alert to localStorage
+ */
+export function addDismissedAlert(alertId: string): void {
+  const dismissed = getDismissedAlerts();
+  dismissed.add(alertId);
+  setStorageItem(STORAGE_KEYS.DISMISSED_ALERTS, Array.from(dismissed));
+}
+
+/**
+ * Clear old dismissed alerts (older than 7 days)
+ */
+export function cleanupDismissedAlerts(): void {
+  // For now, just clear all since we don't store timestamps
+  // In a future enhancement, we could store {id, dismissedAt} objects
+  setStorageItem(STORAGE_KEYS.DISMISSED_ALERTS, []);
 }
 
 /**
