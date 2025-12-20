@@ -14,6 +14,7 @@ export interface CreateTransactionDTO {
   description?: string;
   date?: string;
   is_private?: boolean;
+  split_requested?: boolean;
 }
 
 export interface UpdateTransactionDTO {
@@ -80,6 +81,7 @@ export class SupabaseTransactionService implements TransactionService {
       .from("transactions")
       .select(
         `id, date, category_id, subcategory_id, amount, description, account_id, inserted_at, user_id, is_private,
+        split_requested, collaborator_id, collaborator_amount, collaborator_description, split_completed_at,
         category:user_categories!transactions_category_fk(name, color),
         subcategory:user_categories!transactions_subcategory_fk(name, color)`
       )
@@ -91,10 +93,13 @@ export class SupabaseTransactionService implements TransactionService {
     if (end) query = query.lte("date", end);
 
     // Filter by user + partner if household linked
+    // Also include transactions where user is the collaborator (for split bills)
     if (partnerId) {
-      query = query.in("user_id", [userId, partnerId]);
+      query = query.or(
+        `user_id.in.(${userId},${partnerId}),collaborator_id.eq.${userId}`
+      );
     } else {
-      query = query.eq("user_id", userId);
+      query = query.or(`user_id.eq.${userId},collaborator_id.eq.${userId}`);
     }
 
     const { data: rawRows, error } = (await query) as any;
@@ -270,6 +275,8 @@ export class SupabaseTransactionService implements TransactionService {
         "#38bdf8",
       is_private: r.is_private || false,
       is_owner: r.user_id === userId,
+      // Track if the current user is the collaborator on this split transaction (must be boolean!)
+      is_collaborator: !!(r.collaborator_id === userId && r.split_completed_at),
       user_theme:
         r.user_id === userId
           ? myPrefs?.theme || "blue"
@@ -277,6 +284,17 @@ export class SupabaseTransactionService implements TransactionService {
             myPrefs?.theme === "pink"
             ? "blue"
             : "pink",
+      // Split bill fields
+      split_requested: r.split_requested || false,
+      collaborator_id: r.collaborator_id || null,
+      collaborator_amount: r.collaborator_amount || null,
+      collaborator_description: r.collaborator_description || null,
+      split_completed_at: r.split_completed_at || null,
+      // Calculate total amount for completed splits
+      total_amount:
+        r.split_requested && r.split_completed_at && r.collaborator_amount
+          ? r.amount + r.collaborator_amount
+          : r.amount,
     }));
   }
 
@@ -289,11 +307,34 @@ export class SupabaseTransactionService implements TransactionService {
       description,
       date,
       is_private,
+      split_requested,
     } = data;
 
     // Validate required fields
     if (!account_id || !category_id || !amount) {
       throw new Error("account_id, category_id, and amount are required");
+    }
+
+    // If split requested, get the partner's user ID from household link
+    let collaboratorId: string | null = null;
+    if (split_requested) {
+      const { data: link } = await this.supabase
+        .from("household_links")
+        .select("owner_user_id, partner_user_id")
+        .or(`owner_user_id.eq.${userId},partner_user_id.eq.${userId}`)
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!link) {
+        throw new Error("Split bill requires an active household link");
+      }
+
+      collaboratorId =
+        link.owner_user_id === userId
+          ? link.partner_user_id
+          : link.owner_user_id;
     }
 
     // Get category name from category_id (validation)
@@ -335,7 +376,7 @@ export class SupabaseTransactionService implements TransactionService {
     }
 
     // Create transaction
-    const transactionData = {
+    const transactionData: Record<string, unknown> = {
       user_id: userId,
       date: txDate, // YYYY-MM-DD
       category_id: category_id,
@@ -344,6 +385,8 @@ export class SupabaseTransactionService implements TransactionService {
       description: description || "",
       account_id: account_id,
       is_private: is_private || false,
+      split_requested: split_requested || false,
+      collaborator_id: collaboratorId,
     };
 
     const { data: created, error } = await this.supabase
@@ -355,6 +398,35 @@ export class SupabaseTransactionService implements TransactionService {
     if (error) {
       console.error("Error creating transaction:", error);
       throw new Error("Failed to create transaction");
+    }
+
+    // If split requested, create a notification for the collaborator
+    if (split_requested && collaboratorId) {
+      // Get category name for notification
+      const { data: categoryData } = await this.supabase
+        .from("user_categories")
+        .select("name")
+        .eq("id", category_id)
+        .single();
+
+      await this.supabase.from("notifications").insert({
+        user_id: collaboratorId,
+        title: "Split Bill Request",
+        message: `You've been asked to add your portion to a $${amount} ${categoryData?.name || "expense"}`,
+        icon: "split",
+        notification_type: "transaction_pending",
+        severity: "action",
+        source: "transaction",
+        priority: "high",
+        action_type: "log_transaction",
+        action_data: {
+          transaction_id: created.id,
+          owner_amount: amount,
+          owner_description: description || "",
+          category_name: categoryData?.name || "",
+        },
+        transaction_id: created.id,
+      });
     }
 
     // Update account_balances.updated_at for confirmed transactions

@@ -18,6 +18,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useSplitBillModal } from "@/contexts/SplitBillContext";
 import { useTab } from "@/contexts/TabContext";
 import {
   getActionButtonText,
@@ -47,6 +48,7 @@ export default function NotificationModal({
   const router = useRouter();
   const { setActiveTab, setHubDefaultView } = useTab();
   const themeClasses = useThemeClasses();
+  const { openSplitBillModal } = useSplitBillModal();
 
   const { data, isLoading } = useInAppNotifications({
     limit: 20,
@@ -66,6 +68,30 @@ export default function NotificationModal({
     // Mark as read
     if (!notification.is_read) {
       markRead.mutate(notification.id);
+    }
+
+    // Handle split bill notifications specially
+    if (
+      notification.notification_type === "transaction_pending" &&
+      notification.action_data
+    ) {
+      const splitData = notification.action_data as {
+        transaction_id?: string;
+        owner_amount?: number;
+        owner_description?: string;
+        category_name?: string;
+      };
+
+      if (splitData.transaction_id) {
+        openSplitBillModal({
+          transaction_id: splitData.transaction_id,
+          owner_amount: splitData.owner_amount || 0,
+          owner_description: splitData.owner_description || "",
+          category_name: splitData.category_name || "Expense",
+        });
+        onOpenChange(false);
+        return;
+      }
     }
 
     // Get route from the notification
@@ -164,6 +190,8 @@ export default function NotificationModal({
         case "chat_message":
         case "chat_mention":
           return "💬";
+        case "transaction_pending":
+          return "🔀"; // Split bill icon
         case "success":
           return "✅";
         case "warning":
@@ -182,6 +210,10 @@ export default function NotificationModal({
       case "transaction":
       case "log_transaction":
         return "📝";
+      case "split":
+        return "🔀";
+      case "check":
+        return "✅";
       case "budget":
         return "💰";
       case "warning":

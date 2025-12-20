@@ -1,11 +1,13 @@
 import AIChatAssistant from "@/components/ai/AIChatAssistant";
 import { EagerDataPrefetch } from "@/components/EagerDataPrefetch";
 import { ErrorLogger } from "@/components/ErrorLogger";
+import SplitBillHandler from "@/components/expense/SplitBillHandler";
 import ConditionalHeader from "@/components/layouts/ConditionalHeader";
 import GuestHeader from "@/components/layouts/GuestHeader";
 import MobileNav from "@/components/layouts/MobileNav";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { Toaster } from "@/components/ui/sonner";
+import { SplitBillProvider } from "@/contexts/SplitBillContext";
 import { UserProvider } from "@/contexts/UserContext";
 import { supabaseServerRSC } from "@/lib/supabase/server";
 import type { Metadata, Viewport } from "next";
@@ -144,45 +146,48 @@ export default async function RootLayout({
               user ? { name: userName, email: userEmail, avatarUrl } : null
             }
           >
-            {/* Eager prefetch critical data immediately on app load */}
-            {user && <EagerDataPrefetch />}
-            <ServiceWorkerRegistration />
-            <ErrorLogger />
-            {/* Conditional header - show user menu when logged in, login button when logged out */}
-            {user ? (
-              <ConditionalHeader
-                userName={userName}
-                userEmail={userEmail}
-                avatarUrl={avatarUrl}
+            <SplitBillProvider>
+              {/* Eager prefetch critical data immediately on app load */}
+              {user && <EagerDataPrefetch />}
+              <ServiceWorkerRegistration />
+              <ErrorLogger />
+              {/* Conditional header - show user menu when logged in, login button when logged out */}
+              {user ? (
+                <ConditionalHeader
+                  userName={userName}
+                  userEmail={userEmail}
+                  avatarUrl={avatarUrl}
+                />
+              ) : (
+                <GuestHeader />
+              )}
+              {children}
+              <MobileNav />
+              {user && <AIChatAssistant />}
+              {user && <SplitBillHandler />}
+              <Toaster
+                richColors
+                closeButton
+                position="top-center"
+                toastOptions={{
+                  style: {
+                    background: "hsl(var(--header-bg))",
+                    border: "1px solid hsl(var(--header-border))",
+                    color: "hsl(var(--foreground))",
+                    backdropFilter: "blur(12px)",
+                  },
+                  className: "neo-card shadow-2xl",
+                  actionButtonStyle: {
+                    background: "hsl(var(--nav-text-primary))",
+                    color: "hsl(var(--background))",
+                    border: "none",
+                    fontWeight: "600",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                  },
+                  duration: 3000,
+                }}
               />
-            ) : (
-              <GuestHeader />
-            )}
-            {children}
-            <MobileNav />
-            {user && <AIChatAssistant />}
-            <Toaster
-              richColors
-              closeButton
-              position="top-center"
-              toastOptions={{
-                style: {
-                  background: "hsl(var(--header-bg))",
-                  border: "1px solid hsl(var(--header-border))",
-                  color: "hsl(var(--foreground))",
-                  backdropFilter: "blur(12px)",
-                },
-                className: "neo-card shadow-2xl",
-                actionButtonStyle: {
-                  background: "hsl(var(--nav-text-primary))",
-                  color: "hsl(var(--background))",
-                  border: "none",
-                  fontWeight: "600",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                },
-                duration: 3000,
-              }}
-            />
+            </SplitBillProvider>
           </UserProvider>
         </Providers>
       </body>

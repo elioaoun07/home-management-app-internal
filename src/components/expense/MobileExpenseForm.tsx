@@ -164,6 +164,7 @@ export default function MobileExpenseForm() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [isSplitBill, setIsSplitBill] = useState(false);
   const [showNewAccountDrawer, setShowNewAccountDrawer] = useState(false);
   const [showNewCategoryDrawer, setShowNewCategoryDrawer] = useState(false);
   const [showNewSubcategoryDrawer, setShowNewSubcategoryDrawer] =
@@ -589,6 +590,7 @@ export default function MobileExpenseForm() {
       description: description || undefined,
       date: format(date, "yyyy-MM-dd"),
       is_private: isPrivate,
+      split_requested: isSplitBill,
       // Include display names for optimistic UI
       _optimistic: {
         category_name: selectedCategory?.name ?? null,
@@ -603,6 +605,7 @@ export default function MobileExpenseForm() {
     const amountForToast = amount;
     const categoryNameForToast = selectedCategory?.name;
     const isIncomeForToast = selectedAccount?.type === "income";
+    const wasSplitBill = isSplitBill;
 
     // Reset form immediately for instant UI feedback
     setAmount("");
@@ -610,6 +613,7 @@ export default function MobileExpenseForm() {
     setSelectedSubcategoryId(undefined);
     setDescription("");
     setIsPrivate(false);
+    setIsSplitBill(false);
     const newDefaultAccount = accounts.find((a: any) => a.is_default);
     if (newDefaultAccount) {
       setSelectedAccountId(newDefaultAccount.id);
@@ -621,9 +625,17 @@ export default function MobileExpenseForm() {
     // Optimistic add - mutation hook handles cache updates
     addTransactionMutation.mutate(transactionData, {
       onSuccess: (newTransaction) => {
-        toast.success(isIncomeForToast ? "Income added!" : "Expense added!", {
+        const successMessage = wasSplitBill
+          ? "Split bill sent!"
+          : isIncomeForToast
+            ? "Income added!"
+            : "Expense added!";
+        const successDescription = wasSplitBill
+          ? `$${amountForToast} for ${categoryNameForToast} - awaiting partner's amount`
+          : `$${amountForToast} for ${categoryNameForToast}`;
+        toast.success(successMessage, {
           icon: ToastIcons.create,
-          description: `$${amountForToast} for ${categoryNameForToast}`,
+          description: successDescription,
           action: {
             label: "Undo",
             onClick: () => {
@@ -891,13 +903,79 @@ export default function MobileExpenseForm() {
 
           {step === "amount" && (
             <div>
-              {/* Private/Public Lock Icon (shown only on Amount step) */}
-              <div className="flex items-center justify-end px-1 py-2">
+              {/* Private/Public Lock Icon and Split Bill (shown only on Amount step) */}
+              <div className="flex items-center justify-end gap-2 px-1 py-2">
+                {/* Split Bill Button */}
                 <button
-                  onClick={() => setIsPrivate(!isPrivate)}
+                  onClick={() => {
+                    if (navigator.vibrate) navigator.vibrate(10);
+                    setIsSplitBill(!isSplitBill);
+                    // Split bill transactions cannot be private
+                    if (!isSplitBill) setIsPrivate(false);
+                  }}
+                  suppressHydrationWarning
+                  className={cn(
+                    "group relative p-2.5 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2 overflow-hidden",
+                    isSplitBill
+                      ? "border-emerald-400/50 bg-gradient-to-br from-emerald-500/20 to-teal-500/10 shadow-[0_0_15px_rgba(16,185,129,0.25)] hover:shadow-[0_0_25px_rgba(16,185,129,0.35)]"
+                      : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`
+                  )}
+                  title={
+                    isSplitBill ? "Cancel split bill" : "Split with partner"
+                  }
+                >
+                  {/* Animated background glow when active */}
+                  {isSplitBill && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 animate-[shimmer_3s_ease-in-out_infinite]" />
+                  )}
+
+                  {/* Split icon */}
+                  <svg
+                    className={cn(
+                      "relative w-5 h-5 transition-all duration-500",
+                      isSplitBill
+                        ? "text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.8)]"
+                        : `${themeClasses.textFaint} ${themeClasses.textHover}`
+                    )}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    {/* Split/divide icon */}
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 4v16m-6-8h12"
+                    />
+                    <circle cx="6" cy="8" r="2" />
+                    <circle cx="18" cy="16" r="2" />
+                  </svg>
+
+                  <span
+                    className={cn(
+                      "relative text-xs font-semibold tracking-wide transition-all duration-300",
+                      isSplitBill
+                        ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]"
+                        : `${themeClasses.textFaint} ${themeClasses.textHover}`
+                    )}
+                  >
+                    Split
+                  </span>
+                </button>
+
+                {/* Private/Public Button */}
+                <button
+                  onClick={() => {
+                    // Cannot make private if split bill is enabled
+                    if (isSplitBill && !isPrivate) return;
+                    setIsPrivate(!isPrivate);
+                  }}
+                  disabled={isSplitBill}
                   suppressHydrationWarning
                   className={cn(
                     "group relative p-3 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2.5 overflow-hidden",
+                    isSplitBill && "opacity-50 cursor-not-allowed",
                     isPrivate
                       ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow} hover:shadow-[0_0_25px_rgba(20,184,166,0.35),0_0_50px_rgba(6,182,212,0.2)]`
                       : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`

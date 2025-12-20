@@ -23,8 +23,20 @@ export type Transaction = {
   subcategory_color?: string;
   category_id?: string | null;
   subcategory_id?: string | null;
+  is_private?: boolean;
+  is_owner?: boolean;
+  /** True if current user is the collaborator on a completed split transaction */
+  is_collaborator?: boolean;
+  user_theme?: string;
   /** True if this transaction is optimistic (not yet confirmed by server) */
   _isPending?: boolean;
+  // Split bill fields
+  split_requested?: boolean;
+  collaborator_id?: string;
+  collaborator_amount?: number;
+  collaborator_description?: string;
+  split_completed_at?: string;
+  total_amount?: number;
 };
 
 type TransactionInput = {
@@ -35,6 +47,7 @@ type TransactionInput = {
   category_id?: string | null;
   subcategory_id?: string | null;
   is_private?: boolean;
+  split_requested?: boolean;
   // Optional display fields for optimistic UI (not sent to server)
   _optimistic?: {
     category_name?: string | null;

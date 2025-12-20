@@ -144,10 +144,7 @@ export function ShoppingListView({
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
 
-    // Debug logging
-    console.log("📋 Paste detected:");
-    console.log("Total lines:", lines.length);
-    console.log("First 5 lines:", lines.slice(0, 5));
+    // Paste detected
 
     // Detect if this looks like a list:
     // - Multiple lines (2 or more)
@@ -194,14 +191,7 @@ export function ShoppingListView({
         !quantityPattern.test(lines[2]) && // Third line is NOT a quantity (ingredient)
         quantityPattern.test(lines[3]); // Fourth line IS a quantity
 
-      console.log("🔍 Detection results:");
-      console.log("First line:", JSON.stringify(lines[0]));
-      console.log("Second line:", JSON.stringify(lines[1]));
-      console.log("First is header:", firstLineIsHeader);
-      console.log("Second is header:", secondLineIsHeader);
-      console.log("Has alternating pattern:", hasAlternatingPattern);
-      console.log("Line 0 is quantity:", quantityPattern.test(lines[0]));
-      console.log("Line 1 is quantity:", quantityPattern.test(lines[1]));
+      // Detection results computed
 
       // MOBILE FORMAT: Alternating lines with headers OR detected alternating pattern
       if ((firstLineIsHeader && secondLineIsHeader) || hasAlternatingPattern) {
@@ -209,9 +199,7 @@ export function ShoppingListView({
         const skipCount = firstLineIsHeader && secondLineIsHeader ? 2 : 0;
         const dataLines = lines.slice(skipCount);
 
-        console.log("📱 Parsing MOBILE table format (alternating lines)");
-        console.log("Skip count:", skipCount);
-        console.log("Data lines count:", dataLines.length);
+        // Parsing mobile alternating-lines format
 
         // Parse in pairs: [ingredient, quantity, ingredient, quantity, ...]
         for (let i = 0; i < dataLines.length; i += 2) {
@@ -219,9 +207,7 @@ export function ShoppingListView({
           const quantity = dataLines[i + 1]; // Next line is quantity
 
           if (ingredient && !quantityPattern.test(ingredient)) {
-            console.log(
-              `  ✓ Item ${i / 2 + 1}: "${ingredient}" → "${quantity || "no qty"}"`
-            );
+            // item parsed
             items.push({
               content: ingredient.trim(),
               quantity: quantity ? quantity.trim() : undefined,
@@ -231,7 +217,7 @@ export function ShoppingListView({
       }
       // DESKTOP FORMAT: Tab-separated with optional header row
       else if (lines.some((line) => line.includes("\t"))) {
-        console.log("💻 Parsing DESKTOP table format (tab-separated)");
+        // Parsing desktop tab-separated format
 
         // Skip first line if it's a header
         const startIndex = firstLineHasBothHeaders ? 1 : 0;
@@ -248,7 +234,7 @@ export function ShoppingListView({
           })
           .filter((item) => item.content.length > 0);
 
-        console.log(`  ✓ Parsed ${items.length} tab-separated items`);
+        // parsed tab-separated items
       } else {
         // Original parsing logic for other formats
         items = lines

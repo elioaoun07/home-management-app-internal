@@ -39,6 +39,7 @@ import {
   calculateIncomeExpenseSummary,
   getExpenseTransactions,
 } from "@/lib/utils/incomeExpense";
+import { getTransactionDisplayAmount } from "@/lib/utils/splitBill";
 import { useQueryClient } from "@tanstack/react-query";
 import { differenceInDays, format, getDay, parseISO, subYears } from "date-fns";
 import {
@@ -85,6 +86,15 @@ type Transaction = {
   user_theme?: string;
   user_id?: string;
   is_owner?: boolean;
+  /** True if current user is the collaborator on a completed split transaction */
+  is_collaborator?: boolean;
+  // Split bill fields
+  split_requested?: boolean;
+  collaborator_id?: string;
+  collaborator_amount?: number;
+  collaborator_description?: string;
+  split_completed_at?: string;
+  total_amount?: number;
 };
 
 type Props = {
@@ -150,20 +160,33 @@ const WebDashboard = memo(function WebDashboard({
 
   // ==================== OWNERSHIP FILTERED TRANSACTIONS ====================
   // Apply ownership filter FIRST before any other processing
+  // For split bills: "mine" includes transactions where user is owner OR collaborator
+  // "partner" shows transactions where user is neither owner nor collaborator
   const ownershipFilteredTransactions = useMemo(() => {
     if (ownershipFilter === "all") return transactions;
     if (ownershipFilter === "mine")
-      return transactions.filter((t) => t.is_owner === true);
-    return transactions.filter((t) => t.is_owner === false); // partner
+      return transactions.filter(
+        (t) => t.is_owner === true || t.is_collaborator === true
+      );
+    // Partner filter should include:
+    // 1. Transactions owned by partner (!is_owner)
+    // 2. Transactions owned by me but split with partner (is_owner && split_completed_at)
+    return transactions.filter(
+      (t) =>
+        t.is_owner === false || (t.is_owner === true && !!t.split_completed_at)
+    );
   }, [transactions, ownershipFilter]);
 
   // ==================== INCOME VS EXPENSE ====================
   const incomeExpenseSummary = useMemo(() => {
-    return calculateIncomeExpenseSummary(
-      ownershipFilteredTransactions,
-      accounts
-    );
-  }, [ownershipFilteredTransactions, accounts]);
+    // Map transactions to use the correct display amount for the summary calculation
+    const mappedTxs = ownershipFilteredTransactions.map((t) => ({
+      ...t,
+      amount: getTransactionDisplayAmount(t, ownershipFilter),
+    }));
+
+    return calculateIncomeExpenseSummary(mappedTxs, accounts);
+  }, [ownershipFilteredTransactions, accounts, ownershipFilter]);
 
   const savingsRate = useMemo(() => {
     if (incomeExpenseSummary.totalIncome === 0) return 0;
@@ -221,8 +244,11 @@ const WebDashboard = memo(function WebDashboard({
           new Date(a.inserted_at).getTime() - new Date(b.inserted_at).getTime();
       else if (sortField === "date")
         comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
-      else if (sortField === "amount") comparison = a.amount - b.amount;
-      else if (sortField === "category")
+      else if (sortField === "amount") {
+        const amountA = getTransactionDisplayAmount(a, ownershipFilter);
+        const amountB = getTransactionDisplayAmount(b, ownershipFilter);
+        comparison = amountA - amountB;
+      } else if (sortField === "category")
         comparison = (a.category || "").localeCompare(b.category || "");
       return sortOrder === "asc" ? comparison : -comparison;
     });
@@ -233,18 +259,35 @@ const WebDashboard = memo(function WebDashboard({
     filterAccount,
     sortField,
     sortOrder,
+    ownershipFilter,
   ]);
+
+  // Map transactions to use display amount for analytics that rely on t.amount
+  const mappedFilteredTransactions = useMemo(() => {
+    return filteredTransactions.map((t) => ({
+      ...t,
+      amount: getTransactionDisplayAmount(t, ownershipFilter),
+    }));
+  }, [filteredTransactions, ownershipFilter]);
 
   // ==================== ADVANCED ANALYTICS ====================
 
+  // Helper function to get the correct display amount for a transaction based on filter
+  // Now imported from @/lib/utils/splitBill
+  // const getTransactionDisplayAmount = (t: Transaction, filter: OwnershipFilter): number => { ... }
+
   const stats = useMemo(() => {
-    const total = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
+    const total = filteredTransactions.reduce(
+      (sum, t) => sum + getTransactionDisplayAmount(t, ownershipFilter),
+      0
+    );
     const defaultColor = themeClasses.defaultAccentColor;
     const byCategory = filteredTransactions.reduce(
       (acc, t) => {
         const cat = t.category || "Uncategorized";
+        const displayAmount = getTransactionDisplayAmount(t, ownershipFilter);
         acc[cat] = {
-          amount: (acc[cat]?.amount || 0) + t.amount,
+          amount: (acc[cat]?.amount || 0) + displayAmount,
           color: t.category_color || defaultColor,
           count: (acc[cat]?.count || 0) + 1,
         };
@@ -280,6 +323,7 @@ const WebDashboard = memo(function WebDashboard({
     startDate,
     endDate,
     themeClasses.defaultAccentColor,
+    ownershipFilter,
   ]);
 
   // SPENDING VELOCITY & BURN RATE
@@ -307,8 +351,14 @@ const WebDashboard = memo(function WebDashboard({
       );
     });
 
-    const last7Total = last7Days.reduce((sum, t) => sum + t.amount, 0);
-    const prev7Total = prev7Days.reduce((sum, t) => sum + t.amount, 0);
+    const last7Total = last7Days.reduce(
+      (sum, t) => sum + getTransactionDisplayAmount(t, ownershipFilter),
+      0
+    );
+    const prev7Total = prev7Days.reduce(
+      (sum, t) => sum + getTransactionDisplayAmount(t, ownershipFilter),
+      0
+    );
     const weekOverWeekChange =
       prev7Total > 0 ? ((last7Total - prev7Total) / prev7Total) * 100 : 0;
 
@@ -321,7 +371,7 @@ const WebDashboard = memo(function WebDashboard({
       prev7Total,
       weekOverWeekChange,
     };
-  }, [filteredTransactions, stats.total, startDate, endDate]);
+  }, [filteredTransactions, stats.total, startDate, endDate, ownershipFilter]);
 
   // DAY OF WEEK PATTERN
   const dayOfWeekPattern = useMemo(() => {
@@ -336,7 +386,7 @@ const WebDashboard = memo(function WebDashboard({
     };
     filteredTransactions.forEach((t) => {
       const day = getDay(parseISO(t.date));
-      byDay[day].total += t.amount;
+      byDay[day].total += getTransactionDisplayAmount(t, ownershipFilter);
       byDay[day].count += 1;
     });
     const maxTotal = Math.max(...Object.values(byDay).map((d) => d.total), 1);
@@ -352,24 +402,35 @@ const WebDashboard = memo(function WebDashboard({
       peakDay: { day: Number(peakDay[0]), ...peakDay[1] },
       lowDay: { day: Number(lowDay[0]), ...lowDay[1] },
     };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, ownershipFilter]);
 
   // ANOMALIES
   const anomalies = useMemo(() => {
     const avgAmount = stats.total / Math.max(1, stats.count);
     const stdDev = Math.sqrt(
       filteredTransactions.reduce(
-        (sum, t) => sum + Math.pow(t.amount - avgAmount, 2),
+        (sum, t) =>
+          sum +
+          Math.pow(
+            getTransactionDisplayAmount(t, ownershipFilter) - avgAmount,
+            2
+          ),
         0
       ) / Math.max(1, stats.count)
     );
     const threshold = avgAmount + stdDev * 2;
     const unusualTransactions = filteredTransactions
-      .filter((t) => t.amount > threshold)
-      .sort((a, b) => b.amount - a.amount)
+      .filter(
+        (t) => getTransactionDisplayAmount(t, ownershipFilter) > threshold
+      )
+      .sort(
+        (a, b) =>
+          getTransactionDisplayAmount(b, ownershipFilter) -
+          getTransactionDisplayAmount(a, ownershipFilter)
+      )
       .slice(0, 5);
     return { unusualTransactions, threshold, avgAmount };
-  }, [filteredTransactions, stats]);
+  }, [filteredTransactions, stats, ownershipFilter]);
 
   // CATEGORY TRENDS
   const categoryTrends = useMemo(() => {
@@ -383,8 +444,10 @@ const WebDashboard = memo(function WebDashboard({
     filteredTransactions.forEach((t) => {
       const date = parseISO(t.date);
       const cat = t.category || "Uncategorized";
-      if (date < midPoint) firstHalf[cat] = (firstHalf[cat] || 0) + t.amount;
-      else secondHalf[cat] = (secondHalf[cat] || 0) + t.amount;
+      const displayAmount = getTransactionDisplayAmount(t, ownershipFilter);
+      if (date < midPoint)
+        firstHalf[cat] = (firstHalf[cat] || 0) + displayAmount;
+      else secondHalf[cat] = (secondHalf[cat] || 0) + displayAmount;
     });
     const trends = Object.keys(stats.byCategory).map((cat) => {
       const first = firstHalf[cat] || 0;
@@ -456,32 +519,32 @@ const WebDashboard = memo(function WebDashboard({
 
   // Month over Month
   const monthOverMonth = useMemo(
-    () => getMonthOverMonth(filteredTransactions),
-    [filteredTransactions]
+    () => getMonthOverMonth(mappedFilteredTransactions),
+    [mappedFilteredTransactions]
   );
 
   // Year over Year
   const yearOverYear = useMemo(
-    () => getYearOverYear(filteredTransactions),
-    [filteredTransactions]
+    () => getYearOverYear(mappedFilteredTransactions),
+    [mappedFilteredTransactions]
   );
 
   // Same Month Last Year (Nov 2025 vs Nov 2024)
   const sameMonthLastYear = useMemo(
-    () => getSameMonthLastYear(filteredTransactions),
-    [filteredTransactions]
+    () => getSameMonthLastYear(mappedFilteredTransactions),
+    [mappedFilteredTransactions]
   );
 
   // Season comparison
   const seasonComparison = useMemo(
-    () => getCurrentSeasonComparison(filteredTransactions),
-    [filteredTransactions]
+    () => getCurrentSeasonComparison(mappedFilteredTransactions),
+    [mappedFilteredTransactions]
   );
 
   // Seasonal analysis
   const seasonalAnalysis = useMemo(
-    () => getSeasonalAnalysis(filteredTransactions),
-    [filteredTransactions]
+    () => getSeasonalAnalysis(mappedFilteredTransactions),
+    [mappedFilteredTransactions]
   );
 
   // ==================== TIME SERIES DATA ====================
@@ -555,10 +618,28 @@ const WebDashboard = memo(function WebDashboard({
 
   if (categoryDetail) {
     // Apply all filters to category detail view (ownership + account type + category)
-    const categoryTxs = typeFilteredTransactions.filter(
+    let categoryTxs = typeFilteredTransactions.filter(
       (t) => t.category === categoryDetail
     );
-    const totalAmount = categoryTxs.reduce((sum, t) => sum + t.amount, 0);
+    // Also apply ownership filter
+    if (ownershipFilter === "mine") {
+      categoryTxs = categoryTxs.filter(
+        (t) => t.is_owner === true || t.is_collaborator === true
+      );
+    } else if (ownershipFilter === "partner") {
+      // Partner filter should include:
+      // 1. Transactions owned by partner (!is_owner)
+      // 2. Transactions owned by me but split with partner (is_owner && split_completed_at)
+      categoryTxs = categoryTxs.filter(
+        (t) =>
+          t.is_owner === false ||
+          (t.is_owner === true && !!t.split_completed_at)
+      );
+    }
+    const totalAmount = categoryTxs.reduce(
+      (sum, t) => sum + getTransactionDisplayAmount(t, ownershipFilter),
+      0
+    );
     const categoryColor = categoryTxs.find(
       (t) => t.category_color
     )?.category_color;
@@ -569,6 +650,7 @@ const WebDashboard = memo(function WebDashboard({
           categoryColor={categoryColor}
           transactions={categoryTxs}
           totalAmount={totalAmount}
+          ownershipFilter={ownershipFilter}
           onBack={() => setCategoryDetail(null)}
           onTransactionClick={setSelectedTransaction}
         />
@@ -1545,6 +1627,8 @@ const WebDashboard = memo(function WebDashboard({
           <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin">
             {filteredTransactions.slice(0, 20).map((tx) => {
               const isPartnerTx = tx.is_owner === false;
+              const isSplitCompleted =
+                tx.split_requested && tx.split_completed_at;
               const iconColor = isPartnerTx
                 ? themeClasses.isPink
                   ? "text-cyan-400"
@@ -1555,14 +1639,58 @@ const WebDashboard = memo(function WebDashboard({
               // Partner transactions get opposite theme color border
               // If I'm blue theme: partner's transactions show pink border
               // If I'm pink theme: partner's transactions show cyan/blue border
-              const partnerBorderStyle = isPartnerTx
+              // Split completed transactions get a dual gradient border
+              const partnerBorderStyle = isSplitCompleted
                 ? {
-                    border: `1px solid ${themeClasses.isPink ? "rgba(6, 182, 212, 0.5)" : "rgba(236, 72, 153, 0.5)"}`,
-                    boxShadow: themeClasses.isPink
-                      ? "0 0 8px rgba(6, 182, 212, 0.15)"
-                      : "0 0 8px rgba(236, 72, 153, 0.15)",
+                    borderLeft: "3px solid transparent",
+                    backgroundImage:
+                      "linear-gradient(#1a2942, #1a2942), linear-gradient(to bottom, #3b82f6 0%, #3b82f6 50%, #ec4899 50%, #ec4899 100%)",
+                    backgroundOrigin: "border-box",
+                    backgroundClip: "padding-box, border-box",
+                    boxShadow:
+                      "0 0 8px rgba(59, 130, 246, 0.15), 0 0 8px rgba(236, 72, 153, 0.15)",
                   }
-                : {};
+                : isPartnerTx
+                  ? {
+                      border: `1px solid ${themeClasses.isPink ? "rgba(6, 182, 212, 0.5)" : "rgba(236, 72, 153, 0.5)"}`,
+                      boxShadow: themeClasses.isPink
+                        ? "0 0 8px rgba(6, 182, 212, 0.15)"
+                        : "0 0 8px rgba(236, 72, 153, 0.15)",
+                    }
+                  : {};
+
+              // Calculate display amount based on ownership filter
+              const displayAmount =
+                isSplitCompleted && tx.collaborator_amount
+                  ? ownershipFilter === "all"
+                    ? tx.amount + tx.collaborator_amount // Show total for "all"
+                    : ownershipFilter === "mine" && tx.is_owner
+                      ? tx.amount // Show my amount for "mine"
+                      : ownershipFilter === "partner" && !tx.is_owner
+                        ? tx.collaborator_amount // Show partner's amount for "partner"
+                        : tx.amount
+                  : tx.amount;
+
+              // Get display description based on ownership filter
+              const getDisplayDescription = () => {
+                if (!isSplitCompleted) return tx.description;
+
+                if (ownershipFilter === "all") {
+                  // Show both descriptions
+                  const parts = [];
+                  if (tx.description) parts.push(tx.description);
+                  if (tx.collaborator_description)
+                    parts.push(tx.collaborator_description);
+                  return parts.join(" | ");
+                } else if (ownershipFilter === "mine" && tx.is_owner) {
+                  return tx.description;
+                } else if (ownershipFilter === "partner" && !tx.is_owner) {
+                  return tx.collaborator_description;
+                }
+                return tx.description;
+              };
+
+              const displayDescription = getDisplayDescription();
 
               return (
                 <div
@@ -1578,6 +1706,13 @@ const WebDashboard = memo(function WebDashboard({
                   onMouseLeave={() => setHoveredTransaction(null)}
                   onClick={() => setSelectedTransaction(tx)}
                 >
+                  {/* Pending split indicator */}
+                  {tx.split_requested && !tx.split_completed_at && (
+                    <div
+                      className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"
+                      title="Awaiting partner's portion"
+                    />
+                  )}
                   {(() => {
                     const Icon = getCategoryIcon(tx.category || undefined);
                     return (
@@ -1593,15 +1728,22 @@ const WebDashboard = memo(function WebDashboard({
                     );
                   })()}
                   <div className="flex-1 min-w-0">
-                    <p
-                      className="text-xs font-medium truncate"
-                      style={{ color: tx.category_color || "#e2e8f0" }}
-                    >
-                      {tx.category || "Uncategorized"}
-                    </p>
+                    <div className="flex items-center gap-1">
+                      <p
+                        className="text-xs font-medium truncate"
+                        style={{ color: tx.category_color || "#e2e8f0" }}
+                      >
+                        {tx.category || "Uncategorized"}
+                      </p>
+                      {isSplitCompleted && (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                          Split
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[10px] text-slate-500 truncate">
                       {format(parseISO(tx.date), "MMM d")}
-                      {tx.description && ` • ${tx.description}`}
+                      {displayDescription && ` • ${displayDescription}`}
                     </p>
                   </div>
                   {isHovered && (
@@ -1626,9 +1768,25 @@ const WebDashboard = memo(function WebDashboard({
                       </button>
                     </div>
                   )}
-                  <p className={cn("text-sm font-bold", themeClasses.text)}>
-                    ${tx.amount.toFixed(2)}
-                  </p>
+                  <div className="text-right">
+                    <p className={cn("text-sm font-bold", themeClasses.text)}>
+                      ${displayAmount.toFixed(2)}
+                    </p>
+                    {/* Show split breakdown only when viewing "all" */}
+                    {isSplitCompleted &&
+                      tx.collaborator_amount &&
+                      ownershipFilter === "all" && (
+                        <p className="text-[9px] text-slate-500">
+                          <span className="text-blue-400">
+                            ${tx.amount.toFixed(0)}
+                          </span>
+                          <span className="mx-0.5">+</span>
+                          <span className="text-pink-400">
+                            ${tx.collaborator_amount.toFixed(0)}
+                          </span>
+                        </p>
+                      )}
+                  </div>
                 </div>
               );
             })}

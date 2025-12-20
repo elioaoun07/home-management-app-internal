@@ -25,6 +25,7 @@ import {
   calculateIncomeExpenseSummary,
   getExpenseTransactions,
 } from "@/lib/utils/incomeExpense";
+import { getTransactionDisplayAmount } from "@/lib/utils/splitBill";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   endOfMonth,
@@ -120,6 +121,15 @@ type Transaction = {
   user_theme?: string;
   user_id?: string;
   is_owner?: boolean;
+  // True if current user is the collaborator on a split transaction
+  is_collaborator?: boolean;
+  // Split bill fields
+  split_requested?: boolean;
+  collaborator_id?: string;
+  collaborator_amount?: number;
+  collaborator_description?: string;
+  split_completed_at?: string;
+  total_amount?: number;
 };
 
 type Props = {
@@ -183,13 +193,30 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     let filteredTxs = [...transactions];
 
     // Apply ownership filter
+    // For split bills: "mine" includes transactions where user is owner OR collaborator
+    // "partner" shows transactions where user is neither owner nor collaborator
     if (ownershipFilter === "mine") {
-      filteredTxs = filteredTxs.filter((t) => t.is_owner === true);
+      filteredTxs = filteredTxs.filter(
+        (t) => t.is_owner === true || t.is_collaborator === true
+      );
     } else if (ownershipFilter === "partner") {
-      filteredTxs = filteredTxs.filter((t) => t.is_owner === false);
+      // Partner filter should include:
+      // 1. Transactions owned by partner (!is_owner)
+      // 2. Transactions owned by me but split with partner (is_owner && split_completed_at)
+      filteredTxs = filteredTxs.filter(
+        (t) =>
+          t.is_owner === false ||
+          (t.is_owner === true && !!t.split_completed_at)
+      );
     }
 
-    return calculateIncomeExpenseSummary(filteredTxs, accounts);
+    // Map transactions to use the correct display amount for the summary calculation
+    const mappedTxs = filteredTxs.map((t) => ({
+      ...t,
+      amount: getTransactionDisplayAmount(t, ownershipFilter),
+    }));
+
+    return calculateIncomeExpenseSummary(mappedTxs, accounts);
   }, [transactions, accounts, ownershipFilter]);
 
   // Filter transactions based on account type FIRST
@@ -213,10 +240,21 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     let filtered = [...typeFilteredTransactions];
 
     // Ownership filter
+    // For split bills: "mine" includes transactions where user is owner OR collaborator
+    // "partner" shows transactions where user is neither owner nor collaborator
     if (ownershipFilter === "mine") {
-      filtered = filtered.filter((t) => t.is_owner === true);
+      filtered = filtered.filter(
+        (t) => t.is_owner === true || t.is_collaborator === true
+      );
     } else if (ownershipFilter === "partner") {
-      filtered = filtered.filter((t) => t.is_owner === false);
+      // Partner filter should include:
+      // 1. Transactions owned by partner (!is_owner)
+      // 2. Transactions owned by me but split with partner (is_owner && split_completed_at)
+      filtered = filtered.filter(
+        (t) =>
+          t.is_owner === false ||
+          (t.is_owner === true && !!t.split_completed_at)
+      );
     }
 
     if (filterCategory) {
@@ -255,13 +293,17 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
 
   // Calculate summary stats from FILTERED transactions
   const stats = useMemo(() => {
-    const total = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
+    const total = filteredTransactions.reduce(
+      (sum, t) => sum + getTransactionDisplayAmount(t, ownershipFilter),
+      0
+    );
     const defaultColor = themeClasses.defaultAccentColor;
     const byCategory = filteredTransactions.reduce(
       (acc, t) => {
         const cat = t.category || "Uncategorized";
+        const displayAmount = getTransactionDisplayAmount(t, ownershipFilter);
         acc[cat] = {
-          amount: (acc[cat]?.amount || 0) + t.amount,
+          amount: (acc[cat]?.amount || 0) + displayAmount,
           color: t.category_color || defaultColor,
         };
         return acc;
@@ -299,6 +341,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     startDate,
     endDate,
     themeClasses.defaultAccentColor,
+    ownershipFilter,
   ]);
 
   const categories = useMemo(() => {
@@ -377,12 +420,31 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   };
 
   const getCategoryTransactions = (categoryName: string) => {
-    return transactions.filter((t) => t.category === categoryName);
+    // Apply same ownership filter as the main list
+    let filtered = transactions.filter((t) => t.category === categoryName);
+    if (ownershipFilter === "mine") {
+      filtered = filtered.filter(
+        (t) => t.is_owner === true || t.is_collaborator === true
+      );
+    } else if (ownershipFilter === "partner") {
+      // Partner filter should include:
+      // 1. Transactions owned by partner (!is_owner)
+      // 2. Transactions owned by me but split with partner (is_owner && split_completed_at)
+      filtered = filtered.filter(
+        (t) =>
+          t.is_owner === false ||
+          (t.is_owner === true && !!t.split_completed_at)
+      );
+    }
+    return filtered;
   };
 
   if (categoryDetail) {
     const categoryTxs = getCategoryTransactions(categoryDetail);
-    const totalAmount = categoryTxs.reduce((sum, t) => sum + t.amount, 0);
+    const totalAmount = categoryTxs.reduce(
+      (sum, t) => sum + getTransactionDisplayAmount(t, ownershipFilter),
+      0
+    );
     // Get category color from the first transaction with this category
     const categoryColor = categoryTxs.find(
       (t) => t.category_color
@@ -394,6 +456,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
         categoryColor={categoryColor}
         transactions={categoryTxs}
         totalAmount={totalAmount}
+        ownershipFilter={ownershipFilter}
         onBack={() => setCategoryDetail(null)}
         onTransactionClick={setSelectedTransaction}
       />
@@ -1026,7 +1089,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                           (tx as any)._isPending && "opacity-70"
                         )}
                       >
-                        ${tx.amount.toFixed(0)}
+                        $
+                        {getTransactionDisplayAmount(
+                          tx,
+                          ownershipFilter
+                        ).toFixed(0)}
                       </p>
                     </button>
                   );
@@ -1091,6 +1158,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     onDelete={handleDelete}
                     onClick={setSelectedTransaction}
                     currentUserId={currentUserId}
+                    ownershipFilter={ownershipFilter}
                   />
                 ))}
               </>

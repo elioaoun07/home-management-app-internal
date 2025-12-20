@@ -9,6 +9,11 @@ import { Card } from "@/components/ui/card";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
+import {
+  getTransactionDisplayAmount,
+  getTransactionDisplayDescription,
+  type OwnershipFilter,
+} from "@/lib/utils/splitBill";
 import { format } from "date-fns";
 import { useMemo, useState } from "react";
 
@@ -24,6 +29,12 @@ type Transaction = {
   account_name?: string;
   category_color?: string;
   is_owner?: boolean;
+  // Split bill fields
+  is_collaborator?: boolean;
+  split_requested?: boolean;
+  collaborator_amount?: number;
+  collaborator_description?: string;
+  split_completed_at?: string;
 };
 
 type Props = {
@@ -31,6 +42,7 @@ type Props = {
   categoryColor?: string;
   transactions: Transaction[];
   totalAmount: number;
+  ownershipFilter?: OwnershipFilter;
   onBack: () => void;
   onTransactionClick: (tx: Transaction) => void;
 };
@@ -40,6 +52,7 @@ export default function CategoryDetailView({
   categoryColor,
   transactions,
   totalAmount,
+  ownershipFilter = "both",
   onBack,
   onTransactionClick,
 }: Props) {
@@ -63,7 +76,8 @@ export default function CategoryDetailView({
     const bySubcategory = transactions.reduce(
       (acc, t) => {
         const sub = t.subcategory || "Other";
-        acc[sub] = (acc[sub] || 0) + t.amount;
+        acc[sub] =
+          (acc[sub] || 0) + getTransactionDisplayAmount(t, ownershipFilter);
         return acc;
       },
       {} as Record<string, number>
@@ -72,7 +86,8 @@ export default function CategoryDetailView({
     const byAccount = transactions.reduce(
       (acc, t) => {
         const acct = t.account_name || "Unknown";
-        acc[acct] = (acc[acct] || 0) + t.amount;
+        acc[acct] =
+          (acc[acct] || 0) + getTransactionDisplayAmount(t, ownershipFilter);
         return acc;
       },
       {} as Record<string, number>
@@ -89,7 +104,7 @@ export default function CategoryDetailView({
       count: transactions.length,
       recent: sortedByDate.slice(0, 5),
     };
-  }, [transactions, totalAmount]);
+  }, [transactions, totalAmount, ownershipFilter]);
 
   return (
     <div
@@ -339,8 +354,20 @@ export default function CategoryDetailView({
                   new Date(b.date).getTime() - new Date(a.date).getTime()
               )
               .map((tx, index) => {
+                // Get the display amount and description based on ownership filter
+                const displayAmount = getTransactionDisplayAmount(
+                  tx,
+                  ownershipFilter
+                );
+                const displayDescription = getTransactionDisplayDescription(
+                  tx,
+                  ownershipFilter
+                );
+
                 // Owner-based border: current user's theme color if owner, opposite if partner
-                const isPartner = tx.is_owner === false;
+                // For split transactions where I'm the collaborator, show as "mine"
+                const isPartner =
+                  tx.is_owner === false && tx.is_collaborator !== true;
                 const ownerBorderColor = isPartner
                   ? themeClasses.isPink
                     ? "rgba(6, 182, 212, 0.4)" // Cyan for partner in pink theme
@@ -356,6 +383,10 @@ export default function CategoryDetailView({
                     ? "rgba(236, 72, 153, 0.2)"
                     : "rgba(6, 182, 212, 0.2)";
 
+                // For split transactions in "both" filter, show dual-colored border
+                const isSplitBoth =
+                  tx.split_completed_at && ownershipFilter === "both";
+
                 return (
                   <div
                     key={tx.id}
@@ -365,8 +396,17 @@ export default function CategoryDetailView({
                     )}
                     style={{
                       animationDelay: `${0.8 + index * 0.05}s`,
-                      borderColor: ownerBorderColor,
-                      boxShadow: `0 0 10px ${ownerGlowColor}`,
+                      borderColor: isSplitBoth ? undefined : ownerBorderColor,
+                      boxShadow: isSplitBoth
+                        ? undefined
+                        : `0 0 10px ${ownerGlowColor}`,
+                      ...(isSplitBoth
+                        ? {
+                            borderImage: `linear-gradient(90deg, rgba(236, 72, 153, 0.6), rgba(6, 182, 212, 0.6)) 1`,
+                            borderStyle: "solid",
+                            borderWidth: "1px",
+                          }
+                        : {}),
                     }}
                   >
                     <div className="flex-1 min-w-0">
@@ -378,9 +418,9 @@ export default function CategoryDetailView({
                         <span>•</span>
                         <span>{tx.account_name}</span>
                       </div>
-                      {tx.description && (
+                      {displayDescription && (
                         <p className="text-xs mt-1 truncate opacity-70 text-[#94a3b8]">
-                          {tx.description}
+                          {displayDescription}
                         </p>
                       )}
                     </div>
@@ -391,7 +431,7 @@ export default function CategoryDetailView({
                           themeClasses.text
                         )}
                       >
-                        ${tx.amount.toFixed(2)}
+                        ${displayAmount.toFixed(2)}
                       </p>
                       <div
                         className={cn(
