@@ -291,7 +291,46 @@ export function ShoppingListView({
     // If it's not a list (single line, no markers), let the default paste behavior happen
   };
 
-  // Toggle check state via API with instant optimistic UI
+  // Retry helper for failed operations
+  const retryWithBackoff = useCallback(
+    async (
+      operation: () => Promise<Response>,
+      maxRetries = 3,
+      onError?: () => void
+    ): Promise<boolean> => {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const res = await operation();
+          if (res.ok) return true;
+
+          // Don't retry on client errors (4xx) except 429 (rate limit)
+          if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+            onError?.();
+            return false;
+          }
+
+          // Server error or rate limit - retry
+          if (attempt < maxRetries) {
+            const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+            await new Promise((r) => setTimeout(r, delay));
+          }
+        } catch (error) {
+          // Network error - retry
+          if (attempt < maxRetries) {
+            const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+            await new Promise((r) => setTimeout(r, delay));
+          }
+        }
+      }
+
+      // All retries failed
+      onError?.();
+      return false;
+    },
+    []
+  );
+
+  // Toggle check state via API with instant optimistic UI and retry logic
   const toggleCheck = useCallback(
     async (itemId: string) => {
       const queryKey = ["hub", "messages", threadId];
@@ -309,6 +348,8 @@ export function ShoppingListView({
       );
       const currentMessage = currentData?.messages.find((m) => m.id === itemId);
       const shouldCheck = !currentMessage?.checked_at;
+      const previousCheckedAt = currentMessage?.checked_at;
+      const previousCheckedBy = currentMessage?.checked_by;
 
       // Optimistically update UI immediately - no delay
       queryClient.setQueryData<{ messages: HubMessage[] }>(queryKey, (old) => {
@@ -327,56 +368,59 @@ export function ShoppingListView({
         };
       });
 
-      try {
-        // Fire and forget - don't await or refetch
-        fetch("/api/hub/messages", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "toggle_check",
-            message_id: itemId,
-          }),
-        }).then((res) => {
-          if (!res.ok) {
-            console.error("Failed to toggle check");
-            // Silently rollback on error
-            queryClient.setQueryData<{ messages: HubMessage[] }>(
-              queryKey,
-              (old) => {
-                if (!old) return old;
-                return {
-                  ...old,
-                  messages: old.messages.map((msg) =>
-                    msg.id === itemId
-                      ? {
-                          ...msg,
-                          checked_at: shouldCheck
-                            ? null
-                            : new Date().toISOString(),
-                          checked_by: shouldCheck ? null : currentUserId,
-                        }
-                      : msg
-                  ),
-                };
-              }
-            );
+      // Rollback function
+      const rollback = () => {
+        queryClient.setQueryData<{ messages: HubMessage[] }>(
+          queryKey,
+          (old) => {
+            if (!old) return old;
+            return {
+              ...old,
+              messages: old.messages.map((msg) =>
+                msg.id === itemId
+                  ? {
+                      ...msg,
+                      checked_at: previousCheckedAt,
+                      checked_by: previousCheckedBy,
+                    }
+                  : msg
+              ),
+            };
           }
+        );
+        toast.error("Failed to update item. Please try again.", {
+          duration: 2000,
         });
-      } finally {
-        // Clear pending toggle after a short delay
-        setTimeout(() => {
-          setPendingToggles((prev) => {
-            const newMap = new Map(prev);
-            const count = newMap.get(itemId) || 0;
-            if (count <= 1) {
-              newMap.delete(itemId);
-            } else {
-              newMap.set(itemId, count - 1);
-            }
-            return newMap;
-          });
-        }, 100);
-      }
+      };
+
+      // Perform the API call with retry logic
+      const success = await retryWithBackoff(
+        () =>
+          fetch("/api/hub/messages", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "toggle_check",
+              message_id: itemId,
+            }),
+          }),
+        3,
+        rollback
+      );
+
+      // Clear pending toggle after completion
+      setPendingToggles((prev) => {
+        const newMap = new Map(prev);
+        const count = newMap.get(itemId) || 0;
+        if (count <= 1) {
+          newMap.delete(itemId);
+        } else {
+          newMap.set(itemId, count - 1);
+        }
+        return newMap;
+      });
+
+      return success;
     },
     [queryClient, threadId, currentUserId]
   );

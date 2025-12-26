@@ -15,6 +15,7 @@ import {
   StarIcon,
 } from "@/components/icons/FuturisticIcons";
 import { Card } from "@/components/ui/card";
+import { SyncIndicator } from "@/components/ui/SyncIndicator";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
@@ -572,6 +573,9 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               />
             )}
           </button>
+
+          {/* Sync Status Indicator */}
+          <SyncIndicator compact />
         </div>
 
         {/* Expandable Filters Panel */}

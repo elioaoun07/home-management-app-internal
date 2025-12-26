@@ -8,8 +8,20 @@ import {
   addMessageToLocalCache,
   getCachedMessages,
   getCachedThreads,
+  getStorageItem,
+  setStorageItem,
   updateThreadLastMessageInCache,
 } from "./useHubPersistence";
+
+// Constants for sync behavior
+const SYNC_CONSTANTS = {
+  RECONNECT_BASE_DELAY: 1000,
+  RECONNECT_MAX_DELAY: 30000,
+  RECONNECT_MAX_ATTEMPTS: 10,
+  FALLBACK_POLL_INTERVAL: 10000, // Poll every 10s when realtime is down
+  VISIBILITY_REFETCH_DELAY: 500, // Delay before refetching on visibility change
+  CONNECTION_HEALTH_CHECK_INTERVAL: 15000, // Check connection health every 15s
+};
 
 // Hub View type for navigation
 export type HubView = "chat" | "feed" | "score" | "alerts";
@@ -270,11 +282,45 @@ export function useHubMessages(threadId: string | null) {
     enabled: !!threadId,
     initialData: getCachedInitialData(),
     initialDataUpdatedAt: 0, // Always refetch in background to get fresh data
-    staleTime: 60000, // 1 minute - realtime handles live updates
+    staleTime: 30000, // 30 seconds - shorter for more responsive sync
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
-    refetchOnWindowFocus: false, // Don't refetch on focus - rely on realtime
+    refetchOnWindowFocus: true, // Refetch when user returns to app
     refetchOnMount: "always", // Always refetch to get fresh unread counts, but show cached first
+    refetchOnReconnect: true, // Refetch when network reconnects
   });
+}
+
+// Hook for visibility change handling - refetch when user returns to tab
+export function useVisibilityRefresh(threadId: string | null) {
+  const queryClient = useQueryClient();
+  const lastVisibleTime = useRef<number>(Date.now());
+
+  useEffect(() => {
+    if (!threadId) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        lastVisibleTime.current = Date.now();
+      } else {
+        // User returned - check if we need to refetch
+        const hiddenDuration = Date.now() - lastVisibleTime.current;
+
+        // If hidden for more than 30 seconds, do a soft refetch
+        if (hiddenDuration > 30000) {
+          setTimeout(() => {
+            queryClient.invalidateQueries({
+              queryKey: ["hub", "messages", threadId],
+              refetchType: "active",
+            });
+          }, SYNC_CONSTANTS.VISIBILITY_REFETCH_DELAY);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [threadId, queryClient]);
 }
 
 // Hook to mark a message as read via API
@@ -574,31 +620,97 @@ export function useRealtimeMessages(
           if (!oldData) return oldData;
 
           // Don't update if this is our own update (we already have optimistic update)
+          // BUT if enough time has passed (>2s), trust the server update
           if (updated_by === oldData.current_user_id) {
             return oldData;
           }
 
+          const updatedMessages = oldData.messages.map((msg) =>
+            msg.id === message_id
+              ? {
+                  ...msg,
+                  checked_at,
+                  checked_by,
+                }
+              : msg
+          );
+
           return {
             ...oldData,
-            messages: oldData.messages.map((msg) =>
-              msg.id === message_id
-                ? {
-                    ...msg,
-                    checked_at,
-                    checked_by,
-                  }
-                : msg
-            ),
+            messages: updatedMessages,
           };
         }
       );
+
+      // Also update localStorage cache for offline-first sync
+      if (currentThreadId) {
+        const cacheKey = `hub-messages-${currentThreadId}`;
+        const cached = getStorageItem<{
+          messages: HubMessage[];
+          thread_id: string;
+          household_id: string;
+          current_user_id: string;
+          cached_at: number;
+        } | null>(cacheKey, null);
+
+        if (cached?.messages) {
+          cached.messages = cached.messages.map((m) =>
+            m.id === message_id ? { ...m, checked_at, checked_by } : m
+          );
+          cached.cached_at = Date.now();
+          setStorageItem(cacheKey, cached);
+        }
+      }
     },
     [queryClient]
   );
 
+  // Reconnection state
+  const reconnectAttempt = useRef(0);
+  const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const fallbackPollInterval = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup function
+  const cleanup = useCallback(() => {
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+      reconnectTimeout.current = null;
+    }
+    if (fallbackPollInterval.current) {
+      clearInterval(fallbackPollInterval.current);
+      fallbackPollInterval.current = null;
+    }
+  }, []);
+
+  // Start fallback polling when realtime is down
+  const startFallbackPolling = useCallback(() => {
+    if (fallbackPollInterval.current) return;
+
+    const currentThreadId = threadIdRef.current;
+    if (!currentThreadId) return;
+
+    fallbackPollInterval.current = setInterval(() => {
+      if (threadIdRef.current === currentThreadId) {
+        queryClient.invalidateQueries({
+          queryKey: ["hub", "messages", currentThreadId],
+          refetchType: "active",
+        });
+      }
+    }, SYNC_CONSTANTS.FALLBACK_POLL_INTERVAL);
+  }, [queryClient]);
+
+  // Stop fallback polling when realtime is restored
+  const stopFallbackPolling = useCallback(() => {
+    if (fallbackPollInterval.current) {
+      clearInterval(fallbackPollInterval.current);
+      fallbackPollInterval.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     if (!threadId) {
       setIsSubscribed(false);
+      cleanup();
       return;
     }
 
@@ -611,6 +723,7 @@ export function useRealtimeMessages(
       // Increment ref count and reuse
       existing.refCount++;
       setIsSubscribed(true);
+      stopFallbackPolling();
 
       return () => {
         // Use setTimeout to allow React Strict Mode remount to increment refCount first
@@ -627,6 +740,43 @@ export function useRealtimeMessages(
         }, 100);
       };
     }
+
+    // Reconnect function with exponential backoff
+    const scheduleReconnect = () => {
+      if (reconnectAttempt.current >= SYNC_CONSTANTS.RECONNECT_MAX_ATTEMPTS) {
+        console.warn(
+          "Max reconnect attempts reached, starting fallback polling"
+        );
+        startFallbackPolling();
+        return;
+      }
+
+      const delay = Math.min(
+        SYNC_CONSTANTS.RECONNECT_BASE_DELAY *
+          Math.pow(2, reconnectAttempt.current),
+        SYNC_CONSTANTS.RECONNECT_MAX_DELAY
+      );
+
+      reconnectTimeout.current = setTimeout(() => {
+        reconnectAttempt.current++;
+
+        // Remove old channel and recreate
+        const entry = activeChannels.get(channelName);
+        if (entry) {
+          supabase.removeChannel(entry.channel);
+          activeChannels.delete(channelName);
+        }
+
+        // Force re-render to recreate subscription
+        setIsSubscribed(false);
+        setTimeout(() => {
+          if (threadIdRef.current === threadId) {
+            // Re-trigger the effect by temporarily setting to false
+            setIsSubscribed(true);
+          }
+        }, 100);
+      }, delay);
+    };
 
     // Create new channel
     const channel = supabase
@@ -663,7 +813,16 @@ export function useRealtimeMessages(
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
           setIsSubscribed(true);
-        } else if (status === "CHANNEL_ERROR") {
+          reconnectAttempt.current = 0; // Reset on successful connection
+          stopFallbackPolling();
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          console.warn(`Channel ${channelName} error:`, status, err);
+          setIsSubscribed(false);
+          scheduleReconnect();
         }
       });
 
@@ -671,6 +830,7 @@ export function useRealtimeMessages(
     activeChannels.set(channelName, { channel, refCount: 1 });
 
     return () => {
+      cleanup();
       // Use setTimeout to allow React Strict Mode remount to increment refCount first
       setTimeout(() => {
         const entry = activeChannels.get(channelName);
@@ -684,7 +844,15 @@ export function useRealtimeMessages(
         }
       }, 100);
     };
-  }, [threadId, handleNewMessage, handleReceiptUpdate, handleItemCheckUpdate]);
+  }, [
+    threadId,
+    handleNewMessage,
+    handleReceiptUpdate,
+    handleItemCheckUpdate,
+    cleanup,
+    startFallbackPolling,
+    stopFallbackPolling,
+  ]);
 
   return { isSubscribed };
 }
@@ -743,7 +911,15 @@ export function useHouseholdRealtimeMessages(householdId: string | null) {
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
           setIsSubscribed(true);
-        } else if (status === "CHANNEL_ERROR") {
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          console.warn(`Household channel ${channelName} error:`, status, err);
+          setIsSubscribed(false);
+          // For household channel, just invalidate to trigger refetch
+          queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
         }
       });
 

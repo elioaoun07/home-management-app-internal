@@ -14,6 +14,7 @@ import {
   TrophyIcon,
   XIcon,
 } from "@/components/icons/FuturisticIcons";
+import { OfflineBanner, SyncIndicator } from "@/components/ui/SyncIndicator";
 import { useTab } from "@/contexts/TabContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAccounts } from "@/features/accounts/hooks";
@@ -34,6 +35,7 @@ import {
   useSendMessage,
   useSnoozeAlert,
   useUpdateNotificationTime,
+  useVisibilityRefresh,
   type HubAlert,
   type HubChatThread,
   type HubFeedItem,
@@ -141,6 +143,9 @@ export default function HubPage() {
 
   return (
     <div className={cn("min-h-screen pb-24", themeClasses.bgPage)}>
+      {/* Offline/Error Banner - Shows when connectivity issues */}
+      <OfflineBanner />
+
       {/* Daily Pulse Header - Hide when inside a thread */}
       {!activeThreadId && (
         <div className="px-4 py-3">
@@ -1433,6 +1438,9 @@ function ThreadConversation({
   const hasScrolledToUnread = useRef(false);
   const hasProcessedUnread = useRef(false);
 
+  // Subscribe to visibility changes - refetch when user returns to tab after being away
+  useVisibilityRefresh(threadId);
+
   // Sync messages to localStorage cache when data loads
   useEffect(() => {
     if (
@@ -2280,6 +2288,15 @@ function ThreadConversation({
                   >
                     <Settings className="w-5 h-5" />
                   </button>
+                  {/* Sync Status Indicator */}
+                  <SyncIndicator
+                    compact
+                    onRefresh={() =>
+                      queryClient.invalidateQueries({
+                        queryKey: ["hub", "messages", threadId],
+                      })
+                    }
+                  />
                 </>
               )}
             </div>
