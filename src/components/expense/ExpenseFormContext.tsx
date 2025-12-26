@@ -1,10 +1,12 @@
 "use client";
 
+import { useAccounts } from "@/features/accounts/hooks";
 import {
   createContext,
   MutableRefObject,
   ReactNode,
   useContext,
+  useEffect,
   useRef,
   useState,
 } from "react";
@@ -56,6 +58,17 @@ export function ExpenseFormProvider({ children }: { children: ReactNode }) {
   const [isEditMode, setIsEditMode] = useState(false);
   const exitEditModeRef = useRef<(() => void) | null>(null);
 
+  // Get accounts to auto-select default
+  const { data: accounts = [] } = useAccounts();
+  const defaultAccount = accounts.find((a: any) => a.is_default);
+
+  // Auto-select default account when available
+  useEffect(() => {
+    if (defaultAccount && !selectedAccountId) {
+      setSelectedAccountId(defaultAccount.id);
+    }
+  }, [defaultAccount, selectedAccountId]);
+
   const applyTemplate = (template: {
     account_id: string;
     category_id?: string;
@@ -73,7 +86,9 @@ export function ExpenseFormProvider({ children }: { children: ReactNode }) {
 
   const resetForm = () => {
     setAmount("");
-    setSelectedAccountId(undefined);
+    // Keep default account selected if available
+    const newDefaultAccount = accounts.find((a: any) => a.is_default);
+    setSelectedAccountId(newDefaultAccount?.id);
     setSelectedCategoryId(undefined);
     setSelectedSubcategoryId(undefined);
     setDescription("");

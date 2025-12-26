@@ -39,6 +39,7 @@ import {
   useCategories,
   useCategoriesWithHidden,
 } from "@/features/categories/useCategoriesQuery";
+import { useLbpSettings } from "@/features/preferences/useLbpSettings";
 import {
   useSectionOrder,
   type SectionKey,
@@ -131,11 +132,20 @@ export default function MobileExpenseForm() {
   const { data: sectionOrder, isLoading: sectionOrderLoading } =
     useSectionOrder();
 
+  // Valid steps that have UI rendering
+  const VALID_STEPS: readonly Step[] = [
+    "amount",
+    "account",
+    "category",
+    "subcategory",
+  ];
+
   const stepFlow = useMemo<Step[]>(() => {
     if (!sectionOrder || sectionOrder.length === 0) {
       return ["amount", "account", "category", "subcategory"];
     }
-    return [...sectionOrder];
+    // Filter to only include valid steps that have UI
+    return sectionOrder.filter((s) => VALID_STEPS.includes(s));
   }, [sectionOrder]);
 
   // OPTIMIZED: Single API call for accounts - derive visible accounts from it
@@ -169,6 +179,10 @@ export default function MobileExpenseForm() {
   const [showNewCategoryDrawer, setShowNewCategoryDrawer] = useState(false);
   const [showNewSubcategoryDrawer, setShowNewSubcategoryDrawer] =
     useState(false);
+
+  // LBP change tracking (Lebanon dual-currency)
+  const [lbpChangeInput, setLbpChangeInput] = useState("");
+  const { lbpRate, calculateActualValue } = useLbpSettings();
 
   // Edit mode states for each section
   const [editModeAccount, setEditModeAccount] = useState(false);
@@ -538,14 +552,19 @@ export default function MobileExpenseForm() {
     }
   };
 
+  // Use a ref to ensure initialization happens exactly once
+  const hasInitializedRef = useRef(false);
+
   useEffect(() => {
-    // INSTANT INIT - Don't wait for accounts to load
-    // Set initialized immediately, accounts will populate when ready
-    if (stepFlow.length > 0) {
+    // INSTANT INIT - Wait for accounts to load so we know if there's a default account
+    // This ensures we skip the account step correctly when user has a default account
+    // Only run ONCE after accounts are loaded - use ref to guarantee single execution
+    if (stepFlow.length > 0 && !hasInitializedRef.current && !accountsLoading) {
+      hasInitializedRef.current = true;
       setStep(firstValidStep);
       setIsInitialized(true);
     }
-  }, [stepFlow, firstValidStep]);
+  }, [stepFlow, firstValidStep, accountsLoading]);
 
   useEffect(() => {
     if (defaultAccount && !selectedAccountId) {
@@ -581,6 +600,9 @@ export default function MobileExpenseForm() {
   const handleSubmit = async () => {
     if (!canSubmit || addTransactionMutation.isPending) return;
 
+    // Parse LBP change if provided (stored in thousands)
+    const parsedLbpChange = lbpChangeInput ? parseFloat(lbpChangeInput) : null;
+
     // Store current values for undo
     const transactionData = {
       account_id: selectedAccountId,
@@ -591,6 +613,7 @@ export default function MobileExpenseForm() {
       date: format(date, "yyyy-MM-dd"),
       is_private: isPrivate,
       split_requested: isSplitBill,
+      lbp_change_received: parsedLbpChange,
       // Include display names for optimistic UI
       _optimistic: {
         category_name: selectedCategory?.name ?? null,
@@ -614,6 +637,7 @@ export default function MobileExpenseForm() {
     setDescription("");
     setIsPrivate(false);
     setIsSplitBill(false);
+    setLbpChangeInput("");
     const newDefaultAccount = accounts.find((a: any) => a.is_default);
     if (newDefaultAccount) {
       setSelectedAccountId(newDefaultAccount.id);
@@ -880,6 +904,35 @@ export default function MobileExpenseForm() {
                     <span className={themeClasses.text}>${val}</span>
                   </Button>
                 ))}
+              </div>
+
+              {/* LBP Change Input - always visible, inline and discrete */}
+              <div className="space-y-1 pt-2">
+                <Label className="text-[10px] text-slate-500 font-normal">
+                  🇱🇧 LBP Change (×1,000)
+                </Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder={lbpRate ? "e.g., 600" : "Set rate first"}
+                  value={lbpChangeInput}
+                  onChange={(e) => setLbpChangeInput(e.target.value)}
+                  disabled={!lbpRate}
+                  className={`h-9 text-sm !bg-bg-card-custom/50 ${themeClasses.border} border-dashed text-white placeholder:text-slate-600 ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} disabled:opacity-30`}
+                />
+                {lbpRate &&
+                  lbpChangeInput &&
+                  parseFloat(lbpChangeInput) > 0 &&
+                  amount &&
+                  parseFloat(amount) > 0 && (
+                    <p className="text-[10px] text-cyan-400/70">
+                      Actual: $
+                      {calculateActualValue(
+                        parseFloat(amount),
+                        parseFloat(lbpChangeInput)
+                      )?.toFixed(2) ?? "—"}
+                    </p>
+                  )}
               </div>
 
               <Button

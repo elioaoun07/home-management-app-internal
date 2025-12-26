@@ -112,6 +112,7 @@ export function getCachedPreferences(): {
   date_start?: string;
   theme?: string;
   section_order?: string[];
+  lbp_exchange_rate?: number | null;
 } | null {
   if (typeof window === "undefined") return null;
   try {
@@ -132,6 +133,7 @@ export function setCachedPreferences(prefs: {
   date_start?: string;
   theme?: string;
   section_order?: string[];
+  lbp_exchange_rate?: number | null;
 }): void {
   if (typeof window === "undefined") return;
   try {

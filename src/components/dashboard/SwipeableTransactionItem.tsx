@@ -2,6 +2,7 @@
 
 import { Edit2Icon, Trash2Icon } from "@/components/icons/FuturisticIcons";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useLbpSettings } from "@/features/preferences/useLbpSettings";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
@@ -37,6 +38,8 @@ type Transaction = {
   collaborator_amount?: number;
   collaborator_description?: string;
   split_completed_at?: string;
+  /** LBP change received (in thousands, e.g., 600 = 600,000 LBP) */
+  lbp_change_received?: number | null;
 };
 
 type OwnershipFilter = "all" | "mine" | "partner";
@@ -93,6 +96,13 @@ export default function SwipeableTransactionItem({
     transaction,
     ownershipFilter
   );
+
+  // LBP settings for calculating actual value
+  const { calculateActualValue, hasLbpRate } = useLbpSettings();
+  const hasLbpChange = hasLbpRate && transaction.lbp_change_received;
+  const actualValue = hasLbpChange
+    ? calculateActualValue(transaction.amount, transaction.lbp_change_received!)
+    : null;
 
   // Get current user's theme to determine border color logic
   // If I have pink theme: my transactions=pink border, partner's=blue border
@@ -382,6 +392,16 @@ export default function SwipeableTransactionItem({
               >
                 ${displayAmount.toFixed(2)}
               </p>
+              {/* Show LBP change actual value */}
+              {hasLbpChange && actualValue !== null && (
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-slate-500">→</span>
+                  <span className="text-cyan-400 font-medium">
+                    ${actualValue.toFixed(2)}
+                  </span>
+                  <span className="text-slate-500 text-[10px]">actual</span>
+                </div>
+              )}
               {/* Show split breakdown only when viewing "all" for completed splits */}
               {isSplitCompleted && ownershipFilter === "all" && (
                 <div className="flex gap-1 text-xs">

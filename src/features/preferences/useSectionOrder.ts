@@ -47,9 +47,11 @@ export function useSectionOrder(
         ? (data.section_order as string[])
         : [...DEFAULT_ORDER];
 
-      // Filter to only known keys and ensure all are present
+      // Filter to only known keys (exclude null, undefined, empty strings) and ensure all are present
       const known = new Set(DEFAULT_ORDER);
-      const filtered = arr.filter((k): k is SectionKey => known.has(k as any));
+      const filtered = arr.filter(
+        (k): k is SectionKey => !!k && known.has(k as any)
+      );
       const missing = DEFAULT_ORDER.filter((k) => !filtered.includes(k));
       const result = [...filtered, ...missing];
 

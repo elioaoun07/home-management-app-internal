@@ -50,9 +50,17 @@ export default function ExpenseForm() {
   // Get accounts for balance display
   const { data: accounts = [] } = useAccounts();
   const selectedAccount = accounts.find((a: any) => a.id === selectedAccountId);
+  const defaultAccount = accounts.find((a: any) => a.is_default);
 
   // Mutation for adding transactions with optimistic updates
   const addTransactionMutation = useAddTransaction();
+
+  // Auto-select default account when available
+  useEffect(() => {
+    if (defaultAccount && !selectedAccountId) {
+      setSelectedAccountId(defaultAccount.id);
+    }
+  }, [defaultAccount, selectedAccountId]);
 
   const humanDate = (d: Date) => {
     if (isToday(d)) return "Today";
@@ -152,7 +160,9 @@ export default function ExpenseForm() {
     };
 
     // Reset form immediately for instant UI feedback
-    setSelectedAccountId(undefined);
+    // Keep default account selected if available
+    const newDefaultAccount = accounts.find((a: any) => a.is_default);
+    setSelectedAccountId(newDefaultAccount?.id);
     setSelectedCategoryId(undefined);
     setSelectedSubcategoryId(undefined);
     setAmount("");

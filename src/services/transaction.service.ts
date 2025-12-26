@@ -15,6 +15,8 @@ export interface CreateTransactionDTO {
   date?: string;
   is_private?: boolean;
   split_requested?: boolean;
+  /** LBP change received (in thousands, e.g., 600 = 600,000 LBP). For Lebanon dual-currency. */
+  lbp_change_received?: number | null;
 }
 
 export interface UpdateTransactionDTO {
@@ -24,6 +26,8 @@ export interface UpdateTransactionDTO {
   description?: string;
   category_id?: string | null;
   subcategory_id?: string | null;
+  /** LBP change received (in thousands, e.g., 600 = 600,000 LBP). For Lebanon dual-currency. */
+  lbp_change_received?: number | null;
 }
 
 export interface TransactionService {
@@ -333,6 +337,8 @@ export class SupabaseTransactionService implements TransactionService {
         r.split_requested && r.split_completed_at && r.collaborator_amount
           ? r.amount + r.collaborator_amount
           : r.amount,
+      // LBP change tracking for Lebanon dual-currency
+      lbp_change_received: r.lbp_change_received ?? null,
     }));
   }
 
@@ -346,6 +352,7 @@ export class SupabaseTransactionService implements TransactionService {
       date,
       is_private,
       split_requested,
+      lbp_change_received,
     } = data;
 
     // Validate required fields
@@ -425,6 +432,7 @@ export class SupabaseTransactionService implements TransactionService {
       is_private: is_private || false,
       split_requested: split_requested || false,
       collaborator_id: collaboratorId,
+      lbp_change_received: lbp_change_received ?? null,
     };
 
     const { data: created, error } = await this.supabase
@@ -531,7 +539,7 @@ export class SupabaseTransactionService implements TransactionService {
   }
 
   async updateTransaction(userId: string, data: UpdateTransactionDTO) {
-    const { id, date, amount, description, category_id, subcategory_id } = data;
+    const { id, date, amount, description, category_id, subcategory_id, lbp_change_received } = data;
 
     if (!id) {
       throw new Error("id is required");
@@ -580,6 +588,11 @@ export class SupabaseTransactionService implements TransactionService {
       } else {
         updateFields.subcategory_id = String(subcategory_id);
       }
+    }
+
+    // Handle LBP change (Lebanon dual-currency tracking)
+    if (lbp_change_received !== undefined) {
+      updateFields.lbp_change_received = lbp_change_received ?? null;
     }
 
     if (Object.keys(updateFields).length === 0) {

@@ -1,6 +1,5 @@
 "use client";
 
-import { ExpenseFormProvider } from "@/components/expense/ExpenseFormContext";
 import MobileExpenseForm from "@/components/expense/MobileExpenseForm";
 import { useTab } from "@/contexts/TabContext";
 import { useViewMode } from "@/hooks/useViewMode";
@@ -67,9 +66,7 @@ export default function TabContainer() {
       </div>
       <div className={activeTab === "expense" ? "block" : "hidden"}>
         <main className="h-screen">
-          <ExpenseFormProvider>
-            <MobileExpenseForm />
-          </ExpenseFormProvider>
+          <MobileExpenseForm />
         </main>
       </div>
       <div className={activeTab === "reminder" ? "block" : "hidden"}>

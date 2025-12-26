@@ -88,8 +88,13 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
   const updatePreferences = useUpdatePreferences();
 
   useEffect(() => {
-    if (Array.isArray(serverOrderArray) && open)
-      setOrder(serverOrderArray as SectionKey[]);
+    if (Array.isArray(serverOrderArray) && open) {
+      // Filter out any invalid/undefined keys
+      const validKeys = (serverOrderArray as SectionKey[]).filter(
+        (key) => key && SECTION_LABELS[key]
+      );
+      setOrder(validKeys);
+    }
   }, [serverOrderArray, open]);
 
   const canSave = useMemo(() => {
@@ -392,11 +397,13 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                           strategy={verticalListSortingStrategy}
                         >
                           <ul className="space-y-2">
-                            {order.map((key) => (
-                              <SortableItem key={key} id={key}>
-                                {SECTION_LABELS[key]}
-                              </SortableItem>
-                            ))}
+                            {order
+                              .filter((key) => key && SECTION_LABELS[key])
+                              .map((key) => (
+                                <SortableItem key={key} id={key}>
+                                  {SECTION_LABELS[key]}
+                                </SortableItem>
+                              ))}
                           </ul>
                         </SortableContext>
                       )}

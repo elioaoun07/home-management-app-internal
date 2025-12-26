@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest) {
 
   const { data, error } = await supabase
     .from("user_preferences")
-    .select("section_order, theme, date_start")
+    .select("section_order, theme, date_start, lbp_exchange_rate")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest) {
 
   // Always return keys, let client handle defaulting
   return NextResponse.json(
-    data ?? { section_order: null, theme: null, date_start: null },
+    data ?? { section_order: null, theme: null, date_start: null, lbp_exchange_rate: null },
     {
       headers: { "Cache-Control": "no-store" },
     }
@@ -50,7 +50,7 @@ export async function PATCH(_req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { section_order, theme } = body ?? {};
+  const { section_order, theme, lbp_exchange_rate } = body ?? {};
   let { date_start } = (body ?? {}) as { date_start?: unknown };
 
   if (
@@ -124,6 +124,22 @@ export async function PATCH(_req: NextRequest) {
       );
     }
     payload.date_start = `${m[1]}-${day}`;
+  }
+
+  // Handle LBP exchange rate (Lebanon dual-currency tracking)
+  if (lbp_exchange_rate !== undefined) {
+    if (lbp_exchange_rate === null) {
+      payload.lbp_exchange_rate = null;
+    } else {
+      const rate = Number(lbp_exchange_rate);
+      if (!Number.isFinite(rate) || rate <= 0) {
+        return NextResponse.json(
+          { error: "lbp_exchange_rate must be a positive number" },
+          { status: 400 }
+        );
+      }
+      payload.lbp_exchange_rate = rate;
+    }
   }
 
   // Update-first strategy: update existing row, else insert with safe defaults.
