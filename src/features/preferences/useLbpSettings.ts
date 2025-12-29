@@ -4,39 +4,17 @@
  */
 "use client";
 
-import { CACHE_TIMES, getCachedPreferences, setCachedPreferences } from "@/lib/queryConfig";
+import {
+  CACHE_TIMES,
+  getCachedPreferences,
+  setCachedPreferences,
+} from "@/lib/queryConfig";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
-
-const LS_KEY = "user_preferences";
+import { useCallback, useEffect, useState } from "react";
 
 export interface LbpSettings {
   /** LBP per USD rate in thousands (e.g., 90 = 90,000 LBP per 1 USD) */
   lbp_exchange_rate: number | null;
-}
-
-function readLocalLbpRate(): number | null {
-  try {
-    if (typeof window === "undefined") return null;
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.lbp_exchange_rate ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function writeLocalLbpRate(rate: number | null) {
-  try {
-    if (typeof window === "undefined") return;
-    const raw = localStorage.getItem(LS_KEY);
-    const existing = raw ? JSON.parse(raw) : {};
-    existing.lbp_exchange_rate = rate;
-    localStorage.setItem(LS_KEY, JSON.stringify(existing));
-  } catch {
-    // ignore
-  }
 }
 
 /**
@@ -46,18 +24,30 @@ function writeLocalLbpRate(rate: number | null) {
 export function useLbpSettings() {
   const queryClient = useQueryClient();
 
+  // Use state for cached value to handle SSR/hydration properly
+  const [cachedRate, setCachedRate] = useState<number | null>(null);
+
+  // Read from localStorage on client mount
+  useEffect(() => {
+    const prefs = getCachedPreferences();
+    if (prefs?.lbp_exchange_rate !== undefined) {
+      setCachedRate(prefs.lbp_exchange_rate);
+    }
+  }, []);
+
   const query = useQuery<LbpSettings>({
     queryKey: ["lbp-settings"],
     queryFn: async () => {
       const res = await fetch("/api/user-preferences");
       if (!res.ok) throw new Error("Failed to fetch preferences");
       const data = await res.json();
-      console.log("LBP Settings fetched:", data);
       // Cache to localStorage
       setCachedPreferences(data);
       return { lbp_exchange_rate: data.lbp_exchange_rate ?? null };
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes - shorter for testing
+    // Use placeholderData instead of initialData to allow refetch
+    placeholderData: { lbp_exchange_rate: cachedRate },
+    staleTime: CACHE_TIMES.PREFERENCES,
   });
 
   const mutation = useMutation({
@@ -77,15 +67,19 @@ export function useLbpSettings() {
       // Optimistic update
       await queryClient.cancelQueries({ queryKey: ["lbp-settings"] });
       const previous = queryClient.getQueryData<LbpSettings>(["lbp-settings"]);
-      queryClient.setQueryData<LbpSettings>(["lbp-settings"], { lbp_exchange_rate: rate });
-      writeLocalLbpRate(rate);
+      queryClient.setQueryData<LbpSettings>(["lbp-settings"], {
+        lbp_exchange_rate: rate,
+      });
+      setCachedPreferences({ lbp_exchange_rate: rate });
       return { previous };
     },
     onError: (_err, _rate, context) => {
       // Rollback on error
       if (context?.previous) {
         queryClient.setQueryData(["lbp-settings"], context.previous);
-        writeLocalLbpRate(context.previous.lbp_exchange_rate);
+        setCachedPreferences({
+          lbp_exchange_rate: context.previous.lbp_exchange_rate,
+        });
       }
     },
     onSettled: () => {

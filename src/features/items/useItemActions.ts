@@ -307,17 +307,20 @@ export function useCompleteItem() {
 
         // Archive if the item's date is before the start of this week
         const shouldArchive = occurrenceDateObj < weekStart;
-        const status = shouldArchive ? "archived" : "completed";
+        const status = "completed";
+
+        const updatePayload: any = {
+          status,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (shouldArchive) {
+          updatePayload.archived_at = new Date().toISOString();
+        }
 
         // For non-recurring: update item status + record action
         const [itemResult, actionResult] = await Promise.all([
-          supabase
-            .from("items")
-            .update({
-              status,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", itemId),
+          supabase.from("items").update(updatePayload).eq("id", itemId),
           supabase.from("item_occurrence_actions").insert({
             item_id: itemId,
             occurrence_date: occurrenceDate,

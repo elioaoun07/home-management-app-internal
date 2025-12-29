@@ -97,6 +97,7 @@ export type HubMessage = {
   item_url?: string | null; // Hyperlink for shopping items
   item_quantity?: string | null; // Quantity for shopping items (e.g., "2 bags", "1 lb")
   topic_id?: string | null; // Topic/section within notes thread
+  has_links?: boolean; // Whether item has multiple comparison links
 };
 
 export type HubFeedItem = {

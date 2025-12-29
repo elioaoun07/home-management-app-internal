@@ -8,6 +8,7 @@ import {
   Archive,
   Check,
   ExternalLink,
+  Layers,
   Link as LinkIcon,
   Plus,
   Trash2,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { ProductComparisonSheet } from "./ProductComparisonSheet";
 
 interface ShoppingItem {
   id: string;
@@ -26,6 +28,7 @@ interface ShoppingItem {
   createdAt: string;
   senderId: string;
   itemUrl: string | null; // URL for where to get the item
+  hasLinks: boolean; // Whether item has multiple links for comparison
 }
 
 interface ShoppingListViewProps {
@@ -60,6 +63,13 @@ export function ShoppingListView({
   );
   const [quantityInputValue, setQuantityInputValue] = useState("");
 
+  // Multi-link comparison sheet state
+  const [comparisonSheetOpen, setComparisonSheetOpen] = useState(false);
+  const [selectedItemForComparison, setSelectedItemForComparison] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
   const enableItemUrls = thread?.enable_item_urls ?? false;
 
   // Parse messages into shopping items
@@ -82,6 +92,7 @@ export function ShoppingListView({
       createdAt: msg.created_at,
       senderId: msg.sender_user_id,
       itemUrl: msg.item_url || null,
+      hasLinks: !!(msg as any).has_links, // From database flag
     }))
     .sort((a, b) => {
       // Unchecked items first, then by creation date
@@ -529,6 +540,12 @@ export function ShoppingListView({
     setUrlInputValue("");
   };
 
+  // Open comparison sheet for an item
+  const openComparisonSheet = (itemId: string, itemName: string) => {
+    setSelectedItemForComparison({ id: itemId, name: itemName });
+    setComparisonSheetOpen(true);
+  };
+
   // Clear all checked items (archive them)
   const handleClearChecked = useCallback(async () => {
     if (checkedItemsList.length === 0 || isClearing) return;
@@ -739,7 +756,29 @@ export function ShoppingListView({
 
                       {/* Action Buttons */}
                       <div className="flex items-center gap-1">
-                        {/* Link Button - Only show if enableItemUrls is true */}
+                        {/* Multi-Link Compare Button - Only show if enableItemUrls is true */}
+                        {enableItemUrls && (
+                          <button
+                            onClick={() =>
+                              openComparisonSheet(item.id, item.content)
+                            }
+                            className={cn(
+                              "p-1.5 rounded-lg transition-all",
+                              item.hasLinks
+                                ? "text-purple-400 hover:bg-purple-500/20"
+                                : "text-white/40 hover:bg-white/10 hover:text-white"
+                            )}
+                            title={
+                              item.hasLinks
+                                ? "Compare stores"
+                                : "Add store links"
+                            }
+                          >
+                            <Layers className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {/* Single Link Button - Legacy, only show if enableItemUrls is true */}
                         {enableItemUrls && (
                           <button
                             onClick={() =>
@@ -751,7 +790,11 @@ export function ShoppingListView({
                                 ? "text-blue-400 hover:bg-blue-500/20"
                                 : "text-white/40 hover:bg-white/10 hover:text-white"
                             )}
-                            title={item.itemUrl ? "Edit link" : "Add link"}
+                            title={
+                              item.itemUrl
+                                ? "Edit quick link"
+                                : "Add quick link"
+                            }
                           >
                             <LinkIcon className="w-4 h-4" />
                           </button>
@@ -949,6 +992,19 @@ export function ShoppingListView({
           </>
         )}
       </div>
+
+      {/* Product Comparison Sheet */}
+      {selectedItemForComparison && (
+        <ProductComparisonSheet
+          isOpen={comparisonSheetOpen}
+          onClose={() => {
+            setComparisonSheetOpen(false);
+            setSelectedItemForComparison(null);
+          }}
+          messageId={selectedItemForComparison.id}
+          itemName={selectedItemForComparison.name}
+        />
+      )}
     </div>
   );
 }

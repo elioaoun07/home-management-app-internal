@@ -173,7 +173,7 @@ export function CalendarView({ items }: CalendarViewProps) {
 
     return items.filter((item) => {
       // Skip archived items
-      if (item.status === "archived") return false;
+      if (item.status === "archived" || item.archived_at) return false;
 
       // Check category filter
       if (selectedCategoryFilters.length > 0) {

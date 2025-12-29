@@ -352,7 +352,9 @@ export default function WebEventsDashboard() {
     const last7Days = subDays(today, 7);
 
     // Filter out archived items
-    const activeItems = allItems.filter((i) => i.status !== "archived");
+    const activeItems = allItems.filter(
+      (i) => i.status !== "archived" && !i.archived_at
+    );
 
     // Items by status
     const completed = activeItems.filter((i) => i.status === "completed");

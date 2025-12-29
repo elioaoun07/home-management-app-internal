@@ -123,7 +123,7 @@ export class SupabaseTransactionService implements TransactionService {
       .from("transactions")
       .select(
         `id, date, category_id, subcategory_id, amount, description, account_id, inserted_at, user_id, is_private,
-        split_requested, collaborator_id, collaborator_amount, collaborator_description, split_completed_at,
+        split_requested, collaborator_id, collaborator_amount, collaborator_description, split_completed_at, lbp_change_received,
         category:user_categories!transactions_category_fk(name, color),
         subcategory:user_categories!transactions_subcategory_fk(name, color)`
       )
@@ -539,7 +539,15 @@ export class SupabaseTransactionService implements TransactionService {
   }
 
   async updateTransaction(userId: string, data: UpdateTransactionDTO) {
-    const { id, date, amount, description, category_id, subcategory_id, lbp_change_received } = data;
+    const {
+      id,
+      date,
+      amount,
+      description,
+      category_id,
+      subcategory_id,
+      lbp_change_received,
+    } = data;
 
     if (!id) {
       throw new Error("id is required");

@@ -27,7 +27,12 @@ export async function GET(_req: NextRequest) {
 
   // Always return keys, let client handle defaulting
   return NextResponse.json(
-    data ?? { section_order: null, theme: null, date_start: null, lbp_exchange_rate: null },
+    data ?? {
+      section_order: null,
+      theme: null,
+      date_start: null,
+      lbp_exchange_rate: null,
+    },
     {
       headers: { "Cache-Control": "no-store" },
     }

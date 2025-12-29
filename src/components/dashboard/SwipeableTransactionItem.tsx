@@ -101,7 +101,10 @@ export default function SwipeableTransactionItem({
   const { calculateActualValue, hasLbpRate } = useLbpSettings();
   const hasLbpChange = hasLbpRate && transaction.lbp_change_received;
   const actualValue = hasLbpChange
-    ? calculateActualValue(transaction.amount, transaction.lbp_change_received!)
+    ? calculateActualValue(
+        Number(transaction.amount),
+        Number(transaction.lbp_change_received)
+      )
     : null;
 
   // Get current user's theme to determine border color logic
@@ -386,7 +389,7 @@ export default function SwipeableTransactionItem({
               {/* Display amount based on filter and role */}
               <p
                 className={cn(
-                  "text-lg font-bold bg-gradient-to-br from-emerald-400 via-emerald-300 to-teal bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]",
+                  "text-lg font-bold bg-gradient-to-br from-emerald-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]",
                   transaction._isPending && "opacity-70"
                 )}
               >

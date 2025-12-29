@@ -907,32 +907,62 @@ export default function MobileExpenseForm() {
               </div>
 
               {/* LBP Change Input - always visible, inline and discrete */}
-              <div className="space-y-1 pt-2">
-                <Label className="text-[10px] text-slate-500 font-normal">
-                  🇱🇧 LBP Change (×1,000)
-                </Label>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder={lbpRate ? "e.g., 600" : "Set rate first"}
-                  value={lbpChangeInput}
-                  onChange={(e) => setLbpChangeInput(e.target.value)}
-                  disabled={!lbpRate}
-                  className={`h-9 text-sm !bg-bg-card-custom/50 ${themeClasses.border} border-dashed text-white placeholder:text-slate-600 ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} disabled:opacity-30`}
-                />
+              <div className="flex items-center justify-end gap-2 px-1 pt-2">
                 {lbpRate &&
                   lbpChangeInput &&
                   parseFloat(lbpChangeInput) > 0 &&
                   amount &&
                   parseFloat(amount) > 0 && (
-                    <p className="text-[10px] text-cyan-400/70">
-                      Actual: $
-                      {calculateActualValue(
-                        parseFloat(amount),
-                        parseFloat(lbpChangeInput)
-                      )?.toFixed(2) ?? "—"}
-                    </p>
+                    <div className="flex flex-col items-end justify-center leading-tight">
+                      <span className="text-[10px] text-slate-400">Actual</span>
+                      <span
+                        className={`text-sm font-medium ${themeClasses.text}`}
+                      >
+                        $
+                        {calculateActualValue(
+                          parseFloat(amount),
+                          parseFloat(lbpChangeInput)
+                        )?.toFixed(2) ?? "—"}
+                      </span>
+                    </div>
                   )}
+                <div
+                  className={`relative flex items-center h-9 w-40 px-3 rounded-md border border-dashed !bg-bg-card-custom/50 ${themeClasses.border} focus-within:ring-1 ${themeClasses.focusRing.replace(
+                    "focus:",
+                    "focus-within:"
+                  )} ${themeClasses.focusBorder.replace(
+                    "focus:",
+                    "focus-within:"
+                  )} transition-all duration-200 ${
+                    !lbpRate ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                >
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder={lbpRate ? "LBP" : "Rate?"}
+                    value={lbpChangeInput}
+                    onChange={(e) => setLbpChangeInput(e.target.value)}
+                    // Ensure input is disabled during SSR/hydration to avoid
+                    // server/client attribute mismatches. `isInitialized` is
+                    // set to true in a useEffect after mount.
+                    disabled={!isInitialized ? true : !lbpRate}
+                    // When third-party extensions or the browser modify attributes
+                    // between server and client renders, React may warn about
+                    // hydration mismatches. This flag suppresses that specific
+                    // warning for this input which is intentionally controlled
+                    // after mount.
+                    suppressHydrationWarning
+                    className="flex-1 bg-transparent border-none outline-none text-right text-sm text-white placeholder:text-slate-600 disabled:cursor-not-allowed p-0 w-full"
+                  />
+                  <span
+                    className={`text-sm text-slate-500 pointer-events-none ml-0.5 transition-opacity duration-200 ${
+                      lbpChangeInput ? "opacity-100" : "opacity-0"
+                    }`}
+                  >
+                    ,000
+                  </span>
+                </div>
               </div>
 
               <Button

@@ -69,7 +69,7 @@ export function ScheduleView({ items }: ScheduleViewProps) {
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       // Skip archived items
-      if (item.status === "archived") return false;
+      if (item.status === "archived" || item.archived_at) return false;
 
       const dateStr =
         item.type === "reminder" || item.type === "task"

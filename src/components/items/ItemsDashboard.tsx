@@ -490,7 +490,7 @@ export default function ItemsDashboard({
 
     filteredItems.forEach((item) => {
       // Skip archived items entirely
-      if (item.status === "archived") return;
+      if (item.status === "archived" || item.archived_at) return;
 
       const itemDate = getItemDate(item);
       const isRecurring = !!item.recurrence_rule?.rrule;

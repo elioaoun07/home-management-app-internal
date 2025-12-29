@@ -14,6 +14,38 @@ export const dynamic = "force-dynamic";
 // Monthly token limit (Gemini free tier)
 const MONTHLY_TOKEN_LIMIT = 1_000_000;
 
+// Rate limiting: Track Gemini API rate limits with exponential backoff
+let lastRateLimitError: number = 0;
+let rateLimitCooldownMs = 30000; // Start with 30 seconds
+
+function isRateLimited(): { limited: boolean; retryInSeconds: number } {
+  if (lastRateLimitError === 0) return { limited: false, retryInSeconds: 0 };
+  const elapsed = Date.now() - lastRateLimitError;
+  const remaining = rateLimitCooldownMs - elapsed;
+  if (remaining <= 0) {
+    return { limited: false, retryInSeconds: 0 };
+  }
+  return { limited: true, retryInSeconds: Math.ceil(remaining / 1000) };
+}
+
+function recordRateLimitError(errorMessage: string): number {
+  lastRateLimitError = Date.now();
+
+  // Extract retry-after if available from error message
+  const retryMatch = errorMessage.match(/retry in ([\d.]+)s/i);
+  if (retryMatch) {
+    rateLimitCooldownMs = Math.ceil(parseFloat(retryMatch[1]) * 1000) + 5000; // Add 5s buffer
+  } else {
+    // Exponential backoff: double the cooldown up to 5 min max
+    rateLimitCooldownMs = Math.min(rateLimitCooldownMs * 2, 300000);
+  }
+
+  console.log(
+    `AI Chat rate limit cooldown set to ${rateLimitCooldownMs / 1000}s`
+  );
+  return Math.ceil(rateLimitCooldownMs / 1000);
+}
+
 interface ChatRequest {
   message: string;
   chatHistory?: ChatMessage[];
@@ -66,6 +98,18 @@ export async function POST(req: NextRequest) {
             limit: MONTHLY_TOKEN_LIMIT,
             percentage: 100,
           },
+        },
+        { status: 429 }
+      );
+    }
+
+    // Check if we're in a rate limit cooldown period
+    const rateLimitStatus = isRateLimited();
+    if (rateLimitStatus.limited) {
+      return NextResponse.json(
+        {
+          error: `AI is temporarily unavailable due to rate limits. Please try again in ${rateLimitStatus.retryInSeconds} seconds.`,
+          retryAfter: rateLimitStatus.retryInSeconds,
         },
         { status: 429 }
       );
@@ -146,6 +190,24 @@ export async function POST(req: NextRequest) {
 
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
+
+    // Check for rate limit (429) errors
+    if (
+      errorMessage.includes("429") ||
+      errorMessage.includes("quota") ||
+      errorMessage.includes("RESOURCE_EXHAUSTED")
+    ) {
+      // Record the rate limit and get cooldown
+      const retrySeconds = recordRateLimitError(errorMessage);
+
+      return NextResponse.json(
+        {
+          error: `AI is temporarily unavailable due to rate limits. Please try again in ${retrySeconds} seconds.`,
+          retryAfter: retrySeconds,
+        },
+        { status: 429 }
+      );
+    }
 
     // Check for API key issues
     if (errorMessage.includes("API key") || errorMessage.includes("401")) {
