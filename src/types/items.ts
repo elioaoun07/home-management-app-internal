@@ -91,6 +91,7 @@ export interface Subtask {
   id: UUID;
   parent_item_id: UUID;
   title: string;
+  occurrence_date?: string | null; // ISO timestamp - which occurrence this subtask belongs to (null for non-recurring)
   done_at?: string | null; // ISO timestamp
   order_index: number;
   created_at: string;

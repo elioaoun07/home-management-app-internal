@@ -4,7 +4,7 @@
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { ItemWithDetails } from "@/types/items";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addDays, addWeeks, parseISO, setHours, setMinutes } from "date-fns";
+import { addDays, addWeeks, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { itemsKeys } from "./useItems";
 
@@ -105,11 +105,30 @@ export function calculateNextOccurrence(
  */
 export function calculateTomorrowSameTime(currentDate: string): string {
   const date = parseISO(currentDate);
-  const tomorrow = addDays(new Date(), 1);
-  return setMinutes(
-    setHours(tomorrow, date.getHours()),
-    date.getMinutes()
-  ).toISOString();
+  // Add 1 day to the current occurrence date, keeping the same time
+  return addDays(date, 1).toISOString();
+}
+
+/**
+ * Normalize a date to YYYY-MM-DD format in LOCAL timezone
+ * This is critical for proper date comparison
+ */
+export function normalizeToLocalDateString(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Parse a database timestamp to local date string
+ * Handles both ISO and Postgres formats
+ */
+export function parseDbDateToLocalString(dbDate: string): string {
+  // Parse the date and get local date string
+  const date = new Date(dbDate);
+  return normalizeToLocalDateString(date);
 }
 
 // ============================================
@@ -140,7 +159,7 @@ export function useItemOccurrenceActions(itemId: string | undefined) {
 /** Fetch all occurrence actions for a date range (for filtering completed occurrences) */
 export function useAllOccurrenceActions() {
   return useQuery({
-    queryKey: [...itemsKeys.all, "all-actions"],
+    queryKey: itemsKeys.allActions(),
     queryFn: async () => {
       const supabase = supabaseBrowser();
       const {
@@ -169,48 +188,42 @@ export function useAllOccurrenceActions() {
   });
 }
 
-/** Check if a specific occurrence is completed/cancelled */
+/** Check if a specific occurrence is completed/cancelled/postponed (should not show on original date) */
 export function isOccurrenceCompleted(
   itemId: string,
   occurrenceDate: Date,
   actions: ItemOccurrenceAction[]
 ): boolean {
-  // Normalize to YYYY-MM-DD format for comparison
-  const targetDate = occurrenceDate.toISOString().split("T")[0];
+  // Normalize to YYYY-MM-DD format in LOCAL timezone for comparison
+  const targetDate = normalizeToLocalDateString(occurrenceDate);
 
   console.log("🔍 isOccurrenceCompleted called:", {
     itemId,
     occurrenceDate: occurrenceDate.toISOString(),
-    targetDate,
+    targetDateLocal: targetDate,
     totalActions: actions.length,
     actionsForThisItem: actions.filter((a) => a.item_id === itemId),
   });
 
   const result = actions.some((action) => {
     if (action.item_id !== itemId) return false;
+    // Include postponed in the check - postponed occurrences shouldn't show on original date
     if (
       action.action_type !== "completed" &&
-      action.action_type !== "cancelled"
+      action.action_type !== "cancelled" &&
+      action.action_type !== "postponed"
     )
       return false;
 
-    // Extract date part from occurrence_date (handles both ISO and postgres timestamp formats)
-    let actionDate: string;
-    if (action.occurrence_date.includes("T")) {
-      // ISO format: 2025-12-15T10:00:00.000Z
-      actionDate = action.occurrence_date.split("T")[0];
-    } else {
-      // Postgres timestamp format: 2025-12-15 10:00:00
-      actionDate = action.occurrence_date.split(" ")[0];
-    }
-
+    // Parse the action's occurrence_date to local date string
+    const actionDate = parseDbDateToLocalString(action.occurrence_date);
     const matches = actionDate === targetDate;
 
     console.log("  📋 Comparing action:", {
       actionId: action.id,
       actionOccurrenceDate: action.occurrence_date,
-      actionDate,
-      targetDate,
+      actionDateLocal: actionDate,
+      targetDateLocal: targetDate,
       actionType: action.action_type,
       matches,
     });
@@ -221,6 +234,64 @@ export function isOccurrenceCompleted(
   console.log("  ✅ Result:", result);
 
   return result;
+}
+
+/** Get postponed occurrences that should show on a specific date */
+export function getPostponedOccurrencesForDate<T extends { id: string }>(
+  items: T[],
+  targetDate: Date,
+  actions: ItemOccurrenceAction[]
+): Array<{
+  item: T;
+  occurrenceDate: Date;
+  originalDate: Date;
+  isPostponed: true;
+}> {
+  // Normalize target date to local date string
+  const targetDateStr = normalizeToLocalDateString(targetDate);
+  const results: Array<{
+    item: T;
+    occurrenceDate: Date;
+    originalDate: Date;
+    isPostponed: true;
+  }> = [];
+
+  console.log("🔍 getPostponedOccurrencesForDate:", {
+    targetDate: targetDate.toISOString(),
+    targetDateLocal: targetDateStr,
+    postponedActions: actions.filter((a) => a.action_type === "postponed"),
+  });
+
+  for (const action of actions) {
+    if (action.action_type !== "postponed" || !action.postponed_to) continue;
+
+    // Parse the postponed_to date to local date string
+    const postponedToDateStr = parseDbDateToLocalString(action.postponed_to);
+
+    console.log("  📋 Checking postponed action:", {
+      actionId: action.id,
+      postponedTo: action.postponed_to,
+      postponedToLocal: postponedToDateStr,
+      targetLocal: targetDateStr,
+      matches: postponedToDateStr === targetDateStr,
+    });
+
+    if (postponedToDateStr === targetDateStr) {
+      const item = items.find((i) => i.id === action.item_id);
+      if (item) {
+        results.push({
+          item,
+          occurrenceDate: new Date(action.postponed_to),
+          originalDate: new Date(action.occurrence_date),
+          isPostponed: true,
+        });
+      }
+    }
+  }
+
+  console.log("  ✅ Found postponed items:", results.length);
+
+  return results;
 }
 
 /** Fetch completion stats for user's items */
@@ -343,13 +414,7 @@ export function useCompleteItem() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: [...itemsKeys.all, "all-actions"],
-      });
-      queryClient.invalidateQueries({ queryKey: [...itemsKeys.all, "stats"] });
-      queryClient.invalidateQueries({
-        queryKey: [...itemsKeys.all, "all-actions"],
-      });
+      queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
       queryClient.invalidateQueries({ queryKey: [...itemsKeys.all, "stats"] });
     },
   });
@@ -409,7 +474,9 @@ export function usePostponeItem() {
       return { action: data, postponedTo };
     },
     onSuccess: () => {
+      // Invalidate both items and occurrence actions
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+      queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
     },
   });
 }
@@ -463,9 +530,7 @@ export function useCancelItem() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: [...itemsKeys.all, "all-actions"],
-      });
+      queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
       queryClient.invalidateQueries({ queryKey: [...itemsKeys.all, "stats"] });
     },
   });
@@ -616,7 +681,8 @@ export function useItemActionsWithToast() {
     item: ItemWithDetails,
     occurrenceDate: string,
     postponeType: PostponeType,
-    reason?: string
+    reason?: string,
+    customDate?: string
   ) => {
     const isRecurring = !!item.recurrence_rule?.rrule;
     let postponedTo: string | undefined;
@@ -629,6 +695,8 @@ export function useItemActionsWithToast() {
       );
     } else if (postponeType === "tomorrow") {
       postponedTo = calculateTomorrowSameTime(occurrenceDate);
+    } else if (postponeType === "custom" && customDate) {
+      postponedTo = customDate;
     }
 
     try {
@@ -646,7 +714,9 @@ export function useItemActionsWithToast() {
           ? "next occurrence"
           : postponeType === "tomorrow"
             ? "tomorrow"
-            : "later";
+            : postponeType === "custom" && postponedTo
+              ? new Date(postponedTo).toLocaleDateString()
+              : "later";
 
       toast.success(`"${item.title}" postponed to ${label}`, {
         action: {
@@ -731,4 +801,44 @@ export function useItemActionsWithToast() {
       cancelItem.isPending ||
       deleteItem.isPending,
   };
+}
+
+// ============================================
+// AUTO-COMPLETE HELPER
+// ============================================
+
+/**
+ * Check if all subtasks for an item/occurrence are completed
+ * For recurring items: checks occurrence-specific completions
+ * For one-time items: checks the done_at field on subtasks
+ */
+export function areAllSubtasksCompleted(
+  subtasks: Array<{ id: string; done_at?: string | null }>,
+  isRecurring: boolean,
+  occurrenceDate: Date,
+  subtaskCompletions?: Array<{
+    subtask_id: string;
+    occurrence_date: string;
+  }>
+): boolean {
+  if (!subtasks || subtasks.length === 0) return false;
+
+  if (isRecurring && subtaskCompletions) {
+    // For recurring items, check occurrence-specific completions
+    const targetDateStr = normalizeToLocalDateString(occurrenceDate);
+    const completedSubtaskIds = new Set(
+      subtaskCompletions
+        .filter(
+          (c) =>
+            normalizeToLocalDateString(new Date(c.occurrence_date)) ===
+            targetDateStr
+        )
+        .map((c) => c.subtask_id)
+    );
+
+    return subtasks.every((s) => completedSubtaskIds.has(s.id));
+  } else {
+    // For one-time items, check done_at field
+    return subtasks.every((s) => s.done_at);
+  }
 }

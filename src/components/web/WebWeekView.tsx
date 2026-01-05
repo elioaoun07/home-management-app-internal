@@ -2,6 +2,12 @@
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { getBirthdayDisplayName, getBirthdaysForDate } from "@/data/birthdays";
+import {
+  getPostponedOccurrencesForDate,
+  isOccurrenceCompleted,
+  type ItemOccurrenceAction,
+} from "@/features/items/useItemActions";
+import { type SubtaskCompletion } from "@/features/items/useItems";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
 import {
@@ -32,7 +38,13 @@ import { RRule } from "rrule";
 
 interface WebWeekViewProps {
   items: ItemWithDetails[];
-  onItemClick?: (item: ItemWithDetails, event: React.MouseEvent) => void;
+  occurrenceActions?: ItemOccurrenceAction[];
+  subtaskCompletions?: SubtaskCompletion[];
+  onItemClick?: (
+    item: ItemWithDetails,
+    event: React.MouseEvent,
+    occurrenceDate?: Date
+  ) => void;
   onAddEvent?: (date: Date) => void;
   onBirthdayClick?: (
     birthday: { name: string; category?: string },
@@ -76,8 +88,41 @@ const typeColors: Record<
   },
 };
 
+// Build a full RRULE string including COUNT and UNTIL from recurrence_rule
+function buildFullRRuleString(
+  dtstart: Date,
+  recurrenceRule: {
+    rrule: string;
+    count?: number | null;
+    end_until?: string | null;
+  }
+): string {
+  let rrulePart = recurrenceRule.rrule;
+
+  // Add COUNT if specified
+  if (recurrenceRule.count && !rrulePart.includes("COUNT=")) {
+    rrulePart += `;COUNT=${recurrenceRule.count}`;
+  }
+
+  // Add UNTIL if specified (and no COUNT)
+  if (
+    recurrenceRule.end_until &&
+    !recurrenceRule.count &&
+    !rrulePart.includes("UNTIL=")
+  ) {
+    const untilDate = parseISO(recurrenceRule.end_until);
+    const untilStr =
+      untilDate.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    rrulePart += `;UNTIL=${untilStr}`;
+  }
+
+  return `DTSTART:${dtstart.toISOString().replace(/[-:]/g, "").split(".")[0]}Z\nRRULE:${rrulePart}`;
+}
+
 export function WebWeekView({
   items,
+  occurrenceActions = [],
+  subtaskCompletions = [],
   onItemClick,
   onAddEvent,
   onBirthdayClick,
@@ -95,7 +140,55 @@ export function WebWeekView({
   // Hours to display (6 AM to 12 AM) - 18 time slots showing ranges
   const hours = Array.from({ length: 18 }, (_, i) => i + 6);
 
-  // Expand recurring items
+  /**
+   * Get the actual occurrence datetime for an item on a specific date
+   */
+  const getOccurrenceDateTimeForItem = (
+    item: ItemWithDetails,
+    calendarDate: Date
+  ): Date => {
+    const dateStr =
+      item.event_details?.start_at || item.reminder_details?.due_at;
+
+    if (!dateStr) return calendarDate;
+
+    const itemDate = parseISO(dateStr);
+
+    // For recurring items, find the specific occurrence on this date
+    if (item.recurrence_rule?.rrule) {
+      try {
+        const rruleString = buildFullRRuleString(
+          itemDate,
+          item.recurrence_rule
+        );
+        const rule = RRule.fromString(rruleString);
+
+        const dayStart = new Date(calendarDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(calendarDate);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        const occurrences = rule.between(dayStart, dayEnd, true);
+        if (occurrences.length > 0) {
+          return occurrences[0];
+        }
+      } catch (error) {
+        console.error("Error getting occurrence datetime:", error);
+      }
+    }
+
+    // For non-recurring, use the calendar date with the item's time
+    const result = new Date(calendarDate);
+    result.setHours(
+      itemDate.getHours(),
+      itemDate.getMinutes(),
+      itemDate.getSeconds(),
+      0
+    );
+    return result;
+  };
+
+  // Expand recurring items (accounting for occurrence actions)
   const getItemsForDate = useMemo(() => {
     return (date: Date): ItemWithDetails[] => {
       const itemsOnDate: ItemWithDetails[] = [];
@@ -109,9 +202,10 @@ export function WebWeekView({
 
         if (item.recurrence_rule?.rrule) {
           try {
-            const rruleString = `DTSTART:${
-              parsedDate.toISOString().replace(/[-:]/g, "").split(".")[0]
-            }Z\nRRULE:${item.recurrence_rule.rrule}`;
+            const rruleString = buildFullRRuleString(
+              parsedDate,
+              item.recurrence_rule
+            );
             const rule = RRule.fromString(rruleString);
 
             const startOfDay = new Date(date);
@@ -120,20 +214,49 @@ export function WebWeekView({
             endOfDay.setHours(23, 59, 59, 999);
 
             const occurrences = rule.between(startOfDay, endOfDay, true);
-            if (occurrences.length > 0) {
-              itemsOnDate.push(item);
+            for (const occ of occurrences) {
+              // Check if this occurrence has been handled
+              const isHandled = isOccurrenceCompleted(
+                item.id,
+                occ,
+                occurrenceActions
+              );
+              if (!isHandled) {
+                itemsOnDate.push(item);
+                break; // Only add once per item per day
+              }
             }
           } catch (error) {
             console.error("Error parsing RRULE:", error);
           }
         } else if (isSameDay(parsedDate, date)) {
-          itemsOnDate.push(item);
+          // Check if non-recurring item has been handled
+          const isHandled = isOccurrenceCompleted(
+            item.id,
+            parsedDate,
+            occurrenceActions
+          );
+          if (!isHandled) {
+            itemsOnDate.push(item);
+          }
+        }
+      }
+
+      // Add postponed items that are scheduled for this date
+      const postponedForDate = getPostponedOccurrencesForDate(
+        items,
+        date,
+        occurrenceActions
+      );
+      for (const p of postponedForDate) {
+        if (!itemsOnDate.some((i) => i.id === p.item.id)) {
+          itemsOnDate.push(p.item);
         }
       }
 
       return itemsOnDate;
     };
-  }, [items]);
+  }, [items, occurrenceActions]);
 
   // Calculate position and height for an item
   const getItemStyle = (item: ItemWithDetails) => {
@@ -319,77 +442,142 @@ export function WebWeekView({
                 className="grid grid-cols-8 mb-4 gap-2"
               >
                 <div className="p-2" /> {/* Time column spacer */}
-                {weekDays.map((day, index) => (
-                  <motion.div
-                    key={day.toISOString()}
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      delay: index * 0.04,
-                      type: "spring",
-                      stiffness: 300,
-                    }}
-                    className={cn(
-                      "relative p-4 text-center rounded-2xl transition-all overflow-hidden",
-                      isToday(day)
-                        ? isPink
-                          ? "bg-gradient-to-br from-pink-500/40 to-purple-600/40 border-2 border-pink-400/60 shadow-lg shadow-pink-500/20"
-                          : "bg-gradient-to-br from-cyan-500/40 to-blue-600/40 border-2 border-cyan-400/60 shadow-lg shadow-cyan-500/20"
-                        : "bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20"
-                    )}
-                  >
-                    {/* Shimmer effect for today */}
-                    {isToday(day) && (
-                      <motion.div
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-                        animate={{ x: ["-100%", "100%"] }}
-                        transition={{
-                          duration: 2,
-                          repeat: Infinity,
-                          ease: "linear",
-                        }}
-                      />
-                    )}
-                    <div
+                {weekDays.map((day, index) => {
+                  const dayItems = getItemsForDate(day);
+                  const birthdays = showBirthdays
+                    ? getBirthdaysForDate(day)
+                    : [];
+                  const hasEvents = dayItems.some(
+                    (item) => item.type === "event"
+                  );
+                  const hasReminders = dayItems.some(
+                    (item) => item.type === "reminder"
+                  );
+                  const hasTasks = dayItems.some(
+                    (item) => item.type === "task"
+                  );
+                  const hasBirthdays = birthdays.length > 0;
+                  const totalItems = dayItems.length + birthdays.length;
+
+                  return (
+                    <motion.div
+                      key={day.toISOString()}
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        delay: index * 0.04,
+                        type: "spring",
+                        stiffness: 300,
+                      }}
                       className={cn(
-                        "text-[11px] font-bold uppercase tracking-widest",
+                        "relative p-4 text-center rounded-2xl transition-all overflow-hidden",
                         isToday(day)
                           ? isPink
-                            ? "text-pink-200"
-                            : "text-cyan-200"
-                          : "text-white/40"
+                            ? "bg-gradient-to-br from-pink-500/40 to-purple-600/40 border-2 border-pink-400/60 shadow-lg shadow-pink-500/20"
+                            : "bg-gradient-to-br from-cyan-500/40 to-blue-600/40 border-2 border-cyan-400/60 shadow-lg shadow-cyan-500/20"
+                          : "bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20"
                       )}
                     >
-                      {format(day, "EEE")}
-                    </div>
-                    <div
-                      className={cn(
-                        "text-3xl font-black mt-1",
-                        isToday(day)
-                          ? isPink
-                            ? "text-pink-300"
-                            : "text-cyan-300"
-                          : "text-white"
+                      {/* Item count badge */}
+                      {totalItems > 0 && (
+                        <div className="absolute top-1.5 right-1.5">
+                          <div
+                            className={cn(
+                              "min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center",
+                              isPink
+                                ? "bg-pink-500 text-white"
+                                : "bg-cyan-500 text-white"
+                            )}
+                          >
+                            {totalItems}
+                          </div>
+                        </div>
                       )}
-                    >
-                      {format(day, "d")}
-                    </div>
-                    {isToday(day) && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
+
+                      {/* Shimmer effect for today */}
+                      {isToday(day) && (
+                        <motion.div
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                          animate={{ x: ["-100%", "100%"] }}
+                          transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "linear",
+                          }}
+                        />
+                      )}
+                      <div
                         className={cn(
-                          "absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] font-bold",
-                          isPink
-                            ? "bg-pink-500 text-white"
-                            : "bg-cyan-500 text-white"
+                          "text-[11px] font-bold uppercase tracking-widest",
+                          isToday(day)
+                            ? isPink
+                              ? "text-pink-200"
+                              : "text-cyan-200"
+                            : "text-white/40"
                         )}
                       >
-                        TODAY
-                      </motion.div>
-                    )}
-                  </motion.div>
-                ))}
+                        {format(day, "EEE")}
+                      </div>
+                      <div
+                        className={cn(
+                          "text-3xl font-black mt-1",
+                          isToday(day)
+                            ? isPink
+                              ? "text-pink-300"
+                              : "text-cyan-300"
+                            : "text-white"
+                        )}
+                      >
+                        {format(day, "d")}
+                      </div>
+
+                      {/* Event type indicators (colored dots) */}
+                      {totalItems > 0 && !isToday(day) && (
+                        <div className="flex items-center justify-center gap-1 mt-1.5">
+                          {hasEvents && (
+                            <div
+                              className="w-2 h-2 rounded-full bg-pink-400"
+                              title="Events"
+                            />
+                          )}
+                          {hasReminders && (
+                            <div
+                              className="w-2 h-2 rounded-full bg-cyan-400"
+                              title="Reminders"
+                            />
+                          )}
+                          {hasTasks && (
+                            <div
+                              className="w-2 h-2 rounded-full bg-purple-400"
+                              title="Tasks"
+                            />
+                          )}
+                          {hasBirthdays && (
+                            <div
+                              className="w-2 h-2 rounded-full bg-amber-400"
+                              title="Birthdays"
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      {isToday(day) && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className={cn(
+                            "absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] font-bold",
+                            isPink
+                              ? "bg-pink-500 text-white"
+                              : "bg-cyan-500 text-white"
+                          )}
+                        >
+                          TODAY
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  );
+                })}
               </motion.div>
             </AnimatePresence>
 
@@ -469,7 +657,9 @@ export function WebWeekView({
                             whileHover={{ scale: 1.02 }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onItemClick?.(item, e);
+                              const occurrenceDateTime =
+                                getOccurrenceDateTimeForItem(item, day);
+                              onItemClick?.(item, e, occurrenceDateTime);
                             }}
                             className={cn(
                               "px-2 py-1 rounded-lg cursor-pointer overflow-hidden",
@@ -659,7 +849,11 @@ export function WebWeekView({
                                   top: `${style.top}px`,
                                   height: `${style.height}px`,
                                 }}
-                                onClick={(e) => onItemClick?.(item, e)}
+                                onClick={(e) => {
+                                  const occurrenceDateTime =
+                                    getOccurrenceDateTimeForItem(item, day);
+                                  onItemClick?.(item, e, occurrenceDateTime);
+                                }}
                               >
                                 {/* Shine effect */}
                                 <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />

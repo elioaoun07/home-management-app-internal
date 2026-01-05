@@ -8,12 +8,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
+  useAllOccurrenceActions,
   useItemActionsWithToast,
   type PostponeType,
 } from "@/features/items/useItemActions";
-import { useDeleteItem, useItems } from "@/features/items/useItems";
+import {
+  useAllSubtaskCompletions,
+  useDeleteItem,
+  useItems,
+} from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemType, ItemWithDetails } from "@/types/items";
@@ -30,23 +40,27 @@ import {
   Clock,
   Edit2,
   FastForward,
+  Filter,
   Heart,
   Home,
   LayoutDashboard,
   ListTodo,
   MapPin,
   Repeat,
+  Target,
   Trash2,
   User,
   Users,
   X,
   XCircle,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ItemSubtasksList } from "./ItemSubtasks";
 import { WebCalendar } from "./WebCalendar";
 import { WebEventFormDialog } from "./WebEventFormDialog";
 import WebEventsDashboard from "./WebEventsDashboard";
+import WebTabletMissionControl from "./WebTabletMissionControl";
 import { WebWeekView } from "./WebWeekView";
 
 // Item type filters
@@ -99,9 +113,9 @@ export default function WebEvents() {
   const itemActions = useItemActionsWithToast();
 
   // State
-  const [mainView, setMainView] = useState<"calendar" | "dashboard">(
-    "calendar"
-  );
+  const [mainView, setMainView] = useState<
+    "calendar" | "dashboard" | "mission-control"
+  >("mission-control");
   const [view, setView] = useState<"month" | "week">("month");
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -126,16 +140,26 @@ export default function WebEvents() {
   const [showActionDialog, setShowActionDialog] = useState(false);
   const [showPostponeDialog, setShowPostponeDialog] = useState(false);
   const [actionReason, setActionReason] = useState("");
+  const [customPostponeDate, setCustomPostponeDate] = useState<string>("");
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+  const [clickedOccurrenceDate, setClickedOccurrenceDate] =
+    useState<Date | null>(null);
 
   // Helper: Check if item is recurring
   const isRecurring = useCallback((item: ItemWithDetails | null) => {
     return !!item?.recurrence_rule?.rrule;
   }, []);
 
-  // Helper: Get occurrence date from item
+  // Helper: Get occurrence date from item (uses clickedOccurrenceDate for recurring items)
   const getOccurrenceDate = useCallback(
     (item: ItemWithDetails | null): Date => {
       if (!item) return new Date();
+
+      // For recurring items, use the clicked occurrence date if available
+      if (item.recurrence_rule?.rrule && clickedOccurrenceDate) {
+        return clickedOccurrenceDate;
+      }
+
       const dateStr =
         item.type === "reminder" || item.type === "task"
           ? item.reminder_details?.due_at
@@ -144,7 +168,7 @@ export default function WebEvents() {
             : null;
       return dateStr ? parseISO(dateStr) : new Date();
     },
-    []
+    [clickedOccurrenceDate]
   );
 
   // Action handlers
@@ -156,23 +180,28 @@ export default function WebEvents() {
       actionReason || undefined
     );
     setDetailItem(null);
+    setClickedOccurrenceDate(null);
     setModalPosition(null);
     setShowActionDialog(false);
     setActionReason("");
   }, [detailItem, itemActions, getOccurrenceDate, actionReason]);
 
   const handlePostponeAction = useCallback(
-    (postponeType: PostponeType) => {
+    (postponeType: PostponeType, customDate?: string) => {
       if (!detailItem) return;
       itemActions.handlePostpone(
         detailItem,
         getOccurrenceDate(detailItem).toISOString(),
         postponeType,
-        actionReason || undefined
+        actionReason || undefined,
+        customDate
       );
       setDetailItem(null);
+      setClickedOccurrenceDate(null);
       setModalPosition(null);
       setShowPostponeDialog(false);
+      setShowCustomDatePicker(false);
+      setCustomPostponeDate("");
       setActionReason("");
     },
     [detailItem, itemActions, getOccurrenceDate, actionReason]
@@ -186,6 +215,7 @@ export default function WebEvents() {
       actionReason || undefined
     );
     setDetailItem(null);
+    setClickedOccurrenceDate(null);
     setModalPosition(null);
     setShowActionDialog(false);
     setActionReason("");
@@ -193,6 +223,25 @@ export default function WebEvents() {
 
   // Fetch all items
   const { data: allItems = [], isLoading } = useItems();
+
+  // Fetch occurrence actions for filtering completed/postponed items
+  const { data: occurrenceActions = [] } = useAllOccurrenceActions();
+
+  // Fetch subtask completions for recurring item subtasks
+  const { data: subtaskCompletions = [] } = useAllSubtaskCompletions();
+
+  // Sync detailItem with allItems to get optimistic updates
+  useEffect(() => {
+    if (detailItem) {
+      const updatedItem = allItems.find((item) => item.id === detailItem.id);
+      if (
+        updatedItem &&
+        JSON.stringify(updatedItem) !== JSON.stringify(detailItem)
+      ) {
+        setDetailItem(updatedItem);
+      }
+    }
+  }, [allItems, detailItem]);
 
   // Filter items by type and category
   const filteredItems = allItems.filter((item) => {
@@ -232,13 +281,19 @@ export default function WebEvents() {
   };
 
   // Handle clicking on an item to view/edit it
-  const handleItemClick = (item: ItemWithDetails, event: React.MouseEvent) => {
+  const handleItemClick = (
+    item: ItemWithDetails,
+    event: React.MouseEvent,
+    occurrenceDate?: Date
+  ) => {
     const rect = event.currentTarget.getBoundingClientRect();
     setModalPosition({
       x: rect.right + 10,
       y: rect.top,
     });
     setDetailItem(item);
+    // Store the occurrence date for recurring items
+    setClickedOccurrenceDate(occurrenceDate || null);
   };
 
   // Handle editing an item
@@ -423,13 +478,28 @@ export default function WebEvents() {
     <div className={cn("min-h-screen pb-20", themeClasses.pageBg)}>
       {/* Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#0a1628]/95 backdrop-blur-lg border-t border-white/10">
-        <div className="max-w-md mx-auto px-4">
+        <div className="max-w-lg mx-auto px-4">
           <div className="flex items-center justify-around py-2">
+            <button
+              type="button"
+              onClick={() => setMainView("mission-control")}
+              className={cn(
+                "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all",
+                mainView === "mission-control"
+                  ? isPink
+                    ? "bg-pink-500/20 text-pink-400"
+                    : "bg-cyan-500/20 text-cyan-400"
+                  : "text-white/50 hover:text-white/70"
+              )}
+            >
+              <Target className="w-5 h-5" />
+              <span className="text-xs font-medium">Focus</span>
+            </button>
             <button
               type="button"
               onClick={() => setMainView("calendar")}
               className={cn(
-                "flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all",
+                "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all",
                 mainView === "calendar"
                   ? isPink
                     ? "bg-pink-500/20 text-pink-400"
@@ -444,7 +514,7 @@ export default function WebEvents() {
               type="button"
               onClick={() => setMainView("dashboard")}
               className={cn(
-                "flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all",
+                "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all",
                 mainView === "dashboard"
                   ? isPink
                     ? "bg-pink-500/20 text-pink-400"
@@ -453,160 +523,188 @@ export default function WebEvents() {
               )}
             >
               <LayoutDashboard className="w-5 h-5" />
-              <span className="text-xs font-medium">Dashboard</span>
+              <span className="text-xs font-medium">Stats</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Mission Control View (Default for Tablet) */}
+      {mainView === "mission-control" && (
+        <WebTabletMissionControl
+          onItemClick={handleItemClick}
+          onAddEvent={handleAddEvent}
+        />
+      )}
 
       {/* Dashboard View */}
       {mainView === "dashboard" && <WebEventsDashboard />}
 
       {/* Calendar View */}
       {mainView === "calendar" && (
-        <div className="p-6">
+        <div className="p-2 lg:p-6">
           <div className="max-w-[1600px] mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h1
-                  className={cn(
-                    "text-3xl font-bold bg-clip-text text-transparent",
-                    isPink
-                      ? "bg-gradient-to-r from-pink-300 via-pink-400 to-purple-400"
-                      : "bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400"
-                  )}
-                >
-                  Events & Reminders
-                </h1>
-                <p className="text-white/60 mt-1">
-                  Manage your schedule, reminders, and tasks
-                </p>
-              </div>
-
-              <QuickAddButtons />
-            </div>
-
-            {/* View and Type Filter Tabs */}
-            <div className="flex items-center gap-4 mb-6">
-              {/* View Toggle */}
-              <div className="flex items-center gap-2 p-1 bg-white/5 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setView("month")}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                    view === "month"
-                      ? "neo-gradient text-white shadow-lg"
-                      : "text-white/60 hover:text-white hover:bg-white/10"
-                  )}
-                >
-                  <CalendarDays className="w-4 h-4" />
-                  Month
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView("week")}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                    view === "week"
-                      ? "neo-gradient text-white shadow-lg"
-                      : "text-white/60 hover:text-white hover:bg-white/10"
-                  )}
-                >
-                  <Calendar className="w-4 h-4" />
-                  Week
-                </button>
-              </div>
-
-              {/* Type Filter Tabs */}
-              <div className="flex items-center gap-2 p-1 bg-white/5 rounded-xl w-fit">
-                {typeFilters.map((filter) => {
-                  const Icon = filter.icon;
-                  const isActive = typeFilter === filter.id;
-                  return (
-                    <button
-                      key={filter.id}
-                      type="button"
-                      onClick={() => setTypeFilter(filter.id)}
-                      className={cn(
-                        "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                        isActive
-                          ? "neo-gradient text-white shadow-lg"
-                          : "text-white/60 hover:text-white hover:bg-white/10"
-                      )}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {filter.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Birthday Toggle */}
-              <button
-                type="button"
-                onClick={() => setShowBirthdays(!showBirthdays)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                  showBirthdays
-                    ? "bg-white/10 text-white"
-                    : "text-white/40 hover:text-white/60"
-                )}
-              >
-                <Cake className="w-4 h-4" />
-                Birthdays
-              </button>
-            </div>
-
-            {/* Category Filters */}
-            <div className="flex items-center gap-2 mb-6 flex-wrap">
-              <span className="text-white/60 text-sm font-medium">
-                Categories:
-              </span>
-              <div className="flex items-center gap-2 flex-wrap">
-                {CATEGORIES.map((category) => {
-                  const Icon = category.icon;
-                  const isSelected = selectedCategories.includes(category.id);
-                  return (
-                    <button
-                      key={category.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedCategories((prev) =>
-                          isSelected
-                            ? prev.filter((id) => id !== category.id)
-                            : [...prev, category.id]
-                        );
-                      }}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                        isSelected
-                          ? "text-white shadow-lg"
-                          : "bg-white/5 text-white/60 hover:text-white hover:bg-white/10"
-                      )}
-                      style={{
-                        backgroundColor: isSelected
-                          ? category.color
-                          : undefined,
-                      }}
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                      {category.name}
-                    </button>
-                  );
-                })}
-                {selectedCategories.length > 0 && (
+            {/* Compact toolbar - touch-friendly buttons */}
+            <div className="flex items-center justify-between gap-2 mb-1.5 lg:mb-4">
+              {/* Left side: View toggle + Type filters */}
+              <div className="flex items-center gap-2 lg:gap-2">
+                {/* View Toggle */}
+                <div className="flex items-center p-0.5 bg-white/5 rounded-lg">
                   <button
                     type="button"
-                    onClick={() => setSelectedCategories([])}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-white/60 hover:text-white hover:bg-white/10 transition-all"
+                    onClick={() => setView("month")}
+                    className={cn(
+                      "p-2.5 lg:px-3 lg:py-2 rounded-md transition-all",
+                      view === "month"
+                        ? "neo-gradient text-white"
+                        : "text-white/50 hover:text-white"
+                    )}
+                    title="Month view"
                   >
-                    <X className="w-3.5 h-3.5" />
-                    Clear
+                    <CalendarDays className="w-5 h-5" />
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => setView("week")}
+                    className={cn(
+                      "p-2.5 lg:px-3 lg:py-2 rounded-md transition-all",
+                      view === "week"
+                        ? "neo-gradient text-white"
+                        : "text-white/50 hover:text-white"
+                    )}
+                    title="Week view"
+                  >
+                    <Calendar className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Divider */}
+                <div className="w-px h-8 bg-white/10" />
+
+                {/* Type Filter */}
+                <div className="flex items-center p-0.5 bg-white/5 rounded-lg">
+                  {typeFilters.map((filter) => {
+                    const Icon = filter.icon;
+                    const isActive = typeFilter === filter.id;
+                    return (
+                      <button
+                        key={filter.id}
+                        type="button"
+                        onClick={() => setTypeFilter(filter.id)}
+                        className={cn(
+                          "p-2.5 lg:px-3 lg:py-2 rounded-md transition-all",
+                          isActive
+                            ? "neo-gradient text-white"
+                            : "text-white/50 hover:text-white"
+                        )}
+                        title={filter.label}
+                      >
+                        <Icon className="w-5 h-5" />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Divider */}
+                <div className="w-px h-8 bg-white/10" />
+
+                {/* Birthday Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowBirthdays(!showBirthdays)}
+                  className={cn(
+                    "p-2.5 rounded-lg transition-all",
+                    showBirthdays
+                      ? "bg-amber-500/20 text-amber-300"
+                      : "text-white/40 hover:text-white/60"
+                  )}
+                  title="Show birthdays"
+                >
+                  <Cake className="w-5 h-5" />
+                </button>
+
+                {/* Category Filter Dropdown */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex items-center gap-1 p-2.5 rounded-lg transition-all",
+                        selectedCategories.length > 0
+                          ? isPink
+                            ? "bg-pink-500/20 text-pink-300"
+                            : "bg-cyan-500/20 text-cyan-300"
+                          : "text-white/40 hover:text-white/60"
+                      )}
+                      title="Filter by category"
+                    >
+                      <Filter className="w-5 h-5" />
+                      {selectedCategories.length > 0 && (
+                        <span className="text-xs font-bold">
+                          {selectedCategories.length}
+                        </span>
+                      )}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-48 p-2 bg-gray-900/95 backdrop-blur-xl border-white/10"
+                    align="start"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-white/70">
+                          Categories
+                        </span>
+                        {selectedCategories.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCategories([])}
+                            className="text-[10px] text-white/50 hover:text-white"
+                          >
+                            Clear all
+                          </button>
+                        )}
+                      </div>
+                      {CATEGORIES.map((category) => {
+                        const Icon = category.icon;
+                        const isSelected = selectedCategories.includes(
+                          category.id
+                        );
+                        return (
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCategories((prev) =>
+                                isSelected
+                                  ? prev.filter((id) => id !== category.id)
+                                  : [...prev, category.id]
+                              );
+                            }}
+                            className={cn(
+                              "flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs font-medium transition-all",
+                              isSelected
+                                ? "text-white"
+                                : "text-white/60 hover:text-white hover:bg-white/5"
+                            )}
+                            style={{
+                              backgroundColor: isSelected
+                                ? category.color
+                                : undefined,
+                            }}
+                          >
+                            <Icon className="w-3.5 h-3.5" />
+                            {category.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
+
+              {/* Right side: Quick add buttons */}
+              <QuickAddButtons />
             </div>
 
             {/* Loading State */}
@@ -636,6 +734,8 @@ export default function WebEvents() {
             {!isLoading && view === "month" && (
               <WebCalendar
                 items={filteredItems}
+                occurrenceActions={occurrenceActions}
+                subtaskCompletions={subtaskCompletions}
                 selectedDate={selectedDate}
                 onDateSelect={setSelectedDate}
                 onItemClick={handleItemClick}
@@ -649,6 +749,8 @@ export default function WebEvents() {
             {!isLoading && view === "week" && (
               <WebWeekView
                 items={filteredItems}
+                occurrenceActions={occurrenceActions}
+                subtaskCompletions={subtaskCompletions}
                 selectedDate={selectedDate}
                 onItemClick={handleItemClick}
                 onAddEvent={handleAddEvent}
@@ -665,6 +767,7 @@ export default function WebEvents() {
                   className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md"
                   onClick={() => {
                     setDetailItem(null);
+                    setClickedOccurrenceDate(null);
                     setModalPosition(null);
                   }}
                 />
@@ -936,6 +1039,18 @@ export default function WebEvents() {
                       )}
                     </div>
 
+                    {/* Subtasks */}
+                    <div className="pl-3 pt-2 border-t border-white/10">
+                      <ItemSubtasksList
+                        itemId={detailItem.id}
+                        subtasks={detailItem.subtasks || []}
+                        isRecurring={!!detailItem.recurrence_rule}
+                        occurrenceDate={getOccurrenceDate(detailItem)}
+                        subtaskCompletions={subtaskCompletions}
+                        onAllCompleted={handleCompleteAction}
+                      />
+                    </div>
+
                     {/* Description */}
                     {detailItem.description && (
                       <div className="pl-3 pt-2 border-t border-white/10">
@@ -1103,6 +1218,108 @@ export default function WebEvents() {
                 </div>
               </button>
 
+              {/* Custom Date Option */}
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomDatePicker(!showCustomDatePicker)}
+                  className={cn(
+                    "w-full p-4 rounded-xl border text-left transition-all",
+                    showCustomDatePicker
+                      ? isPink
+                        ? "border-pink-500/40 bg-pink-500/10"
+                        : "border-cyan-500/40 bg-cyan-500/10"
+                      : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                  )}
+                >
+                  <div className="font-semibold text-white mb-1 flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    Pick a specific date
+                  </div>
+                  <div className="text-sm text-white/60">
+                    Choose exactly when to reschedule
+                  </div>
+                </button>
+
+                {showCustomDatePicker && (
+                  <div className="p-3 rounded-xl border border-white/10 bg-white/5 space-y-3">
+                    <div className="flex gap-2">
+                      <input
+                        type="date"
+                        value={customPostponeDate.split("T")[0] || ""}
+                        onChange={(e) => {
+                          const dateValue = e.target.value;
+                          if (dateValue) {
+                            // Keep the original time from the occurrence
+                            const origDate = getOccurrenceDate(detailItem);
+                            const newDate = new Date(dateValue);
+                            newDate.setHours(
+                              origDate.getHours(),
+                              origDate.getMinutes(),
+                              0,
+                              0
+                            );
+                            setCustomPostponeDate(newDate.toISOString());
+                          }
+                        }}
+                        min={format(new Date(), "yyyy-MM-dd")}
+                        className={cn(
+                          "flex-1 p-2 rounded-lg bg-white/5 border border-white/10",
+                          "text-white text-sm",
+                          "focus:outline-none focus:border-white/30"
+                        )}
+                      />
+                      <input
+                        type="time"
+                        value={
+                          customPostponeDate
+                            ? format(new Date(customPostponeDate), "HH:mm")
+                            : ""
+                        }
+                        onChange={(e) => {
+                          if (customPostponeDate && e.target.value) {
+                            const [hours, minutes] = e.target.value
+                              .split(":")
+                              .map(Number);
+                            const newDate = new Date(customPostponeDate);
+                            newDate.setHours(hours, minutes, 0, 0);
+                            setCustomPostponeDate(newDate.toISOString());
+                          }
+                        }}
+                        className={cn(
+                          "w-24 p-2 rounded-lg bg-white/5 border border-white/10",
+                          "text-white text-sm",
+                          "focus:outline-none focus:border-white/30"
+                        )}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (customPostponeDate) {
+                          handlePostponeAction("custom", customPostponeDate);
+                        }
+                      }}
+                      disabled={!customPostponeDate}
+                      className={cn(
+                        "w-full",
+                        isPink
+                          ? "bg-pink-500 hover:bg-pink-600"
+                          : "bg-cyan-500 hover:bg-cyan-600"
+                      )}
+                    >
+                      Postpone to{" "}
+                      {customPostponeDate
+                        ? format(
+                            new Date(customPostponeDate),
+                            "MMM d 'at' h:mm a"
+                          )
+                        : "..."}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               <button
                 type="button"
                 disabled
@@ -1145,6 +1362,8 @@ export default function WebEvents() {
                 onClick={() => {
                   setShowPostponeDialog(false);
                   setActionReason("");
+                  setCustomPostponeDate("");
+                  setShowCustomDatePicker(false);
                 }}
                 className="border-white/20 text-white/70 hover:bg-white/10"
               >

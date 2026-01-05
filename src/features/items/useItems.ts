@@ -11,11 +11,13 @@ import type {
   ItemsFilter,
   ItemsSort,
   ItemWithDetails,
+  Subtask,
   UpdateEventInput,
   UpdateItemInput,
   UpdateReminderInput,
 } from "@/types/items";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 // ============================================
 // QUERY KEYS
@@ -33,6 +35,9 @@ export const itemsKeys = {
   categories: () => [...itemsKeys.all, "categories"] as const,
   upcoming: () => [...itemsKeys.all, "upcoming"] as const,
   overdue: () => [...itemsKeys.all, "overdue"] as const,
+  allActions: () => [...itemsKeys.all, "all-actions"] as const,
+  subtaskCompletions: (itemId?: string) =>
+    [...itemsKeys.all, "subtask-completions", itemId] as const,
 };
 
 // ============================================
@@ -873,7 +878,50 @@ export function useToggleSubtask() {
       if (error) throw error;
       return { id, done };
     },
-    onSuccess: () => {
+    onMutate: async ({ id, done }) => {
+      await queryClient.cancelQueries({ queryKey: itemsKeys.all });
+
+      // Snapshot all item list queries
+      const previousQueries: {
+        queryKey: readonly unknown[];
+        data: ItemWithDetails[];
+      }[] = [];
+      queryClient
+        .getQueriesData<ItemWithDetails[]>({ queryKey: itemsKeys.lists() })
+        .forEach(([queryKey, data]) => {
+          if (data) {
+            previousQueries.push({ queryKey, data });
+          }
+        });
+
+      // Optimistically update the subtask in ALL item list queries
+      queryClient.setQueriesData<ItemWithDetails[]>(
+        { queryKey: itemsKeys.lists() },
+        (old) => {
+          if (!old) return old;
+          return old.map((item) => ({
+            ...item,
+            subtasks: item.subtasks?.map((s) =>
+              s.id === id
+                ? { ...s, done_at: done ? new Date().toISOString() : null }
+                : s
+            ),
+          }));
+        }
+      );
+
+      return { previousQueries };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error - restore all queries
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ queryKey, data }) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      toast.error("Failed to update subtask");
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
     },
   });
@@ -907,5 +955,400 @@ export function useCreateItemCategory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.categories() });
     },
+  });
+}
+
+// ============================================
+// SUBTASK HOOKS
+// ============================================
+
+export interface SubtaskCompletion {
+  id: string;
+  subtask_id: string;
+  occurrence_date: string;
+  completed_at: string;
+  completed_by: string | null;
+}
+
+/** Fetch subtask completions for an item (for recurring items) */
+export function useSubtaskCompletions(itemId: string | undefined) {
+  return useQuery({
+    queryKey: itemsKeys.subtaskCompletions(itemId),
+    queryFn: async () => {
+      if (!itemId) return [];
+      const supabase = supabaseBrowser();
+
+      // Get all subtask IDs for this item first
+      const { data: subtasks, error: subtasksError } = await supabase
+        .from("item_subtasks")
+        .select("id")
+        .eq("parent_item_id", itemId);
+
+      if (subtasksError) throw subtasksError;
+      if (!subtasks?.length) return [];
+
+      const subtaskIds = subtasks.map((s) => s.id);
+
+      const { data, error } = await supabase
+        .from("item_subtask_completions")
+        .select("*")
+        .in("subtask_id", subtaskIds);
+
+      if (error) throw error;
+      return data as SubtaskCompletion[];
+    },
+    enabled: !!itemId,
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+/** Toggle subtask completion for a specific occurrence (for recurring items) */
+export function useToggleSubtaskForOccurrence() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      subtaskId,
+      occurrenceDate,
+      completed,
+    }: {
+      subtaskId: string;
+      occurrenceDate: string;
+      completed: boolean;
+    }) => {
+      const supabase = supabaseBrowser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (completed) {
+        // Insert completion record
+        const { data, error } = await supabase
+          .from("item_subtask_completions")
+          .upsert(
+            {
+              subtask_id: subtaskId,
+              occurrence_date: occurrenceDate,
+              completed_at: new Date().toISOString(),
+              completed_by: user?.id,
+            },
+            { onConflict: "subtask_id,occurrence_date" }
+          )
+          .select()
+          .single();
+
+        if (error) throw error;
+        return { subtaskId, occurrenceDate, completed, data };
+      } else {
+        // Delete completion record
+        const { error } = await supabase
+          .from("item_subtask_completions")
+          .delete()
+          .eq("subtask_id", subtaskId)
+          .eq("occurrence_date", occurrenceDate);
+
+        if (error) throw error;
+        return { subtaskId, occurrenceDate, completed, data: null };
+      }
+    },
+    onMutate: async ({ subtaskId, occurrenceDate, completed }) => {
+      await queryClient.cancelQueries({ queryKey: itemsKeys.all });
+
+      const previousCompletions = queryClient.getQueryData<SubtaskCompletion[]>(
+        [...itemsKeys.all, "all-subtask-completions"]
+      );
+
+      // Optimistically update the completions cache
+      queryClient.setQueryData<SubtaskCompletion[]>(
+        [...itemsKeys.all, "all-subtask-completions"],
+        (old) => {
+          if (!old) old = [];
+          if (completed) {
+            // Add completion
+            return [
+              ...old,
+              {
+                id: `temp-${Date.now()}`,
+                subtask_id: subtaskId,
+                occurrence_date: occurrenceDate,
+                completed_at: new Date().toISOString(),
+                completed_by: null,
+              },
+            ];
+          } else {
+            // Remove completion
+            return old.filter(
+              (c) =>
+                !(
+                  c.subtask_id === subtaskId &&
+                  c.occurrence_date === occurrenceDate
+                )
+            );
+          }
+        }
+      );
+
+      return { previousCompletions };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousCompletions) {
+        queryClient.setQueryData(
+          [...itemsKeys.all, "all-subtask-completions"],
+          context.previousCompletions
+        );
+      }
+      toast.error("Failed to update subtask");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+    },
+  });
+}
+
+/** Add a new subtask to an item */
+export function useAddSubtask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      parentItemId,
+      title,
+      occurrenceDate,
+      orderIndex,
+    }: {
+      parentItemId: string;
+      title: string;
+      occurrenceDate?: string; // ISO string - for recurring items, which occurrence this subtask belongs to
+      orderIndex?: number;
+    }) => {
+      const supabase = supabaseBrowser();
+
+      // Get current max order_index if not provided
+      let finalOrderIndex = orderIndex;
+      if (finalOrderIndex === undefined) {
+        const { data: existing } = await supabase
+          .from("item_subtasks")
+          .select("order_index")
+          .eq("parent_item_id", parentItemId)
+          .order("order_index", { ascending: false })
+          .limit(1);
+
+        finalOrderIndex = existing?.[0]?.order_index
+          ? existing[0].order_index + 1
+          : 0;
+      }
+
+      const { data, error } = await supabase
+        .from("item_subtasks")
+        .insert({
+          parent_item_id: parentItemId,
+          title,
+          order_index: finalOrderIndex,
+          occurrence_date: occurrenceDate || null,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as Subtask;
+    },
+    onMutate: async ({ parentItemId, title, occurrenceDate }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: itemsKeys.all });
+
+      // Snapshot all item list queries
+      const previousQueries: {
+        queryKey: readonly unknown[];
+        data: ItemWithDetails[];
+      }[] = [];
+      queryClient
+        .getQueriesData<ItemWithDetails[]>({ queryKey: itemsKeys.lists() })
+        .forEach(([queryKey, data]) => {
+          if (data) {
+            previousQueries.push({ queryKey, data });
+          }
+        });
+
+      // Create optimistic subtask
+      const optimisticSubtask: Subtask = {
+        id: `temp-${Date.now()}`,
+        parent_item_id: parentItemId,
+        title,
+        occurrence_date: occurrenceDate || null,
+        done_at: null,
+        order_index: 999, // Will be at end
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // Optimistically update ALL item list queries
+      queryClient.setQueriesData<ItemWithDetails[]>(
+        { queryKey: itemsKeys.lists() },
+        (old) => {
+          if (!old) return old;
+          return old.map((item) => {
+            if (item.id === parentItemId) {
+              return {
+                ...item,
+                subtasks: [...(item.subtasks || []), optimisticSubtask],
+              };
+            }
+            return item;
+          });
+        }
+      );
+
+      // Show optimistic toast
+      toast.success("Subtask added", { duration: 2000 });
+
+      return { previousQueries };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error - restore all queries
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ queryKey, data }) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      toast.error("Failed to add subtask");
+    },
+    onSettled: () => {
+      // Always refetch to sync with server
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+    },
+  });
+}
+
+/** Delete a subtask */
+export function useDeleteSubtask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (subtaskId: string) => {
+      const supabase = supabaseBrowser();
+      const { error } = await supabase
+        .from("item_subtasks")
+        .delete()
+        .eq("id", subtaskId);
+
+      if (error) throw error;
+      return subtaskId;
+    },
+    onMutate: async (subtaskId) => {
+      await queryClient.cancelQueries({ queryKey: itemsKeys.all });
+
+      // Snapshot all item list queries
+      const previousQueries: {
+        queryKey: readonly unknown[];
+        data: ItemWithDetails[];
+      }[] = [];
+      queryClient
+        .getQueriesData<ItemWithDetails[]>({ queryKey: itemsKeys.lists() })
+        .forEach(([queryKey, data]) => {
+          if (data) {
+            previousQueries.push({ queryKey, data });
+          }
+        });
+
+      // Optimistically remove the subtask from ALL item list queries
+      queryClient.setQueriesData<ItemWithDetails[]>(
+        { queryKey: itemsKeys.lists() },
+        (old) => {
+          if (!old) return old;
+          return old.map((item) => ({
+            ...item,
+            subtasks: item.subtasks?.filter((s) => s.id !== subtaskId) || [],
+          }));
+        }
+      );
+
+      toast.success("Subtask removed", { duration: 2000 });
+
+      return { previousQueries };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error - restore all queries
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(({ queryKey, data }) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      toast.error("Failed to delete subtask");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+    },
+  });
+}
+
+/** Update subtask title */
+export function useUpdateSubtask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, title }: { id: string; title: string }) => {
+      const supabase = supabaseBrowser();
+      const { data, error } = await supabase
+        .from("item_subtasks")
+        .update({
+          title,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+    },
+  });
+}
+
+/** Fetch all subtask completions for all user's items */
+export function useAllSubtaskCompletions() {
+  return useQuery({
+    queryKey: [...itemsKeys.all, "all-subtask-completions"],
+    queryFn: async () => {
+      const supabase = supabaseBrowser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      // Get all subtask IDs for user's items
+      const { data: subtasks, error: subtasksError } = await supabase
+        .from("item_subtasks")
+        .select("id, parent_item_id, items!inner(user_id)")
+        .eq("items.user_id", user.id);
+
+      if (subtasksError) {
+        console.error("Error fetching subtasks:", subtasksError);
+        return [];
+      }
+      if (!subtasks?.length) return [];
+
+      const subtaskIds = subtasks.map((s) => s.id);
+
+      // Get completions for last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { data, error } = await supabase
+        .from("item_subtask_completions")
+        .select("*")
+        .in("subtask_id", subtaskIds)
+        .gte("occurrence_date", thirtyDaysAgo.toISOString());
+
+      if (error) {
+        console.error("Error fetching subtask completions:", error);
+        return [];
+      }
+      return data as SubtaskCompletion[];
+    },
+    staleTime: 0,
+    refetchOnMount: true,
   });
 }
