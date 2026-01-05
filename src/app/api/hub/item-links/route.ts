@@ -49,6 +49,7 @@ function extractStoreName(url: string): string {
       "ebay.com": "eBay",
       "aliexpress.com": "AliExpress",
       "newegg.com": "Newegg",
+      "gcscomputerpro.com": "GCS Computer Pro",
     };
     return storeMap[cleanHost] || cleanHost.split(".")[0];
   } catch {
@@ -65,12 +66,286 @@ function randomDelay(min: number, max: number): Promise<void> {
 }
 
 /**
+ * List of domains that use JS rendering and need Jina AI reader
+ */
+const JS_RENDERED_SITES = ["gcscomputerpro.com"];
+
+/**
+ * Check if URL is from a JS-rendered site that needs special handling
+ */
+function isJSRenderedSite(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    return JS_RENDERED_SITES.some((domain) => hostname.includes(domain));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetch webpage content using Jina AI reader (for JS-rendered sites)
+ * This service renders JavaScript and returns readable content
+ */
+async function fetchWithJinaReader(
+  url: string
+): Promise<{ content: string; success: boolean }> {
+  try {
+    const jinaUrl = `https://r.jina.ai/${url}`;
+
+    const response = await fetch(jinaUrl, {
+      headers: {
+        Accept: "text/plain",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      signal: AbortSignal.timeout(30000), // 30 second timeout for JS rendering
+    });
+
+    if (response.ok) {
+      const content = await response.text();
+      return { content, success: true };
+    }
+
+    console.log(`Jina reader failed with status ${response.status}`);
+    return { content: "", success: false };
+  } catch (error) {
+    console.error("Jina reader error:", error);
+    return { content: "", success: false };
+  }
+}
+
+/**
+ * Extract product info from Jina AI reader markdown content
+ * Works for GCS and similar JS-rendered sites
+ */
+function extractFromJinaContent(
+  content: string,
+  url: string
+): Partial<ProductInfo> {
+  const result: Partial<ProductInfo> = {};
+
+  // Extract title from markdown heading or Title: line
+  const titleMatch =
+    content.match(/^Title:\s*(?:GCS\s*\|\s*)?(.+?)$/m) ||
+    content.match(/^#\s*(.+?)$/m) ||
+    content.match(/^={3,}\s*\n(.+?)\n/m);
+  if (titleMatch && titleMatch[1]) {
+    let title = titleMatch[1].trim();
+    // Remove site prefix if present
+    title = title.replace(/^GCS\s*\|\s*/i, "").trim();
+    if (title && !title.includes("Loading")) {
+      result.product_title = title;
+    }
+  }
+
+  // Extract price - look for $XXX pattern
+  const pricePatterns = [
+    /(?:^|\s)\$\s*([\d,]+(?:\.\d{2})?)\s*(?:\n|$|Price)/m,
+    /In Stock\s*\$\s*([\d,]+(?:\.\d{2})?)/i,
+    /\$\s*([\d,]+(?:\.\d{2})?)\s*Price excludes/i,
+  ];
+
+  for (const pattern of pricePatterns) {
+    const match = content.match(pattern);
+    if (match && match[1]) {
+      const priceStr = match[1].replace(/,/g, "");
+      const price = parseFloat(priceStr);
+      if (!isNaN(price) && price > 0 && price < 100000) {
+        result.price = price;
+        result.currency = "USD";
+        break;
+      }
+    }
+  }
+
+  // Extract stock status
+  if (/\bIn Stock\b/i.test(content)) {
+    result.stock_status = "in_stock";
+  } else if (/\bOut of Stock\b/i.test(content)) {
+    result.stock_status = "out_of_stock";
+  }
+
+  // Extract image URL - look for backend storage URLs or Image references
+  const imagePatterns = [
+    /!\[Image[^\]]*\]\((https:\/\/backend\.gcscomputerpro\.com\/storage\/[^)]+)\)/i,
+    /!\[Image[^\]]*\]\((https:\/\/[^)]+\.(?:webp|jpg|jpeg|png))\)/i,
+    /(https:\/\/backend\.gcscomputerpro\.com\/storage\/\d+\/[^\s\)]+\.webp)/i,
+  ];
+
+  for (const pattern of imagePatterns) {
+    const match = content.match(pattern);
+    if (match && match[1]) {
+      result.image_url = match[1];
+      break;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Extract product title from URL slug (fallback for JS-rendered sites)
+ * Converts "samsung-sm-x133-galaxy-tab-a11-tablet-11-8gb-ram-128gb-storage-grey"
+ * to "Samsung Sm X133 Galaxy Tab A11 Tablet 11 8gb Ram 128gb Storage Grey"
+ */
+function extractTitleFromUrlSlug(url: string): string | null {
+  try {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split("/").filter(Boolean);
+    // Get the last segment (product slug)
+    const slug = pathParts[pathParts.length - 1];
+    if (!slug) return null;
+
+    // Convert kebab-case to title case
+    const title = slug
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      // Fix common patterns
+      .replace(/\b(\d+)gb\b/gi, "$1GB")
+      .replace(/\b(\d+)tb\b/gi, "$1TB")
+      .replace(/\bram\b/gi, "RAM")
+      .replace(/\bssd\b/gi, "SSD")
+      .replace(/\bhdd\b/gi, "HDD")
+      .replace(/\bcpu\b/gi, "CPU")
+      .replace(/\bgpu\b/gi, "GPU")
+      .replace(/\bwifi\b/gi, "WiFi")
+      .replace(/\blte\b/gi, "LTE")
+      .replace(/\b5g\b/gi, "5G")
+      .replace(/\busb\b/gi, "USB")
+      .replace(/\bhdmi\b/gi, "HDMI");
+
+    return title;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract product info specifically for GCS Computer Pro website
+ * This site uses Nuxt.js and renders content client-side with JavaScript
+ * We need to extract what we can from static HTML and fall back to URL parsing
+ */
+function extractGCSProductInfo(
+  html: string,
+  url: string
+): Partial<ProductInfo> {
+  const result: Partial<ProductInfo> = {};
+
+  // Try og:title first, but check if it's actually loaded (not "Loading...")
+  const ogTitleMatch = html.match(/property="og:title"\s+content="([^"]+)"/i);
+  if (ogTitleMatch && ogTitleMatch[1] && !ogTitleMatch[1].includes("Loading")) {
+    result.product_title = ogTitleMatch[1].trim();
+  }
+
+  // Try to find title from the main content area - GCS pattern
+  if (!result.product_title) {
+    // Look for standalone title pattern (after image, before "No Reviews")
+    const titleMatch = html.match(
+      />\s*([^<>]{10,200}?)\s*(?:No Reviews|SKU:|In Stock|Out of Stock)/i
+    );
+    if (titleMatch && titleMatch[1]) {
+      const title = titleMatch[1].trim().replace(/\s+/g, " ");
+      // Filter out non-title content and loading states
+      if (
+        !title.includes("http") &&
+        !title.includes("©") &&
+        !title.includes("Loading") &&
+        title.length > 10
+      ) {
+        result.product_title = title;
+      }
+    }
+  }
+
+  // FALLBACK: Extract title from URL slug if HTML doesn't have it
+  // This is crucial for JS-rendered sites like GCS
+  if (!result.product_title || result.product_title === "Loading...") {
+    const slugTitle = extractTitleFromUrlSlug(url);
+    if (slugTitle) {
+      result.product_title = slugTitle;
+    }
+  }
+
+  // GCS price pattern: $XXX directly in the content
+  // Pattern: $167 or $ 167 before "Price excludes VAT"
+  const pricePatterns = [
+    /(?:In Stock|Out of Stock)\s*\$\s*([\d,]+(?:\.\d{2})?)/i,
+    /\$\s*([\d,]+(?:\.\d{2})?)\s*(?:Price excludes|Price includes)/i,
+    />\s*\$\s*([\d,]+(?:\.\d{2})?)\s*</,
+  ];
+
+  for (const pattern of pricePatterns) {
+    const match = html.match(pattern);
+    if (match && match[1]) {
+      const priceStr = match[1].replace(/,/g, "");
+      const price = parseFloat(priceStr);
+      if (!isNaN(price) && price > 0 && price < 100000) {
+        result.price = price;
+        result.currency = "USD";
+        break;
+      }
+    }
+  }
+
+  // GCS image pattern: backend.gcscomputerpro.com/storage/...
+  const imagePatterns = [
+    /src="(https:\/\/backend\.gcscomputerpro\.com\/storage\/[^"]+)"/i,
+    /property="og:image"\s+content="([^"]+)"/i,
+    /src="([^"]+\.(?:webp|jpg|jpeg|png))"/i,
+  ];
+
+  for (const pattern of imagePatterns) {
+    const match = html.match(pattern);
+    if (match && match[1] && match[1].startsWith("http")) {
+      // Skip small/icon images
+      if (!match[1].includes("icon") && !match[1].includes("logo")) {
+        result.image_url = match[1];
+        break;
+      }
+    }
+  }
+
+  // GCS stock status - simple "In Stock" or "Out of Stock" text
+  if (/>\s*In Stock\s*</i.test(html) || /In Stock\s*\$/i.test(html)) {
+    result.stock_status = "in_stock";
+  } else if (/>\s*Out of Stock\s*</i.test(html) || /Out of Stock/i.test(html)) {
+    result.stock_status = "out_of_stock";
+  }
+
+  // Mark that we used URL extraction if no price/stock was found
+  if (!result.price && !result.stock_status) {
+    (result as any).extraction_note =
+      "JS-rendered site - title from URL, price/stock unavailable";
+  }
+
+  return result;
+}
+
+/**
+ * Check if URL is from GCS Computer Pro
+ */
+function isGCSWebsite(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname;
+    return hostname.includes("gcscomputerpro.com");
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Try to extract basic product info from HTML without AI (fallback)
  */
 function extractBasicProductInfo(
   html: string,
   url: string
 ): Partial<ProductInfo> {
+  // Check if this is a GCS website - use specialized extractor
+  if (isGCSWebsite(url)) {
+    console.log("Using GCS-specific extractor for:", url);
+    return extractGCSProductInfo(html, url);
+  }
+
   const result: Partial<ProductInfo> = {};
 
   // Try to extract title from various common patterns
@@ -101,8 +376,10 @@ function extractBasicProductInfo(
     // Schema.org
     /itemprop="price"\s+content="([\d.]+)"/i,
     /property="product:price:amount"\s+content="([\d.]+)"/i,
-    // Currency with amount
+    // Currency with amount - enhanced
     />\s*\$\s*([\d,]+(?:\.\d{2})?)\s*</,
+    />\s*\$\s*([\d,]+(?:\.\d{2})?)\s*(?:Price|VAT|Tax)/i,
+    /(?:Stock|Available)\s*\$\s*([\d,]+(?:\.\d{2})?)/i,
     /USD\s*([\d,]+(?:\.\d{2})?)/i,
     /([\d,]+(?:\.\d{2})?)\s*USD/i,
     // Lebanese Pound
@@ -148,13 +425,24 @@ function extractBasicProductInfo(
     /property="og:image"\s+content="([^"]+)"/i,
     /class="[^"]*product[^"]*image[^"]*"[^>]*src="([^"]+)"/i,
     /data-zoom-image="([^"]+)"/i,
+    // Backend/storage image patterns (common in headless CMS)
+    /src="(https:\/\/[^"]*(?:storage|backend|cdn|media)[^"]*\.(?:webp|jpg|jpeg|png))"/i,
+    // Generic product images
+    /src="(https:\/\/[^"]*product[^"]*\.(?:webp|jpg|jpeg|png))"/i,
   ];
 
   for (const pattern of imagePatterns) {
     const match = html.match(pattern);
     if (match && match[1] && match[1].startsWith("http")) {
-      result.image_url = match[1];
-      break;
+      // Skip small/icon/logo images
+      if (
+        !match[1].includes("icon") &&
+        !match[1].includes("logo") &&
+        !match[1].includes("favicon")
+      ) {
+        result.image_url = match[1];
+        break;
+      }
     }
   }
 
@@ -218,10 +506,22 @@ function extractBasicProductInfo(
     }
   }
 
-  // If still unknown, check for general "in stock" text
+  // If still unknown, check for general "in stock" text patterns
   if (!result.stock_status) {
-    if (/class="[^"]*stock[^"]*"[^>]*>[\s\S]*?in\s+stock/i.test(html)) {
-      result.stock_status = "in_stock";
+    const inStockPatterns = [
+      /class="[^"]*stock[^"]*"[^>]*>[\s\S]*?in\s+stock/i,
+      // Generic "In Stock" text (common in custom CMS sites)
+      />\s*In Stock\s*</i,
+      />\s*In Stock\s*\$/i,
+      // Near price patterns
+      /In Stock\s*\$[\d,]+/i,
+    ];
+
+    for (const pattern of inStockPatterns) {
+      if (pattern.test(html)) {
+        result.stock_status = "in_stock";
+        break;
+      }
     }
   }
 
@@ -302,6 +602,7 @@ async function fetchWithRetry(
 /**
  * Fetch webpage content and extract product info using regex patterns
  * No AI/Gemini required - pure HTML parsing
+ * For JS-rendered sites like GCS, uses Jina AI reader
  */
 async function scrapeProductInfo(url: string): Promise<ProductInfo> {
   const storeName = extractStoreName(url);
@@ -319,7 +620,53 @@ async function scrapeProductInfo(url: string): Promise<ProductInfo> {
   };
 
   try {
-    // Try to fetch the webpage
+    // For JS-rendered sites, use Jina AI reader first
+    if (isJSRenderedSite(url)) {
+      console.log(`Using Jina reader for JS-rendered site: ${url}`);
+
+      const { content, success } = await fetchWithJinaReader(url);
+
+      if (success && content) {
+        const jinaInfo = extractFromJinaContent(content, url);
+
+        console.log(`Jina extraction for ${url}:`, jinaInfo);
+
+        // If we got good data from Jina, return it
+        if (jinaInfo.product_title && jinaInfo.product_title !== "Loading...") {
+          return {
+            store_name: storeName,
+            product_title: jinaInfo.product_title || "View product",
+            price: jinaInfo.price || null,
+            currency: jinaInfo.currency || "USD",
+            stock_status: jinaInfo.stock_status || "unknown",
+            stock_quantity: null,
+            image_url: jinaInfo.image_url || null,
+            extra_info: { extraction_method: "jina_reader" },
+          };
+        }
+      }
+
+      // Fallback to URL-based extraction for JS sites
+      console.log(
+        `Jina reader failed, falling back to URL extraction for ${url}`
+      );
+      const slugTitle = extractTitleFromUrlSlug(url);
+      return {
+        store_name: storeName,
+        product_title: slugTitle || "View product",
+        price: null,
+        currency: "USD",
+        stock_status: "unknown",
+        stock_quantity: null,
+        image_url: null,
+        extra_info: {
+          extraction_method: "url_slug",
+          note: "JS-rendered site - limited data available",
+        },
+      };
+    }
+
+    // For regular sites, use direct fetch
     const { html, success } = await fetchWithRetry(url);
 
     if (!success || !html) {
@@ -565,7 +912,14 @@ async function scrapeAndUpdateLink(
   try {
     const productInfo = await scrapeProductInfo(url);
 
-    await supabase
+    console.log(`Updating link ${linkId} with:`, {
+      product_title: productInfo.product_title,
+      price: productInfo.price,
+      stock_status: productInfo.stock_status,
+      image_url: productInfo.image_url,
+    });
+
+    const { error: updateError } = await supabase
       .from("shopping_item_links")
       .update({
         store_name: productInfo.store_name,
@@ -581,6 +935,12 @@ async function scrapeAndUpdateLink(
         updated_at: new Date().toISOString(),
       })
       .eq("id", linkId);
+
+    if (updateError) {
+      console.error(`Database update error for link ${linkId}:`, updateError);
+    } else {
+      console.log(`Successfully updated link ${linkId}`);
+    }
   } catch (error) {
     console.error(`Failed to scrape and update link ${linkId}:`, error);
 
