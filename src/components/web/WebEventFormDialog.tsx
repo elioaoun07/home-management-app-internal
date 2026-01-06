@@ -229,7 +229,8 @@ export function WebEventFormDialog({
         setPriority(editItem.priority);
         setIsPublic(editItem.is_public ?? true);
         setResponsibleUserId(
-          (editItem.responsible_user_id || householdData?.currentUserId) ?? undefined
+          (editItem.responsible_user_id || householdData?.currentUserId) ??
+            undefined
         );
 
         // Initialize categories

@@ -131,9 +131,7 @@ export async function GET(req: NextRequest) {
 
       // Get the list of preferred times (UTC) from metadata
       // Default to 20:00 UTC if not set
-      const preferredTimes: string[] = metadata.preferred_times || [
-        "20:00:00",
-      ];
+      const preferredTimes: string[] = metadata.preferred_times || ["20:00:00"];
 
       // Get already sent slots for today
       const lastSentSlots: Record<string, string[]> =

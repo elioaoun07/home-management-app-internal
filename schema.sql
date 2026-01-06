@@ -203,6 +203,9 @@ CREATE TABLE public.hub_message_receipts (
   delivered_at timestamp with time zone,
   read_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now(),
+  push_status text CHECK (push_status IS NULL OR push_status IN ('pending', 'sent', 'failed')),
+  push_sent_at timestamp with time zone,
+  push_error text,
   CONSTRAINT hub_message_receipts_pkey PRIMARY KEY (id),
   CONSTRAINT hub_message_receipts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT hub_message_receipts_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.hub_messages(id)

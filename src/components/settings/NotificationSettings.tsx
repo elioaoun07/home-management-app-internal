@@ -344,12 +344,17 @@ function InAppNotificationPreferences() {
   };
 
   // Get preferred times array from metadata (for multiple reminders per day)
-  const getPreferredTimes = (key: string, defaultTimes = ["18:00"]): string[] => {
+  const getPreferredTimes = (
+    key: string,
+    defaultTimes = ["18:00"]
+  ): string[] => {
     const pref = getPreference(key);
     const metadata = pref?.metadata as Record<string, unknown> | null;
     if (metadata?.preferred_times && Array.isArray(metadata.preferred_times)) {
       // Convert "HH:mm:ss" to "HH:mm"
-      return (metadata.preferred_times as string[]).map((t) => t.substring(0, 5));
+      return (metadata.preferred_times as string[]).map((t) =>
+        t.substring(0, 5)
+      );
     }
     // Fallback to old preferred_time field
     if (pref?.preferred_time) {
@@ -413,9 +418,7 @@ function InAppNotificationPreferences() {
     if (enable) {
       // Add evening reminder (default 6 PM) if only morning exists
       newTimes =
-        currentTimes.length === 1
-          ? [currentTimes[0], "18:00"]
-          : currentTimes;
+        currentTimes.length === 1 ? [currentTimes[0], "18:00"] : currentTimes;
     } else {
       // Keep only the first time
       newTimes = [currentTimes[0]];
