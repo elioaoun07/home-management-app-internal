@@ -320,6 +320,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Only send push notifications for budget and reminder threads
+  const shouldSendPush =
+    thread?.purpose === "budget" || thread?.purpose === "reminder";
+
   // Create receipt for partner with status='delivered' (message saved on server)
   let receiptId: string | null = null;
   if (partnerUserId) {
@@ -330,16 +334,13 @@ export async function POST(request: NextRequest) {
         user_id: partnerUserId,
         status: "delivered",
         delivered_at: new Date().toISOString(),
-        push_status: "pending", // Will update after push attempt
+        // Only set push_status for threads that should get push notifications
+        push_status: shouldSendPush ? "pending" : null,
       })
       .select("id")
       .single();
     receiptId = receipt?.id || null;
   }
-
-  // Only send push notifications for budget and reminder threads
-  const shouldSendPush =
-    thread?.purpose === "budget" || thread?.purpose === "reminder";
 
   // Send immediate push notification to partner (only for budget/reminder threads)
   if (
@@ -417,14 +418,48 @@ export async function POST(request: NextRequest) {
             .update({
               push_status: pushSent ? "sent" : "failed",
               push_sent_at: new Date().toISOString(),
+              push_error: pushSent ? null : "All subscriptions failed",
+            })
+            .eq("id", receiptId);
+        }
+      } else {
+        // No push subscriptions - mark as failed with reason
+        if (receiptId) {
+          await supabase
+            .from("hub_message_receipts")
+            .update({
+              push_status: "failed",
+              push_sent_at: new Date().toISOString(),
+              push_error: "No active push subscriptions for recipient",
             })
             .eq("id", receiptId);
         }
       }
     } catch (pushError) {
       console.error("[Chat] Error sending push notification:", pushError);
-      // Don't fail the request - message was still created
+      // Update receipt with error
+      if (receiptId) {
+        await supabase
+          .from("hub_message_receipts")
+          .update({
+            push_status: "failed",
+            push_sent_at: new Date().toISOString(),
+            push_error:
+              pushError instanceof Error ? pushError.message : "Unknown error",
+          })
+          .eq("id", receiptId);
+      }
     }
+  } else if (shouldSendPush && receiptId) {
+    // VAPID keys not configured - mark as failed
+    await supabase
+      .from("hub_message_receipts")
+      .update({
+        push_status: "failed",
+        push_sent_at: new Date().toISOString(),
+        push_error: "Push notifications not configured (missing VAPID keys)",
+      })
+      .eq("id", receiptId);
   }
 
   // Update thread's last_message_at
