@@ -1,5 +1,6 @@
 "use client";
 
+import { ResponsibleUserPicker } from "@/components/items/ResponsibleUserPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,7 +22,9 @@ import {
   useUpdateItem,
   useUpdateReminderDetails,
 } from "@/features/items/useItems";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNotification";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import type {
@@ -163,6 +166,9 @@ export function WebEventFormDialog({
   const themeClasses = useThemeClasses();
   const isPink = theme === "pink";
 
+  // Household members for responsible user picker
+  const { data: householdData } = useHouseholdMembers();
+
   // Form state
   const [itemType, setItemType] = useState<ItemType>(defaultType);
   const [title, setTitle] = useState("");
@@ -196,6 +202,11 @@ export function WebEventFormDialog({
   // Visibility state (default PUBLIC)
   const [isPublic, setIsPublic] = useState(true);
 
+  // Responsible user state
+  const [responsibleUserId, setResponsibleUserId] = useState<
+    string | undefined
+  >(undefined);
+
   // Mutations
   const createReminder = useCreateReminder();
   const createEvent = useCreateEvent();
@@ -217,6 +228,9 @@ export function WebEventFormDialog({
         setDescription(editItem.description || "");
         setPriority(editItem.priority);
         setIsPublic(editItem.is_public ?? true);
+        setResponsibleUserId(
+          (editItem.responsible_user_id || householdData?.currentUserId) ?? undefined
+        );
 
         // Initialize categories
         setSelectedCategories(editItem.categories || ["personal"]);
@@ -292,6 +306,7 @@ export function WebEventFormDialog({
           prefillCategory ? [prefillCategory] : ["personal"]
         );
         setIsPublic(true);
+        setResponsibleUserId(householdData?.currentUserId ?? undefined);
       }
     }
   }, [
@@ -301,6 +316,7 @@ export function WebEventFormDialog({
     defaultType,
     prefillTitle,
     prefillCategory,
+    householdData?.currentUserId,
   ]);
 
   // Auto-update end date when start date changes
@@ -459,8 +475,26 @@ export function WebEventFormDialog({
             category_ids:
               selectedCategories.length > 0 ? selectedCategories : undefined,
             is_public: isPublic,
+            responsible_user_id: responsibleUserId,
           };
           const newReminder = await createReminder.mutateAsync(input);
+
+          // Send notification if assigned to someone else
+          if (
+            responsibleUserId &&
+            householdData?.currentUserId &&
+            responsibleUserId !== householdData.currentUserId
+          ) {
+            await checkAndNotifyAssignment({
+              itemId: newReminder.id,
+              itemTitle: title.trim(),
+              itemType: "reminder",
+              newResponsibleUserId: responsibleUserId,
+              currentUserId: householdData.currentUserId,
+              currentUserName: "Me",
+            });
+          }
+
           toast.success("Reminder created!", {
             icon: ToastIcons.create,
             action: {
@@ -528,8 +562,26 @@ export function WebEventFormDialog({
             alerts: alerts.length > 0 ? alerts : undefined,
             recurrence_rule,
             is_public: isPublic,
+            responsible_user_id: responsibleUserId,
           };
           const newEvent = await createEvent.mutateAsync(input);
+
+          // Send notification if assigned to someone else
+          if (
+            responsibleUserId &&
+            householdData?.currentUserId &&
+            responsibleUserId !== householdData.currentUserId
+          ) {
+            await checkAndNotifyAssignment({
+              itemId: newEvent.id,
+              itemTitle: title.trim(),
+              itemType: "event",
+              newResponsibleUserId: responsibleUserId,
+              currentUserId: householdData.currentUserId,
+              currentUserName: "Me",
+            });
+          }
+
           toast.success("Event created!", {
             icon: ToastIcons.create,
             action: {
@@ -575,8 +627,26 @@ export function WebEventFormDialog({
               selectedCategories.length > 0 ? selectedCategories : undefined,
             recurrence_rule,
             is_public: isPublic,
+            responsible_user_id: responsibleUserId,
           };
           const newTask = await createTask.mutateAsync(input);
+
+          // Send notification if assigned to someone else
+          if (
+            responsibleUserId &&
+            householdData?.currentUserId &&
+            responsibleUserId !== householdData.currentUserId
+          ) {
+            await checkAndNotifyAssignment({
+              itemId: newTask.id,
+              itemTitle: title.trim(),
+              itemType: "task",
+              newResponsibleUserId: responsibleUserId,
+              currentUserId: householdData.currentUserId,
+              currentUserName: "Me",
+            });
+          }
+
           toast.success("Task created!", {
             icon: ToastIcons.create,
             action: {
@@ -1229,6 +1299,60 @@ export function WebEventFormDialog({
                 : "Only visible to you"}
             </p>
           </div>
+
+          {/* Responsible User Picker */}
+          {householdData?.hasPartner && (
+            <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+              <div className="flex items-center gap-2">
+                <div
+                  className={cn(
+                    "p-1.5 rounded-lg",
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                  )}
+                >
+                  <User
+                    className={cn(
+                      "w-4 h-4",
+                      isPink ? "text-pink-400" : "text-cyan-400"
+                    )}
+                  />
+                </div>
+                <Label className="text-sm font-semibold text-white">
+                  Responsible
+                </Label>
+              </div>
+              <ResponsibleUserPicker
+                value={responsibleUserId}
+                onChange={(userId) => {
+                  setResponsibleUserId(userId);
+                  // If assigning to someone else, ensure item is public
+                  if (userId !== householdData.currentUserId && !isPublic) {
+                    setIsPublic(true);
+                  }
+                }}
+                isPublic={isPublic}
+                disabled={!isPublic}
+              />
+              {isPublic &&
+                responsibleUserId &&
+                responsibleUserId !== householdData.currentUserId && (
+                  <p className="text-xs text-pink-300/70 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" />
+                    {
+                      householdData.members.find(
+                        (m) => m.id === responsibleUserId
+                      )?.displayName
+                    }{" "}
+                    will be notified
+                  </p>
+                )}
+              {!isPublic && (
+                <p className="text-xs text-white/40">
+                  Make item public to assign to your partner
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Description */}
           <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">

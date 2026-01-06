@@ -16,12 +16,15 @@ import {
   useUpdateItem,
   useUpdateReminderDetails,
 } from "@/features/items/useItems";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
+import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNotification";
 import { cn } from "@/lib/utils";
 import type { ItemPriority, ItemWithDetails } from "@/types/items";
 import { format, parseISO } from "date-fns";
 import { Bell, MapPin, Tag, User, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ResponsibleUserPicker } from "./ResponsibleUserPicker";
 
 interface EditItemDialogProps {
   item: ItemWithDetails | null;
@@ -37,6 +40,9 @@ export default function EditItemDialog({
   const { theme } = useTheme();
   const isPink = theme === "pink";
 
+  // Household members for responsible user picker
+  const { data: householdData } = useHouseholdMembers();
+
   // Form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -51,6 +57,12 @@ export default function EditItemDialog({
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [alertMinutes, setAlertMinutes] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [responsibleUserId, setResponsibleUserId] = useState<
+    string | undefined
+  >(undefined);
+  const [originalResponsibleUserId, setOriginalResponsibleUserId] = useState<
+    string | undefined
+  >(undefined);
 
   // Category options
   const CATEGORIES = [
@@ -87,6 +99,8 @@ export default function EditItemDialog({
     setPriority(item.priority);
     setIsPublic(item.is_public ?? true);
     setSelectedCategories(item.categories || []);
+    setResponsibleUserId(item.responsible_user_id);
+    setOriginalResponsibleUserId(item.responsible_user_id);
 
     // Initialize alert
     if (item.alerts && item.alerts.length > 0) {
@@ -149,7 +163,26 @@ export default function EditItemDialog({
         priority,
         is_public: isPublic,
         categories: selectedCategories,
+        responsible_user_id: responsibleUserId,
       });
+
+      // Check if responsible user changed and send notification
+      if (
+        responsibleUserId &&
+        responsibleUserId !== originalResponsibleUserId &&
+        householdData?.currentUserId &&
+        responsibleUserId !== householdData.currentUserId
+      ) {
+        await checkAndNotifyAssignment({
+          itemId: item.id,
+          itemTitle: title.trim(),
+          itemType: item.type,
+          newResponsibleUserId: responsibleUserId,
+          previousResponsibleUserId: originalResponsibleUserId,
+          currentUserId: householdData.currentUserId,
+          currentUserName: "Me",
+        });
+      }
 
       // Update type-specific details
       if (item.type === "reminder" || item.type === "task") {
@@ -443,7 +476,13 @@ export default function EditItemDialog({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setIsPublic(!isPublic)}
+                onClick={() => {
+                  setIsPublic(!isPublic);
+                  // Reset responsible user to self when making private
+                  if (isPublic && householdData?.currentUserId) {
+                    setResponsibleUserId(householdData.currentUserId);
+                  }
+                }}
                 className={cn(
                   "relative w-11 h-6 rounded-full transition-colors",
                   isPublic
@@ -467,6 +506,42 @@ export default function EditItemDialog({
               </span>
             </div>
           </div>
+
+          {/* Responsible User */}
+          {householdData?.hasPartner && (
+            <div className="space-y-2">
+              <Label className="text-white/70 flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Responsible
+              </Label>
+              <ResponsibleUserPicker
+                value={responsibleUserId}
+                onChange={(userId) => {
+                  setResponsibleUserId(userId);
+                  // If assigning to someone else, ensure item is public
+                  if (userId !== householdData.currentUserId && !isPublic) {
+                    setIsPublic(true);
+                  }
+                }}
+                isPublic={isPublic}
+                disabled={!isPublic}
+              />
+              {isPublic &&
+                responsibleUserId &&
+                responsibleUserId !== householdData.currentUserId &&
+                responsibleUserId !== originalResponsibleUserId && (
+                  <p className="text-xs text-pink-300/70">
+                    ✨{" "}
+                    {
+                      householdData.members.find(
+                        (m) => m.id === responsibleUserId
+                      )?.displayName
+                    }{" "}
+                    will be notified
+                  </p>
+                )}
+            </div>
+          )}
         </div>
 
         {/* Actions */}

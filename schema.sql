@@ -229,6 +229,7 @@ CREATE TABLE public.hub_messages (
   item_url text,
   topic_id uuid,
   item_quantity text,
+  has_links boolean DEFAULT false,
   CONSTRAINT hub_messages_pkey PRIMARY KEY (id),
   CONSTRAINT hub_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
   CONSTRAINT hub_messages_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
@@ -332,6 +333,17 @@ CREATE TABLE public.item_snoozes (
   CONSTRAINT item_snoozes_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.item_alerts(id),
   CONSTRAINT item_snoozes_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
+CREATE TABLE public.item_subtask_completions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  subtask_id uuid NOT NULL,
+  occurrence_date timestamp with time zone NOT NULL,
+  completed_at timestamp with time zone NOT NULL DEFAULT now(),
+  completed_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT item_subtask_completions_pkey PRIMARY KEY (id),
+  CONSTRAINT item_subtask_completions_subtask_id_fkey FOREIGN KEY (subtask_id) REFERENCES public.item_subtasks(id),
+  CONSTRAINT item_subtask_completions_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES auth.users(id)
+);
 CREATE TABLE public.item_subtasks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   parent_item_id uuid NOT NULL,
@@ -340,6 +352,7 @@ CREATE TABLE public.item_subtasks (
   order_index integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  occurrence_date timestamp with time zone,
   CONSTRAINT item_subtasks_pkey PRIMARY KEY (id),
   CONSTRAINT item_subtasks_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES public.items(id)
 );
@@ -504,6 +517,27 @@ CREATE TABLE public.reminder_templates (
   CONSTRAINT reminder_templates_pkey PRIMARY KEY (id),
   CONSTRAINT reminder_templates_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.shopping_item_links (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  message_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  url text NOT NULL,
+  store_name text,
+  product_title text,
+  price numeric,
+  currency text DEFAULT 'USD'::text,
+  stock_status text,
+  stock_quantity integer,
+  image_url text,
+  extra_info jsonb,
+  last_fetched_at timestamp with time zone,
+  fetch_error text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT shopping_item_links_pkey PRIMARY KEY (id),
+  CONSTRAINT shopping_item_links_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.hub_messages(id),
+  CONSTRAINT shopping_item_links_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.statement_imports (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -551,12 +585,15 @@ CREATE TABLE public.transactions (
   collaborator_amount numeric,
   collaborator_description text,
   split_completed_at timestamp with time zone,
+  collaborator_account_id uuid,
+  lbp_change_received numeric,
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
   CONSTRAINT transactions_category_fk FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_subcategory_fk FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
   CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT transactions_collaborator_id_fkey FOREIGN KEY (collaborator_id) REFERENCES auth.users(id)
+  CONSTRAINT transactions_collaborator_id_fkey FOREIGN KEY (collaborator_id) REFERENCES auth.users(id),
+  CONSTRAINT transactions_collaborator_account_id_fkey FOREIGN KEY (collaborator_account_id) REFERENCES public.accounts(id)
 );
 CREATE TABLE public.user_categories (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -574,8 +611,8 @@ CREATE TABLE public.user_categories (
   CONSTRAINT user_categories_pkey PRIMARY KEY (id),
   CONSTRAINT user_categories_default_fk FOREIGN KEY (default_category_id) REFERENCES public.default_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
@@ -594,6 +631,7 @@ CREATE TABLE public.user_preferences (
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
   section_order jsonb DEFAULT '["amount", "account", "category", "subcategory", "description"]'::jsonb,
   date_start text DEFAULT '''mon-1''::text'::text,
+  lbp_exchange_rate numeric,
   CONSTRAINT user_preferences_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );

@@ -1,10 +1,15 @@
 /**
  * Daily Transaction Reminder - Unified Cron Endpoint
  *
- * OPTIMAL APPROACH:
- * - Uses `last_sent_at` field in notification_preferences for deduplication
- * - Only creates notification for user visibility, not for tracking
- * - Much cleaner than group_key approach
+ * SUPPORTS MULTIPLE REMINDER TIMES PER DAY:
+ * - Uses `preferred_times` array in metadata for multiple daily reminders
+ * - Uses `last_sent_slots` in metadata to track which time slots have been sent today
+ *
+ * Example metadata:
+ * {
+ *   "preferred_times": ["05:15:00", "16:00:00"],  // UTC times (7:15 AM and 6:00 PM Beirut)
+ *   "last_sent_slots": { "2026-01-06": ["05:15:00"] }  // Already sent for this slot today
+ * }
  *
  * Cron schedule: every 5 minutes
  * Endpoint: GET /api/cron/daily-reminder
@@ -24,6 +29,32 @@ const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
+// Helper: Check if current UTC time matches a target time (within 5-minute window)
+function isTimeMatch(
+  currentTotalMinutes: number,
+  targetHour: number,
+  targetMinute: number
+): boolean {
+  const targetTotalMinutes = targetHour * 60 + targetMinute;
+
+  // Match if within 0-4 minutes after target time
+  const diff = currentTotalMinutes - targetTotalMinutes;
+  const isMatch = diff >= 0 && diff < 5;
+
+  // Handle midnight wraparound (e.g., target=23:58, current=00:02)
+  const diffWrapped = currentTotalMinutes + 1440 - targetTotalMinutes;
+  const isMatchWrapped =
+    diffWrapped >= 0 && diffWrapped < 5 && targetTotalMinutes > 1435;
+
+  return isMatch || isMatchWrapped;
+}
+
+// Helper: Parse time string "HH:MM:SS" or "HH:MM" to [hour, minute]
+function parseTime(timeStr: string): [number, number] {
+  const [hour, minute] = timeStr.split(":").map(Number);
+  return [hour, minute];
 }
 
 export async function GET(req: NextRequest) {
@@ -68,7 +99,7 @@ export async function GET(req: NextRequest) {
     // Get all users with daily_transaction_reminder enabled
     const { data: preferences, error: prefError } = await supabase
       .from("notification_preferences")
-      .select("id, user_id, preferred_time, timezone, metadata, last_sent_at")
+      .select("id, user_id, timezone, metadata, last_sent_at")
       .eq("preference_key", "daily_transaction_reminder")
       .eq("enabled", true);
 
@@ -85,40 +116,49 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Filter to eligible users:
-    // 1. preferred_time is NOW (within 5 min window)
-    // 2. last_sent_at is NULL or before today
-    const eligibleUsers: typeof preferences = [];
-    let alreadySentToday = 0;
+    // Filter to eligible users based on their preferred times
+    const eligibleUsers: Array<{
+      pref: (typeof preferences)[0];
+      matchedSlot: string;
+    }> = [];
+    let alreadySentForSlot = 0;
 
     for (const pref of preferences) {
-      // Check if already sent today
-      if (pref.last_sent_at) {
-        const lastSentDate = pref.last_sent_at.split("T")[0];
-        if (lastSentDate === todayUTC) {
-          alreadySentToday++;
-          continue; // Already sent today, skip
+      const metadata =
+        typeof pref.metadata === "string"
+          ? JSON.parse(pref.metadata)
+          : pref.metadata || {};
+
+      // Get the list of preferred times (UTC) from metadata
+      // Default to 20:00 UTC if not set
+      const preferredTimes: string[] = metadata.preferred_times || [
+        "20:00:00",
+      ];
+
+      // Get already sent slots for today
+      const lastSentSlots: Record<string, string[]> =
+        metadata.last_sent_slots || {};
+      const todaySentSlots: string[] = lastSentSlots[todayUTC] || [];
+
+      // Check each preferred time
+      for (const timeSlot of preferredTimes) {
+        const [prefHour, prefMinute] = parseTime(timeSlot);
+
+        // Check if this time slot matches current time
+        if (isTimeMatch(currentTotalMinutes, prefHour, prefMinute)) {
+          // Check if already sent for this specific slot today
+          if (todaySentSlots.includes(timeSlot)) {
+            alreadySentForSlot++;
+            console.log(
+              `[Daily Reminder] User ${pref.user_id}: Already sent for slot ${timeSlot} today`
+            );
+            continue;
+          }
+
+          // Eligible for this time slot!
+          eligibleUsers.push({ pref, matchedSlot: timeSlot });
+          break; // Only match one slot per user per cron run
         }
-      }
-
-      // Parse preferred_time (format: "HH:MM:SS" or "HH:MM")
-      const [prefHour, prefMinute] = (pref.preferred_time || "20:00:00")
-        .split(":")
-        .map(Number);
-
-      const prefTotalMinutes = prefHour * 60 + prefMinute;
-
-      // Match if within 0-4 minutes after preferred time
-      const diff = currentTotalMinutes - prefTotalMinutes;
-      const isTimeMatch = diff >= 0 && diff < 5;
-
-      // Handle midnight wraparound (e.g., pref=23:58, current=00:02)
-      const diffWrapped = currentTotalMinutes + 1440 - prefTotalMinutes;
-      const isTimeMatchWrapped =
-        diffWrapped >= 0 && diffWrapped < 5 && prefTotalMinutes > 1435;
-
-      if (isTimeMatch || isTimeMatchWrapped) {
-        eligibleUsers.push(pref);
       }
     }
 
@@ -128,7 +168,7 @@ export async function GET(req: NextRequest) {
         message: "No users due for reminder at this time",
         checked_at_utc: `${currentHour}:${String(currentMinute).padStart(2, "0")}`,
         total_enabled: preferences.length,
-        already_sent_today: alreadySentToday,
+        already_sent_for_slot: alreadySentForSlot,
       });
     }
 
@@ -140,7 +180,7 @@ export async function GET(req: NextRequest) {
     let pushSent = 0;
     let pushFailed = 0;
 
-    for (const pref of eligibleUsers) {
+    for (const { pref, matchedSlot } of eligibleUsers) {
       const userId = pref.user_id;
       const prefId = pref.id;
 
@@ -153,14 +193,21 @@ export async function GET(req: NextRequest) {
 
       const hasLogged = (todayCount || 0) > 0;
 
-      // Build notification content
+      // Build notification content (customize based on morning vs evening)
+      const [slotHour] = parseTime(matchedSlot);
+      const isMorning = slotHour < 12;
+
       const title = hasLogged
         ? "Great job logging today! 🎉"
-        : "Did you log all your spending today?";
+        : isMorning
+          ? "Good morning! Ready to track today? ☀️"
+          : "Did you log all your spending today?";
 
       const message = hasLogged
         ? `You've logged ${todayCount} transaction${todayCount === 1 ? "" : "s"} today. Keep it up!`
-        : "Take a moment to log your spending. It helps you stay on budget!";
+        : isMorning
+          ? "Start your day by logging any purchases. Stay on budget!"
+          : "Take a moment to log your spending. It helps you stay on budget!";
 
       // Create notification (for user to see in-app)
       const { data: notification, error: insertError } = await supabase
@@ -196,10 +243,42 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Mark as sent TODAY in preferences (this is the deduplication!)
+      // Update metadata to mark this time slot as sent today (deduplication for multiple times per day)
+      const currentMetadata =
+        typeof pref.metadata === "string"
+          ? JSON.parse(pref.metadata)
+          : pref.metadata || {};
+
+      const lastSentSlots: Record<string, string[]> =
+        currentMetadata.last_sent_slots || {};
+
+      // Add this slot to today's sent slots
+      if (!lastSentSlots[todayUTC]) {
+        lastSentSlots[todayUTC] = [];
+      }
+      lastSentSlots[todayUTC].push(matchedSlot);
+
+      // Clean up old dates (keep only last 7 days to prevent metadata bloat)
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0];
+      for (const date of Object.keys(lastSentSlots)) {
+        if (date < sevenDaysAgo) {
+          delete lastSentSlots[date];
+        }
+      }
+
+      const updatedMetadata = {
+        ...currentMetadata,
+        last_sent_slots: lastSentSlots,
+      };
+
       await supabase
         .from("notification_preferences")
-        .update({ last_sent_at: now.toISOString() })
+        .update({
+          last_sent_at: now.toISOString(),
+          metadata: updatedMetadata,
+        })
         .eq("id", prefId);
 
       notificationsSent++;
@@ -222,7 +301,7 @@ export async function GET(req: NextRequest) {
             body: message,
             icon: "/appicon-192.png",
             badge: "/appicon-192.png",
-            tag: `daily-reminder-${todayUTC}`,
+            tag: `daily-reminder-${todayUTC}-${matchedSlot.replace(/:/g, "")}`,
             data: {
               type: "daily_reminder",
               notification_id: notification.id,

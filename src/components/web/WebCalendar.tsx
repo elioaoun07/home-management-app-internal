@@ -3,6 +3,7 @@
 import { useTheme } from "@/contexts/ThemeContext";
 import { getBirthdayDisplayName, getBirthdaysForDate } from "@/data/birthdays";
 import {
+  getCompletedOccurrencesForDate,
   getPostponedOccurrencesForDate,
   isOccurrenceCompleted,
   type ItemOccurrenceAction,
@@ -15,6 +16,7 @@ import {
   addMonths,
   endOfMonth,
   format,
+  formatDistanceToNow,
   isSameDay,
   isSameMonth,
   isToday,
@@ -28,9 +30,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Cake,
   CalendarPlus,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock,
+  Eye,
+  EyeOff,
+  FastForward,
   MapPin,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -132,6 +138,7 @@ export function WebCalendar({
   const [internalSelectedDate, setInternalSelectedDate] = useState<Date | null>(
     new Date()
   );
+  const [showCompleted, setShowCompleted] = useState(true);
 
   /**
    * Get the actual occurrence datetime for an item on a specific date
@@ -285,20 +292,20 @@ export function WebCalendar({
       }
     }
 
-    // Add postponed items that are scheduled for this date
-    const postponedForDate = getPostponedOccurrencesForDate(
-      items,
-      date,
-      occurrenceActions
-    );
-    for (const p of postponedForDate) {
-      // Avoid duplicates - check if item is already in result
-      if (!result.some((r) => r.id === p.item.id)) {
-        result.push(p.item);
-      }
-    }
+    // NOTE: We no longer add postponed items here - they are shown in a separate
+    // "Postponed to this day" section via getPostponedItemsForDate
 
     return result;
+  };
+
+  // Get completed items for a specific date
+  const getCompletedItemsForDate = (date: Date) => {
+    return getCompletedOccurrencesForDate(items, date, occurrenceActions);
+  };
+
+  // Get postponed items for a specific date (items postponed TO this date)
+  const getPostponedItemsForDate = (date: Date) => {
+    return getPostponedOccurrencesForDate(items, date, occurrenceActions);
   };
 
   const goToPreviousMonth = () => {
@@ -327,6 +334,11 @@ export function WebCalendar({
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const selectedDateItems = selectedDate ? getItemsForDate(selectedDate) : [];
+  const selectedDateCompletedItems =
+    selectedDate && showCompleted ? getCompletedItemsForDate(selectedDate) : [];
+  const selectedDatePostponedItems = selectedDate
+    ? getPostponedItemsForDate(selectedDate)
+    : [];
   const selectedDateBirthdays =
     selectedDate && showBirthdays ? getBirthdaysForDate(selectedDate) : [];
 
@@ -399,6 +411,24 @@ export function WebCalendar({
           </div>
 
           <div className="flex items-center gap-1 lg:gap-2">
+            {/* Show/Hide Completed Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowCompleted(!showCompleted)}
+              className={cn(
+                "p-1 lg:p-2 rounded-lg transition-all duration-200",
+                "bg-white/5 hover:bg-white/10 border border-white/10",
+                showCompleted ? "text-green-400" : "text-white/40"
+              )}
+              title={showCompleted ? "Hide completed" : "Show completed"}
+            >
+              {showCompleted ? (
+                <Eye className="w-3 h-3 lg:w-4 lg:h-4" />
+              ) : (
+                <EyeOff className="w-3 h-3 lg:w-4 lg:h-4" />
+              )}
+            </button>
+
             <button
               type="button"
               onClick={goToToday}
@@ -462,11 +492,19 @@ export function WebCalendar({
           >
             {calendarDays.map((date, index) => {
               const dayItems = getItemsForDate(date);
+              const completedItems = showCompleted
+                ? getCompletedItemsForDate(date)
+                : [];
+              const postponedItems = getPostponedItemsForDate(date);
               const birthdays = showBirthdays ? getBirthdaysForDate(date) : [];
               const isTodayDate = isToday(date);
               const isCurrentMonth = isSameMonth(date, currentMonth);
               const isSelected = selectedDate && isSameDay(date, selectedDate);
-              const hasItems = dayItems.length > 0 || birthdays.length > 0;
+              const hasItems =
+                dayItems.length > 0 ||
+                birthdays.length > 0 ||
+                completedItems.length > 0 ||
+                postponedItems.length > 0;
               const isWeekendDay = isWeekend(date);
               const isHovered = hoveredDate && isSameDay(date, hoveredDate);
 
@@ -623,14 +661,112 @@ export function WebCalendar({
                         );
                       })}
 
-                    {dayItems.length + birthdays.length > 2 && (
+                    {/* Show completed items with green styling */}
+                    {completedItems
+                      .slice(
+                        0,
+                        Math.max(
+                          0,
+                          2 - dayItems.length - Math.min(birthdays.length, 1)
+                        )
+                      )
+                      .map((completed) => {
+                        const item = completed.item;
+                        const time =
+                          item.type === "event"
+                            ? item.event_details?.start_at
+                            : item.reminder_details?.due_at;
+
+                        return (
+                          <motion.div
+                            key={`completed-${item.id}`}
+                            initial={{ opacity: 0, x: -5 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onItemClick?.(item, e, completed.occurrenceDate);
+                            }}
+                            className={cn(
+                              "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate cursor-pointer",
+                              "border lg:border-2 transition-all duration-200 opacity-60",
+                              "bg-green-500/10 border-green-500/50 text-green-300/70"
+                            )}
+                          >
+                            <div className="flex items-center gap-0.5">
+                              {time && (
+                                <span className="text-[7px] lg:text-[9px] opacity-70 flex-shrink-0">
+                                  {format(parseISO(time), "HH:mm")}
+                                </span>
+                              )}
+                              <span className="truncate font-medium line-through">
+                                {item.title}
+                              </span>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+
+                    {/* Show postponed items with amber styling */}
+                    {postponedItems
+                      .slice(
+                        0,
+                        Math.max(
+                          0,
+                          2 -
+                            dayItems.length -
+                            completedItems.length -
+                            Math.min(birthdays.length, 1)
+                        )
+                      )
+                      .map((postponed) => {
+                        const item = postponed.item;
+                        const time =
+                          item.type === "event"
+                            ? item.event_details?.start_at
+                            : item.reminder_details?.due_at;
+
+                        return (
+                          <motion.div
+                            key={`postponed-${item.id}`}
+                            initial={{ opacity: 0, x: -5 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onItemClick?.(item, e, postponed.occurrenceDate);
+                            }}
+                            className={cn(
+                              "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate cursor-pointer",
+                              "border lg:border-2 transition-all duration-200 opacity-70",
+                              "bg-amber-500/10 border-amber-500/50 text-amber-300/80"
+                            )}
+                          >
+                            <div className="flex items-center gap-0.5">
+                              <FastForward className="w-2 h-2 lg:w-2.5 lg:h-2.5 flex-shrink-0" />
+                              <span className="truncate font-medium">
+                                {item.title}
+                              </span>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+
+                    {dayItems.length +
+                      birthdays.length +
+                      completedItems.length +
+                      postponedItems.length >
+                      2 && (
                       <div
                         className={cn(
                           "text-[7px] lg:text-[10px] font-medium px-0.5",
                           isPink ? "text-pink-400/70" : "text-cyan-400/70"
                         )}
                       >
-                        +{dayItems.length + birthdays.length - 2}
+                        +
+                        {dayItems.length +
+                          birthdays.length +
+                          completedItems.length +
+                          postponedItems.length -
+                          2}
                       </div>
                     )}
                   </div>
@@ -684,7 +820,9 @@ export function WebCalendar({
               </div>
 
               {selectedDateItems.length > 0 ||
-              selectedDateBirthdays.length > 0 ? (
+              selectedDateBirthdays.length > 0 ||
+              selectedDateCompletedItems.length > 0 ||
+              selectedDatePostponedItems.length > 0 ? (
                 <div className="space-y-2">
                   {/* Show birthdays first */}
                   {selectedDateBirthdays.map((birthday) => (
@@ -841,6 +979,159 @@ export function WebCalendar({
                       </motion.div>
                     );
                   })}
+
+                  {/* Postponed Items Section */}
+                  {selectedDatePostponedItems.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-white/10">
+                      <div className="flex items-center gap-2 mb-3">
+                        <FastForward className="w-4 h-4 text-amber-400" />
+                        <h4 className="text-sm font-medium text-amber-400">
+                          Postponed to this day
+                        </h4>
+                        <span className="text-xs text-amber-400/60">
+                          ({selectedDatePostponedItems.length})
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {selectedDatePostponedItems.map((postponed) => {
+                          const item = postponed.item;
+                          const colors =
+                            typeColors[item.type] || typeColors.task;
+                          const time =
+                            item.type === "event"
+                              ? item.event_details?.start_at
+                              : item.reminder_details?.due_at;
+
+                          return (
+                            <motion.div
+                              key={`postponed-${item.id}`}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              onClick={(e) => {
+                                onItemClick?.(
+                                  item,
+                                  e,
+                                  postponed.occurrenceDate
+                                );
+                              }}
+                              className={cn(
+                                "p-3 rounded-xl cursor-pointer",
+                                "border-2 border-amber-500/30 transition-all duration-200",
+                                "bg-amber-500/10 hover:bg-amber-500/15"
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <FastForward className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                                    <h4 className="font-medium text-amber-300 truncate">
+                                      {item.title}
+                                    </h4>
+                                  </div>
+                                  <div className="flex items-center gap-1 mt-1 text-sm text-amber-300/60 ml-6">
+                                    <span>
+                                      from{" "}
+                                      {format(postponed.originalDate, "MMM d")}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span
+                                  className={cn(
+                                    "px-2 py-0.5 rounded text-xs capitalize",
+                                    "bg-amber-500/20 text-amber-300"
+                                  )}
+                                >
+                                  {item.type}
+                                </span>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Completed Items Section */}
+                  {selectedDateCompletedItems.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-white/10">
+                      <div className="flex items-center gap-2 mb-3">
+                        <CheckCircle2 className="w-4 h-4 text-green-400" />
+                        <h4 className="text-sm font-medium text-green-400">
+                          Completed
+                        </h4>
+                        <span className="text-xs text-green-400/60">
+                          ({selectedDateCompletedItems.length})
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {selectedDateCompletedItems.map((completed) => {
+                          const item = completed.item;
+                          const colors =
+                            typeColors[item.type] || typeColors.task;
+                          const time =
+                            item.type === "event"
+                              ? item.event_details?.start_at
+                              : item.reminder_details?.due_at;
+
+                          return (
+                            <motion.div
+                              key={`completed-${item.id}`}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              onClick={(e) => {
+                                onItemClick?.(
+                                  item,
+                                  e,
+                                  completed.occurrenceDate
+                                );
+                              }}
+                              className={cn(
+                                "p-3 rounded-xl cursor-pointer",
+                                "border-2 border-green-500/30 transition-all duration-200",
+                                "bg-green-500/10 hover:bg-green-500/15 opacity-70"
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+                                    <h4 className="font-medium text-green-300 truncate line-through">
+                                      {item.title}
+                                    </h4>
+                                  </div>
+                                  <div className="flex flex-col gap-0.5 mt-1 ml-6">
+                                    {time && (
+                                      <div className="flex items-center gap-1 text-sm text-green-300/60">
+                                        <Clock className="w-3 h-3" />
+                                        <span>
+                                          {format(parseISO(time), "h:mm a")}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div className="text-xs text-green-400/50">
+                                      Completed{" "}
+                                      {formatDistanceToNow(
+                                        completed.completedAt,
+                                        { addSuffix: true }
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <span
+                                  className={cn(
+                                    "px-2 py-0.5 rounded text-xs capitalize",
+                                    "bg-green-500/20 text-green-300"
+                                  )}
+                                >
+                                  {item.type}
+                                </span>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-8">

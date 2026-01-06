@@ -1,8 +1,18 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import webpush from "web-push";
 
 export const dynamic = "force-dynamic";
+
+// Configure VAPID for push notifications
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY!;
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
 
 // Notification types (maps to notification_type_enum in database)
 export type NotificationType =
@@ -168,10 +178,45 @@ export async function POST(request: NextRequest) {
     recurring_payment_id,
     category_id,
     send_push = false,
+    target_user_id, // Optional: create notification for a different user (must be household member)
   } = body;
 
   if (!title) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
+  }
+
+  // Determine target user - default to current user
+  let notificationUserId = user.id;
+
+  // If target_user_id is specified, verify it's a valid household member
+  if (target_user_id && target_user_id !== user.id) {
+    const { data: householdLink } = await supabase
+      .from("household_links")
+      .select("owner_user_id, partner_user_id")
+      .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (householdLink) {
+      const partnerId =
+        householdLink.owner_user_id === user.id
+          ? householdLink.partner_user_id
+          : householdLink.owner_user_id;
+
+      if (target_user_id === partnerId) {
+        notificationUserId = target_user_id;
+      } else {
+        return NextResponse.json(
+          { error: "Target user is not a household member" },
+          { status: 403 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        { error: "No household link found" },
+        { status: 403 }
+      );
+    }
   }
 
   // Check for duplicate if group_key is provided
@@ -179,7 +224,7 @@ export async function POST(request: NextRequest) {
     const { data: existing } = await supabase
       .from("notifications")
       .select("id")
-      .eq("user_id", user.id)
+      .eq("user_id", notificationUserId)
       .eq("group_key", group_key)
       .eq("is_dismissed", false)
       .single();
@@ -195,7 +240,7 @@ export async function POST(request: NextRequest) {
   const { data: notification, error } = await supabase
     .from("notifications")
     .insert({
-      user_id: user.id,
+      user_id: notificationUserId,
       title,
       message,
       icon,
@@ -220,6 +265,77 @@ export async function POST(request: NextRequest) {
   if (error) {
     console.error("Error creating notification:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Send push notification immediately if requested
+  if (send_push && notification && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+    try {
+      // Get user's push subscriptions
+      const { data: subscriptions } = await supabase
+        .from("push_subscriptions")
+        .select("*")
+        .eq("user_id", notificationUserId)
+        .eq("is_active", true);
+
+      if (subscriptions && subscriptions.length > 0) {
+        const payload = JSON.stringify({
+          title,
+          body: message || "",
+          icon: "/icons/icon-192x192.png",
+          badge: "/icons/badge-72x72.png",
+          tag: notification.id,
+          data: {
+            url: action_url || "/",
+            notificationId: notification.id,
+          },
+        });
+
+        let pushSent = false;
+        for (const sub of subscriptions) {
+          try {
+            await webpush.sendNotification(
+              {
+                endpoint: sub.endpoint,
+                keys: {
+                  p256dh: sub.p256dh,
+                  auth: sub.auth,
+                },
+              },
+              payload
+            );
+            pushSent = true;
+          } catch (pushError) {
+            const webPushError = pushError as { statusCode?: number };
+            // Remove invalid subscriptions (410 Gone or 404 Not Found)
+            if (
+              webPushError.statusCode === 410 ||
+              webPushError.statusCode === 404
+            ) {
+              await supabase
+                .from("push_subscriptions")
+                .delete()
+                .eq("id", sub.id);
+            }
+            console.error(
+              `[in-app] Push failed for subscription ${sub.id}:`,
+              pushError
+            );
+          }
+        }
+
+        // Update push status
+        await supabase
+          .from("notifications")
+          .update({
+            push_status: pushSent ? "sent" : "failed",
+            push_sent_at: pushSent ? new Date().toISOString() : null,
+          })
+          .eq("id", notification.id);
+      }
+    } catch (pushError) {
+      console.error("[in-app] Error sending push notification:", pushError);
+      // Don't fail the request, notification was still created
+    }
   }
 
   return NextResponse.json({ notification });

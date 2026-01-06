@@ -256,11 +256,18 @@ export function getPostponedOccurrencesForDate<T extends { id: string }>(
     isPostponed: true;
   }> = [];
 
-  console.log("🔍 getPostponedOccurrencesForDate:", {
-    targetDate: targetDate.toISOString(),
-    targetDateLocal: targetDateStr,
-    postponedActions: actions.filter((a) => a.action_type === "postponed"),
-  });
+  // Build a set of item+date combinations that have been completed or cancelled
+  // so we can filter them out from postponed results
+  const completedOrCancelledKeys = new Set<string>();
+  for (const action of actions) {
+    if (
+      action.action_type === "completed" ||
+      action.action_type === "cancelled"
+    ) {
+      const actionDateStr = parseDbDateToLocalString(action.occurrence_date);
+      completedOrCancelledKeys.add(`${action.item_id}:${actionDateStr}`);
+    }
+  }
 
   for (const action of actions) {
     if (action.action_type !== "postponed" || !action.postponed_to) continue;
@@ -268,15 +275,14 @@ export function getPostponedOccurrencesForDate<T extends { id: string }>(
     // Parse the postponed_to date to local date string
     const postponedToDateStr = parseDbDateToLocalString(action.postponed_to);
 
-    console.log("  📋 Checking postponed action:", {
-      actionId: action.id,
-      postponedTo: action.postponed_to,
-      postponedToLocal: postponedToDateStr,
-      targetLocal: targetDateStr,
-      matches: postponedToDateStr === targetDateStr,
-    });
-
     if (postponedToDateStr === targetDateStr) {
+      // Check if this item has been completed/cancelled on the postponed-to date
+      const key = `${action.item_id}:${postponedToDateStr}`;
+      if (completedOrCancelledKeys.has(key)) {
+        // This postponed item was subsequently completed/cancelled, skip it
+        continue;
+      }
+
       const item = items.find((i) => i.id === action.item_id);
       if (item) {
         results.push({
@@ -289,7 +295,50 @@ export function getPostponedOccurrencesForDate<T extends { id: string }>(
     }
   }
 
-  console.log("  ✅ Found postponed items:", results.length);
+  return results;
+}
+
+/** Get completed occurrences for a specific date */
+export function getCompletedOccurrencesForDate<T extends { id: string }>(
+  items: T[],
+  targetDate: Date,
+  actions: ItemOccurrenceAction[]
+): Array<{
+  item: T;
+  occurrenceDate: Date;
+  completedAt: Date;
+  isCompleted: true;
+  actionId: string;
+}> {
+  // Normalize target date to local date string
+  const targetDateStr = normalizeToLocalDateString(targetDate);
+  const results: Array<{
+    item: T;
+    occurrenceDate: Date;
+    completedAt: Date;
+    isCompleted: true;
+    actionId: string;
+  }> = [];
+
+  for (const action of actions) {
+    if (action.action_type !== "completed") continue;
+
+    // Parse the action's occurrence_date to local date string
+    const actionDateStr = parseDbDateToLocalString(action.occurrence_date);
+
+    if (actionDateStr === targetDateStr) {
+      const item = items.find((i) => i.id === action.item_id);
+      if (item) {
+        results.push({
+          item,
+          occurrenceDate: new Date(action.occurrence_date),
+          completedAt: new Date(action.created_at),
+          isCompleted: true,
+          actionId: action.id,
+        });
+      }
+    }
+  }
 
   return results;
 }

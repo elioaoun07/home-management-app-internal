@@ -1,5 +1,13 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   getPostponedOccurrencesForDate,
@@ -7,6 +15,7 @@ import {
   normalizeToLocalDateString,
   useAllOccurrenceActions,
   useItemActionsWithToast,
+  useUndoOccurrenceAction,
   type ItemOccurrenceAction,
   type PostponeType,
 } from "@/features/items/useItemActions";
@@ -43,25 +52,30 @@ import {
   AlertCircle,
   Bell,
   Calendar,
+  CalendarDays,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock,
+  Eye,
+  EyeOff,
   FastForward,
   Flame,
   ListTodo,
   Plus,
   Repeat,
-  SkipForward,
+  RotateCcw,
   Square,
   Target,
   Trash2,
   TrendingUp,
+  XCircle,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RRule } from "rrule";
+import { toast } from "sonner";
 // ============================================
 // TYPES
 // ============================================
@@ -177,14 +191,12 @@ function expandRecurringItems(
 
         for (const occ of occurrences) {
           const isCompleted = isOccurrenceCompleted(item.id, occ, actions);
-          // Only add if not completed/cancelled/postponed
-          if (!isCompleted) {
-            result.push({
-              item,
-              occurrenceDate: occ,
-              isCompleted: false,
-            });
-          }
+          // Include completed items but mark them as completed
+          result.push({
+            item,
+            occurrenceDate: occ,
+            isCompleted,
+          });
         }
       } catch (error) {
         console.error("Error parsing RRULE:", error);
@@ -193,14 +205,12 @@ function expandRecurringItems(
       const isCompleted =
         item.status === "completed" ||
         isOccurrenceCompleted(item.id, itemDate, actions);
-      // Only add if not completed/cancelled/postponed
-      if (!isCompleted) {
-        result.push({
-          item,
-          occurrenceDate: itemDate,
-          isCompleted: false,
-        });
-      }
+      // Include completed items but mark them as completed
+      result.push({
+        item,
+        occurrenceDate: itemDate,
+        isCompleted,
+      });
     }
   }
 
@@ -214,13 +224,21 @@ function expandRecurringItems(
       actions
     );
     for (const p of dayPostponed) {
-      result.push({
-        item: p.item,
-        occurrenceDate: p.occurrenceDate,
-        isCompleted: false,
-        isPostponed: true,
-        originalDate: p.originalDate,
-      });
+      // Check if this item+date combo is already in results (avoid duplicates)
+      const alreadyExists = result.some(
+        (r) =>
+          r.item.id === p.item.id &&
+          isSameDay(r.occurrenceDate, p.occurrenceDate)
+      );
+      if (!alreadyExists) {
+        result.push({
+          item: p.item,
+          occurrenceDate: p.occurrenceDate,
+          isCompleted: false,
+          isPostponed: true,
+          originalDate: p.originalDate,
+        });
+      }
     }
     currentDate = addDays(currentDate, 1);
   }
@@ -389,14 +407,16 @@ function AddSubtaskInput({
 function TodayTaskCard({
   occurrence,
   onComplete,
-  onSkip,
+  onCancel,
   onPostpone,
+  onUndo,
   subtaskCompletions,
 }: {
   occurrence: ExpandedOccurrence;
-  onComplete: () => void;
-  onSkip: () => void;
+  onComplete: (notes?: string) => void;
+  onCancel: (notes?: string) => void;
   onPostpone: () => void;
+  onUndo?: () => void;
   subtaskCompletions?: SubtaskCompletion[];
 }) {
   const { item, occurrenceDate, isCompleted, isPostponed, originalDate } =
@@ -409,6 +429,7 @@ function TodayTaskCard({
   const [showSubtasks, setShowSubtasks] = useState(
     (item.subtasks?.length ?? 0) > 0
   );
+  const [notes, setNotes] = useState("");
 
   // Subtask mutations
   const toggleSubtask = useToggleSubtask();
@@ -642,9 +663,9 @@ function TodayTaskCard({
             </div>
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions - always visible for better touch/click support */}
           {!isCompleted && (
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={onPostpone}
@@ -655,15 +676,15 @@ function TodayTaskCard({
               </button>
               <button
                 type="button"
-                onClick={onSkip}
-                className="p-2 rounded-lg bg-gray-500/20 text-gray-400 hover:bg-gray-500/30 transition-colors"
-                title="Skip this occurrence"
+                onClick={() => onCancel(notes || undefined)}
+                className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                title="Cancel this occurrence"
               >
-                <SkipForward className="w-4 h-4" />
+                <XCircle className="w-4 h-4" />
               </button>
               <button
                 type="button"
-                onClick={onComplete}
+                onClick={() => onComplete(notes || undefined)}
                 className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors"
                 title="Mark complete"
               >
@@ -672,9 +693,40 @@ function TodayTaskCard({
             </div>
           )}
           {isCompleted && (
-            <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+            <div className="flex items-center gap-2">
+              {onUndo && (
+                <button
+                  type="button"
+                  onClick={onUndo}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors opacity-0 group-hover:opacity-100"
+                  title="Undo completion"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="text-xs">Undo</span>
+                </button>
+              )}
+              <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+            </div>
           )}
         </div>
+
+        {/* Notes textarea - show on hover/focus */}
+        {!isCompleted && (
+          <div className="mt-2 ml-11 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add a note (optional)..."
+              rows={1}
+              className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white/70 placeholder:text-white/30 focus:outline-none focus:border-white/20 resize-none"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                }
+              }}
+            />
+          </div>
+        )}
 
         {/* Subtasks Toggle */}
         {!isCompleted && (
@@ -1032,10 +1084,18 @@ export default function WebTabletMissionControl({
   const itemActions = useItemActionsWithToast();
   const [showRoutines, setShowRoutines] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showCompleted, setShowCompleted] = useState(true);
+
+  // Postpone dialog state
+  const [postponeOccurrence, setPostponeOccurrence] =
+    useState<ExpandedOccurrence | null>(null);
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+  const [customPostponeDate, setCustomPostponeDate] = useState("");
+  const [actionReason, setActionReason] = useState("");
 
   // Fetch data
   const { data: allItems = [], isLoading } = useItems();
-  const { data: actions = [] } = useAllOccurrenceActions();
+  const { data: occurrenceActions = [] } = useAllOccurrenceActions();
   const { data: subtaskCompletions = [] } = useAllSubtaskCompletions();
 
   // Date ranges
@@ -1079,7 +1139,7 @@ export default function WebTabletMissionControl({
       activeItems,
       weekStart,
       addDays(weekEnd, 1),
-      actions
+      occurrenceActions
     );
     const byDay = new Map<string, ExpandedOccurrence[]>();
 
@@ -1092,13 +1152,15 @@ export default function WebTabletMissionControl({
     }
 
     return byDay;
-  }, [activeItems, actions, weekStart, weekEnd]);
+  }, [activeItems, occurrenceActions, weekStart, weekEnd]);
 
   // Selected date's tasks (replaces todayTasks)
   const focusTasks = useMemo(() => {
     const dateKey = format(startOfDay(selectedDate), "yyyy-MM-dd");
-    return weekOccurrences.get(dateKey) || [];
-  }, [weekOccurrences, selectedDate]);
+    const allTasks = weekOccurrences.get(dateKey) || [];
+    // Filter out completed if showCompleted is false
+    return showCompleted ? allTasks : allTasks.filter((o) => !o.isCompleted);
+  }, [weekOccurrences, selectedDate, showCompleted]);
 
   // Overdue tasks
   const overdueTasks = useMemo(() => {
@@ -1155,37 +1217,93 @@ export default function WebTabletMissionControl({
 
   // Action handlers
   const handleComplete = useCallback(
-    (occurrence: ExpandedOccurrence) => {
+    (occurrence: ExpandedOccurrence, notes?: string) => {
       itemActions.handleComplete(
         occurrence.item,
         occurrence.occurrenceDate.toISOString(),
-        undefined
+        notes
       );
     },
     [itemActions]
   );
 
   const handleSkip = useCallback(
-    (occurrence: ExpandedOccurrence) => {
+    (occurrence: ExpandedOccurrence, notes?: string) => {
       itemActions.handleCancel(
         occurrence.item,
         occurrence.occurrenceDate.toISOString(),
-        "Skipped"
+        notes || "Skipped"
       );
     },
     [itemActions]
   );
 
-  const handlePostpone = useCallback(
-    (occurrence: ExpandedOccurrence) => {
+  // Open postpone dialog
+  const openPostponeDialog = useCallback((occurrence: ExpandedOccurrence) => {
+    setPostponeOccurrence(occurrence);
+    setShowCustomDatePicker(false);
+    setCustomPostponeDate("");
+    setActionReason("");
+  }, []);
+
+  // Handle postpone action from dialog
+  const handlePostponeAction = useCallback(
+    (postponeType: PostponeType, customDate?: string) => {
+      if (!postponeOccurrence) return;
+
       itemActions.handlePostpone(
-        occurrence.item,
-        occurrence.occurrenceDate.toISOString(),
-        "tomorrow" as PostponeType,
-        undefined
+        postponeOccurrence.item,
+        postponeOccurrence.occurrenceDate.toISOString(),
+        postponeType,
+        actionReason || undefined,
+        customDate
       );
+
+      // Reset dialog state
+      setPostponeOccurrence(null);
+      setShowCustomDatePicker(false);
+      setCustomPostponeDate("");
+      setActionReason("");
     },
-    [itemActions]
+    [postponeOccurrence, itemActions, actionReason]
+  );
+
+  // Undo action mutation
+  const undoAction = useUndoOccurrenceAction();
+
+  // Handler to get action ID for a completed occurrence
+  const getCompletedActionId = useCallback(
+    (occurrence: ExpandedOccurrence): string | null => {
+      if (!occurrence.isCompleted) return null;
+      const targetDateStr = occurrence.occurrenceDate
+        .toISOString()
+        .split("T")[0];
+      const action = occurrenceActions.find(
+        (a) =>
+          a.item_id === occurrence.item.id &&
+          a.action_type === "completed" &&
+          a.occurrence_date.split("T")[0] === targetDateStr
+      );
+      return action?.id || null;
+    },
+    [occurrenceActions]
+  );
+
+  // Undo handler
+  const handleUndo = useCallback(
+    async (occurrence: ExpandedOccurrence) => {
+      const actionId = getCompletedActionId(occurrence);
+      if (!actionId) return;
+
+      try {
+        await undoAction.mutateAsync(actionId);
+        toast.success("Action undone");
+      } catch (error) {
+        toast.error("Failed to undo action");
+        console.error(error);
+      }
+    },
+    [getCompletedActionId, undoAction]
   );
 
   if (isLoading) {
@@ -1260,6 +1378,25 @@ export default function WebTabletMissionControl({
             <TrendingUp className="w-3 h-3" />
             <span>{stats.completionRate}%</span>
           </div>
+          {/* Show/Hide Completed toggle */}
+          <button
+            type="button"
+            onClick={() => setShowCompleted(!showCompleted)}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors",
+              showCompleted
+                ? "bg-green-500/30 text-green-300"
+                : "bg-white/10 text-white/50 hover:bg-white/15"
+            )}
+            title={showCompleted ? "Hide completed" : "Show completed"}
+          >
+            {showCompleted ? (
+              <Eye className="w-3 h-3" />
+            ) : (
+              <EyeOff className="w-3 h-3" />
+            )}
+            <span>{showCompleted ? "Showing" : "Hiding"}</span>
+          </button>
           {/* Routines toggle */}
           {recurringWithDates.length > 0 && (
             <button
@@ -1389,9 +1526,10 @@ export default function WebTabletMissionControl({
                     <TodayTaskCard
                       key={`${occ.item.id}-${idx}`}
                       occurrence={occ}
-                      onComplete={() => handleComplete(occ)}
-                      onSkip={() => handleSkip(occ)}
-                      onPostpone={() => handlePostpone(occ)}
+                      onComplete={(notes) => handleComplete(occ, notes)}
+                      onCancel={(notes) => handleSkip(occ, notes)}
+                      onPostpone={() => openPostponeDialog(occ)}
+                      onUndo={() => handleUndo(occ)}
                       subtaskCompletions={subtaskCompletions}
                     />
                   ))
@@ -1419,9 +1557,10 @@ export default function WebTabletMissionControl({
                   <TodayTaskCard
                     key={`overdue-${occ.item.id}-${idx}`}
                     occurrence={occ}
-                    onComplete={() => handleComplete(occ)}
-                    onSkip={() => handleSkip(occ)}
-                    onPostpone={() => handlePostpone(occ)}
+                    onComplete={(notes) => handleComplete(occ, notes)}
+                    onCancel={(notes) => handleSkip(occ, notes)}
+                    onPostpone={() => openPostponeDialog(occ)}
+                    onUndo={() => handleUndo(occ)}
                     subtaskCompletions={subtaskCompletions}
                   />
                 ))}
@@ -1463,6 +1602,232 @@ export default function WebTabletMissionControl({
           </div>
         </div>
       </div>
+
+      {/* Postpone Options Dialog */}
+      {postponeOccurrence && (
+        <Dialog
+          open={!!postponeOccurrence}
+          onOpenChange={(open) => !open && setPostponeOccurrence(null)}
+        >
+          <DialogContent
+            className={cn(
+              "sm:max-w-md neo-card border",
+              isPink ? "border-pink-500/30" : "border-cyan-500/30"
+            )}
+          >
+            <DialogHeader>
+              <DialogTitle
+                className={cn(
+                  "flex items-center gap-2 text-xl",
+                  isPink ? "text-pink-300" : "text-cyan-300"
+                )}
+              >
+                <FastForward className="w-5 h-5" />
+                Postpone "{postponeOccurrence.item.title}"
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-3 py-4">
+              {/* Skip to next occurrence - only for recurring items */}
+              {postponeOccurrence.item.recurrence_rule && (
+                <button
+                  type="button"
+                  onClick={() => handlePostponeAction("next_occurrence")}
+                  className={cn(
+                    "w-full p-4 rounded-xl border text-left transition-all",
+                    "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                  )}
+                >
+                  <div className="font-semibold text-white mb-1">
+                    Skip to next occurrence
+                  </div>
+                  <div className="text-sm text-white/60">
+                    Cancel this time and wait for the next scheduled occurrence
+                  </div>
+                </button>
+              )}
+
+              {/* Tomorrow */}
+              <button
+                type="button"
+                onClick={() => handlePostponeAction("tomorrow")}
+                className={cn(
+                  "w-full p-4 rounded-xl border text-left transition-all",
+                  "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                )}
+              >
+                <div className="font-semibold text-white mb-1">
+                  Tomorrow, same time
+                </div>
+                <div className="text-sm text-white/60">
+                  Reschedule to tomorrow at the same time
+                </div>
+              </button>
+
+              {/* Custom Date Option */}
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomDatePicker(!showCustomDatePicker)}
+                  className={cn(
+                    "w-full p-4 rounded-xl border text-left transition-all",
+                    showCustomDatePicker
+                      ? isPink
+                        ? "border-pink-500/50 bg-pink-500/10"
+                        : "border-cyan-500/50 bg-cyan-500/10"
+                      : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="w-5 h-5 text-white/70" />
+                    <div>
+                      <div className="font-semibold text-white mb-1">
+                        Pick a specific date
+                      </div>
+                      <div className="text-sm text-white/60">
+                        Choose exactly when to reschedule
+                      </div>
+                    </div>
+                  </div>
+                </button>
+
+                {showCustomDatePicker && (
+                  <div className="pl-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={
+                          customPostponeDate
+                            ? customPostponeDate.split("T")[0]
+                            : ""
+                        }
+                        min={format(new Date(), "yyyy-MM-dd")}
+                        onChange={(e) => {
+                          const dateValue = e.target.value;
+                          if (dateValue) {
+                            const time = postponeOccurrence.occurrenceDate;
+                            const newDate = new Date(dateValue);
+                            newDate.setHours(
+                              time.getHours(),
+                              time.getMinutes(),
+                              0,
+                              0
+                            );
+                            setCustomPostponeDate(newDate.toISOString());
+                          }
+                        }}
+                        className={cn(
+                          "flex-1 p-2 rounded-lg bg-white/5 border border-white/10",
+                          "text-white text-sm",
+                          "focus:outline-none focus:border-white/30"
+                        )}
+                      />
+                      <input
+                        type="time"
+                        value={
+                          customPostponeDate
+                            ? format(new Date(customPostponeDate), "HH:mm")
+                            : format(postponeOccurrence.occurrenceDate, "HH:mm")
+                        }
+                        onChange={(e) => {
+                          const timeValue = e.target.value;
+                          if (timeValue && customPostponeDate) {
+                            const [hours, minutes] = timeValue
+                              .split(":")
+                              .map(Number);
+                            const newDate = new Date(customPostponeDate);
+                            newDate.setHours(hours, minutes, 0, 0);
+                            setCustomPostponeDate(newDate.toISOString());
+                          }
+                        }}
+                        className={cn(
+                          "w-24 p-2 rounded-lg bg-white/5 border border-white/10",
+                          "text-white text-sm",
+                          "focus:outline-none focus:border-white/30"
+                        )}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (customPostponeDate) {
+                          handlePostponeAction("custom", customPostponeDate);
+                        }
+                      }}
+                      disabled={!customPostponeDate}
+                      className={cn(
+                        "w-full",
+                        isPink
+                          ? "bg-pink-500 hover:bg-pink-600"
+                          : "bg-cyan-500 hover:bg-cyan-600"
+                      )}
+                    >
+                      Postpone to{" "}
+                      {customPostponeDate
+                        ? format(
+                            new Date(customPostponeDate),
+                            "MMM d 'at' h:mm a"
+                          )
+                        : "..."}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* AI option (coming soon) */}
+              <button
+                type="button"
+                disabled
+                className={cn(
+                  "w-full p-4 rounded-xl border text-left opacity-50 cursor-not-allowed",
+                  "border-white/10 bg-white/5"
+                )}
+              >
+                <div className="font-semibold text-white/60 mb-1">
+                  Find next available slot (AI)
+                </div>
+                <div className="text-sm text-white/40">
+                  Coming soon - AI will find the best time for you
+                </div>
+              </button>
+
+              {/* Reason input */}
+              <div className="pt-2">
+                <label className="block text-sm text-white/60 mb-2">
+                  Reason (optional)
+                </label>
+                <textarea
+                  value={actionReason}
+                  onChange={(e) => setActionReason(e.target.value)}
+                  placeholder="Why are you postponing this?"
+                  className={cn(
+                    "w-full p-3 rounded-lg bg-white/5 border border-white/10",
+                    "text-white placeholder:text-white/30 resize-none",
+                    "focus:outline-none focus:border-white/30"
+                  )}
+                  rows={2}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setPostponeOccurrence(null);
+                  setActionReason("");
+                  setCustomPostponeDate("");
+                  setShowCustomDatePicker(false);
+                }}
+                className="border-white/20 text-white/70 hover:bg-white/10"
+              >
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

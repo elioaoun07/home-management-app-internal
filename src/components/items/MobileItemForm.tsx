@@ -19,7 +19,9 @@ import {
   useCreateReminder,
   useCreateTask,
 } from "@/features/items/useItems";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNotification";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import type {
@@ -34,6 +36,7 @@ import { format } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ResponsibleUserPicker } from "./ResponsibleUserPicker";
 
 /**
  * MobileItemForm - A mobile-friendly form for creating reminders, events, and notes
@@ -167,11 +170,20 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
   const themeClasses = useThemeClasses();
   const isPink = theme === "pink";
 
+  // Household members for responsible user picker
+  const { data: householdData } = useHouseholdMembers();
+
   // Form state
   const [step, setStep] = useState<FormStep>("title");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<ItemPriority>("normal");
+
+  // Visibility and responsibility state
+  const [isPublic, setIsPublic] = useState(true);
+  const [responsibleUserId, setResponsibleUserId] = useState<
+    string | undefined
+  >(undefined);
 
   // Reminder-specific state
   const [dueDate, setDueDate] = useState("");
@@ -205,6 +217,13 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
   const isEvent = createMode === "event";
   const isTask = createMode === "task";
 
+  // Set default responsible user when household data is available
+  useEffect(() => {
+    if (householdData?.currentUserId && !responsibleUserId) {
+      setResponsibleUserId(householdData.currentUserId);
+    }
+  }, [householdData?.currentUserId, responsibleUserId]);
+
   // Reset form when opening
   useEffect(() => {
     if (isOpen) {
@@ -212,6 +231,8 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
       setTitle("");
       setDescription("");
       setPriority("normal");
+      setIsPublic(true);
+      setResponsibleUserId(householdData?.currentUserId ?? undefined);
       setDueDate(format(new Date(), "yyyy-MM-dd"));
       setDueTime("12:00");
       setStartDate(format(new Date(), "yyyy-MM-dd"));
@@ -301,9 +322,28 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           due_at: dueDate && dueTime ? `${dueDate}T${dueTime}:00` : undefined,
           alerts: alerts.length > 0 ? alerts : undefined,
           recurrence_rule,
+          is_public: isPublic,
+          responsible_user_id: responsibleUserId,
         };
 
-        await createReminder.mutateAsync(input);
+        const item = await createReminder.mutateAsync(input);
+
+        // Send notification if assigned to someone else
+        if (
+          responsibleUserId &&
+          householdData?.currentUserId &&
+          responsibleUserId !== householdData.currentUserId
+        ) {
+          await checkAndNotifyAssignment({
+            itemId: item.id,
+            itemTitle: title.trim(),
+            itemType: "reminder",
+            newResponsibleUserId: responsibleUserId,
+            currentUserId: householdData.currentUserId,
+            currentUserName: "Me",
+          });
+        }
+
         toast.success("Reminder created!", { icon: ToastIcons.create });
       } else if (isEvent) {
         const alerts: CreateAlertInput[] = [];
@@ -341,9 +381,28 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           location_text: location.trim() || undefined,
           alerts: alerts.length > 0 ? alerts : undefined,
           recurrence_rule,
+          is_public: isPublic,
+          responsible_user_id: responsibleUserId,
         };
 
-        await createEvent.mutateAsync(input);
+        const item = await createEvent.mutateAsync(input);
+
+        // Send notification if assigned to someone else
+        if (
+          responsibleUserId &&
+          householdData?.currentUserId &&
+          responsibleUserId !== householdData.currentUserId
+        ) {
+          await checkAndNotifyAssignment({
+            itemId: item.id,
+            itemTitle: title.trim(),
+            itemType: "event",
+            newResponsibleUserId: responsibleUserId,
+            currentUserId: householdData.currentUserId,
+            currentUserName: "Me",
+          });
+        }
+
         toast.success("Event created!", { icon: ToastIcons.create });
       } else if (isTask) {
         const input: CreateTaskInput = {
@@ -353,9 +412,28 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           priority,
           due_at: `${dueDate}T${dueTime}:00`,
           estimate_minutes: undefined,
+          is_public: isPublic,
+          responsible_user_id: responsibleUserId,
         };
 
-        await createTask.mutateAsync(input);
+        const item = await createTask.mutateAsync(input);
+
+        // Send notification if assigned to someone else
+        if (
+          responsibleUserId &&
+          householdData?.currentUserId &&
+          responsibleUserId !== householdData.currentUserId
+        ) {
+          await checkAndNotifyAssignment({
+            itemId: item.id,
+            itemTitle: title.trim(),
+            itemType: "task",
+            newResponsibleUserId: responsibleUserId,
+            currentUserId: householdData.currentUserId,
+            currentUserName: "Me",
+          });
+        }
+
         toast.success("Task created!", { icon: ToastIcons.create });
       }
 
@@ -804,6 +882,92 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                     )}
                   />
                 </div>
+
+                {/* Visibility Toggle */}
+                <div className="pt-2 border-t border-white/10">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <svg
+                        className="w-4 h-4 text-white/60"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                      <Label className="text-sm text-white/80">
+                        Share with household
+                      </Label>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPublic(!isPublic);
+                        // Reset responsible user to self when making private
+                        if (isPublic && householdData?.currentUserId) {
+                          setResponsibleUserId(householdData.currentUserId);
+                        }
+                      }}
+                      className={cn(
+                        "w-12 h-6 rounded-full transition-colors relative",
+                        isPublic
+                          ? isPink
+                            ? "bg-pink-500"
+                            : "bg-cyan-500"
+                          : "bg-white/20"
+                      )}
+                    >
+                      <motion.div
+                        className="absolute top-1 w-4 h-4 rounded-full bg-white"
+                        animate={{
+                          left: isPublic ? "calc(100% - 20px)" : "4px",
+                        }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 500,
+                          damping: 30,
+                        }}
+                      />
+                    </button>
+                  </div>
+                  <p className="text-xs text-white/40 mt-1 ml-6">
+                    {isPublic
+                      ? "Visible to your household partner"
+                      : "Only you can see this item"}
+                  </p>
+                </div>
+
+                {/* Responsible User Picker */}
+                {householdData?.hasPartner && (
+                  <div className="pt-2 border-t border-white/10">
+                    <Label className="text-sm text-white/80 mb-2 block">
+                      Responsible
+                    </Label>
+                    <ResponsibleUserPicker
+                      value={responsibleUserId}
+                      onChange={setResponsibleUserId}
+                      isPublic={isPublic}
+                      disabled={!isPublic}
+                    />
+                    {isPublic &&
+                      responsibleUserId &&
+                      responsibleUserId !== householdData.currentUserId && (
+                        <p className="text-xs text-pink-300/70 mt-2">
+                          ✨{" "}
+                          {
+                            householdData.members.find(
+                              (m) => m.id === responsibleUserId
+                            )?.displayName
+                          }{" "}
+                          will be notified
+                        </p>
+                      )}
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -944,6 +1108,71 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                         </span>
                       </div>
                     )}
+
+                    {/* Responsible User */}
+                    {responsibleUserId && householdData && (
+                      <div className="flex items-center gap-2 text-white/60">
+                        <svg
+                          className="w-4 h-4"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                        <span>
+                          Responsible:{" "}
+                          <span
+                            className={
+                              responsibleUserId === householdData.currentUserId
+                                ? "text-cyan-300"
+                                : "text-pink-300"
+                            }
+                          >
+                            {householdData.members.find(
+                              (m) => m.id === responsibleUserId
+                            )?.displayName || "Me"}
+                          </span>
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Visibility */}
+                    <div className="flex items-center gap-2 text-white/60">
+                      <svg
+                        className="w-4 h-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        {isPublic ? (
+                          <>
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                          </>
+                        ) : (
+                          <>
+                            <rect
+                              width="18"
+                              height="11"
+                              x="3"
+                              y="11"
+                              rx="2"
+                              ry="2"
+                            />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                          </>
+                        )}
+                      </svg>
+                      <span>
+                        {isPublic ? "Shared with household" : "Private"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </motion.div>

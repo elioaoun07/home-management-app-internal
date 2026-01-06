@@ -15,8 +15,10 @@ import {
 } from "@/components/ui/popover";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
+  isOccurrenceCompleted,
   useAllOccurrenceActions,
   useItemActionsWithToast,
+  useUndoOccurrenceAction,
   type PostponeType,
 } from "@/features/items/useItemActions";
 import {
@@ -47,6 +49,7 @@ import {
   ListTodo,
   MapPin,
   Repeat,
+  RotateCcw,
   Target,
   Trash2,
   User,
@@ -226,6 +229,54 @@ export default function WebEvents() {
 
   // Fetch occurrence actions for filtering completed/postponed items
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
+
+  // Undo occurrence action mutation
+  const undoAction = useUndoOccurrenceAction();
+
+  // Helper: Check if the clicked occurrence is completed and get the action ID
+  const getCompletedOccurrenceAction = useCallback(() => {
+    if (!detailItem || !clickedOccurrenceDate) return null;
+
+    // Check if this occurrence is completed
+    const isCompleted = isOccurrenceCompleted(
+      detailItem.id,
+      clickedOccurrenceDate,
+      occurrenceActions
+    );
+
+    if (!isCompleted) return null;
+
+    // Find the action ID for undo
+    const targetDateStr = clickedOccurrenceDate.toISOString().split("T")[0];
+    const action = occurrenceActions.find(
+      (a) =>
+        a.item_id === detailItem.id &&
+        a.action_type === "completed" &&
+        a.occurrence_date.split("T")[0] === targetDateStr
+    );
+
+    return action || null;
+  }, [detailItem, clickedOccurrenceDate, occurrenceActions]);
+
+  // Undo handler
+  const handleUndoAction = useCallback(async () => {
+    const action = getCompletedOccurrenceAction();
+    if (!action) return;
+
+    try {
+      await undoAction.mutateAsync(action.id);
+      toast.success("Action undone");
+      setDetailItem(null);
+      setClickedOccurrenceDate(null);
+      setModalPosition(null);
+    } catch (error) {
+      toast.error("Failed to undo action");
+      console.error(error);
+    }
+  }, [getCompletedOccurrenceAction, undoAction]);
+
+  // Check if current occurrence is completed
+  const isCurrentOccurrenceCompleted = !!getCompletedOccurrenceAction();
 
   // Fetch subtask completions for recurring item subtasks
   const { data: subtaskCompletions = [] } = useAllSubtaskCompletions();
@@ -795,48 +846,63 @@ export default function WebEvents() {
                   {/* Action Bar */}
                   <div className="flex items-center justify-between p-3 border-b border-white/10 bg-white/5">
                     <div className="flex items-center gap-1">
-                      {/* Complete button */}
-                      {detailItem.status !== "completed" && (
+                      {/* Undo button for completed occurrences */}
+                      {isCurrentOccurrenceCompleted && (
                         <button
                           type="button"
-                          onClick={handleCompleteAction}
-                          className="p-2 rounded-full hover:bg-green-500/20 transition-colors"
-                          title="Complete"
+                          onClick={handleUndoAction}
+                          className="p-2 rounded-full hover:bg-amber-500/20 transition-colors flex items-center gap-1"
+                          title="Undo completion"
                         >
-                          <Check className="w-4 h-4 text-green-400" />
+                          <RotateCcw className="w-4 h-4 text-amber-400" />
+                          <span className="text-xs text-amber-400">Undo</span>
                         </button>
                       )}
-                      {/* Postpone button */}
-                      {detailItem.status !== "completed" && (
-                        <button
-                          type="button"
-                          onClick={() => setShowPostponeDialog(true)}
-                          className={cn(
-                            "p-2 rounded-full hover:bg-amber-500/20 transition-colors",
-                            isPink
-                              ? "hover:bg-pink-500/20"
-                              : "hover:bg-cyan-500/20"
-                          )}
-                          title="Postpone"
-                        >
-                          <FastForward className="w-4 h-4 text-amber-400" />
-                        </button>
-                      )}
-                      {/* Cancel occurrence button */}
-                      {detailItem.status !== "completed" && (
-                        <button
-                          type="button"
-                          onClick={handleCancelAction}
-                          className="p-2 rounded-full hover:bg-red-500/20 transition-colors"
-                          title={
-                            isRecurring(detailItem)
-                              ? "Cancel this occurrence"
-                              : "Cancel"
-                          }
-                        >
-                          <XCircle className="w-4 h-4 text-red-400" />
-                        </button>
-                      )}
+                      {/* Complete button - only show for non-completed occurrences */}
+                      {!isCurrentOccurrenceCompleted &&
+                        detailItem.status !== "completed" && (
+                          <button
+                            type="button"
+                            onClick={handleCompleteAction}
+                            className="p-2 rounded-full hover:bg-green-500/20 transition-colors"
+                            title="Complete"
+                          >
+                            <Check className="w-4 h-4 text-green-400" />
+                          </button>
+                        )}
+                      {/* Postpone button - only show for non-completed occurrences */}
+                      {!isCurrentOccurrenceCompleted &&
+                        detailItem.status !== "completed" && (
+                          <button
+                            type="button"
+                            onClick={() => setShowPostponeDialog(true)}
+                            className={cn(
+                              "p-2 rounded-full hover:bg-amber-500/20 transition-colors",
+                              isPink
+                                ? "hover:bg-pink-500/20"
+                                : "hover:bg-cyan-500/20"
+                            )}
+                            title="Postpone"
+                          >
+                            <FastForward className="w-4 h-4 text-amber-400" />
+                          </button>
+                        )}
+                      {/* Cancel occurrence button - only show for non-completed occurrences */}
+                      {!isCurrentOccurrenceCompleted &&
+                        detailItem.status !== "completed" && (
+                          <button
+                            type="button"
+                            onClick={handleCancelAction}
+                            className="p-2 rounded-full hover:bg-red-500/20 transition-colors"
+                            title={
+                              isRecurring(detailItem)
+                                ? "Cancel this occurrence"
+                                : "Cancel"
+                            }
+                          >
+                            <XCircle className="w-4 h-4 text-red-400" />
+                          </button>
+                        )}
                       <div className="w-px h-4 bg-white/20 mx-1" />
                       <button
                         type="button"
@@ -891,10 +957,18 @@ export default function WebEvents() {
 
                     {/* Title */}
                     <div className="pl-3">
-                      <h2 className="text-xl font-medium text-white mb-1">
+                      <h2
+                        className={cn(
+                          "text-xl font-medium mb-1",
+                          isCurrentOccurrenceCompleted
+                            ? "text-green-300 line-through"
+                            : "text-white"
+                        )}
+                      >
                         {detailItem.title}
                       </h2>
-                      {detailItem.status === "completed" && (
+                      {(detailItem.status === "completed" ||
+                        isCurrentOccurrenceCompleted) && (
                         <div className="flex items-center gap-2 text-green-400 text-sm">
                           <CheckCircle2 className="w-4 h-4" />
                           <span>Completed</span>
@@ -1059,6 +1133,27 @@ export default function WebEvents() {
                         </p>
                       </div>
                     )}
+
+                    {/* Action Note (inline, always visible when not completed) */}
+                    {!isCurrentOccurrenceCompleted &&
+                      detailItem.status !== "completed" && (
+                        <div className="pl-3 pt-2 border-t border-white/10">
+                          <label className="block text-xs text-white/40 mb-1">
+                            Add a note (optional)
+                          </label>
+                          <textarea
+                            value={actionReason}
+                            onChange={(e) => setActionReason(e.target.value)}
+                            placeholder="Why are you completing, postponing, or canceling?"
+                            className={cn(
+                              "w-full p-2 rounded-lg bg-white/5 border border-white/10",
+                              "text-white text-sm placeholder:text-white/30 resize-none",
+                              "focus:outline-none focus:border-white/20"
+                            )}
+                            rows={2}
+                          />
+                        </div>
+                      )}
                   </div>
                 </motion.div>
               </>

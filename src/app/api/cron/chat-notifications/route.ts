@@ -62,12 +62,16 @@ export async function GET(req: NextRequest) {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     const now = new Date();
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000); // Avoid race with immediate push
 
-    // Step 1: Get all unread receipts
+    // Step 1: Get unread receipts where push failed or was never attempted
+    // Skip recently created receipts (< 5 min) to avoid racing with immediate push
     const { data: unreadReceipts, error: receiptsError } = await supabase
       .from("hub_message_receipts")
-      .select("id, message_id, user_id, status")
-      .neq("status", "read");
+      .select("id, message_id, user_id, status, push_status")
+      .neq("status", "read")
+      .lt("created_at", fiveMinutesAgo.toISOString())
+      .or("push_status.is.null,push_status.eq.failed,push_status.eq.pending");
 
     if (receiptsError) {
       return NextResponse.json(
@@ -112,7 +116,7 @@ export async function GET(req: NextRequest) {
 
     const { data: threads } = await supabase
       .from("hub_chat_threads")
-      .select("id, title, is_private, created_by")
+      .select("id, title, is_private, created_by, purpose")
       .in("id", threadIds);
 
     // Create thread lookup map
@@ -159,6 +163,10 @@ export async function GET(req: NextRequest) {
 
       // Skip private threads (only creator can see them, no push to others)
       if (thread?.is_private) continue;
+
+      // Only send push notifications for budget and reminder threads
+      if (thread?.purpose !== "budget" && thread?.purpose !== "reminder")
+        continue;
 
       const userId = receipt.user_id;
       const threadId = message.thread_id;
@@ -318,6 +326,16 @@ export async function GET(req: NextRequest) {
                 push_sent_at: new Date().toISOString(),
               })
               .eq("id", notification.id);
+
+            // Also update the receipts' push_status so we don't retry
+            const receiptIds = receipts.map((r) => r.receipt_id);
+            await supabase
+              .from("hub_message_receipts")
+              .update({
+                push_status: "sent",
+                push_sent_at: new Date().toISOString(),
+              })
+              .in("id", receiptIds);
           } catch (error: unknown) {
             pushFailed++;
 
@@ -341,6 +359,17 @@ export async function GET(req: NextRequest) {
                 push_error: error instanceof Error ? error.message : "Unknown",
               })
               .eq("id", notification.id);
+
+            // Also mark receipts as failed so we can retry later or stop retrying
+            const receiptIds = receipts.map((r) => r.receipt_id);
+            await supabase
+              .from("hub_message_receipts")
+              .update({
+                push_status: "failed",
+                push_sent_at: new Date().toISOString(),
+                push_error: error instanceof Error ? error.message : "Unknown",
+              })
+              .in("id", receiptIds);
           }
         }
       }

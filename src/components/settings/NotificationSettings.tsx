@@ -343,13 +343,19 @@ function InAppNotificationPreferences() {
     return pref ? pref.enabled : defaultEnabled;
   };
 
-  const getPreferredTime = (key: string, defaultTime = "20:00"): string => {
+  // Get preferred times array from metadata (for multiple reminders per day)
+  const getPreferredTimes = (key: string, defaultTimes = ["18:00"]): string[] => {
     const pref = getPreference(key);
-    // preferred_time comes as "HH:mm:ss", we need "HH:mm"
-    if (pref?.preferred_time) {
-      return pref.preferred_time.substring(0, 5);
+    const metadata = pref?.metadata as Record<string, unknown> | null;
+    if (metadata?.preferred_times && Array.isArray(metadata.preferred_times)) {
+      // Convert "HH:mm:ss" to "HH:mm"
+      return (metadata.preferred_times as string[]).map((t) => t.substring(0, 5));
     }
-    return defaultTime;
+    // Fallback to old preferred_time field
+    if (pref?.preferred_time) {
+      return [pref.preferred_time.substring(0, 5)];
+    }
+    return defaultTimes;
   };
 
   const handleToggle = async (key: string, enabled: boolean) => {
@@ -364,15 +370,74 @@ function InAppNotificationPreferences() {
     }
   };
 
-  const handleTimeChange = async (key: string, time: string) => {
+  // Update a specific time slot (index) in the preferred_times array
+  const handleTimeChange = async (
+    key: string,
+    time: string,
+    index: number = 0
+  ) => {
+    const pref = getPreference(key);
+    const currentMetadata = (pref?.metadata as Record<string, unknown>) || {};
+    const currentTimes = getPreferredTimes(key);
+
+    // Update the specific time slot
+    const newTimes = [...currentTimes];
+    newTimes[index] = time;
+
+    // Convert to "HH:mm:ss" format for storage
+    const timesWithSeconds = newTimes.map((t) =>
+      t.length === 5 ? t + ":00" : t
+    );
+
     try {
       await updatePreference.mutateAsync({
         preference_key: key,
-        preferred_time: time + ":00", // Add seconds
+        metadata: {
+          ...currentMetadata,
+          preferred_times: timesWithSeconds,
+        },
       });
       toast.success(`Reminder time updated to ${formatTime(time)}`);
     } catch {
       toast.error("Failed to update reminder time");
+    }
+  };
+
+  // Toggle between 1 and 2 reminder times per day
+  const handleToggleSecondReminder = async (key: string, enable: boolean) => {
+    const pref = getPreference(key);
+    const currentMetadata = (pref?.metadata as Record<string, unknown>) || {};
+    const currentTimes = getPreferredTimes(key);
+
+    let newTimes: string[];
+    if (enable) {
+      // Add evening reminder (default 6 PM) if only morning exists
+      newTimes =
+        currentTimes.length === 1
+          ? [currentTimes[0], "18:00"]
+          : currentTimes;
+    } else {
+      // Keep only the first time
+      newTimes = [currentTimes[0]];
+    }
+
+    const timesWithSeconds = newTimes.map((t) =>
+      t.length === 5 ? t + ":00" : t
+    );
+
+    try {
+      await updatePreference.mutateAsync({
+        preference_key: key,
+        metadata: {
+          ...currentMetadata,
+          preferred_times: timesWithSeconds,
+        },
+      });
+      toast.success(
+        enable ? "Second reminder added" : "Second reminder removed"
+      );
+    } catch {
+      toast.error("Failed to update reminders");
     }
   };
 
@@ -410,20 +475,28 @@ function InAppNotificationPreferences() {
     },
   ];
 
-  // Preset times for quick selection
-  const presetTimes = [
+  // Preset times for morning and evening
+  const morningPresetTimes = [
+    { label: "7 AM", value: "07:00" },
+    { label: "7:15 AM", value: "07:15" },
+    { label: "8 AM", value: "08:00" },
+    { label: "9 AM", value: "09:00" },
+  ];
+
+  const eveningPresetTimes = [
+    { label: "5 PM", value: "17:00" },
     { label: "6 PM", value: "18:00" },
     { label: "7 PM", value: "19:00" },
     { label: "8 PM", value: "20:00" },
     { label: "9 PM", value: "21:00" },
-    { label: "10 PM", value: "22:00" },
   ];
 
   const isReminderEnabled = getPreferenceValue("daily_transaction_reminder");
-  const currentReminderTime = getPreferredTime(
-    "daily_transaction_reminder",
-    "18:00"
-  );
+  const currentReminderTimes = getPreferredTimes("daily_transaction_reminder", [
+    "07:15",
+    "18:00",
+  ]);
+  const hasTwoReminders = currentReminderTimes.length >= 2;
 
   return (
     <div className="space-y-4 pt-4 border-t border-white/10">
@@ -467,55 +540,133 @@ function InAppNotificationPreferences() {
 
           {/* Time picker - only show when enabled */}
           {isReminderEnabled && (
-            <div className="ml-12 space-y-3">
-              <div className="flex items-center gap-2">
-                <Clock className={`w-4 h-4 ${themeClasses.textMuted}`} />
-                <span className={`text-sm ${themeClasses.textMuted}`}>
-                  Remind me at
-                </span>
-              </div>
-
-              {/* Quick preset buttons */}
-              <div className="flex flex-wrap gap-2">
-                {presetTimes.map((preset) => (
-                  <button
-                    key={preset.value}
-                    onClick={() =>
-                      handleTimeChange(
-                        "daily_transaction_reminder",
-                        preset.value
-                      )
-                    }
-                    disabled={updatePreference.isPending}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                      currentReminderTime === preset.value
-                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white"
-                        : `${themeClasses.bgSurface} ${themeClasses.textMuted} hover:bg-white/10`
-                    }`}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Custom time input */}
-              <div className="flex items-center gap-2">
-                <span className={`text-xs ${themeClasses.textMuted}`}>
-                  Or custom:
-                </span>
-                <input
-                  type="time"
-                  value={currentReminderTime}
-                  onChange={(e) =>
-                    handleTimeChange(
+            <div className="ml-12 space-y-4">
+              {/* Toggle for 2x daily reminders */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className={`w-4 h-4 ${themeClasses.textMuted}`} />
+                  <span className={`text-sm ${themeClasses.textMuted}`}>
+                    Remind me twice a day
+                  </span>
+                </div>
+                <Switch
+                  checked={hasTwoReminders}
+                  onCheckedChange={(checked) =>
+                    handleToggleSecondReminder(
                       "daily_transaction_reminder",
-                      e.target.value
+                      checked
                     )
                   }
                   disabled={updatePreference.isPending}
-                  className={`px-3 py-1.5 rounded-lg text-sm ${themeClasses.bgSurface} ${themeClasses.text} ${themeClasses.border} border focus:outline-none focus:ring-2 focus:ring-cyan-500/50`}
                 />
               </div>
+
+              {/* Morning reminder */}
+              <div className="space-y-2">
+                <span
+                  className={`text-xs font-medium ${themeClasses.textMuted}`}
+                >
+                  ☀️ {hasTwoReminders ? "Morning" : "Daily"} Reminder
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {(hasTwoReminders
+                    ? morningPresetTimes
+                    : [...morningPresetTimes, ...eveningPresetTimes]
+                  ).map((preset) => (
+                    <button
+                      key={preset.value}
+                      onClick={() =>
+                        handleTimeChange(
+                          "daily_transaction_reminder",
+                          preset.value,
+                          0
+                        )
+                      }
+                      disabled={updatePreference.isPending}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        currentReminderTimes[0] === preset.value
+                          ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white"
+                          : `${themeClasses.bgSurface} ${themeClasses.textMuted} hover:bg-white/10`
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs ${themeClasses.textMuted}`}>
+                    Custom:
+                  </span>
+                  <input
+                    type="time"
+                    value={currentReminderTimes[0] || "07:15"}
+                    onChange={(e) =>
+                      handleTimeChange(
+                        "daily_transaction_reminder",
+                        e.target.value,
+                        0
+                      )
+                    }
+                    disabled={updatePreference.isPending}
+                    className={`px-3 py-1.5 rounded-lg text-sm ${themeClasses.bgSurface} ${themeClasses.text} ${themeClasses.border} border focus:outline-none focus:ring-2 focus:ring-cyan-500/50`}
+                  />
+                </div>
+              </div>
+
+              {/* Evening reminder (only shown when 2x daily is enabled) */}
+              {hasTwoReminders && (
+                <div className="space-y-2">
+                  <span
+                    className={`text-xs font-medium ${themeClasses.textMuted}`}
+                  >
+                    🌙 Evening Reminder
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {eveningPresetTimes.map((preset) => (
+                      <button
+                        key={preset.value}
+                        onClick={() =>
+                          handleTimeChange(
+                            "daily_transaction_reminder",
+                            preset.value,
+                            1
+                          )
+                        }
+                        disabled={updatePreference.isPending}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          currentReminderTimes[1] === preset.value
+                            ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                            : `${themeClasses.bgSurface} ${themeClasses.textMuted} hover:bg-white/10`
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs ${themeClasses.textMuted}`}>
+                      Custom:
+                    </span>
+                    <input
+                      type="time"
+                      value={currentReminderTimes[1] || "18:00"}
+                      onChange={(e) =>
+                        handleTimeChange(
+                          "daily_transaction_reminder",
+                          e.target.value,
+                          1
+                        )
+                      }
+                      disabled={updatePreference.isPending}
+                      className={`px-3 py-1.5 rounded-lg text-sm ${themeClasses.bgSurface} ${themeClasses.text} ${themeClasses.border} border focus:outline-none focus:ring-2 focus:ring-purple-500/50`}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <p className={`text-xs ${themeClasses.textMuted} italic`}>
+                Times are in your local timezone
+              </p>
             </div>
           )}
         </div>

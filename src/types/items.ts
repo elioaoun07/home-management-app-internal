@@ -258,6 +258,7 @@ export interface UpdateItemInput {
   is_public?: boolean;
   archived_at?: string | null;
   categories?: string[];
+  responsible_user_id?: string | null;
 }
 
 /** Input for updating reminder details */
