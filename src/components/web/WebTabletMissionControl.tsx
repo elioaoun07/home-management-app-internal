@@ -26,6 +26,7 @@ import {
   useItems,
   useToggleSubtask,
   useToggleSubtaskForOccurrence,
+  useUpdateSubtask,
   type SubtaskCompletion,
 } from "@/features/items/useItems";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Expand,
   Eye,
   EyeOff,
   FastForward,
@@ -76,6 +78,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RRule } from "rrule";
 import { toast } from "sonner";
+import { TaskFocusModal } from "./TaskFocusModal";
 // ============================================
 // TYPES
 // ============================================
@@ -252,7 +255,307 @@ function expandRecurringItems(
 // SUB-COMPONENTS
 // ============================================
 
-// Subtask Item Component
+// Helper to build nested subtask tree
+interface SubtaskWithChildren extends Subtask {
+  children: SubtaskWithChildren[];
+}
+
+function buildSubtaskTree(subtasks: Subtask[]): SubtaskWithChildren[] {
+  const map = new Map<string, SubtaskWithChildren>();
+  const roots: SubtaskWithChildren[] = [];
+
+  // Initialize map
+  for (const s of subtasks) {
+    map.set(s.id, { ...s, children: [] });
+  }
+
+  // Build tree
+  for (const s of subtasks) {
+    const node = map.get(s.id)!;
+    if (s.parent_subtask_id && map.has(s.parent_subtask_id)) {
+      map.get(s.parent_subtask_id)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  // Sort children by order_index
+  const sortChildren = (nodes: SubtaskWithChildren[]) => {
+    nodes.sort((a, b) => a.order_index - b.order_index);
+    for (const node of nodes) {
+      sortChildren(node.children);
+    }
+  };
+  sortChildren(roots);
+
+  return roots;
+}
+
+// Nested Subtask Item Component (with full nesting support)
+function NestedSubtaskItem({
+  subtask,
+  isRecurring,
+  occurrenceDate,
+  isSubtaskCompleted,
+  onToggle,
+  onDelete,
+  onUpdate,
+  onAddSubtask,
+  depth = 0,
+  maxDepth = 3,
+  isOverdue,
+  overdueFromDate,
+}: {
+  subtask: SubtaskWithChildren;
+  isRecurring: boolean;
+  occurrenceDate: Date;
+  isSubtaskCompleted: (id: string) => boolean;
+  onToggle: (subtask: Subtask) => void;
+  onDelete: (subtaskId: string) => void;
+  onUpdate: (subtaskId: string, title: string) => void;
+  onAddSubtask: (parentSubtaskId: string, title: string) => void;
+  depth?: number;
+  maxDepth?: number;
+  isOverdue?: boolean;
+  overdueFromDate?: Date;
+}) {
+  const { theme } = useTheme();
+  const isPink = theme === "pink";
+  const [showChildren, setShowChildren] = useState(true);
+  const [isAddingChild, setIsAddingChild] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(subtask.title);
+  const [childTitle, setChildTitle] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const hasChildren = subtask.children.length > 0;
+  const canAddChildren = depth < maxDepth;
+  const isCompleted = isSubtaskCompleted(subtask.id);
+
+  useEffect(() => {
+    if (isAddingChild && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isAddingChild]);
+
+  useEffect(() => {
+    if (isEditing && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleSaveEdit = () => {
+    const trimmed = editTitle.trim();
+    if (trimmed && trimmed !== subtask.title) {
+      onUpdate(subtask.id, trimmed);
+    } else {
+      setEditTitle(subtask.title);
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditTitle(subtask.title);
+    setIsEditing(false);
+  };
+
+  const handleAddChild = () => {
+    if (childTitle.trim()) {
+      onAddSubtask(subtask.id, childTitle.trim());
+      setChildTitle("");
+      setIsAddingChild(false);
+    }
+  };
+
+  return (
+    <div>
+      <div
+        className={cn(
+          "group/subtask flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors",
+          isOverdue && "border border-red-500/30 bg-red-500/5"
+        )}
+        style={{ paddingLeft: `${8 + depth * 16}px` }}
+      >
+        {/* Expand/collapse for parent subtasks */}
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={() => setShowChildren(!showChildren)}
+            className="w-4 h-4 flex items-center justify-center text-white/50 hover:text-white/80 flex-shrink-0"
+          >
+            {showChildren ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
+          </button>
+        ) : (
+          <div className="w-4 flex-shrink-0" />
+        )}
+
+        <button
+          type="button"
+          onClick={() => onToggle(subtask)}
+          className={cn(
+            "w-4 h-4 rounded border flex items-center justify-center transition-all flex-shrink-0",
+            isCompleted
+              ? "bg-green-500 border-green-500"
+              : isOverdue
+                ? "border-red-400/50 hover:border-red-400"
+                : isPink
+                  ? "border-pink-400/50 hover:border-pink-400"
+                  : "border-cyan-400/50 hover:border-cyan-400"
+          )}
+        >
+          {isCompleted && <Check className="w-3 h-3 text-white" />}
+        </button>
+
+        {/* Title - inline editable */}
+        {isEditing ? (
+          <input
+            ref={editInputRef}
+            type="text"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onBlur={handleSaveEdit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSaveEdit();
+              if (e.key === "Escape") handleCancelEdit();
+            }}
+            className={cn(
+              "flex-1 text-sm bg-transparent border-b outline-none",
+              isPink
+                ? "border-pink-400/50 focus:border-pink-400"
+                : "border-cyan-400/50 focus:border-cyan-400"
+            )}
+          />
+        ) : (
+          <span
+            onClick={() => !isCompleted && setIsEditing(true)}
+            className={cn(
+              "flex-1 text-sm",
+              isCompleted
+                ? "line-through text-white/40"
+                : isOverdue
+                  ? "text-red-400 cursor-text hover:text-red-300"
+                  : "text-white/80 cursor-text hover:text-white"
+            )}
+          >
+            {subtask.title}
+          </span>
+        )}
+
+        {/* Add child subtask button */}
+        {canAddChildren && !isCompleted && !isEditing && (
+          <button
+            type="button"
+            onClick={() => setIsAddingChild(true)}
+            className={cn(
+              "p-1 rounded transition-all",
+              isPink
+                ? "text-pink-400/70 hover:text-pink-400 hover:bg-pink-500/20"
+                : "text-cyan-400/70 hover:text-cyan-400 hover:bg-cyan-500/20"
+            )}
+            title="Add sub-item"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Delete button */}
+        {!isEditing && (
+          <button
+            type="button"
+            onClick={() => onDelete(subtask.id)}
+            className="p-1 text-red-400/70 hover:text-red-400 hover:bg-red-500/20 rounded transition-all"
+            title="Delete subtask"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Add child input */}
+      <AnimatePresence>
+        {isAddingChild && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div
+              className="flex items-center gap-2 py-1 px-2"
+              style={{ paddingLeft: `${24 + (depth + 1) * 16}px` }}
+            >
+              <Square className="w-4 h-4 text-white/30 flex-shrink-0" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={childTitle}
+                onChange={(e) => setChildTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddChild();
+                  if (e.key === "Escape") {
+                    setIsAddingChild(false);
+                    setChildTitle("");
+                  }
+                }}
+                onBlur={() => {
+                  if (!childTitle.trim()) {
+                    setIsAddingChild(false);
+                  }
+                }}
+                placeholder="Sub-item title..."
+                className="flex-1 bg-transparent border-none outline-none text-sm text-white placeholder:text-white/30"
+              />
+              <button
+                type="button"
+                onClick={handleAddChild}
+                disabled={!childTitle.trim()}
+                className="p-1 text-green-400 hover:bg-green-500/20 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Children */}
+      <AnimatePresence>
+        {showChildren && hasChildren && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            {subtask.children.map((child) => (
+              <NestedSubtaskItem
+                key={child.id}
+                subtask={child}
+                isRecurring={isRecurring}
+                occurrenceDate={occurrenceDate}
+                isSubtaskCompleted={isSubtaskCompleted}
+                onToggle={onToggle}
+                onDelete={onDelete}
+                onUpdate={onUpdate}
+                onAddSubtask={onAddSubtask}
+                depth={depth + 1}
+                maxDepth={maxDepth}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Simple Subtask Item (for overdue display only - no nesting)
 function SubtaskItem({
   subtask,
   isRecurring,
@@ -260,6 +563,7 @@ function SubtaskItem({
   isCompletedForOccurrence,
   onToggle,
   onDelete,
+  onUpdate,
   isOverdue,
   overdueFromDate,
 }: {
@@ -269,11 +573,37 @@ function SubtaskItem({
   isCompletedForOccurrence: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onUpdate: (title: string) => void;
   isOverdue?: boolean;
   overdueFromDate?: Date;
 }) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(subtask.title);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleSaveEdit = () => {
+    const trimmed = editTitle.trim();
+    if (trimmed && trimmed !== subtask.title) {
+      onUpdate(trimmed);
+    } else {
+      setEditTitle(subtask.title);
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditTitle(subtask.title);
+    setIsEditing(false);
+  };
 
   return (
     <div
@@ -298,25 +628,46 @@ function SubtaskItem({
       >
         {isCompletedForOccurrence && <Check className="w-3 h-3 text-white" />}
       </button>
-      <span
-        className={cn(
-          "flex-1 text-sm",
-          isCompletedForOccurrence
-            ? "line-through text-white/40"
-            : isOverdue
-              ? "text-red-400"
-              : "text-white/80"
-        )}
-      >
-        {subtask.title}
-      </span>
+      {isEditing ? (
+        <input
+          ref={editInputRef}
+          type="text"
+          value={editTitle}
+          onChange={(e) => setEditTitle(e.target.value)}
+          onBlur={handleSaveEdit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSaveEdit();
+            if (e.key === "Escape") handleCancelEdit();
+          }}
+          className={cn(
+            "flex-1 text-sm bg-transparent border-b outline-none",
+            isPink
+              ? "border-pink-400/50 focus:border-pink-400"
+              : "border-cyan-400/50 focus:border-cyan-400"
+          )}
+        />
+      ) : (
+        <span
+          onClick={() => !isCompletedForOccurrence && setIsEditing(true)}
+          className={cn(
+            "flex-1 text-sm",
+            isCompletedForOccurrence
+              ? "line-through text-white/40"
+              : isOverdue
+                ? "text-red-400 cursor-text hover:text-red-300"
+                : "text-white/80 cursor-text hover:text-white"
+          )}
+        >
+          {subtask.title}
+        </span>
+      )}
       <button
         type="button"
         onClick={onDelete}
-        className="opacity-0 group-hover/subtask:opacity-100 p-1 text-red-400 hover:bg-red-500/20 rounded transition-all"
+        className="p-1 text-red-400/70 hover:text-red-400 hover:bg-red-500/20 rounded transition-all"
         title="Delete subtask"
       >
-        <Trash2 className="w-3 h-3" />
+        <Trash2 className="w-4 h-4" />
       </button>
     </div>
   );
@@ -410,6 +761,7 @@ function TodayTaskCard({
   onCancel,
   onPostpone,
   onUndo,
+  onExpand,
   subtaskCompletions,
 }: {
   occurrence: ExpandedOccurrence;
@@ -417,6 +769,7 @@ function TodayTaskCard({
   onCancel: (notes?: string) => void;
   onPostpone: () => void;
   onUndo?: () => void;
+  onExpand?: () => void;
   subtaskCompletions?: SubtaskCompletion[];
 }) {
   const { item, occurrenceDate, isCompleted, isPostponed, originalDate } =
@@ -436,6 +789,7 @@ function TodayTaskCard({
   const toggleSubtaskForOccurrence = useToggleSubtaskForOccurrence();
   const addSubtask = useAddSubtask();
   const deleteSubtask = useDeleteSubtask();
+  const updateSubtask = useUpdateSubtask();
 
   const isRecurring = !!item.recurrence_rule;
   const subtasks = item.subtasks || [];
@@ -536,12 +890,21 @@ function TodayTaskCard({
     isSubtaskCompletedForDate,
   ]);
 
-  // Count completed subtasks for current occurrence
-  const completedSubtasksCount = currentOccurrenceSubtasks.filter((s) =>
+  // Count completed subtasks for current occurrence (only top-level)
+  const topLevelSubtasks = currentOccurrenceSubtasks.filter(
+    (s) => !s.parent_subtask_id
+  );
+  const completedSubtasksCount = topLevelSubtasks.filter((s) =>
     isSubtaskCompleted(s.id)
   ).length;
 
-  const hasCurrentSubtasks = currentOccurrenceSubtasks.length > 0;
+  // Build nested tree from flat subtasks
+  const subtaskTree = useMemo(
+    () => buildSubtaskTree(currentOccurrenceSubtasks),
+    [currentOccurrenceSubtasks]
+  );
+
+  const hasCurrentSubtasks = topLevelSubtasks.length > 0;
   const hasOverdueSubtasks = overdueSubtasksWithDates.length > 0;
 
   // Handle subtask toggle
@@ -583,9 +946,27 @@ function TodayTaskCard({
     });
   };
 
+  // Handle add nested subtask
+  const handleAddNestedSubtask = async (
+    parentSubtaskId: string,
+    title: string
+  ) => {
+    await addSubtask.mutateAsync({
+      parentItemId: item.id,
+      parentSubtaskId,
+      title,
+      occurrenceDate: isRecurring ? occurrenceDate.toISOString() : undefined,
+    });
+  };
+
   // Handle delete subtask
   const handleDeleteSubtask = async (subtaskId: string) => {
     await deleteSubtask.mutateAsync(subtaskId);
+  };
+
+  // Handle update subtask
+  const handleUpdateSubtask = async (subtaskId: string, title: string) => {
+    await updateSubtask.mutateAsync({ id: subtaskId, title });
   };
 
   return (
@@ -637,15 +1018,14 @@ function TodayTaskCard({
                 <span
                   className={cn(
                     "font-medium",
-                    completedSubtasksCount === currentOccurrenceSubtasks.length
+                    completedSubtasksCount === topLevelSubtasks.length
                       ? "text-green-400"
                       : isPink
                         ? "text-pink-400"
                         : "text-cyan-400"
                   )}
                 >
-                  • {completedSubtasksCount}/{currentOccurrenceSubtasks.length}{" "}
-                  subtasks
+                  • {completedSubtasksCount}/{topLevelSubtasks.length} subtasks
                   {hasOverdueSubtasks &&
                     ` (+${overdueSubtasksWithDates.length} overdue)`}
                 </span>
@@ -666,6 +1046,21 @@ function TodayTaskCard({
           {/* Quick Actions - always visible for better touch/click support */}
           {!isCompleted && (
             <div className="flex items-center gap-1">
+              {onExpand && (
+                <button
+                  type="button"
+                  onClick={onExpand}
+                  className={cn(
+                    "p-2 rounded-lg transition-colors",
+                    isPink
+                      ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
+                      : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30"
+                  )}
+                  title="Focus Mode"
+                >
+                  <Expand className="w-4 h-4" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onPostpone}
@@ -747,7 +1142,7 @@ function TodayTaskCard({
             )}
             <span>
               {hasCurrentSubtasks || hasOverdueSubtasks
-                ? `${currentOccurrenceSubtasks.length} subtask${currentOccurrenceSubtasks.length !== 1 ? "s" : ""}${hasOverdueSubtasks ? ` (+${overdueSubtasksWithDates.length} overdue)` : ""}`
+                ? `${topLevelSubtasks.length} subtask${topLevelSubtasks.length !== 1 ? "s" : ""}${hasOverdueSubtasks ? ` (+${overdueSubtasksWithDates.length} overdue)` : ""}`
                 : "Add subtasks"}
             </span>
           </button>
@@ -794,6 +1189,9 @@ function TodayTaskCard({
                               }
                             }}
                             onDelete={() => handleDeleteSubtask(subtask.id)}
+                            onUpdate={(title) =>
+                              handleUpdateSubtask(subtask.id, title)
+                            }
                             isOverdue={true}
                             overdueFromDate={homeOccurrence}
                           />
@@ -803,20 +1201,20 @@ function TodayTaskCard({
                   </div>
                 )}
 
-                {/* Current occurrence subtasks */}
-                {currentOccurrenceSubtasks
-                  .sort((a, b) => a.order_index - b.order_index)
-                  .map((subtask) => (
-                    <SubtaskItem
-                      key={subtask.id}
-                      subtask={subtask}
-                      isRecurring={isRecurring}
-                      occurrenceDate={occurrenceDate}
-                      isCompletedForOccurrence={isSubtaskCompleted(subtask.id)}
-                      onToggle={() => handleSubtaskToggle(subtask)}
-                      onDelete={() => handleDeleteSubtask(subtask.id)}
-                    />
-                  ))}
+                {/* Current occurrence subtasks (nested tree) */}
+                {subtaskTree.map((subtask) => (
+                  <NestedSubtaskItem
+                    key={subtask.id}
+                    subtask={subtask}
+                    isRecurring={isRecurring}
+                    occurrenceDate={occurrenceDate}
+                    isSubtaskCompleted={isSubtaskCompleted}
+                    onToggle={handleSubtaskToggle}
+                    onDelete={handleDeleteSubtask}
+                    onUpdate={handleUpdateSubtask}
+                    onAddSubtask={handleAddNestedSubtask}
+                  />
+                ))}
                 <AddSubtaskInput itemId={item.id} onAdd={handleAddSubtask} />
               </div>
             </div>
@@ -1085,6 +1483,10 @@ export default function WebTabletMissionControl({
   const [showRoutines, setShowRoutines] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showCompleted, setShowCompleted] = useState(true);
+
+  // Focus modal state
+  const [focusOccurrence, setFocusOccurrence] =
+    useState<ExpandedOccurrence | null>(null);
 
   // Postpone dialog state
   const [postponeOccurrence, setPostponeOccurrence] =
@@ -1530,6 +1932,7 @@ export default function WebTabletMissionControl({
                       onCancel={(notes) => handleSkip(occ, notes)}
                       onPostpone={() => openPostponeDialog(occ)}
                       onUndo={() => handleUndo(occ)}
+                      onExpand={() => setFocusOccurrence(occ)}
                       subtaskCompletions={subtaskCompletions}
                     />
                   ))
@@ -1561,6 +1964,7 @@ export default function WebTabletMissionControl({
                     onCancel={(notes) => handleSkip(occ, notes)}
                     onPostpone={() => openPostponeDialog(occ)}
                     onUndo={() => handleUndo(occ)}
+                    onExpand={() => setFocusOccurrence(occ)}
                     subtaskCompletions={subtaskCompletions}
                   />
                 ))}
@@ -1828,6 +2232,21 @@ export default function WebTabletMissionControl({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Task Focus View (Full Screen) */}
+      <AnimatePresence>
+        {focusOccurrence && (
+          <TaskFocusModal
+            occurrence={focusOccurrence}
+            subtaskCompletions={subtaskCompletions}
+            onClose={() => setFocusOccurrence(null)}
+            onComplete={(notes) => {
+              handleComplete(focusOccurrence, notes);
+              setFocusOccurrence(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

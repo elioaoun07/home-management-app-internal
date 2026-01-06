@@ -868,15 +868,49 @@ export function useToggleSubtask() {
   return useMutation({
     mutationFn: async ({ id, done }: { id: string; done: boolean }) => {
       const supabase = supabaseBrowser();
-      const { error } = await supabase
-        .from("item_subtasks")
-        .update({
-          done_at: done ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id);
-      if (error) throw error;
-      return { id, done };
+      const now = new Date().toISOString();
+
+      if (done) {
+        // When completing: cascade to all descendants
+        // First, get all descendant subtask IDs using recursive query
+        const { data: descendants, error: descError } = await supabase.rpc(
+          "get_subtask_descendants",
+          { root_subtask_id: id }
+        );
+
+        // If the RPC doesn't exist yet, just update the single subtask
+        if (descError && descError.message.includes("does not exist")) {
+          const { error } = await supabase
+            .from("item_subtasks")
+            .update({ done_at: now, updated_at: now })
+            .eq("id", id);
+          if (error) throw error;
+          return { id, done, cascadedIds: [id] };
+        }
+
+        if (descError) throw descError;
+
+        // Update the subtask and all descendants
+        const allIds = [
+          id,
+          ...(descendants?.map((d: { id: string }) => d.id) || []),
+        ];
+        const { error } = await supabase
+          .from("item_subtasks")
+          .update({ done_at: now, updated_at: now })
+          .in("id", allIds);
+
+        if (error) throw error;
+        return { id, done, cascadedIds: allIds };
+      } else {
+        // When un-completing: only un-complete the single subtask
+        const { error } = await supabase
+          .from("item_subtasks")
+          .update({ done_at: null, updated_at: now })
+          .eq("id", id);
+        if (error) throw error;
+        return { id, done, cascadedIds: [id] };
+      }
     },
     onMutate: async ({ id, done }) => {
       await queryClient.cancelQueries({ queryKey: itemsKeys.all });
@@ -894,21 +928,65 @@ export function useToggleSubtask() {
           }
         });
 
+      // Helper to get all descendant IDs
+      const getDescendantIds = (
+        subtasks: Subtask[],
+        parentId: string
+      ): string[] => {
+        const children = subtasks.filter(
+          (s) => s.parent_subtask_id === parentId
+        );
+        return children.flatMap((c) => [
+          c.id,
+          ...getDescendantIds(subtasks, c.id),
+        ]);
+      };
+
       // Optimistically update the subtask in ALL item list queries
       queryClient.setQueriesData<ItemWithDetails[]>(
         { queryKey: itemsKeys.lists() },
         (old) => {
           if (!old) return old;
-          return old.map((item) => ({
-            ...item,
-            subtasks: item.subtasks?.map((s) =>
-              s.id === id
-                ? { ...s, done_at: done ? new Date().toISOString() : null }
-                : s
-            ),
-          }));
+          return old.map((item) => {
+            if (!item.subtasks) return item;
+
+            // Get all IDs to update (subtask + descendants if completing)
+            const idsToUpdate = done
+              ? [id, ...getDescendantIds(item.subtasks, id)]
+              : [id];
+
+            return {
+              ...item,
+              subtasks: item.subtasks.map((s) =>
+                idsToUpdate.includes(s.id)
+                  ? { ...s, done_at: done ? new Date().toISOString() : null }
+                  : s
+              ),
+            };
+          });
         }
       );
+
+      // Show toast for cascading completion
+      const queriesData = queryClient.getQueriesData<ItemWithDetails[]>({
+        queryKey: itemsKeys.lists(),
+      });
+      const itemsData = queriesData.flatMap(([, data]) => data || []);
+      if (done && itemsData.length > 0) {
+        const item = itemsData.find((i) =>
+          i.subtasks?.some((s) => s.id === id)
+        );
+        if (item?.subtasks) {
+          const descendantCount = getDescendantIds(item.subtasks, id).length;
+          if (descendantCount > 0) {
+            const subtask = item.subtasks.find((s) => s.id === id);
+            toast.success(
+              `Completed "${subtask?.title}" and ${descendantCount} sub-item${descendantCount > 1 ? "s" : ""}`,
+              { duration: 3000 }
+            );
+          }
+        }
+      }
 
       return { previousQueries };
     },
@@ -1021,26 +1099,46 @@ export function useToggleSubtaskForOccurrence() {
         data: { user },
       } = await supabase.auth.getUser();
 
+      // Get all descendant IDs if completing
+      let allIds = [subtaskId];
       if (completed) {
-        // Insert completion record
+        const { data: descendants, error: descError } = await supabase.rpc(
+          "get_subtask_descendants",
+          { root_subtask_id: subtaskId }
+        );
+
+        // If RPC exists and returns descendants, include them
+        if (!descError && descendants) {
+          allIds = [subtaskId, ...descendants.map((d: { id: string }) => d.id)];
+        }
+      }
+
+      if (completed) {
+        // Insert completion records for subtask and all descendants
+        const completionRecords = allIds.map((id) => ({
+          subtask_id: id,
+          occurrence_date: occurrenceDate,
+          completed_at: new Date().toISOString(),
+          completed_by: user?.id,
+        }));
+
         const { data, error } = await supabase
           .from("item_subtask_completions")
-          .upsert(
-            {
-              subtask_id: subtaskId,
-              occurrence_date: occurrenceDate,
-              completed_at: new Date().toISOString(),
-              completed_by: user?.id,
-            },
-            { onConflict: "subtask_id,occurrence_date" }
-          )
-          .select()
-          .single();
+          .upsert(completionRecords, {
+            onConflict: "subtask_id,occurrence_date",
+          })
+          .select();
 
         if (error) throw error;
-        return { subtaskId, occurrenceDate, completed, data };
+        return {
+          subtaskId,
+          occurrenceDate,
+          completed,
+          data,
+          cascadedIds: allIds,
+        };
       } else {
-        // Delete completion record
+        // Delete completion record (only for the specific subtask, not descendants)
         const { error } = await supabase
           .from("item_subtask_completions")
           .delete()
@@ -1048,7 +1146,13 @@ export function useToggleSubtaskForOccurrence() {
           .eq("occurrence_date", occurrenceDate);
 
         if (error) throw error;
-        return { subtaskId, occurrenceDate, completed, data: null };
+        return {
+          subtaskId,
+          occurrenceDate,
+          completed,
+          data: null,
+          cascadedIds: [subtaskId],
+        };
       }
     },
     onMutate: async ({ subtaskId, occurrenceDate, completed }) => {
@@ -1058,25 +1162,63 @@ export function useToggleSubtaskForOccurrence() {
         [...itemsKeys.all, "all-subtask-completions"]
       );
 
+      // Helper to get all descendant IDs from items data
+      const getDescendantIds = (
+        subtasks: Subtask[],
+        parentId: string
+      ): string[] => {
+        const children = subtasks.filter(
+          (s) => s.parent_subtask_id === parentId
+        );
+        return children.flatMap((c) => [
+          c.id,
+          ...getDescendantIds(subtasks, c.id),
+        ]);
+      };
+
+      // Get items data to find descendants
+      const queriesData = queryClient.getQueriesData<ItemWithDetails[]>({
+        queryKey: itemsKeys.lists(),
+      });
+      const itemsData = queriesData.flatMap(([, data]) => data || []);
+      let allIds = [subtaskId];
+
+      if (completed && itemsData.length > 0) {
+        const item = itemsData.find((i) =>
+          i.subtasks?.some((s) => s.id === subtaskId)
+        );
+        if (item?.subtasks) {
+          allIds = [subtaskId, ...getDescendantIds(item.subtasks, subtaskId)];
+
+          // Show toast for cascading completion
+          const descendantCount = allIds.length - 1;
+          if (descendantCount > 0) {
+            const subtask = item.subtasks.find((s) => s.id === subtaskId);
+            toast.success(
+              `Completed "${subtask?.title}" and ${descendantCount} sub-item${descendantCount > 1 ? "s" : ""}`,
+              { duration: 3000 }
+            );
+          }
+        }
+      }
+
       // Optimistically update the completions cache
       queryClient.setQueryData<SubtaskCompletion[]>(
         [...itemsKeys.all, "all-subtask-completions"],
         (old) => {
           if (!old) old = [];
           if (completed) {
-            // Add completion
-            return [
-              ...old,
-              {
-                id: `temp-${Date.now()}`,
-                subtask_id: subtaskId,
-                occurrence_date: occurrenceDate,
-                completed_at: new Date().toISOString(),
-                completed_by: null,
-              },
-            ];
+            // Add completion records for all IDs
+            const newCompletions = allIds.map((id) => ({
+              id: `temp-${Date.now()}-${id}`,
+              subtask_id: id,
+              occurrence_date: occurrenceDate,
+              completed_at: new Date().toISOString(),
+              completed_by: null,
+            }));
+            return [...old, ...newCompletions];
           } else {
-            // Remove completion
+            // Remove completion (only for the specific subtask)
             return old.filter(
               (c) =>
                 !(
@@ -1112,11 +1254,13 @@ export function useAddSubtask() {
   return useMutation({
     mutationFn: async ({
       parentItemId,
+      parentSubtaskId,
       title,
       occurrenceDate,
       orderIndex,
     }: {
       parentItemId: string;
+      parentSubtaskId?: string; // For nested subtasks
       title: string;
       occurrenceDate?: string; // ISO string - for recurring items, which occurrence this subtask belongs to
       orderIndex?: number;
@@ -1126,12 +1270,21 @@ export function useAddSubtask() {
       // Get current max order_index if not provided
       let finalOrderIndex = orderIndex;
       if (finalOrderIndex === undefined) {
-        const { data: existing } = await supabase
+        // Query siblings (same parent_subtask_id)
+        let query = supabase
           .from("item_subtasks")
           .select("order_index")
           .eq("parent_item_id", parentItemId)
           .order("order_index", { ascending: false })
           .limit(1);
+
+        if (parentSubtaskId) {
+          query = query.eq("parent_subtask_id", parentSubtaskId);
+        } else {
+          query = query.is("parent_subtask_id", null);
+        }
+
+        const { data: existing } = await query;
 
         finalOrderIndex = existing?.[0]?.order_index
           ? existing[0].order_index + 1
@@ -1142,6 +1295,7 @@ export function useAddSubtask() {
         .from("item_subtasks")
         .insert({
           parent_item_id: parentItemId,
+          parent_subtask_id: parentSubtaskId || null,
           title,
           order_index: finalOrderIndex,
           occurrence_date: occurrenceDate || null,
@@ -1152,7 +1306,12 @@ export function useAddSubtask() {
       if (error) throw error;
       return data as Subtask;
     },
-    onMutate: async ({ parentItemId, title, occurrenceDate }) => {
+    onMutate: async ({
+      parentItemId,
+      parentSubtaskId,
+      title,
+      occurrenceDate,
+    }) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: itemsKeys.all });
 
@@ -1173,6 +1332,7 @@ export function useAddSubtask() {
       const optimisticSubtask: Subtask = {
         id: `temp-${Date.now()}`,
         parent_item_id: parentItemId,
+        parent_subtask_id: parentSubtaskId || null,
         title,
         occurrence_date: occurrenceDate || null,
         done_at: null,

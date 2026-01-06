@@ -74,6 +74,7 @@ export async function GET(req: NextRequest) {
         items (
           id,
           user_id,
+          responsible_user_id,
           title,
           description,
           type,
@@ -110,6 +111,7 @@ export async function GET(req: NextRequest) {
       const itemsArray = alert.items as unknown as Array<{
         id: string;
         user_id: string;
+        responsible_user_id: string | null;
         title: string;
         description: string | null;
         type: string;
@@ -120,7 +122,9 @@ export async function GET(req: NextRequest) {
 
       if (!item) continue;
 
-      const userId = item.user_id;
+      // Send notification to the responsible user (who should do the task)
+      // Falls back to owner if no responsible user is set
+      const userId = item.responsible_user_id || item.user_id;
 
       // Determine notification type based on item type
       const notificationType =

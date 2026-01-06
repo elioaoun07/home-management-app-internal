@@ -7,6 +7,7 @@ import {
   useDeleteSubtask,
   useToggleSubtask,
   useToggleSubtaskForOccurrence,
+  useUpdateSubtask,
   type SubtaskCompletion,
 } from "@/features/items/useItems";
 import { cn } from "@/lib/utils";
@@ -30,8 +31,63 @@ function getSubtaskOccurrenceDate(subtask: Subtask): Date | null {
   return new Date(subtask.occurrence_date);
 }
 
+// Helper to build nested subtask tree
+interface SubtaskWithChildren extends Subtask {
+  children: SubtaskWithChildren[];
+}
+
+function buildSubtaskTree(subtasks: Subtask[]): SubtaskWithChildren[] {
+  const map = new Map<string, SubtaskWithChildren>();
+  const roots: SubtaskWithChildren[] = [];
+
+  // Initialize map
+  for (const s of subtasks) {
+    map.set(s.id, { ...s, children: [] });
+  }
+
+  // Build tree
+  for (const s of subtasks) {
+    const node = map.get(s.id)!;
+    if (s.parent_subtask_id && map.has(s.parent_subtask_id)) {
+      map.get(s.parent_subtask_id)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  // Sort children by order_index at each level
+  const sortChildren = (nodes: SubtaskWithChildren[]) => {
+    nodes.sort((a, b) => a.order_index - b.order_index);
+    for (const node of nodes) {
+      sortChildren(node.children);
+    }
+  };
+  sortChildren(roots);
+
+  return roots;
+}
+
+// Get count of completed children (recursive)
+function getChildCompletionCount(
+  subtask: SubtaskWithChildren,
+  isSubtaskCompleted: (id: string) => boolean
+): { completed: number; total: number } {
+  let completed = 0;
+  let total = 0;
+
+  for (const child of subtask.children) {
+    total++;
+    if (isSubtaskCompleted(child.id)) completed++;
+    const childCounts = getChildCompletionCount(child, isSubtaskCompleted);
+    completed += childCounts.completed;
+    total += childCounts.total;
+  }
+
+  return { completed, total };
+}
+
 // ============================================
-// SUBTASK ITEM COMPONENT
+// SUBTASK ITEM COMPONENT (supports nesting)
 // ============================================
 export function SubtaskItem({
   subtask,
@@ -42,8 +98,13 @@ export function SubtaskItem({
   overdueFromDate,
   onToggle,
   onDelete,
+  onAddSubtask,
+  onUpdate,
+  isSubtaskCompleted,
+  depth = 0,
+  maxDepth = 3,
 }: {
-  subtask: Subtask;
+  subtask: SubtaskWithChildren;
   isRecurring: boolean;
   occurrenceDate: Date;
   isCompletedForOccurrence: boolean;
@@ -51,61 +112,513 @@ export function SubtaskItem({
   overdueFromDate?: Date;
   onToggle: () => void;
   onDelete: () => void;
+  onAddSubtask?: (parentSubtaskId: string, title: string) => void;
+  onUpdate?: (title: string) => void;
+  isSubtaskCompleted?: (id: string) => boolean;
+  depth?: number;
+  maxDepth?: number;
 }) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
+  const [showChildren, setShowChildren] = useState(true);
+  const [isAddingChild, setIsAddingChild] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(subtask.title);
+  const [childTitle, setChildTitle] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const hasChildren = subtask.children.length > 0;
+  const canAddChildren = depth < maxDepth && onAddSubtask;
+
+  // Child completion count
+  const childCounts = isSubtaskCompleted
+    ? getChildCompletionCount(subtask, isSubtaskCompleted)
+    : { completed: 0, total: 0 };
+
+  useEffect(() => {
+    if (isAddingChild && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isAddingChild]);
+
+  useEffect(() => {
+    if (isEditing && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleAddChild = () => {
+    if (childTitle.trim() && onAddSubtask) {
+      onAddSubtask(subtask.id, childTitle.trim());
+      setChildTitle("");
+      setIsAddingChild(false);
+    }
+  };
+
+  const handleSaveEdit = () => {
+    const trimmed = editTitle.trim();
+    if (trimmed && trimmed !== subtask.title && onUpdate) {
+      onUpdate(trimmed);
+    } else {
+      setEditTitle(subtask.title);
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditTitle(subtask.title);
+    setIsEditing(false);
+  };
 
   return (
-    <div
-      className={cn(
-        "group/subtask flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors",
-        isOverdue && "bg-red-500/10 border border-red-500/20"
-      )}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
+    <div>
+      <div
         className={cn(
-          "w-4 h-4 rounded border flex items-center justify-center transition-all flex-shrink-0",
-          isCompletedForOccurrence
-            ? "bg-green-500 border-green-500"
-            : isOverdue
-              ? "border-red-400/50 hover:border-red-400"
+          "group/subtask flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors",
+          isOverdue && "bg-red-500/10 border border-red-500/20"
+        )}
+        style={{ paddingLeft: `${8 + depth * 16}px` }}
+      >
+        {/* Expand/collapse for parent subtasks */}
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={() => setShowChildren(!showChildren)}
+            className="w-4 h-4 flex items-center justify-center text-white/50 hover:text-white/80 flex-shrink-0"
+          >
+            {showChildren ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
+          </button>
+        ) : (
+          <div className="w-4 flex-shrink-0" />
+        )}
+
+        <button
+          type="button"
+          onClick={onToggle}
+          className={cn(
+            "w-4 h-4 rounded border flex items-center justify-center transition-all flex-shrink-0",
+            isCompletedForOccurrence
+              ? "bg-green-500 border-green-500"
+              : isOverdue
+                ? "border-red-400/50 hover:border-red-400"
+                : isPink
+                  ? "border-pink-400/50 hover:border-pink-400"
+                  : "border-cyan-400/50 hover:border-cyan-400"
+          )}
+        >
+          {isCompletedForOccurrence && <Check className="w-3 h-3 text-white" />}
+        </button>
+        <div className="flex-1 min-w-0">
+          {isEditing ? (
+            <input
+              ref={editInputRef}
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveEdit();
+                if (e.key === "Escape") handleCancelEdit();
+              }}
+              className={cn(
+                "w-full bg-transparent border-b outline-none text-sm",
+                isPink
+                  ? "border-pink-400/50 focus:border-pink-400"
+                  : "border-cyan-400/50 focus:border-cyan-400"
+              )}
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <span
+                onClick={() =>
+                  !isCompletedForOccurrence && onUpdate && setIsEditing(true)
+                }
+                className={cn(
+                  "text-sm",
+                  isCompletedForOccurrence
+                    ? "line-through text-white/40"
+                    : isOverdue
+                      ? "text-red-300 cursor-text hover:text-red-200"
+                      : "text-white/80 cursor-text hover:text-white"
+                )}
+              >
+                {subtask.title}
+              </span>
+              {/* Child count indicator */}
+              {childCounts.total > 0 && (
+                <span
+                  className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded-full",
+                    childCounts.completed === childCounts.total
+                      ? "bg-green-500/20 text-green-400"
+                      : isPink
+                        ? "bg-pink-500/20 text-pink-400"
+                        : "bg-cyan-500/20 text-cyan-400"
+                  )}
+                >
+                  {childCounts.completed}/{childCounts.total}
+                </span>
+              )}
+            </div>
+          )}
+          {isOverdue && overdueFromDate && !isEditing && (
+            <span className="text-[10px] text-red-400/70 flex items-center gap-1">
+              <AlertCircle className="w-2.5 h-2.5" />
+              Overdue from {format(overdueFromDate, "MMM d")}
+            </span>
+          )}
+        </div>
+
+        {/* Add child subtask button */}
+        {canAddChildren && !isCompletedForOccurrence && !isEditing && (
+          <button
+            type="button"
+            onClick={() => setIsAddingChild(true)}
+            className={cn(
+              "p-1 rounded transition-all",
+              isPink
+                ? "text-pink-400/70 hover:text-pink-400 hover:bg-pink-500/20"
+                : "text-cyan-400/70 hover:text-cyan-400 hover:bg-cyan-500/20"
+            )}
+            title="Add sub-item"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        )}
+
+        {!isEditing && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="p-1 text-red-400/70 hover:text-red-400 hover:bg-red-500/20 rounded transition-all"
+            title="Delete subtask"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Add child input */}
+      <AnimatePresence>
+        {isAddingChild && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div
+              className="flex items-center gap-2 py-1 px-2"
+              style={{ paddingLeft: `${24 + (depth + 1) * 16}px` }}
+            >
+              <Square className="w-4 h-4 text-white/30 flex-shrink-0" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={childTitle}
+                onChange={(e) => setChildTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddChild();
+                  if (e.key === "Escape") {
+                    setIsAddingChild(false);
+                    setChildTitle("");
+                  }
+                }}
+                onBlur={() => {
+                  if (!childTitle.trim()) {
+                    setIsAddingChild(false);
+                  }
+                }}
+                placeholder="Sub-item title..."
+                className="flex-1 bg-transparent border-none outline-none text-sm text-white placeholder:text-white/30"
+              />
+              <button
+                type="button"
+                onClick={handleAddChild}
+                disabled={!childTitle.trim()}
+                className="p-1 text-green-400 hover:bg-green-500/20 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ============================================
+// NESTED SUBTASK ITEM (wrapper with proper callbacks)
+// ============================================
+function NestedSubtaskItem({
+  subtask,
+  isRecurring,
+  occurrenceDate,
+  isSubtaskCompleted,
+  onToggle,
+  onDelete,
+  onAddSubtask,
+  onUpdate,
+  depth = 0,
+  maxDepth = 3,
+}: {
+  subtask: SubtaskWithChildren;
+  isRecurring: boolean;
+  occurrenceDate: Date;
+  isSubtaskCompleted: (id: string) => boolean;
+  onToggle: (subtask: Subtask) => void;
+  onDelete: (subtaskId: string) => void;
+  onAddSubtask: (parentSubtaskId: string, title: string) => void;
+  onUpdate: (subtaskId: string, title: string) => void;
+  depth?: number;
+  maxDepth?: number;
+}) {
+  const { theme } = useTheme();
+  const isPink = theme === "pink";
+  const [showChildren, setShowChildren] = useState(true);
+  const [isAddingChild, setIsAddingChild] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(subtask.title);
+  const [childTitle, setChildTitle] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const hasChildren = subtask.children.length > 0;
+  const canAddChildren = depth < maxDepth;
+  const isCompleted = isSubtaskCompleted(subtask.id);
+
+  // Child completion count
+  const childCounts = getChildCompletionCount(subtask, isSubtaskCompleted);
+
+  useEffect(() => {
+    if (isAddingChild && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isAddingChild]);
+
+  useEffect(() => {
+    if (isEditing && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleAddChild = () => {
+    if (childTitle.trim()) {
+      onAddSubtask(subtask.id, childTitle.trim());
+      setChildTitle("");
+      setIsAddingChild(false);
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (editTitle.trim() && editTitle.trim() !== subtask.title) {
+      onUpdate(subtask.id, editTitle.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditTitle(subtask.title);
+    setIsEditing(false);
+  };
+
+  return (
+    <div>
+      <div
+        className="group/subtask flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors"
+        style={{ paddingLeft: `${8 + depth * 16}px` }}
+      >
+        {/* Expand/collapse for parent subtasks */}
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={() => setShowChildren(!showChildren)}
+            className="w-4 h-4 flex items-center justify-center text-white/50 hover:text-white/80 flex-shrink-0"
+          >
+            {showChildren ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
+          </button>
+        ) : (
+          <div className="w-4 flex-shrink-0" />
+        )}
+
+        <button
+          type="button"
+          onClick={() => onToggle(subtask)}
+          className={cn(
+            "w-4 h-4 rounded border flex items-center justify-center transition-all flex-shrink-0",
+            isCompleted
+              ? "bg-green-500 border-green-500"
               : isPink
                 ? "border-pink-400/50 hover:border-pink-400"
                 : "border-cyan-400/50 hover:border-cyan-400"
-        )}
-      >
-        {isCompletedForOccurrence && <Check className="w-3 h-3 text-white" />}
-      </button>
-      <div className="flex-1 min-w-0">
-        <span
-          className={cn(
-            "text-sm block",
-            isCompletedForOccurrence
-              ? "line-through text-white/40"
-              : isOverdue
-                ? "text-red-300"
-                : "text-white/80"
           )}
         >
-          {subtask.title}
-        </span>
-        {isOverdue && overdueFromDate && (
-          <span className="text-[10px] text-red-400/70 flex items-center gap-1">
-            <AlertCircle className="w-2.5 h-2.5" />
-            Overdue from {format(overdueFromDate, "MMM d")}
-          </span>
+          {isCompleted && <Check className="w-3 h-3 text-white" />}
+        </button>
+
+        {/* Title - inline editable */}
+        <div className="flex-1 min-w-0">
+          {isEditing ? (
+            <input
+              ref={editInputRef}
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveEdit();
+                if (e.key === "Escape") handleCancelEdit();
+              }}
+              onBlur={handleSaveEdit}
+              className="w-full bg-transparent border-none outline-none text-sm text-white"
+            />
+          ) : (
+            <div
+              className="flex items-center gap-2 cursor-text"
+              onClick={() => !isCompleted && setIsEditing(true)}
+            >
+              <span
+                className={cn(
+                  "text-sm",
+                  isCompleted ? "line-through text-white/40" : "text-white/80"
+                )}
+              >
+                {subtask.title}
+              </span>
+              {/* Child count indicator */}
+              {childCounts.total > 0 && (
+                <span
+                  className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded-full",
+                    childCounts.completed === childCounts.total
+                      ? "bg-green-500/20 text-green-400"
+                      : isPink
+                        ? "bg-pink-500/20 text-pink-400"
+                        : "bg-cyan-500/20 text-cyan-400"
+                  )}
+                >
+                  {childCounts.completed}/{childCounts.total}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Add child subtask button */}
+        {canAddChildren && !isCompleted && !isEditing && (
+          <button
+            type="button"
+            onClick={() => setIsAddingChild(true)}
+            className={cn(
+              "p-1 rounded transition-all",
+              isPink
+                ? "text-pink-400/70 hover:text-pink-400 hover:bg-pink-500/20"
+                : "text-cyan-400/70 hover:text-cyan-400 hover:bg-cyan-500/20"
+            )}
+            title="Add sub-item"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Delete button - always on far right */}
+        {!isEditing && (
+          <button
+            type="button"
+            onClick={() => onDelete(subtask.id)}
+            className="p-1 text-red-400/70 hover:text-red-400 hover:bg-red-500/20 rounded transition-all"
+            title="Delete subtask"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         )}
       </div>
-      <button
-        type="button"
-        onClick={onDelete}
-        className="opacity-0 group-hover/subtask:opacity-100 p-1 text-red-400 hover:bg-red-500/20 rounded transition-all"
-        title="Delete subtask"
-      >
-        <Trash2 className="w-3 h-3" />
-      </button>
+
+      {/* Add child input */}
+      <AnimatePresence>
+        {isAddingChild && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div
+              className="flex items-center gap-2 py-1 px-2"
+              style={{ paddingLeft: `${24 + (depth + 1) * 16}px` }}
+            >
+              <Square className="w-4 h-4 text-white/30 flex-shrink-0" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={childTitle}
+                onChange={(e) => setChildTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddChild();
+                  if (e.key === "Escape") {
+                    setIsAddingChild(false);
+                    setChildTitle("");
+                  }
+                }}
+                onBlur={() => {
+                  if (!childTitle.trim()) {
+                    setIsAddingChild(false);
+                  }
+                }}
+                placeholder="Sub-item title..."
+                className="flex-1 bg-transparent border-none outline-none text-sm text-white placeholder:text-white/30"
+              />
+              <button
+                type="button"
+                onClick={handleAddChild}
+                disabled={!childTitle.trim()}
+                className="p-1 text-green-400 hover:bg-green-500/20 rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Children */}
+      <AnimatePresence>
+        {showChildren && hasChildren && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            {subtask.children.map((child) => (
+              <NestedSubtaskItem
+                key={child.id}
+                subtask={child}
+                isRecurring={isRecurring}
+                occurrenceDate={occurrenceDate}
+                isSubtaskCompleted={isSubtaskCompleted}
+                onToggle={onToggle}
+                onDelete={onDelete}
+                onAddSubtask={onAddSubtask}
+                onUpdate={onUpdate}
+                depth={depth + 1}
+                maxDepth={maxDepth}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -229,6 +742,7 @@ export function ItemSubtasksList({
   const toggleSubtaskForOccurrence = useToggleSubtaskForOccurrence();
   const addSubtask = useAddSubtask();
   const deleteSubtask = useDeleteSubtask();
+  const updateSubtask = useUpdateSubtask();
 
   const today = startOfDay(new Date());
   const currentOcc = startOfDay(occurrenceDate);
@@ -321,10 +835,19 @@ export function ItemSubtasksList({
     isSubtaskCompletedForDate,
   ]);
 
-  // Count completed subtasks for current occurrence
-  const completedSubtasksCount = currentOccurrenceSubtasks.filter((s) =>
+  // Count completed subtasks for current occurrence (only top-level for display)
+  const topLevelSubtasks = currentOccurrenceSubtasks.filter(
+    (s) => !s.parent_subtask_id
+  );
+  const completedSubtasksCount = topLevelSubtasks.filter((s) =>
     isSubtaskCompleted(s.id)
   ).length;
+
+  // Build nested tree from flat subtasks
+  const subtaskTree = useMemo(
+    () => buildSubtaskTree(currentOccurrenceSubtasks),
+    [currentOccurrenceSubtasks]
+  );
 
   // Handle subtask toggle
   const handleSubtaskToggle = async (subtask: Subtask) => {
@@ -343,16 +866,12 @@ export function ItemSubtasksList({
       });
     }
 
-    // Check if all subtasks for current occurrence are now completed -> auto-complete the task
-    const willAllBeCompleted = currentOccurrenceSubtasks.every((s) =>
+    // Check if all top-level subtasks for current occurrence are now completed -> auto-complete the task
+    const willAllBeCompleted = topLevelSubtasks.every((s) =>
       s.id === subtask.id ? !currentlyCompleted : isSubtaskCompleted(s.id)
     );
 
-    if (
-      willAllBeCompleted &&
-      currentOccurrenceSubtasks.length > 0 &&
-      onAllCompleted
-    ) {
+    if (willAllBeCompleted && topLevelSubtasks.length > 0 && onAllCompleted) {
       // Small delay for visual feedback before auto-completing
       setTimeout(() => {
         onAllCompleted();
@@ -369,15 +888,31 @@ export function ItemSubtasksList({
     });
   };
 
+  // Handle add nested subtask
+  const handleAddNestedSubtask = async (
+    parentSubtaskId: string,
+    title: string
+  ) => {
+    await addSubtask.mutateAsync({
+      parentItemId: itemId,
+      parentSubtaskId,
+      title,
+      occurrenceDate: isRecurring ? occurrenceDate.toISOString() : undefined,
+    });
+  };
+
   // Handle delete subtask
   const handleDeleteSubtask = async (subtaskId: string) => {
     await deleteSubtask.mutateAsync(subtaskId);
   };
 
-  const hasCurrentSubtasks = currentOccurrenceSubtasks.length > 0;
+  // Handle update subtask
+  const handleUpdateSubtask = async (subtaskId: string, title: string) => {
+    await updateSubtask.mutateAsync({ id: subtaskId, title });
+  };
+
+  const hasCurrentSubtasks = topLevelSubtasks.length > 0;
   const hasOverdueSubtasks = overdueSubtasksWithDates.length > 0;
-  const totalSubtasksForDisplay =
-    currentOccurrenceSubtasks.length + overdueSubtasksWithDates.length;
 
   return (
     <div>
@@ -400,7 +935,7 @@ export function ItemSubtasksList({
           )}
           <span>
             {hasCurrentSubtasks || hasOverdueSubtasks
-              ? `${completedSubtasksCount}/${currentOccurrenceSubtasks.length} subtask${currentOccurrenceSubtasks.length !== 1 ? "s" : ""}${hasOverdueSubtasks ? ` (+${overdueSubtasksWithDates.length} overdue)` : ""}`
+              ? `${completedSubtasksCount}/${topLevelSubtasks.length} subtask${topLevelSubtasks.length !== 1 ? "s" : ""}${hasOverdueSubtasks ? ` (+${overdueSubtasksWithDates.length} overdue)` : ""}`
               : "Add subtasks"}
           </span>
         </button>
@@ -431,7 +966,7 @@ export function ItemSubtasksList({
                         ({ subtask, homeOccurrence }) => (
                           <SubtaskItem
                             key={`overdue-${subtask.id}`}
-                            subtask={subtask}
+                            subtask={{ ...subtask, children: [] }}
                             isRecurring={isRecurring}
                             occurrenceDate={homeOccurrence}
                             isCompletedForOccurrence={false}
@@ -455,20 +990,20 @@ export function ItemSubtasksList({
                   </div>
                 )}
 
-                {/* Current occurrence subtasks */}
-                {currentOccurrenceSubtasks
-                  .sort((a, b) => a.order_index - b.order_index)
-                  .map((subtask) => (
-                    <SubtaskItem
-                      key={subtask.id}
-                      subtask={subtask}
-                      isRecurring={isRecurring}
-                      occurrenceDate={occurrenceDate}
-                      isCompletedForOccurrence={isSubtaskCompleted(subtask.id)}
-                      onToggle={() => handleSubtaskToggle(subtask)}
-                      onDelete={() => handleDeleteSubtask(subtask.id)}
-                    />
-                  ))}
+                {/* Current occurrence subtasks (nested tree) */}
+                {subtaskTree.map((subtask) => (
+                  <NestedSubtaskItem
+                    key={subtask.id}
+                    subtask={subtask}
+                    isRecurring={isRecurring}
+                    occurrenceDate={occurrenceDate}
+                    isSubtaskCompleted={isSubtaskCompleted}
+                    onToggle={handleSubtaskToggle}
+                    onDelete={handleDeleteSubtask}
+                    onAddSubtask={handleAddNestedSubtask}
+                    onUpdate={handleUpdateSubtask}
+                  />
+                ))}
                 <AddSubtaskInput itemId={itemId} onAdd={handleAddSubtask} />
               </div>
             </div>

@@ -24,7 +24,7 @@ export type WebTab = "dashboard" | "budget" | "goals";
 export default function WebViewContainer() {
   const themeClasses = useThemeClasses();
   const userData = useUser(); // Get user data from context (server-side)
-  const [viewMode, setViewMode] = useState<WebViewMode>("budget");
+  const [viewMode, setViewMode] = useState<WebViewMode>("events");
   const [activeTab, setActiveTab] = useState<WebTab>("dashboard");
   const [monthStartDay, setMonthStartDay] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(
@@ -236,19 +236,6 @@ export default function WebViewContainer() {
             <div className="flex items-center p-1 rounded-xl bg-black/20 border border-white/10">
               <button
                 type="button"
-                onClick={() => setViewMode("budget")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                  viewMode === "budget"
-                    ? "neo-gradient text-white shadow-lg"
-                    : "text-white/60 hover:text-white hover:bg-white/10"
-                )}
-              >
-                <Wallet className="w-4 h-4" />
-                Budget
-              </button>
-              <button
-                type="button"
                 onClick={() => setViewMode("events")}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
@@ -259,6 +246,19 @@ export default function WebViewContainer() {
               >
                 <CalendarDays className="w-4 h-4" />
                 Events
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("budget")}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  viewMode === "budget"
+                    ? "neo-gradient text-white shadow-lg"
+                    : "text-white/60 hover:text-white hover:bg-white/10"
+                )}
+              >
+                <Wallet className="w-4 h-4" />
+                Budget
               </button>
             </div>
           </div>

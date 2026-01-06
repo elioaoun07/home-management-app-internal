@@ -168,7 +168,10 @@ export default function ItemActionsSheet({
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [reason, setReason] = useState("");
   const [pendingAction, setPendingAction] = useState<
-    "complete" | "cancel" | null
+    "complete" | "cancel" | "postpone" | null
+  >(null);
+  const [pendingPostponeType, setPendingPostponeType] = useState<
+    "next_occurrence" | "tomorrow" | "ai_slot" | null
   >(null);
   const sheetRef = useRef<HTMLDivElement>(null);
 
@@ -191,18 +194,9 @@ export default function ItemActionsSheet({
   };
 
   const handleCompleteClick = () => {
-    // Direct complete for non-important items, show reason input for prayer meetings etc.
-    const needsReason =
-      item.title.toLowerCase().includes("prayer") ||
-      item.categories?.includes("community");
-
-    if (needsReason) {
-      setPendingAction("complete");
-      setShowReasonInput(true);
-    } else {
-      onComplete();
-      handleClose();
-    }
+    // Complete directly without prompting for reason
+    onComplete();
+    handleClose();
   };
 
   const handleCancelClick = () => {
@@ -215,6 +209,8 @@ export default function ItemActionsSheet({
       onComplete(reason || undefined);
     } else if (pendingAction === "cancel") {
       onCancel(reason || undefined);
+    } else if (pendingAction === "postpone" && pendingPostponeType) {
+      onPostpone(pendingPostponeType, reason || undefined);
     }
     handleClose();
   };
@@ -222,8 +218,11 @@ export default function ItemActionsSheet({
   const handlePostponeSelect = (
     type: "next_occurrence" | "tomorrow" | "ai_slot"
   ) => {
-    onPostpone(type, undefined);
-    handleClose();
+    // Show reason input for postpone
+    setPendingAction("postpone");
+    setPendingPostponeType(type);
+    setShowPostponeOptions(false);
+    setShowReasonInput(true);
   };
 
   const handleDeleteClick = () => {
@@ -327,8 +326,10 @@ export default function ItemActionsSheet({
               <MessageIcon className="w-4 h-4" />
               <span className="text-sm">
                 {pendingAction === "complete"
-                  ? "Why was this missed? (optional)"
-                  : "Reason for cancelling (optional)"}
+                  ? "Add a note (optional)"
+                  : pendingAction === "postpone"
+                    ? "Why was this postponed? (optional)"
+                    : "Reason for cancelling (optional)"}
               </span>
             </div>
             <textarea
@@ -350,6 +351,7 @@ export default function ItemActionsSheet({
                 onClick={() => {
                   setShowReasonInput(false);
                   setPendingAction(null);
+                  setPendingPostponeType(null);
                 }}
                 className="flex-1 py-3 rounded-xl bg-white/10 text-white font-medium"
               >
@@ -360,12 +362,18 @@ export default function ItemActionsSheet({
                 onClick={handleReasonSubmit}
                 className={cn(
                   "flex-1 py-3 rounded-xl font-medium text-white",
-                  pendingAction === "complete"
-                    ? "bg-green-500 hover:bg-green-600"
-                    : "bg-red-500 hover:bg-red-600"
+                  pendingAction === "postpone"
+                    ? "bg-amber-500 hover:bg-amber-600"
+                    : pendingAction === "cancel"
+                      ? "bg-red-500 hover:bg-red-600"
+                      : "bg-green-500 hover:bg-green-600"
                 )}
               >
-                {pendingAction === "complete" ? "Complete" : "Cancel Item"}
+                {pendingAction === "postpone"
+                  ? "Postpone"
+                  : pendingAction === "cancel"
+                    ? "Cancel Item"
+                    : "Complete"}
               </button>
             </div>
           </div>

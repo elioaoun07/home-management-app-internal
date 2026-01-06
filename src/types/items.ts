@@ -90,12 +90,18 @@ export interface EventDetails {
 export interface Subtask {
   id: UUID;
   parent_item_id: UUID;
+  parent_subtask_id?: UUID | null; // Reference to parent subtask for nested subtasks
   title: string;
   occurrence_date?: string | null; // ISO timestamp - which occurrence this subtask belongs to (null for non-recurring)
   done_at?: string | null; // ISO timestamp
   order_index: number;
   created_at: string;
   updated_at: string;
+}
+
+/** Subtask with nested children for display */
+export interface SubtaskWithChildren extends Subtask {
+  children?: SubtaskWithChildren[];
 }
 
 /** Alert for notifications */

@@ -1,3 +1,4 @@
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -237,7 +238,9 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { data: notification, error } = await supabase
+  // Use admin client for insert to bypass RLS (we already verified permissions above)
+  const adminClient = supabaseAdmin();
+  const { data: notification, error } = await adminClient
     .from("notifications")
     .insert({
       user_id: notificationUserId,
@@ -311,20 +314,25 @@ export async function POST(request: NextRequest) {
               webPushError.statusCode === 410 ||
               webPushError.statusCode === 404
             ) {
-              await supabase
+              // Use admin client to delete expired subscription
+              await adminClient
                 .from("push_subscriptions")
                 .delete()
                 .eq("id", sub.id);
+              console.log(
+                `[in-app] Removed expired push subscription ${sub.id}`
+              );
+            } else {
+              console.error(
+                `[in-app] Push failed for subscription ${sub.id}:`,
+                pushError
+              );
             }
-            console.error(
-              `[in-app] Push failed for subscription ${sub.id}:`,
-              pushError
-            );
           }
         }
 
         // Update push status
-        await supabase
+        await adminClient
           .from("notifications")
           .update({
             push_status: pushSent ? "sent" : "failed",
