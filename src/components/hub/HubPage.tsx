@@ -17,7 +17,7 @@ import {
 import { OfflineBanner, SyncIndicator } from "@/components/ui/SyncIndicator";
 import { useTab } from "@/contexts/TabContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
   useBroadcastReceiptUpdate,
@@ -1527,9 +1527,10 @@ function ThreadConversation({
     );
   };
 
-  // Fetch accounts and categories for transaction parsing
-  const { data: accounts = [] } = useAccounts();
-  const defaultAccount = accounts.find((a: any) => a.is_default);
+  // Fetch ONLY current user's accounts and categories for transaction parsing
+  // Using useMyAccounts ensures we get the current user's accounts, not partner's
+  const { data: accounts = [] } = useMyAccounts();
+  const defaultAccount = accounts.find((a: any) => a.is_default) || accounts[0];
   const { data: categories = [] } = useCategories(defaultAccount?.id);
 
   // Long press handler for messages (must be at component level, not in map)

@@ -4,7 +4,7 @@
 import { SaveIcon, XIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useCreateMessageAction } from "@/features/hub/messageActions";
 import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
@@ -40,8 +40,8 @@ export default function AddTransactionFromMessageModal({
   const addMutation = useAddTransaction();
   const createActionMutation = useCreateMessageAction();
 
-  // Get accounts and default account
-  const { data: accounts = [] } = useAccounts();
+  // Get ONLY current user's accounts (not partner's) for adding transactions
+  const { data: accounts = [] } = useMyAccounts();
   const defaultAccount = accounts.find((a: any) => a.is_default);
   const [selectedAccount, setSelectedAccount] = useState<string | undefined>(
     defaultAccount?.id
