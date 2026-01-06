@@ -324,30 +324,49 @@ export async function POST(request: NextRequest) {
   const shouldSendPush =
     thread?.purpose === "budget" || thread?.purpose === "reminder";
 
-  // Create receipt for partner with status='delivered' (message saved on server)
+  // The database trigger (create_message_receipts) auto-creates the receipt
+  // with push_status='pending' for budget/reminder threads.
+  // We fetch the receipt to check if user already read it (WhatsApp-style behavior).
   let receiptId: string | null = null;
-  if (partnerUserId) {
+  let receiptStatus: string | null = null;
+  if (partnerUserId && shouldSendPush) {
+    // Small delay to allow realtime to mark as read if user is in chat
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
     const { data: receipt } = await supabase
       .from("hub_message_receipts")
-      .insert({
-        message_id: message.id,
-        user_id: partnerUserId,
-        status: "delivered",
-        delivered_at: new Date().toISOString(),
-        // Only set push_status for threads that should get push notifications
-        push_status: shouldSendPush ? "pending" : null,
-      })
-      .select("id")
+      .select("id, status")
+      .eq("message_id", message.id)
+      .eq("user_id", partnerUserId)
       .single();
+
     receiptId = receipt?.id || null;
+    receiptStatus = receipt?.status || null;
   }
 
+  // WhatsApp-style: Skip push if user already read the message (they're in the chat)
+  const userAlreadyRead = receiptStatus === "read";
+
+  // Debug logging
+  console.log("[Chat Push] Debug:", {
+    shouldSendPush,
+    partnerUserId,
+    hasVapidPublic: !!VAPID_PUBLIC_KEY,
+    hasVapidPrivate: !!VAPID_PRIVATE_KEY,
+    receiptId,
+    receiptStatus,
+    userAlreadyRead,
+    threadPurpose: thread?.purpose,
+  });
+
   // Send immediate push notification to partner (only for budget/reminder threads)
+  // Skip if user already read the message (WhatsApp-style: they're in the chat)
   if (
     shouldSendPush &&
     partnerUserId &&
     VAPID_PUBLIC_KEY &&
-    VAPID_PRIVATE_KEY
+    VAPID_PRIVATE_KEY &&
+    !userAlreadyRead
   ) {
     try {
       // Get sender's display name
@@ -450,6 +469,17 @@ export async function POST(request: NextRequest) {
           .eq("id", receiptId);
       }
     }
+  } else if (shouldSendPush && receiptId && userAlreadyRead) {
+    // User already read the message (they're in the chat) - skip push notification
+    await supabase
+      .from("hub_message_receipts")
+      .update({
+        push_status: "skipped",
+        push_sent_at: new Date().toISOString(),
+        push_error: null,
+      })
+      .eq("id", receiptId);
+    console.log("[Chat Push] Skipped - user already read message (in chat)");
   } else if (shouldSendPush && receiptId) {
     // VAPID keys not configured - mark as failed
     await supabase

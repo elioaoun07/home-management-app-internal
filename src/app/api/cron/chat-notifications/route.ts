@@ -261,6 +261,30 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
+        // Recheck receipt status before sending - user may have read while we were processing
+        // (WhatsApp-style: don't notify if user is now in the chat)
+        const receiptIds = receipts.map((r) => r.receipt_id);
+        const { data: currentReceipts } = await supabase
+          .from("hub_message_receipts")
+          .select("id, status")
+          .in("id", receiptIds);
+
+        const allRead = currentReceipts?.every((r) => r.status === "read");
+        if (allRead) {
+          // User has read all messages - mark as skipped and don't send push
+          await supabase
+            .from("hub_message_receipts")
+            .update({
+              push_status: "skipped",
+              push_sent_at: new Date().toISOString(),
+            })
+            .in("id", receiptIds);
+          console.log(
+            `[Chat Cron] Skipped push for thread ${threadId} - user already read`
+          );
+          continue;
+        }
+
         // Create notification in unified table
         const { data: notification, error: insertError } = await supabase
           .from("notifications")
