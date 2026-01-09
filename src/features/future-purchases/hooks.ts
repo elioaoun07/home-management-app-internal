@@ -248,9 +248,8 @@ export function useUpdateFuturePurchase() {
                   name: original.name,
                   target_amount: original.target_amount,
                   target_date: original.target_date,
-                  notes: original.notes,
-                  category: original.category,
-                  priority: original.priority,
+                  description: original.description ?? undefined,
+                  urgency: original.urgency,
                   status: original.status,
                 });
                 qc.invalidateQueries({ queryKey: [QUERY_KEY] });
@@ -309,9 +308,8 @@ export function useDeleteFuturePurchase() {
                   name: deleted.name,
                   target_amount: deleted.target_amount,
                   target_date: deleted.target_date,
-                  notes: deleted.notes,
-                  category: deleted.category,
-                  priority: deleted.priority,
+                  description: deleted.description ?? undefined,
+                  urgency: deleted.urgency,
                 });
                 qc.invalidateQueries({ queryKey: [QUERY_KEY] });
                 toast.success("Deletion undone");

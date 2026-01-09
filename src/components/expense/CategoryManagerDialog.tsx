@@ -396,7 +396,7 @@ export default function CategoryManagerDialog({
     // Find original name for undo
     let originalName = "";
     for (const cat of roots) {
-      const sub = cat.subcategories?.find((s) => s.id === id);
+      const sub = getSubs(cat.id).find((s) => s.id === id);
       if (sub) {
         originalName = sub.name;
         break;
