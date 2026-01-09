@@ -115,7 +115,7 @@ export default function AddTransactionFromMessageModal({
               );
             }
 
-            toast.success("Transaction added!");
+            // Toast is now handled by the hook with Undo
             onSuccess(messageId);
             onClose();
           },

@@ -608,7 +608,6 @@ const WebDashboard = memo(function WebDashboard({
 
   const handleDelete = (id: string) => {
     deleteMutation.mutate(id, {
-      onSuccess: () => toast.success("Transaction deleted"),
       onError: () => toast.error("Failed to delete transaction"),
     });
   };

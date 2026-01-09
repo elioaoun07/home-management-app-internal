@@ -228,6 +228,7 @@ export function useDeleteTransaction() {
         previousTodayTransactions,
         previousBalance,
         accountId,
+        deletedTransaction,
       };
     },
     onError: (err, transactionId, context) => {
@@ -268,8 +269,45 @@ export function useDeleteTransaction() {
         refetchType: "none",
       });
     },
-    onSuccess: () => {
-      toast.success("Transaction deleted", { icon: ToastIcons.delete });
+    onSuccess: (_, __, context) => {
+      const deleted = context?.deletedTransaction;
+      toast.success("Transaction deleted", {
+        icon: ToastIcons.delete,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              if (deleted) {
+                const response = await fetch("/api/transactions", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    date: deleted.date,
+                    amount: deleted.amount,
+                    description: deleted.description,
+                    account_id: deleted.account_id,
+                    category_id: deleted.category_id,
+                    subcategory_id: deleted.subcategory_id,
+                    is_private: deleted.is_private,
+                  }),
+                });
+                if (!response.ok) throw new Error("Failed to recreate");
+                queryClient.invalidateQueries({ queryKey: ["transactions"] });
+                queryClient.invalidateQueries({
+                  queryKey: ["transactions-today"],
+                });
+                queryClient.invalidateQueries({
+                  queryKey: ["account-balance"],
+                });
+                toast.success("Deletion undone");
+              }
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     },
   });
 }
@@ -605,6 +643,31 @@ export function useAddTransaction() {
 
       // Note: Success toast for "add" is handled by the calling component
       // which can include amount and category in the message
+      // Provide Undo capability by storing the created transaction ID
+      toast.success("Transaction added!", {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              const response = await fetch(
+                `/api/transactions/${serverTransaction.id}`,
+                { method: "DELETE" }
+              );
+              if (!response.ok) throw new Error("Failed to delete");
+              queryClient.invalidateQueries({ queryKey: ["transactions"] });
+              queryClient.invalidateQueries({
+                queryKey: ["transactions-today"],
+              });
+              queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+              toast.success("Transaction removed");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     },
     onSettled: () => {
       // Mark all transaction queries as stale - they will refetch when next accessed
@@ -737,6 +800,7 @@ export function useUpdateTransaction() {
         previousTodayTransactions,
         previousBalance,
         accountId: oldTransaction?.account_id,
+        oldTransaction,
       };
     },
     onError: (err, update, context) => {
@@ -761,7 +825,7 @@ export function useUpdateTransaction() {
         );
       }
     },
-    onSuccess: (data, update) => {
+    onSuccess: (data, update, context) => {
       // Clear _isPending flag from the updated transaction
       queryClient.setQueriesData<Transaction[]>(
         { queryKey: ["transactions"] },
@@ -783,7 +847,46 @@ export function useUpdateTransaction() {
       );
 
       // Show success toast
-      toast.success("Transaction updated", { icon: ToastIcons.update });
+      const original = context?.oldTransaction;
+      toast.success("Transaction updated", {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              if (original) {
+                const response = await fetch(
+                  `/api/transactions/${original.id}`,
+                  {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      date: original.date,
+                      amount: original.amount,
+                      description: original.description,
+                      account_id: original.account_id,
+                      category_id: original.category_id,
+                      subcategory_id: original.subcategory_id,
+                    }),
+                  }
+                );
+                if (!response.ok) throw new Error("Failed to undo");
+                queryClient.invalidateQueries({ queryKey: ["transactions"] });
+                queryClient.invalidateQueries({
+                  queryKey: ["transactions-today"],
+                });
+                queryClient.invalidateQueries({
+                  queryKey: ["account-balance"],
+                });
+                toast.success("Update undone");
+              }
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     },
     onSettled: () => {
       // Mark all transaction queries as stale - they will refetch when next accessed

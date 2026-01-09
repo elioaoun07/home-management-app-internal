@@ -305,6 +305,10 @@ export default function CategoryManagerDialog({
 
   // rename/delete
   async function patchCategoryName(id: string, name: string) {
+    // Get original name for undo
+    const category = roots.find((c) => c.id === id);
+    const originalName = category?.name || "";
+
     setLoading({ type: "cat-rename", id });
     try {
       const res = await fetch(`/api/categories/${id}`, {
@@ -313,7 +317,26 @@ export default function CategoryManagerDialog({
         body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error(await res.text());
-      toast.success("Category renamed");
+      toast.success("Category renamed", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await fetch(`/api/categories/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: originalName }),
+              });
+              await refetch();
+              onChange?.();
+              toast.success("Rename undone");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
       await refetch();
       onChange?.();
     } catch (e) {
@@ -325,11 +348,39 @@ export default function CategoryManagerDialog({
   }
 
   async function deleteCategory(id: string) {
+    // Store category data for undo (soft delete)
+    const category = roots.find((c) => c.id === id);
+
     setLoading({ type: "cat-del", id });
     try {
       const res = await fetch(`/api/categories/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
-      toast.success("Category deleted");
+      toast.success("Category deleted", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              // Restore by recreating (or if soft delete, update visible)
+              if (category) {
+                await fetch("/api/categories/manage", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    operation: "update",
+                    data: { id, visible: true },
+                  }),
+                });
+                await refetch();
+                onChange?.();
+                toast.success("Category restored");
+              }
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
       await refetch();
       onChange?.();
       setConfirmCatDeleteId(null);
@@ -342,6 +393,16 @@ export default function CategoryManagerDialog({
   }
 
   async function patchSubcategoryName(id: string, name: string) {
+    // Find original name for undo
+    let originalName = "";
+    for (const cat of roots) {
+      const sub = cat.subcategories?.find((s) => s.id === id);
+      if (sub) {
+        originalName = sub.name;
+        break;
+      }
+    }
+
     setLoading({ type: "sub-rename", id });
     try {
       const res = await fetch(`/api/categories/subcategories/${id}`, {
@@ -350,7 +411,26 @@ export default function CategoryManagerDialog({
         body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error(await res.text());
-      toast.success("Subcategory renamed");
+      toast.success("Subcategory renamed", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await fetch(`/api/categories/subcategories/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: originalName }),
+              });
+              await refetch();
+              onChange?.();
+              toast.success("Rename undone");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
       await refetch();
       onChange?.();
     } catch (e) {
@@ -369,7 +449,27 @@ export default function CategoryManagerDialog({
         method: "DELETE",
       });
       if (!res.ok) throw new Error(await res.text());
-      toast.success("Subcategory deleted");
+      toast.success("Subcategory deleted", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              // Restore subcategory visibility
+              await fetch(`/api/categories/subcategories/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ visible: true }),
+              });
+              await refetch();
+              onChange?.();
+              toast.success("Subcategory restored");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
       await refetch();
       onChange?.();
       setConfirmSubDeleteId(null);

@@ -110,9 +110,38 @@ export function MerchantMappingsManager({ open, onOpenChange }: Props) {
   const handleDelete = async (mapping: MerchantMapping) => {
     if (!confirm(`Delete mapping for "${mapping.merchant_name}"?`)) return;
 
+    // Store mapping data for undo
+    const mappingData = { ...mapping };
+
     try {
       await deleteMutation.mutateAsync(mapping.id);
-      toast.success("Mapping deleted");
+      toast.success("Mapping deleted", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              // Recreate the mapping
+              await fetch("/api/merchant-mappings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  account_id: mappingData.account_id,
+                  merchant_name: mappingData.merchant_name,
+                  merchant_pattern: mappingData.merchant_pattern,
+                  category_id: mappingData.category_id,
+                  subcategory_id: mappingData.subcategory_id,
+                }),
+              });
+              // Refetch mappings
+              window.location.reload(); // Simple approach for undo
+              toast.success("Mapping restored");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     } catch (error) {
       toast.error("Failed to delete mapping");
     }
@@ -368,14 +397,31 @@ function AddMappingDialog({
     }
 
     try {
-      await saveMutation.mutateAsync({
+      const created = await saveMutation.mutateAsync({
         merchant_pattern: pattern,
         merchant_name: name,
         account_id: accountId || null,
         category_id: categoryId || null,
         subcategory_id: subcategoryId || null,
       });
-      toast.success("Mapping saved");
+      toast.success("Mapping saved", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              // Delete the created mapping
+              await fetch(`/api/merchant-mappings/${created.id}`, {
+                method: "DELETE",
+              });
+              window.location.reload();
+              toast.success("Mapping removed");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
       onOpenChange(false);
       setPattern("");
       setName("");

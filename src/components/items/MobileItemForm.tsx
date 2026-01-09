@@ -32,6 +32,7 @@ import type {
   CreateTaskInput,
   ItemPriority,
 } from "@/types/items";
+import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
@@ -169,6 +170,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
   const { theme } = useTheme();
   const themeClasses = useThemeClasses();
   const isPink = theme === "pink";
+  const queryClient = useQueryClient();
 
   // Household members for responsible user picker
   const { data: householdData } = useHouseholdMembers();
@@ -344,7 +346,22 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           });
         }
 
-        toast.success("Reminder created!", { icon: ToastIcons.create });
+        toast.success("Reminder created!", {
+          icon: ToastIcons.create,
+          duration: 4000,
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                await fetch(`/api/items/${item.id}`, { method: "DELETE" });
+                queryClient.invalidateQueries({ queryKey: ["items"] });
+                toast.success("Reminder removed");
+              } catch {
+                toast.error("Failed to undo");
+              }
+            },
+          },
+        });
       } else if (isEvent) {
         const alerts: CreateAlertInput[] = [];
         if (enableAlert) {
@@ -403,7 +420,22 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           });
         }
 
-        toast.success("Event created!", { icon: ToastIcons.create });
+        toast.success("Event created!", {
+          icon: ToastIcons.create,
+          duration: 4000,
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                await fetch(`/api/items/${item.id}`, { method: "DELETE" });
+                queryClient.invalidateQueries({ queryKey: ["items"] });
+                toast.success("Event removed");
+              } catch {
+                toast.error("Failed to undo");
+              }
+            },
+          },
+        });
       } else if (isTask) {
         const input: CreateTaskInput = {
           type: "task",
@@ -434,7 +466,22 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           });
         }
 
-        toast.success("Task created!", { icon: ToastIcons.create });
+        toast.success("Task created!", {
+          icon: ToastIcons.create,
+          duration: 4000,
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                await fetch(`/api/items/${item.id}`, { method: "DELETE" });
+                queryClient.invalidateQueries({ queryKey: ["items"] });
+                toast.success("Task removed");
+              } catch {
+                toast.error("Failed to undo");
+              }
+            },
+          },
+        });
       }
 
       closeCreateForm();

@@ -1358,9 +1358,6 @@ export function useAddSubtask() {
         }
       );
 
-      // Show optimistic toast
-      toast.success("Subtask added", { duration: 2000 });
-
       return { previousQueries };
     },
     onError: (err, variables, context) => {
@@ -1371,6 +1368,23 @@ export function useAddSubtask() {
         });
       }
       toast.error("Failed to add subtask");
+    },
+    onSuccess: (createdSubtask) => {
+      toast.success("Subtask added", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            const supabase = supabaseBrowser();
+            await supabase
+              .from("item_subtasks")
+              .delete()
+              .eq("id", createdSubtask.id);
+            queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+            toast.success("Subtask removed");
+          },
+        },
+      });
     },
     onSettled: () => {
       // Always refetch to sync with server
@@ -1386,13 +1400,21 @@ export function useDeleteSubtask() {
   return useMutation({
     mutationFn: async (subtaskId: string) => {
       const supabase = supabaseBrowser();
+
+      // First, fetch the subtask data so we can restore it on Undo
+      const { data: subtaskData } = await supabase
+        .from("item_subtasks")
+        .select("*")
+        .eq("id", subtaskId)
+        .single();
+
       const { error } = await supabase
         .from("item_subtasks")
         .delete()
         .eq("id", subtaskId);
 
       if (error) throw error;
-      return subtaskId;
+      return { subtaskId, deletedSubtask: subtaskData };
     },
     onMutate: async (subtaskId) => {
       await queryClient.cancelQueries({ queryKey: itemsKeys.all });
@@ -1422,8 +1444,6 @@ export function useDeleteSubtask() {
         }
       );
 
-      toast.success("Subtask removed", { duration: 2000 });
-
       return { previousQueries };
     },
     onError: (err, variables, context) => {
@@ -1434,6 +1454,25 @@ export function useDeleteSubtask() {
         });
       }
       toast.error("Failed to delete subtask");
+    },
+    onSuccess: ({ deletedSubtask }) => {
+      toast.success("Subtask removed", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            if (deletedSubtask) {
+              const supabase = supabaseBrowser();
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              const { id, created_at, updated_at, ...restoreData } =
+                deletedSubtask;
+              await supabase.from("item_subtasks").insert(restoreData);
+              queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+              toast.success("Subtask restored");
+            }
+          },
+        },
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });

@@ -160,6 +160,8 @@ export default function TemplateQuickEntryButton({
                       size="icon"
                       variant="ghost"
                       onClick={async () => {
+                        // Store template data for undo
+                        const templateData = { ...tpl };
                         try {
                           const res = await fetch(
                             "/api/transaction-templates",
@@ -178,7 +180,33 @@ export default function TemplateQuickEntryButton({
                             toast.error(msg);
                             return;
                           }
-                          toast.success("Template deleted");
+                          toast.success("Template deleted", {
+                            duration: 4000,
+                            action: {
+                              label: "Undo",
+                              onClick: async () => {
+                                try {
+                                  const { id, ...data } = templateData;
+                                  const res = await fetch(
+                                    "/api/transaction-templates",
+                                    {
+                                      method: "POST",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                      },
+                                      body: JSON.stringify(data),
+                                    }
+                                  );
+                                  if (!res.ok)
+                                    throw new Error("Failed to restore");
+                                  refreshTemplates();
+                                  toast.success("Template restored");
+                                } catch {
+                                  toast.error("Failed to undo");
+                                }
+                              },
+                            },
+                          });
                           refreshTemplates();
                         } catch (err) {
                           console.error("Delete template failed", err);
@@ -209,6 +237,7 @@ export default function TemplateQuickEntryButton({
         onSave={async (tpl) => {
           // Create or update a template with error handling. Throw on failure so the dialog stays open.
           const method = tpl.id ? "PATCH" : "POST";
+          const previousData = editing ? { ...editing } : null;
           const res = await fetch("/api/transaction-templates", {
             method,
             headers: { "Content-Type": "application/json" },
@@ -225,12 +254,46 @@ export default function TemplateQuickEntryButton({
             toast.error(msg);
             throw new Error(msg);
           }
-          toast.success(tpl.id ? "Template updated" : "Template created");
+          const created = await res.json();
+          const isUpdate = !!tpl.id;
+          toast.success(isUpdate ? "Template updated" : "Template created", {
+            duration: 4000,
+            action: {
+              label: "Undo",
+              onClick: async () => {
+                try {
+                  if (isUpdate && previousData) {
+                    // Restore previous data
+                    await fetch("/api/transaction-templates", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(previousData),
+                    });
+                  } else {
+                    // Delete the created template
+                    await fetch("/api/transaction-templates", {
+                      method: "DELETE",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ id: created.id }),
+                    });
+                  }
+                  refreshTemplates();
+                  toast.success(
+                    isUpdate ? "Update undone" : "Template removed"
+                  );
+                } catch {
+                  toast.error("Failed to undo");
+                }
+              },
+            },
+          });
           refreshTemplates();
         }}
         onDelete={
           editing && editing.id
             ? async () => {
+                // Store template data for undo
+                const templateData = { ...editing };
                 try {
                   const res = await fetch("/api/transaction-templates", {
                     method: "DELETE",
@@ -246,7 +309,30 @@ export default function TemplateQuickEntryButton({
                     toast.error(msg);
                     return;
                   }
-                  toast.success("Template deleted");
+                  toast.success("Template deleted", {
+                    duration: 4000,
+                    action: {
+                      label: "Undo",
+                      onClick: async () => {
+                        try {
+                          const { id, ...data } = templateData;
+                          const res = await fetch(
+                            "/api/transaction-templates",
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify(data),
+                            }
+                          );
+                          if (!res.ok) throw new Error("Failed to restore");
+                          refreshTemplates();
+                          toast.success("Template restored");
+                        } catch {
+                          toast.error("Failed to undo");
+                        }
+                      },
+                    },
+                  });
                   setDialogOpen(false);
                   refreshTemplates();
                 } catch (err) {
@@ -284,7 +370,7 @@ export default function TemplateQuickEntryButton({
                 setQuickEdit(undefined);
                 setOpen(false);
 
-                // Optimistic add - mutation hook handles cache updates
+                // Optimistic add - mutation hook handles cache updates and toast with Undo
                 addTransactionMutation.mutate(
                   {
                     account_id: template.account_id,
@@ -295,12 +381,6 @@ export default function TemplateQuickEntryButton({
                     date: date,
                   },
                   {
-                    onSuccess: () => {
-                      toast.success("Expense added", {
-                        icon: ToastIcons.create,
-                        description: `$${parseFloat(amount).toFixed(2)} from template`,
-                      });
-                    },
                     onError: (err) => {
                       console.error("Quick entry failed", err);
                       toast.error("Failed to add expense", {

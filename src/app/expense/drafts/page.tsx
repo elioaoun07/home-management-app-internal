@@ -85,10 +85,9 @@ export default function DraftsPage() {
   };
 
   const deleteDraft = (draftId: string) => {
-    // Optimistic - draft disappears instantly
+    // Optimistic - draft disappears instantly, hook handles toast with Undo
     deleteDraftMutation.mutate(draftId, {
       onSuccess: () => {
-        toast.success("Draft deleted");
         if (editingId === draftId) cancelEditing();
       },
       onError: () => {

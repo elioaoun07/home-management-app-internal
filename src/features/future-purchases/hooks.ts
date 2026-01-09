@@ -184,7 +184,21 @@ export function useCreateFuturePurchase() {
   return useMutation({
     mutationFn: createFuturePurchase,
     onSuccess: (created) => {
-      toast.success(`"${created.name}" goal created!`);
+      toast.success(`"${created.name}" goal created!`, {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await deleteFuturePurchase(created.id);
+              qc.invalidateQueries({ queryKey: [QUERY_KEY] });
+              toast.success("Goal creation undone");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
     },
     onError: (err) => {
@@ -203,13 +217,16 @@ export function useUpdateFuturePurchase() {
 
       const previous = qc.getQueryData<FuturePurchase[]>([QUERY_KEY, {}]);
 
+      // Store the original item for undo
+      const originalItem = previous?.find((p) => p.id === update.id);
+
       // Optimistic update
       qc.setQueryData<FuturePurchase[]>([QUERY_KEY, {}], (old) => {
         if (!old) return old;
         return old.map((p) => (p.id === update.id ? { ...p, ...update } : p));
       });
 
-      return { previous };
+      return { previous, originalItem };
     },
     onError: (err, _, context) => {
       if (context?.previous) {
@@ -217,8 +234,34 @@ export function useUpdateFuturePurchase() {
       }
       toast.error(err.message || "Failed to update purchase goal");
     },
-    onSuccess: () => {
-      toast.success("Purchase goal updated");
+    onSuccess: (updated, _, context) => {
+      const original = context?.originalItem;
+      toast.success("Purchase goal updated", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              if (original) {
+                await updateFuturePurchase({
+                  id: original.id,
+                  name: original.name,
+                  target_amount: original.target_amount,
+                  target_date: original.target_date,
+                  notes: original.notes,
+                  category: original.category,
+                  priority: original.priority,
+                  status: original.status,
+                });
+                qc.invalidateQueries({ queryKey: [QUERY_KEY] });
+                toast.success("Update undone");
+              }
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
@@ -236,13 +279,16 @@ export function useDeleteFuturePurchase() {
 
       const previous = qc.getQueryData<FuturePurchase[]>([QUERY_KEY, {}]);
 
+      // Store deleted item for undo
+      const deletedItem = previous?.find((p) => p.id === id);
+
       // Optimistic delete
       qc.setQueryData<FuturePurchase[]>([QUERY_KEY, {}], (old) => {
         if (!old) return old;
         return old.filter((p) => p.id !== id);
       });
 
-      return { previous };
+      return { previous, deletedItem };
     },
     onError: (err, _, context) => {
       if (context?.previous) {
@@ -250,8 +296,32 @@ export function useDeleteFuturePurchase() {
       }
       toast.error(err.message || "Failed to delete purchase goal");
     },
-    onSuccess: () => {
-      toast.success("Purchase goal deleted");
+    onSuccess: (_, __, context) => {
+      const deleted = context?.deletedItem;
+      toast.success("Purchase goal deleted", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              if (deleted) {
+                await createFuturePurchase({
+                  name: deleted.name,
+                  target_amount: deleted.target_amount,
+                  target_date: deleted.target_date,
+                  notes: deleted.notes,
+                  category: deleted.category,
+                  priority: deleted.priority,
+                });
+                qc.invalidateQueries({ queryKey: [QUERY_KEY] });
+                toast.success("Deletion undone");
+              }
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });
@@ -272,11 +342,32 @@ export function useAllocateSavings() {
       amount: number;
       month?: string;
     }) => allocateSavings(id, amount, month),
-    onSuccess: (updated) => {
+    onSuccess: (updated, variables) => {
       const isCompleted = updated.status === "completed";
+      const undoAction = {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              // Undo by allocating negative amount
+              await allocateSavings(
+                variables.id,
+                -variables.amount,
+                variables.month
+              );
+              qc.invalidateQueries({ queryKey: [QUERY_KEY] });
+              toast.success("Allocation undone");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      };
       if (isCompleted) {
         toast.success(
-          `🎉 Congratulations! You've reached your "${updated.name}" goal!`
+          `🎉 Congratulations! You've reached your "${updated.name}" goal!`,
+          undoAction
         );
       } else {
         const percent = (
@@ -284,7 +375,8 @@ export function useAllocateSavings() {
           100
         ).toFixed(0);
         toast.success(
-          `Saved! ${percent}% of your "${updated.name}" goal reached`
+          `Saved! ${percent}% of your "${updated.name}" goal reached`,
+          undoAction
         );
       }
       qc.invalidateQueries({ queryKey: [QUERY_KEY] });

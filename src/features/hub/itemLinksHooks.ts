@@ -121,7 +121,23 @@ export function useAddItemLink() {
       queryClient.invalidateQueries({
         queryKey: itemLinksKeys.byMessage(newLink.message_id),
       });
-      toast.success("Link added! Fetching product info...");
+      toast.success("Link added! Fetching product info...", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await deleteItemLink(newLink.id);
+              queryClient.invalidateQueries({
+                queryKey: itemLinksKeys.byMessage(newLink.message_id),
+              });
+              toast.success("Link removed");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -163,12 +179,42 @@ export function useDeleteItemLink(messageId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: deleteItemLink,
-    onSuccess: () => {
+    mutationFn: async (linkId: string) => {
+      // Get the link data before deleting for undo
+      const existingLinks = queryClient.getQueryData<ShoppingItemLink[]>(
+        itemLinksKeys.byMessage(messageId)
+      );
+      const deletedLink = existingLinks?.find((l) => l.id === linkId);
+      await deleteItemLink(linkId);
+      return { linkId, deletedLink };
+    },
+    onSuccess: ({ deletedLink }) => {
       queryClient.invalidateQueries({
         queryKey: itemLinksKeys.byMessage(messageId),
       });
-      toast.success("Link removed");
+      toast.success("Link removed", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              if (deletedLink) {
+                await addItemLink({
+                  message_id: deletedLink.message_id,
+                  url: deletedLink.url,
+                  auto_fetch: false,
+                });
+                queryClient.invalidateQueries({
+                  queryKey: itemLinksKeys.byMessage(messageId),
+                });
+                toast.success("Link restored");
+              }
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);

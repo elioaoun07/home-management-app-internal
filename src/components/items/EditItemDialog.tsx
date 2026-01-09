@@ -149,6 +149,17 @@ export default function EditItemDialog({
       return;
     }
 
+    // Store original data for undo
+    const originalData = {
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      priority: item.priority,
+      is_public: item.is_public,
+      categories: item.categories,
+      responsible_user_id: item.responsible_user_id,
+    };
+
     setSaving(true);
     try {
       const supabase = await import("@/lib/supabase/client").then((m) =>
@@ -223,7 +234,20 @@ export default function EditItemDialog({
         }
       }
 
-      toast.success("Item updated!");
+      toast.success("Item updated!", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await updateItem.mutateAsync(originalData);
+              toast.success("Update undone");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
       onOpenChange(false);
     } catch (error) {
       console.error("Failed to update item:", error);

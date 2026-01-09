@@ -278,9 +278,34 @@ export function CategoryManagement() {
 
       if (!response.ok) throw new Error("Failed to update category");
 
+      // Store original for undo
+      const originalData = { ...editingCategory };
+      const updatedData = { id: editingCategory.id, ...updates };
+
       await queryClient.invalidateQueries({ queryKey: ["categories"] });
       setEditingCategory(null);
-      toast.success("Category updated!");
+      toast.success("Category updated!", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await fetch("/api/categories/manage", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  operation: "update",
+                  data: originalData,
+                }),
+              });
+              await queryClient.invalidateQueries({ queryKey: ["categories"] });
+              toast.success("Update undone");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     } catch (error) {
       console.error("Update category error:", error);
       toast.error("Failed to update category");
@@ -308,9 +333,31 @@ export function CategoryManagement() {
 
       if (!response.ok) throw new Error("Failed to create category");
 
+      const created = await response.json();
       await queryClient.invalidateQueries({ queryKey: ["categories"] });
       setNewCategory(null);
-      toast.success("Category created!");
+      toast.success("Category created!", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await fetch("/api/categories/manage", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  operation: "delete",
+                  data: { id: created.id, hard_delete: true },
+                }),
+              });
+              await queryClient.invalidateQueries({ queryKey: ["categories"] });
+              toast.success("Category removed");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     } catch (error) {
       console.error("Create category error:", error);
       toast.error("Failed to create category");
@@ -319,6 +366,9 @@ export function CategoryManagement() {
 
   async function handleDeleteCategory(categoryId: string) {
     if (!confirm("Are you sure you want to delete this category?")) return;
+
+    // Store category data for undo
+    const deletedCategory = categories.find((c) => c.id === categoryId);
 
     try {
       const response = await fetch("/api/categories/manage", {
@@ -336,7 +386,29 @@ export function CategoryManagement() {
       }
 
       await queryClient.invalidateQueries({ queryKey: ["categories"] });
-      toast.success("Category deleted!");
+      toast.success("Category deleted!", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              // Restore by making visible again
+              await fetch("/api/categories/manage", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  operation: "update",
+                  data: { id: categoryId, visible: true },
+                }),
+              });
+              await queryClient.invalidateQueries({ queryKey: ["categories"] });
+              toast.success("Category restored");
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     } catch (error: any) {
       console.error("Delete category error:", error);
       toast.error(error.message || "Failed to delete category");

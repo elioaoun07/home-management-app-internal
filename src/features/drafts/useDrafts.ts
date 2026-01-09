@@ -3,6 +3,7 @@
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 type DraftTransaction = {
   id: string;
@@ -119,6 +120,7 @@ export function useDeleteDraft() {
         previousDrafts,
         previousBalance,
         accountId: deletedDraft?.account_id,
+        deletedDraft,
       };
     },
     onError: (err, draftId, context) => {
@@ -132,6 +134,44 @@ export function useDeleteDraft() {
           context.previousBalance
         );
       }
+    },
+    onSuccess: (_, __, context) => {
+      const deleted = context?.deletedDraft;
+      toast.success("Draft deleted", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              if (deleted) {
+                // Recreate the draft
+                const res = await fetch("/api/drafts", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    date: deleted.date,
+                    amount: deleted.amount,
+                    description: deleted.description,
+                    category_id: deleted.category_id,
+                    subcategory_id: deleted.subcategory_id,
+                    voice_transcript: deleted.voice_transcript,
+                    confidence_score: deleted.confidence_score,
+                    account_id: deleted.account_id,
+                  }),
+                });
+                if (!res.ok) throw new Error("Failed to restore");
+                queryClient.invalidateQueries({ queryKey: qk.drafts() });
+                queryClient.invalidateQueries({
+                  queryKey: ["account-balance"],
+                });
+                toast.success("Draft restored");
+              }
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.drafts() });
