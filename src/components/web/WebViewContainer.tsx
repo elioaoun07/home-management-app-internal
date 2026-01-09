@@ -2,6 +2,7 @@
 
 import UserMenuClient from "@/components/auth/UserMenuClient";
 import WebBudget from "@/components/web/WebBudget";
+import WebCatalogue from "@/components/web/WebCatalogue";
 import WebDashboard from "@/components/web/WebDashboard";
 import WebEvents from "@/components/web/WebEvents";
 import WebFuturePurchases from "@/components/web/WebFuturePurchases";
@@ -12,11 +13,17 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { getDefaultDateRange } from "@/lib/utils/date";
-import { BarChart3, CalendarDays, Rocket, Wallet } from "lucide-react";
+import {
+  BarChart3,
+  BookOpen,
+  CalendarDays,
+  Rocket,
+  Wallet,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-// Top-level view modes - Budget or Events
-export type WebViewMode = "budget" | "events";
+// Top-level view modes - Budget, Events, or Catalogue
+export type WebViewMode = "budget" | "events" | "catalogue";
 
 // Tabs within Budget view
 export type WebTab = "dashboard" | "budget" | "goals";
@@ -229,7 +236,11 @@ export default function WebViewContainer() {
             <div
               className={`text-xl font-bold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
             >
-              {viewMode === "budget" ? "Budget Manager" : "Events & Reminders"}
+              {viewMode === "budget"
+                ? "Budget Manager"
+                : viewMode === "catalogue"
+                  ? "Life Catalogue"
+                  : "Events & Reminders"}
             </div>
 
             {/* View Mode Toggle */}
@@ -260,6 +271,19 @@ export default function WebViewContainer() {
                 <Wallet className="w-4 h-4" />
                 Budget
               </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("catalogue")}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  viewMode === "catalogue"
+                    ? "bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg"
+                    : "text-white/60 hover:text-white hover:bg-white/10"
+                )}
+              >
+                <BookOpen className="w-4 h-4" />
+                Catalogue
+              </button>
             </div>
           </div>
 
@@ -276,6 +300,9 @@ export default function WebViewContainer() {
       <main className="flex-1 overflow-y-auto">
         {/* Events View */}
         {viewMode === "events" && <WebEvents />}
+
+        {/* Catalogue View */}
+        {viewMode === "catalogue" && <WebCatalogue />}
 
         {/* Budget Views */}
         {viewMode === "budget" && (
