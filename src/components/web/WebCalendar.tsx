@@ -63,30 +63,39 @@ interface WebCalendarProps {
 }
 
 // Priority badge colors
-const priorityColors: Record<string, { bg: string; text: string }> = {
-  low: { bg: "bg-gray-500/20", text: "text-gray-300" },
-  normal: { bg: "bg-cyan-500/20", text: "text-cyan-300" },
-  high: { bg: "bg-orange-500/20", text: "text-orange-300" },
-  urgent: { bg: "bg-red-500/20", text: "text-red-300" },
+const priorityColors: Record<string, { bg: string; text: string; frostBg: string; frostText: string }> = {
+  low: { bg: "bg-gray-500/20", text: "text-gray-300", frostBg: "bg-gray-100", frostText: "text-gray-600" },
+  normal: { bg: "bg-cyan-500/20", text: "text-cyan-300", frostBg: "bg-indigo-100", frostText: "text-indigo-600" },
+  high: { bg: "bg-orange-500/20", text: "text-orange-300", frostBg: "bg-orange-100", frostText: "text-orange-600" },
+  urgent: { bg: "bg-red-500/20", text: "text-red-300", frostBg: "bg-red-100", frostText: "text-red-600" },
 };
 
 // Item type colors
-const typeColors: Record<string, { bg: string; border: string; text: string }> =
+const typeColors: Record<string, { bg: string; border: string; text: string; frostBg: string; frostBorder: string; frostText: string }> =
   {
     reminder: {
       bg: "bg-cyan-500/20",
       border: "border-l-cyan-400",
       text: "text-cyan-300",
+      frostBg: "bg-indigo-50",
+      frostBorder: "border-l-indigo-400",
+      frostText: "text-indigo-600",
     },
     event: {
       bg: "bg-pink-500/20",
       border: "border-l-pink-400",
       text: "text-pink-300",
+      frostBg: "bg-pink-50",
+      frostBorder: "border-l-pink-400",
+      frostText: "text-pink-600",
     },
     task: {
       bg: "bg-purple-500/20",
       border: "border-l-purple-400",
       text: "text-purple-300",
+      frostBg: "bg-violet-50",
+      frostBorder: "border-l-violet-400",
+      frostText: "text-violet-600",
     },
   };
 
@@ -134,6 +143,7 @@ export function WebCalendar({
 }: WebCalendarProps) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
+  const isFrost = theme === "frost";
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [internalSelectedDate, setInternalSelectedDate] = useState<Date | null>(
     new Date()
@@ -370,11 +380,13 @@ export function WebCalendar({
               onClick={goToPreviousMonth}
               className={cn(
                 "p-1 lg:p-2 rounded-lg transition-all duration-200",
-                "bg-white/5 hover:bg-white/10 border border-white/10",
+                isFrost
+                  ? "bg-white hover:bg-slate-50 border border-slate-200 shadow-sm"
+                  : "bg-white/5 hover:bg-white/10 border border-white/10",
                 "hover:scale-105 active:scale-95"
               )}
             >
-              <ChevronLeft className="w-4 h-4 text-white" />
+              <ChevronLeft className={cn("w-4 h-4", isFrost ? "text-slate-700" : "text-white")} />
             </button>
 
             <AnimatePresence mode="wait" custom={direction}>
@@ -388,9 +400,11 @@ export function WebCalendar({
                 transition={{ duration: 0.2, ease: "easeInOut" }}
                 className={cn(
                   "text-base lg:text-xl font-bold bg-clip-text text-transparent min-w-[120px] lg:min-w-[180px] text-center",
-                  isPink
-                    ? "bg-gradient-to-r from-pink-300 via-pink-400 to-purple-400"
-                    : "bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400"
+                  isFrost
+                    ? "bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500"
+                    : isPink
+                      ? "bg-gradient-to-r from-pink-300 via-pink-400 to-purple-400"
+                      : "bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400"
                 )}
               >
                 {format(currentMonth, "MMMM yyyy")}
@@ -402,11 +416,13 @@ export function WebCalendar({
               onClick={goToNextMonth}
               className={cn(
                 "p-1 lg:p-2 rounded-lg transition-all duration-200",
-                "bg-white/5 hover:bg-white/10 border border-white/10",
+                isFrost
+                  ? "bg-white hover:bg-slate-50 border border-slate-200 shadow-sm"
+                  : "bg-white/5 hover:bg-white/10 border border-white/10",
                 "hover:scale-105 active:scale-95"
               )}
             >
-              <ChevronRight className="w-4 h-4 text-white" />
+              <ChevronRight className={cn("w-4 h-4", isFrost ? "text-slate-700" : "text-white")} />
             </button>
           </div>
 
@@ -417,8 +433,12 @@ export function WebCalendar({
               onClick={() => setShowCompleted(!showCompleted)}
               className={cn(
                 "p-1 lg:p-2 rounded-lg transition-all duration-200",
-                "bg-white/5 hover:bg-white/10 border border-white/10",
-                showCompleted ? "text-green-400" : "text-white/40"
+                isFrost
+                  ? "bg-white hover:bg-slate-50 border border-slate-200 shadow-sm"
+                  : "bg-white/5 hover:bg-white/10 border border-white/10",
+                showCompleted
+                  ? isFrost ? "text-green-600" : "text-green-400"
+                  : isFrost ? "text-slate-400" : "text-white/40"
               )}
               title={showCompleted ? "Hide completed" : "Show completed"}
             >
@@ -434,9 +454,13 @@ export function WebCalendar({
               onClick={goToToday}
               className={cn(
                 "px-2 py-1 lg:px-3 lg:py-2 rounded-lg text-[10px] lg:text-sm font-medium transition-all duration-200",
-                "bg-white/5 hover:bg-white/10 border border-white/10",
-                "hover:scale-105 active:scale-95",
-                isPink ? "text-pink-300" : "text-cyan-300"
+                isFrost
+                  ? "bg-white hover:bg-slate-50 border border-slate-200 shadow-sm text-indigo-600"
+                  : cn(
+                      "bg-white/5 hover:bg-white/10 border border-white/10",
+                      isPink ? "text-pink-300" : "text-cyan-300"
+                    ),
+                "hover:scale-105 active:scale-95"
               )}
             >
               Today
@@ -448,7 +472,9 @@ export function WebCalendar({
                 onClick={() => onAddEvent(selectedDate || new Date())}
                 className={cn(
                   "flex items-center gap-1 px-2 py-1 lg:px-3 lg:py-2 rounded-lg text-[10px] lg:text-sm font-medium transition-all duration-200",
-                  "neo-gradient text-white shadow-lg",
+                  isFrost
+                    ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-md"
+                    : "neo-gradient text-white shadow-lg",
                   "hover:scale-105 active:scale-95"
                 )}
               >
@@ -467,10 +493,14 @@ export function WebCalendar({
               className={cn(
                 "text-center text-[9px] lg:text-xs font-semibold py-1 lg:py-2 rounded-lg",
                 idx >= 5
-                  ? isPink
-                    ? "text-pink-400/80"
-                    : "text-cyan-400/80"
-                  : "text-white/60"
+                  ? isFrost
+                    ? "text-indigo-500"
+                    : isPink
+                      ? "text-pink-400/80"
+                      : "text-cyan-400/80"
+                  : isFrost
+                    ? "text-slate-600"
+                    : "text-white/60"
               )}
             >
               {day}
@@ -520,28 +550,40 @@ export function WebCalendar({
                   className={cn(
                     "relative rounded-md lg:rounded-xl transition-all duration-200 min-h-[56px] lg:min-h-[100px] p-0.5 lg:p-2 cursor-pointer",
                     "flex flex-col border overflow-hidden group",
-                    // Base styles
-                    isCurrentMonth
-                      ? "bg-white/[0.03]"
-                      : "bg-white/[0.01] opacity-50",
+                    // Base styles - frost vs dark
+                    isFrost
+                      ? isCurrentMonth
+                        ? "bg-white"
+                        : "bg-slate-50 opacity-60"
+                      : isCurrentMonth
+                        ? "bg-white/[0.03]"
+                        : "bg-white/[0.01] opacity-50",
                     // Border styles
-                    isTodayDate
-                      ? isPink
-                        ? "border-pink-400/60 ring-2 ring-pink-400/30"
-                        : "border-cyan-400/60 ring-2 ring-cyan-400/30"
-                      : isSelected
+                    isFrost
+                      ? isTodayDate
+                        ? "border-indigo-400 ring-2 ring-indigo-400/30 shadow-sm"
+                        : isSelected
+                          ? "border-indigo-300 bg-indigo-50"
+                          : isHovered
+                            ? "border-slate-300 bg-slate-50"
+                            : "border-slate-200"
+                      : isTodayDate
                         ? isPink
-                          ? "border-pink-400/40 bg-pink-500/10"
-                          : "border-cyan-400/40 bg-cyan-500/10"
-                        : isHovered
-                          ? "border-white/20 bg-white/[0.05]"
-                          : "border-white/[0.06]",
+                          ? "border-pink-400/60 ring-2 ring-pink-400/30"
+                          : "border-cyan-400/60 ring-2 ring-cyan-400/30"
+                        : isSelected
+                          ? isPink
+                            ? "border-pink-400/40 bg-pink-500/10"
+                            : "border-cyan-400/40 bg-cyan-500/10"
+                          : isHovered
+                            ? "border-white/20 bg-white/[0.05]"
+                            : "border-white/[0.06]",
                     // Weekend highlight
                     isWeekendDay &&
                       isCurrentMonth &&
                       !isTodayDate &&
                       !isSelected &&
-                      "bg-white/[0.02]"
+                      (isFrost ? "bg-indigo-50/50" : "bg-white/[0.02]")
                   )}
                 >
                   {/* Date Header */}
@@ -549,21 +591,31 @@ export function WebCalendar({
                     <span
                       className={cn(
                         "w-4 h-4 lg:w-6 lg:h-6 rounded-full flex items-center justify-center text-[9px] lg:text-xs font-medium transition-all",
-                        isTodayDate
-                          ? isPink
-                            ? "bg-gradient-to-br from-pink-500 to-pink-600 text-white"
-                            : "bg-gradient-to-br from-cyan-500 to-cyan-600 text-white"
-                          : isSelected
+                        isFrost
+                          ? isTodayDate
+                            ? "bg-gradient-to-br from-indigo-500 to-violet-500 text-white"
+                            : isSelected
+                              ? "bg-indigo-100 text-indigo-700"
+                              : isCurrentMonth
+                                ? isWeekendDay
+                                  ? "text-indigo-500"
+                                  : "text-slate-700"
+                                : "text-slate-300"
+                          : isTodayDate
                             ? isPink
-                              ? "bg-pink-500/30 text-pink-300"
-                              : "bg-cyan-500/30 text-cyan-300"
-                            : isCurrentMonth
-                              ? isWeekendDay
-                                ? isPink
-                                  ? "text-pink-300/80"
-                                  : "text-cyan-300/80"
-                                : "text-white/90"
-                              : "text-white/30"
+                              ? "bg-gradient-to-br from-pink-500 to-pink-600 text-white"
+                              : "bg-gradient-to-br from-cyan-500 to-cyan-600 text-white"
+                            : isSelected
+                              ? isPink
+                                ? "bg-pink-500/30 text-pink-300"
+                                : "bg-cyan-500/30 text-cyan-300"
+                              : isCurrentMonth
+                                ? isWeekendDay
+                                  ? isPink
+                                    ? "text-pink-300/80"
+                                    : "text-cyan-300/80"
+                                  : "text-white/90"
+                                : "text-white/30"
                       )}
                     >
                       {format(date, "d")}
@@ -580,9 +632,10 @@ export function WebCalendar({
                           onAddEvent(date);
                         }}
                         className={cn(
-                          "w-4 h-4 lg:w-6 lg:h-6 rounded-full flex items-center justify-center",
-                          "bg-white/10 hover:bg-white/20 transition-colors",
-                          "text-white/60 hover:text-white"
+                          "w-4 h-4 lg:w-6 lg:h-6 rounded-full flex items-center justify-center transition-colors",
+                          isFrost
+                            ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-600 hover:text-indigo-700"
+                            : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"
                         )}
                       >
                         <CalendarPlus className="w-2 h-2 lg:w-3 lg:h-3" />
@@ -605,11 +658,13 @@ export function WebCalendar({
                         className={cn(
                           "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate cursor-pointer",
                           "border-l lg:border-l-2 transition-all duration-200",
-                          "bg-amber-500/20 border-l-amber-400 text-amber-200"
+                          isFrost
+                            ? "bg-amber-100 border-l-amber-400 text-amber-700"
+                            : "bg-amber-500/20 border-l-amber-400 text-amber-200"
                         )}
                       >
                         <div className="flex items-center gap-0.5">
-                          <Cake className="w-2 h-2 lg:w-3 lg:h-3 text-amber-300 flex-shrink-0" />
+                          <Cake className={cn("w-2 h-2 lg:w-3 lg:h-3 flex-shrink-0", isFrost ? "text-amber-600" : "text-amber-300")} />
                           <span className="truncate font-medium">
                             {getBirthdayDisplayName(birthday, date)}
                           </span>
@@ -642,9 +697,9 @@ export function WebCalendar({
                             className={cn(
                               "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate cursor-pointer",
                               "border-l lg:border-l-2 transition-all duration-200",
-                              colors.bg,
-                              colors.border,
-                              colors.text
+                              isFrost ? colors.frostBg : colors.bg,
+                              isFrost ? colors.frostBorder : colors.border,
+                              isFrost ? colors.frostText : colors.text
                             )}
                           >
                             <div className="flex items-center gap-0.5">
@@ -689,7 +744,9 @@ export function WebCalendar({
                             className={cn(
                               "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate cursor-pointer",
                               "border lg:border-2 transition-all duration-200 opacity-60",
-                              "bg-green-500/10 border-green-500/50 text-green-300/70"
+                              isFrost
+                                ? "bg-green-100 border-green-300 text-green-600"
+                                : "bg-green-500/10 border-green-500/50 text-green-300/70"
                             )}
                           >
                             <div className="flex items-center gap-0.5">
@@ -737,7 +794,9 @@ export function WebCalendar({
                             className={cn(
                               "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate cursor-pointer",
                               "border lg:border-2 transition-all duration-200 opacity-70",
-                              "bg-amber-500/10 border-amber-500/50 text-amber-300/80"
+                              isFrost
+                                ? "bg-amber-100 border-amber-300 text-amber-600"
+                                : "bg-amber-500/10 border-amber-500/50 text-amber-300/80"
                             )}
                           >
                             <div className="flex items-center gap-0.5">
@@ -758,7 +817,11 @@ export function WebCalendar({
                       <div
                         className={cn(
                           "text-[7px] lg:text-[10px] font-medium px-0.5",
-                          isPink ? "text-pink-400/70" : "text-cyan-400/70"
+                          isFrost
+                            ? "text-indigo-500"
+                            : isPink
+                              ? "text-pink-400/70"
+                              : "text-cyan-400/70"
                         )}
                       >
                         +
@@ -783,9 +846,11 @@ export function WebCalendar({
           className={cn(
             "sticky top-2 rounded-xl backdrop-blur-xl border p-3",
             "h-fit max-h-[calc(100vh-100px)] overflow-y-auto",
-            isPink
-              ? "bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-transparent border-pink-500/20"
-              : "bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-500/20"
+            isFrost
+              ? "bg-white/80 border-indigo-200 shadow-lg"
+              : isPink
+                ? "bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-transparent border-pink-500/20"
+                : "bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-500/20"
           )}
         >
           {selectedDate ? (
@@ -795,12 +860,16 @@ export function WebCalendar({
                   <h3
                     className={cn(
                       "text-lg font-bold",
-                      isPink ? "text-pink-300" : "text-cyan-300"
+                      isFrost
+                        ? "text-indigo-600"
+                        : isPink
+                          ? "text-pink-300"
+                          : "text-cyan-300"
                     )}
                   >
                     {format(selectedDate, "EEEE")}
                   </h3>
-                  <p className="text-sm text-white/60">
+                  <p className={cn("text-sm", isFrost ? "text-slate-500" : "text-white/60")}>
                     {format(selectedDate, "MMMM d, yyyy")}
                   </p>
                 </div>
@@ -810,8 +879,9 @@ export function WebCalendar({
                     onClick={() => onAddEvent(selectedDate)}
                     className={cn(
                       "p-2 rounded-lg transition-all",
-                      "bg-white/10 hover:bg-white/20",
-                      "text-white/60 hover:text-white"
+                      isFrost
+                        ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-600 hover:text-indigo-700"
+                        : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"
                     )}
                   >
                     <CalendarPlus className="w-5 h-5" />
@@ -837,28 +907,27 @@ export function WebCalendar({
                       className={cn(
                         "p-3 rounded-xl cursor-pointer relative overflow-hidden",
                         "border-l-4 border-l-amber-400 transition-all duration-200",
-                        "bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-600/20",
-                        "hover:from-amber-500/30 hover:via-yellow-500/25 hover:to-amber-600/30",
-                        "hover:shadow-lg hover:shadow-amber-500/20",
-                        "ring-1 ring-amber-400/30"
+                        isFrost
+                          ? "bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 hover:from-amber-200 hover:via-yellow-100 hover:to-amber-200 ring-1 ring-amber-300"
+                          : "bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-600/20 hover:from-amber-500/30 hover:via-yellow-500/25 hover:to-amber-600/30 hover:shadow-lg hover:shadow-amber-500/20 ring-1 ring-amber-400/30"
                       )}
                     >
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-300/10 to-transparent animate-pulse" />
+                      <div className={cn("absolute inset-0 bg-gradient-to-r from-transparent via-amber-300/10 to-transparent", !isFrost && "animate-pulse")} />
                       <div className="flex items-start justify-between gap-2 relative">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <Cake className="w-4 h-4 text-amber-300" />
-                            <h4 className="font-semibold text-amber-200 truncate">
+                            <Cake className={cn("w-4 h-4", isFrost ? "text-amber-600" : "text-amber-300")} />
+                            <h4 className={cn("font-semibold truncate", isFrost ? "text-amber-800" : "text-amber-200")}>
                               {getBirthdayDisplayName(birthday, selectedDate)}
                             </h4>
                           </div>
                           {birthday.category && (
-                            <p className="text-sm text-amber-300/70 mt-1 capitalize">
+                            <p className={cn("text-sm mt-1 capitalize", isFrost ? "text-amber-600" : "text-amber-300/70")}>
                               {birthday.category}
                             </p>
                           )}
                         </div>
-                        <span className="px-2 py-0.5 rounded text-xs bg-amber-500/30 text-amber-200 font-medium border border-amber-400/30">
+                        <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", isFrost ? "bg-amber-200 text-amber-800 border-amber-300" : "bg-amber-500/30 text-amber-200 border-amber-400/30")}>
                           Birthday
                         </span>
                       </div>
@@ -889,8 +958,10 @@ export function WebCalendar({
                         className={cn(
                           "p-3 rounded-xl",
                           "border-l-4 transition-all duration-200",
-                          "bg-white/5 hover:bg-white/10",
-                          colors.border
+                          isFrost
+                            ? "bg-slate-50 hover:bg-slate-100"
+                            : "bg-white/5 hover:bg-white/10",
+                          isFrost ? colors.frostBorder : colors.border
                         )}
                       >
                         <div
@@ -905,12 +976,12 @@ export function WebCalendar({
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-medium text-white truncate">
+                              <h4 className={cn("font-medium truncate", isFrost ? "text-slate-900" : "text-white")}>
                                 {item.title}
                               </h4>
 
                               {time && (
-                                <div className="flex items-center gap-1 mt-1 text-sm text-white/60">
+                                <div className={cn("flex items-center gap-1 mt-1 text-sm", isFrost ? "text-slate-500" : "text-white/60")}>
                                   <Clock className="w-3 h-3" />
                                   <span>
                                     {format(parseISO(time), "h:mm a")}
@@ -921,7 +992,7 @@ export function WebCalendar({
                               )}
 
                               {location && (
-                                <div className="flex items-center gap-1 mt-1 text-sm text-white/60">
+                                <div className={cn("flex items-center gap-1 mt-1 text-sm", isFrost ? "text-slate-500" : "text-white/60")}>
                                   <MapPin className="w-3 h-3" />
                                   <span className="truncate">{location}</span>
                                 </div>
@@ -938,8 +1009,8 @@ export function WebCalendar({
                               <span
                                 className={cn(
                                   "px-2 py-0.5 rounded text-xs capitalize",
-                                  colors.bg,
-                                  colors.text
+                                  isFrost ? colors.frostBg : colors.bg,
+                                  isFrost ? colors.frostText : colors.text
                                 )}
                               >
                                 {item.type}
@@ -948,8 +1019,8 @@ export function WebCalendar({
                                 <span
                                   className={cn(
                                     "px-2 py-0.5 rounded text-xs capitalize",
-                                    priorityColor.bg,
-                                    priorityColor.text
+                                    isFrost ? priorityColor.frostBg : priorityColor.bg,
+                                    isFrost ? priorityColor.frostText : priorityColor.text
                                   )}
                                 >
                                   {item.priority}
@@ -960,7 +1031,7 @@ export function WebCalendar({
                         </div>
 
                         {/* Subtasks Section */}
-                        <div className="mt-3 pt-2 border-t border-white/10">
+                        <div className={cn("mt-3 pt-2 border-t", isFrost ? "border-slate-200" : "border-white/10")}>
                           <ItemSubtasksList
                             itemId={item.id}
                             subtasks={item.subtasks || []}
@@ -982,13 +1053,13 @@ export function WebCalendar({
 
                   {/* Postponed Items Section */}
                   {selectedDatePostponedItems.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-white/10">
+                    <div className={cn("mt-4 pt-4 border-t", isFrost ? "border-slate-200" : "border-white/10")}>
                       <div className="flex items-center gap-2 mb-3">
-                        <FastForward className="w-4 h-4 text-amber-400" />
-                        <h4 className="text-sm font-medium text-amber-400">
+                        <FastForward className={cn("w-4 h-4", isFrost ? "text-amber-600" : "text-amber-400")} />
+                        <h4 className={cn("text-sm font-medium", isFrost ? "text-amber-700" : "text-amber-400")}>
                           Postponed to this day
                         </h4>
-                        <span className="text-xs text-amber-400/60">
+                        <span className={cn("text-xs", isFrost ? "text-amber-500" : "text-amber-400/60")}>
                           ({selectedDatePostponedItems.length})
                         </span>
                       </div>
@@ -1016,19 +1087,21 @@ export function WebCalendar({
                               }}
                               className={cn(
                                 "p-3 rounded-xl cursor-pointer",
-                                "border-2 border-amber-500/30 transition-all duration-200",
-                                "bg-amber-500/10 hover:bg-amber-500/15"
+                                "border-2 transition-all duration-200",
+                                isFrost
+                                  ? "border-amber-300 bg-amber-50 hover:bg-amber-100"
+                                  : "border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15"
                               )}
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <FastForward className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                                    <h4 className="font-medium text-amber-300 truncate">
+                                    <FastForward className={cn("w-4 h-4 flex-shrink-0", isFrost ? "text-amber-600" : "text-amber-400")} />
+                                    <h4 className={cn("font-medium truncate", isFrost ? "text-amber-800" : "text-amber-300")}>
                                       {item.title}
                                     </h4>
                                   </div>
-                                  <div className="flex items-center gap-1 mt-1 text-sm text-amber-300/60 ml-6">
+                                  <div className={cn("flex items-center gap-1 mt-1 text-sm ml-6", isFrost ? "text-amber-600" : "text-amber-300/60")}>
                                     <span>
                                       from{" "}
                                       {format(postponed.originalDate, "MMM d")}
@@ -1038,7 +1111,9 @@ export function WebCalendar({
                                 <span
                                   className={cn(
                                     "px-2 py-0.5 rounded text-xs capitalize",
-                                    "bg-amber-500/20 text-amber-300"
+                                    isFrost
+                                      ? "bg-amber-200 text-amber-800"
+                                      : "bg-amber-500/20 text-amber-300"
                                   )}
                                 >
                                   {item.type}
@@ -1053,13 +1128,13 @@ export function WebCalendar({
 
                   {/* Completed Items Section */}
                   {selectedDateCompletedItems.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-white/10">
+                    <div className={cn("mt-4 pt-4 border-t", isFrost ? "border-slate-200" : "border-white/10")}>
                       <div className="flex items-center gap-2 mb-3">
-                        <CheckCircle2 className="w-4 h-4 text-green-400" />
-                        <h4 className="text-sm font-medium text-green-400">
+                        <CheckCircle2 className={cn("w-4 h-4", isFrost ? "text-green-600" : "text-green-400")} />
+                        <h4 className={cn("text-sm font-medium", isFrost ? "text-green-700" : "text-green-400")}>
                           Completed
                         </h4>
-                        <span className="text-xs text-green-400/60">
+                        <span className={cn("text-xs", isFrost ? "text-green-500" : "text-green-400/60")}>
                           ({selectedDateCompletedItems.length})
                         </span>
                       </div>
@@ -1087,28 +1162,30 @@ export function WebCalendar({
                               }}
                               className={cn(
                                 "p-3 rounded-xl cursor-pointer",
-                                "border-2 border-green-500/30 transition-all duration-200",
-                                "bg-green-500/10 hover:bg-green-500/15 opacity-70"
+                                "border-2 transition-all duration-200 opacity-70",
+                                isFrost
+                                  ? "border-green-300 bg-green-50 hover:bg-green-100"
+                                  : "border-green-500/30 bg-green-500/10 hover:bg-green-500/15"
                               )}
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
-                                    <h4 className="font-medium text-green-300 truncate line-through">
+                                    <CheckCircle2 className={cn("w-4 h-4 flex-shrink-0", isFrost ? "text-green-600" : "text-green-400")} />
+                                    <h4 className={cn("font-medium truncate line-through", isFrost ? "text-green-700" : "text-green-300")}>
                                       {item.title}
                                     </h4>
                                   </div>
                                   <div className="flex flex-col gap-0.5 mt-1 ml-6">
                                     {time && (
-                                      <div className="flex items-center gap-1 text-sm text-green-300/60">
+                                      <div className={cn("flex items-center gap-1 text-sm", isFrost ? "text-green-600" : "text-green-300/60")}>
                                         <Clock className="w-3 h-3" />
                                         <span>
                                           {format(parseISO(time), "h:mm a")}
                                         </span>
                                       </div>
                                     )}
-                                    <div className="text-xs text-green-400/50">
+                                    <div className={cn("text-xs", isFrost ? "text-green-500" : "text-green-400/50")}>
                                       Completed{" "}
                                       {formatDistanceToNow(
                                         completed.completedAt,
@@ -1120,7 +1197,9 @@ export function WebCalendar({
                                 <span
                                   className={cn(
                                     "px-2 py-0.5 rounded text-xs capitalize",
-                                    "bg-green-500/20 text-green-300"
+                                    isFrost
+                                      ? "bg-green-200 text-green-800"
+                                      : "bg-green-500/20 text-green-300"
                                   )}
                                 >
                                   {item.type}
@@ -1135,15 +1214,17 @@ export function WebCalendar({
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <CalendarPlus className="w-12 h-12 mx-auto mb-3 text-white/20" />
-                  <p className="text-sm text-white/40">No events scheduled</p>
+                  <CalendarPlus className={cn("w-12 h-12 mx-auto mb-3", isFrost ? "text-slate-300" : "text-white/20")} />
+                  <p className={cn("text-sm", isFrost ? "text-slate-400" : "text-white/40")}>No events scheduled</p>
                   {onAddEvent && (
                     <button
                       type="button"
                       onClick={() => onAddEvent(selectedDate)}
                       className={cn(
                         "mt-3 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                        "bg-white/10 hover:bg-white/20 text-white/70 hover:text-white"
+                        isFrost
+                          ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-600 hover:text-indigo-700"
+                          : "bg-white/10 hover:bg-white/20 text-white/70 hover:text-white"
                       )}
                     >
                       Add an event
@@ -1154,7 +1235,7 @@ export function WebCalendar({
             </>
           ) : (
             <div className="text-center py-8">
-              <p className="text-sm text-white/40">
+              <p className={cn("text-sm", isFrost ? "text-slate-400" : "text-white/40")}>
                 Select a date to view details
               </p>
             </div>

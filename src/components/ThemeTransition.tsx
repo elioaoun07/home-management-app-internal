@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface ThemeTransitionProps {
   isTransitioning: boolean;
-  toTheme: "blue" | "pink";
+  toTheme: "blue" | "pink" | "frost" | "calm";
   onPaintCovered: () => void | Promise<void>;
   onComplete: () => void;
 }
@@ -59,16 +59,38 @@ export default function ThemeTransition({
             highlight: "#67e8f9",
             particle: [180, 200, 220], // HSL hue range
           }
-        : {
-            primary: "#ec4899",
-            secondary: "#f472b6",
-            tertiary: "#a855f7",
-            bg: "#1a0a14",
-            bgDark: "#0d0509",
-            glow: "rgba(236, 72, 153, 0.8)",
-            highlight: "#fbcfe8",
-            particle: [320, 340, 360], // HSL hue range
-          },
+        : toTheme === "frost"
+          ? {
+              primary: "#6366f1",
+              secondary: "#8b5cf6",
+              tertiary: "#a78bfa",
+              bg: "#f8fafc",
+              bgDark: "#f1f5f9",
+              glow: "rgba(99, 102, 241, 0.5)",
+              highlight: "#a5b4fc",
+              particle: [240, 250, 260], // HSL hue range (indigo/violet)
+            }
+          : toTheme === "calm"
+            ? {
+                primary: "#78716c",
+                secondary: "#a8a29e",
+                tertiary: "#84a98c",
+                bg: "#1c1917",
+                bgDark: "#0c0a09",
+                glow: "rgba(120, 113, 108, 0.6)",
+                highlight: "#d6cfc7",
+                particle: [30, 40, 50], // HSL hue range (warm stone)
+              }
+            : {
+                primary: "#ec4899",
+                secondary: "#f472b6",
+                tertiary: "#a855f7",
+                bg: "#1a0a14",
+                bgDark: "#0d0509",
+                glow: "rgba(236, 72, 153, 0.8)",
+                highlight: "#fbcfe8",
+                particle: [320, 340, 360], // HSL hue range
+              },
     [toTheme]
   );
 
@@ -80,10 +102,31 @@ export default function ThemeTransition({
       const imageData = ctx.createImageData(width, height);
       const data = imageData.data;
 
-      // Parse primary color
-      const r = toTheme === "blue" ? 6 : 236;
-      const g = toTheme === "blue" ? 182 : 72;
-      const b = toTheme === "blue" ? 212 : 153;
+      // Parse primary color based on theme
+      const r =
+        toTheme === "blue"
+          ? 6
+          : toTheme === "frost"
+            ? 99
+            : toTheme === "calm"
+              ? 120
+              : 236;
+      const g =
+        toTheme === "blue"
+          ? 182
+          : toTheme === "frost"
+            ? 102
+            : toTheme === "calm"
+              ? 113
+              : 72;
+      const b =
+        toTheme === "blue"
+          ? 212
+          : toTheme === "frost"
+            ? 241
+            : toTheme === "calm"
+              ? 108
+              : 153;
 
       // Simplified metaball - sample every 4 pixels for performance
       for (let y = 0; y < height; y += 4) {
@@ -581,7 +624,13 @@ export default function ThemeTransition({
                 animation: "neon-glow 1s ease-in-out infinite",
               }}
             >
-              {toTheme === "blue" ? "🌊" : "🌸"}
+              {toTheme === "blue"
+                ? "🌊"
+                : toTheme === "frost"
+                  ? "❄️"
+                  : toTheme === "calm"
+                    ? "🌿"
+                    : "🌸"}
             </div>
 
             {/* Theme name with reveal animation */}
@@ -598,7 +647,13 @@ export default function ThemeTransition({
                 animation: "text-reveal 0.5s ease-out forwards",
               }}
             >
-              {toTheme === "blue" ? "OCEAN" : "SUNSET"}
+              {toTheme === "blue"
+                ? "OCEAN"
+                : toTheme === "frost"
+                  ? "FROST"
+                  : toTheme === "calm"
+                    ? "CALM"
+                    : "SUNSET"}
             </div>
 
             {/* Progress bar */}

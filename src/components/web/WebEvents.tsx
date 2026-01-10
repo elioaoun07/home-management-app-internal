@@ -112,6 +112,8 @@ export default function WebEvents() {
   const { theme } = useTheme();
   const themeClasses = useThemeClasses();
   const isPink = theme === "pink";
+  const isFrost = theme === "frost";
+  const isCalm = theme === "calm";
   const deleteItem = useDeleteItem();
   const itemActions = useItemActionsWithToast();
 
@@ -528,7 +530,16 @@ export default function WebEvents() {
   return (
     <div className={cn("min-h-screen pb-20", themeClasses.pageBg)}>
       {/* Bottom Navigation Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#0a1628]/95 backdrop-blur-lg border-t border-white/10">
+      <div
+        className={cn(
+          "fixed bottom-0 left-0 right-0 z-50 backdrop-blur-lg border-t",
+          isCalm
+            ? "bg-[#1c1917]/95 border-stone-700"
+            : isFrost
+              ? "bg-white/95 border-slate-200 shadow-lg"
+              : "bg-[#0a1628]/95 border-white/10"
+        )}
+      >
         <div className="max-w-lg mx-auto px-4">
           <div className="flex items-center justify-around py-2">
             <button
@@ -537,10 +548,18 @@ export default function WebEvents() {
               className={cn(
                 "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all",
                 mainView === "mission-control"
-                  ? isPink
-                    ? "bg-pink-500/20 text-pink-400"
-                    : "bg-cyan-500/20 text-cyan-400"
-                  : "text-white/50 hover:text-white/70"
+                  ? isCalm
+                    ? "bg-stone-700 text-stone-200"
+                    : isFrost
+                      ? "bg-indigo-100 text-indigo-600"
+                      : isPink
+                        ? "bg-pink-500/20 text-pink-400"
+                        : "bg-cyan-500/20 text-cyan-400"
+                  : isCalm
+                    ? "text-stone-500 hover:text-stone-400"
+                    : isFrost
+                      ? "text-slate-400 hover:text-slate-600"
+                      : "text-white/50 hover:text-white/70"
               )}
             >
               <Target className="w-5 h-5" />
@@ -552,10 +571,18 @@ export default function WebEvents() {
               className={cn(
                 "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all",
                 mainView === "calendar"
-                  ? isPink
-                    ? "bg-pink-500/20 text-pink-400"
-                    : "bg-cyan-500/20 text-cyan-400"
-                  : "text-white/50 hover:text-white/70"
+                  ? isCalm
+                    ? "bg-stone-700 text-stone-200"
+                    : isFrost
+                      ? "bg-indigo-100 text-indigo-600"
+                      : isPink
+                        ? "bg-pink-500/20 text-pink-400"
+                        : "bg-cyan-500/20 text-cyan-400"
+                  : isCalm
+                    ? "text-stone-500 hover:text-stone-400"
+                    : isFrost
+                      ? "text-slate-400 hover:text-slate-600"
+                      : "text-white/50 hover:text-white/70"
               )}
             >
               <CalendarDays className="w-5 h-5" />
@@ -567,10 +594,18 @@ export default function WebEvents() {
               className={cn(
                 "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all",
                 mainView === "dashboard"
-                  ? isPink
-                    ? "bg-pink-500/20 text-pink-400"
-                    : "bg-cyan-500/20 text-cyan-400"
-                  : "text-white/50 hover:text-white/70"
+                  ? isCalm
+                    ? "bg-stone-700 text-stone-200"
+                    : isFrost
+                      ? "bg-indigo-100 text-indigo-600"
+                      : isPink
+                        ? "bg-pink-500/20 text-pink-400"
+                        : "bg-cyan-500/20 text-cyan-400"
+                  : isCalm
+                    ? "text-stone-500 hover:text-stone-400"
+                    : isFrost
+                      ? "text-slate-400 hover:text-slate-600"
+                      : "text-white/50 hover:text-white/70"
               )}
             >
               <LayoutDashboard className="w-5 h-5" />
@@ -600,15 +635,24 @@ export default function WebEvents() {
               {/* Left side: View toggle + Type filters */}
               <div className="flex items-center gap-2 lg:gap-2">
                 {/* View Toggle */}
-                <div className="flex items-center p-0.5 bg-white/5 rounded-lg">
+                <div
+                  className={cn(
+                    "flex items-center p-0.5 rounded-lg",
+                    isFrost ? "bg-slate-100" : "bg-white/5"
+                  )}
+                >
                   <button
                     type="button"
                     onClick={() => setView("month")}
                     className={cn(
                       "p-2.5 lg:px-3 lg:py-2 rounded-md transition-all",
                       view === "month"
-                        ? "neo-gradient text-white"
-                        : "text-white/50 hover:text-white"
+                        ? isFrost
+                          ? "bg-white text-indigo-600 shadow-sm"
+                          : "neo-gradient text-white"
+                        : isFrost
+                          ? "text-slate-500 hover:text-slate-700"
+                          : "text-white/50 hover:text-white"
                     )}
                     title="Month view"
                   >
@@ -620,8 +664,12 @@ export default function WebEvents() {
                     className={cn(
                       "p-2.5 lg:px-3 lg:py-2 rounded-md transition-all",
                       view === "week"
-                        ? "neo-gradient text-white"
-                        : "text-white/50 hover:text-white"
+                        ? isFrost
+                          ? "bg-white text-indigo-600 shadow-sm"
+                          : "neo-gradient text-white"
+                        : isFrost
+                          ? "text-slate-500 hover:text-slate-700"
+                          : "text-white/50 hover:text-white"
                     )}
                     title="Week view"
                   >
@@ -630,10 +678,20 @@ export default function WebEvents() {
                 </div>
 
                 {/* Divider */}
-                <div className="w-px h-8 bg-white/10" />
+                <div
+                  className={cn(
+                    "w-px h-8",
+                    isFrost ? "bg-slate-200" : "bg-white/10"
+                  )}
+                />
 
                 {/* Type Filter */}
-                <div className="flex items-center p-0.5 bg-white/5 rounded-lg">
+                <div
+                  className={cn(
+                    "flex items-center p-0.5 rounded-lg",
+                    isFrost ? "bg-slate-100" : "bg-white/5"
+                  )}
+                >
                   {typeFilters.map((filter) => {
                     const Icon = filter.icon;
                     const isActive = typeFilter === filter.id;
@@ -645,8 +703,12 @@ export default function WebEvents() {
                         className={cn(
                           "p-2.5 lg:px-3 lg:py-2 rounded-md transition-all",
                           isActive
-                            ? "neo-gradient text-white"
-                            : "text-white/50 hover:text-white"
+                            ? isFrost
+                              ? "bg-white text-indigo-600 shadow-sm"
+                              : "neo-gradient text-white"
+                            : isFrost
+                              ? "text-slate-500 hover:text-slate-700"
+                              : "text-white/50 hover:text-white"
                         )}
                         title={filter.label}
                       >
@@ -657,7 +719,12 @@ export default function WebEvents() {
                 </div>
 
                 {/* Divider */}
-                <div className="w-px h-8 bg-white/10" />
+                <div
+                  className={cn(
+                    "w-px h-8",
+                    isFrost ? "bg-slate-200" : "bg-white/10"
+                  )}
+                />
 
                 {/* Birthday Toggle */}
                 <button
@@ -666,8 +733,12 @@ export default function WebEvents() {
                   className={cn(
                     "p-2.5 rounded-lg transition-all",
                     showBirthdays
-                      ? "bg-amber-500/20 text-amber-300"
-                      : "text-white/40 hover:text-white/60"
+                      ? isFrost
+                        ? "bg-amber-100 text-amber-600"
+                        : "bg-amber-500/20 text-amber-300"
+                      : isFrost
+                        ? "text-slate-400 hover:text-slate-600"
+                        : "text-white/40 hover:text-white/60"
                   )}
                   title="Show birthdays"
                 >

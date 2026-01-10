@@ -6,7 +6,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 
 export interface UserPreferences {
-  theme?: "blue" | "pink";
+  theme?: "blue" | "pink" | "frost";
   date_start?: string;
 }
 
@@ -32,7 +32,7 @@ export function useUserPreferences() {
     initialData: cachedPrefs
       ? {
           date_start: cachedPrefs.date_start,
-          theme: cachedPrefs.theme as "blue" | "pink" | undefined,
+          theme: cachedPrefs.theme as "blue" | "pink" | "frost" | undefined,
         }
       : undefined,
   });

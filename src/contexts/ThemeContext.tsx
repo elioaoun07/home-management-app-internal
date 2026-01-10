@@ -13,7 +13,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-type Theme = "blue" | "pink";
+type Theme = "blue" | "pink" | "frost" | "calm";
 
 interface ThemeContextType {
   theme: Theme;
@@ -27,13 +27,26 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "blue";
   const stored = localStorage.getItem("color-theme");
-  if (stored === "pink" || stored === "blue") return stored;
+  if (
+    stored === "pink" ||
+    stored === "blue" ||
+    stored === "frost" ||
+    stored === "calm"
+  )
+    return stored;
   return "blue";
 }
 
 // Apply theme to DOM immediately - no React state delay
 function applyThemeToDOM(newTheme: Theme) {
-  const bgColor = newTheme === "pink" ? "#1a0a14" : "#0a1628";
+  const bgColor =
+    newTheme === "pink"
+      ? "#1a0a14"
+      : newTheme === "frost"
+        ? "#f8fafc"
+        : newTheme === "calm"
+          ? "#1c1917"
+          : "#0a1628";
   document.documentElement.setAttribute("data-theme", newTheme);
   document.documentElement.style.backgroundColor = bgColor;
   document.body.style.backgroundColor = bgColor;
@@ -69,7 +82,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (preferences?.theme) {
       const userTheme = preferences.theme as Theme;
       if (
-        (userTheme === "blue" || userTheme === "pink") &&
+        (userTheme === "blue" ||
+          userTheme === "pink" ||
+          userTheme === "frost" ||
+          userTheme === "calm") &&
         userTheme !== theme
       ) {
         setThemeState(userTheme);
@@ -125,18 +141,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       // Start the beautiful paint animation!
       setIsTransitioning(true);
 
-      // Toast shows in the NEW theme color (opposite of what we're switching FROM)
-      toast.success(
-        `🎨 ${newTheme === "blue" ? "Blue Ocean" : "Pink Sunset"} theme!`,
-        {
-          duration: 2000,
-          style: {
-            background: newTheme === "blue" ? "#1e3a5f" : "#3d1a2e",
-            border: `1px solid ${newTheme === "blue" ? "#3b82f6" : "#ec4899"}`,
-            color: newTheme === "blue" ? "#93c5fd" : "#f9a8d4",
-          },
-        }
-      );
+      // Toast shows in the NEW theme color
+      const themeNames = {
+        blue: "Blue Ocean",
+        pink: "Pink Sunset",
+        frost: "Frost Light",
+        calm: "Calm Tablet",
+      };
+      const themeStyles = {
+        blue: { background: "#1e3a5f", border: "#3b82f6", color: "#93c5fd" },
+        pink: { background: "#3d1a2e", border: "#ec4899", color: "#f9a8d4" },
+        frost: { background: "#ffffff", border: "#6366f1", color: "#4338ca" },
+        calm: { background: "#292524", border: "#78716c", color: "#d6cfc7" },
+      };
+      toast.success(`🎨 ${themeNames[newTheme]} theme!`, {
+        duration: 2000,
+        style: {
+          background: themeStyles[newTheme].background,
+          border: `1px solid ${themeStyles[newTheme].border}`,
+          color: themeStyles[newTheme].color,
+        },
+      });
     } catch (error) {
       console.error("Failed to save theme:", error);
       toast.error("Failed to save theme preference");

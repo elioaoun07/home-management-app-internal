@@ -721,7 +721,7 @@ CREATE TABLE public.user_onboarding (
 );
 CREATE TABLE public.user_preferences (
   user_id uuid NOT NULL,
-  theme text NOT NULL DEFAULT '''dark''::text'::text CHECK (theme = ANY (ARRAY['light'::text, 'dark'::text, 'wood'::text, 'system'::text, 'blue'::text, 'pink'::text])),
+  theme text NOT NULL DEFAULT '''dark''::text'::text CHECK (theme = ANY (ARRAY['light'::text, 'dark'::text, 'frost'::text, 'system'::text, 'blue'::text, 'pink'::text])),
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
   section_order jsonb DEFAULT '["amount", "account", "category", "subcategory", "description"]'::jsonb,
   date_start text DEFAULT '''mon-1''::text'::text,

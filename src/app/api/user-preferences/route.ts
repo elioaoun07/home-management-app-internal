@@ -75,26 +75,16 @@ export async function PATCH(_req: NextRequest) {
   const payload: Record<string, any> = { user_id: user.id };
   if (section_order !== undefined) payload.section_order = section_order;
 
-  // Handle theme (blue/pink)
-  if (theme === "blue" || theme === "pink") {
-    payload.theme = theme;
-  } else if (theme === null) {
-    payload.theme = null;
-  }
-
+  // Handle theme (blue/pink/frost/calm)
   if (
-    theme === "light" ||
-    theme === "dark" ||
-    theme === "wood" ||
-    theme === "system"
+    theme === "blue" ||
+    theme === "pink" ||
+    theme === "frost" ||
+    theme === "calm"
   ) {
     payload.theme = theme;
   } else if (theme === null) {
-    // Explicitly clearing theme to null if client requests
     payload.theme = null;
-  } else if (theme !== undefined) {
-    // Ignore unknown theme strings to avoid CHECK violations on older schemas
-    // (Do not write theme if it's not a recognized value)
   }
   if (date_start !== undefined) {
     // Sanitize values like "'mon-1'::text" or "'mon-1'"

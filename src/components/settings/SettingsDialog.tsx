@@ -228,18 +228,18 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                       await setTheme("blue");
                     }}
                     disabled={themeLoading}
-                    className={`group relative neo-card p-8 rounded-2xl hover:scale-[1.02] transition-all disabled:opacity-50 ${
+                    className={`group relative neo-card p-6 rounded-2xl hover:scale-[1.02] transition-all disabled:opacity-50 ${
                       colorTheme === "blue"
                         ? "ring-2 ring-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.3)]"
                         : ""
                     }`}
                   >
-                    <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-[#3b82f6] via-[#06b6d4] to-[#14b8a6] shadow-[0_0_30px_rgba(59,130,246,0.5)] mb-4"></div>
-                    <p className="text-lg font-bold bg-gradient-to-r from-cyan-400 to-teal bg-clip-text text-transparent">
+                    <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-[#3b82f6] via-[#06b6d4] to-[#14b8a6] shadow-[0_0_30px_rgba(59,130,246,0.5)] mb-3"></div>
+                    <p className="text-base font-bold bg-gradient-to-r from-cyan-400 to-teal bg-clip-text text-transparent">
                       Blue
                     </p>
                     {colorTheme === "blue" && (
-                      <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-cyan-400 flex items-center justify-center text-slate-900 text-xs font-bold">
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-cyan-400 flex items-center justify-center text-slate-900 text-xs font-bold">
                         ✓
                       </div>
                     )}
@@ -250,18 +250,68 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                       await setTheme("pink");
                     }}
                     disabled={themeLoading}
-                    className={`group relative neo-card p-8 rounded-2xl hover:scale-[1.02] transition-all disabled:opacity-50 ${
+                    className={`group relative neo-card p-6 rounded-2xl hover:scale-[1.02] transition-all disabled:opacity-50 ${
                       colorTheme === "pink"
                         ? "ring-2 ring-pink-400 shadow-[0_0_30px_rgba(236,72,153,0.3)]"
                         : ""
                     }`}
                   >
-                    <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-[#ec4899] via-[#f472b6] to-[#fbbf24] shadow-[0_0_30px_rgba(236,72,153,0.5)] mb-4"></div>
-                    <p className="text-lg font-bold bg-gradient-to-r from-pink-400 to-amber-400 bg-clip-text text-transparent">
+                    <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-[#ec4899] via-[#f472b6] to-[#fbbf24] shadow-[0_0_30px_rgba(236,72,153,0.5)] mb-3"></div>
+                    <p className="text-base font-bold bg-gradient-to-r from-pink-400 to-amber-400 bg-clip-text text-transparent">
                       Pink
                     </p>
                     {colorTheme === "pink" && (
-                      <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-pink-400 flex items-center justify-center text-slate-900 text-xs font-bold">
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-pink-400 flex items-center justify-center text-slate-900 text-xs font-bold">
+                        ✓
+                      </div>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      await setTheme("frost");
+                    }}
+                    disabled={themeLoading}
+                    className={`group relative neo-card p-6 rounded-2xl hover:scale-[1.02] transition-all disabled:opacity-50 ${
+                      colorTheme === "frost"
+                        ? "ring-2 ring-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.25)]"
+                        : ""
+                    }`}
+                  >
+                    <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-[#6366f1] via-[#8b5cf6] to-[#a78bfa] shadow-[0_4px_16px_rgba(99,102,241,0.35)] mb-3"></div>
+                    <p className="text-base font-bold bg-gradient-to-r from-indigo-600 to-violet-500 bg-clip-text text-transparent">
+                      Frost
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Light Mode
+                    </p>
+                    {colorTheme === "frost" && (
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                        ✓
+                      </div>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      await setTheme("calm");
+                    }}
+                    disabled={themeLoading}
+                    className={`group relative neo-card p-6 rounded-2xl hover:scale-[1.02] transition-all disabled:opacity-50 ${
+                      colorTheme === "calm"
+                        ? "ring-2 ring-stone-500 shadow-[0_4px_16px_rgba(120,113,108,0.3)]"
+                        : ""
+                    }`}
+                  >
+                    <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-[#78716c] via-[#a8a29e] to-[#84a98c] shadow-[0_4px_16px_rgba(120,113,108,0.4)] mb-3"></div>
+                    <p className="text-base font-bold bg-gradient-to-r from-stone-400 to-emerald-500 bg-clip-text text-transparent">
+                      Calm
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Tablet View
+                    </p>
+                    {colorTheme === "calm" && (
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-stone-500 flex items-center justify-center text-white text-xs font-bold">
                         ✓
                       </div>
                     )}

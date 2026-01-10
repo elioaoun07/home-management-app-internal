@@ -776,6 +776,7 @@ function TodayTaskCard({
     occurrence;
   const { theme } = useTheme();
   const isPink = theme === "pink";
+  const isFrost = theme === "frost";
   const colors = typeColors[item.type];
   const Icon = colors.icon;
   const isOverdue = isPast(occurrenceDate) && !isCompleted;
@@ -976,21 +977,21 @@ function TodayTaskCard({
       exit={{ opacity: 0, x: 20 }}
       className={cn(
         "group relative rounded-xl border-l-4 backdrop-blur-sm transition-all overflow-hidden",
-        colors.border,
+        isFrost ? "border-l-indigo-400" : colors.border,
         isCompleted
-          ? "bg-green-500/10 opacity-60"
+          ? isFrost ? "bg-green-50 opacity-70" : "bg-green-500/10 opacity-60"
           : isPostponed
-            ? "bg-amber-500/10 border-l-amber-400"
+            ? isFrost ? "bg-amber-50 border-l-amber-500" : "bg-amber-500/10 border-l-amber-400"
             : isOverdue
-              ? "bg-red-500/10 border-l-red-400"
-              : "bg-white/5 hover:bg-white/10"
+              ? isFrost ? "bg-red-50 border-l-red-500" : "bg-red-500/10 border-l-red-400"
+              : isFrost ? "bg-indigo-50/50 hover:bg-indigo-50" : "bg-white/5 hover:bg-white/10"
       )}
     >
       <div className="p-4">
         <div className="flex items-start gap-3">
           {/* Type Icon */}
-          <div className={cn("p-2 rounded-lg", colors.bg)}>
-            <Icon className={cn("w-5 h-5", colors.text)} />
+          <div className={cn("p-2 rounded-lg", isFrost ? "bg-indigo-100" : colors.bg)}>
+            <Icon className={cn("w-5 h-5", isFrost ? "text-indigo-600" : colors.text)} />
           </div>
 
           {/* Content */}
@@ -998,20 +999,21 @@ function TodayTaskCard({
             <div className="flex items-center gap-2 mb-1">
               <h3
                 className={cn(
-                  "font-medium text-white truncate",
-                  isCompleted && "line-through text-white/50"
+                  "font-medium truncate",
+                  isFrost ? "text-slate-900" : "text-white",
+                  isCompleted && (isFrost ? "line-through text-slate-400" : "line-through text-white/50")
                 )}
               >
                 {item.title}
               </h3>
               {item.recurrence_rule && (
-                <Repeat className="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
+                <Repeat className={cn("w-3.5 h-3.5 flex-shrink-0", isFrost ? "text-slate-400" : "text-white/40")} />
               )}
               {item.priority === "urgent" && (
                 <Zap className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
               )}
             </div>
-            <div className="flex items-center gap-2 text-xs text-white/50">
+            <div className={cn("flex items-center gap-2 text-xs", isFrost ? "text-slate-500" : "text-white/50")}>
               <Clock className="w-3 h-3" />
               <span>{format(occurrenceDate, "h:mm a")}</span>
               {(hasCurrentSubtasks || hasOverdueSubtasks) && (
@@ -1019,10 +1021,12 @@ function TodayTaskCard({
                   className={cn(
                     "font-medium",
                     completedSubtasksCount === topLevelSubtasks.length
-                      ? "text-green-400"
-                      : isPink
-                        ? "text-pink-400"
-                        : "text-cyan-400"
+                      ? isFrost ? "text-green-600" : "text-green-400"
+                      : isFrost
+                        ? "text-indigo-600"
+                        : isPink
+                          ? "text-pink-400"
+                          : "text-cyan-400"
                   )}
                 >
                   • {completedSubtasksCount}/{topLevelSubtasks.length} subtasks
@@ -1052,9 +1056,11 @@ function TodayTaskCard({
                   onClick={onExpand}
                   className={cn(
                     "p-2 rounded-lg transition-colors",
-                    isPink
-                      ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
-                      : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30"
+                    isFrost
+                      ? "bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
+                      : isPink
+                        ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
+                        : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30"
                   )}
                   title="Focus Mode"
                 >
@@ -1064,7 +1070,12 @@ function TodayTaskCard({
               <button
                 type="button"
                 onClick={onPostpone}
-                className="p-2 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                className={cn(
+                  "p-2 rounded-lg transition-colors",
+                  isFrost
+                    ? "bg-amber-100 text-amber-600 hover:bg-amber-200"
+                    : "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                )}
                 title="Postpone"
               >
                 <FastForward className="w-4 h-4" />
@@ -1072,7 +1083,12 @@ function TodayTaskCard({
               <button
                 type="button"
                 onClick={() => onCancel(notes || undefined)}
-                className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                className={cn(
+                  "p-2 rounded-lg transition-colors",
+                  isFrost
+                    ? "bg-red-100 text-red-600 hover:bg-red-200"
+                    : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                )}
                 title="Cancel this occurrence"
               >
                 <XCircle className="w-4 h-4" />
@@ -1080,7 +1096,12 @@ function TodayTaskCard({
               <button
                 type="button"
                 onClick={() => onComplete(notes || undefined)}
-                className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors"
+                className={cn(
+                  "p-2 rounded-lg transition-colors",
+                  isFrost
+                    ? "bg-green-100 text-green-600 hover:bg-green-200"
+                    : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                )}
                 title="Mark complete"
               >
                 <Check className="w-4 h-4" />
@@ -1093,14 +1114,19 @@ function TodayTaskCard({
                 <button
                   type="button"
                   onClick={onUndo}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors opacity-0 group-hover:opacity-100"
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100",
+                    isFrost
+                      ? "bg-amber-100 text-amber-600 hover:bg-amber-200"
+                      : "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                  )}
                   title="Undo completion"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span className="text-xs">Undo</span>
                 </button>
               )}
-              <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+              <CheckCircle2 className={cn("w-5 h-5 flex-shrink-0", isFrost ? "text-green-600" : "text-green-400")} />
             </div>
           )}
         </div>
@@ -1346,6 +1372,7 @@ function DayRow({
 }) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
+  const isFrost = theme === "frost";
   const completedCount = occurrences.filter((o) => o.isCompleted).length;
   const totalCount = occurrences.length;
   const allDone = totalCount > 0 && completedCount === totalCount;
@@ -1356,18 +1383,24 @@ function DayRow({
       className={cn(
         "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer",
         isSelected && !isDayToday
-          ? isPink
-            ? "bg-pink-500/20 border-pink-500/50 ring-1 ring-pink-500/30"
-            : "bg-cyan-500/20 border-cyan-500/50 ring-1 ring-cyan-500/30"
+          ? isFrost
+            ? "bg-indigo-100 border-indigo-300 ring-1 ring-indigo-200"
+            : isPink
+              ? "bg-pink-500/20 border-pink-500/50 ring-1 ring-pink-500/30"
+              : "bg-cyan-500/20 border-cyan-500/50 ring-1 ring-cyan-500/30"
           : isDayToday
-            ? isPink
-              ? "bg-pink-500/15 border-pink-500/40"
-              : "bg-cyan-500/15 border-cyan-500/40"
-            : "bg-white/5 border-white/10 hover:bg-white/[0.07]",
+            ? isFrost
+              ? "bg-indigo-50 border-indigo-300"
+              : isPink
+                ? "bg-pink-500/15 border-pink-500/40"
+                : "bg-cyan-500/15 border-cyan-500/40"
+            : isFrost
+              ? "bg-white border-slate-200 hover:bg-slate-50"
+              : "bg-white/5 border-white/10 hover:bg-white/[0.07]",
         allDone &&
           !isDayToday &&
           !isSelected &&
-          "border-green-500/30 bg-green-500/5"
+          (isFrost ? "border-green-300 bg-green-50" : "border-green-500/30 bg-green-500/5")
       )}
     >
       {/* Date Badge */}
@@ -1375,20 +1408,28 @@ function DayRow({
         className={cn(
           "flex-shrink-0 w-14 text-center py-1.5 rounded-lg",
           isDayToday
-            ? isPink
-              ? "bg-pink-500/20"
-              : "bg-cyan-500/20"
-            : "bg-white/5"
+            ? isFrost
+              ? "bg-indigo-100"
+              : isPink
+                ? "bg-pink-500/20"
+                : "bg-cyan-500/20"
+            : isFrost
+              ? "bg-slate-100"
+              : "bg-white/5"
         )}
       >
         <div
           className={cn(
             "text-[10px] font-medium uppercase",
             isDayToday
-              ? isPink
-                ? "text-pink-400"
-                : "text-cyan-400"
-              : "text-white/50"
+              ? isFrost
+                ? "text-indigo-600"
+                : isPink
+                  ? "text-pink-400"
+                  : "text-cyan-400"
+              : isFrost
+                ? "text-slate-500"
+                : "text-white/50"
           )}
         >
           {format(date, "EEE")}
@@ -1396,7 +1437,9 @@ function DayRow({
         <div
           className={cn(
             "text-lg font-bold",
-            isDayToday ? "text-white" : "text-white/80"
+            isDayToday
+              ? isFrost ? "text-indigo-700" : "text-white"
+              : isFrost ? "text-slate-700" : "text-white/80"
           )}
         >
           {format(date, "d")}
@@ -1406,7 +1449,7 @@ function DayRow({
       {/* Tasks List */}
       <div className="flex-1 min-w-0">
         {occurrences.length === 0 ? (
-          <div className="text-white/30 text-sm py-2">No tasks</div>
+          <div className={cn("text-sm py-2", isFrost ? "text-slate-400" : "text-white/30")}>No tasks</div>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {occurrences.map((occ, idx) => {
@@ -1418,14 +1461,16 @@ function DayRow({
                   className={cn(
                     "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs",
                     occ.isCompleted
-                      ? "bg-green-500/15 text-green-400"
-                      : colors.bg
+                      ? isFrost ? "bg-green-100 text-green-700" : "bg-green-500/15 text-green-400"
+                      : isFrost ? "bg-indigo-100 text-indigo-700" : colors.bg
                   )}
                 >
                   <Icon
                     className={cn(
                       "w-3 h-3 flex-shrink-0",
-                      occ.isCompleted ? "text-green-400" : colors.text
+                      occ.isCompleted
+                        ? isFrost ? "text-green-600" : "text-green-400"
+                        : isFrost ? "text-indigo-600" : colors.text
                     )}
                   />
                   <span
@@ -1436,7 +1481,7 @@ function DayRow({
                   >
                     {occ.item.title}
                   </span>
-                  <span className="text-[10px] text-white/40">
+                  <span className={cn("text-[10px]", isFrost ? "text-slate-500" : "text-white/40")}>
                     {format(occ.occurrenceDate, "h:mma").toLowerCase()}
                   </span>
                   {occ.isCompleted && <Check className="w-3 h-3" />}
@@ -1479,6 +1524,7 @@ export default function WebTabletMissionControl({
 }: WebTabletMissionControlProps) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
+  const isFrost = theme === "frost";
   const itemActions = useItemActionsWithToast();
   const [showRoutines, setShowRoutines] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -1879,26 +1925,31 @@ export default function WebTabletMissionControl({
         {/* LEFT: Today's Focus + Overdue */}
         <div className="lg:col-span-5 space-y-4">
           {/* Focus Section */}
-          <div className="bg-white/5 rounded-2xl border border-white/10 p-4">
+          <div className={cn(
+            "rounded-2xl p-4",
+            isFrost 
+              ? "bg-white border border-indigo-200 shadow-sm" 
+              : "bg-white/5 border border-white/10"
+          )}>
             <div className="flex items-center gap-2 mb-3">
               <div
                 className={cn(
                   "p-2 rounded-lg",
-                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                  isFrost ? "bg-indigo-100" : isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
                 )}
               >
                 <Target
                   className={cn(
                     "w-5 h-5",
-                    isPink ? "text-pink-400" : "text-cyan-400"
+                    isFrost ? "text-indigo-600" : isPink ? "text-pink-400" : "text-cyan-400"
                   )}
                 />
               </div>
               <div>
-                <h2 className="font-semibold text-white">
+                <h2 className={cn("font-semibold", isFrost ? "text-slate-900" : "text-white")}>
                   {getFocusTitle(selectedDate)}
                 </h2>
-                <p className="text-xs text-white/50">
+                <p className={cn("text-xs", isFrost ? "text-slate-500" : "text-white/50")}>
                   {focusTasks.filter((t) => t.isCompleted).length}/
                   {focusTasks.length} completed
                 </p>
@@ -1911,7 +1962,7 @@ export default function WebTabletMissionControl({
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-center py-8 text-white/30"
+                    className={cn("text-center py-8", isFrost ? "text-slate-400" : "text-white/30")}
                   >
                     <CheckCircle2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>
@@ -1943,14 +1994,19 @@ export default function WebTabletMissionControl({
 
           {/* Overdue Section */}
           {overdueTasks.length > 0 && (
-            <div className="bg-red-500/10 rounded-2xl border border-red-500/30 p-4">
+            <div className={cn(
+              "rounded-2xl p-4",
+              isFrost
+                ? "bg-red-50 border border-red-200"
+                : "bg-red-500/10 border border-red-500/30"
+            )}>
               <div className="flex items-center gap-2 mb-3">
-                <div className="p-2 rounded-lg bg-red-500/20">
-                  <Clock className="w-5 h-5 text-red-400" />
+                <div className={cn("p-2 rounded-lg", isFrost ? "bg-red-100" : "bg-red-500/20")}>
+                  <Clock className={cn("w-5 h-5", isFrost ? "text-red-600" : "text-red-400")} />
                 </div>
                 <div>
-                  <h2 className="font-semibold text-red-400">Overdue</h2>
-                  <p className="text-xs text-red-300/50">
+                  <h2 className={cn("font-semibold", isFrost ? "text-red-700" : "text-red-400")}>Overdue</h2>
+                  <p className={cn("text-xs", isFrost ? "text-red-500" : "text-red-300/50")}>
                     {overdueTasks.length} tasks need attention
                   </p>
                 </div>
@@ -1974,13 +2030,18 @@ export default function WebTabletMissionControl({
         </div>
 
         {/* RIGHT: This Week Timeline */}
-        <div className="lg:col-span-7 bg-white/5 rounded-2xl border border-white/10 p-4">
+        <div className={cn(
+          "lg:col-span-7 rounded-2xl p-4",
+          isFrost
+            ? "bg-white border border-indigo-200 shadow-sm"
+            : "bg-white/5 border border-white/10"
+        )}>
           <div className="flex items-center gap-2 mb-3">
-            <div className="p-2 rounded-lg bg-purple-500/20">
-              <Calendar className="w-5 h-5 text-purple-400" />
+            <div className={cn("p-2 rounded-lg", isFrost ? "bg-violet-100" : "bg-purple-500/20")}>
+              <Calendar className={cn("w-5 h-5", isFrost ? "text-violet-600" : "text-purple-400")} />
             </div>
-            <h2 className="font-semibold text-white">This Week</h2>
-            <span className="text-xs text-white/40 ml-auto">
+            <h2 className={cn("font-semibold", isFrost ? "text-slate-900" : "text-white")}>This Week</h2>
+            <span className={cn("text-xs ml-auto", isFrost ? "text-slate-500" : "text-white/40")}>
               {format(weekStart, "MMM d")} -{" "}
               {format(addDays(weekStart, 6), "MMM d")}
             </span>
