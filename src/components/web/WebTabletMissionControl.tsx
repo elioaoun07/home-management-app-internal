@@ -36,7 +36,6 @@ import {
   differenceInCalendarDays,
   endOfWeek,
   format,
-  formatDistanceToNow,
   isBefore,
   isPast,
   isSameDay,
@@ -976,52 +975,85 @@ function TodayTaskCard({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
       className={cn(
-        "group relative rounded-xl border-l-4 backdrop-blur-sm transition-all overflow-hidden",
+        "group relative rounded-lg border-l-3 backdrop-blur-sm transition-all overflow-hidden",
+        "border border-white/10 shadow-sm",
         isFrost ? "border-l-indigo-400" : colors.border,
         isCompleted
-          ? isFrost ? "bg-green-50 opacity-70" : "bg-green-500/10 opacity-60"
+          ? isFrost
+            ? "bg-green-50 border-green-200 opacity-70"
+            : "bg-green-500/15 border-green-500/30 opacity-60"
           : isPostponed
-            ? isFrost ? "bg-amber-50 border-l-amber-500" : "bg-amber-500/10 border-l-amber-400"
+            ? isFrost
+              ? "bg-amber-50 border-l-amber-500 border-amber-200"
+              : "bg-amber-500/15 border-l-amber-400 border-amber-500/30"
             : isOverdue
-              ? isFrost ? "bg-red-50 border-l-red-500" : "bg-red-500/10 border-l-red-400"
-              : isFrost ? "bg-indigo-50/50 hover:bg-indigo-50" : "bg-white/5 hover:bg-white/10"
+              ? isFrost
+                ? "bg-red-50 border-l-red-500 border-red-200"
+                : "bg-red-500/15 border-l-red-400 border-red-500/30"
+              : isFrost
+                ? "bg-indigo-50/50 hover:bg-indigo-50 border-indigo-200"
+                : "bg-white/[0.08] hover:bg-white/[0.12] border-white/15"
       )}
     >
-      <div className="p-4">
-        <div className="flex items-start gap-3">
+      <div className="p-2.5">
+        <div className="flex items-center gap-2">
           {/* Type Icon */}
-          <div className={cn("p-2 rounded-lg", isFrost ? "bg-indigo-100" : colors.bg)}>
-            <Icon className={cn("w-5 h-5", isFrost ? "text-indigo-600" : colors.text)} />
+          <div
+            className={cn(
+              "p-1.5 rounded",
+              isFrost ? "bg-indigo-100" : colors.bg
+            )}
+          >
+            <Icon
+              className={cn(
+                "w-3.5 h-3.5",
+                isFrost ? "text-indigo-600" : colors.text
+              )}
+            />
           </div>
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-1">
               <h3
                 className={cn(
-                  "font-medium truncate",
+                  "text-xs font-medium truncate",
                   isFrost ? "text-slate-900" : "text-white",
-                  isCompleted && (isFrost ? "line-through text-slate-400" : "line-through text-white/50")
+                  isCompleted &&
+                    (isFrost
+                      ? "line-through text-slate-400"
+                      : "line-through text-white/50")
                 )}
               >
                 {item.title}
               </h3>
               {item.recurrence_rule && (
-                <Repeat className={cn("w-3.5 h-3.5 flex-shrink-0", isFrost ? "text-slate-400" : "text-white/40")} />
+                <Repeat
+                  className={cn(
+                    "w-2.5 h-2.5 flex-shrink-0",
+                    isFrost ? "text-slate-400" : "text-white/40"
+                  )}
+                />
               )}
               {item.priority === "urgent" && (
-                <Zap className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                <Zap className="w-2.5 h-2.5 text-red-400 flex-shrink-0" />
               )}
             </div>
-            <div className={cn("flex items-center gap-2 text-xs", isFrost ? "text-slate-500" : "text-white/50")}>
-              <Clock className="w-3 h-3" />
-              <span>{format(occurrenceDate, "h:mm a")}</span>
+            <div
+              className={cn(
+                "flex items-center gap-1 text-[10px]",
+                isFrost ? "text-slate-500" : "text-white/50"
+              )}
+            >
+              <span>{format(occurrenceDate, "h:mma")}</span>
               {(hasCurrentSubtasks || hasOverdueSubtasks) && (
                 <span
                   className={cn(
                     "font-medium",
                     completedSubtasksCount === topLevelSubtasks.length
-                      ? isFrost ? "text-green-600" : "text-green-400"
+                      ? isFrost
+                        ? "text-green-600"
+                        : "text-green-400"
                       : isFrost
                         ? "text-indigo-600"
                         : isPink
@@ -1029,147 +1061,123 @@ function TodayTaskCard({
                           : "text-cyan-400"
                   )}
                 >
-                  • {completedSubtasksCount}/{topLevelSubtasks.length} subtasks
-                  {hasOverdueSubtasks &&
-                    ` (+${overdueSubtasksWithDates.length} overdue)`}
-                </span>
-              )}
-              {isPostponed && originalDate && (
-                <span className="text-amber-400 font-medium">
-                  • moved from {format(originalDate, "MMM d")}
+                  • {completedSubtasksCount}/{topLevelSubtasks.length}
                 </span>
               )}
               {isOverdue && !isPostponed && (
-                <span className="text-red-400 font-medium">
-                  • {formatDistanceToNow(occurrenceDate)} overdue
-                </span>
+                <span className="text-red-400">• overdue</span>
               )}
             </div>
           </div>
 
-          {/* Quick Actions - always visible for better touch/click support */}
+          {/* Quick Actions */}
           {!isCompleted && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               {onExpand && (
                 <button
                   type="button"
                   onClick={onExpand}
                   className={cn(
-                    "p-2 rounded-lg transition-colors",
+                    "p-1.5 rounded transition-colors",
                     isFrost
-                      ? "bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
+                      ? "text-indigo-600 hover:bg-indigo-100"
                       : isPink
-                        ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
-                        : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30"
+                        ? "text-pink-400 hover:bg-pink-500/20"
+                        : "text-cyan-400 hover:bg-cyan-500/20"
                   )}
                   title="Focus Mode"
                 >
-                  <Expand className="w-4 h-4" />
+                  <Expand className="w-3.5 h-3.5" />
                 </button>
               )}
               <button
                 type="button"
                 onClick={onPostpone}
                 className={cn(
-                  "p-2 rounded-lg transition-colors",
+                  "p-1.5 rounded transition-colors",
                   isFrost
-                    ? "bg-amber-100 text-amber-600 hover:bg-amber-200"
-                    : "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                    ? "text-amber-600 hover:bg-amber-100"
+                    : "text-amber-400 hover:bg-amber-500/20"
                 )}
                 title="Postpone"
               >
-                <FastForward className="w-4 h-4" />
+                <FastForward className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={() => onCancel(notes || undefined)}
                 className={cn(
-                  "p-2 rounded-lg transition-colors",
+                  "p-1.5 rounded transition-colors",
                   isFrost
-                    ? "bg-red-100 text-red-600 hover:bg-red-200"
-                    : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                    ? "text-red-600 hover:bg-red-100"
+                    : "text-red-400 hover:bg-red-500/20"
                 )}
-                title="Cancel this occurrence"
+                title="Cancel"
               >
-                <XCircle className="w-4 h-4" />
+                <XCircle className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={() => onComplete(notes || undefined)}
                 className={cn(
-                  "p-2 rounded-lg transition-colors",
+                  "p-1.5 rounded transition-colors",
                   isFrost
                     ? "bg-green-100 text-green-600 hover:bg-green-200"
                     : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
                 )}
-                title="Mark complete"
+                title="Done"
               >
-                <Check className="w-4 h-4" />
+                <Check className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
           {isCompleted && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               {onUndo && (
                 <button
                   type="button"
                   onClick={onUndo}
                   className={cn(
-                    "flex items-center gap-1 px-2 py-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100",
+                    "p-1 rounded transition-colors",
                     isFrost
-                      ? "bg-amber-100 text-amber-600 hover:bg-amber-200"
-                      : "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                      ? "text-amber-600 hover:bg-amber-100"
+                      : "text-amber-400 hover:bg-amber-500/20"
                   )}
-                  title="Undo completion"
+                  title="Undo"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span className="text-xs">Undo</span>
+                  <RotateCcw className="w-3 h-3" />
                 </button>
               )}
-              <CheckCircle2 className={cn("w-5 h-5 flex-shrink-0", isFrost ? "text-green-600" : "text-green-400")} />
+              <CheckCircle2
+                className={cn(
+                  "w-4 h-4 flex-shrink-0",
+                  isFrost ? "text-green-600" : "text-green-400"
+                )}
+              />
             </div>
           )}
         </div>
 
-        {/* Notes textarea - show on hover/focus */}
-        {!isCompleted && (
-          <div className="mt-2 ml-11 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add a note (optional)..."
-              rows={1}
-              className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white/70 placeholder:text-white/30 focus:outline-none focus:border-white/20 resize-none"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {/* Subtasks Toggle */}
-        {!isCompleted && (
+        {/* Subtasks Toggle - hidden by default on tablet */}
+        {!isCompleted && (hasCurrentSubtasks || hasOverdueSubtasks) && (
           <button
             type="button"
             onClick={() => setShowSubtasks(!showSubtasks)}
             className={cn(
-              "flex items-center gap-1 mt-2 ml-11 text-xs transition-colors",
+              "flex items-center gap-0.5 mt-1 ml-8 text-[10px] transition-colors",
               isPink
                 ? "text-pink-400/70 hover:text-pink-400"
                 : "text-cyan-400/70 hover:text-cyan-400"
             )}
           >
             {showSubtasks ? (
-              <ChevronDown className="w-3.5 h-3.5" />
+              <ChevronDown className="w-2.5 h-2.5" />
             ) : (
-              <ChevronRight className="w-3.5 h-3.5" />
+              <ChevronRight className="w-2.5 h-2.5" />
             )}
             <span>
-              {hasCurrentSubtasks || hasOverdueSubtasks
-                ? `${topLevelSubtasks.length} subtask${topLevelSubtasks.length !== 1 ? "s" : ""}${hasOverdueSubtasks ? ` (+${overdueSubtasksWithDates.length} overdue)` : ""}`
-                : "Add subtasks"}
+              {topLevelSubtasks.length} subtask
+              {topLevelSubtasks.length !== 1 ? "s" : ""}
             </span>
           </button>
         )}
@@ -1381,7 +1389,7 @@ function DayRow({
     <div
       onClick={onClick}
       className={cn(
-        "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer",
+        "flex items-center gap-2 p-1.5 rounded-lg border transition-all cursor-pointer",
         isSelected && !isDayToday
           ? isFrost
             ? "bg-indigo-100 border-indigo-300 ring-1 ring-indigo-200"
@@ -1400,13 +1408,15 @@ function DayRow({
         allDone &&
           !isDayToday &&
           !isSelected &&
-          (isFrost ? "border-green-300 bg-green-50" : "border-green-500/30 bg-green-500/5")
+          (isFrost
+            ? "border-green-300 bg-green-50"
+            : "border-green-500/30 bg-green-500/5")
       )}
     >
       {/* Date Badge */}
       <div
         className={cn(
-          "flex-shrink-0 w-14 text-center py-1.5 rounded-lg",
+          "flex-shrink-0 w-10 text-center py-1 rounded",
           isDayToday
             ? isFrost
               ? "bg-indigo-100"
@@ -1420,7 +1430,7 @@ function DayRow({
       >
         <div
           className={cn(
-            "text-[10px] font-medium uppercase",
+            "text-[8px] font-medium uppercase leading-tight",
             isDayToday
               ? isFrost
                 ? "text-indigo-600"
@@ -1436,10 +1446,14 @@ function DayRow({
         </div>
         <div
           className={cn(
-            "text-lg font-bold",
+            "text-sm font-bold leading-tight",
             isDayToday
-              ? isFrost ? "text-indigo-700" : "text-white"
-              : isFrost ? "text-slate-700" : "text-white/80"
+              ? isFrost
+                ? "text-indigo-700"
+                : "text-white"
+              : isFrost
+                ? "text-slate-700"
+                : "text-white/80"
           )}
         >
           {format(date, "d")}
@@ -1447,47 +1461,69 @@ function DayRow({
       </div>
 
       {/* Tasks List */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 overflow-hidden">
         {occurrences.length === 0 ? (
-          <div className={cn("text-sm py-2", isFrost ? "text-slate-400" : "text-white/30")}>No tasks</div>
+          <div
+            className={cn(
+              "text-[10px]",
+              isFrost ? "text-slate-400" : "text-white/30"
+            )}
+          >
+            —
+          </div>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {occurrences.map((occ, idx) => {
+          <div className="flex flex-wrap gap-1">
+            {occurrences.slice(0, 3).map((occ, idx) => {
               const colors = typeColors[occ.item.type];
               const Icon = colors.icon;
               return (
                 <div
                   key={`${occ.item.id}-${idx}`}
                   className={cn(
-                    "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs",
+                    "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]",
                     occ.isCompleted
-                      ? isFrost ? "bg-green-100 text-green-700" : "bg-green-500/15 text-green-400"
-                      : isFrost ? "bg-indigo-100 text-indigo-700" : colors.bg
+                      ? isFrost
+                        ? "bg-green-100 text-green-700"
+                        : "bg-green-500/15 text-green-400"
+                      : isFrost
+                        ? "bg-indigo-100 text-indigo-700"
+                        : colors.bg
                   )}
                 >
                   <Icon
                     className={cn(
-                      "w-3 h-3 flex-shrink-0",
+                      "w-2.5 h-2.5 flex-shrink-0",
                       occ.isCompleted
-                        ? isFrost ? "text-green-600" : "text-green-400"
-                        : isFrost ? "text-indigo-600" : colors.text
+                        ? isFrost
+                          ? "text-green-600"
+                          : "text-green-400"
+                        : isFrost
+                          ? "text-indigo-600"
+                          : colors.text
                     )}
                   />
                   <span
                     className={cn(
-                      "truncate max-w-[120px]",
+                      "truncate max-w-[60px]",
                       occ.isCompleted && "line-through opacity-60"
                     )}
                   >
                     {occ.item.title}
                   </span>
-                  <span className={cn("text-[10px]", isFrost ? "text-slate-500" : "text-white/40")}>
-                    {format(occ.occurrenceDate, "h:mma").toLowerCase()}
-                  </span>
-                  {occ.isCompleted && <Check className="w-3 h-3" />}
+                  {occ.isCompleted && <Check className="w-2.5 h-2.5" />}
                 </div>
               );
             })}
+            {occurrences.length > 3 && (
+              <span
+                className={cn(
+                  "text-[10px] px-1",
+                  isFrost ? "text-slate-500" : "text-white/40"
+                )}
+              >
+                +{occurrences.length - 3}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -1496,10 +1532,12 @@ function DayRow({
       {totalCount > 0 && (
         <div
           className={cn(
-            "flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full",
+            "flex-shrink-0 text-[9px] font-medium px-1.5 py-0.5 rounded-full",
             allDone
               ? "bg-green-500/20 text-green-400"
-              : "bg-white/10 text-white/50"
+              : isFrost
+                ? "bg-slate-100 text-slate-500"
+                : "bg-white/10 text-white/50"
           )}
         >
           {completedCount}/{totalCount}
@@ -1799,31 +1837,44 @@ export default function WebTabletMissionControl({
     .sort((a, b) => a.sortDate.getTime() - b.sortDate.getTime());
 
   return (
-    <div className="p-4 lg:p-6 space-y-4">
-      {/* Header with Stats */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Mission Control</h1>
-          <p className="text-white/50 text-sm">
-            {format(today, "EEEE, MMMM d, yyyy")}
-          </p>
+    <div className="p-3 h-full flex flex-col">
+      {/* Compact Header Row - Single line with title + stats */}
+      <div className="flex items-center justify-between mb-2 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <h1
+            className={cn(
+              "text-base font-bold",
+              isFrost ? "text-slate-800" : "text-white"
+            )}
+          >
+            Mission Control
+          </h1>
+          <span
+            className={cn(
+              "text-xs",
+              isFrost ? "text-slate-500" : "text-white/40"
+            )}
+          >
+            {format(today, "MMM d")}
+          </span>
         </div>
-        {/* Stats as subheader badges */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-orange-500/20 text-orange-400 text-xs font-medium">
-            <Flame className="w-3 h-3" />
+
+        {/* Stats inline */}
+        <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 text-[10px] font-medium">
+            <Flame className="w-2.5 h-2.5" />
             <span>{stats.streak}</span>
           </div>
-          <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-green-500/20 text-green-400 text-xs font-medium">
-            <CheckCircle2 className="w-3 h-3" />
-            <span>{stats.completed} done</span>
+          <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 text-[10px] font-medium">
+            <CheckCircle2 className="w-2.5 h-2.5" />
+            <span>{stats.completed}</span>
           </div>
-          <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/20 text-amber-400 text-xs font-medium">
-            <Clock className="w-3 h-3" />
-            <span>{stats.pending} pending</span>
+          <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-medium">
+            <Clock className="w-2.5 h-2.5" />
+            <span>{stats.pending}</span>
           </div>
-          <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-purple-500/20 text-purple-400 text-xs font-medium">
-            <TrendingUp className="w-3 h-3" />
+          <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 text-[10px] font-medium">
+            <TrendingUp className="w-2.5 h-2.5" />
             <span>{stats.completionRate}%</span>
           </div>
           {/* Show/Hide Completed toggle */}
@@ -1831,7 +1882,7 @@ export default function WebTabletMissionControl({
             type="button"
             onClick={() => setShowCompleted(!showCompleted)}
             className={cn(
-              "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors",
+              "p-1 rounded transition-colors",
               showCompleted
                 ? "bg-green-500/30 text-green-300"
                 : "bg-white/10 text-white/50 hover:bg-white/15"
@@ -1843,7 +1894,6 @@ export default function WebTabletMissionControl({
             ) : (
               <EyeOff className="w-3 h-3" />
             )}
-            <span>{showCompleted ? "Showing" : "Hiding"}</span>
           </button>
           {/* Routines toggle */}
           {recurringWithDates.length > 0 && (
@@ -1851,128 +1901,134 @@ export default function WebTabletMissionControl({
               type="button"
               onClick={() => setShowRoutines(!showRoutines)}
               className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors",
+                "flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors",
                 showRoutines
                   ? "bg-cyan-500/30 text-cyan-300"
                   : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/25"
               )}
             >
-              <Repeat className="w-3 h-3" />
-              <span>{recurringWithDates.length} routines</span>
-              {showRoutines ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
-                <ChevronRight className="w-3 h-3" />
-              )}
+              <Repeat className="w-2.5 h-2.5" />
+              <span>{recurringWithDates.length}</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Collapsible Routines Panel */}
+      {/* Collapsible Routines Panel - Compact horizontal strip */}
       <AnimatePresence>
         {showRoutines && recurringWithDates.length > 0 && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
+            className="overflow-hidden flex-shrink-0 mb-2"
           >
-            <div className="bg-white/5 rounded-xl border border-white/10 p-3">
-              <div className="flex flex-wrap gap-2">
-                {recurringWithDates
-                  .slice(0, 10)
-                  .map(({ item, nextOccurrence, isCompleted, isOverdue }) => {
-                    const colors = typeColors[item.type];
-                    return (
-                      <div
-                        key={item.id}
-                        className={cn(
-                          "flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs",
-                          isCompleted
-                            ? "bg-green-500/10 border-green-500/40 text-green-400"
-                            : isOverdue
-                              ? "bg-red-500/10 border-red-500/40 text-red-300"
-                              : cn(
-                                  colors.bg,
-                                  "border-transparent",
-                                  "text-white/80"
-                                )
-                        )}
-                      >
-                        <span className={cn(isCompleted && "line-through")}>
-                          {item.title}
-                        </span>
-                        <span className="text-[10px] text-white/40">
-                          {nextOccurrence
-                            ? isToday(nextOccurrence.occurrenceDate)
-                              ? format(nextOccurrence.occurrenceDate, "h:mm a")
-                              : format(nextOccurrence.occurrenceDate, "EEE")
-                            : ""}
-                        </span>
-                        {isCompleted && <Check className="w-3 h-3" />}
-                      </div>
-                    );
-                  })}
-              </div>
+            <div className="flex gap-1 overflow-x-auto scrollbar-none py-1">
+              {recurringWithDates
+                .slice(0, 8)
+                .map(({ item, nextOccurrence, isCompleted, isOverdue }) => {
+                  const colors = typeColors[item.type];
+                  return (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] whitespace-nowrap flex-shrink-0",
+                        isCompleted
+                          ? "bg-green-500/10 text-green-400"
+                          : isOverdue
+                            ? "bg-red-500/10 text-red-300"
+                            : cn(colors.bg, "text-white/80")
+                      )}
+                    >
+                      <span className={cn(isCompleted && "line-through")}>
+                        {item.title}
+                      </span>
+                      {isCompleted && <Check className="w-2.5 h-2.5" />}
+                    </div>
+                  );
+                })}
+              {recurringWithDates.length > 8 && (
+                <span className="text-[10px] text-white/40 px-1 flex-shrink-0">
+                  +{recurringWithDates.length - 8}
+                </span>
+              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Main layout: Today (5 cols) + This Week (7 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* LEFT: Today's Focus + Overdue */}
-        <div className="lg:col-span-5 space-y-4">
+      {/* Main layout: Side-by-side for 800x500 landscape tablet */}
+      <div className="flex gap-3 flex-1 min-h-0">
+        {/* LEFT COLUMN: Focus + Overdue */}
+        <div className="w-[320px] flex-shrink-0 flex flex-col gap-2 overflow-hidden">
           {/* Focus Section */}
-          <div className={cn(
-            "rounded-2xl p-4",
-            isFrost 
-              ? "bg-white border border-indigo-200 shadow-sm" 
-              : "bg-white/5 border border-white/10"
-          )}>
-            <div className="flex items-center gap-2 mb-3">
+          <div
+            className={cn(
+              "rounded-xl p-2 flex-1 min-h-0 flex flex-col",
+              isFrost
+                ? "bg-white border border-indigo-200 shadow-sm"
+                : "bg-white/5 border border-white/10"
+            )}
+          >
+            <div className="flex items-center gap-1.5 mb-1.5 flex-shrink-0">
               <div
                 className={cn(
-                  "p-2 rounded-lg",
-                  isFrost ? "bg-indigo-100" : isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                  "p-1 rounded-lg",
+                  isFrost
+                    ? "bg-indigo-100"
+                    : isPink
+                      ? "bg-pink-500/20"
+                      : "bg-cyan-500/20"
                 )}
               >
                 <Target
                   className={cn(
-                    "w-5 h-5",
-                    isFrost ? "text-indigo-600" : isPink ? "text-pink-400" : "text-cyan-400"
+                    "w-3.5 h-3.5",
+                    isFrost
+                      ? "text-indigo-600"
+                      : isPink
+                        ? "text-pink-400"
+                        : "text-cyan-400"
                   )}
                 />
               </div>
-              <div>
-                <h2 className={cn("font-semibold", isFrost ? "text-slate-900" : "text-white")}>
-                  {getFocusTitle(selectedDate)}
-                </h2>
-                <p className={cn("text-xs", isFrost ? "text-slate-500" : "text-white/50")}>
-                  {focusTasks.filter((t) => t.isCompleted).length}/
-                  {focusTasks.length} completed
-                </p>
-              </div>
+              <h2
+                className={cn(
+                  "text-xs font-semibold flex-1",
+                  isFrost ? "text-slate-900" : "text-white"
+                )}
+              >
+                {getFocusTitle(selectedDate)}
+              </h2>
+              <span
+                className={cn(
+                  "text-[10px]",
+                  isFrost ? "text-slate-500" : "text-white/50"
+                )}
+              >
+                {focusTasks.filter((t) => t.isCompleted).length}/
+                {focusTasks.length}
+              </span>
             </div>
 
-            <div className="space-y-2 max-h-[400px] overflow-y-auto scrollbar-thin">
+            <div className="space-y-2 overflow-y-auto scrollbar-thin flex-1 min-h-0 pr-1">
               <AnimatePresence mode="popLayout">
                 {focusTasks.length === 0 ? (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className={cn("text-center py-8", isFrost ? "text-slate-400" : "text-white/30")}
+                    className={cn(
+                      "text-center py-4",
+                      isFrost ? "text-slate-400" : "text-white/30"
+                    )}
                   >
-                    <CheckCircle2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>
+                    <CheckCircle2 className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                    <p className="text-xs">
                       No tasks for{" "}
                       {isToday(selectedDate)
                         ? "today"
-                        : format(selectedDate, "EEEE")}
-                      !
+                        : format(selectedDate, "EEE")}
                     </p>
-                    <p className="text-xs mt-1">Enjoy your free time 🎉</p>
                   </motion.div>
                 ) : (
                   focusTasks.map((occ, idx) => (
@@ -1994,24 +2050,46 @@ export default function WebTabletMissionControl({
 
           {/* Overdue Section */}
           {overdueTasks.length > 0 && (
-            <div className={cn(
-              "rounded-2xl p-4",
-              isFrost
-                ? "bg-red-50 border border-red-200"
-                : "bg-red-500/10 border border-red-500/30"
-            )}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className={cn("p-2 rounded-lg", isFrost ? "bg-red-100" : "bg-red-500/20")}>
-                  <Clock className={cn("w-5 h-5", isFrost ? "text-red-600" : "text-red-400")} />
+            <div
+              className={cn(
+                "rounded-xl p-2",
+                isFrost
+                  ? "bg-red-50 border border-red-200"
+                  : "bg-red-500/10 border border-red-500/30"
+              )}
+            >
+              <div className="flex items-center gap-1.5 mb-2">
+                <div
+                  className={cn(
+                    "p-1.5 rounded-lg",
+                    isFrost ? "bg-red-100" : "bg-red-500/20"
+                  )}
+                >
+                  <Clock
+                    className={cn(
+                      "w-4 h-4",
+                      isFrost ? "text-red-600" : "text-red-400"
+                    )}
+                  />
                 </div>
-                <div>
-                  <h2 className={cn("font-semibold", isFrost ? "text-red-700" : "text-red-400")}>Overdue</h2>
-                  <p className={cn("text-xs", isFrost ? "text-red-500" : "text-red-300/50")}>
-                    {overdueTasks.length} tasks need attention
-                  </p>
-                </div>
+                <h2
+                  className={cn(
+                    "text-sm font-semibold flex-1",
+                    isFrost ? "text-red-700" : "text-red-400"
+                  )}
+                >
+                  Overdue
+                </h2>
+                <span
+                  className={cn(
+                    "text-[10px]",
+                    isFrost ? "text-red-500" : "text-red-300/50"
+                  )}
+                >
+                  {overdueTasks.length}
+                </span>
               </div>
-              <div className="space-y-2 max-h-[200px] overflow-y-auto scrollbar-thin">
+              <div className="space-y-2 max-h-[120px] overflow-y-auto scrollbar-thin pr-1">
                 {overdueTasks.map((occ, idx) => (
                   <TodayTaskCard
                     key={`overdue-${occ.item.id}-${idx}`}
@@ -2029,41 +2107,67 @@ export default function WebTabletMissionControl({
           )}
         </div>
 
-        {/* RIGHT: This Week Timeline */}
-        <div className={cn(
-          "lg:col-span-7 rounded-2xl p-4",
-          isFrost
-            ? "bg-white border border-indigo-200 shadow-sm"
-            : "bg-white/5 border border-white/10"
-        )}>
-          <div className="flex items-center gap-2 mb-3">
-            <div className={cn("p-2 rounded-lg", isFrost ? "bg-violet-100" : "bg-purple-500/20")}>
-              <Calendar className={cn("w-5 h-5", isFrost ? "text-violet-600" : "text-purple-400")} />
-            </div>
-            <h2 className={cn("font-semibold", isFrost ? "text-slate-900" : "text-white")}>This Week</h2>
-            <span className={cn("text-xs ml-auto", isFrost ? "text-slate-500" : "text-white/40")}>
-              {format(weekStart, "MMM d")} -{" "}
-              {format(addDays(weekStart, 6), "MMM d")}
-            </span>
-          </div>
-
-          {/* Week as horizontal rows */}
-          <div className="space-y-2 max-h-[500px] overflow-y-auto scrollbar-thin pr-1">
-            {Array.from({ length: 7 }, (_, i) => {
-              const date = addDays(weekStart, i);
-              const dateKey = format(date, "yyyy-MM-dd");
-              const dayOccurrences = weekOccurrences.get(dateKey) || [];
-              return (
-                <DayRow
-                  key={dateKey}
-                  date={date}
-                  occurrences={dayOccurrences}
-                  isToday={isToday(date)}
-                  isSelected={isSameDay(date, selectedDate)}
-                  onClick={() => setSelectedDate(date)}
+        {/* RIGHT COLUMN: This Week Timeline */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div
+            className={cn(
+              "rounded-xl p-2 flex-1 flex flex-col min-h-0",
+              isFrost
+                ? "bg-white border border-indigo-200 shadow-sm"
+                : "bg-white/5 border border-white/10"
+            )}
+          >
+            <div className="flex items-center gap-1.5 mb-1.5 flex-shrink-0">
+              <div
+                className={cn(
+                  "p-1 rounded-lg",
+                  isFrost ? "bg-violet-100" : "bg-purple-500/20"
+                )}
+              >
+                <Calendar
+                  className={cn(
+                    "w-3.5 h-3.5",
+                    isFrost ? "text-violet-600" : "text-purple-400"
+                  )}
                 />
-              );
-            })}
+              </div>
+              <h2
+                className={cn(
+                  "text-xs font-semibold",
+                  isFrost ? "text-slate-900" : "text-white"
+                )}
+              >
+                This Week
+              </h2>
+              <span
+                className={cn(
+                  "text-[10px] ml-auto",
+                  isFrost ? "text-slate-500" : "text-white/40"
+                )}
+              >
+                {format(weekStart, "MMM d")} -{" "}
+                {format(addDays(weekStart, 6), "d")}
+              </span>
+            </div>
+
+            {/* Week as horizontal rows - fills available height */}
+            <div className="space-y-0.5 overflow-y-auto scrollbar-thin pr-1 flex-1 min-h-0">
+              {Array.from({ length: 7 }, (_, i) => {
+                const date = addDays(weekStart, i);
+                const dateKey = format(date, "yyyy-MM-dd");
+                const dayOccurrences = weekOccurrences.get(dateKey) || [];
+                return (
+                  <DayRow
+                    key={dateKey}
+                    date={date}
+                    occurrences={dayOccurrences}
+                    isToday={isToday(date)}
+                    isSelected={isSameDay(date, selectedDate)}
+                    onClick={() => setSelectedDate(date)}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

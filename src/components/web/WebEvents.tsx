@@ -50,6 +50,7 @@ import {
   MapPin,
   Repeat,
   RotateCcw,
+  Sparkles,
   Target,
   Trash2,
   User,
@@ -64,6 +65,7 @@ import { WebCalendar } from "./WebCalendar";
 import { WebEventFormDialog } from "./WebEventFormDialog";
 import WebEventsDashboard from "./WebEventsDashboard";
 import WebTabletMissionControl from "./WebTabletMissionControl";
+import WebTodayView from "./WebTodayView";
 import { WebWeekView } from "./WebWeekView";
 
 // Item type filters
@@ -119,8 +121,8 @@ export default function WebEvents() {
 
   // State
   const [mainView, setMainView] = useState<
-    "calendar" | "dashboard" | "mission-control"
-  >("mission-control");
+    "calendar" | "dashboard" | "mission-control" | "today"
+  >("today");
   const [view, setView] = useState<"month" | "week">("month");
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -528,8 +530,8 @@ export default function WebEvents() {
   );
 
   return (
-    <div className={cn("min-h-screen pb-20", themeClasses.pageBg)}>
-      {/* Bottom Navigation Bar */}
+    <div className={cn("min-h-screen pb-10", themeClasses.pageBg)}>
+      {/* Bottom Navigation Bar - Compact for 800x500 tablet */}
       <div
         className={cn(
           "fixed bottom-0 left-0 right-0 z-50 backdrop-blur-lg border-t",
@@ -540,13 +542,36 @@ export default function WebEvents() {
               : "bg-[#0a1628]/95 border-white/10"
         )}
       >
-        <div className="max-w-lg mx-auto px-4">
-          <div className="flex items-center justify-around py-2">
+        <div className="max-w-lg mx-auto px-3">
+          <div className="flex items-center justify-around py-1.5">
+            <button
+              type="button"
+              onClick={() => setMainView("today")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1 rounded-full transition-all",
+                mainView === "today"
+                  ? isCalm
+                    ? "bg-stone-700 text-stone-200"
+                    : isFrost
+                      ? "bg-indigo-100 text-indigo-600"
+                      : isPink
+                        ? "bg-pink-500/20 text-pink-400"
+                        : "bg-cyan-500/20 text-cyan-400"
+                  : isCalm
+                    ? "text-stone-500 hover:text-stone-400"
+                    : isFrost
+                      ? "text-slate-400 hover:text-slate-600"
+                      : "text-white/50 hover:text-white/70"
+              )}
+            >
+              <Sparkles className="w-4 h-4" />
+              <span className="text-xs font-medium">Today</span>
+            </button>
             <button
               type="button"
               onClick={() => setMainView("mission-control")}
               className={cn(
-                "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all",
+                "flex items-center gap-1.5 px-3 py-1 rounded-full transition-all",
                 mainView === "mission-control"
                   ? isCalm
                     ? "bg-stone-700 text-stone-200"
@@ -562,14 +587,14 @@ export default function WebEvents() {
                       : "text-white/50 hover:text-white/70"
               )}
             >
-              <Target className="w-5 h-5" />
+              <Target className="w-4 h-4" />
               <span className="text-xs font-medium">Focus</span>
             </button>
             <button
               type="button"
               onClick={() => setMainView("calendar")}
               className={cn(
-                "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all",
+                "flex items-center gap-1.5 px-3 py-1 rounded-full transition-all",
                 mainView === "calendar"
                   ? isCalm
                     ? "bg-stone-700 text-stone-200"
@@ -585,14 +610,14 @@ export default function WebEvents() {
                       : "text-white/50 hover:text-white/70"
               )}
             >
-              <CalendarDays className="w-5 h-5" />
+              <CalendarDays className="w-4 h-4" />
               <span className="text-xs font-medium">Calendar</span>
             </button>
             <button
               type="button"
               onClick={() => setMainView("dashboard")}
               className={cn(
-                "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all",
+                "flex items-center gap-1.5 px-3 py-1 rounded-full transition-all",
                 mainView === "dashboard"
                   ? isCalm
                     ? "bg-stone-700 text-stone-200"
@@ -608,14 +633,17 @@ export default function WebEvents() {
                       : "text-white/50 hover:text-white/70"
               )}
             >
-              <LayoutDashboard className="w-5 h-5" />
+              <LayoutDashboard className="w-4 h-4" />
               <span className="text-xs font-medium">Stats</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mission Control View (Default for Tablet) */}
+      {/* Today View - Widget-based task navigation */}
+      {mainView === "today" && <WebTodayView />}
+
+      {/* Mission Control View */}
       {mainView === "mission-control" && (
         <WebTabletMissionControl
           onItemClick={handleItemClick}
@@ -628,16 +656,16 @@ export default function WebEvents() {
 
       {/* Calendar View */}
       {mainView === "calendar" && (
-        <div className="p-2 lg:p-6">
+        <div className="p-1.5">
           <div className="max-w-[1600px] mx-auto">
             {/* Compact toolbar - touch-friendly buttons */}
-            <div className="flex items-center justify-between gap-2 mb-1.5 lg:mb-4">
+            <div className="flex items-center justify-between gap-1 mb-1">
               {/* Left side: View toggle + Type filters */}
-              <div className="flex items-center gap-2 lg:gap-2">
+              <div className="flex items-center gap-1">
                 {/* View Toggle */}
                 <div
                   className={cn(
-                    "flex items-center p-0.5 rounded-lg",
+                    "flex items-center p-0.5 rounded",
                     isFrost ? "bg-slate-100" : "bg-white/5"
                   )}
                 >
@@ -645,7 +673,7 @@ export default function WebEvents() {
                     type="button"
                     onClick={() => setView("month")}
                     className={cn(
-                      "p-2.5 lg:px-3 lg:py-2 rounded-md transition-all",
+                      "p-1.5 rounded transition-all",
                       view === "month"
                         ? isFrost
                           ? "bg-white text-indigo-600 shadow-sm"
@@ -656,13 +684,13 @@ export default function WebEvents() {
                     )}
                     title="Month view"
                   >
-                    <CalendarDays className="w-5 h-5" />
+                    <CalendarDays className="w-4 h-4" />
                   </button>
                   <button
                     type="button"
                     onClick={() => setView("week")}
                     className={cn(
-                      "p-2.5 lg:px-3 lg:py-2 rounded-md transition-all",
+                      "p-1.5 rounded transition-all",
                       view === "week"
                         ? isFrost
                           ? "bg-white text-indigo-600 shadow-sm"
@@ -673,22 +701,14 @@ export default function WebEvents() {
                     )}
                     title="Week view"
                   >
-                    <Calendar className="w-5 h-5" />
+                    <Calendar className="w-4 h-4" />
                   </button>
                 </div>
-
-                {/* Divider */}
-                <div
-                  className={cn(
-                    "w-px h-8",
-                    isFrost ? "bg-slate-200" : "bg-white/10"
-                  )}
-                />
 
                 {/* Type Filter */}
                 <div
                   className={cn(
-                    "flex items-center p-0.5 rounded-lg",
+                    "flex items-center p-0.5 rounded",
                     isFrost ? "bg-slate-100" : "bg-white/5"
                   )}
                 >
@@ -701,7 +721,7 @@ export default function WebEvents() {
                         type="button"
                         onClick={() => setTypeFilter(filter.id)}
                         className={cn(
-                          "p-2.5 lg:px-3 lg:py-2 rounded-md transition-all",
+                          "p-1.5 rounded transition-all",
                           isActive
                             ? isFrost
                               ? "bg-white text-indigo-600 shadow-sm"
@@ -712,26 +732,18 @@ export default function WebEvents() {
                         )}
                         title={filter.label}
                       >
-                        <Icon className="w-5 h-5" />
+                        <Icon className="w-4 h-4" />
                       </button>
                     );
                   })}
                 </div>
-
-                {/* Divider */}
-                <div
-                  className={cn(
-                    "w-px h-8",
-                    isFrost ? "bg-slate-200" : "bg-white/10"
-                  )}
-                />
 
                 {/* Birthday Toggle */}
                 <button
                   type="button"
                   onClick={() => setShowBirthdays(!showBirthdays)}
                   className={cn(
-                    "p-2.5 rounded-lg transition-all",
+                    "p-1.5 rounded transition-all",
                     showBirthdays
                       ? isFrost
                         ? "bg-amber-100 text-amber-600"
@@ -742,7 +754,7 @@ export default function WebEvents() {
                   )}
                   title="Show birthdays"
                 >
-                  <Cake className="w-5 h-5" />
+                  <Cake className="w-4 h-4" />
                 </button>
 
                 {/* Category Filter Dropdown */}

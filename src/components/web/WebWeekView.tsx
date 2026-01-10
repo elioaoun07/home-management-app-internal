@@ -353,29 +353,27 @@ export function WebWeekView({
         style={{ animationDelay: "1s" }}
       />
 
-      <div className="relative backdrop-blur-xl border border-white/10 rounded-3xl p-6">
+      <div className="relative backdrop-blur-xl border border-white/10 rounded-xl p-2">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <motion.div
                 whileHover={{ rotate: 360, scale: 1.1 }}
                 transition={{ duration: 0.5 }}
                 className={cn(
-                  "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg",
+                  "w-8 h-8 rounded-lg flex items-center justify-center shadow-lg",
                   isPink
                     ? "bg-gradient-to-br from-pink-500 to-purple-600"
                     : "bg-gradient-to-br from-cyan-500 to-blue-600"
                 )}
               >
-                <Sparkles className="w-6 h-6 text-white" />
+                <Sparkles className="w-4 h-4 text-white" />
               </motion.div>
               <div>
-                <h2 className="text-2xl font-bold text-white">
-                  {format(weekStart, "MMMM d")} –{" "}
-                  {format(weekDays[6], "d, yyyy")}
+                <h2 className="text-sm font-bold text-white">
+                  {format(weekStart, "MMM d")} – {format(weekDays[6], "d")}
                 </h2>
-                <p className="text-sm text-white/50">Your Weekly Schedule</p>
               </div>
             </div>
 
@@ -430,7 +428,7 @@ export function WebWeekView({
 
         {/* Week Grid */}
         <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-          <div className="min-w-[1000px]">
+          <div className="min-w-[480px]">
             {/* Day Headers */}
             <AnimatePresence mode="wait">
               <motion.div
@@ -439,9 +437,9 @@ export function WebWeekView({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: direction * -50 }}
                 transition={{ duration: 0.2 }}
-                className="grid grid-cols-8 mb-4 gap-2"
+                className="grid grid-cols-8 mb-1 gap-0.5"
               >
-                <div className="p-2" /> {/* Time column spacer */}
+                <div className="p-1" /> {/* Time column spacer */}
                 {weekDays.map((day, index) => {
                   const dayItems = getItemsForDate(day);
                   const birthdays = showBirthdays
@@ -470,20 +468,20 @@ export function WebWeekView({
                         stiffness: 300,
                       }}
                       className={cn(
-                        "relative p-4 text-center rounded-2xl transition-all overflow-hidden",
+                        "relative p-1.5 text-center rounded-lg transition-all overflow-hidden",
                         isToday(day)
                           ? isPink
-                            ? "bg-gradient-to-br from-pink-500/40 to-purple-600/40 border-2 border-pink-400/60 shadow-lg shadow-pink-500/20"
-                            : "bg-gradient-to-br from-cyan-500/40 to-blue-600/40 border-2 border-cyan-400/60 shadow-lg shadow-cyan-500/20"
-                          : "bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20"
+                            ? "bg-gradient-to-br from-pink-500/40 to-purple-600/40 border border-pink-400/60"
+                            : "bg-gradient-to-br from-cyan-500/40 to-blue-600/40 border border-cyan-400/60"
+                          : "bg-white/5 border border-white/10 hover:bg-white/10"
                       )}
                     >
                       {/* Item count badge */}
                       {totalItems > 0 && (
-                        <div className="absolute top-1.5 right-1.5">
+                        <div className="absolute top-0.5 right-0.5">
                           <div
                             className={cn(
-                              "min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center",
+                              "min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-bold flex items-center justify-center",
                               isPink
                                 ? "bg-pink-500 text-white"
                                 : "bg-cyan-500 text-white"
@@ -508,7 +506,7 @@ export function WebWeekView({
                       )}
                       <div
                         className={cn(
-                          "text-[11px] font-bold uppercase tracking-widest",
+                          "text-[8px] font-bold uppercase tracking-wide",
                           isToday(day)
                             ? isPink
                               ? "text-pink-200"
@@ -520,7 +518,7 @@ export function WebWeekView({
                       </div>
                       <div
                         className={cn(
-                          "text-3xl font-black mt-1",
+                          "text-lg font-black",
                           isToday(day)
                             ? isPink
                               ? "text-pink-300"
@@ -533,28 +531,28 @@ export function WebWeekView({
 
                       {/* Event type indicators (colored dots) */}
                       {totalItems > 0 && !isToday(day) && (
-                        <div className="flex items-center justify-center gap-1 mt-1.5">
+                        <div className="flex items-center justify-center gap-0.5 mt-0.5">
                           {hasEvents && (
                             <div
-                              className="w-2 h-2 rounded-full bg-pink-400"
+                              className="w-1.5 h-1.5 rounded-full bg-pink-400"
                               title="Events"
                             />
                           )}
                           {hasReminders && (
                             <div
-                              className="w-2 h-2 rounded-full bg-cyan-400"
+                              className="w-1.5 h-1.5 rounded-full bg-cyan-400"
                               title="Reminders"
                             />
                           )}
                           {hasTasks && (
                             <div
-                              className="w-2 h-2 rounded-full bg-purple-400"
+                              className="w-1.5 h-1.5 rounded-full bg-purple-400"
                               title="Tasks"
                             />
                           )}
                           {hasBirthdays && (
                             <div
-                              className="w-2 h-2 rounded-full bg-amber-400"
+                              className="w-1.5 h-1.5 rounded-full bg-amber-400"
                               title="Birthdays"
                             />
                           )}
@@ -566,10 +564,8 @@ export function WebWeekView({
                           initial={{ scale: 0 }}
                           animate={{ scale: 1 }}
                           className={cn(
-                            "absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] font-bold",
-                            isPink
-                              ? "bg-pink-500 text-white"
-                              : "bg-cyan-500 text-white"
+                            "text-[7px] font-bold",
+                            isPink ? "text-pink-300" : "text-cyan-300"
                           )}
                         >
                           TODAY
@@ -582,17 +578,17 @@ export function WebWeekView({
             </AnimatePresence>
 
             {/* All Day Events Section */}
-            <div className="grid grid-cols-8 gap-2 mb-4">
-              <div className="flex items-center justify-end pr-3">
+            <div className="grid grid-cols-8 gap-0.5 mb-1">
+              <div className="flex items-center justify-end pr-1">
                 <div
                   className={cn(
-                    "text-[11px] font-semibold px-2 py-1 rounded-lg",
+                    "text-[8px] font-semibold px-1 py-0.5 rounded",
                     isPink
                       ? "text-pink-300/80 bg-pink-500/10"
                       : "text-cyan-300/80 bg-cyan-500/10"
                   )}
                 >
-                  ALL DAY
+                  ALL
                 </div>
               </div>
               {weekDays.map((day) => {
@@ -608,16 +604,16 @@ export function WebWeekView({
                   <div
                     key={day.toISOString()}
                     className={cn(
-                      "min-h-[40px] rounded-xl border transition-all",
+                      "min-h-[24px] rounded-lg border transition-all",
                       isToday(day)
                         ? "bg-white/[0.05] border-white/20"
                         : "bg-white/[0.02] border-white/10",
-                      hasAllDayItems && "p-1"
+                      hasAllDayItems && "p-0.5"
                     )}
                   >
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                       {/* Birthdays */}
-                      {birthdays.map((birthday) => (
+                      {birthdays.slice(0, 1).map((birthday) => (
                         <motion.div
                           key={birthday.id}
                           initial={{ opacity: 0, scale: 0.9 }}
@@ -628,16 +624,14 @@ export function WebWeekView({
                             onBirthdayClick?.(birthday, day);
                           }}
                           className={cn(
-                            "px-2 py-1 rounded-lg cursor-pointer overflow-hidden relative",
-                            "bg-gradient-to-r from-amber-500/25 via-yellow-500/20 to-amber-600/25",
-                            "border-l-4 border-l-amber-400 ring-1 ring-amber-400/30",
-                            "hover:shadow-lg hover:shadow-amber-500/20"
+                            "px-1 py-0.5 rounded cursor-pointer overflow-hidden relative",
+                            "bg-gradient-to-r from-amber-500/25 to-amber-600/25",
+                            "border-l-2 border-l-amber-400"
                           )}
                         >
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-300/10 to-transparent animate-pulse" />
-                          <div className="flex items-center gap-1.5 relative">
-                            <Cake className="w-3 h-3 text-amber-300 flex-shrink-0" />
-                            <span className="text-xs font-semibold text-amber-200 truncate">
+                          <div className="flex items-center gap-0.5 relative">
+                            <Cake className="w-2.5 h-2.5 text-amber-300 flex-shrink-0" />
+                            <span className="text-[8px] font-semibold text-amber-200 truncate">
                               {getBirthdayDisplayName(birthday, day)}
                             </span>
                           </div>
@@ -645,7 +639,7 @@ export function WebWeekView({
                       ))}
 
                       {/* All Day Events */}
-                      {allDayEvents.map((item) => {
+                      {allDayEvents.slice(0, 1).map((item) => {
                         const colors = typeColors[item.type];
                         const TypeIcon = colors.icon;
 

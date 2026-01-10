@@ -30,7 +30,6 @@ import {
   FastForward,
   Flame,
   ListTodo,
-  TrendingUp,
 } from "lucide-react";
 import { useMemo } from "react";
 
@@ -244,7 +243,7 @@ function StatsCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
-        "p-4 rounded-xl border backdrop-blur-sm",
+        "p-2 rounded-lg border backdrop-blur-sm",
         isCalm
           ? "bg-gradient-to-br from-[#292524]/90 to-[#1c1917]/90"
           : isFrost
@@ -253,67 +252,25 @@ function StatsCard({
         border
       )}
     >
-      <div className="flex items-start justify-between">
-        <div className={cn("p-2 rounded-lg", bg)}>
-          <Icon className={cn("w-5 h-5", text)} />
+      <div className="flex items-center gap-2">
+        <div className={cn("p-1.5 rounded", bg)}>
+          <Icon className={cn("w-3.5 h-3.5", text)} />
         </div>
-        {trend && (
+        <div className="flex-1 min-w-0">
+          <div className={cn("text-lg font-bold", text)}>{value}</div>
           <div
             className={cn(
-              "flex items-center gap-1 text-xs",
-              trend === "up"
-                ? isCalm
-                  ? "text-emerald-400"
-                  : isFrost
-                    ? "text-green-600"
-                    : "text-green-400"
-                : trend === "down"
-                  ? isCalm
-                    ? "text-red-400"
-                    : isFrost
-                      ? "text-red-600"
-                      : "text-red-400"
-                  : isCalm
-                    ? "text-stone-500"
-                    : isFrost
-                      ? "text-slate-500"
-                      : "text-white/40"
-            )}
-          >
-            <TrendingUp
-              className={cn("w-3 h-3", trend === "down" && "rotate-180")}
-            />
-          </div>
-        )}
-      </div>
-      <div className="mt-3">
-        <div className={cn("text-2xl font-bold", text)}>{value}</div>
-        <div
-          className={cn(
-            "text-sm mt-0.5",
-            isCalm
-              ? "text-stone-400"
-              : isFrost
-                ? "text-slate-600"
-                : "text-white/70"
-          )}
-        >
-          {title}
-        </div>
-        {subtitle && (
-          <div
-            className={cn(
-              "text-xs mt-1",
+              "text-[10px]",
               isCalm
-                ? "text-stone-500"
+                ? "text-stone-400"
                 : isFrost
-                  ? "text-slate-500"
-                  : "text-white/40"
+                  ? "text-slate-600"
+                  : "text-white/70"
             )}
           >
-            {subtitle}
+            {title}
           </div>
-        )}
+        </div>
       </div>
     </motion.div>
   );
@@ -331,7 +288,7 @@ function StreakDisplay({ streak, label }: { streak: number; label: string }) {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       className={cn(
-        "flex items-center gap-3 p-4 rounded-xl border",
+        "flex items-center gap-2 p-2 rounded-lg border",
         isCalm
           ? "bg-gradient-to-br from-amber-900/20 to-orange-900/20 border-amber-700/30"
           : isFrost
@@ -341,7 +298,7 @@ function StreakDisplay({ streak, label }: { streak: number; label: string }) {
     >
       <div
         className={cn(
-          "p-2 rounded-lg",
+          "p-1.5 rounded",
           isCalm
             ? "bg-amber-900/30"
             : isFrost
@@ -351,7 +308,7 @@ function StreakDisplay({ streak, label }: { streak: number; label: string }) {
       >
         <Flame
           className={cn(
-            "w-6 h-6",
+            "w-4 h-4",
             isCalm
               ? "text-amber-400"
               : isFrost
@@ -360,36 +317,22 @@ function StreakDisplay({ streak, label }: { streak: number; label: string }) {
           )}
         />
       </div>
-      <div>
-        <div className="flex items-baseline gap-1">
-          <span
-            className={cn(
-              "text-3xl font-bold",
-              isCalm
-                ? "text-amber-400"
-                : isFrost
-                  ? "text-orange-600"
-                  : "text-orange-400"
-            )}
-          >
-            {streak}
-          </span>
-          <span
-            className={cn(
-              "text-sm",
-              isCalm
-                ? "text-amber-400/70"
-                : isFrost
-                  ? "text-orange-500"
-                  : "text-orange-400/70"
-            )}
-          >
-            days
-          </span>
-        </div>
-        <div
+      <div className="flex items-baseline gap-1">
+        <span
           className={cn(
-            "text-xs",
+            "text-xl font-bold",
+            isCalm
+              ? "text-amber-400"
+              : isFrost
+                ? "text-orange-600"
+                : "text-orange-400"
+          )}
+        >
+          {streak}
+        </span>
+        <span
+          className={cn(
+            "text-[10px]",
             isCalm
               ? "text-stone-500"
               : isFrost
@@ -398,7 +341,7 @@ function StreakDisplay({ streak, label }: { streak: number; label: string }) {
           )}
         >
           {label}
-        </div>
+        </span>
       </div>
     </motion.div>
   );
@@ -728,14 +671,14 @@ export default function WebEventsDashboard() {
 
   if (isLoading) {
     return (
-      <div className={cn("min-h-screen p-6", themeClasses.pageBg)}>
+      <div className={cn("min-h-screen p-2", themeClasses.pageBg)}>
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-2">
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
                 className={cn(
-                  "h-32 rounded-xl animate-pulse",
+                  "h-20 rounded-lg animate-pulse",
                   isCalm
                     ? "bg-gradient-to-br from-[#292524] to-[#1c1917]"
                     : "bg-gradient-to-br from-[#1a2942] to-[#0f1d2e]"
@@ -749,14 +692,14 @@ export default function WebEventsDashboard() {
   }
 
   return (
-    <div className={cn("min-h-screen p-6", themeClasses.pageBg)}>
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className={cn("min-h-screen p-2", themeClasses.pageBg)}>
+      <div className="max-w-7xl mx-auto space-y-2">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1
               className={cn(
-                "text-2xl font-bold bg-clip-text text-transparent",
+                "text-lg font-bold bg-clip-text text-transparent",
                 isCalm
                   ? "bg-gradient-to-r from-stone-300 via-stone-400 to-emerald-400"
                   : isFrost
@@ -768,23 +711,11 @@ export default function WebEventsDashboard() {
             >
               Dashboard
             </h1>
-            <p
-              className={cn(
-                "text-sm mt-1",
-                isCalm
-                  ? "text-stone-500"
-                  : isFrost
-                    ? "text-slate-500"
-                    : "text-white/50"
-              )}
-            >
-              Overview of your events, reminders, and tasks
-            </p>
           </div>
         </div>
 
         {/* Main Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-2">
           <StatsCard
             title="Completed"
             value={stats.completed}
@@ -809,24 +740,21 @@ export default function WebEventsDashboard() {
           <StatsCard
             title="Today"
             value={`${stats.todayCompleted}/${stats.todayTotal}`}
-            subtitle="Tasks for today"
+            subtitle="Tasks"
             icon={Calendar}
             color={isPink ? "pink" : "cyan"}
           />
         </div>
 
         {/* Streak and Progress Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <StreakDisplay
-            streak={stats.streak}
-            label="Current completion streak"
-          />
+        <div className="grid grid-cols-2 gap-2">
+          <StreakDisplay streak={stats.streak} label="Streak" />
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-              "lg:col-span-2 p-4 rounded-xl border",
+              "p-2 rounded-lg border",
               isCalm
                 ? "bg-gradient-to-br from-[#292524]/90 to-[#1c1917]/90 border-stone-700/50"
                 : isFrost
@@ -836,7 +764,7 @@ export default function WebEventsDashboard() {
           >
             <h3
               className={cn(
-                "text-sm font-medium mb-3",
+                "text-[10px] font-medium mb-1",
                 isCalm
                   ? "text-stone-400"
                   : isFrost
@@ -846,11 +774,11 @@ export default function WebEventsDashboard() {
             >
               Weekly Progress
             </h3>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
               <div className="flex-1">
                 <div
                   className={cn(
-                    "h-3 rounded-full overflow-hidden",
+                    "h-2 rounded-full overflow-hidden",
                     isCalm
                       ? "bg-stone-700"
                       : isFrost
