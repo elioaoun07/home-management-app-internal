@@ -1,3 +1,4 @@
+import { sendSplitBillNotification } from "@/lib/notifications/sendSplitBillNotification";
 import { ToastIcons } from "@/lib/toastIcons";
 import {
   keepPreviousData,
@@ -643,6 +644,18 @@ export function useAddTransaction() {
 
       // Note: Success toast for "add" is handled by the calling component
       // which can include amount and category in the message
+
+      // Send push notification if this is a split bill request
+      if (variables.split_requested && serverTransaction.collaborator_id) {
+        sendSplitBillNotification({
+          transactionId: serverTransaction.id,
+          collaboratorId: serverTransaction.collaborator_id,
+          amount: serverTransaction.amount,
+          categoryName: serverTransaction.category || undefined,
+          description: serverTransaction.description || undefined,
+        });
+      }
+
       // Provide Undo capability by storing the created transaction ID
       toast.success("Transaction added!", {
         icon: ToastIcons.create,

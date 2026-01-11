@@ -447,6 +447,7 @@ export class SupabaseTransactionService implements TransactionService {
     }
 
     // If split requested, create a notification for the collaborator
+    // (Push notification is sent via API from the frontend after success)
     if (split_requested && collaboratorId) {
       // Get category name for notification
       const { data: categoryData } = await this.supabase
