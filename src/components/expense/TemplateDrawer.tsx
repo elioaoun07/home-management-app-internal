@@ -12,6 +12,7 @@ import type {
   ReminderTemplate,
 } from "@/types/items";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import LaunchTemplateDialog from "./LaunchTemplateDialog";
 import ReminderTemplateDialog from "./ReminderTemplateDialog";
@@ -219,16 +220,19 @@ export default function TemplateDrawer({
   const setCurrentIndex =
     templateMode === "budget" ? setSelectedIndex : setSelectedReminderIndex;
 
-  return (
+  // Use portal to render at document body level so z-index works properly
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <>
       {/* Blurred Background Overlay */}
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-md z-50 animate-in fade-in"
+        className="fixed inset-0 bg-black/40 backdrop-blur-md z-[100] animate-in fade-in"
         onClick={() => onOpenChange(false)}
       />
 
       {/* Carousel Container */}
-      <div className="fixed inset-x-0 bottom-0 z-50 animate-in slide-in-from-bottom duration-300">
+      <div className="fixed inset-x-0 bottom-0 z-[110] animate-in slide-in-from-bottom duration-300">
         <div className="bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-xl border-t-2 border-[hsl(var(--nav-text-primary)/0.3)] rounded-t-3xl shadow-2xl pb-safe">
           {/* Toggle Header */}
           <div className="flex items-center justify-center gap-2 p-4 border-b border-white/10">
@@ -544,6 +548,7 @@ export default function TemplateDrawer({
         template={templateToLaunch}
         onLaunch={handleLaunchTemplate}
       />
-    </>
+    </>,
+    document.body
   );
 }
