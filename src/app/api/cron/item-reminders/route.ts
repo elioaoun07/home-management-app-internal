@@ -107,8 +107,8 @@ export async function GET(req: NextRequest) {
     let failed = 0;
 
     for (const alert of dueAlerts) {
-      // Supabase returns related records as arrays
-      const itemsArray = alert.items as unknown as Array<{
+      // Supabase returns a single object for many-to-one relations (item_alerts -> items)
+      const item = alert.items as unknown as {
         id: string;
         user_id: string;
         responsible_user_id: string | null;
@@ -116,11 +116,14 @@ export async function GET(req: NextRequest) {
         description: string | null;
         type: string;
         priority: string;
-      }> | null;
+      } | null;
 
-      const item = itemsArray?.[0];
-
-      if (!item) continue;
+      if (!item) {
+        console.log(
+          `[Item Reminders] Alert ${alert.id} has no associated item, skipping`
+        );
+        continue;
+      }
 
       // Send notification to the responsible user (who should do the task)
       // Falls back to owner if no responsible user is set

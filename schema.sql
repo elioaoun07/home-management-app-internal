@@ -230,6 +230,17 @@ CREATE TABLE public.household_links (
   CONSTRAINT household_links_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id),
   CONSTRAINT household_links_partner_user_id_fkey FOREIGN KEY (partner_user_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.household_members (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  household_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  user_email text,
+  role text NOT NULL DEFAULT 'member'::text CHECK (role = ANY (ARRAY['owner'::text, 'partner'::text, 'viewer'::text])),
+  joined_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT household_members_pkey PRIMARY KEY (id),
+  CONSTRAINT household_members_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
+  CONSTRAINT household_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.hub_chat_threads (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   household_id uuid NOT NULL,
@@ -545,6 +556,13 @@ CREATE TABLE public.notifications (
   CONSTRAINT notifications_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT notifications_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id)
 );
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  full_name text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.push_subscriptions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -705,8 +723,8 @@ CREATE TABLE public.user_categories (
   CONSTRAINT user_categories_pkey PRIMARY KEY (id),
   CONSTRAINT user_categories_default_fk FOREIGN KEY (default_category_id) REFERENCES public.default_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
@@ -721,7 +739,7 @@ CREATE TABLE public.user_onboarding (
 );
 CREATE TABLE public.user_preferences (
   user_id uuid NOT NULL,
-  theme text NOT NULL DEFAULT '''dark''::text'::text CHECK (theme = ANY (ARRAY['light'::text, 'dark'::text, 'frost'::text, 'system'::text, 'blue'::text, 'pink'::text])),
+  theme text NOT NULL DEFAULT '''dark''::text'::text CHECK (theme = ANY (ARRAY['light'::text, 'dark'::text, 'frost'::text, 'calm'::text, 'system'::text, 'blue'::text, 'pink'::text])),
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
   section_order jsonb DEFAULT '["amount", "account", "category", "subcategory", "description"]'::jsonb,
   date_start text DEFAULT '''mon-1''::text'::text,
