@@ -42,13 +42,16 @@ import {
   Square,
   Target,
   Trash2,
+  Undo2,
   X,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-// Default kanban stages
+// Default kanban stages (main workflow)
 const DEFAULT_KANBAN_STAGES = ["To Do", "In Progress", "Done"];
+// "Later" is a special stage for low-priority items, shown as collapsible section
+const LATER_STAGE = "Later";
 
 /**
  * Sort subtasks by priority first (if set), then by order_index.
@@ -237,6 +240,8 @@ function NestedFocusSubtaskItem({
   onAddSubtask,
   onUpdate,
   onPriorityChange,
+  onMoveToLater,
+  isOverdue = false,
   depth = 0,
   maxDepth = 3,
 }: {
@@ -249,6 +254,8 @@ function NestedFocusSubtaskItem({
   onAddSubtask: (parentSubtaskId: string, title: string) => void;
   onUpdate: (subtaskId: string, title: string) => void;
   onPriorityChange?: (subtaskId: string, priority: number | null) => void;
+  onMoveToLater?: (subtask: Subtask) => void;
+  isOverdue?: boolean;
   depth?: number;
   maxDepth?: number;
 }) {
@@ -340,7 +347,9 @@ function NestedFocusSubtaskItem({
           "group/subtask flex items-center gap-4 py-4 px-5 rounded-xl transition-all",
           isCompleted
             ? "bg-green-500/10 border border-green-500/20"
-            : "bg-white/5 hover:bg-white/10 border border-white/10",
+            : isOverdue
+              ? "bg-amber-500/10 border-2 border-amber-500/50"
+              : "bg-white/5 hover:bg-white/10 border border-white/10",
         )}
         style={{ marginLeft: `${depth * 24}px` }}
       >
@@ -481,6 +490,18 @@ function NestedFocusSubtaskItem({
           </button>
         )}
 
+        {/* Move to Later button */}
+        {onMoveToLater && !isCompleted && !isEditing && (
+          <button
+            type="button"
+            onClick={() => onMoveToLater(subtask)}
+            className="p-2 rounded-lg transition-all text-white/30 hover:text-white/60 hover:bg-white/10 opacity-0 group-hover/subtask:opacity-100"
+            title="Move to Later"
+          >
+            <Clock className="w-4 h-4" />
+          </button>
+        )}
+
         {/* Delete button - always on far right */}
         {!isEditing && (
           <button
@@ -561,6 +582,7 @@ function NestedFocusSubtaskItem({
                 onAddSubtask={onAddSubtask}
                 onUpdate={onUpdate}
                 onPriorityChange={onPriorityChange}
+                onMoveToLater={onMoveToLater}
                 depth={depth + 1}
                 maxDepth={maxDepth}
               />
@@ -768,13 +790,17 @@ export function TaskFocusModal({
   const [isKanbanView, setIsKanbanView] = useState(
     item.subtask_kanban_enabled || false,
   );
-  const kanbanStages = item.subtask_kanban_stages || [
+  const allKanbanStages = item.subtask_kanban_stages || [
     "To Do",
     "In Progress",
     "Done",
   ];
+  // Main kanban stages (excludes "Later" which is displayed separately)
+  const kanbanStages = allKanbanStages.filter((s: string) => s !== LATER_STAGE);
   const [draggedSubtaskId, setDraggedSubtaskId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+  const [showLater, setShowLater] = useState(false);
+  const [showOverdueInKanban, setShowOverdueInKanban] = useState(true);
 
   const isRecurring = !!item.recurrence_rule;
   const subtasks = item.subtasks || [];
@@ -888,11 +914,21 @@ export function TaskFocusModal({
     isSubtaskCompleted(s.id),
   ).length;
 
-  // Build nested tree from flat subtasks
-  const subtaskTree = useMemo(
-    () => buildSubtaskTree(currentOccurrenceSubtasks),
-    [currentOccurrenceSubtasks],
-  );
+  // Build nested tree from flat subtasks (excludes Later stage)
+  const subtaskTree = useMemo(() => {
+    const mainSubtasks = currentOccurrenceSubtasks.filter(
+      (s) => s.kanban_stage !== LATER_STAGE,
+    );
+    return buildSubtaskTree(mainSubtasks);
+  }, [currentOccurrenceSubtasks]);
+
+  // Overdue subtasks for list view (when toggle is on)
+  const overdueSubtasksForList = useMemo(() => {
+    if (!showOverdueInKanban) return [];
+    return overdueSubtasksWithDates
+      .filter(({ subtask }) => subtask.kanban_stage !== LATER_STAGE)
+      .map(({ subtask, homeOccurrence }) => ({ subtask, homeOccurrence }));
+  }, [showOverdueInKanban, overdueSubtasksWithDates]);
 
   const hasCurrentSubtasks = topLevelSubtasks.length > 0;
   const hasOverdueSubtasks = overdueSubtasksWithDates.length > 0;
@@ -1217,6 +1253,82 @@ export function TaskFocusModal({
       });
   };
 
+  // Set of overdue subtask IDs for quick lookup
+  const overdueSubtaskIds = useMemo(() => {
+    return new Set(overdueSubtasksWithDates.map(({ subtask }) => subtask.id));
+  }, [overdueSubtasksWithDates]);
+
+  // Get subtasks by kanban stage (includes overdue when toggled)
+  const getSubtasksByStageWithOverdue = (stage: string) => {
+    const current = currentOccurrenceSubtasks
+      .filter((s) => !s.parent_subtask_id) // Only top-level for kanban
+      .filter((s) => getEffectiveKanbanStage(s) === stage);
+
+    const overdue = showOverdueInKanban
+      ? overdueSubtasksWithDates
+          .filter(({ subtask }) => !subtask.parent_subtask_id)
+          .filter(({ subtask }) => getEffectiveKanbanStage(subtask) === stage)
+          .map(({ subtask }) => subtask)
+      : [];
+
+    return [...current, ...overdue].sort((a, b) => {
+      const aPriority = a.priority ?? null;
+      const bPriority = b.priority ?? null;
+      if (aPriority === null && bPriority === null) return 0;
+      if (aPriority === null) return 1;
+      if (bPriority === null) return -1;
+      return aPriority - bPriority;
+    });
+  };
+
+  // Subtasks in "Later" stage (shown as collapsible section, includes overdue when toggled)
+  const laterSubtasks = useMemo(() => {
+    const currentLater = currentOccurrenceSubtasks
+      .filter((s) => !s.parent_subtask_id)
+      .filter((s) => getEffectiveKanbanStage(s) === LATER_STAGE);
+
+    const overdueLater = showOverdueInKanban
+      ? overdueSubtasksWithDates
+          .filter(({ subtask }) => !subtask.parent_subtask_id)
+          .filter(
+            ({ subtask }) => getEffectiveKanbanStage(subtask) === LATER_STAGE,
+          )
+          .map(({ subtask }) => subtask)
+      : [];
+
+    return [...currentLater, ...overdueLater].sort(sortByPriorityThenOrder);
+  }, [
+    currentOccurrenceSubtasks,
+    showOverdueInKanban,
+    overdueSubtasksWithDates,
+  ]);
+
+  // Move to "Later" stage - saves current stage for undo
+  const handleMoveToLater = async (subtask: Subtask) => {
+    const currentStage = getEffectiveKanbanStage(subtask);
+    await updateSubtaskKanbanStage.mutateAsync({
+      subtaskId: subtask.id,
+      kanbanStage: LATER_STAGE,
+      parentItemId: item.id,
+      previousKanbanStage: currentStage, // Save where it came from
+    });
+  };
+
+  // Move from "Later" back to previous stage (or first stage if unknown)
+  const handleMoveFromLater = async (subtask: Subtask) => {
+    const targetStage = subtask.previous_kanban_stage || kanbanStages[0];
+    // Validate the target stage exists in current stages
+    const validStage = kanbanStages.includes(targetStage)
+      ? targetStage
+      : kanbanStages[0];
+    await updateSubtaskKanbanStage.mutateAsync({
+      subtaskId: subtask.id,
+      kanbanStage: validStage,
+      parentItemId: item.id,
+      previousKanbanStage: null, // Clear the previous stage after restoring
+    });
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, x: "100%" }}
@@ -1379,41 +1491,6 @@ export function TaskFocusModal({
                 </CollapsiblePastSubtasks>
               )}
 
-              {/* Overdue Subtasks from Past Occurrences - Collapsible */}
-              {hasOverdueSubtasks && (
-                <CollapsiblePastSubtasks
-                  title="Overdue from Past Occurrences"
-                  subtitle="Subtasks not completed on their scheduled date"
-                  count={overdueSubtasksWithDates.length}
-                  defaultOpen={overdueSubtasksWithDates.length <= 3}
-                >
-                  <div className="space-y-3">
-                    <AnimatePresence mode="popLayout">
-                      {overdueSubtasksWithDates.map(
-                        ({ subtask, homeOccurrence }) => (
-                          <FocusSubtaskItem
-                            key={`overdue-${subtask.id}`}
-                            subtask={subtask}
-                            isRecurring={isRecurring}
-                            occurrenceDate={homeOccurrence}
-                            isCompletedForOccurrence={false}
-                            onToggle={() =>
-                              handleOverdueSubtaskToggle(
-                                subtask,
-                                homeOccurrence,
-                              )
-                            }
-                            onDelete={() => handleDeleteSubtask(subtask.id)}
-                            isOverdue={true}
-                            overdueFromDate={homeOccurrence}
-                          />
-                        ),
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </CollapsiblePastSubtasks>
-              )}
-
               {/* Current Subtasks */}
               <div>
                 {(hasCurrentSubtasks || !hasOverdueSubtasks) && (
@@ -1436,6 +1513,31 @@ export function TaskFocusModal({
                     </div>
                     {/* Kanban Toggle */}
                     <div className="flex items-center gap-2">
+                      {/* Show Overdue Toggle - show in both views when there are overdue items */}
+                      {hasOverdueSubtasks && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowOverdueInKanban(!showOverdueInKanban)
+                          }
+                          title={
+                            showOverdueInKanban
+                              ? "Hide overdue items from kanban"
+                              : `Show ${overdueSubtasksWithDates.length} overdue items in kanban`
+                          }
+                          className={cn(
+                            "p-1.5 rounded-lg transition-colors flex items-center gap-1",
+                            showOverdueInKanban
+                              ? "bg-amber-500/20 text-amber-400"
+                              : "text-amber-400/60 hover:text-amber-400 hover:bg-amber-500/10",
+                          )}
+                        >
+                          <AlertCircle className="w-4 h-4" />
+                          <span className="text-xs font-medium">
+                            {overdueSubtasksWithDates.length}
+                          </span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleKanbanToggle(false)}
@@ -1486,154 +1588,423 @@ export function TaskFocusModal({
                           onAddSubtask={handleAddNestedSubtask}
                           onUpdate={handleUpdateSubtask}
                           onPriorityChange={handlePriorityChange}
+                          onMoveToLater={handleMoveToLater}
+                          isOverdue={overdueSubtaskIds.has(subtask.id)}
                         />
                       ))}
                     </AnimatePresence>
+
+                    {/* Overdue subtasks from past occurrences - shown inline when toggle is on */}
+                    {overdueSubtasksForList.map(
+                      ({ subtask, homeOccurrence }) => (
+                        <motion.div
+                          key={`overdue-${subtask.id}`}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="group/subtask flex items-center gap-4 py-4 px-5 rounded-xl transition-all bg-amber-500/10 border-2 border-amber-500/50"
+                        >
+                          <div className="w-5 flex-shrink-0" />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (isRecurring) {
+                                await toggleSubtaskForOccurrence.mutateAsync({
+                                  subtaskId: subtask.id,
+                                  occurrenceDate: homeOccurrence.toISOString(),
+                                  completed: true,
+                                });
+                              }
+                            }}
+                            className={cn(
+                              "w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all flex-shrink-0",
+                              isPink
+                                ? "border-pink-400/50 hover:border-pink-400 hover:bg-pink-500/20"
+                                : "border-cyan-400/50 hover:border-cyan-400 hover:bg-cyan-500/20",
+                            )}
+                          />
+                          <span className="flex-1 text-lg text-white/90">
+                            {subtask.title}
+                          </span>
+                          <span className="text-sm text-amber-500">
+                            {format(homeOccurrence, "MMM d")}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveToLater(subtask)}
+                            className="p-2 rounded-lg transition-all text-white/30 hover:text-white/60 hover:bg-white/10 opacity-0 group-hover/subtask:opacity-100"
+                            title="Move to Later"
+                          >
+                            <Clock className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSubtask(subtask.id)}
+                            className="p-2 text-red-400/70 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-all"
+                            title="Delete subtask"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </motion.div>
+                      ),
+                    )}
+
+                    {/* Later section for list view */}
+                    {laterSubtasks.length > 0 && (
+                      <div className="mt-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowLater(!showLater)}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                        >
+                          <motion.div
+                            animate={{ rotate: showLater ? 180 : 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <ChevronDown className="w-4 h-4 text-white/50" />
+                          </motion.div>
+                          <Clock className="w-4 h-4 text-white/50" />
+                          <span className="text-sm font-medium text-white/70">
+                            Later
+                          </span>
+                          <span className="px-1.5 py-0.5 text-xs rounded-full bg-white/10 text-white/50">
+                            {laterSubtasks.length}
+                          </span>
+                          <span className="text-xs text-white/40 ml-auto">
+                            Low priority
+                          </span>
+                        </button>
+                        <AnimatePresence>
+                          {showLater && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="mt-2 space-y-2 pl-2">
+                                {laterSubtasks.map((subtask) => {
+                                  const isOverdueItem = overdueSubtaskIds.has(
+                                    subtask.id,
+                                  );
+                                  return (
+                                    <motion.div
+                                      key={subtask.id}
+                                      initial={{ opacity: 0, x: -10 }}
+                                      animate={{ opacity: 1, x: 0 }}
+                                      className={cn(
+                                        "group/subtask flex items-center gap-4 py-3 px-4 rounded-xl transition-all",
+                                        isOverdueItem
+                                          ? "bg-amber-500/10 border-2 border-amber-500/50"
+                                          : "bg-white/5 hover:bg-white/10 border border-white/10",
+                                      )}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleMoveFromLater(subtask)
+                                        }
+                                        className={cn(
+                                          "flex-shrink-0 w-5 h-5 flex items-center justify-center transition-all",
+                                          isPink
+                                            ? "text-pink-400/50 hover:text-pink-400"
+                                            : "text-cyan-400/50 hover:text-cyan-400",
+                                        )}
+                                        title={
+                                          subtask.previous_kanban_stage
+                                            ? `Restore to ${subtask.previous_kanban_stage}`
+                                            : "Move back to To Do"
+                                        }
+                                      >
+                                        <Undo2 className="w-4 h-4" />
+                                      </button>
+                                      <span className="flex-1 text-base text-white/70">
+                                        {subtask.title}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleDeleteSubtask(subtask.id)
+                                        }
+                                        className="p-1.5 text-red-400/70 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-all opacity-0 group-hover/subtask:opacity-100"
+                                        title="Delete subtask"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </motion.div>
+                                  );
+                                })}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+
                     <FocusAddSubtaskInput onAdd={handleAddSubtask} />
                   </div>
                 )}
 
                 {/* Kanban View */}
                 {isKanbanView && (
-                  <div className="grid grid-cols-3 gap-4">
-                    {kanbanStages.map((stage, stageIndex) => (
-                      <div
-                        key={stage}
-                        data-kanban-stage={stage}
-                        onDragOver={(e) => handleDragOver(e, stage)}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e, stage)}
-                        className={cn(
-                          "rounded-xl p-3 min-h-[200px] transition-all",
-                          stageIndex === kanbanStages.length - 1
-                            ? "bg-green-500/10 border border-green-500/20"
-                            : "bg-white/5 border border-white/10",
-                          dragOverStage === stage && "ring-2",
-                          dragOverStage === stage &&
-                            (stageIndex === kanbanStages.length - 1
-                              ? "ring-green-500/50"
-                              : isPink
-                                ? "ring-pink-500/50"
-                                : "ring-cyan-500/50"),
-                        )}
-                      >
-                        <h3
+                  <>
+                    <div className="grid grid-cols-3 gap-4">
+                      {kanbanStages.map((stage, stageIndex) => (
+                        <div
+                          key={stage}
+                          data-kanban-stage={stage}
+                          onDragOver={(e) => handleDragOver(e, stage)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDrop(e, stage)}
                           className={cn(
-                            "font-semibold mb-3 text-sm",
+                            "rounded-xl p-3 min-h-[200px] transition-all",
                             stageIndex === kanbanStages.length - 1
-                              ? "text-green-400"
-                              : isPink
-                                ? "text-pink-400"
-                                : "text-cyan-400",
+                              ? "bg-green-500/10 border border-green-500/20"
+                              : "bg-white/5 border border-white/10",
+                            dragOverStage === stage && "ring-2",
+                            dragOverStage === stage &&
+                              (stageIndex === kanbanStages.length - 1
+                                ? "ring-green-500/50"
+                                : isPink
+                                  ? "ring-pink-500/50"
+                                  : "ring-cyan-500/50"),
                           )}
                         >
-                          {stage} ({getSubtasksByStage(stage).length})
-                        </h3>
-                        <div className="space-y-2">
-                          {getSubtasksByStage(stage).map((subtask) => (
-                            <div
-                              key={subtask.id}
-                              draggable
-                              onDragStart={(e) =>
-                                handleDragStart(e, subtask.id)
-                              }
-                              onDragEnd={handleDragEnd}
-                              onTouchStart={(e) =>
-                                handleTouchStart(e, subtask.id)
-                              }
-                              onTouchMove={handleTouchMove}
-                              onTouchEnd={handleTouchEnd}
-                              className={cn(
-                                "p-3 rounded-lg bg-white/5 border border-white/10",
-                                "hover:bg-white/10 transition-all cursor-grab active:cursor-grabbing",
-                                "touch-none",
-                                draggedSubtaskId === subtask.id &&
-                                  "opacity-50 scale-95",
-                              )}
-                            >
-                              <div className="flex items-center gap-2">
-                                {/* Back arrow - only show if not in first stage */}
-                                {stageIndex > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleKanbanMoveBackward(subtask)
+                          <h3
+                            className={cn(
+                              "font-semibold mb-3 text-sm",
+                              stageIndex === kanbanStages.length - 1
+                                ? "text-green-400"
+                                : isPink
+                                  ? "text-pink-400"
+                                  : "text-cyan-400",
+                            )}
+                          >
+                            {stage} (
+                            {getSubtasksByStageWithOverdue(stage).length})
+                          </h3>
+                          <div className="space-y-2">
+                            {getSubtasksByStageWithOverdue(stage).map(
+                              (subtask) => {
+                                const isOverdue = overdueSubtaskIds.has(
+                                  subtask.id,
+                                );
+                                return (
+                                  <div
+                                    key={subtask.id}
+                                    draggable
+                                    onDragStart={(e) =>
+                                      handleDragStart(e, subtask.id)
                                     }
+                                    onDragEnd={handleDragEnd}
+                                    onTouchStart={(e) =>
+                                      handleTouchStart(e, subtask.id)
+                                    }
+                                    onTouchMove={handleTouchMove}
+                                    onTouchEnd={handleTouchEnd}
                                     className={cn(
-                                      "flex-shrink-0 w-5 h-5 rounded flex items-center justify-center transition-all",
-                                      "hover:bg-white/10",
-                                      isPink
-                                        ? "text-pink-400/50 hover:text-pink-400"
-                                        : "text-cyan-400/50 hover:text-cyan-400",
+                                      "p-3 rounded-lg",
+                                      "hover:bg-white/10 transition-all cursor-grab active:cursor-grabbing",
+                                      "touch-none",
+                                      isOverdue
+                                        ? "border-2 border-amber-500/50 bg-amber-500/10"
+                                        : "bg-white/5 border border-white/10",
+                                      draggedSubtaskId === subtask.id &&
+                                        "opacity-50 scale-95",
                                     )}
-                                    title="Move to previous stage"
                                   >
-                                    <ChevronLeft className="w-4 h-4" />
-                                  </button>
-                                )}
-                                {/* Spacer when in first stage for alignment */}
-                                {stageIndex === 0 && <div className="w-5" />}
+                                    <div className="flex items-center gap-2">
+                                      {/* Back arrow - only show if not in first stage */}
+                                      {stageIndex > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleKanbanMoveBackward(subtask)
+                                          }
+                                          className={cn(
+                                            "flex-shrink-0 w-5 h-5 rounded flex items-center justify-center transition-all",
+                                            "hover:bg-white/10",
+                                            isPink
+                                              ? "text-pink-400/50 hover:text-pink-400"
+                                              : "text-cyan-400/50 hover:text-cyan-400",
+                                          )}
+                                          title="Move to previous stage"
+                                        >
+                                          <ChevronLeft className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                      {/* Spacer when in first stage for alignment */}
+                                      {stageIndex === 0 && (
+                                        <div className="w-5" />
+                                      )}
 
-                                <div className="flex-1 min-w-0">
-                                  <span
-                                    className={cn(
-                                      "text-sm",
-                                      stageIndex === kanbanStages.length - 1
-                                        ? "text-white/50 line-through"
-                                        : "text-white",
-                                    )}
-                                  >
-                                    {subtask.title}
-                                  </span>
-                                  {subtask.priority !== null &&
-                                    subtask.priority !== undefined && (
-                                      <span
+                                      <div className="flex-1 min-w-0">
+                                        <span
+                                          className={cn(
+                                            "text-sm",
+                                            stageIndex ===
+                                              kanbanStages.length - 1
+                                              ? "text-white/50 line-through"
+                                              : "text-white",
+                                          )}
+                                        >
+                                          {subtask.title}
+                                        </span>
+                                        {subtask.priority !== null &&
+                                          subtask.priority !== undefined && (
+                                            <span
+                                              className={cn(
+                                                "ml-2 px-1.5 py-0.5 text-xs rounded font-medium",
+                                                isPink
+                                                  ? "bg-pink-500/20 text-pink-400"
+                                                  : "bg-cyan-500/20 text-cyan-400",
+                                              )}
+                                            >
+                                              #{subtask.priority}
+                                            </span>
+                                          )}
+                                      </div>
+
+                                      {/* Move to Later button */}
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleMoveToLater(subtask)
+                                        }
                                         className={cn(
-                                          "ml-2 px-1.5 py-0.5 text-xs rounded font-medium",
-                                          isPink
-                                            ? "bg-pink-500/20 text-pink-400"
-                                            : "bg-cyan-500/20 text-cyan-400",
+                                          "flex-shrink-0 w-5 h-5 rounded flex items-center justify-center transition-all",
+                                          "hover:bg-white/10 text-white/30 hover:text-white/60",
                                         )}
+                                        title="Move to Later"
                                       >
-                                        #{subtask.priority}
-                                      </span>
-                                    )}
-                                </div>
+                                        <Clock className="w-3.5 h-3.5" />
+                                      </button>
 
-                                {/* Forward arrow / check button */}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleKanbanMoveForward(subtask)
-                                  }
-                                  className={cn(
-                                    "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all",
-                                    stageIndex === kanbanStages.length - 1
-                                      ? "border-green-500 bg-green-500"
-                                      : isPink
-                                        ? "border-pink-400/50 hover:border-pink-400"
-                                        : "border-cyan-400/50 hover:border-cyan-400",
-                                  )}
-                                  title={
-                                    stageIndex === kanbanStages.length - 1
-                                      ? "Move to first stage"
-                                      : "Move to next stage"
-                                  }
-                                >
-                                  {stageIndex === kanbanStages.length - 1 && (
-                                    <Check className="w-3 h-3 text-white" />
-                                  )}
-                                  {stageIndex < kanbanStages.length - 1 && (
-                                    <ChevronRight className="w-3 h-3 text-white/40" />
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          ))}
+                                      {/* Forward arrow / check button */}
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleKanbanMoveForward(subtask)
+                                        }
+                                        className={cn(
+                                          "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all",
+                                          stageIndex === kanbanStages.length - 1
+                                            ? "border-green-500 bg-green-500"
+                                            : isPink
+                                              ? "border-pink-400/50 hover:border-pink-400"
+                                              : "border-cyan-400/50 hover:border-cyan-400",
+                                        )}
+                                        title={
+                                          stageIndex === kanbanStages.length - 1
+                                            ? "Move to first stage"
+                                            : "Move to next stage"
+                                        }
+                                      >
+                                        {stageIndex ===
+                                          kanbanStages.length - 1 && (
+                                          <Check className="w-3 h-3 text-white" />
+                                        )}
+                                        {stageIndex <
+                                          kanbanStages.length - 1 && (
+                                          <ChevronRight className="w-3 h-3 text-white/40" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              },
+                            )}
+                          </div>
                         </div>
+                      ))}
+                    </div>
+
+                    {/* Later Section - collapsible for low-priority items */}
+                    {laterSubtasks.length > 0 && (
+                      <div className="mt-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowLater(!showLater)}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                        >
+                          <motion.div
+                            animate={{ rotate: showLater ? 180 : 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <ChevronDown className="w-4 h-4 text-white/50" />
+                          </motion.div>
+                          <Clock className="w-4 h-4 text-white/50" />
+                          <span className="text-sm font-medium text-white/70">
+                            Later
+                          </span>
+                          <span className="px-1.5 py-0.5 text-xs rounded-full bg-white/10 text-white/50">
+                            {laterSubtasks.length}
+                          </span>
+                          <span className="text-xs text-white/40 ml-auto">
+                            Low priority
+                          </span>
+                        </button>
+                        <AnimatePresence>
+                          {showLater && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="mt-2 space-y-2 pl-2">
+                                {laterSubtasks.map((subtask) => {
+                                  const isOverdue = overdueSubtaskIds.has(
+                                    subtask.id,
+                                  );
+                                  return (
+                                    <div
+                                      key={subtask.id}
+                                      className={cn(
+                                        "p-3 rounded-lg hover:bg-white/10 transition-colors",
+                                        isOverdue
+                                          ? "border-2 border-amber-500/50 bg-amber-500/10"
+                                          : "bg-white/5 border border-white/10",
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        {/* Move back to To Do */}
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleMoveFromLater(subtask)
+                                          }
+                                          className={cn(
+                                            "flex-shrink-0 w-5 h-5 rounded flex items-center justify-center transition-all",
+                                            "hover:bg-white/10",
+                                            isPink
+                                              ? "text-pink-400/50 hover:text-pink-400"
+                                              : "text-cyan-400/50 hover:text-cyan-400",
+                                          )}
+                                          title={
+                                            subtask.previous_kanban_stage
+                                              ? `Restore to ${subtask.previous_kanban_stage}`
+                                              : "Move back to To Do"
+                                          }
+                                        >
+                                          <Undo2 className="w-4 h-4" />
+                                        </button>
+
+                                        <span className="flex-1 text-sm text-white/70">
+                                          {subtask.title}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

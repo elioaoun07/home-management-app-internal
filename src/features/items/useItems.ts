@@ -1628,10 +1628,12 @@ export function useUpdateSubtaskKanbanStage() {
       subtaskId,
       kanbanStage,
       parentItemId,
+      previousKanbanStage,
     }: {
       subtaskId: string;
       kanbanStage: string;
       parentItemId: string;
+      previousKanbanStage?: string | null; // Store previous stage when moving to Later
     }) => {
       const supabase = supabaseBrowser();
 
@@ -1639,6 +1641,12 @@ export function useUpdateSubtaskKanbanStage() {
         kanban_stage: kanbanStage,
         updated_at: new Date().toISOString(),
       };
+
+      // If previousKanbanStage is provided, update it (for moving to Later)
+      // If it's null, clear it (for moving back from Later)
+      if (previousKanbanStage !== undefined) {
+        updateData.previous_kanban_stage = previousKanbanStage;
+      }
 
       const { data, error } = await supabase
         .from("item_subtasks")
@@ -1650,7 +1658,12 @@ export function useUpdateSubtaskKanbanStage() {
       if (error) throw error;
       return data;
     },
-    onMutate: async ({ subtaskId, kanbanStage, parentItemId }) => {
+    onMutate: async ({
+      subtaskId,
+      kanbanStage,
+      parentItemId,
+      previousKanbanStage,
+    }) => {
       // Cancel any outgoing refetches for all item queries
       await queryClient.cancelQueries({ queryKey: itemsKeys.all });
 
@@ -1663,7 +1676,13 @@ export function useUpdateSubtaskKanbanStage() {
             ...item,
             subtasks: item.subtasks?.map((subtask) =>
               subtask.id === subtaskId
-                ? { ...subtask, kanban_stage: kanbanStage }
+                ? {
+                    ...subtask,
+                    kanban_stage: kanbanStage,
+                    ...(previousKanbanStage !== undefined && {
+                      previous_kanban_stage: previousKanbanStage,
+                    }),
+                  }
                 : subtask,
             ),
           };

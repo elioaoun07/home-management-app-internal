@@ -99,6 +99,7 @@ export interface Subtask {
   order_index: number;
   priority?: number | null; // Numeric priority (1 = highest). NULL means use order_index
   kanban_stage?: string | null; // Current kanban stage name (e.g., "To Do", "In Progress", "Done")
+  previous_kanban_stage?: string | null; // Previous stage before moving to "Later" (for undo)
   created_at: string;
   updated_at: string;
 }
