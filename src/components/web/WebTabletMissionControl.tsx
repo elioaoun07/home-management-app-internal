@@ -136,7 +136,7 @@ function buildFullRRuleString(
     rrule: string;
     count?: number | null;
     end_until?: string | null;
-  }
+  },
 ): string {
   let rrulePart = recurrenceRule.rrule;
 
@@ -174,7 +174,7 @@ function expandRecurringItems(
   items: ItemWithDetails[],
   startDate: Date,
   endDate: Date,
-  actions: ItemOccurrenceAction[]
+  actions: ItemOccurrenceAction[],
 ): ExpandedOccurrence[] {
   const result: ExpandedOccurrence[] = [];
 
@@ -186,7 +186,7 @@ function expandRecurringItems(
       try {
         const rruleString = buildFullRRuleString(
           itemDate,
-          item.recurrence_rule
+          item.recurrence_rule,
         );
         const rule = RRule.fromString(rruleString);
         const occurrences = rule.between(startDate, endDate, true);
@@ -223,14 +223,14 @@ function expandRecurringItems(
     const dayPostponed = getPostponedOccurrencesForDate(
       items,
       currentDate,
-      actions
+      actions,
     );
     for (const p of dayPostponed) {
       // Check if this item+date combo is already in results (avoid duplicates)
       const alreadyExists = result.some(
         (r) =>
           r.item.id === p.item.id &&
-          isSameDay(r.occurrenceDate, p.occurrenceDate)
+          isSameDay(r.occurrenceDate, p.occurrenceDate),
       );
       if (!alreadyExists) {
         result.push({
@@ -246,7 +246,7 @@ function expandRecurringItems(
   }
 
   return result.sort(
-    (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime()
+    (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime(),
   );
 }
 
@@ -373,7 +373,7 @@ function NestedSubtaskItem({
       <div
         className={cn(
           "group/subtask flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors",
-          isOverdue && "border border-red-500/30 bg-red-500/5"
+          isOverdue && "border border-red-500/30 bg-red-500/5",
         )}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
       >
@@ -405,7 +405,7 @@ function NestedSubtaskItem({
                 ? "border-red-400/50 hover:border-red-400"
                 : isPink
                   ? "border-pink-400/50 hover:border-pink-400"
-                  : "border-cyan-400/50 hover:border-cyan-400"
+                  : "border-cyan-400/50 hover:border-cyan-400",
           )}
         >
           {isCompleted && <Check className="w-3 h-3 text-white" />}
@@ -427,7 +427,7 @@ function NestedSubtaskItem({
               "flex-1 text-sm bg-transparent border-b outline-none",
               isPink
                 ? "border-pink-400/50 focus:border-pink-400"
-                : "border-cyan-400/50 focus:border-cyan-400"
+                : "border-cyan-400/50 focus:border-cyan-400",
             )}
           />
         ) : (
@@ -437,9 +437,7 @@ function NestedSubtaskItem({
               "flex-1 text-sm",
               isCompleted
                 ? "line-through text-white/40"
-                : isOverdue
-                  ? "text-red-400 cursor-text hover:text-red-300"
-                  : "text-white/80 cursor-text hover:text-white"
+                : "text-white/80 cursor-text hover:text-white",
             )}
           >
             {subtask.title}
@@ -455,7 +453,7 @@ function NestedSubtaskItem({
               "p-1 rounded transition-all",
               isPink
                 ? "text-pink-400/70 hover:text-pink-400 hover:bg-pink-500/20"
-                : "text-cyan-400/70 hover:text-cyan-400 hover:bg-cyan-500/20"
+                : "text-cyan-400/70 hover:text-cyan-400 hover:bg-cyan-500/20",
             )}
             title="Add sub-item"
           >
@@ -554,6 +552,90 @@ function NestedSubtaskItem({
   );
 }
 
+// Collapsible section for past/dragged subtasks (compact version)
+function CollapsibleSubtaskSection({
+  title,
+  subtitle,
+  count,
+  variant = "warning",
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  count: number;
+  variant?: "warning" | "danger";
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const colors =
+    variant === "danger"
+      ? {
+          border: "border-red-500/30",
+          bg: "bg-red-500/10",
+          text: "text-red-400",
+          badge: "bg-red-500/20 text-red-300",
+        }
+      : {
+          border: "border-amber-500/30",
+          bg: "bg-amber-500/10",
+          text: "text-amber-400",
+          badge: "bg-amber-500/20 text-amber-300",
+        };
+
+  return (
+    <div
+      className={cn(
+        "mb-3 rounded-lg border overflow-hidden",
+        colors.border,
+        colors.bg,
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          "w-full flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 transition-colors",
+        )}
+      >
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ChevronDown className={cn("w-3.5 h-3.5", colors.text)} />
+        </motion.div>
+        <AlertCircle className={cn("w-3.5 h-3.5", colors.text)} />
+        <span className={cn("text-xs font-medium", colors.text)}>{title}</span>
+        <span
+          className={cn(
+            "px-1.5 py-0.5 text-[10px] font-medium rounded-full",
+            colors.badge,
+          )}
+        >
+          {count}
+        </span>
+        {subtitle && (
+          <span className="text-[10px] text-white/40 ml-auto">{subtitle}</span>
+        )}
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-0.5 px-2 pb-2">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // Simple Subtask Item (for overdue display only - no nesting)
 function SubtaskItem({
   subtask,
@@ -608,7 +690,7 @@ function SubtaskItem({
     <div
       className={cn(
         "group/subtask flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors",
-        isOverdue && "border border-red-500/30 bg-red-500/5"
+        isOverdue && "border border-red-500/30 bg-red-500/5",
       )}
     >
       <button
@@ -622,7 +704,7 @@ function SubtaskItem({
               ? "border-red-400/50 hover:border-red-400"
               : isPink
                 ? "border-pink-400/50 hover:border-pink-400"
-                : "border-cyan-400/50 hover:border-cyan-400"
+                : "border-cyan-400/50 hover:border-cyan-400",
         )}
       >
         {isCompletedForOccurrence && <Check className="w-3 h-3 text-white" />}
@@ -642,7 +724,7 @@ function SubtaskItem({
             "flex-1 text-sm bg-transparent border-b outline-none",
             isPink
               ? "border-pink-400/50 focus:border-pink-400"
-              : "border-cyan-400/50 focus:border-cyan-400"
+              : "border-cyan-400/50 focus:border-cyan-400",
           )}
         />
       ) : (
@@ -652,9 +734,7 @@ function SubtaskItem({
             "flex-1 text-sm",
             isCompletedForOccurrence
               ? "line-through text-white/40"
-              : isOverdue
-                ? "text-red-400 cursor-text hover:text-red-300"
-                : "text-white/80 cursor-text hover:text-white"
+              : "text-white/80 cursor-text hover:text-white",
           )}
         >
           {subtask.title}
@@ -709,7 +789,7 @@ function AddSubtaskInput({
           "flex items-center gap-2 py-1.5 px-2 rounded-lg text-sm transition-colors w-full",
           isPink
             ? "text-pink-400/70 hover:bg-pink-500/10 hover:text-pink-400"
-            : "text-cyan-400/70 hover:bg-cyan-500/10 hover:text-cyan-400"
+            : "text-cyan-400/70 hover:bg-cyan-500/10 hover:text-cyan-400",
         )}
       >
         <Plus className="w-3.5 h-3.5" />
@@ -780,7 +860,7 @@ function TodayTaskCard({
   const Icon = colors.icon;
   const isOverdue = isPast(occurrenceDate) && !isCompleted;
   const [showSubtasks, setShowSubtasks] = useState(
-    (item.subtasks?.length ?? 0) > 0
+    (item.subtasks?.length ?? 0) > 0,
   );
   const [notes, setNotes] = useState("");
 
@@ -807,20 +887,20 @@ function TodayTaskCard({
           (c) =>
             c.subtask_id === subtaskId &&
             normalizeToLocalDateString(new Date(c.occurrence_date)) ===
-              targetDateStr
+              targetDateStr,
         );
       }
       // For one-time items, check done_at
       const subtask = subtasks.find((s) => s.id === subtaskId);
       return !!subtask?.done_at;
     },
-    [isRecurring, subtaskCompletions, subtasks]
+    [isRecurring, subtaskCompletions, subtasks],
   );
 
   // Check if a subtask is completed for THIS occurrence
   const isSubtaskCompleted = useCallback(
     (subtaskId: string) => isSubtaskCompletedForDate(subtaskId, occurrenceDate),
-    [isSubtaskCompletedForDate, occurrenceDate]
+    [isSubtaskCompletedForDate, occurrenceDate],
   );
 
   // Helper to get occurrence date from subtask
@@ -845,16 +925,19 @@ function TodayTaskCard({
     });
   }, [subtasks, isRecurring, occurrenceDate]);
 
+  // Dragged/orphaned subtasks: subtasks with NULL occurrence_date for recurring items
+  // These are subtasks that were created without being tied to a specific occurrence
+  const draggedSubtasks = useMemo(() => {
+    if (!isRecurring) return [];
+    return subtasks.filter((s) => !s.occurrence_date && !s.done_at);
+  }, [subtasks, isRecurring]);
+
   // Overdue subtasks: subtasks from PAST occurrences that weren't completed
-  // Only show when viewing today or future occurrence
   const overdueSubtasksWithDates = useMemo((): Array<{
     subtask: Subtask;
     homeOccurrence: Date;
   }> => {
     if (!isRecurring) return [];
-
-    // Only show overdue when viewing today or future
-    if (isViewingPast) return [];
 
     const overdueList: Array<{ subtask: Subtask; homeOccurrence: Date }> = [];
 
@@ -868,10 +951,7 @@ function TodayTaskCard({
       if (isSameDay(subtaskOcc, currentOcc)) continue;
       if (!isBefore(subtaskOcc, currentOcc)) continue;
 
-      // Only show if the subtask's occurrence is in the past (before today)
-      if (!isBefore(subtaskOcc, today)) continue;
-
-      // Check if NOT completed for its occurrence
+      // Check if NOT completed for its home occurrence
       if (!isSubtaskCompletedForDate(subtask.id, subtaskOccDate)) {
         overdueList.push({ subtask, homeOccurrence: subtaskOccDate });
       }
@@ -879,29 +959,25 @@ function TodayTaskCard({
 
     // Sort by date (oldest first)
     return overdueList.sort(
-      (a, b) => a.homeOccurrence.getTime() - b.homeOccurrence.getTime()
+      (a, b) => a.homeOccurrence.getTime() - b.homeOccurrence.getTime(),
     );
-  }, [
-    isRecurring,
-    isViewingPast,
-    subtasks,
-    currentOcc,
-    today,
-    isSubtaskCompletedForDate,
-  ]);
+  }, [isRecurring, subtasks, currentOcc, isSubtaskCompletedForDate]);
+
+  // Combined count of all incomplete subtasks from past
+  const hasDraggedSubtasks = draggedSubtasks.length > 0;
 
   // Count completed subtasks for current occurrence (only top-level)
   const topLevelSubtasks = currentOccurrenceSubtasks.filter(
-    (s) => !s.parent_subtask_id
+    (s) => !s.parent_subtask_id,
   );
   const completedSubtasksCount = topLevelSubtasks.filter((s) =>
-    isSubtaskCompleted(s.id)
+    isSubtaskCompleted(s.id),
   ).length;
 
   // Build nested tree from flat subtasks
   const subtaskTree = useMemo(
     () => buildSubtaskTree(currentOccurrenceSubtasks),
-    [currentOccurrenceSubtasks]
+    [currentOccurrenceSubtasks],
   );
 
   const hasCurrentSubtasks = topLevelSubtasks.length > 0;
@@ -926,7 +1002,7 @@ function TodayTaskCard({
 
     // Check if all subtasks for current occurrence are now completed -> auto-complete the task
     const willAllBeCompleted = currentOccurrenceSubtasks.every((s) =>
-      s.id === subtask.id ? !currentlyCompleted : isSubtaskCompleted(s.id)
+      s.id === subtask.id ? !currentlyCompleted : isSubtaskCompleted(s.id),
     );
 
     if (willAllBeCompleted && currentOccurrenceSubtasks.length > 0) {
@@ -949,7 +1025,7 @@ function TodayTaskCard({
   // Handle add nested subtask
   const handleAddNestedSubtask = async (
     parentSubtaskId: string,
-    title: string
+    title: string,
   ) => {
     await addSubtask.mutateAsync({
       parentItemId: item.id,
@@ -992,7 +1068,7 @@ function TodayTaskCard({
                 : "bg-red-500/15 border-l-red-400 border-red-500/30"
               : isFrost
                 ? "bg-indigo-50/50 hover:bg-indigo-50 border-indigo-200"
-                : "bg-white/[0.08] hover:bg-white/[0.12] border-white/15"
+                : "bg-white/[0.08] hover:bg-white/[0.12] border-white/15",
       )}
     >
       <div className="p-2.5">
@@ -1001,13 +1077,13 @@ function TodayTaskCard({
           <div
             className={cn(
               "p-1.5 rounded",
-              isFrost ? "bg-indigo-100" : colors.bg
+              isFrost ? "bg-indigo-100" : colors.bg,
             )}
           >
             <Icon
               className={cn(
                 "w-3.5 h-3.5",
-                isFrost ? "text-indigo-600" : colors.text
+                isFrost ? "text-indigo-600" : colors.text,
               )}
             />
           </div>
@@ -1022,7 +1098,7 @@ function TodayTaskCard({
                   isCompleted &&
                     (isFrost
                       ? "line-through text-slate-400"
-                      : "line-through text-white/50")
+                      : "line-through text-white/50"),
                 )}
               >
                 {item.title}
@@ -1031,7 +1107,7 @@ function TodayTaskCard({
                 <Repeat
                   className={cn(
                     "w-2.5 h-2.5 flex-shrink-0",
-                    isFrost ? "text-slate-400" : "text-white/40"
+                    isFrost ? "text-slate-400" : "text-white/40",
                   )}
                 />
               )}
@@ -1042,7 +1118,7 @@ function TodayTaskCard({
             <div
               className={cn(
                 "flex items-center gap-1 text-[10px]",
-                isFrost ? "text-slate-500" : "text-white/50"
+                isFrost ? "text-slate-500" : "text-white/50",
               )}
             >
               <span>{format(occurrenceDate, "h:mma")}</span>
@@ -1058,7 +1134,7 @@ function TodayTaskCard({
                         ? "text-indigo-600"
                         : isPink
                           ? "text-pink-400"
-                          : "text-cyan-400"
+                          : "text-cyan-400",
                   )}
                 >
                   • {completedSubtasksCount}/{topLevelSubtasks.length}
@@ -1083,7 +1159,7 @@ function TodayTaskCard({
                       ? "text-indigo-600 hover:bg-indigo-100"
                       : isPink
                         ? "text-pink-400 hover:bg-pink-500/20"
-                        : "text-cyan-400 hover:bg-cyan-500/20"
+                        : "text-cyan-400 hover:bg-cyan-500/20",
                   )}
                   title="Focus Mode"
                 >
@@ -1097,7 +1173,7 @@ function TodayTaskCard({
                   "p-1.5 rounded transition-colors",
                   isFrost
                     ? "text-amber-600 hover:bg-amber-100"
-                    : "text-amber-400 hover:bg-amber-500/20"
+                    : "text-amber-400 hover:bg-amber-500/20",
                 )}
                 title="Postpone"
               >
@@ -1110,7 +1186,7 @@ function TodayTaskCard({
                   "p-1.5 rounded transition-colors",
                   isFrost
                     ? "text-red-600 hover:bg-red-100"
-                    : "text-red-400 hover:bg-red-500/20"
+                    : "text-red-400 hover:bg-red-500/20",
                 )}
                 title="Cancel"
               >
@@ -1123,7 +1199,7 @@ function TodayTaskCard({
                   "p-1.5 rounded transition-colors",
                   isFrost
                     ? "bg-green-100 text-green-600 hover:bg-green-200"
-                    : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                    : "bg-green-500/20 text-green-400 hover:bg-green-500/30",
                 )}
                 title="Done"
               >
@@ -1141,7 +1217,7 @@ function TodayTaskCard({
                     "p-1 rounded transition-colors",
                     isFrost
                       ? "text-amber-600 hover:bg-amber-100"
-                      : "text-amber-400 hover:bg-amber-500/20"
+                      : "text-amber-400 hover:bg-amber-500/20",
                   )}
                   title="Undo"
                 >
@@ -1151,7 +1227,7 @@ function TodayTaskCard({
               <CheckCircle2
                 className={cn(
                   "w-4 h-4 flex-shrink-0",
-                  isFrost ? "text-green-600" : "text-green-400"
+                  isFrost ? "text-green-600" : "text-green-400",
                 )}
               />
             </div>
@@ -1167,7 +1243,7 @@ function TodayTaskCard({
               "flex items-center gap-0.5 mt-1 ml-8 text-[10px] transition-colors",
               isPink
                 ? "text-pink-400/70 hover:text-pink-400"
-                : "text-cyan-400/70 hover:text-cyan-400"
+                : "text-cyan-400/70 hover:text-cyan-400",
             )}
           >
             {showSubtasks ? (
@@ -1194,45 +1270,72 @@ function TodayTaskCard({
           >
             <div className="px-4 pb-3 ml-8 border-t border-white/5 pt-2">
               <div className="space-y-0.5">
+                {/* Dragged/orphaned subtasks from previous occurrences */}
+                {hasDraggedSubtasks && (
+                  <CollapsibleSubtaskSection
+                    title="Incomplete"
+                    subtitle="Carried forward"
+                    count={draggedSubtasks.length}
+                    variant="warning"
+                    defaultOpen={true}
+                  >
+                    {draggedSubtasks.map((subtask) => (
+                      <SubtaskItem
+                        key={`dragged-${subtask.id}`}
+                        subtask={subtask}
+                        isRecurring={isRecurring}
+                        occurrenceDate={occurrenceDate}
+                        isCompletedForOccurrence={false}
+                        onToggle={async () => {
+                          await handleSubtaskToggle(subtask);
+                        }}
+                        onDelete={() => handleDeleteSubtask(subtask.id)}
+                        onUpdate={(title) =>
+                          handleUpdateSubtask(subtask.id, title)
+                        }
+                        isOverdue={true}
+                      />
+                    ))}
+                  </CollapsibleSubtaskSection>
+                )}
+
                 {/* Overdue subtasks from previous occurrences */}
-                {overdueSubtasksWithDates.length > 0 && (
-                  <div className="mb-3">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <AlertCircle className="w-3.5 h-3.5 text-red-400" />
-                      <span className="text-xs font-medium text-red-400">
-                        Overdue
-                      </span>
-                    </div>
-                    <div className="space-y-0.5 pl-1 border-l-2 border-red-500/30">
-                      {overdueSubtasksWithDates.map(
-                        ({ subtask, homeOccurrence }) => (
-                          <SubtaskItem
-                            key={`overdue-${subtask.id}`}
-                            subtask={subtask}
-                            isRecurring={isRecurring}
-                            occurrenceDate={homeOccurrence}
-                            isCompletedForOccurrence={false}
-                            onToggle={async () => {
-                              // Complete the subtask for its home occurrence
-                              if (isRecurring) {
-                                await toggleSubtaskForOccurrence.mutateAsync({
-                                  subtaskId: subtask.id,
-                                  occurrenceDate: homeOccurrence.toISOString(),
-                                  completed: true,
-                                });
-                              }
-                            }}
-                            onDelete={() => handleDeleteSubtask(subtask.id)}
-                            onUpdate={(title) =>
-                              handleUpdateSubtask(subtask.id, title)
+                {hasOverdueSubtasks && (
+                  <CollapsibleSubtaskSection
+                    title="Overdue"
+                    subtitle="From past occurrences"
+                    count={overdueSubtasksWithDates.length}
+                    variant="danger"
+                    defaultOpen={overdueSubtasksWithDates.length <= 3}
+                  >
+                    {overdueSubtasksWithDates.map(
+                      ({ subtask, homeOccurrence }) => (
+                        <SubtaskItem
+                          key={`overdue-${subtask.id}`}
+                          subtask={subtask}
+                          isRecurring={isRecurring}
+                          occurrenceDate={homeOccurrence}
+                          isCompletedForOccurrence={false}
+                          onToggle={async () => {
+                            // Complete the subtask for its home occurrence
+                            if (isRecurring) {
+                              await toggleSubtaskForOccurrence.mutateAsync({
+                                subtaskId: subtask.id,
+                                occurrenceDate: homeOccurrence.toISOString(),
+                                completed: true,
+                              });
                             }
-                            isOverdue={true}
-                            overdueFromDate={homeOccurrence}
-                          />
-                        )
-                      )}
-                    </div>
-                  </div>
+                          }}
+                          onDelete={() => handleDeleteSubtask(subtask.id)}
+                          onUpdate={(title) =>
+                            handleUpdateSubtask(subtask.id, title)
+                          }
+                          isOverdue={true}
+                          overdueFromDate={homeOccurrence}
+                        />
+                      ),
+                    )}
+                  </CollapsibleSubtaskSection>
                 )}
 
                 {/* Current occurrence subtasks (nested tree) */}
@@ -1269,20 +1372,20 @@ function TimelineItem({ occurrence }: { occurrence: ExpandedOccurrence }) {
       className={cn(
         "flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs",
         isCompleted ? "opacity-50" : "",
-        colors.bg
+        colors.bg,
       )}
     >
       <div
         className={cn(
           "w-1.5 h-1.5 rounded-full",
-          isCompleted ? "bg-green-400" : colors.text.replace("text-", "bg-")
+          isCompleted ? "bg-green-400" : colors.text.replace("text-", "bg-"),
         )}
       />
       <span
         className={cn(
           "truncate",
           isCompleted && "line-through",
-          "text-white/80"
+          "text-white/80",
         )}
       >
         {item.title}
@@ -1308,19 +1411,19 @@ function EnhancedTimelineItem({
     <div
       className={cn(
         "flex items-center gap-1.5 px-1.5 py-1 rounded-md text-[11px]",
-        isCompleted ? "opacity-50 bg-green-500/10" : colors.bg
+        isCompleted ? "opacity-50 bg-green-500/10" : colors.bg,
       )}
     >
       <Icon
         className={cn(
           "w-3 h-3 flex-shrink-0",
-          isCompleted ? "text-green-400" : colors.text
+          isCompleted ? "text-green-400" : colors.text,
         )}
       />
       <span
         className={cn(
           "truncate flex-1",
-          isCompleted ? "line-through text-green-400/70" : "text-white/90"
+          isCompleted ? "line-through text-green-400/70" : "text-white/90",
         )}
       >
         {item.title}
@@ -1410,7 +1513,7 @@ function DayRow({
           !isSelected &&
           (isFrost
             ? "border-green-300 bg-green-50"
-            : "border-green-500/30 bg-green-500/5")
+            : "border-green-500/30 bg-green-500/5"),
       )}
     >
       {/* Date Badge */}
@@ -1425,7 +1528,7 @@ function DayRow({
                 : "bg-cyan-500/20"
             : isFrost
               ? "bg-slate-100"
-              : "bg-white/5"
+              : "bg-white/5",
         )}
       >
         <div
@@ -1439,7 +1542,7 @@ function DayRow({
                   : "text-cyan-400"
               : isFrost
                 ? "text-slate-500"
-                : "text-white/50"
+                : "text-white/50",
           )}
         >
           {format(date, "EEE")}
@@ -1453,7 +1556,7 @@ function DayRow({
                 : "text-white"
               : isFrost
                 ? "text-slate-700"
-                : "text-white/80"
+                : "text-white/80",
           )}
         >
           {format(date, "d")}
@@ -1466,7 +1569,7 @@ function DayRow({
           <div
             className={cn(
               "text-[10px]",
-              isFrost ? "text-slate-400" : "text-white/30"
+              isFrost ? "text-slate-400" : "text-white/30",
             )}
           >
             —
@@ -1487,7 +1590,7 @@ function DayRow({
                         : "bg-green-500/15 text-green-400"
                       : isFrost
                         ? "bg-indigo-100 text-indigo-700"
-                        : colors.bg
+                        : colors.bg,
                   )}
                 >
                   <Icon
@@ -1499,13 +1602,13 @@ function DayRow({
                           : "text-green-400"
                         : isFrost
                           ? "text-indigo-600"
-                          : colors.text
+                          : colors.text,
                     )}
                   />
                   <span
                     className={cn(
                       "truncate max-w-[60px]",
-                      occ.isCompleted && "line-through opacity-60"
+                      occ.isCompleted && "line-through opacity-60",
                     )}
                   >
                     {occ.item.title}
@@ -1518,7 +1621,7 @@ function DayRow({
               <span
                 className={cn(
                   "text-[10px] px-1",
-                  isFrost ? "text-slate-500" : "text-white/40"
+                  isFrost ? "text-slate-500" : "text-white/40",
                 )}
               >
                 +{occurrences.length - 3}
@@ -1537,7 +1640,7 @@ function DayRow({
               ? "bg-green-500/20 text-green-400"
               : isFrost
                 ? "bg-slate-100 text-slate-500"
-                : "bg-white/10 text-white/50"
+                : "bg-white/10 text-white/50",
           )}
         >
           {completedCount}/{totalCount}
@@ -1568,9 +1671,11 @@ export default function WebTabletMissionControl({
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showCompleted, setShowCompleted] = useState(true);
 
-  // Focus modal state
-  const [focusOccurrence, setFocusOccurrence] =
-    useState<ExpandedOccurrence | null>(null);
+  // Focus modal state - store only identifiers to keep data fresh
+  const [focusOccurrenceKey, setFocusOccurrenceKey] = useState<{
+    itemId: string;
+    occurrenceDate: Date;
+  } | null>(null);
 
   // Postpone dialog state
   const [postponeOccurrence, setPostponeOccurrence] =
@@ -1606,7 +1711,7 @@ export default function WebTabletMissionControl({
 
       return format(date, "EEEE, MMM d");
     },
-    [today]
+    [today],
   );
 
   // Filter active items (not archived, not cancelled)
@@ -1615,7 +1720,7 @@ export default function WebTabletMissionControl({
       (item) =>
         item.status !== "archived" &&
         item.status !== "cancelled" &&
-        !item.archived_at
+        !item.archived_at,
     );
   }, [allItems]);
 
@@ -1625,7 +1730,7 @@ export default function WebTabletMissionControl({
       activeItems,
       weekStart,
       addDays(weekEnd, 1),
-      occurrenceActions
+      occurrenceActions,
     );
     const byDay = new Map<string, ExpandedOccurrence[]>();
 
@@ -1659,6 +1764,40 @@ export default function WebTabletMissionControl({
     });
     return result;
   }, [weekOccurrences, today]);
+
+  // Derive focusOccurrence from fresh data (not a stale snapshot)
+  const focusOccurrence = useMemo(() => {
+    if (!focusOccurrenceKey) return null;
+
+    // Find the item from fresh allItems
+    const item = allItems.find((i) => i.id === focusOccurrenceKey.itemId);
+    if (!item) return null;
+
+    // Re-expand to get fresh occurrence with latest subtasks
+    const occDateKey = format(focusOccurrenceKey.occurrenceDate, "yyyy-MM-dd");
+    const dayOccs = weekOccurrences.get(occDateKey) || [];
+
+    // Find the matching occurrence
+    const occ = dayOccs.find(
+      (o) =>
+        o.item.id === focusOccurrenceKey.itemId &&
+        isSameDay(o.occurrenceDate, focusOccurrenceKey.occurrenceDate),
+    );
+
+    return occ || null;
+  }, [focusOccurrenceKey, allItems, weekOccurrences]);
+
+  // Helper to set focus occurrence by key
+  const setFocusOccurrence = useCallback((occ: ExpandedOccurrence | null) => {
+    if (occ) {
+      setFocusOccurrenceKey({
+        itemId: occ.item.id,
+        occurrenceDate: occ.occurrenceDate,
+      });
+    } else {
+      setFocusOccurrenceKey(null);
+    }
+  }, []);
 
   // Stats calculations
   const stats = useMemo(() => {
@@ -1707,10 +1846,10 @@ export default function WebTabletMissionControl({
       itemActions.handleComplete(
         occurrence.item,
         occurrence.occurrenceDate.toISOString(),
-        notes
+        notes,
       );
     },
-    [itemActions]
+    [itemActions],
   );
 
   const handleSkip = useCallback(
@@ -1718,10 +1857,10 @@ export default function WebTabletMissionControl({
       itemActions.handleCancel(
         occurrence.item,
         occurrence.occurrenceDate.toISOString(),
-        notes || "Skipped"
+        notes || "Skipped",
       );
     },
-    [itemActions]
+    [itemActions],
   );
 
   // Open postpone dialog
@@ -1742,7 +1881,7 @@ export default function WebTabletMissionControl({
         postponeOccurrence.occurrenceDate.toISOString(),
         postponeType,
         actionReason || undefined,
-        customDate
+        customDate,
       );
 
       // Reset dialog state
@@ -1751,7 +1890,7 @@ export default function WebTabletMissionControl({
       setCustomPostponeDate("");
       setActionReason("");
     },
-    [postponeOccurrence, itemActions, actionReason]
+    [postponeOccurrence, itemActions, actionReason],
   );
 
   // Undo action mutation
@@ -1768,11 +1907,11 @@ export default function WebTabletMissionControl({
         (a) =>
           a.item_id === occurrence.item.id &&
           a.action_type === "completed" &&
-          a.occurrence_date.split("T")[0] === targetDateStr
+          a.occurrence_date.split("T")[0] === targetDateStr,
       );
       return action?.id || null;
     },
-    [occurrenceActions]
+    [occurrenceActions],
   );
 
   // Undo handler
@@ -1789,7 +1928,7 @@ export default function WebTabletMissionControl({
         console.error(error);
       }
     },
-    [getCompletedActionId, undoAction]
+    [getCompletedActionId, undoAction],
   );
 
   if (isLoading) {
@@ -1844,7 +1983,7 @@ export default function WebTabletMissionControl({
           <h1
             className={cn(
               "text-base font-bold",
-              isFrost ? "text-slate-800" : "text-white"
+              isFrost ? "text-slate-800" : "text-white",
             )}
           >
             Mission Control
@@ -1852,7 +1991,7 @@ export default function WebTabletMissionControl({
           <span
             className={cn(
               "text-xs",
-              isFrost ? "text-slate-500" : "text-white/40"
+              isFrost ? "text-slate-500" : "text-white/40",
             )}
           >
             {format(today, "MMM d")}
@@ -1885,7 +2024,7 @@ export default function WebTabletMissionControl({
               "p-1 rounded transition-colors",
               showCompleted
                 ? "bg-green-500/30 text-green-300"
-                : "bg-white/10 text-white/50 hover:bg-white/15"
+                : "bg-white/10 text-white/50 hover:bg-white/15",
             )}
             title={showCompleted ? "Hide completed" : "Show completed"}
           >
@@ -1904,7 +2043,7 @@ export default function WebTabletMissionControl({
                 "flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors",
                 showRoutines
                   ? "bg-cyan-500/30 text-cyan-300"
-                  : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/25"
+                  : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/25",
               )}
             >
               <Repeat className="w-2.5 h-2.5" />
@@ -1937,7 +2076,7 @@ export default function WebTabletMissionControl({
                           ? "bg-green-500/10 text-green-400"
                           : isOverdue
                             ? "bg-red-500/10 text-red-300"
-                            : cn(colors.bg, "text-white/80")
+                            : cn(colors.bg, "text-white/80"),
                       )}
                     >
                       <span className={cn(isCompleted && "line-through")}>
@@ -1967,7 +2106,7 @@ export default function WebTabletMissionControl({
               "rounded-xl p-2 flex-1 min-h-0 flex flex-col",
               isFrost
                 ? "bg-white border border-indigo-200 shadow-sm"
-                : "bg-white/5 border border-white/10"
+                : "bg-white/5 border border-white/10",
             )}
           >
             <div className="flex items-center gap-1.5 mb-1.5 flex-shrink-0">
@@ -1978,7 +2117,7 @@ export default function WebTabletMissionControl({
                     ? "bg-indigo-100"
                     : isPink
                       ? "bg-pink-500/20"
-                      : "bg-cyan-500/20"
+                      : "bg-cyan-500/20",
                 )}
               >
                 <Target
@@ -1988,14 +2127,14 @@ export default function WebTabletMissionControl({
                       ? "text-indigo-600"
                       : isPink
                         ? "text-pink-400"
-                        : "text-cyan-400"
+                        : "text-cyan-400",
                   )}
                 />
               </div>
               <h2
                 className={cn(
                   "text-xs font-semibold flex-1",
-                  isFrost ? "text-slate-900" : "text-white"
+                  isFrost ? "text-slate-900" : "text-white",
                 )}
               >
                 {getFocusTitle(selectedDate)}
@@ -2003,7 +2142,7 @@ export default function WebTabletMissionControl({
               <span
                 className={cn(
                   "text-[10px]",
-                  isFrost ? "text-slate-500" : "text-white/50"
+                  isFrost ? "text-slate-500" : "text-white/50",
                 )}
               >
                 {focusTasks.filter((t) => t.isCompleted).length}/
@@ -2019,7 +2158,7 @@ export default function WebTabletMissionControl({
                     animate={{ opacity: 1 }}
                     className={cn(
                       "text-center py-4",
-                      isFrost ? "text-slate-400" : "text-white/30"
+                      isFrost ? "text-slate-400" : "text-white/30",
                     )}
                   >
                     <CheckCircle2 className="w-8 h-8 mx-auto mb-1 opacity-50" />
@@ -2055,27 +2194,27 @@ export default function WebTabletMissionControl({
                 "rounded-xl p-2",
                 isFrost
                   ? "bg-red-50 border border-red-200"
-                  : "bg-red-500/10 border border-red-500/30"
+                  : "bg-red-500/10 border border-red-500/30",
               )}
             >
               <div className="flex items-center gap-1.5 mb-2">
                 <div
                   className={cn(
                     "p-1.5 rounded-lg",
-                    isFrost ? "bg-red-100" : "bg-red-500/20"
+                    isFrost ? "bg-red-100" : "bg-red-500/20",
                   )}
                 >
                   <Clock
                     className={cn(
                       "w-4 h-4",
-                      isFrost ? "text-red-600" : "text-red-400"
+                      isFrost ? "text-red-600" : "text-red-400",
                     )}
                   />
                 </div>
                 <h2
                   className={cn(
                     "text-sm font-semibold flex-1",
-                    isFrost ? "text-red-700" : "text-red-400"
+                    isFrost ? "text-red-700" : "text-red-400",
                   )}
                 >
                   Overdue
@@ -2083,7 +2222,7 @@ export default function WebTabletMissionControl({
                 <span
                   className={cn(
                     "text-[10px]",
-                    isFrost ? "text-red-500" : "text-red-300/50"
+                    isFrost ? "text-red-500" : "text-red-300/50",
                   )}
                 >
                   {overdueTasks.length}
@@ -2114,27 +2253,27 @@ export default function WebTabletMissionControl({
               "rounded-xl p-2 flex-1 flex flex-col min-h-0",
               isFrost
                 ? "bg-white border border-indigo-200 shadow-sm"
-                : "bg-white/5 border border-white/10"
+                : "bg-white/5 border border-white/10",
             )}
           >
             <div className="flex items-center gap-1.5 mb-1.5 flex-shrink-0">
               <div
                 className={cn(
                   "p-1 rounded-lg",
-                  isFrost ? "bg-violet-100" : "bg-purple-500/20"
+                  isFrost ? "bg-violet-100" : "bg-purple-500/20",
                 )}
               >
                 <Calendar
                   className={cn(
                     "w-3.5 h-3.5",
-                    isFrost ? "text-violet-600" : "text-purple-400"
+                    isFrost ? "text-violet-600" : "text-purple-400",
                   )}
                 />
               </div>
               <h2
                 className={cn(
                   "text-xs font-semibold",
-                  isFrost ? "text-slate-900" : "text-white"
+                  isFrost ? "text-slate-900" : "text-white",
                 )}
               >
                 This Week
@@ -2142,7 +2281,7 @@ export default function WebTabletMissionControl({
               <span
                 className={cn(
                   "text-[10px] ml-auto",
-                  isFrost ? "text-slate-500" : "text-white/40"
+                  isFrost ? "text-slate-500" : "text-white/40",
                 )}
               >
                 {format(weekStart, "MMM d")} -{" "}
@@ -2181,14 +2320,14 @@ export default function WebTabletMissionControl({
           <DialogContent
             className={cn(
               "sm:max-w-md neo-card border",
-              isPink ? "border-pink-500/30" : "border-cyan-500/30"
+              isPink ? "border-pink-500/30" : "border-cyan-500/30",
             )}
           >
             <DialogHeader>
               <DialogTitle
                 className={cn(
                   "flex items-center gap-2 text-xl",
-                  isPink ? "text-pink-300" : "text-cyan-300"
+                  isPink ? "text-pink-300" : "text-cyan-300",
                 )}
               >
                 <FastForward className="w-5 h-5" />
@@ -2204,7 +2343,7 @@ export default function WebTabletMissionControl({
                   onClick={() => handlePostponeAction("next_occurrence")}
                   className={cn(
                     "w-full p-4 rounded-xl border text-left transition-all",
-                    "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                    "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
                   )}
                 >
                   <div className="font-semibold text-white mb-1">
@@ -2222,7 +2361,7 @@ export default function WebTabletMissionControl({
                 onClick={() => handlePostponeAction("tomorrow")}
                 className={cn(
                   "w-full p-4 rounded-xl border text-left transition-all",
-                  "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                  "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
                 )}
               >
                 <div className="font-semibold text-white mb-1">
@@ -2244,7 +2383,7 @@ export default function WebTabletMissionControl({
                       ? isPink
                         ? "border-pink-500/50 bg-pink-500/10"
                         : "border-cyan-500/50 bg-cyan-500/10"
-                      : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                      : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
                   )}
                 >
                   <div className="flex items-center gap-2">
@@ -2280,7 +2419,7 @@ export default function WebTabletMissionControl({
                               time.getHours(),
                               time.getMinutes(),
                               0,
-                              0
+                              0,
                             );
                             setCustomPostponeDate(newDate.toISOString());
                           }
@@ -2288,7 +2427,7 @@ export default function WebTabletMissionControl({
                         className={cn(
                           "flex-1 p-2 rounded-lg bg-white/5 border border-white/10",
                           "text-white text-sm",
-                          "focus:outline-none focus:border-white/30"
+                          "focus:outline-none focus:border-white/30",
                         )}
                       />
                       <input
@@ -2312,7 +2451,7 @@ export default function WebTabletMissionControl({
                         className={cn(
                           "w-24 p-2 rounded-lg bg-white/5 border border-white/10",
                           "text-white text-sm",
-                          "focus:outline-none focus:border-white/30"
+                          "focus:outline-none focus:border-white/30",
                         )}
                       />
                     </div>
@@ -2328,14 +2467,14 @@ export default function WebTabletMissionControl({
                         "w-full",
                         isPink
                           ? "bg-pink-500 hover:bg-pink-600"
-                          : "bg-cyan-500 hover:bg-cyan-600"
+                          : "bg-cyan-500 hover:bg-cyan-600",
                       )}
                     >
                       Postpone to{" "}
                       {customPostponeDate
                         ? format(
                             new Date(customPostponeDate),
-                            "MMM d 'at' h:mm a"
+                            "MMM d 'at' h:mm a",
                           )
                         : "..."}
                     </Button>
@@ -2349,7 +2488,7 @@ export default function WebTabletMissionControl({
                 disabled
                 className={cn(
                   "w-full p-4 rounded-xl border text-left opacity-50 cursor-not-allowed",
-                  "border-white/10 bg-white/5"
+                  "border-white/10 bg-white/5",
                 )}
               >
                 <div className="font-semibold text-white/60 mb-1">
@@ -2372,7 +2511,7 @@ export default function WebTabletMissionControl({
                   className={cn(
                     "w-full p-3 rounded-lg bg-white/5 border border-white/10",
                     "text-white placeholder:text-white/30 resize-none",
-                    "focus:outline-none focus:border-white/30"
+                    "focus:outline-none focus:border-white/30",
                   )}
                   rows={2}
                 />

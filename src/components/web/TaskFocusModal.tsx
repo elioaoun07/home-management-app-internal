@@ -7,7 +7,10 @@ import {
   useDeleteSubtask,
   useToggleSubtask,
   useToggleSubtaskForOccurrence,
+  useUpdateItemKanbanSettings,
   useUpdateSubtask,
+  useUpdateSubtaskKanbanStage,
+  useUpdateSubtaskPriority,
   type SubtaskCompletion,
 } from "@/features/items/useItems";
 import { cn } from "@/lib/utils";
@@ -28,8 +31,11 @@ import {
   Calendar,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clock,
+  Columns3,
+  List,
   ListTodo,
   Plus,
   Repeat,
@@ -40,6 +46,22 @@ import {
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+// Default kanban stages
+const DEFAULT_KANBAN_STAGES = ["To Do", "In Progress", "Done"];
+
+/**
+ * Sort subtasks by priority first (if set), then by order_index.
+ * Priority 1 = highest (comes first). Null priority = use order_index.
+ */
+function sortByPriorityThenOrder(a: Subtask, b: Subtask): number {
+  if (a.priority != null && b.priority != null) {
+    return a.priority - b.priority;
+  }
+  if (a.priority != null) return -1;
+  if (b.priority != null) return 1;
+  return a.order_index - b.order_index;
+}
 
 // Helper to build nested subtask tree
 interface SubtaskWithChildren extends Subtask {
@@ -64,7 +86,7 @@ function buildSubtaskTree(subtasks: Subtask[]): SubtaskWithChildren[] {
   }
 
   const sortChildren = (nodes: SubtaskWithChildren[]) => {
-    nodes.sort((a, b) => a.order_index - b.order_index);
+    nodes.sort(sortByPriorityThenOrder);
     for (const node of nodes) {
       sortChildren(node.children);
     }
@@ -76,7 +98,7 @@ function buildSubtaskTree(subtasks: Subtask[]): SubtaskWithChildren[] {
 
 function getChildCompletionCount(
   subtask: SubtaskWithChildren,
-  isSubtaskCompleted: (id: string) => boolean
+  isSubtaskCompleted: (id: string) => boolean,
 ): { completed: number; total: number } {
   let completed = 0;
   let total = 0;
@@ -143,6 +165,67 @@ const typeColors: Record<
 // SUB-COMPONENTS
 // ============================================
 
+// Collapsible section for past/dragged subtasks
+function CollapsiblePastSubtasks({
+  title,
+  subtitle,
+  count,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  count: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const { theme } = useTheme();
+  const isPink = theme === "pink";
+
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-500/10 transition-colors"
+      >
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ChevronDown className="w-5 h-5 text-amber-400" />
+        </motion.div>
+        <AlertCircle className="w-5 h-5 text-amber-400" />
+        <div className="flex-1 text-left">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-amber-400">{title}</span>
+            <span className="px-2 py-0.5 text-xs font-medium bg-amber-500/20 text-amber-300 rounded-full">
+              {count}
+            </span>
+          </div>
+          {subtitle && (
+            <span className="text-xs text-amber-400/60">{subtitle}</span>
+          )}
+        </div>
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 pt-1">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // Nested Subtask Item Component (Enhanced for focus view with nesting support)
 function NestedFocusSubtaskItem({
   subtask,
@@ -153,6 +236,7 @@ function NestedFocusSubtaskItem({
   onDelete,
   onAddSubtask,
   onUpdate,
+  onPriorityChange,
   depth = 0,
   maxDepth = 3,
 }: {
@@ -164,6 +248,7 @@ function NestedFocusSubtaskItem({
   onDelete: (subtaskId: string) => void;
   onAddSubtask: (parentSubtaskId: string, title: string) => void;
   onUpdate: (subtaskId: string, title: string) => void;
+  onPriorityChange?: (subtaskId: string, priority: number | null) => void;
   depth?: number;
   maxDepth?: number;
 }) {
@@ -172,10 +257,15 @@ function NestedFocusSubtaskItem({
   const [showChildren, setShowChildren] = useState(true);
   const [isAddingChild, setIsAddingChild] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isEditingPriority, setIsEditingPriority] = useState(false);
   const [editTitle, setEditTitle] = useState(subtask.title);
+  const [editPriority, setEditPriority] = useState(
+    subtask.priority?.toString() ?? "",
+  );
   const [childTitle, setChildTitle] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const priorityInputRef = useRef<HTMLInputElement>(null);
 
   const hasChildren = subtask.children.length > 0;
   const canAddChildren = depth < maxDepth;
@@ -194,6 +284,13 @@ function NestedFocusSubtaskItem({
       editInputRef.current.select();
     }
   }, [isEditing]);
+
+  useEffect(() => {
+    if (isEditingPriority && priorityInputRef.current) {
+      priorityInputRef.current.focus();
+      priorityInputRef.current.select();
+    }
+  }, [isEditingPriority]);
 
   const handleAddChild = () => {
     if (childTitle.trim()) {
@@ -215,6 +312,24 @@ function NestedFocusSubtaskItem({
     setIsEditing(false);
   };
 
+  const handleSavePriority = () => {
+    const trimmed = editPriority.trim();
+    if (trimmed === "") {
+      if (onPriorityChange) onPriorityChange(subtask.id, null);
+    } else {
+      const num = parseInt(trimmed, 10);
+      if (!isNaN(num) && num >= 1 && onPriorityChange) {
+        onPriorityChange(subtask.id, num);
+      }
+    }
+    setIsEditingPriority(false);
+  };
+
+  const handleCancelPriority = () => {
+    setEditPriority(subtask.priority?.toString() ?? "");
+    setIsEditingPriority(false);
+  };
+
   return (
     <div>
       <motion.div
@@ -225,7 +340,7 @@ function NestedFocusSubtaskItem({
           "group/subtask flex items-center gap-4 py-4 px-5 rounded-xl transition-all",
           isCompleted
             ? "bg-green-500/10 border border-green-500/20"
-            : "bg-white/5 hover:bg-white/10 border border-white/10"
+            : "bg-white/5 hover:bg-white/10 border border-white/10",
         )}
         style={{ marginLeft: `${depth * 24}px` }}
       >
@@ -255,7 +370,7 @@ function NestedFocusSubtaskItem({
               ? "bg-green-500 border-green-500"
               : isPink
                 ? "border-pink-400/50 hover:border-pink-400 hover:bg-pink-500/20"
-                : "border-cyan-400/50 hover:border-cyan-400 hover:bg-cyan-500/20"
+                : "border-cyan-400/50 hover:border-cyan-400 hover:bg-cyan-500/20",
           )}
         >
           {isCompleted && <Check className="w-4 h-4 text-white" />}
@@ -284,11 +399,52 @@ function NestedFocusSubtaskItem({
               <span
                 className={cn(
                   "text-lg",
-                  isCompleted ? "line-through text-white/40" : "text-white"
+                  isCompleted ? "line-through text-white/40" : "text-white",
                 )}
               >
                 {subtask.title}
               </span>
+              {/* Priority badge */}
+              {onPriorityChange &&
+                !isCompleted &&
+                (isEditingPriority ? (
+                  <input
+                    ref={priorityInputRef}
+                    type="number"
+                    min="1"
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSavePriority();
+                      if (e.key === "Escape") handleCancelPriority();
+                    }}
+                    onBlur={handleSavePriority}
+                    placeholder="#"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-12 text-center text-sm px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-300 outline-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsEditingPriority(true);
+                    }}
+                    title={
+                      subtask.priority
+                        ? `Priority #${subtask.priority} (click to change)`
+                        : "Set priority"
+                    }
+                    className={cn(
+                      "text-sm px-2 py-0.5 rounded-lg font-medium transition-colors",
+                      subtask.priority
+                        ? "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                        : "bg-white/5 text-white/30 hover:bg-white/10 opacity-0 group-hover/subtask:opacity-100",
+                    )}
+                  >
+                    {subtask.priority ? `#${subtask.priority}` : "#"}
+                  </button>
+                ))}
               {/* Child count indicator */}
               {childCounts.total > 0 && (
                 <span
@@ -298,7 +454,7 @@ function NestedFocusSubtaskItem({
                       ? "bg-green-500/20 text-green-400"
                       : isPink
                         ? "bg-pink-500/20 text-pink-400"
-                        : "bg-cyan-500/20 text-cyan-400"
+                        : "bg-cyan-500/20 text-cyan-400",
                   )}
                 >
                   {childCounts.completed}/{childCounts.total}
@@ -317,7 +473,7 @@ function NestedFocusSubtaskItem({
               "p-2 rounded-lg transition-all",
               isPink
                 ? "text-pink-400/70 hover:text-pink-400 hover:bg-pink-500/20"
-                : "text-cyan-400/70 hover:text-cyan-400 hover:bg-cyan-500/20"
+                : "text-cyan-400/70 hover:text-cyan-400 hover:bg-cyan-500/20",
             )}
             title="Add sub-item"
           >
@@ -404,6 +560,7 @@ function NestedFocusSubtaskItem({
                 onDelete={onDelete}
                 onAddSubtask={onAddSubtask}
                 onUpdate={onUpdate}
+                onPriorityChange={onPriorityChange}
                 depth={depth + 1}
                 maxDepth={maxDepth}
               />
@@ -445,11 +602,9 @@ function FocusSubtaskItem({
       exit={{ opacity: 0, x: 10 }}
       className={cn(
         "group/subtask flex items-center gap-4 py-4 px-5 rounded-xl transition-all",
-        isOverdue
-          ? "border-2 border-red-500/40 bg-red-500/10"
-          : isCompletedForOccurrence
-            ? "bg-green-500/10 border border-green-500/20"
-            : "bg-white/5 hover:bg-white/10 border border-white/10"
+        isCompletedForOccurrence
+          ? "bg-green-500/10 border border-green-500/20"
+          : "bg-white/5 hover:bg-white/10 border border-white/10",
       )}
     >
       <div className="w-5 flex-shrink-0" />
@@ -460,11 +615,9 @@ function FocusSubtaskItem({
           "w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all flex-shrink-0",
           isCompletedForOccurrence
             ? "bg-green-500 border-green-500"
-            : isOverdue
-              ? "border-red-400/50 hover:border-red-400 hover:bg-red-500/20"
-              : isPink
-                ? "border-pink-400/50 hover:border-pink-400 hover:bg-pink-500/20"
-                : "border-cyan-400/50 hover:border-cyan-400 hover:bg-cyan-500/20"
+            : isPink
+              ? "border-pink-400/50 hover:border-pink-400 hover:bg-pink-500/20"
+              : "border-cyan-400/50 hover:border-cyan-400 hover:bg-cyan-500/20",
         )}
       >
         {isCompletedForOccurrence && <Check className="w-4 h-4 text-white" />}
@@ -475,16 +628,14 @@ function FocusSubtaskItem({
             "text-lg",
             isCompletedForOccurrence
               ? "line-through text-white/40"
-              : isOverdue
-                ? "text-red-300"
-                : "text-white"
+              : "text-white",
           )}
         >
           {subtask.title}
         </span>
         {isOverdue && overdueFromDate && (
-          <p className="text-sm text-red-400/70 mt-0.5">
-            From {format(overdueFromDate, "MMM d")}
+          <p className="text-sm text-white/40 mt-0.5">
+            from {format(overdueFromDate, "MMM d")}
           </p>
         )}
       </div>
@@ -531,7 +682,7 @@ function FocusAddSubtaskInput({ onAdd }: { onAdd: (title: string) => void }) {
           "flex items-center justify-center gap-3 py-4 px-5 rounded-xl text-base transition-colors w-full border-2 border-dashed",
           isPink
             ? "text-pink-400/70 border-pink-500/30 hover:bg-pink-500/10 hover:text-pink-400 hover:border-pink-500/50"
-            : "text-cyan-400/70 border-cyan-500/30 hover:bg-cyan-500/10 hover:text-cyan-400 hover:border-cyan-500/50"
+            : "text-cyan-400/70 border-cyan-500/30 hover:bg-cyan-500/10 hover:text-cyan-400 hover:border-cyan-500/50",
         )}
       >
         <Plus className="w-5 h-5" />
@@ -609,6 +760,21 @@ export function TaskFocusModal({
   const addSubtask = useAddSubtask();
   const deleteSubtask = useDeleteSubtask();
   const updateSubtask = useUpdateSubtask();
+  const updateSubtaskPriority = useUpdateSubtaskPriority();
+  const updateSubtaskKanbanStage = useUpdateSubtaskKanbanStage();
+  const updateKanbanSettings = useUpdateItemKanbanSettings();
+
+  // Kanban view state
+  const [isKanbanView, setIsKanbanView] = useState(
+    item.subtask_kanban_enabled || false,
+  );
+  const kanbanStages = item.subtask_kanban_stages || [
+    "To Do",
+    "In Progress",
+    "Done",
+  ];
+  const [draggedSubtaskId, setDraggedSubtaskId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
 
   const isRecurring = !!item.recurrence_rule;
   const subtasks = item.subtasks || [];
@@ -637,20 +803,20 @@ export function TaskFocusModal({
           (c) =>
             c.subtask_id === subtaskId &&
             normalizeToLocalDateString(new Date(c.occurrence_date)) ===
-              targetDateStr
+              targetDateStr,
         );
       }
       // For one-time items, check done_at
       const subtask = subtasks.find((s) => s.id === subtaskId);
       return !!subtask?.done_at;
     },
-    [isRecurring, subtaskCompletions, subtasks]
+    [isRecurring, subtaskCompletions, subtasks],
   );
 
   // Check if a subtask is completed for THIS occurrence
   const isSubtaskCompleted = useCallback(
     (subtaskId: string) => isSubtaskCompletedForDate(subtaskId, occurrenceDate),
-    [isSubtaskCompletedForDate, occurrenceDate]
+    [isSubtaskCompletedForDate, occurrenceDate],
   );
 
   // Helper to get occurrence date from subtask
@@ -673,13 +839,19 @@ export function TaskFocusModal({
     });
   }, [subtasks, isRecurring, occurrenceDate]);
 
-  // Overdue subtasks from past occurrences
+  // Dragged/orphaned subtasks: subtasks with NULL occurrence_date for recurring items
+  // These are subtasks that were created without being tied to a specific occurrence
+  const draggedSubtasks = useMemo(() => {
+    if (!isRecurring) return [];
+    return subtasks.filter((s) => !s.occurrence_date && !s.done_at);
+  }, [subtasks, isRecurring]);
+
+  // Overdue subtasks from past occurrences (with occurrence_date set)
   const overdueSubtasksWithDates = useMemo((): Array<{
     subtask: Subtask;
     homeOccurrence: Date;
   }> => {
     if (!isRecurring) return [];
-    if (isViewingPast) return [];
 
     const overdueList: Array<{ subtask: Subtask; homeOccurrence: Date }> = [];
 
@@ -689,39 +861,37 @@ export function TaskFocusModal({
 
       const subtaskOcc = startOfDay(subtaskOccDate);
 
+      // Skip subtasks for current occurrence (they show in currentOccurrenceSubtasks)
       if (isSameDay(subtaskOcc, currentOcc)) continue;
+      // Skip future occurrences
       if (!isBefore(subtaskOcc, currentOcc)) continue;
-      if (!isBefore(subtaskOcc, today)) continue;
 
+      // Check if NOT completed for its home occurrence
       if (!isSubtaskCompletedForDate(subtask.id, subtaskOccDate)) {
         overdueList.push({ subtask, homeOccurrence: subtaskOccDate });
       }
     }
 
     return overdueList.sort(
-      (a, b) => a.homeOccurrence.getTime() - b.homeOccurrence.getTime()
+      (a, b) => a.homeOccurrence.getTime() - b.homeOccurrence.getTime(),
     );
-  }, [
-    isRecurring,
-    isViewingPast,
-    subtasks,
-    currentOcc,
-    today,
-    isSubtaskCompletedForDate,
-  ]);
+  }, [isRecurring, subtasks, currentOcc, isSubtaskCompletedForDate]);
+
+  // Combined count of all incomplete subtasks from past
+  const hasDraggedSubtasks = draggedSubtasks.length > 0;
 
   // Count completed subtasks (only top-level for progress display)
   const topLevelSubtasks = currentOccurrenceSubtasks.filter(
-    (s) => !s.parent_subtask_id
+    (s) => !s.parent_subtask_id,
   );
   const completedSubtasksCount = topLevelSubtasks.filter((s) =>
-    isSubtaskCompleted(s.id)
+    isSubtaskCompleted(s.id),
   ).length;
 
   // Build nested tree from flat subtasks
   const subtaskTree = useMemo(
     () => buildSubtaskTree(currentOccurrenceSubtasks),
-    [currentOccurrenceSubtasks]
+    [currentOccurrenceSubtasks],
   );
 
   const hasCurrentSubtasks = topLevelSubtasks.length > 0;
@@ -751,7 +921,7 @@ export function TaskFocusModal({
 
     // Auto-complete when all top-level subtasks done
     const willAllBeCompleted = topLevelSubtasks.every((s) =>
-      s.id === subtask.id ? !currentlyCompleted : isSubtaskCompleted(s.id)
+      s.id === subtask.id ? !currentlyCompleted : isSubtaskCompleted(s.id),
     );
 
     if (willAllBeCompleted && topLevelSubtasks.length > 0) {
@@ -764,7 +934,7 @@ export function TaskFocusModal({
   // Handle overdue subtask toggle
   const handleOverdueSubtaskToggle = async (
     subtask: Subtask,
-    homeOccurrence: Date
+    homeOccurrence: Date,
   ) => {
     if (isRecurring) {
       await toggleSubtaskForOccurrence.mutateAsync({
@@ -787,7 +957,7 @@ export function TaskFocusModal({
   // Handle add nested subtask
   const handleAddNestedSubtask = async (
     parentSubtaskId: string,
-    title: string
+    title: string,
   ) => {
     await addSubtask.mutateAsync({
       parentItemId: item.id,
@@ -807,6 +977,246 @@ export function TaskFocusModal({
     await updateSubtask.mutateAsync({ id: subtaskId, title });
   };
 
+  // Handle priority change
+  const handlePriorityChange = async (
+    subtaskId: string,
+    priority: number | null,
+  ) => {
+    await updateSubtaskPriority.mutateAsync({
+      subtaskId,
+      parentItemId: item.id,
+      newPriority: priority,
+    });
+  };
+
+  // Handle kanban stage change - React Query handles optimistic update
+  const handleKanbanStageChange = async (subtaskId: string, stage: string) => {
+    await updateSubtaskKanbanStage.mutateAsync({
+      subtaskId,
+      kanbanStage: stage,
+      parentItemId: item.id,
+    });
+  };
+
+  // Get effective kanban stage
+  const getEffectiveKanbanStage = (subtask: Subtask): string => {
+    return subtask.kanban_stage ?? kanbanStages[0];
+  };
+
+  // Handle kanban toggle
+  const handleKanbanToggle = async (enabled: boolean) => {
+    setIsKanbanView(enabled);
+    await updateKanbanSettings.mutateAsync({
+      itemId: item.id,
+      kanbanEnabled: enabled,
+      kanbanStages: kanbanStages,
+    });
+  };
+
+  // Handle kanban move forward (to next stage)
+  const handleKanbanMoveForward = async (subtask: Subtask) => {
+    const currentStage = getEffectiveKanbanStage(subtask);
+    const currentIndex = kanbanStages.indexOf(currentStage);
+
+    if (currentIndex < kanbanStages.length - 1) {
+      // Move to next stage
+      const nextStage = kanbanStages[currentIndex + 1];
+      await handleKanbanStageChange(subtask.id, nextStage);
+
+      // If moved to final stage, mark as complete
+      if (currentIndex + 1 === kanbanStages.length - 1) {
+        await handleSubtaskToggle(subtask);
+      }
+    }
+  };
+
+  // Handle kanban move backward (to previous stage)
+  const handleKanbanMoveBackward = async (subtask: Subtask) => {
+    const currentStage = getEffectiveKanbanStage(subtask);
+    const currentIndex = kanbanStages.indexOf(currentStage);
+
+    if (currentIndex > 0) {
+      // Move to previous stage
+      const prevStage = kanbanStages[currentIndex - 1];
+      await handleKanbanStageChange(subtask.id, prevStage);
+    }
+  };
+
+  // Ref for custom drag image
+  const dragImageRef = useRef<HTMLDivElement | null>(null);
+
+  // Handle drag start
+  const handleDragStart = (e: React.DragEvent, subtaskId: string) => {
+    setDraggedSubtaskId(subtaskId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", subtaskId);
+
+    // Create custom drag image
+    const subtask = currentOccurrenceSubtasks.find((s) => s.id === subtaskId);
+    if (subtask) {
+      const dragImage = document.createElement("div");
+      dragImage.className = cn(
+        "fixed z-[200] px-4 py-2 rounded-lg shadow-2xl max-w-[200px] truncate border-2",
+        isPink
+          ? "bg-pink-900/90 border-pink-500 text-pink-100"
+          : "bg-cyan-900/90 border-cyan-500 text-cyan-100",
+      );
+      dragImage.style.cssText = "position: fixed; top: -1000px; left: -1000px;";
+      dragImage.textContent = subtask.title;
+      document.body.appendChild(dragImage);
+      dragImageRef.current = dragImage;
+
+      e.dataTransfer.setDragImage(
+        dragImage,
+        dragImage.offsetWidth / 2,
+        dragImage.offsetHeight / 2,
+      );
+
+      // Clean up after a brief delay
+      setTimeout(() => {
+        if (dragImageRef.current) {
+          document.body.removeChild(dragImageRef.current);
+          dragImageRef.current = null;
+        }
+      }, 0);
+    }
+  };
+
+  // Handle drag over a stage column
+  const handleDragOver = (e: React.DragEvent, stage: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverStage(stage);
+  };
+
+  // Handle drag leave
+  const handleDragLeave = () => {
+    setDragOverStage(null);
+  };
+
+  // Handle drop on a stage column
+  const handleDrop = async (e: React.DragEvent, targetStage: string) => {
+    e.preventDefault();
+    setDragOverStage(null);
+
+    const subtaskId = e.dataTransfer.getData("text/plain") || draggedSubtaskId;
+    if (!subtaskId) return;
+
+    const subtask = currentOccurrenceSubtasks.find((s) => s.id === subtaskId);
+    if (!subtask) return;
+
+    const currentStage = getEffectiveKanbanStage(subtask);
+    if (currentStage === targetStage) {
+      setDraggedSubtaskId(null);
+      return;
+    }
+
+    setDraggedSubtaskId(null);
+
+    // Move to target stage (optimistic update happens inside)
+    await handleKanbanStageChange(subtaskId, targetStage);
+
+    // If moved to final stage, mark as complete
+    const targetIndex = kanbanStages.indexOf(targetStage);
+    if (targetIndex === kanbanStages.length - 1) {
+      await handleSubtaskToggle(subtask);
+    }
+  };
+
+  // Handle drag end
+  const handleDragEnd = () => {
+    setDraggedSubtaskId(null);
+    setDragOverStage(null);
+  };
+
+  // Touch event handlers for mobile drag and drop
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const touchSubtaskId = useRef<string | null>(null);
+  const [dragGhostPos, setDragGhostPos] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [dragGhostTitle, setDragGhostTitle] = useState<string>("");
+
+  const handleTouchStart = (e: React.TouchEvent, subtaskId: string) => {
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    touchSubtaskId.current = subtaskId;
+    setDraggedSubtaskId(subtaskId);
+
+    // Set up ghost element
+    const subtask = currentOccurrenceSubtasks.find((s) => s.id === subtaskId);
+    if (subtask) {
+      setDragGhostTitle(subtask.title);
+      setDragGhostPos({ x: touch.clientX, y: touch.clientY });
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchSubtaskId.current) return;
+
+    const touch = e.touches[0];
+
+    // Update ghost position
+    setDragGhostPos({ x: touch.clientX, y: touch.clientY });
+
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+
+    // Find which stage column we're over
+    const stageColumn = element?.closest("[data-kanban-stage]");
+    if (stageColumn) {
+      const stage = stageColumn.getAttribute("data-kanban-stage");
+      if (stage) setDragOverStage(stage);
+    } else {
+      setDragOverStage(null);
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    const subtaskId = touchSubtaskId.current;
+    const targetStage = dragOverStage;
+
+    // Reset touch state
+    touchStartPos.current = null;
+    touchSubtaskId.current = null;
+    setDraggedSubtaskId(null);
+    setDragOverStage(null);
+    setDragGhostPos(null);
+    setDragGhostTitle("");
+
+    if (!subtaskId || !targetStage) return;
+
+    const subtask = currentOccurrenceSubtasks.find((s) => s.id === subtaskId);
+    if (!subtask) return;
+
+    const currentStage = getEffectiveKanbanStage(subtask);
+    if (currentStage === targetStage) return;
+
+    // Move to target stage
+    await handleKanbanStageChange(subtaskId, targetStage);
+
+    // If moved to final stage, mark as complete
+    const targetIndex = kanbanStages.indexOf(targetStage);
+    if (targetIndex === kanbanStages.length - 1) {
+      await handleSubtaskToggle(subtask);
+    }
+  };
+
+  // Get subtasks by kanban stage (using optimistic local state)
+  const getSubtasksByStage = (stage: string) => {
+    return currentOccurrenceSubtasks
+      .filter((s) => !s.parent_subtask_id) // Only top-level for kanban
+      .filter((s) => getEffectiveKanbanStage(s) === stage)
+      .sort((a, b) => {
+        const aPriority = a.priority ?? null;
+        const bPriority = b.priority ?? null;
+        if (aPriority === null && bPriority === null) return 0;
+        if (aPriority === null) return 1;
+        if (bPriority === null) return -1;
+        return aPriority - bPriority;
+      });
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, x: "100%" }}
@@ -823,7 +1233,7 @@ export function TaskFocusModal({
             ? "border-green-500/20 bg-green-500/5"
             : isPostponed
               ? "border-amber-500/20 bg-amber-500/5"
-              : "border-white/10 bg-white/5"
+              : "border-white/10 bg-white/5",
         )}
       >
         {/* Back Button */}
@@ -834,7 +1244,7 @@ export function TaskFocusModal({
             "flex items-center gap-2 px-3 py-2 rounded-xl transition-colors",
             isPink
               ? "text-pink-400 hover:bg-pink-500/20"
-              : "text-cyan-400 hover:bg-cyan-500/20"
+              : "text-cyan-400 hover:bg-cyan-500/20",
           )}
         >
           <ArrowLeft className="w-5 h-5" />
@@ -859,7 +1269,7 @@ export function TaskFocusModal({
               <h1
                 className={cn(
                   "text-3xl font-bold text-white",
-                  isCompleted && "line-through text-white/50"
+                  isCompleted && "line-through text-white/50",
                 )}
               >
                 {item.title}
@@ -904,7 +1314,7 @@ export function TaskFocusModal({
                       ? "text-green-400"
                       : isPink
                         ? "text-pink-400"
-                        : "text-cyan-400"
+                        : "text-cyan-400",
                   )}
                 >
                   {completedSubtasksCount}/{topLevelSubtasks.length} subtasks
@@ -923,7 +1333,7 @@ export function TaskFocusModal({
                       ? "bg-green-500"
                       : isPink
                         ? "bg-pink-500"
-                        : "bg-cyan-500"
+                        : "bg-cyan-500",
                   )}
                 />
               </div>
@@ -942,15 +1352,41 @@ export function TaskFocusModal({
           {/* Subtasks Section */}
           {!isCompleted && (
             <div className="space-y-6">
-              {/* Overdue Subtasks */}
-              {overdueSubtasksWithDates.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <AlertCircle className="w-5 h-5 text-red-400" />
-                    <h2 className="text-xl font-semibold text-red-400">
-                      Overdue Subtasks
-                    </h2>
+              {/* Dragged/Orphaned Subtasks - Collapsible */}
+              {hasDraggedSubtasks && (
+                <CollapsiblePastSubtasks
+                  title="Incomplete Subtasks"
+                  subtitle="Carried forward from previous occurrences"
+                  count={draggedSubtasks.length}
+                  defaultOpen={true}
+                >
+                  <div className="space-y-3">
+                    <AnimatePresence mode="popLayout">
+                      {draggedSubtasks.map((subtask) => (
+                        <FocusSubtaskItem
+                          key={`dragged-${subtask.id}`}
+                          subtask={subtask}
+                          isRecurring={isRecurring}
+                          occurrenceDate={occurrenceDate}
+                          isCompletedForOccurrence={false}
+                          onToggle={() => handleSubtaskToggle(subtask)}
+                          onDelete={() => handleDeleteSubtask(subtask.id)}
+                          isOverdue={true}
+                        />
+                      ))}
+                    </AnimatePresence>
                   </div>
+                </CollapsiblePastSubtasks>
+              )}
+
+              {/* Overdue Subtasks from Past Occurrences - Collapsible */}
+              {hasOverdueSubtasks && (
+                <CollapsiblePastSubtasks
+                  title="Overdue from Past Occurrences"
+                  subtitle="Subtasks not completed on their scheduled date"
+                  count={overdueSubtasksWithDates.length}
+                  defaultOpen={overdueSubtasksWithDates.length <= 3}
+                >
                   <div className="space-y-3">
                     <AnimatePresence mode="popLayout">
                       {overdueSubtasksWithDates.map(
@@ -964,58 +1400,241 @@ export function TaskFocusModal({
                             onToggle={() =>
                               handleOverdueSubtaskToggle(
                                 subtask,
-                                homeOccurrence
+                                homeOccurrence,
                               )
                             }
                             onDelete={() => handleDeleteSubtask(subtask.id)}
                             isOverdue={true}
                             overdueFromDate={homeOccurrence}
                           />
-                        )
+                        ),
                       )}
                     </AnimatePresence>
                   </div>
-                </div>
+                </CollapsiblePastSubtasks>
               )}
 
               {/* Current Subtasks */}
               <div>
                 {(hasCurrentSubtasks || !hasOverdueSubtasks) && (
-                  <div className="flex items-center gap-2 mb-4">
-                    <Target
-                      className={cn(
-                        "w-5 h-5",
-                        isPink ? "text-pink-400" : "text-cyan-400"
-                      )}
-                    />
-                    <h2
-                      className={cn(
-                        "text-xl font-semibold",
-                        isPink ? "text-pink-400" : "text-cyan-400"
-                      )}
-                    >
-                      {hasOverdueSubtasks ? "Today's Subtasks" : "Subtasks"}
-                    </h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Target
+                        className={cn(
+                          "w-5 h-5",
+                          isPink ? "text-pink-400" : "text-cyan-400",
+                        )}
+                      />
+                      <h2
+                        className={cn(
+                          "text-xl font-semibold",
+                          isPink ? "text-pink-400" : "text-cyan-400",
+                        )}
+                      >
+                        {hasOverdueSubtasks ? "Today's Subtasks" : "Subtasks"}
+                      </h2>
+                    </div>
+                    {/* Kanban Toggle */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleKanbanToggle(false)}
+                        className={cn(
+                          "p-2 rounded-lg transition-colors",
+                          !isKanbanView
+                            ? isPink
+                              ? "bg-pink-500/20 text-pink-400"
+                              : "bg-cyan-500/20 text-cyan-400"
+                            : "text-white/40 hover:text-white/60 hover:bg-white/10",
+                        )}
+                        title="List view"
+                      >
+                        <List className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleKanbanToggle(true)}
+                        className={cn(
+                          "p-2 rounded-lg transition-colors",
+                          isKanbanView
+                            ? isPink
+                              ? "bg-pink-500/20 text-pink-400"
+                              : "bg-cyan-500/20 text-cyan-400"
+                            : "text-white/40 hover:text-white/60 hover:bg-white/10",
+                        )}
+                        title="Kanban view"
+                      >
+                        <Columns3 className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                 )}
-                <div className="space-y-3">
-                  <AnimatePresence mode="popLayout">
-                    {subtaskTree.map((subtask) => (
-                      <NestedFocusSubtaskItem
-                        key={subtask.id}
-                        subtask={subtask}
-                        isRecurring={isRecurring}
-                        occurrenceDate={occurrenceDate}
-                        isSubtaskCompleted={isSubtaskCompleted}
-                        onToggle={handleSubtaskToggle}
-                        onDelete={handleDeleteSubtask}
-                        onAddSubtask={handleAddNestedSubtask}
-                        onUpdate={handleUpdateSubtask}
-                      />
+
+                {/* List View */}
+                {!isKanbanView && (
+                  <div className="space-y-3">
+                    <AnimatePresence mode="popLayout">
+                      {subtaskTree.map((subtask) => (
+                        <NestedFocusSubtaskItem
+                          key={subtask.id}
+                          subtask={subtask}
+                          isRecurring={isRecurring}
+                          occurrenceDate={occurrenceDate}
+                          isSubtaskCompleted={isSubtaskCompleted}
+                          onToggle={handleSubtaskToggle}
+                          onDelete={handleDeleteSubtask}
+                          onAddSubtask={handleAddNestedSubtask}
+                          onUpdate={handleUpdateSubtask}
+                          onPriorityChange={handlePriorityChange}
+                        />
+                      ))}
+                    </AnimatePresence>
+                    <FocusAddSubtaskInput onAdd={handleAddSubtask} />
+                  </div>
+                )}
+
+                {/* Kanban View */}
+                {isKanbanView && (
+                  <div className="grid grid-cols-3 gap-4">
+                    {kanbanStages.map((stage, stageIndex) => (
+                      <div
+                        key={stage}
+                        data-kanban-stage={stage}
+                        onDragOver={(e) => handleDragOver(e, stage)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, stage)}
+                        className={cn(
+                          "rounded-xl p-3 min-h-[200px] transition-all",
+                          stageIndex === kanbanStages.length - 1
+                            ? "bg-green-500/10 border border-green-500/20"
+                            : "bg-white/5 border border-white/10",
+                          dragOverStage === stage && "ring-2",
+                          dragOverStage === stage &&
+                            (stageIndex === kanbanStages.length - 1
+                              ? "ring-green-500/50"
+                              : isPink
+                                ? "ring-pink-500/50"
+                                : "ring-cyan-500/50"),
+                        )}
+                      >
+                        <h3
+                          className={cn(
+                            "font-semibold mb-3 text-sm",
+                            stageIndex === kanbanStages.length - 1
+                              ? "text-green-400"
+                              : isPink
+                                ? "text-pink-400"
+                                : "text-cyan-400",
+                          )}
+                        >
+                          {stage} ({getSubtasksByStage(stage).length})
+                        </h3>
+                        <div className="space-y-2">
+                          {getSubtasksByStage(stage).map((subtask) => (
+                            <div
+                              key={subtask.id}
+                              draggable
+                              onDragStart={(e) =>
+                                handleDragStart(e, subtask.id)
+                              }
+                              onDragEnd={handleDragEnd}
+                              onTouchStart={(e) =>
+                                handleTouchStart(e, subtask.id)
+                              }
+                              onTouchMove={handleTouchMove}
+                              onTouchEnd={handleTouchEnd}
+                              className={cn(
+                                "p-3 rounded-lg bg-white/5 border border-white/10",
+                                "hover:bg-white/10 transition-all cursor-grab active:cursor-grabbing",
+                                "touch-none",
+                                draggedSubtaskId === subtask.id &&
+                                  "opacity-50 scale-95",
+                              )}
+                            >
+                              <div className="flex items-center gap-2">
+                                {/* Back arrow - only show if not in first stage */}
+                                {stageIndex > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleKanbanMoveBackward(subtask)
+                                    }
+                                    className={cn(
+                                      "flex-shrink-0 w-5 h-5 rounded flex items-center justify-center transition-all",
+                                      "hover:bg-white/10",
+                                      isPink
+                                        ? "text-pink-400/50 hover:text-pink-400"
+                                        : "text-cyan-400/50 hover:text-cyan-400",
+                                    )}
+                                    title="Move to previous stage"
+                                  >
+                                    <ChevronLeft className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {/* Spacer when in first stage for alignment */}
+                                {stageIndex === 0 && <div className="w-5" />}
+
+                                <div className="flex-1 min-w-0">
+                                  <span
+                                    className={cn(
+                                      "text-sm",
+                                      stageIndex === kanbanStages.length - 1
+                                        ? "text-white/50 line-through"
+                                        : "text-white",
+                                    )}
+                                  >
+                                    {subtask.title}
+                                  </span>
+                                  {subtask.priority !== null &&
+                                    subtask.priority !== undefined && (
+                                      <span
+                                        className={cn(
+                                          "ml-2 px-1.5 py-0.5 text-xs rounded font-medium",
+                                          isPink
+                                            ? "bg-pink-500/20 text-pink-400"
+                                            : "bg-cyan-500/20 text-cyan-400",
+                                        )}
+                                      >
+                                        #{subtask.priority}
+                                      </span>
+                                    )}
+                                </div>
+
+                                {/* Forward arrow / check button */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleKanbanMoveForward(subtask)
+                                  }
+                                  className={cn(
+                                    "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all",
+                                    stageIndex === kanbanStages.length - 1
+                                      ? "border-green-500 bg-green-500"
+                                      : isPink
+                                        ? "border-pink-400/50 hover:border-pink-400"
+                                        : "border-cyan-400/50 hover:border-cyan-400",
+                                  )}
+                                  title={
+                                    stageIndex === kanbanStages.length - 1
+                                      ? "Move to first stage"
+                                      : "Move to next stage"
+                                  }
+                                >
+                                  {stageIndex === kanbanStages.length - 1 && (
+                                    <Check className="w-3 h-3 text-white" />
+                                  )}
+                                  {stageIndex < kanbanStages.length - 1 && (
+                                    <ChevronRight className="w-3 h-3 text-white/40" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     ))}
-                  </AnimatePresence>
-                  <FocusAddSubtaskInput onAdd={handleAddSubtask} />
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1036,6 +1655,32 @@ export function TaskFocusModal({
           )}
         </div>
       </div>
+
+      {/* Drag Ghost Element - follows finger during touch drag */}
+      <AnimatePresence>
+        {dragGhostPos && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.15 }}
+            className={cn(
+              "fixed z-[200] pointer-events-none px-4 py-2 rounded-lg shadow-2xl max-w-[200px] truncate",
+              "border-2",
+              isPink
+                ? "bg-pink-900/90 border-pink-500 text-pink-100"
+                : "bg-cyan-900/90 border-cyan-500 text-cyan-100",
+            )}
+            style={{
+              left: dragGhostPos.x,
+              top: dragGhostPos.y,
+              transform: "translate(-50%, -120%)",
+            }}
+          >
+            <span className="text-sm font-medium">{dragGhostTitle}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

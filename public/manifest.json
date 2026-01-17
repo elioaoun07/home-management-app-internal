@@ -6,7 +6,6 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
-  "orientation": "any",
   "background_color": "#0a1628",
   "theme_color": "#06b6d4",
   "categories": ["finance", "productivity", "lifestyle"],

@@ -46,7 +46,7 @@ export const itemsKeys = {
 
 async function fetchItems(
   filters?: ItemsFilter,
-  sort?: ItemsSort
+  sort?: ItemsSort,
 ): Promise<ItemWithDetails[]> {
   const supabase = supabaseBrowser();
   const {
@@ -78,7 +78,7 @@ async function fetchItems(
       item_subtasks (*),
       item_alerts (*),
       item_recurrence_rules (*)
-    `
+    `,
     )
     .is("archived_at", null);
 
@@ -120,7 +120,7 @@ async function fetchItems(
 
   if (filters?.search) {
     query = query.or(
-      `title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
+      `title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`,
     );
   }
 
@@ -176,7 +176,7 @@ async function fetchItemById(id: string): Promise<ItemWithDetails | null> {
       item_alerts (*),
       item_recurrence_rules (*),
       item_attachments (*)
-    `
+    `,
     )
     .eq("id", id)
     .single();
@@ -385,7 +385,7 @@ export function useCreateReminder() {
           if (a.kind === "relative" && a.offset_minutes && input.due_at) {
             const baseTime = new Date(input.due_at);
             computedTriggerAt = new Date(
-              baseTime.getTime() - a.offset_minutes * 60 * 1000
+              baseTime.getTime() - a.offset_minutes * 60 * 1000,
             ).toISOString();
           }
           return {
@@ -407,7 +407,7 @@ export function useCreateReminder() {
         // Auto-create a push alert at the due time if no alerts provided
         console.log(
           "[useCreateReminder] Creating auto-alert for due_at:",
-          input.due_at
+          input.due_at,
         );
         const { data: alertData, error: alertsError } = await supabase
           .from("item_alerts")
@@ -425,7 +425,7 @@ export function useCreateReminder() {
           console.error("Failed to create auto-alert:", alertsError);
           // Still throw so user knows there was an issue
           throw new Error(
-            `Reminder created but alert failed: ${alertsError.message}`
+            `Reminder created but alert failed: ${alertsError.message}`,
           );
         } else {
           console.log("[useCreateReminder] Auto-alert created:", alertData);
@@ -526,7 +526,7 @@ export function useCreateEvent() {
             if (baseTimeStr) {
               const baseTime = new Date(baseTimeStr);
               computedTriggerAt = new Date(
-                baseTime.getTime() - a.offset_minutes * 60 * 1000
+                baseTime.getTime() - a.offset_minutes * 60 * 1000,
               ).toISOString();
             }
           }
@@ -616,6 +616,23 @@ export function useCreateTask() {
         if (recurrenceError) throw recurrenceError;
       }
 
+      // Auto-create a push alert at the due time for tasks with a due date
+      if (input.due_at) {
+        const { error: alertsError } = await supabase
+          .from("item_alerts")
+          .insert({
+            item_id: item.id,
+            kind: "absolute",
+            trigger_at: input.due_at,
+            channel: "push",
+            active: true,
+          });
+
+        if (alertsError) {
+          console.error("Failed to create auto-alert for task:", alertsError);
+        }
+      }
+
       return item as Item;
     },
     onSuccess: () => {
@@ -673,7 +690,7 @@ export function useUpdateReminderDetails() {
             "status",
             "is_public",
             "archived_at",
-          ].includes(k)
+          ].includes(k),
         )
       ) {
         const itemUpdate: any = {};
@@ -745,7 +762,7 @@ export function useUpdateEventDetails() {
             "status",
             "is_public",
             "archived_at",
-          ].includes(k)
+          ].includes(k),
         )
       ) {
         const itemUpdate: any = {};
@@ -875,7 +892,7 @@ export function useToggleSubtask() {
         // First, get all descendant subtask IDs using recursive query
         const { data: descendants, error: descError } = await supabase.rpc(
           "get_subtask_descendants",
-          { root_subtask_id: id }
+          { root_subtask_id: id },
         );
 
         // If the RPC doesn't exist yet, just update the single subtask
@@ -931,10 +948,10 @@ export function useToggleSubtask() {
       // Helper to get all descendant IDs
       const getDescendantIds = (
         subtasks: Subtask[],
-        parentId: string
+        parentId: string,
       ): string[] => {
         const children = subtasks.filter(
-          (s) => s.parent_subtask_id === parentId
+          (s) => s.parent_subtask_id === parentId,
         );
         return children.flatMap((c) => [
           c.id,
@@ -960,11 +977,11 @@ export function useToggleSubtask() {
               subtasks: item.subtasks.map((s) =>
                 idsToUpdate.includes(s.id)
                   ? { ...s, done_at: done ? new Date().toISOString() : null }
-                  : s
+                  : s,
               ),
             };
           });
-        }
+        },
       );
 
       // Show toast for cascading completion
@@ -974,7 +991,7 @@ export function useToggleSubtask() {
       const itemsData = queriesData.flatMap(([, data]) => data || []);
       if (done && itemsData.length > 0) {
         const item = itemsData.find((i) =>
-          i.subtasks?.some((s) => s.id === id)
+          i.subtasks?.some((s) => s.id === id),
         );
         if (item?.subtasks) {
           const descendantCount = getDescendantIds(item.subtasks, id).length;
@@ -982,7 +999,7 @@ export function useToggleSubtask() {
             const subtask = item.subtasks.find((s) => s.id === id);
             toast.success(
               `Completed "${subtask?.title}" and ${descendantCount} sub-item${descendantCount > 1 ? "s" : ""}`,
-              { duration: 3000 }
+              { duration: 3000 },
             );
           }
         }
@@ -1104,7 +1121,7 @@ export function useToggleSubtaskForOccurrence() {
       if (completed) {
         const { data: descendants, error: descError } = await supabase.rpc(
           "get_subtask_descendants",
-          { root_subtask_id: subtaskId }
+          { root_subtask_id: subtaskId },
         );
 
         // If RPC exists and returns descendants, include them
@@ -1159,16 +1176,16 @@ export function useToggleSubtaskForOccurrence() {
       await queryClient.cancelQueries({ queryKey: itemsKeys.all });
 
       const previousCompletions = queryClient.getQueryData<SubtaskCompletion[]>(
-        [...itemsKeys.all, "all-subtask-completions"]
+        [...itemsKeys.all, "all-subtask-completions"],
       );
 
       // Helper to get all descendant IDs from items data
       const getDescendantIds = (
         subtasks: Subtask[],
-        parentId: string
+        parentId: string,
       ): string[] => {
         const children = subtasks.filter(
-          (s) => s.parent_subtask_id === parentId
+          (s) => s.parent_subtask_id === parentId,
         );
         return children.flatMap((c) => [
           c.id,
@@ -1185,7 +1202,7 @@ export function useToggleSubtaskForOccurrence() {
 
       if (completed && itemsData.length > 0) {
         const item = itemsData.find((i) =>
-          i.subtasks?.some((s) => s.id === subtaskId)
+          i.subtasks?.some((s) => s.id === subtaskId),
         );
         if (item?.subtasks) {
           allIds = [subtaskId, ...getDescendantIds(item.subtasks, subtaskId)];
@@ -1196,7 +1213,7 @@ export function useToggleSubtaskForOccurrence() {
             const subtask = item.subtasks.find((s) => s.id === subtaskId);
             toast.success(
               `Completed "${subtask?.title}" and ${descendantCount} sub-item${descendantCount > 1 ? "s" : ""}`,
-              { duration: 3000 }
+              { duration: 3000 },
             );
           }
         }
@@ -1224,10 +1241,10 @@ export function useToggleSubtaskForOccurrence() {
                 !(
                   c.subtask_id === subtaskId &&
                   c.occurrence_date === occurrenceDate
-                )
+                ),
             );
           }
-        }
+        },
       );
 
       return { previousCompletions };
@@ -1236,7 +1253,7 @@ export function useToggleSubtaskForOccurrence() {
       if (context?.previousCompletions) {
         queryClient.setQueryData(
           [...itemsKeys.all, "all-subtask-completions"],
-          context.previousCompletions
+          context.previousCompletions,
         );
       }
       toast.error("Failed to update subtask");
@@ -1355,7 +1372,7 @@ export function useAddSubtask() {
             }
             return item;
           });
-        }
+        },
       );
 
       return { previousQueries };
@@ -1441,7 +1458,7 @@ export function useDeleteSubtask() {
             ...item,
             subtasks: item.subtasks?.filter((s) => s.id !== subtaskId) || [],
           }));
-        }
+        },
       );
 
       return { previousQueries };
@@ -1480,20 +1497,238 @@ export function useDeleteSubtask() {
   });
 }
 
-/** Update subtask title */
+/** Update subtask (title, priority, kanban_stage) */
 export function useUpdateSubtask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, title }: { id: string; title: string }) => {
+    mutationFn: async ({
+      id,
+      title,
+      priority,
+      kanban_stage,
+    }: {
+      id: string;
+      title?: string;
+      priority?: number | null;
+      kanban_stage?: string | null;
+    }) => {
       const supabase = supabaseBrowser();
+
+      const updateData: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (title !== undefined) updateData.title = title;
+      if (priority !== undefined) updateData.priority = priority;
+      if (kanban_stage !== undefined) updateData.kanban_stage = kanban_stage;
+
       const { data, error } = await supabase
         .from("item_subtasks")
-        .update({
-          title,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+    },
+  });
+}
+
+/**
+ * Update subtask priority with automatic reordering.
+ * Priority 1 = top (highest priority). If a priority number is already used,
+ * the item is inserted at that position and all following items shift down by 1.
+ */
+export function useUpdateSubtaskPriority() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      subtaskId,
+      parentItemId,
+      newPriority,
+    }: {
+      subtaskId: string;
+      parentItemId: string;
+      newPriority: number | null;
+    }) => {
+      const supabase = supabaseBrowser();
+
+      // If setting to null, just clear the priority
+      if (newPriority === null) {
+        const { data, error } = await supabase
+          .from("item_subtasks")
+          .update({ priority: null, updated_at: new Date().toISOString() })
+          .eq("id", subtaskId)
+          .select()
+          .single();
+        if (error) throw error;
+        return { updated: [data], shifted: [] };
+      }
+
+      // Get all sibling subtasks with priorities
+      const { data: siblings, error: siblingsError } = await supabase
+        .from("item_subtasks")
+        .select("id, priority")
+        .eq("parent_item_id", parentItemId)
+        .not("priority", "is", null)
+        .order("priority", { ascending: true });
+
+      if (siblingsError) throw siblingsError;
+
+      // Find subtasks that need to shift (priority >= newPriority, excluding the one being updated)
+      const toShift = (siblings || []).filter(
+        (s) =>
+          s.id !== subtaskId &&
+          s.priority !== null &&
+          s.priority >= newPriority,
+      );
+
+      // Shift all affected subtasks down by 1
+      const shiftedIds: string[] = [];
+      for (const s of toShift) {
+        const { error: shiftError } = await supabase
+          .from("item_subtasks")
+          .update({
+            priority: (s.priority as number) + 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", s.id);
+        if (shiftError) throw shiftError;
+        shiftedIds.push(s.id);
+      }
+
+      // Update the target subtask with the new priority
+      const { data, error } = await supabase
+        .from("item_subtasks")
+        .update({ priority: newPriority, updated_at: new Date().toISOString() })
+        .eq("id", subtaskId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { updated: [data], shifted: shiftedIds };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+    },
+  });
+}
+
+/** Update subtask kanban stage with optimistic UI */
+export function useUpdateSubtaskKanbanStage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      subtaskId,
+      kanbanStage,
+      parentItemId,
+    }: {
+      subtaskId: string;
+      kanbanStage: string;
+      parentItemId: string;
+    }) => {
+      const supabase = supabaseBrowser();
+
+      const updateData: Record<string, unknown> = {
+        kanban_stage: kanbanStage,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from("item_subtasks")
+        .update(updateData)
+        .eq("id", subtaskId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onMutate: async ({ subtaskId, kanbanStage, parentItemId }) => {
+      // Cancel any outgoing refetches for all item queries
+      await queryClient.cancelQueries({ queryKey: itemsKeys.all });
+
+      // Helper to update subtask in an item array
+      const updateItemsArray = (items: ItemWithDetails[] | undefined) => {
+        if (!items) return items;
+        return items.map((item) => {
+          if (item.id !== parentItemId) return item;
+          return {
+            ...item,
+            subtasks: item.subtasks?.map((subtask) =>
+              subtask.id === subtaskId
+                ? { ...subtask, kanban_stage: kanbanStage }
+                : subtask,
+            ),
+          };
+        });
+      };
+
+      // Snapshot all queries and update them optimistically
+      const previousQueries: Array<{ queryKey: unknown; data: unknown }> = [];
+
+      // Get all queries that start with itemsKeys.all
+      const allQueries = queryClient.getQueriesData<ItemWithDetails[]>({
+        queryKey: itemsKeys.all,
+      });
+
+      for (const [queryKey, data] of allQueries) {
+        if (Array.isArray(data)) {
+          previousQueries.push({ queryKey, data });
+          queryClient.setQueryData(queryKey, updateItemsArray(data));
+        }
+      }
+
+      return { previousQueries };
+    },
+    onError: (_err, _variables, context) => {
+      // Rollback all queries on error
+      if (context?.previousQueries) {
+        for (const { queryKey, data } of context.previousQueries) {
+          queryClient.setQueryData(queryKey as readonly unknown[], data);
+        }
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+    },
+  });
+}
+
+/** Update item kanban settings (enable/disable, stage names) */
+export function useUpdateItemKanbanSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      kanbanEnabled,
+      kanbanStages,
+    }: {
+      itemId: string;
+      kanbanEnabled?: boolean;
+      kanbanStages?: string[];
+    }) => {
+      const supabase = supabaseBrowser();
+
+      const updateData: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (kanbanEnabled !== undefined)
+        updateData.subtask_kanban_enabled = kanbanEnabled;
+      if (kanbanStages !== undefined)
+        updateData.subtask_kanban_stages = kanbanStages;
+
+      const { data, error } = await supabase
+        .from("items")
+        .update(updateData)
+        .eq("id", itemId)
         .select()
         .single();
 

@@ -45,6 +45,8 @@ export interface Item {
   responsible_user_id: UUID;
   google_event_id?: string | null;
   categories?: string[]; // Array of category IDs (e.g., ["work", "personal"])
+  subtask_kanban_enabled?: boolean; // Whether kanban view is enabled for subtasks
+  subtask_kanban_stages?: string[]; // Array of kanban stage names (e.g., ["To Do", "In Progress", "Done"])
 }
 
 /** Item with related data for display */
@@ -95,6 +97,8 @@ export interface Subtask {
   occurrence_date?: string | null; // ISO timestamp - which occurrence this subtask belongs to (null for non-recurring)
   done_at?: string | null; // ISO timestamp
   order_index: number;
+  priority?: number | null; // Numeric priority (1 = highest). NULL means use order_index
+  kanban_stage?: string | null; // Current kanban stage name (e.g., "To Do", "In Progress", "Done")
   created_at: string;
   updated_at: string;
 }

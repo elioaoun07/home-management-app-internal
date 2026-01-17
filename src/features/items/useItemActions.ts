@@ -505,7 +505,7 @@ export function usePostponeItem() {
 
       if (error) throw error;
 
-      // For non-recurring items, also update the due date
+      // For non-recurring items, also update the due date and alert time
       if (!isRecurring && postponedTo) {
         // Try updating reminder_details
         await supabase
@@ -518,6 +518,38 @@ export function usePostponeItem() {
           .from("event_details")
           .update({ start_at: postponedTo })
           .eq("item_id", itemId);
+
+        // Fetch existing alerts to recalculate trigger_at for relative alerts
+        const { data: alerts } = await supabase
+          .from("item_alerts")
+          .select("id, kind, offset_minutes")
+          .eq("item_id", itemId)
+          .eq("active", true);
+
+        if (alerts && alerts.length > 0) {
+          const postponedDate = new Date(postponedTo);
+
+          for (const alert of alerts) {
+            // For relative alerts, compute trigger_at = postponedTo - offset_minutes
+            // For absolute alerts, just set trigger_at to postponedTo
+            let newTriggerAt = postponedTo;
+            if (alert.kind === "relative" && alert.offset_minutes) {
+              newTriggerAt = new Date(
+                postponedDate.getTime() - alert.offset_minutes * 60 * 1000
+              ).toISOString();
+            }
+
+            // Update the alert with new trigger time
+            // Reset last_fired_at to null so the cron job will send the notification again
+            await supabase
+              .from("item_alerts")
+              .update({
+                trigger_at: newTriggerAt,
+                last_fired_at: null,
+              })
+              .eq("id", alert.id);
+          }
+        }
       }
 
       return { action: data, postponedTo };
