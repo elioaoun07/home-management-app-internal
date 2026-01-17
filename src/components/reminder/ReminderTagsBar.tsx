@@ -47,6 +47,8 @@ interface ReminderTagsBarProps {
   dueTime?: string;
   startDate?: string;
   startTime?: string;
+  endDate?: string;
+  endTime?: string;
   date: Date;
   onTitleClick: () => void;
   onCategoriesClick: () => void;
@@ -65,6 +67,8 @@ export default function ReminderTagsBar({
   dueTime,
   startDate,
   startTime,
+  endDate,
+  endTime,
   date,
   onTitleClick,
   onCategoriesClick,
@@ -92,7 +96,7 @@ export default function ReminderTagsBar({
       <div
         className={cn(
           "mx-auto max-w-[520px] pointer-events-auto rounded-[26px] border bg-bg-dark/95 px-3 py-2.5 shadow-2xl slide-in-from-bottom backdrop-blur-xl",
-          themeClasses.border
+          themeClasses.border,
         )}
         style={barStyles}
       >
@@ -104,7 +108,7 @@ export default function ReminderTagsBar({
               "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in",
               themeClasses.border,
               themeClasses.bgSurface,
-              themeClasses.bgHover
+              themeClasses.bgHover,
             )}
           >
             {detectedItemType === "reminder" ? (
@@ -120,7 +124,7 @@ export default function ReminderTagsBar({
                 "font-semibold text-xs capitalize",
                 detectedItemType === "reminder"
                   ? "text-cyan-400"
-                  : "text-pink-400"
+                  : "text-pink-400",
               )}
             >
               {detectedItemType}
@@ -135,7 +139,7 @@ export default function ReminderTagsBar({
                 "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in",
                 themeClasses.border,
                 themeClasses.bgSurface,
-                themeClasses.bgHover
+                themeClasses.bgHover,
               )}
             >
               <span className={cn("text-[10px]", themeClasses.textMuted)}>
@@ -144,7 +148,7 @@ export default function ReminderTagsBar({
               <span
                 className={cn(
                   "font-semibold text-xs max-w-[120px] truncate",
-                  themeClasses.textHighlight
+                  themeClasses.textHighlight,
                 )}
               >
                 {title}
@@ -160,7 +164,7 @@ export default function ReminderTagsBar({
                 "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in",
                 themeClasses.border,
                 themeClasses.bgSurface,
-                themeClasses.bgHover
+                themeClasses.bgHover,
               )}
             >
               <span className={cn("text-[10px]", themeClasses.textMuted)}>
@@ -178,7 +182,7 @@ export default function ReminderTagsBar({
               <span
                 className={cn(
                   "font-semibold text-xs",
-                  themeClasses.textHighlight
+                  themeClasses.textHighlight,
                 )}
               >
                 {selectedCategories.length > 1
@@ -196,7 +200,7 @@ export default function ReminderTagsBar({
                 "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in",
                 themeClasses.border,
                 themeClasses.bgSurface,
-                themeClasses.bgHover
+                themeClasses.bgHover,
               )}
             >
               <span className={cn("text-[10px]", themeClasses.textMuted)}>
@@ -222,30 +226,60 @@ export default function ReminderTagsBar({
               "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full neo-card hover:scale-105 active:scale-95 transition-all duration-150 quick-scale-in",
               hasDateInfo
                 ? "border-purple/30 bg-purple/10 hover:bg-purple/20"
-                : `${themeClasses.border} ${themeClasses.bgSurface} ${themeClasses.bgHover}`
+                : `${themeClasses.border} ${themeClasses.bgSurface} ${themeClasses.bgHover}`,
             )}
           >
             <CalendarIcon
               className={cn(
                 "w-3.5 h-3.5",
-                hasDateInfo ? "text-purple" : themeClasses.textMuted
+                hasDateInfo ? "text-purple" : themeClasses.textMuted,
               )}
             />
             <span className={cn("text-[10px]", themeClasses.textMuted)}>
               Date
             </span>
-            <span
-              className={cn(
-                "font-semibold text-xs",
-                hasDateInfo ? "text-purple" : themeClasses.textHighlight
-              )}
-            >
-              {format(date, "MMM d")}
-            </span>
-            {hasDateInfo && (dueTime || startTime) && (
-              <span className="font-semibold text-xs text-purple/80">
-                {dueTime || startTime}
-              </span>
+            {detectedItemType === "event" && startDate && endDate ? (
+              // Event: show range
+              <>
+                <span
+                  className={cn(
+                    "font-semibold text-xs",
+                    hasDateInfo ? "text-purple" : themeClasses.textHighlight,
+                  )}
+                >
+                  {format(new Date(startDate), "MMM d")}
+                  {startTime && ` ${startTime}`}
+                </span>
+                <span className={cn("text-xs", themeClasses.textMuted)}>→</span>
+                <span
+                  className={cn(
+                    "font-semibold text-xs",
+                    hasDateInfo ? "text-purple" : themeClasses.textHighlight,
+                  )}
+                >
+                  {format(new Date(endDate), "MMM d")}
+                  {endTime && ` ${endTime}`}
+                </span>
+              </>
+            ) : (
+              // Reminder/Task: show single date
+              <>
+                <span
+                  className={cn(
+                    "font-semibold text-xs",
+                    hasDateInfo ? "text-purple" : themeClasses.textHighlight,
+                  )}
+                >
+                  {dueDate
+                    ? format(new Date(dueDate), "MMM d")
+                    : format(date, "MMM d")}
+                </span>
+                {(dueTime || startTime) && (
+                  <span className="font-semibold text-xs text-purple/80">
+                    {dueTime || startTime}
+                  </span>
+                )}
+              </>
             )}
           </button>
         </div>

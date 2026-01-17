@@ -1,38 +1,49 @@
 /**
  * Mobile-First Reminder Entry Component
- * Full-page form for creating reminders and events
- * Matches MobileExpenseForm UI/UX patterns
+ * Streamlined single-page form with smart text parsing
+ * Quick entry via natural language input
  */
 "use client";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { MOBILE_CONTENT_BOTTOM_OFFSET } from "@/constants/layout";
-import { useCreateEvent, useCreateReminder } from "@/features/items/useItems";
+import {
+  useCreateEvent,
+  useCreateReminder,
+  useCreateTask,
+} from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import {
+  getDateDescription,
+  getRecurrenceDescription,
+  getTimeDescription,
+  parseSmartText,
+  type ParsedItem,
+} from "@/lib/smartTextParser";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import type {
   CreateEventInput,
   CreateRecurrenceInput,
   CreateReminderInput,
+  CreateTaskInput,
   ItemPriority,
   ItemStatus,
+  ItemType,
 } from "@/types/items";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckIcon, ChevronLeftIcon } from "lucide-react";
+import { CheckIcon, SparklesIcon } from "lucide-react";
 import {
   useCallback,
   useEffect,
-  useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from "react";
 import { toast } from "sonner";
-import ReminderTagsBarWrapper from "./ReminderTagsBarWrapper";
 
 // ============================================
 // ICONS
@@ -107,6 +118,20 @@ const TagIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const MicIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" x2="12" y1="19" y2="22" />
+  </svg>
+);
+
 const ListIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
@@ -166,7 +191,7 @@ const categoryIcons: Record<string, React.FC<{ className?: string }>> = {
 // ============================================
 
 type Step = "title" | "date" | "details";
-type ItemType = "reminder" | "event";
+// Using ItemType from @/types/items which includes "reminder" | "event" | "task"
 
 // Priority configuration with theme-aware colors
 const priorityConfig: Record<
@@ -245,16 +270,29 @@ export default function MobileReminderForm() {
   const themeClasses = useThemeClasses();
   const createReminder = useCreateReminder();
   const createEvent = useCreateEvent();
+  const createTask = useCreateTask();
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Form state
-  const [step, setStep] = useState<Step>("title");
+  // Smart text input state
+  const [smartInput, setSmartInput] = useState("");
+  const [parsedItem, setParsedItem] = useState<ParsedItem | null>(null);
+
+  // Track manual overrides - when user manually changes a field, don't let parsing overwrite it
+  const [manualOverrides, setManualOverrides] = useState<{
+    type: boolean;
+    priority: boolean;
+    categories: boolean;
+  }>({ type: false, priority: false, categories: false });
+
+  // Form state (can be overridden manually after parsing)
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [priority, setPriority] = useState<ItemPriority>("normal");
   const [status, setStatus] = useState<ItemStatus>("pending");
+  const [itemType, setItemType] = useState<ItemType>("reminder");
 
-  // Date fields for auto-detection
+  // Date fields
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -262,109 +300,230 @@ export default function MobileReminderForm() {
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
 
-  // Categories (multi-select)
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  // Categories (multi-select, defaults to personal)
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([
+    "personal",
+  ]);
 
   // Recurrence state
   const [recurrenceRule, setRecurrenceRule] = useState("");
 
-  // Date for tags bar calendar
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // Missing fields modal state
+  const [showMissingFieldsModal, setShowMissingFieldsModal] = useState(false);
+  const [missingFieldType, setMissingFieldType] = useState<
+    "event" | "reminder" | "task" | null
+  >(null);
+  const [editingDateField, setEditingDateField] = useState<string | null>(null);
 
-  // Auto-detect item type based on filled date fields
-  const detectedItemType: ItemType = useMemo(() => {
-    // If any event fields are filled, it's an event
-    const hasEventFields = !!(startDate || startTime || endDate || endTime);
-    // If only due date fields are filled and no event fields, it's a reminder
-    const hasOnlyDueFields = !!(dueDate || dueTime) && !hasEventFields;
+  // Voice input state
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-    if (hasEventFields) return "event";
-    if (hasOnlyDueFields) return "reminder";
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = "en-US";
 
-    // Default to reminder if nothing is filled
-    return "reminder";
-  }, [dueDate, dueTime, startDate, startTime, endDate, endTime]);
+        recognition.onresult = (event) => {
+          const transcript = Array.from(event.results)
+            .map((result) => result[0].transcript)
+            .join("");
+          setSmartInput(transcript);
+        };
 
-  // Step flow
-  const stepFlow: Step[] = ["title", "date", "details"];
-  const currentStepIndex = stepFlow.indexOf(step);
+        recognition.onend = () => {
+          setIsListening(false);
+        };
 
-  // Progress percentage
-  const progress = ((currentStepIndex + 1) / stepFlow.length) * 100;
+        recognition.onerror = (event) => {
+          console.error("Speech recognition error:", event.error);
+          setIsListening(false);
+          if (event.error === "not-allowed") {
+            toast.error("Microphone access denied", {
+              icon: ToastIcons.error,
+              description: "Please allow microphone access to use voice input",
+            });
+          }
+        };
 
-  // Navigation
-  const goBack = useCallback(() => {
-    if (navigator.vibrate) navigator.vibrate([5, 5, 5]);
-    const prevIndex = Math.max(currentStepIndex - 1, 0);
-    setStep(stepFlow[prevIndex]);
-  }, [currentStepIndex, stepFlow]);
-
-  const goNext = useCallback(() => {
-    if (navigator.vibrate) navigator.vibrate(10);
-    const nextIndex = Math.min(currentStepIndex + 1, stepFlow.length - 1);
-    setStep(stepFlow[nextIndex]);
-  }, [currentStepIndex, stepFlow]);
-
-  // Validation
-  const isStepValid = useCallback(() => {
-    switch (step) {
-      case "title":
-        return title.trim().length > 0;
-      case "date":
-        return true; // Optional
-      case "details":
-        return selectedCategoryIds.length > 0; // At least one category required
-      default:
-        return true;
+        recognitionRef.current = recognition;
+      }
     }
-  }, [step, title, selectedCategoryIds]);
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, []);
+
+  // Toggle voice input
+  const toggleVoiceInput = useCallback(() => {
+    if (!recognitionRef.current) {
+      toast.error("Voice input not supported", {
+        icon: ToastIcons.error,
+        description: "Your browser doesn't support speech recognition",
+      });
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  }, [isListening]);
+
+  // Helper to format date for display
+  const formatDateDisplay = (dateStr: string) => {
+    if (!dateStr) return "Select date";
+    try {
+      const date = parse(dateStr, "yyyy-MM-dd", new Date());
+      return format(date, "d MMM, yyyy");
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Helper to format time for display
+  const formatTimeDisplay = (timeStr: string) => {
+    if (!timeStr) return "Select time";
+    try {
+      const [hours, minutes] = timeStr.split(":");
+      const date = new Date();
+      date.setHours(parseInt(hours), parseInt(minutes));
+      return format(date, "h:mm a");
+    } catch {
+      return timeStr;
+    }
+  };
+
+  // Parse smart input on change (debounced effect)
+  useEffect(() => {
+    if (!smartInput.trim()) {
+      setParsedItem(null);
+      return;
+    }
+
+    // Parse after a brief delay to avoid parsing on every keystroke
+    const timer = setTimeout(() => {
+      const parsed = parseSmartText(smartInput);
+      setParsedItem(parsed);
+
+      // Update form fields based on parsed data, respecting manual overrides
+      setTitle(parsed.title);
+
+      // Only update type if user hasn't manually changed it
+      if (!manualOverrides.type) {
+        setItemType(parsed.type);
+      }
+
+      // Only update priority if user hasn't manually changed it
+      if (!manualOverrides.priority) {
+        setPriority(parsed.priority);
+      }
+
+      // Add detected categories to existing ones (additive, not replacing)
+      if (
+        !manualOverrides.categories &&
+        parsed.categoryIds &&
+        parsed.categoryIds.length > 0
+      ) {
+        setSelectedCategoryIds((prev) => {
+          const combined = new Set([...prev, ...parsed.categoryIds!]);
+          return Array.from(combined);
+        });
+      }
+
+      if (parsed.recurrenceRule) {
+        setRecurrenceRule(parsed.recurrenceRule);
+      }
+
+      if (parsed.type === "event" && !manualOverrides.type) {
+        if (parsed.startDate) setStartDate(parsed.startDate);
+        if (parsed.startTime) setStartTime(parsed.startTime);
+        if (parsed.endDate) setEndDate(parsed.endDate);
+        if (parsed.endTime) setEndTime(parsed.endTime);
+      } else if (!manualOverrides.type) {
+        if (parsed.dueDate) setDueDate(parsed.dueDate);
+        if (parsed.dueTime) setDueTime(parsed.dueTime);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [smartInput, manualOverrides]);
 
   // Reset form
   const resetForm = useCallback(() => {
-    setStep("title");
+    setSmartInput("");
+    setParsedItem(null);
     setTitle("");
     setDescription("");
     setIsPrivate(false);
     setPriority("normal");
     setStatus("pending");
+    setItemType("reminder");
     setDueDate("");
     setDueTime("");
     setStartDate("");
     setStartTime("");
     setEndDate("");
     setEndTime("");
-    setSelectedCategoryIds([]);
+    setSelectedCategoryIds(["personal"]);
     setRecurrenceRule("");
-  }, []);
-
-  // Toggle category selection
-  const toggleCategory = useCallback((categoryId: string) => {
-    setSelectedCategoryIds((prev) =>
-      prev.includes(categoryId)
-        ? prev.filter((id) => id !== categoryId)
-        : [...prev, categoryId]
-    );
+    setManualOverrides({ type: false, priority: false, categories: false });
   }, []);
 
   // Submit handler
   const handleSubmit = async () => {
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      toast.error("Please enter what you want to remember", {
+        icon: ToastIcons.error,
+      });
+      inputRef.current?.focus();
+      return;
+    }
 
     try {
-      if (detectedItemType === "event") {
-        // Create Event
+      if (itemType === "event") {
+        // Set defaults if missing
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const formatDate = (d: Date) => d.toISOString().split("T")[0];
+        const formatTime = (d: Date) => d.toTimeString().slice(0, 5);
+
+        const defaultStartDate = startDate || formatDate(today);
+        const defaultStartTime = startTime || formatTime(today);
+        const defaultEndDate = endDate || formatDate(tomorrow);
+        const defaultEndTime = endTime || formatTime(today);
+
+        // Check for missing event fields
         if (!startDate || !startTime || !endDate || !endTime) {
-          toast.error("Event requires start and end date/time");
+          setStartDate(defaultStartDate);
+          setStartTime(defaultStartTime);
+          setEndDate(defaultEndDate);
+          setEndTime(defaultEndTime);
+
+          setMissingFieldType("event");
+          setShowMissingFieldsModal(true);
           return;
         }
 
-        // Convert local date/time to ISO string with timezone
+        // Create Event
         const startAtIso = new Date(
-          `${startDate}T${startTime}:00`
+          `${startDate}T${startTime}:00`,
         ).toISOString();
         const endAtIso = new Date(`${endDate}T${endTime}:00`).toISOString();
 
-        // Build recurrence rule if set
         let recurrence_rule: CreateRecurrenceInput | undefined;
         if (recurrenceRule) {
           recurrence_rule = {
@@ -376,7 +535,7 @@ export default function MobileReminderForm() {
         const input: CreateEventInput = {
           type: "event",
           title: title.trim(),
-          description: description.trim() || undefined,
+          description: smartInput.trim() || undefined, // Original input as description
           priority,
           status,
           is_public: !isPrivate,
@@ -392,17 +551,85 @@ export default function MobileReminderForm() {
           icon: ToastIcons.create,
           description: title,
         });
-      } else {
-        // Create Reminder
-        // Convert local date/time to ISO string with timezone
-        let dueAtIso: string | undefined;
-        if (dueDate && dueTime) {
-          // Create a Date object from local date/time - this preserves the local timezone
-          const localDate = new Date(`${dueDate}T${dueTime}:00`);
-          dueAtIso = localDate.toISOString();
+      } else if (itemType === "task") {
+        // Set defaults if missing
+        const today = new Date();
+        const formatDate = (d: Date) => d.toISOString().split("T")[0];
+        const formatTime = (d: Date) => d.toTimeString().slice(0, 5);
+
+        const defaultDueDate = dueDate || formatDate(today);
+        const defaultDueTime = dueTime || formatTime(today);
+
+        // Check for missing task fields - always prompt if no date/time set
+        if (!dueDate || !dueTime) {
+          setDueDate(defaultDueDate);
+          setDueTime(defaultDueTime);
+
+          setMissingFieldType("task");
+          setShowMissingFieldsModal(true);
+          return;
         }
 
-        // Build recurrence rule if set
+        // Create Task
+        let dueAtIso: string | undefined;
+        if (dueDate && dueTime) {
+          dueAtIso = new Date(`${dueDate}T${dueTime}:00`).toISOString();
+        } else if (dueDate) {
+          dueAtIso = new Date(`${dueDate}T12:00:00`).toISOString();
+        }
+
+        let recurrence_rule: CreateRecurrenceInput | undefined;
+        if (recurrenceRule && dueAtIso) {
+          recurrence_rule = {
+            rrule: recurrenceRule,
+            start_anchor: dueAtIso,
+          };
+        }
+
+        const input: CreateTaskInput = {
+          type: "task",
+          title: title.trim(),
+          description: smartInput.trim() || undefined,
+          priority,
+          is_public: !isPrivate,
+          due_at: dueAtIso,
+          category_ids:
+            selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
+          recurrence_rule,
+        };
+
+        await createTask.mutateAsync(input);
+        toast.success("Task created!", {
+          icon: ToastIcons.create,
+          description: title,
+        });
+      } else {
+        // Set defaults if missing
+        const today = new Date();
+        const formatDate = (d: Date) => d.toISOString().split("T")[0];
+        const formatTime = (d: Date) => d.toTimeString().slice(0, 5);
+
+        const defaultDueDate = dueDate || formatDate(today);
+        const defaultDueTime = dueTime || formatTime(today);
+
+        // Check for missing reminder fields - always prompt if no date/time set
+        if (!dueDate || !dueTime) {
+          setDueDate(defaultDueDate);
+          setDueTime(defaultDueTime);
+
+          setMissingFieldType("reminder");
+          setShowMissingFieldsModal(true);
+          return;
+        }
+
+        // Create Reminder
+        let dueAtIso: string | undefined;
+        if (dueDate && dueTime) {
+          dueAtIso = new Date(`${dueDate}T${dueTime}:00`).toISOString();
+        } else if (dueDate) {
+          dueAtIso = new Date(`${dueDate}T12:00:00`).toISOString();
+        }
+
         let recurrence_rule: CreateRecurrenceInput | undefined;
         if (recurrenceRule && dueAtIso) {
           recurrence_rule = {
@@ -414,7 +641,7 @@ export default function MobileReminderForm() {
         const input: CreateReminderInput = {
           type: "reminder",
           title: title.trim(),
-          description: description.trim() || undefined,
+          description: smartInput.trim() || undefined,
           priority,
           status,
           is_public: !isPrivate,
@@ -442,67 +669,109 @@ export default function MobileReminderForm() {
     paddingBottom: `calc(${MOBILE_CONTENT_BOTTOM_OFFSET + 80}px)`,
   };
 
-  // Set default category to "Personal" on mount
-  useEffect(() => {
-    if (selectedCategoryIds.length === 0) {
-      // Personal is always the first in CATEGORIES
-      setSelectedCategoryIds(["personal"]);
-    }
-  }, []); // Only run once on mount
+  const isPending =
+    createReminder.isPending || createEvent.isPending || createTask.isPending;
 
-  // Sync selectedDate with date input fields
-  useEffect(() => {
-    const dateStr = format(selectedDate, "yyyy-MM-dd");
+  // Get parsed info display
+  const getParsedInfoChips = () => {
+    if (!parsedItem) return null;
 
-    // Update the appropriate date field based on detected item type
-    if (detectedItemType === "event") {
-      if (!startDate) {
-        setStartDate(dateStr);
+    const chips: { label: string; color: string; confidence: number }[] = [];
+
+    // Type chip
+    const typeLabel =
+      parsedItem.type === "event"
+        ? "📅 Event"
+        : parsedItem.type === "task"
+          ? "✅ Task"
+          : "⏰ Reminder";
+    chips.push({
+      label: typeLabel,
+      color: "from-cyan-500/30 to-blue-500/30",
+      confidence: parsedItem.confidence.type,
+    });
+
+    // Date chip
+    if (parsedItem.dueDate || parsedItem.startDate) {
+      const dateStr = parsedItem.dueDate || parsedItem.startDate || "";
+      const dateLabel = getDateDescription(dateStr);
+      if (dateLabel) {
+        chips.push({
+          label: `📆 ${dateLabel}`,
+          color: "from-violet-500/30 to-purple-500/30",
+          confidence: parsedItem.confidence.date,
+        });
       }
-    } else {
-      if (!dueDate) {
-        setDueDate(dateStr);
+    }
+
+    // Time chip
+    if (parsedItem.dueTime || parsedItem.startTime) {
+      const timeStr = parsedItem.dueTime || parsedItem.startTime || "";
+      const timeLabel = getTimeDescription(timeStr);
+      if (timeLabel) {
+        chips.push({
+          label: `🕐 ${timeLabel}`,
+          color: "from-amber-500/30 to-orange-500/30",
+          confidence: parsedItem.confidence.time,
+        });
       }
     }
-  }, [selectedDate]); // Run when selectedDate changes
 
-  const isPending = createReminder.isPending || createEvent.isPending;
+    // Recurrence chip
+    if (parsedItem.recurrenceRule) {
+      const recurrenceLabel = getRecurrenceDescription(
+        parsedItem.recurrenceRule,
+      );
+      chips.push({
+        label: `🔄 ${recurrenceLabel}`,
+        color: "from-green-500/30 to-emerald-500/30",
+        confidence: parsedItem.confidence.recurrence,
+      });
+    }
+
+    // Priority chip (only if not normal)
+    if (parsedItem.priority !== "normal") {
+      const prioLabel = priorityConfig[parsedItem.priority].label;
+      const prioIcon =
+        parsedItem.priority === "urgent"
+          ? "🔴"
+          : parsedItem.priority === "high"
+            ? "🟠"
+            : "🔵";
+      chips.push({
+        label: `${prioIcon} ${prioLabel}`,
+        color: "from-red-500/30 to-pink-500/30",
+        confidence: parsedItem.confidence.priority,
+      });
+    }
+
+    return chips;
+  };
+
+  const parsedChips = getParsedInfoChips();
 
   return (
     <>
       <div className="fixed inset-0 top-14 bg-bg-dark flex flex-col">
-        {/* HEADER - positioned below main app header (top-14 = 56px) */}
+        {/* HEADER */}
         <div
           className={cn(
             "sticky top-0 z-[50] bg-gradient-to-b from-bg-card-custom to-bg-medium border-b px-3 py-3 shadow-2xl shadow-black/10 backdrop-blur-xl",
-            themeClasses.border
+            themeClasses.border,
           )}
         >
-          <div className="flex items-center justify-between mb-2">
-            {/* Back Button */}
-            {currentStepIndex > 0 ? (
-              <button
-                type="button"
-                onClick={goBack}
-                className={cn(
-                  "flex items-center gap-1 transition-colors active:scale-95",
-                  themeClasses.textSecondary,
-                  themeClasses.textHover
-                )}
-              >
-                <ChevronLeftIcon className="w-5 h-5" />
-                <span className="text-sm">Back</span>
-              </button>
-            ) : (
-              <div className="w-16" />
-            )}
+          <div className="flex items-center justify-between">
+            <div className="w-8" />
 
-            {/* Title with detected type badge */}
+            {/* Title with AI indicator */}
             <div className="flex items-center gap-2">
+              <SparklesIcon
+                className={cn("w-4 h-4", themeClasses.textActive)}
+              />
               <h1
                 className={cn("text-lg font-semibold", themeClasses.headerText)}
               >
-                New {detectedItemType === "event" ? "Event" : "Reminder"}
+                Quick Entry
               </h1>
             </div>
 
@@ -511,10 +780,10 @@ export default function MobileReminderForm() {
               type="button"
               onClick={resetForm}
               className={cn(
-                "p-1.5 -mr-2 rounded-lg transition-all active:scale-95",
+                "w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-95",
                 themeClasses.bgSurface,
                 themeClasses.border,
-                "hover:bg-opacity-30"
+                "hover:bg-opacity-30",
               )}
             >
               <svg
@@ -529,719 +798,746 @@ export default function MobileReminderForm() {
               </svg>
             </button>
           </div>
-
-          {/* Progress Bar */}
-          <div
-            className={cn(
-              "h-1 rounded-full overflow-hidden",
-              themeClasses.bgSurface
-            )}
-          >
-            <motion.div
-              className="h-full neo-gradient"
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            />
-          </div>
         </div>
 
-        {/* CONTENT */}
+        {/* CONTENT - Single Page */}
         <div
           className="flex-1 overflow-y-auto pt-4 px-4"
           style={contentAreaStyles}
         >
-          <AnimatePresence mode="wait">
-            {/* STEP 1: TITLE + DESCRIPTION + PRIVATE/PUBLIC */}
-            {step === "title" && (
-              <motion.div
-                key="title"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-3 step-slide-in"
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-4"
+          >
+            {/* SMART TEXT INPUT */}
+            <div className="space-y-2">
+              <Label
+                className={cn(
+                  "mb-1 block text-sm font-medium",
+                  themeClasses.headerText,
+                )}
               >
-                <div className="space-y-3">
-                  <div>
-                    <Label
-                      className={cn(
-                        "mb-2 block text-sm font-medium",
-                        themeClasses.headerText
-                      )}
-                    >
-                      Title *
-                    </Label>
-                    <Input
-                      type="text"
-                      placeholder="e.g., Team meeting, Call dentist..."
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className={cn(
-                        "text-base py-3 neo-card border-0 category-appear",
-                        themeClasses.text
-                      )}
-                      autoFocus
-                    />
-                  </div>
-
-                  <div>
-                    <Label
-                      className={cn(
-                        "mb-2 block text-sm font-medium",
-                        themeClasses.headerText
-                      )}
-                    >
-                      Additional Description
-                    </Label>
-                    <Textarea
-                      placeholder="Add any extra details... (optional)"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      className={cn(
-                        "text-base py-3 neo-card border-0 category-appear",
-                        themeClasses.text
-                      )}
-                      style={{ animationDelay: "50ms" }}
-                    />
-                  </div>
-
-                  {/* Private/Public Toggle - Exact match to MobileExpenseForm */}
-                  <div
-                    className="category-appear flex items-center justify-end px-1 py-2"
-                    style={{ animationDelay: "100ms" }}
-                  >
-                    <button
-                      onClick={() => setIsPrivate(!isPrivate)}
-                      className={cn(
-                        "group relative p-3 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2.5 overflow-hidden",
-                        isPrivate
-                          ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow} hover:shadow-[0_0_25px_rgba(20,184,166,0.35),0_0_50px_rgba(6,182,212,0.2)]`
-                          : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`
-                      )}
-                    >
-                      {/* Animated background glow when private */}
-                      {isPrivate && (
-                        <div
-                          className={`absolute inset-0 bg-gradient-to-r ${themeClasses.iconBg} animate-[shimmer_3s_ease-in-out_infinite]`}
-                        />
-                      )}
-
-                      <span
-                        className={cn(
-                          "relative text-sm font-semibold tracking-wide transition-all duration-300",
-                          isPrivate
-                            ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]`
-                            : `${themeClasses.textFaint} ${themeClasses.textHover}`
-                        )}
-                      >
-                        {isPrivate ? "Private" : "Public"}
-                      </span>
-                      <svg
-                        className={cn(
-                          "relative w-5 h-5 transition-all duration-500",
-                          isPrivate
-                            ? `${themeClasses.textActive} drop-shadow-[0_0_10px_rgba(20,184,166,0.8)] animate-pulse`
-                            : `${themeClasses.textFaint} ${themeClasses.textHover}`
-                        )}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2.5}
-                      >
-                        {isPrivate ? (
-                          // Locked icon
-                          <>
-                            <rect
-                              x="5"
-                              y="11"
-                              width="14"
-                              height="10"
-                              rx="2"
-                              ry="2"
-                            />
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                          </>
-                        ) : (
-                          // Unlocked icon
-                          <>
-                            <rect
-                              x="5"
-                              y="11"
-                              width="14"
-                              height="10"
-                              rx="2"
-                              ry="2"
-                            />
-                            <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-                          </>
-                        )}
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
-                <Button
-                  onClick={goNext}
-                  disabled={!isStepValid()}
-                  className="w-full h-11 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5 transition-all active:scale-[0.98] spring-bounce mt-2"
-                >
-                  Continue
-                </Button>
-              </motion.div>
-            )}
-
-            {/* STEP 2: DATE (Reminder or Event) */}
-            {step === "date" && (
-              <motion.div
-                key="date"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-3 step-slide-in"
-              >
-                {/* Type Toggle */}
-                <div className="flex justify-center gap-2 mb-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Clear event fields when switching to reminder
-                      setStartDate("");
-                      setStartTime("");
-                      setEndDate("");
-                      setEndTime("");
-                    }}
+                What do you want to remember?
+              </Label>
+              <div className="relative flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    ref={inputRef}
+                    type="text"
+                    placeholder='e.g., "Remind me to call Thomas tomorrow at 6 pm"'
+                    value={smartInput}
+                    onChange={(e) => setSmartInput(e.target.value)}
                     className={cn(
-                      "px-6 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95",
-                      detectedItemType === "reminder"
-                        ? "neo-gradient text-white shadow-lg"
-                        : `neo-card ${themeClasses.border} ${themeClasses.text} ${themeClasses.borderHover}`
+                      "text-base py-4 pl-4 pr-10 neo-card border-0 w-full",
+                      themeClasses.text,
+                      isListening && "ring-2 ring-red-500/50",
                     )}
-                  >
-                    ⏰ Reminder
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Clear due fields when switching to event
-                      setDueDate("");
-                      setDueTime("");
-                      // Set default start/end if empty
-                      if (!startDate)
-                        setStartDate(format(new Date(), "yyyy-MM-dd"));
-                      if (!startTime) setStartTime("12:00");
-                      if (!endDate)
-                        setEndDate(format(new Date(), "yyyy-MM-dd"));
-                      if (!endTime) setEndTime("13:00");
-                    }}
-                    className={cn(
-                      "px-6 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95",
-                      detectedItemType === "event"
-                        ? "neo-gradient text-white shadow-lg"
-                        : `neo-card ${themeClasses.border} ${themeClasses.text} ${themeClasses.borderHover}`
-                    )}
-                  >
-                    📅 Event
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {detectedItemType === "reminder" ? (
-                    /* Reminder Mode: Just Due Date & Time */
-                    <div className="neo-card p-4 rounded-xl space-y-3 category-appear">
-                      <div className="flex items-center gap-2 mb-2">
-                        <BellIcon
-                          className={cn("w-4 h-4", themeClasses.text)}
-                        />
-                        <Label
-                          className={cn(
-                            "text-sm font-semibold",
-                            themeClasses.headerText
-                          )}
-                        >
-                          Due Date & Time
-                        </Label>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Input
-                          type="date"
-                          value={dueDate}
-                          onChange={(e) => setDueDate(e.target.value)}
-                          className={cn(
-                            "py-3 neo-card border-0",
-                            themeClasses.text
-                          )}
-                        />
-                        <Input
-                          type="time"
-                          value={dueTime}
-                          onChange={(e) => setDueTime(e.target.value)}
-                          className={cn(
-                            "py-3 neo-card border-0",
-                            themeClasses.text
-                          )}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    /* Event Mode: Start and End Date & Time */
-                    <>
-                      <div className="neo-card p-4 rounded-xl space-y-3 category-appear">
-                        <div className="flex items-center gap-2 mb-2">
-                          <CalendarIcon
-                            className={cn("w-4 h-4", themeClasses.text)}
-                          />
-                          <Label
-                            className={cn(
-                              "text-sm font-semibold",
-                              themeClasses.headerText
-                            )}
-                          >
-                            Start Date & Time
-                          </Label>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <Input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className={cn(
-                              "py-3 neo-card border-0",
-                              themeClasses.text
-                            )}
-                          />
-                          <Input
-                            type="time"
-                            value={startTime}
-                            onChange={(e) => setStartTime(e.target.value)}
-                            className={cn(
-                              "py-3 neo-card border-0",
-                              themeClasses.text
-                            )}
-                          />
-                        </div>
-                      </div>
-
-                      <div
-                        className="neo-card p-4 rounded-xl space-y-3 category-appear"
-                        style={{ animationDelay: "50ms" }}
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <CalendarIcon
-                            className={cn("w-4 h-4", themeClasses.text)}
-                          />
-                          <Label
-                            className={cn(
-                              "text-sm font-semibold",
-                              themeClasses.headerText
-                            )}
-                          >
-                            End Date & Time
-                          </Label>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <Input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className={cn(
-                              "py-3 neo-card border-0",
-                              themeClasses.text
-                            )}
-                          />
-                          <Input
-                            type="time"
-                            value={endTime}
-                            onChange={(e) => setEndTime(e.target.value)}
-                            className={cn(
-                              "py-3 neo-card border-0",
-                              themeClasses.text
-                            )}
-                          />
-                        </div>
-                      </div>
-                    </>
+                    autoFocus
+                  />
+                  {smartInput && !isListening && (
+                    <SparklesIcon
+                      className={cn(
+                        "absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 animate-pulse",
+                        themeClasses.textActive,
+                      )}
+                    />
+                  )}
+                  {isListening && (
+                    <motion.div
+                      className="absolute right-3 top-1/2 -translate-y-1/2"
+                      animate={{ scale: [1, 1.2, 1] }}
+                      transition={{ repeat: Infinity, duration: 1 }}
+                    >
+                      <div className="w-3 h-3 rounded-full bg-red-500" />
+                    </motion.div>
                   )}
                 </div>
-
-                {/* Recurrence Section - for both reminders and events */}
-                <div
-                  className="neo-card p-4 rounded-xl space-y-3 category-appear"
-                  style={{ animationDelay: "100ms" }}
+                {/* Voice Input Button */}
+                <button
+                  type="button"
+                  onClick={toggleVoiceInput}
+                  className={cn(
+                    "flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-xl transition-all active:scale-95",
+                    isListening
+                      ? "bg-red-500 text-white shadow-lg shadow-red-500/30"
+                      : `neo-card ${themeClasses.border} ${themeClasses.text} hover:bg-opacity-80`,
+                  )}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <RepeatIcon className={cn("w-4 h-4", themeClasses.text)} />
-                    <Label
-                      className={cn(
-                        "text-sm font-semibold",
-                        themeClasses.headerText
-                      )}
-                    >
-                      Repeat
-                    </Label>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { label: "Never", value: "" },
-                      { label: "Daily", value: "FREQ=DAILY" },
-                      {
-                        label: "Weekdays",
-                        value: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
-                      },
-                      { label: "Weekly", value: "FREQ=WEEKLY" },
-                      { label: "Bi-weekly", value: "FREQ=WEEKLY;INTERVAL=2" },
-                      { label: "Monthly", value: "FREQ=MONTHLY" },
-                      { label: "Quarterly", value: "FREQ=MONTHLY;INTERVAL=3" },
-                      { label: "Yearly", value: "FREQ=YEARLY" },
-                    ].map((preset) => (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        onClick={() => setRecurrenceRule(preset.value)}
+                  <MicIcon
+                    className={cn("w-5 h-5", isListening && "animate-pulse")}
+                  />
+                </button>
+              </div>
+
+              {/* Parsed Info Chips */}
+              <AnimatePresence>
+                {parsedChips && parsedChips.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex flex-wrap gap-1.5 pt-1"
+                  >
+                    {parsedChips.map((chip, idx) => (
+                      <motion.span
+                        key={chip.label}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: idx * 0.05 }}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95",
-                          recurrenceRule === preset.value
-                            ? "neo-gradient text-white shadow-md"
-                            : `neo-card ${themeClasses.border} ${themeClasses.text} ${themeClasses.borderHover}`
+                          "px-2.5 py-1 rounded-full text-xs font-medium bg-gradient-to-r",
+                          chip.color,
+                          themeClasses.text,
                         )}
                       >
-                        {preset.label}
-                      </button>
+                        {chip.label}
+                      </motion.span>
                     ))}
-                  </div>
-                </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-                <Button
-                  onClick={goNext}
-                  className="w-full h-11 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5 transition-all active:scale-[0.98] spring-bounce mt-2"
+              {/* Extracted Title Preview */}
+              {parsedItem && title && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className={cn("text-sm px-1", themeClasses.textSecondary)}
                 >
-                  Continue
-                </Button>
-              </motion.div>
-            )}
+                  <span className="font-medium">Title:</span> {title}
+                </motion.div>
+              )}
 
-            {/* STEP 3: DETAILS (Priority, Categories, Status) - Modern Card Layout */}
-            {step === "details" && (
-              <motion.div
-                key="details"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-5 step-slide-in"
+              {/* Date Display - Clickable to open modal */}
+              <button
+                type="button"
+                onClick={() => {
+                  const today = new Date();
+                  const tomorrow = new Date(today);
+                  tomorrow.setDate(tomorrow.getDate() + 1);
+                  const formatDateStr = (d: Date) =>
+                    d.toISOString().split("T")[0];
+                  const formatTimeStr = (d: Date) =>
+                    d.toTimeString().slice(0, 5);
+
+                  if (itemType === "event") {
+                    if (!startDate) setStartDate(formatDateStr(today));
+                    if (!startTime) setStartTime(formatTimeStr(today));
+                    if (!endDate) setEndDate(formatDateStr(tomorrow));
+                    if (!endTime) setEndTime(formatTimeStr(today));
+                    setMissingFieldType("event");
+                  } else if (itemType === "task") {
+                    if (!dueDate) setDueDate(formatDateStr(today));
+                    if (!dueTime) setDueTime(formatTimeStr(today));
+                    setMissingFieldType("task");
+                  } else {
+                    if (!dueDate) setDueDate(formatDateStr(today));
+                    if (!dueTime) setDueTime(formatTimeStr(today));
+                    setMissingFieldType("reminder");
+                  }
+                  setShowMissingFieldsModal(true);
+                }}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all hover:scale-[1.02] active:scale-[0.98]",
+                  "neo-card",
+                  themeClasses.border,
+                  themeClasses.text,
+                )}
               >
-                {/* Priority Selector - Pill Tabs */}
-                <div className="space-y-2">
-                  <Label
+                <CalendarIcon className="w-4 h-4 text-purple" />
+                <span className={themeClasses.textMuted}>Date:</span>
+                <span className="font-semibold text-purple">
+                  {itemType === "event" ? (
+                    startDate && endDate ? (
+                      <>
+                        {formatDateDisplay(startDate)}
+                        {startTime && ` ${formatTimeDisplay(startTime)}`}
+                        <span className={themeClasses.textMuted}> → </span>
+                        {formatDateDisplay(endDate)}
+                        {endTime && ` ${formatTimeDisplay(endTime)}`}
+                      </>
+                    ) : (
+                      "Tap to set date & time"
+                    )
+                  ) : dueDate ? (
+                    <>
+                      {formatDateDisplay(dueDate)}
+                      {dueTime && ` ${formatTimeDisplay(dueTime)}`}
+                    </>
+                  ) : (
+                    "Tap to set date & time"
+                  )}
+                </span>
+              </button>
+            </div>
+
+            {/* DIVIDER */}
+            <div className="flex items-center gap-3 py-1">
+              <div className={cn("flex-1 h-px", themeClasses.bgSurface)} />
+              <span
+                className={cn("text-xs font-medium", themeClasses.textMuted)}
+              >
+                Quick Options
+              </span>
+              <div className={cn("flex-1 h-px", themeClasses.bgSurface)} />
+            </div>
+
+            {/* TYPE SELECTOR */}
+            <div className="space-y-2">
+              <Label
+                className={cn(
+                  "text-xs font-semibold uppercase tracking-wider px-1",
+                  themeClasses.textSecondary,
+                )}
+              >
+                Type
+              </Label>
+              <div className="flex gap-2">
+                {[
+                  {
+                    type: "reminder" as ItemType,
+                    icon: "⏰",
+                    label: "Reminder",
+                  },
+                  { type: "event" as ItemType, icon: "📅", label: "Event" },
+                  { type: "task" as ItemType, icon: "✅", label: "Task" },
+                ].map((item) => (
+                  <button
+                    key={item.type}
+                    type="button"
+                    onClick={() => {
+                      setItemType(item.type);
+                      setManualOverrides((prev) => ({ ...prev, type: true }));
+                    }}
                     className={cn(
-                      "text-xs font-semibold uppercase tracking-wider px-1",
-                      themeClasses.textSecondary
+                      "flex-1 py-2.5 px-3 rounded-xl text-sm font-semibold transition-all active:scale-95",
+                      itemType === item.type
+                        ? "neo-gradient text-white shadow-lg"
+                        : `neo-card ${themeClasses.border} ${themeClasses.text} ${themeClasses.borderHover}`,
                     )}
                   >
-                    Priority
-                  </Label>
+                    {item.icon} {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                  {/* Pill Container */}
-                  <div className="relative p-1 rounded-2xl bg-gray-900/60 backdrop-blur-sm border border-white/5">
-                    {/* Animated Background Pill */}
-                    <motion.div
-                      className={cn(
-                        "absolute top-1 bottom-1 rounded-xl",
-                        priority === "low" &&
-                          "bg-gradient-to-r from-gray-600/80 to-gray-500/60",
-                        priority === "normal" &&
-                          "bg-gradient-to-r from-cyan-600/80 to-cyan-500/60",
-                        priority === "high" &&
-                          "bg-gradient-to-r from-orange-600/80 to-orange-500/60",
-                        priority === "urgent" &&
-                          "bg-gradient-to-r from-red-600/80 to-red-500/60"
-                      )}
-                      initial={false}
-                      animate={{
-                        left:
-                          priority === "low"
-                            ? "4px"
-                            : priority === "normal"
-                              ? "25%"
-                              : priority === "high"
-                                ? "50%"
-                                : "75%",
-                        width: "calc(25% - 2px)",
-                      }}
-                      transition={{
-                        type: "spring",
-                        stiffness: 500,
-                        damping: 35,
-                      }}
-                      style={{
-                        boxShadow:
-                          priority === "low"
-                            ? "0 0 20px rgba(107, 114, 128, 0.4)"
-                            : priority === "normal"
-                              ? "0 0 20px rgba(6, 182, 212, 0.4)"
-                              : priority === "high"
-                                ? "0 0 20px rgba(249, 115, 22, 0.4)"
-                                : "0 0 20px rgba(239, 68, 68, 0.4)",
-                      }}
-                    />
-
-                    {/* Priority Options */}
-                    <div className="relative flex">
-                      {(Object.keys(priorityConfig) as ItemPriority[]).map(
-                        (p) => {
-                          const isSelected = priority === p;
-                          return (
-                            <motion.button
-                              key={p}
-                              type="button"
-                              onClick={() => setPriority(p)}
-                              className={cn(
-                                "flex-1 py-2.5 px-1 rounded-xl text-xs font-semibold transition-colors relative z-10",
-                                isSelected
-                                  ? "text-white"
-                                  : themeClasses.textMuted
-                              )}
-                              whileTap={{ scale: 0.95 }}
-                            >
-                              <motion.span
-                                animate={{
-                                  opacity: isSelected ? 1 : 0.6,
-                                  y: isSelected ? 0 : 1,
-                                }}
-                                transition={{ duration: 0.15 }}
-                              >
-                                {priorityConfig[p].label}
-                              </motion.span>
-                            </motion.button>
-                          );
-                        }
-                      )}
-                    </div>
-                  </div>
+            {/* PRIORITY SELECTOR - Pill Tabs */}
+            <div className="space-y-2">
+              <Label
+                className={cn(
+                  "text-xs font-semibold uppercase tracking-wider px-1",
+                  themeClasses.textSecondary,
+                )}
+              >
+                Priority
+              </Label>
+              <div className="relative p-1 rounded-2xl bg-gray-900/60 backdrop-blur-sm border border-white/5">
+                {/* Animated Background Pill */}
+                <motion.div
+                  className={cn(
+                    "absolute top-1 bottom-1 rounded-xl",
+                    priority === "low" &&
+                      "bg-gradient-to-r from-gray-600/80 to-gray-500/60",
+                    priority === "normal" &&
+                      "bg-gradient-to-r from-cyan-600/80 to-cyan-500/60",
+                    priority === "high" &&
+                      "bg-gradient-to-r from-orange-600/80 to-orange-500/60",
+                    priority === "urgent" &&
+                      "bg-gradient-to-r from-red-600/80 to-red-500/60",
+                  )}
+                  initial={false}
+                  animate={{
+                    left:
+                      priority === "low"
+                        ? "4px"
+                        : priority === "normal"
+                          ? "25%"
+                          : priority === "high"
+                            ? "50%"
+                            : "75%",
+                    width: "calc(25% - 2px)",
+                  }}
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  style={{
+                    boxShadow:
+                      priority === "low"
+                        ? "0 0 20px rgba(107, 114, 128, 0.4)"
+                        : priority === "normal"
+                          ? "0 0 20px rgba(6, 182, 212, 0.4)"
+                          : priority === "high"
+                            ? "0 0 20px rgba(249, 115, 22, 0.4)"
+                            : "0 0 20px rgba(239, 68, 68, 0.4)",
+                  }}
+                />
+                {/* Priority Options */}
+                <div className="relative flex">
+                  {(Object.keys(priorityConfig) as ItemPriority[]).map((p) => {
+                    const isSelected = priority === p;
+                    return (
+                      <motion.button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          setPriority(p);
+                          setManualOverrides((prev) => ({
+                            ...prev,
+                            priority: true,
+                          }));
+                        }}
+                        className={cn(
+                          "flex-1 py-2.5 px-1 rounded-xl text-xs font-semibold transition-colors relative z-10",
+                          isSelected ? "text-white" : themeClasses.textMuted,
+                        )}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <motion.span
+                          animate={{
+                            opacity: isSelected ? 1 : 0.6,
+                            y: isSelected ? 0 : 1,
+                          }}
+                          transition={{ duration: 0.15 }}
+                        >
+                          {priorityConfig[p].label}
+                        </motion.span>
+                      </motion.button>
+                    );
+                  })}
                 </div>
+              </div>
+            </div>
 
-                {/* Categories - Icon Grid with Animations */}
-                <div className="space-y-3">
-                  <Label
-                    className={cn(
-                      "text-xs font-semibold uppercase tracking-wider px-1",
-                      themeClasses.textSecondary
-                    )}
-                  >
-                    Categories{" "}
-                    <span className={themeClasses.textMuted}>
-                      {selectedCategoryIds.length > 0
-                        ? `(${selectedCategoryIds.length})`
-                        : "(Select at least one)"}
-                    </span>
-                  </Label>
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {CATEGORIES.map((category, idx) => {
-                      const isSelected = selectedCategoryIds.includes(
-                        category.id
-                      );
-                      const Icon = categoryIcons[category.id];
+            {/* CATEGORY SELECTOR - Icon Grid */}
+            <div className="space-y-2">
+              <Label
+                className={cn(
+                  "text-xs font-semibold uppercase tracking-wider px-1",
+                  themeClasses.textSecondary,
+                )}
+              >
+                Categories{" "}
+                <span className={themeClasses.textMuted}>
+                  {selectedCategoryIds.length > 0
+                    ? `(${selectedCategoryIds.length})`
+                    : "(Select at least one)"}
+                </span>
+              </Label>
+              <div className="grid grid-cols-3 gap-2">
+                {CATEGORIES.map((category, idx) => {
+                  const isSelected = selectedCategoryIds.includes(category.id);
+                  const Icon = categoryIcons[category.id];
 
-                      return (
-                        <motion.button
-                          key={category.id}
-                          type="button"
-                          onClick={() => toggleCategory(category.id)}
+                  return (
+                    <motion.button
+                      key={category.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategoryIds((prev) =>
+                          prev.includes(category.id)
+                            ? prev.filter((id) => id !== category.id)
+                            : [...prev, category.id],
+                        );
+                        setManualOverrides((prev) => ({
+                          ...prev,
+                          categories: true,
+                        }));
+                      }}
+                      className={cn(
+                        "relative py-3 px-2 rounded-xl text-xs font-medium transition-all overflow-hidden",
+                        isSelected
+                          ? "shadow-lg"
+                          : `neo-card ${themeClasses.border} hover:border-opacity-50`,
+                      )}
+                      style={{
+                        background: isSelected
+                          ? `linear-gradient(135deg, ${category.color_hex}dd, ${category.color_hex})`
+                          : undefined,
+                      }}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.03 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      {/* Animated background pulse */}
+                      {isSelected && (
+                        <motion.div
+                          className="absolute inset-0 rounded-xl"
+                          style={{
+                            background: `radial-gradient(circle at center, ${category.color_hex}33, transparent)`,
+                          }}
+                          animate={{
+                            scale: [1, 1.2, 1],
+                            opacity: [0.5, 0.8, 0.5],
+                          }}
+                          transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "easeInOut",
+                          }}
+                        />
+                      )}
+
+                      <div className="relative flex flex-col items-center gap-1.5">
+                        {/* Icon */}
+                        <motion.div
                           className={cn(
-                            "relative py-4 px-2 rounded-2xl text-xs font-medium transition-all overflow-hidden",
+                            "w-7 h-7 rounded-lg flex items-center justify-center",
                             isSelected
-                              ? `shadow-lg`
-                              : `neo-card ${themeClasses.border} hover:border-opacity-50`
+                              ? "bg-white/20 backdrop-blur-sm text-white"
+                              : themeClasses.bgSurface,
                           )}
                           style={{
-                            background: isSelected
-                              ? `linear-gradient(135deg, ${category.color_hex}dd, ${category.color_hex})`
-                              : undefined,
+                            color: !isSelected ? category.color_hex : undefined,
                           }}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.05 }}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
                         >
-                          {/* Animated background pulse */}
-                          {isSelected && (
-                            <motion.div
-                              className="absolute inset-0 rounded-2xl"
-                              style={{
-                                background: `radial-gradient(circle at center, ${category.color_hex}33, transparent)`,
-                              }}
-                              animate={{
-                                scale: [1, 1.2, 1],
-                                opacity: [0.5, 0.8, 0.5],
-                              }}
-                              transition={{
-                                duration: 2,
-                                repeat: Infinity,
-                                ease: "easeInOut",
-                              }}
-                            />
+                          <Icon className="w-4 h-4" />
+                        </motion.div>
+
+                        {/* Label */}
+                        <span
+                          className={cn(
+                            "text-center leading-tight font-semibold text-[10px]",
+                            isSelected ? "text-white" : themeClasses.text,
                           )}
+                        >
+                          {category.name}
+                        </span>
+                      </div>
 
-                          <div className="relative flex flex-col items-center gap-2">
-                            {/* Icon */}
-                            <motion.div
-                              className={cn(
-                                "w-8 h-8 rounded-xl flex items-center justify-center",
-                                isSelected
-                                  ? "bg-white/20 backdrop-blur-sm text-white"
-                                  : themeClasses.bgSurface
-                              )}
-                              style={{
-                                color: !isSelected
-                                  ? category.color_hex
-                                  : undefined,
-                              }}
-                              animate={
-                                isSelected
-                                  ? { rotate: [0, 10, -10, 0] }
-                                  : { rotate: 0 }
-                              }
-                              transition={{ duration: 0.5 }}
-                            >
-                              <Icon className="w-5 h-5" />
-                            </motion.div>
-
-                            {/* Label */}
-                            <span
-                              className={cn(
-                                "text-center leading-tight font-semibold",
-                                isSelected ? "text-white" : themeClasses.text
-                              )}
-                            >
-                              {category.name}
-                            </span>
-                          </div>
-
-                          {/* Check badge */}
-                          {isSelected && (
-                            <motion.div
-                              initial={{ scale: 0, rotate: -180 }}
-                              animate={{ scale: 1, rotate: 0 }}
-                              exit={{ scale: 0, rotate: 180 }}
-                              className="absolute -top-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-lg"
-                            >
-                              <CheckIcon className="w-3.5 h-3.5 text-green-600" />
-                            </motion.div>
-                          )}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Event Status - Toggle Switch Style */}
-                {detectedItemType === "event" && (
-                  <div className="space-y-3">
-                    <Label
-                      className={cn(
-                        "text-xs font-semibold uppercase tracking-wider px-1",
-                        themeClasses.textSecondary
+                      {/* Check badge */}
+                      {isSelected && (
+                        <motion.div
+                          initial={{ scale: 0, rotate: -180 }}
+                          animate={{ scale: 1, rotate: 0 }}
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-lg"
+                        >
+                          <CheckIcon className="w-3 h-3 text-green-600" />
+                        </motion.div>
                       )}
-                    >
-                      Event Status
-                    </Label>
-                    <div className="relative neo-card rounded-2xl p-1 flex gap-1">
-                      {/* Sliding background */}
-                      <motion.div
-                        className="absolute inset-1 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 shadow-lg"
-                        animate={{
-                          x: status === "pending" ? 0 : "100%",
-                        }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 300,
-                          damping: 30,
-                        }}
-                        style={{ width: "calc(50% - 4px)" }}
-                      />
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
 
-                      {(["pending", "in_progress"] as ItemStatus[]).map((s) => {
-                        const config = statusConfig[s];
-                        const isSelected = status === s;
-                        const displayLabel =
-                          s === "pending" ? "Tentative" : config.label;
-
-                        return (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => setStatus(s)}
-                            className={cn(
-                              "relative flex-1 py-3 px-4 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 z-10",
-                              isSelected ? "text-white" : themeClasses.text
-                            )}
-                          >
-                            <motion.span
-                              animate={
-                                isSelected ? { rotate: [0, 15, -15, 0] } : {}
-                              }
-                              transition={{ duration: 0.5 }}
-                              className="text-base"
-                            >
-                              {config.icon}
-                            </motion.span>
-                            <span>{displayLabel}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+            {/* Private/Public Toggle */}
+            <div className="flex items-center justify-end px-1">
+              <button
+                onClick={() => setIsPrivate(!isPrivate)}
+                className={cn(
+                  "group relative p-2.5 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2 overflow-hidden",
+                  isPrivate
+                    ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow}`
+                    : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`,
                 )}
-
-                <Button
-                  onClick={handleSubmit}
-                  disabled={!isStepValid() || isPending}
-                  className="w-full h-12 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5 transition-all active:scale-[0.98] spring-bounce mt-4"
-                >
-                  {isPending ? (
-                    <span className="flex items-center gap-2">
-                      <motion.span
-                        animate={{ rotate: 360 }}
-                        transition={{
-                          repeat: Infinity,
-                          duration: 1,
-                          ease: "linear",
-                        }}
-                        className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
-                      />
-                      Creating...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <CheckIcon className="w-5 h-5" />
-                      Create{" "}
-                      {detectedItemType === "event" ? "Event" : "Reminder"}
-                    </span>
+              >
+                <span
+                  className={cn(
+                    "relative text-xs font-semibold tracking-wide transition-all duration-300",
+                    isPrivate
+                      ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]`
+                      : `${themeClasses.textFaint} ${themeClasses.textHover}`,
                   )}
-                </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                >
+                  {isPrivate ? "Private" : "Public"}
+                </span>
+                <svg
+                  className={cn(
+                    "relative w-4 h-4 transition-all duration-500",
+                    isPrivate
+                      ? `${themeClasses.textActive} drop-shadow-[0_0_10px_rgba(20,184,166,0.8)]`
+                      : `${themeClasses.textFaint} ${themeClasses.textHover}`,
+                  )}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  {isPrivate ? (
+                    <>
+                      <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </>
+                  ) : (
+                    <>
+                      <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                    </>
+                  )}
+                </svg>
+              </button>
+            </div>
+
+            {/* CREATE BUTTON */}
+            <Button
+              onClick={handleSubmit}
+              disabled={!title.trim() || isPending}
+              className="w-full h-12 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5 transition-all active:scale-[0.98] spring-bounce mt-2"
+            >
+              {isPending ? (
+                <span className="flex items-center gap-2">
+                  <motion.span
+                    animate={{ rotate: 360 }}
+                    transition={{
+                      repeat: Infinity,
+                      duration: 1,
+                      ease: "linear",
+                    }}
+                    className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+                  />
+                  Creating...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <CheckIcon className="w-5 h-5" />
+                  Create{" "}
+                  {itemType === "event"
+                    ? "Event"
+                    : itemType === "task"
+                      ? "Task"
+                      : "Reminder"}
+                </span>
+              )}
+            </Button>
+          </motion.div>
         </div>
       </div>
 
-      {/* Tags Bar - Fixed at bottom */}
-      <ReminderTagsBarWrapper
-        step={step}
-        setStep={setStep}
-        title={title}
-        detectedItemType={detectedItemType}
-        selectedCategoryIds={selectedCategoryIds}
-        priority={priority}
-        dueDate={dueDate}
-        dueTime={dueTime}
-        startDate={startDate}
-        startTime={startTime}
-        date={selectedDate}
-        setDate={setSelectedDate}
-      />
+      {/* Missing Fields Modal */}
+      <AnimatePresence>
+        {showMissingFieldsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 px-4"
+            onClick={() => setShowMissingFieldsModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                "w-full max-w-md rounded-2xl p-6 space-y-4 border",
+                "bg-[#0a1628] border-cyan-500/30",
+              )}
+            >
+              {/* Header */}
+              <div className="space-y-1">
+                <h3
+                  className={cn("text-lg font-bold", themeClasses.headerText)}
+                >
+                  📅 Complete Date & Time
+                </h3>
+                <p className={cn("text-sm", themeClasses.textSecondary)}>
+                  {missingFieldType === "event"
+                    ? "Please set the start and end date/time for your event"
+                    : "Please set the date and time for your item"}
+                </p>
+              </div>
+
+              {/* Date/Time Inputs */}
+              <div className="space-y-3">
+                {missingFieldType === "event" ? (
+                  <>
+                    {/* Start Date & Time */}
+                    <div className="bg-[#0d1f35] border border-cyan-500/20 p-4 rounded-xl space-y-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CalendarIcon className="w-4 h-4 text-cyan-400" />
+                        <Label className="text-sm font-semibold text-cyan-300">
+                          Start Date & Time
+                        </Label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Start Date */}
+                        <div className="relative">
+                          {editingDateField === "startDate" ? (
+                            <Input
+                              type="date"
+                              value={startDate}
+                              onChange={(e) => setStartDate(e.target.value)}
+                              onBlur={() => setEditingDateField(null)}
+                              autoFocus
+                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditingDateField("startDate")}
+                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
+                            >
+                              {formatDateDisplay(startDate)}
+                            </button>
+                          )}
+                        </div>
+                        {/* Start Time */}
+                        <div className="relative">
+                          {editingDateField === "startTime" ? (
+                            <Input
+                              type="time"
+                              value={startTime}
+                              onChange={(e) => setStartTime(e.target.value)}
+                              onBlur={() => setEditingDateField(null)}
+                              autoFocus
+                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditingDateField("startTime")}
+                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
+                            >
+                              {formatTimeDisplay(startTime)}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* End Date & Time */}
+                    <div className="bg-[#0d1f35] border border-cyan-500/20 p-4 rounded-xl space-y-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CalendarIcon className="w-4 h-4 text-cyan-400" />
+                        <Label className="text-sm font-semibold text-cyan-300">
+                          End Date & Time
+                        </Label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* End Date */}
+                        <div className="relative">
+                          {editingDateField === "endDate" ? (
+                            <Input
+                              type="date"
+                              value={endDate}
+                              onChange={(e) => setEndDate(e.target.value)}
+                              onBlur={() => setEditingDateField(null)}
+                              autoFocus
+                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditingDateField("endDate")}
+                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
+                            >
+                              {formatDateDisplay(endDate)}
+                            </button>
+                          )}
+                        </div>
+                        {/* End Time */}
+                        <div className="relative">
+                          {editingDateField === "endTime" ? (
+                            <Input
+                              type="time"
+                              value={endTime}
+                              onChange={(e) => setEndTime(e.target.value)}
+                              onBlur={() => setEditingDateField(null)}
+                              autoFocus
+                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditingDateField("endTime")}
+                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
+                            >
+                              {formatTimeDisplay(endTime)}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  /* Reminder/Task Date & Time */
+                  <div className="bg-[#0d1f35] border border-cyan-500/20 p-4 rounded-xl space-y-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <BellIcon className="w-4 h-4 text-cyan-400" />
+                      <Label className="text-sm font-semibold text-cyan-300">
+                        Due Date & Time
+                      </Label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Due Date */}
+                      <div className="relative">
+                        {editingDateField === "dueDate" ? (
+                          <Input
+                            type="date"
+                            value={dueDate}
+                            onChange={(e) => setDueDate(e.target.value)}
+                            onBlur={() => setEditingDateField(null)}
+                            autoFocus
+                            className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingDateField("dueDate")}
+                            className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
+                          >
+                            {formatDateDisplay(dueDate)}
+                          </button>
+                        )}
+                      </div>
+                      {/* Due Time */}
+                      <div className="relative">
+                        {editingDateField === "dueTime" ? (
+                          <Input
+                            type="time"
+                            value={dueTime}
+                            onChange={(e) => setDueTime(e.target.value)}
+                            onBlur={() => setEditingDateField(null)}
+                            autoFocus
+                            className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingDateField("dueTime")}
+                            className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
+                          >
+                            {formatTimeDisplay(dueTime)}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <Button
+                  onClick={() => setShowMissingFieldsModal(false)}
+                  variant="outline"
+                  className="flex-1 h-11"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowMissingFieldsModal(false);
+                    // Retry submit after fields are filled
+                    setTimeout(() => handleSubmit(), 100);
+                  }}
+                  disabled={
+                    missingFieldType === "event"
+                      ? !startDate || !startTime || !endDate || !endTime
+                      : !dueDate || !dueTime
+                  }
+                  className="flex-1 h-11 neo-gradient text-white border-0 shadow-lg"
+                >
+                  Continue
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

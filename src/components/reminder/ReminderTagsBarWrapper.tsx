@@ -27,10 +27,13 @@ interface ReminderTagsBarWrapperProps {
   dueTime: string;
   startDate: string;
   startTime: string;
+  endDate?: string;
+  endTime?: string;
   date: Date;
   setDate: Dispatch<SetStateAction<Date>>;
   isEditMode?: boolean;
   onExitEditMode?: () => void;
+  onDateClick?: () => void;
 }
 
 export default function ReminderTagsBarWrapper({
@@ -44,13 +47,16 @@ export default function ReminderTagsBarWrapper({
   dueTime,
   startDate,
   startTime,
+  endDate,
+  endTime,
   date,
   setDate,
   isEditMode = false,
   onExitEditMode,
+  onDateClick,
 }: ReminderTagsBarWrapperProps) {
   const selectedCategories = CATEGORIES.filter((cat) =>
-    selectedCategoryIds.includes(cat.id)
+    selectedCategoryIds.includes(cat.id),
   );
 
   const handleExitEditMode = useCallback(() => {
@@ -70,6 +76,8 @@ export default function ReminderTagsBarWrapper({
         dueTime={dueTime}
         startDate={startDate}
         startTime={startTime}
+        endDate={endDate}
+        endTime={endTime}
         date={date}
         onTitleClick={() => setStep("title")}
         onCategoriesClick={() => setStep("details")}
@@ -77,9 +85,13 @@ export default function ReminderTagsBarWrapper({
         onTypeClick={() =>
           setStep(detectedItemType === "reminder" ? "due-date" : "date")
         }
-        onDateClick={() =>
-          setStep(detectedItemType === "reminder" ? "due-date" : "date")
-        }
+        onDateClick={() => {
+          if (onDateClick) {
+            onDateClick();
+          } else {
+            setStep(detectedItemType === "reminder" ? "due-date" : "date");
+          }
+        }}
         onPriorityClick={() => setStep("details")}
       />
 
