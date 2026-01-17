@@ -802,8 +802,25 @@ export function TaskFocusModal({
   const [showLater, setShowLater] = useState(false);
   const [showOverdueInKanban, setShowOverdueInKanban] = useState(true);
 
+  // Optimistic kanban stage overrides - for instant UI updates during drag/drop
+  const [optimisticKanbanStages, setOptimisticKanbanStages] = useState<
+    Map<string, string>
+  >(new Map());
+
   const isRecurring = !!item.recurrence_rule;
-  const subtasks = item.subtasks || [];
+  const baseSubtasks = item.subtasks || [];
+
+  // Apply optimistic kanban stage overrides to subtasks
+  const subtasks = useMemo(() => {
+    if (optimisticKanbanStages.size === 0) return baseSubtasks;
+    return baseSubtasks.map((subtask) => {
+      const optimisticStage = optimisticKanbanStages.get(subtask.id);
+      if (optimisticStage !== undefined) {
+        return { ...subtask, kanban_stage: optimisticStage };
+      }
+      return subtask;
+    });
+  }, [baseSubtasks, optimisticKanbanStages]);
 
   const today = startOfDay(new Date());
   const currentOcc = startOfDay(occurrenceDate);
@@ -902,6 +919,25 @@ export function TaskFocusModal({
       (a, b) => a.homeOccurrence.getTime() - b.homeOccurrence.getTime(),
     );
   }, [isRecurring, subtasks, currentOcc, isSubtaskCompletedForDate]);
+
+  // Combined list of all subtasks that can be displayed/dragged in kanban
+  // (includes both current occurrence and overdue subtasks)
+  const allKanbanSubtasks = useMemo(() => {
+    const overdueSubtasks = overdueSubtasksWithDates.map(
+      ({ subtask }) => subtask,
+    );
+    // Use a Map to avoid duplicates (by id)
+    const subtaskMap = new Map<string, Subtask>();
+    for (const s of currentOccurrenceSubtasks) {
+      subtaskMap.set(s.id, s);
+    }
+    for (const s of overdueSubtasks) {
+      if (!subtaskMap.has(s.id)) {
+        subtaskMap.set(s.id, s);
+      }
+    }
+    return Array.from(subtaskMap.values());
+  }, [currentOccurrenceSubtasks, overdueSubtasksWithDates]);
 
   // Combined count of all incomplete subtasks from past
   const hasDraggedSubtasks = draggedSubtasks.length > 0;
@@ -1025,13 +1061,30 @@ export function TaskFocusModal({
     });
   };
 
-  // Handle kanban stage change - React Query handles optimistic update
+  // Handle kanban stage change - with optimistic UI update
   const handleKanbanStageChange = async (subtaskId: string, stage: string) => {
-    await updateSubtaskKanbanStage.mutateAsync({
-      subtaskId,
-      kanbanStage: stage,
-      parentItemId: item.id,
+    // Apply optimistic update immediately for instant UI feedback
+    setOptimisticKanbanStages((prev) => {
+      const next = new Map(prev);
+      next.set(subtaskId, stage);
+      return next;
     });
+
+    try {
+      await updateSubtaskKanbanStage.mutateAsync({
+        subtaskId,
+        kanbanStage: stage,
+        parentItemId: item.id,
+      });
+    } finally {
+      // Clear optimistic override after mutation settles (success or error)
+      // The query cache will be invalidated and provide the correct state
+      setOptimisticKanbanStages((prev) => {
+        const next = new Map(prev);
+        next.delete(subtaskId);
+        return next;
+      });
+    }
   };
 
   // Get effective kanban stage
@@ -1088,7 +1141,7 @@ export function TaskFocusModal({
     e.dataTransfer.setData("text/plain", subtaskId);
 
     // Create custom drag image
-    const subtask = currentOccurrenceSubtasks.find((s) => s.id === subtaskId);
+    const subtask = allKanbanSubtasks.find((s) => s.id === subtaskId);
     if (subtask) {
       const dragImage = document.createElement("div");
       dragImage.className = cn(
@@ -1138,7 +1191,7 @@ export function TaskFocusModal({
     const subtaskId = e.dataTransfer.getData("text/plain") || draggedSubtaskId;
     if (!subtaskId) return;
 
-    const subtask = currentOccurrenceSubtasks.find((s) => s.id === subtaskId);
+    const subtask = allKanbanSubtasks.find((s) => s.id === subtaskId);
     if (!subtask) return;
 
     const currentStage = getEffectiveKanbanStage(subtask);
@@ -1181,7 +1234,7 @@ export function TaskFocusModal({
     setDraggedSubtaskId(subtaskId);
 
     // Set up ghost element
-    const subtask = currentOccurrenceSubtasks.find((s) => s.id === subtaskId);
+    const subtask = allKanbanSubtasks.find((s) => s.id === subtaskId);
     if (subtask) {
       setDragGhostTitle(subtask.title);
       setDragGhostPos({ x: touch.clientX, y: touch.clientY });
@@ -1222,7 +1275,7 @@ export function TaskFocusModal({
 
     if (!subtaskId || !targetStage) return;
 
-    const subtask = currentOccurrenceSubtasks.find((s) => s.id === subtaskId);
+    const subtask = allKanbanSubtasks.find((s) => s.id === subtaskId);
     if (!subtask) return;
 
     const currentStage = getEffectiveKanbanStage(subtask);

@@ -1097,6 +1097,23 @@ export function ItemSubtasksList({
   );
   const [editingStageName, setEditingStageName] = useState("");
 
+  // Optimistic kanban stage overrides - for instant UI updates
+  const [optimisticKanbanStages, setOptimisticKanbanStages] = useState<
+    Map<string, string>
+  >(new Map());
+
+  // Apply optimistic kanban stage overrides to subtasks
+  const effectiveSubtasks = useMemo(() => {
+    if (optimisticKanbanStages.size === 0) return subtasks;
+    return subtasks.map((subtask) => {
+      const optimisticStage = optimisticKanbanStages.get(subtask.id);
+      if (optimisticStage !== undefined) {
+        return { ...subtask, kanban_stage: optimisticStage };
+      }
+      return subtask;
+    });
+  }, [subtasks, optimisticKanbanStages]);
+
   // Kanban stages from item settings or default (excluding "Later" which is shown separately)
   const allKanbanStages = useMemo(() => {
     if (
@@ -1153,23 +1170,23 @@ export function ItemSubtasksList({
   // - For non-recurring: all subtasks (occurrence_date is null)
   const currentOccurrenceSubtasks = useMemo(() => {
     if (!isRecurring) {
-      return subtasks; // Non-recurring: all subtasks belong to the item
+      return effectiveSubtasks; // Non-recurring: all subtasks belong to the item
     }
     const occDateStr = normalizeToLocalDateString(occurrenceDate);
-    return subtasks.filter((s) => {
+    return effectiveSubtasks.filter((s) => {
       if (!s.occurrence_date) return false;
       return (
         normalizeToLocalDateString(new Date(s.occurrence_date)) === occDateStr
       );
     });
-  }, [subtasks, isRecurring, occurrenceDate]);
+  }, [effectiveSubtasks, isRecurring, occurrenceDate]);
 
   // Dragged/orphaned subtasks: subtasks with NULL occurrence_date for recurring items
   // These are subtasks that were created without being tied to a specific occurrence
   const draggedSubtasks = useMemo(() => {
     if (!isRecurring) return [];
-    return subtasks.filter((s) => !s.occurrence_date && !s.done_at);
-  }, [subtasks, isRecurring]);
+    return effectiveSubtasks.filter((s) => !s.occurrence_date && !s.done_at);
+  }, [effectiveSubtasks, isRecurring]);
 
   // Check if a subtask is completed for THIS occurrence
   const isSubtaskCompleted = useCallback(
@@ -1186,7 +1203,7 @@ export function ItemSubtasksList({
 
     const overdueList: Array<{ subtask: Subtask; homeOccurrence: Date }> = [];
 
-    for (const subtask of subtasks) {
+    for (const subtask of effectiveSubtasks) {
       const subtaskOccDate = getSubtaskOccurrenceDate(subtask);
       if (!subtaskOccDate) continue;
 
@@ -1206,7 +1223,7 @@ export function ItemSubtasksList({
     return overdueList.sort(
       (a, b) => a.homeOccurrence.getTime() - b.homeOccurrence.getTime(),
     );
-  }, [isRecurring, subtasks, currentOcc, isSubtaskCompletedForDate]);
+  }, [isRecurring, effectiveSubtasks, currentOcc, isSubtaskCompletedForDate]);
 
   // Combined count of all incomplete subtasks from past
   const hasDraggedSubtasks = draggedSubtasks.length > 0;
@@ -1312,24 +1329,40 @@ export function ItemSubtasksList({
     });
   };
 
-  // Handle kanban stage change - React Query handles optimistic update
+  // Handle kanban stage change - with optimistic UI update
   const handleKanbanStageChange = async (
     subtaskId: string,
     stage: string,
     markDone?: boolean,
   ) => {
-    await updateSubtaskKanbanStage.mutateAsync({
-      subtaskId,
-      kanbanStage: stage,
-      parentItemId: itemId,
+    // Apply optimistic update immediately for instant UI feedback
+    setOptimisticKanbanStages((prev) => {
+      const next = new Map(prev);
+      next.set(subtaskId, stage);
+      return next;
     });
 
-    // If marking as done, toggle the subtask
-    if (markDone) {
-      const subtask = subtasks.find((s) => s.id === subtaskId);
-      if (subtask) {
-        await handleSubtaskToggle(subtask);
+    try {
+      await updateSubtaskKanbanStage.mutateAsync({
+        subtaskId,
+        kanbanStage: stage,
+        parentItemId: itemId,
+      });
+
+      // If marking as done, toggle the subtask
+      if (markDone) {
+        const subtask = effectiveSubtasks.find((s) => s.id === subtaskId);
+        if (subtask) {
+          await handleSubtaskToggle(subtask);
+        }
       }
+    } finally {
+      // Clear optimistic override after mutation settles (success or error)
+      setOptimisticKanbanStages((prev) => {
+        const next = new Map(prev);
+        next.delete(subtaskId);
+        return next;
+      });
     }
   };
 
@@ -1410,12 +1443,28 @@ export function ItemSubtasksList({
   // Move to "Later" stage - saves current stage for undo
   const handleMoveToLater = async (subtask: Subtask) => {
     const currentStage = getEffectiveKanbanStage(subtask);
-    await updateSubtaskKanbanStage.mutateAsync({
-      subtaskId: subtask.id,
-      kanbanStage: LATER_STAGE,
-      parentItemId: itemId,
-      previousKanbanStage: currentStage, // Save where it came from
+
+    // Apply optimistic update immediately
+    setOptimisticKanbanStages((prev) => {
+      const next = new Map(prev);
+      next.set(subtask.id, LATER_STAGE);
+      return next;
     });
+
+    try {
+      await updateSubtaskKanbanStage.mutateAsync({
+        subtaskId: subtask.id,
+        kanbanStage: LATER_STAGE,
+        parentItemId: itemId,
+        previousKanbanStage: currentStage, // Save where it came from
+      });
+    } finally {
+      setOptimisticKanbanStages((prev) => {
+        const next = new Map(prev);
+        next.delete(subtask.id);
+        return next;
+      });
+    }
   };
 
   // Move from "Later" back to previous stage (or first stage if unknown)
@@ -1425,12 +1474,28 @@ export function ItemSubtasksList({
     const validStage = kanbanStages.includes(targetStage)
       ? targetStage
       : kanbanStages[0];
-    await updateSubtaskKanbanStage.mutateAsync({
-      subtaskId: subtask.id,
-      kanbanStage: validStage,
-      parentItemId: itemId,
-      previousKanbanStage: null, // Clear the previous stage after restoring
+
+    // Apply optimistic update immediately
+    setOptimisticKanbanStages((prev) => {
+      const next = new Map(prev);
+      next.set(subtask.id, validStage);
+      return next;
     });
+
+    try {
+      await updateSubtaskKanbanStage.mutateAsync({
+        subtaskId: subtask.id,
+        kanbanStage: validStage,
+        parentItemId: itemId,
+        previousKanbanStage: null, // Clear the previous stage after restoring
+      });
+    } finally {
+      setOptimisticKanbanStages((prev) => {
+        const next = new Map(prev);
+        next.delete(subtask.id);
+        return next;
+      });
+    }
   };
 
   const hasCurrentSubtasks = topLevelSubtasks.length > 0;
