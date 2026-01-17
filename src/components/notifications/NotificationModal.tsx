@@ -24,6 +24,7 @@ import {
   getActionButtonText,
   getActionRoute,
   getPriorityBorderColor,
+  useArchiveNotification,
   useCompleteNotificationAction,
   useDismissNotification,
   useInAppNotifications,
@@ -53,16 +54,26 @@ export default function NotificationModal({
   const { data, isLoading } = useInAppNotifications({
     limit: 20,
     includeRead: true,
+    excludeActioned: true, // Hide notifications that have been acted upon
+    autoArchiveHours: 24, // Auto-hide read info notifications after 24 hours
     enabled: open, // Only fetch when modal is open
   });
 
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
   const dismiss = useDismissNotification();
+  const archive = useArchiveNotification();
   const completeAction = useCompleteNotificationAction();
 
   const notifications = data?.notifications || [];
   const unreadCount = data?.unread_count || 0;
+
+  // Check if notification is info-only (no action or action already completed)
+  const isInfoOnly = (notification: Notification) => {
+    return (
+      !notification.action_type || notification.action_completed_at !== null
+    );
+  };
 
   const handleNotificationClick = (notification: Notification) => {
     // Mark as read
@@ -105,6 +116,8 @@ export default function NotificationModal({
         setActiveTab("expense");
       } else if (route === "/budget") {
         setActiveTab("dashboard");
+      } else if (route === "/reminder") {
+        setActiveTab("reminder");
       } else if (route.startsWith("/hub")) {
         setActiveTab("hub");
       } else {
@@ -135,6 +148,8 @@ export default function NotificationModal({
         setActiveTab("expense");
       } else if (route === "/budget") {
         setActiveTab("dashboard");
+      } else if (route === "/reminder") {
+        setActiveTab("reminder");
       } else if (route.startsWith("/hub")) {
         setActiveTab("hub");
       } else {
@@ -143,9 +158,15 @@ export default function NotificationModal({
     }
   };
 
-  const handleDismiss = (e: React.MouseEvent, notificationId: string) => {
+  const handleDismiss = (e: React.MouseEvent, notification: Notification) => {
     e.stopPropagation();
-    dismiss.mutate(notificationId);
+    // For info-only notifications, archive them (removes from sidebar but keeps in Hub Alerts)
+    // For actionable notifications, fully dismiss them
+    if (isInfoOnly(notification)) {
+      archive.mutate(notification.id);
+    } else {
+      dismiss.mutate(notification.id);
+    }
   };
 
   const handleViewAll = () => {
@@ -254,12 +275,12 @@ export default function NotificationModal({
         side="right"
         className="w-full sm:max-w-md flex flex-col bg-[hsl(var(--header-bg))] border-l border-white/10"
       >
-        <SheetHeader className="px-4 pt-4 pb-2">
+        <SheetHeader className="px-4 pt-4 pb-2 pr-12">
           <div className="flex items-center justify-between">
             <SheetTitle
               className={cn(
                 "text-lg font-semibold flex items-center gap-2",
-                themeClasses.headerText
+                themeClasses.headerText,
               )}
             >
               <AlertBellIcon
@@ -279,7 +300,7 @@ export default function NotificationModal({
                 variant="ghost"
                 size="sm"
                 onClick={handleMarkAllRead}
-                className="text-xs text-white/60 hover:text-white"
+                className="text-xs text-white/60 hover:text-white whitespace-nowrap"
               >
                 Mark all read
               </Button>
@@ -335,7 +356,7 @@ export default function NotificationModal({
                   "bg-white/5 hover:bg-white/10 border",
                   getPriorityBorderColor(notification.priority),
                   !notification.is_read &&
-                    "bg-white/8 border-l-2 border-l-primary"
+                    "bg-white/8 border-l-2 border-l-primary",
                 )}
               >
                 <div className="flex items-start gap-3">
@@ -350,7 +371,7 @@ export default function NotificationModal({
                       <h4
                         className={cn(
                           "text-sm font-medium",
-                          notification.is_read ? "text-white/70" : "text-white"
+                          notification.is_read ? "text-white/70" : "text-white",
                         )}
                       >
                         {notification.title}
@@ -358,7 +379,7 @@ export default function NotificationModal({
 
                       {/* Dismiss button */}
                       <button
-                        onClick={(e) => handleDismiss(e, notification.id)}
+                        onClick={(e) => handleDismiss(e, notification)}
                         className="opacity-0 group-hover:opacity-100 p-1 rounded-full hover:bg-white/10 transition-opacity"
                       >
                         <X className="w-4 h-4 text-white/40 hover:text-white/70" />
@@ -395,7 +416,7 @@ export default function NotificationModal({
                               notification.action_type === "complete_task" &&
                                 "bg-green-500/20 text-green-400 hover:bg-green-500/30",
                               notification.action_type === "confirm" &&
-                                "bg-white/10 text-white/70 hover:bg-white/20"
+                                "bg-white/10 text-white/70 hover:bg-white/20",
                             )}
                           >
                             {getActionButtonText(notification.action_type)}

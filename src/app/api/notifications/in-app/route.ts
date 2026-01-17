@@ -100,6 +100,11 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "20", 10);
   const includeRead = searchParams.get("include_read") === "true";
   const type = searchParams.get("type"); // Filter by notification_type
+  const excludeActioned = searchParams.get("exclude_actioned") === "true"; // Exclude notifications with completed actions
+  const autoArchiveHours = parseInt(
+    searchParams.get("auto_archive_hours") || "0",
+    10,
+  ); // Auto-archive read info notifications after X hours
 
   // Build query - use unified 'notifications' table
   let query = supabase
@@ -120,32 +125,62 @@ export async function GET(request: NextRequest) {
     query = query.eq("notification_type", type);
   }
 
+  // Exclude notifications with completed actions (for sidebar view)
+  if (excludeActioned) {
+    query = query.is("action_completed_at", null);
+  }
+
   // Filter out expired and snoozed notifications
   const now = new Date().toISOString();
   query = query
     .or(`expires_at.is.null,expires_at.gt.${now}`)
     .or(`snoozed_until.is.null,snoozed_until.lte.${now}`);
 
-  const { data: notifications, error } = await query;
+  let { data: notifications, error } = await query;
 
   if (error) {
     console.error("Error fetching notifications:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Get unread count
-  const { count: unreadCount } = await supabase
-    .from("notifications")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("is_dismissed", false)
-    .eq("is_read", false)
-    .or(`expires_at.is.null,expires_at.gt.${now}`)
-    .or(`snoozed_until.is.null,snoozed_until.lte.${now}`);
+  // Auto-archive: Filter out read info-only notifications older than X hours
+  // Info-only = no action_type OR action already completed
+  if (autoArchiveHours > 0 && notifications) {
+    const archiveThreshold = new Date(
+      Date.now() - autoArchiveHours * 60 * 60 * 1000,
+    );
+    notifications = notifications.filter((n) => {
+      const isInfoOnly = !n.action_type || n.action_completed_at !== null;
+      const isRead = n.is_read === true;
+      const createdAt = new Date(n.created_at);
+
+      // Keep if: not info-only OR not read OR created recently
+      if (!isInfoOnly || !isRead) return true;
+      return createdAt > archiveThreshold;
+    });
+  }
+
+  // Get unread count (excluding auto-archived)
+  let unreadCount = 0;
+  if (autoArchiveHours > 0) {
+    // Count manually since we filtered in memory
+    unreadCount = notifications?.filter((n) => !n.is_read).length || 0;
+  } else {
+    const { count } = await supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("is_dismissed", false)
+      .eq("is_read", false)
+      .is("action_completed_at", null)
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
+      .or(`snoozed_until.is.null,snoozed_until.lte.${now}`);
+    unreadCount = count || 0;
+  }
 
   return NextResponse.json({
     notifications: notifications || [],
-    unread_count: unreadCount || 0,
+    unread_count: unreadCount,
   });
 }
 
@@ -209,13 +244,13 @@ export async function POST(request: NextRequest) {
       } else {
         return NextResponse.json(
           { error: "Target user is not a household member" },
-          { status: 403 }
+          { status: 403 },
         );
       }
     } else {
       return NextResponse.json(
         { error: "No household link found" },
-        { status: 403 }
+        { status: 403 },
       );
     }
   }
@@ -304,7 +339,7 @@ export async function POST(request: NextRequest) {
                   auth: sub.auth,
                 },
               },
-              payload
+              payload,
             );
             pushSent = true;
           } catch (pushError) {
@@ -320,12 +355,12 @@ export async function POST(request: NextRequest) {
                 .delete()
                 .eq("id", sub.id);
               console.log(
-                `[in-app] Removed expired push subscription ${sub.id}`
+                `[in-app] Removed expired push subscription ${sub.id}`,
               );
             } else {
               console.error(
                 `[in-app] Push failed for subscription ${sub.id}:`,
-                pushError
+                pushError,
               );
             }
           }
@@ -393,7 +428,7 @@ export async function PATCH(request: NextRequest) {
   if (!id) {
     return NextResponse.json(
       { error: "Notification ID required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -437,7 +472,7 @@ export async function DELETE(request: NextRequest) {
   if (!id) {
     return NextResponse.json(
       { error: "Notification ID required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 

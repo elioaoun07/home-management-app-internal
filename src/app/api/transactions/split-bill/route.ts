@@ -32,7 +32,7 @@ export async function GET() {
         collaborator_amount,
         split_completed_at,
         category:user_categories!transactions_category_fk(name, color)
-      `
+      `,
       )
       .eq("split_requested", true)
       .eq("collaborator_id", user.id)
@@ -59,7 +59,7 @@ export async function GET() {
     console.error("Failed to fetch pending splits:", error);
     return NextResponse.json(
       { error: "Failed to fetch pending splits" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -82,21 +82,21 @@ export async function POST(req: NextRequest) {
     if (!transaction_id) {
       return NextResponse.json(
         { error: "transaction_id is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!amount || amount <= 0) {
       return NextResponse.json(
         { error: "Valid amount is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!account_id) {
       return NextResponse.json(
         { error: "Payment account is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     const { data: transaction, error: fetchError } = await supabase
       .from("transactions")
       .select(
-        "id, split_requested, collaborator_id, split_completed_at, user_id, amount"
+        "id, split_requested, collaborator_id, split_completed_at, user_id, amount",
       )
       .eq("id", transaction_id)
       .eq("collaborator_id", user.id)
@@ -133,21 +133,21 @@ export async function POST(req: NextRequest) {
             fetchError: fetchError?.message,
           },
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     if (!transaction.split_requested) {
       return NextResponse.json(
         { error: "This is not a split transaction" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (transaction.split_completed_at) {
       return NextResponse.json(
         { error: "This split has already been completed" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
       console.error("Error completing split bill:", updateError);
       return NextResponse.json(
         { error: "Failed to complete split bill" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -206,7 +206,7 @@ export async function POST(req: NextRequest) {
       severity: "success",
       source: "transaction",
       priority: "normal",
-      action_url: `/transactions/${transaction_id}`,
+      action_url: null, // Transactions are viewed via expense tab, not direct URL
       transaction_id: transaction_id,
     });
 
@@ -226,7 +226,7 @@ export async function POST(req: NextRequest) {
     console.error("Failed to complete split bill:", error);
     return NextResponse.json(
       { error: "Failed to complete split bill" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

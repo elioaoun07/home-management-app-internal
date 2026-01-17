@@ -49,7 +49,7 @@ export async function sendAssignmentNotification({
         source: "item",
         priority: "normal",
         action_type: "view_details",
-        action_url: `/items/${itemId}`,
+        action_url: null, // Items are viewed via tab navigation, not direct URL
         item_id: itemId,
         group_key: `assignment_${itemId}`,
         send_push: true,
@@ -60,7 +60,7 @@ export async function sendAssignmentNotification({
   } catch (error) {
     console.error(
       "[sendAssignmentNotification] Failed to send notification:",
-      error
+      error,
     );
     return false;
   }

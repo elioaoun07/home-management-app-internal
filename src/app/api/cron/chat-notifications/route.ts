@@ -49,14 +49,14 @@ export async function GET(req: NextRequest) {
     if (!supabaseUrl || !supabaseKey) {
       return NextResponse.json(
         { error: "Server configuration error: Missing Supabase credentials" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
       return NextResponse.json(
         { error: "Push notifications not configured" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
     if (receiptsError) {
       return NextResponse.json(
         { error: receiptsError.message },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -95,14 +95,14 @@ export async function GET(req: NextRequest) {
     const { data: messages, error: messagesError } = await supabase
       .from("hub_messages")
       .select(
-        "id, content, sender_user_id, thread_id, created_at, household_id"
+        "id, content, sender_user_id, thread_id, created_at, household_id",
       )
       .in("id", messageIds);
 
     if (messagesError) {
       return NextResponse.json(
         { error: messagesError.message },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
     if (profilesError) {
       console.error(
         "[Chat Notifications] Error fetching profiles:",
-        profilesError
+        profilesError,
       );
     }
 
@@ -218,7 +218,7 @@ export async function GET(req: NextRequest) {
         // Sort by created_at to get the last message
         const sortedReceipts = receipts.sort(
           (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
         );
         const lastReceipt = sortedReceipts[0];
         const senderProfile = profileMap.get(lastReceipt.sender_user_id);
@@ -280,7 +280,7 @@ export async function GET(req: NextRequest) {
             })
             .in("id", receiptIds);
           console.log(
-            `[Chat Cron] Skipped push for thread ${threadId} - user already read`
+            `[Chat Cron] Skipped push for thread ${threadId} - user already read`,
           );
           continue;
         }
@@ -298,7 +298,7 @@ export async function GET(req: NextRequest) {
             source: "cron", // 'chat' not in enum yet, using 'cron' as this is cron-generated
             priority: "normal",
             action_type: "view_details",
-            action_url: `/hub?thread=${threadId}`,
+            action_url: null, // Hub is tab-based, handled via notification click
             action_data: {
               thread_id: threadId,
               message_count: unreadCount,
@@ -306,7 +306,7 @@ export async function GET(req: NextRequest) {
             },
             group_key: groupKey,
             expires_at: new Date(
-              now.getTime() + 7 * 24 * 60 * 60 * 1000
+              now.getTime() + 7 * 24 * 60 * 60 * 1000,
             ).toISOString(),
             push_status: "pending",
           })
@@ -326,7 +326,7 @@ export async function GET(req: NextRequest) {
             type: "chat_message",
             notification_id: notification.id,
             thread_id: threadId,
-            action_url: `/hub?thread=${threadId}`,
+            action_url: null, // Hub is tab-based
             unread_count: unreadCount,
           },
         });
@@ -338,7 +338,7 @@ export async function GET(req: NextRequest) {
                 endpoint: sub.endpoint,
                 keys: { p256dh: sub.p256dh, auth: sub.auth },
               },
-              payload
+              payload,
             );
 
             pushSent++;
@@ -413,7 +413,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

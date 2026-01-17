@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     return NextResponse.json(
       { error: "Push notifications not configured" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   if (!supabaseUrl || !supabaseKey) {
     return NextResponse.json(
       { error: "Missing Supabase credentials" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
           type,
           priority
         )
-      `
+      `,
       )
       .eq("active", true)
       .eq("channel", "push")
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
 
       if (!item) {
         console.log(
-          `[Item Reminders] Alert ${alert.id} has no associated item, skipping`
+          `[Item Reminders] Alert ${alert.id} has no associated item, skipping`,
         );
         continue;
       }
@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
           source: "item",
           priority: item.priority || "normal",
           action_type: "complete_task",
-          action_url: `/reminders/${item.id}`,
+          action_url: null, // Items are viewed via reminder tab, not direct URL
           action_data: {
             item_id: item.id,
             alert_id: alert.id,
@@ -157,7 +157,7 @@ export async function GET(req: NextRequest) {
           item_id: item.id,
           group_key: `item_${item.id}_${alert.id}`,
           expires_at: new Date(
-            now.getTime() + 24 * 60 * 60 * 1000
+            now.getTime() + 24 * 60 * 60 * 1000,
           ).toISOString(),
           push_status: "pending",
         })
@@ -188,7 +188,7 @@ export async function GET(req: NextRequest) {
             notification_id: notification?.id,
             item_id: item.id,
             alert_id: alert.id,
-            action_url: `/reminders/${item.id}`,
+            action_url: null, // Items are viewed via reminder tab, not direct URL
           },
         });
 
@@ -199,7 +199,7 @@ export async function GET(req: NextRequest) {
                 endpoint: sub.endpoint,
                 keys: { p256dh: sub.p256dh, auth: sub.auth },
               },
-              payload
+              payload,
             );
 
             sent++;
@@ -256,7 +256,7 @@ export async function GET(req: NextRequest) {
     console.error("Item reminders cron error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

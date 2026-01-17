@@ -53,22 +53,32 @@ export function useInAppNotifications(options?: {
   includeRead?: boolean;
   enabled?: boolean;
   type?: NotificationType;
+  excludeActioned?: boolean; // Exclude notifications with completed actions (for sidebar)
+  autoArchiveHours?: number; // Auto-hide read info notifications older than X hours
 }) {
   const {
     limit = 20,
     includeRead = true,
     enabled = true,
     type,
+    excludeActioned = false,
+    autoArchiveHours = 0,
   } = options || {};
 
   return useQuery({
-    queryKey: [...notificationKeys.list(), { limit, includeRead, type }],
+    queryKey: [
+      ...notificationKeys.list(),
+      { limit, includeRead, type, excludeActioned, autoArchiveHours },
+    ],
     queryFn: async () => {
       const params = new URLSearchParams({
         limit: limit.toString(),
         include_read: includeRead.toString(),
       });
       if (type) params.set("type", type);
+      if (excludeActioned) params.set("exclude_actioned", "true");
+      if (autoArchiveHours > 0)
+        params.set("auto_archive_hours", autoArchiveHours.toString());
 
       const res = await fetch(`/api/notifications/in-app?${params}`);
       if (!res.ok) throw new Error("Failed to fetch notifications");
@@ -94,7 +104,7 @@ export function useUnreadNotificationCount() {
     queryKey: notificationKeys.unreadCount(),
     queryFn: async () => {
       const res = await fetch(
-        "/api/notifications/in-app?limit=0&include_read=false"
+        "/api/notifications/in-app?limit=0&include_read=false",
       );
       if (!res.ok) throw new Error("Failed to fetch notification count");
       const data = await res.json();
@@ -132,7 +142,7 @@ export function useMarkNotificationRead() {
         return {
           ...old,
           notifications: old.notifications.map((n) =>
-            n.id === notificationId ? { ...n, is_read: true } : n
+            n.id === notificationId ? { ...n, is_read: true } : n,
           ),
           unread_count: Math.max(0, old.unread_count - 1),
         };
@@ -182,7 +192,7 @@ export function useMarkAllNotificationsRead() {
   });
 }
 
-// Dismiss notification
+// Dismiss notification (fully removes from both sidebar and Hub Alerts)
 export function useDismissNotification() {
   const queryClient = useQueryClient();
 
@@ -205,13 +215,13 @@ export function useDismissNotification() {
       }>({ queryKey: notificationKeys.list() }, (old) => {
         if (!old) return old;
         const notification = old.notifications.find(
-          (n) => n.id === notificationId
+          (n) => n.id === notificationId,
         );
         const wasUnread = notification && !notification.is_read;
         return {
           ...old,
           notifications: old.notifications.filter(
-            (n) => n.id !== notificationId
+            (n) => n.id !== notificationId,
           ),
           unread_count: wasUnread
             ? Math.max(0, old.unread_count - 1)
@@ -221,6 +231,55 @@ export function useDismissNotification() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
+    },
+  });
+}
+
+// Archive notification (removes from sidebar but keeps in Hub Alerts)
+// Used for info-only notifications that don't have actions
+export function useArchiveNotification() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (notificationId: string) => {
+      const res = await fetch("/api/notifications/in-app", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: notificationId,
+          action_completed: true, // This triggers action_completed_at to be set
+          is_read: true,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to archive");
+      return res.json();
+    },
+    onMutate: async (notificationId) => {
+      await queryClient.cancelQueries({ queryKey: notificationKeys.list() });
+
+      queryClient.setQueriesData<{
+        notifications: Notification[];
+        unread_count: number;
+      }>({ queryKey: notificationKeys.list() }, (old) => {
+        if (!old) return old;
+        const notification = old.notifications.find(
+          (n) => n.id === notificationId,
+        );
+        const wasUnread = notification && !notification.is_read;
+        return {
+          ...old,
+          notifications: old.notifications.filter(
+            (n) => n.id !== notificationId,
+          ),
+          unread_count: wasUnread
+            ? Math.max(0, old.unread_count - 1)
+            : old.unread_count,
+        };
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
+      // Don't invalidate hub alerts - we want archived notifications to stay there
     },
   });
 }
@@ -250,8 +309,34 @@ export function useCompleteNotificationAction() {
       if (!res.ok) throw new Error("Failed to complete action");
       return res.json();
     },
+    onMutate: async ({ notificationId }) => {
+      // Optimistically remove from sidebar immediately
+      await queryClient.cancelQueries({ queryKey: notificationKeys.list() });
+
+      queryClient.setQueriesData<{
+        notifications: Notification[];
+        unread_count: number;
+      }>({ queryKey: notificationKeys.list() }, (old) => {
+        if (!old) return old;
+        const notification = old.notifications.find(
+          (n) => n.id === notificationId,
+        );
+        const wasUnread = notification && !notification.is_read;
+        return {
+          ...old,
+          notifications: old.notifications.filter(
+            (n) => n.id !== notificationId,
+          ),
+          unread_count: wasUnread
+            ? Math.max(0, old.unread_count - 1)
+            : old.unread_count,
+        };
+      });
+    },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
+      // Also invalidate hub alerts so it shows there
+      queryClient.invalidateQueries({ queryKey: ["hub", "alerts"] });
     },
   });
 }
@@ -288,13 +373,13 @@ export function useSnoozeNotification() {
       }>({ queryKey: notificationKeys.list() }, (old) => {
         if (!old) return old;
         const notification = old.notifications.find(
-          (n) => n.id === notificationId
+          (n) => n.id === notificationId,
         );
         const wasUnread = notification && !notification.is_read;
         return {
           ...old,
           notifications: old.notifications.filter(
-            (n) => n.id !== notificationId
+            (n) => n.id !== notificationId,
           ),
           unread_count: wasUnread
             ? Math.max(0, old.unread_count - 1)
@@ -340,7 +425,7 @@ export function useUpdateNotificationPreference() {
 
   return useMutation({
     mutationFn: async (
-      preference: Partial<NotificationPreference> & { preference_key: string }
+      preference: Partial<NotificationPreference> & { preference_key: string },
     ) => {
       const res = await fetch("/api/notifications/preferences", {
         method: "POST",
@@ -360,7 +445,7 @@ export function useUpdateNotificationPreference() {
 
 // Helper to get action button text
 export function getActionButtonText(
-  actionType: NotificationActionType | null
+  actionType: NotificationActionType | null,
 ): string {
   switch (actionType) {
     case "confirm":
@@ -380,41 +465,67 @@ export function getActionButtonText(
   }
 }
 
+// Valid page routes in the app (not tab-based navigation)
+const VALID_PAGE_ROUTES = [
+  "/dashboard",
+  "/expense",
+  "/recurring",
+  "/settings",
+  "/quick-expense",
+];
+
 // Helper to get action route
 export function getActionRoute(notification: Notification): string | null {
   // First check action_url (new unified field)
   if (notification.action_url) {
-    return notification.action_url;
+    // Validate the action_url - only allow known valid page routes
+    // Invalid routes like /transactions/[id], /items/[id], /reminders/[id], /hub?...
+    // should fall through to type-based routing
+    const url = notification.action_url;
+
+    // Check if it's a valid page route
+    if (
+      VALID_PAGE_ROUTES.some(
+        (route) => url === route || url.startsWith(route + "/"),
+      )
+    ) {
+      return url;
+    }
+
+    // Invalid action_url - fall through to type-based routing
   }
 
-  // Fallback to action_data.route for backward compatibility
+  // Fallback to action_data.route for backward compatibility (with same validation)
   if (notification.action_data?.route) {
-    return notification.action_data.route as string;
+    const route = notification.action_data.route as string;
+    if (
+      VALID_PAGE_ROUTES.some((r) => route === r || route.startsWith(r + "/"))
+    ) {
+      return route;
+    }
   }
 
-  // Map notification types to routes
+  // Map notification types to tab navigation routes
+  // These are handled specially in the notification click handler
   switch (notification.notification_type) {
     case "daily_reminder":
     case "transaction_pending":
-      return "/expense";
+      return "/expense"; // Tab: expense
     case "budget_warning":
     case "budget_exceeded":
-      return "/budget";
+      return "/budget"; // Tab: dashboard
     case "bill_due":
     case "bill_overdue":
-      return "/recurring";
+      return "/recurring"; // Page route (valid)
     case "item_reminder":
     case "item_due":
     case "item_overdue":
-      return notification.item_id
-        ? `/reminders/${notification.item_id}`
-        : "/reminders";
+      return "/reminder"; // Tab: reminder
     case "goal_milestone":
     case "goal_completed":
-      return "/hub?view=goals";
     case "chat_message":
     case "chat_mention":
-      return "/hub?view=chat";
+      return "/hub"; // Tab: hub
     default:
       return null;
   }

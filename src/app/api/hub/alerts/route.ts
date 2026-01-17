@@ -4,21 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// Alert types that show in Hub > Alerts (subset of notification_type)
-const HUB_ALERT_TYPES = [
-  "daily_reminder",
-  "budget_warning",
-  "budget_exceeded",
-  "bill_due",
-  "bill_overdue",
-  "goal_milestone",
-  "goal_completed",
-  "transaction_pending",
-  "warning",
-  "error",
-];
-
 // GET - Fetch alerts for user (from unified notifications table)
+// Shows all notifications without type filtering for now
 export async function GET() {
   const supabase = await supabaseServer(await cookies());
   const {
@@ -31,13 +18,12 @@ export async function GET() {
 
   const now = new Date().toISOString();
 
-  // Fetch alerts from notifications table (filtered by alert-type notifications)
+  // Fetch all notifications (no type filter for now)
   const { data: alerts, error } = await supabase
     .from("notifications")
     .select("*")
     .eq("user_id", user.id)
     .eq("is_dismissed", false)
-    .in("notification_type", HUB_ALERT_TYPES)
     .or(`expires_at.is.null,expires_at.gt.${now}`)
     .or(`snoozed_until.is.null,snoozed_until.lte.${now}`)
     .order("created_at", { ascending: false })

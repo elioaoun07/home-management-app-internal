@@ -5,9 +5,105 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+// GET - Fetch a single transaction by ID
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const supabase = await supabaseServer(await cookies());
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { id } = await params;
+
+    // Fetch the transaction - either owned by user or shared via household
+    const { data: transaction, error } = await supabase
+      .from("transactions")
+      .select(
+        `
+        *,
+        category:user_categories!transactions_category_id_fkey(id, name, color),
+        subcategory:user_categories!transactions_subcategory_id_fkey(id, name, color),
+        account:accounts!transactions_account_id_fkey(id, name)
+      `,
+      )
+      .eq("id", id)
+      .single();
+
+    if (error || !transaction) {
+      return NextResponse.json(
+        { error: "Transaction not found" },
+        { status: 404 },
+      );
+    }
+
+    // Check if user has access (owner or household member)
+    const isOwner = transaction.user_id === user.id;
+
+    if (!isOwner) {
+      // Check if user is in the same household
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("household_id")
+        .eq("id", user.id)
+        .single();
+
+      const { data: ownerProfile } = await supabase
+        .from("profiles")
+        .select("household_id")
+        .eq("id", transaction.user_id)
+        .single();
+
+      const sameHousehold =
+        userProfile?.household_id &&
+        userProfile.household_id === ownerProfile?.household_id;
+
+      if (!sameHousehold) {
+        return NextResponse.json(
+          { error: "Transaction not found" },
+          { status: 404 },
+        );
+      }
+    }
+
+    // Format response
+    return NextResponse.json({
+      transaction: {
+        id: transaction.id,
+        date: transaction.date,
+        amount: transaction.amount,
+        description: transaction.description,
+        account_id: transaction.account_id,
+        account_name: transaction.account?.name || null,
+        category: transaction.category?.name || null,
+        category_id: transaction.category_id,
+        subcategory: transaction.subcategory?.name || null,
+        subcategory_id: transaction.subcategory_id,
+        inserted_at: transaction.inserted_at,
+        user_id: transaction.user_id,
+        is_owner: isOwner,
+        split_requested: transaction.split_requested,
+        split_completed_at: transaction.split_completed_at,
+      },
+    });
+  } catch (error) {
+    console.error("Get transaction error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
+  }
+}
+
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await supabaseServer(await cookies());
   const {
@@ -45,7 +141,7 @@ export async function PATCH(
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         { error: "No fields to update" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -62,14 +158,14 @@ export async function PATCH(
       console.error("Error updating transaction:", error);
       return NextResponse.json(
         { error: "Failed to update transaction" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     if (!updated) {
       return NextResponse.json(
         { error: "Transaction not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -135,14 +231,14 @@ export async function PATCH(
     console.error("Update transaction error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await supabaseServer(await cookies());
   const {
@@ -160,7 +256,7 @@ export async function DELETE(
     const { data: transaction, error: fetchError } = await supabase
       .from("transactions")
       .select(
-        "account_id, amount, is_draft, split_requested, split_completed_at, collaborator_amount, collaborator_account_id"
+        "account_id, amount, is_draft, split_requested, split_completed_at, collaborator_amount, collaborator_account_id",
       )
       .eq("id", id)
       .eq("user_id", user.id)
@@ -169,7 +265,7 @@ export async function DELETE(
     if (fetchError || !transaction) {
       return NextResponse.json(
         { error: "Transaction not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -184,7 +280,7 @@ export async function DELETE(
       console.error("Error deleting transaction:", error);
       return NextResponse.json(
         { error: "Failed to delete transaction" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -210,7 +306,7 @@ export async function DELETE(
       if (ownerFetchError) {
         console.error(
           "[Delete Transaction] Error fetching owner balance:",
-          ownerFetchError
+          ownerFetchError,
         );
       } else if (ownerBalance) {
         const restoredOwnerBalance =
@@ -232,7 +328,7 @@ export async function DELETE(
         if (updateError) {
           console.error(
             "[Delete Transaction] Error updating owner balance:",
-            updateError
+            updateError,
           );
         }
       }
@@ -245,7 +341,7 @@ export async function DELETE(
         transaction.collaborator_account_id
       ) {
         console.log(
-          "[Delete Transaction] This is a completed split bill, restoring collaborator balance"
+          "[Delete Transaction] This is a completed split bill, restoring collaborator balance",
         );
 
         // Use admin client to bypass RLS when updating collaborator's balance
@@ -262,7 +358,7 @@ export async function DELETE(
         if (collabFetchError) {
           console.error(
             "[Delete Transaction] Error fetching collaborator balance:",
-            collabFetchError
+            collabFetchError,
           );
         } else if (collabBalance) {
           const restoredCollabBalance =
@@ -285,11 +381,11 @@ export async function DELETE(
           if (updateError) {
             console.error(
               "[Delete Transaction] Error updating collaborator balance:",
-              updateError
+              updateError,
             );
           } else {
             console.log(
-              "[Delete Transaction] Successfully restored collaborator balance"
+              "[Delete Transaction] Successfully restored collaborator balance",
             );
           }
         }
@@ -301,7 +397,7 @@ export async function DELETE(
     console.error("Delete transaction error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

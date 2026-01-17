@@ -48,6 +48,7 @@ import {
   useHubCacheInit,
   useHubState,
 } from "@/features/hub/useHubPersistence";
+import { useItem } from "@/features/items/useItems";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
@@ -61,7 +62,7 @@ import { toast } from "sonner";
 // Lazy load transaction modal to avoid bundle bloat
 const AddTransactionFromMessageModal = dynamic(
   () => import("@/components/hub/AddTransactionFromMessageModal"),
-  { ssr: false }
+  { ssr: false },
 );
 
 // Lazy load shopping list view
@@ -70,7 +71,7 @@ const ShoppingListView = dynamic(
     import("@/components/hub/ShoppingListView").then((m) => ({
       default: m.ShoppingListView,
     })),
-  { ssr: false }
+  { ssr: false },
 );
 
 // Lazy load notes list view
@@ -79,7 +80,19 @@ const NotesListView = dynamic(
     import("@/components/hub/NotesListView").then((m) => ({
       default: m.NotesListView,
     })),
-  { ssr: false }
+  { ssr: false },
+);
+
+// Lazy load item detail modal for alert navigation
+const ItemDetailModal = dynamic(
+  () => import("@/components/items/ItemDetailModal"),
+  { ssr: false },
+);
+
+// Lazy load transaction detail modal for alert navigation
+const TransactionDetailModal = dynamic(
+  () => import("@/components/dashboard/TransactionDetailModal"),
+  { ssr: false },
 );
 
 // AI Chat Types
@@ -137,9 +150,13 @@ export default function HubPage() {
   useEffect(() => {
     if (hubDefaultView) {
       setActiveView(hubDefaultView);
+      // Clear thread ID when switching to non-chat views to prevent blank page
+      if (hubDefaultView !== "chat") {
+        setActiveThreadId(null);
+      }
       setHubDefaultView(null); // Clear after using
     }
-  }, [hubDefaultView, setHubDefaultView, setActiveView]);
+  }, [hubDefaultView, setHubDefaultView, setActiveView, setActiveThreadId]);
 
   return (
     <div className={cn("min-h-screen pb-24", themeClasses.bgPage)}>
@@ -168,7 +185,7 @@ export default function HubPage() {
                     "flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl transition-all duration-200",
                     isActive
                       ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400"
-                      : "text-white/50 hover:text-white/70"
+                      : "text-white/50 hover:text-white/70",
                   )}
                 >
                   <Icon className="w-4 h-4" />
@@ -221,7 +238,7 @@ function formatDateSeparator(date: Date): string {
   const msgDay = new Date(
     messageDate.getFullYear(),
     messageDate.getMonth(),
-    messageDate.getDate()
+    messageDate.getDate(),
   );
 
   if (msgDay.getTime() === today.getTime()) {
@@ -522,7 +539,7 @@ function ChatView({
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
                 visibilityFilter === "all"
                   ? "bg-gradient-to-r from-blue-500/30 to-purple-500/30 text-white border border-blue-500/30"
-                  : "text-white/50 hover:text-white/70"
+                  : "text-white/50 hover:text-white/70",
               )}
             >
               All
@@ -533,7 +550,7 @@ function ChatView({
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1",
                 visibilityFilter === "public"
                   ? "bg-gradient-to-r from-cyan-500/30 to-blue-500/30 text-cyan-300 border border-cyan-500/30"
-                  : "text-white/50 hover:text-white/70"
+                  : "text-white/50 hover:text-white/70",
               )}
             >
               <svg
@@ -552,7 +569,7 @@ function ChatView({
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1",
                 visibilityFilter === "private"
                   ? "bg-gradient-to-r from-purple-500/30 to-pink-500/30 text-pink-300 border border-purple-500/30"
-                  : "text-white/50 hover:text-white/70"
+                  : "text-white/50 hover:text-white/70",
               )}
             >
               <svg
@@ -576,7 +593,7 @@ function ChatView({
                 "w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
                 purposeFilter !== "all"
                   ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white border border-blue-500/30"
-                  : "bg-white/5 text-white/60 hover:bg-white/10"
+                  : "bg-white/5 text-white/60 hover:bg-white/10",
               )}
             >
               <span className="flex items-center gap-1.5">
@@ -586,7 +603,7 @@ function ChatView({
               <svg
                 className={cn(
                   "w-3 h-3 transition-transform",
-                  showCategoryDropdown && "rotate-180"
+                  showCategoryDropdown && "rotate-180",
                 )}
                 fill="none"
                 viewBox="0 0 24 24"
@@ -616,7 +633,7 @@ function ChatView({
                         "w-full flex items-center gap-2 px-3 py-2 text-xs transition-all",
                         purposeFilter === option.value
                           ? "bg-blue-500/20 text-white"
-                          : "text-white/70 hover:bg-white/5 hover:text-white"
+                          : "text-white/70 hover:bg-white/5 hover:text-white",
                       )}
                     >
                       {option.icon}
@@ -747,7 +764,7 @@ function ThreadItem({
             <h3
               className={cn(
                 "text-sm font-semibold truncate",
-                thread.unread_count > 0 ? "text-white" : "text-white/90"
+                thread.unread_count > 0 ? "text-white" : "text-white/90",
               )}
             >
               {thread.title}
@@ -782,7 +799,8 @@ function ThreadItem({
                   thread.purpose === "health" && "bg-red-500/20 text-red-400",
                   thread.purpose === "notes" &&
                     "bg-yellow-500/20 text-yellow-400",
-                  thread.purpose === "other" && "bg-slate-500/20 text-slate-400"
+                  thread.purpose === "other" &&
+                    "bg-slate-500/20 text-slate-400",
                 )}
               >
                 {thread.purpose}
@@ -803,7 +821,7 @@ function ThreadItem({
                 "text-xs truncate mt-0.5",
                 thread.unread_count > 0
                   ? "text-white/70 font-medium"
-                  : "text-white/50"
+                  : "text-white/50",
               )}
             >
               {isMyLastMessage ? "You: " : ""}
@@ -823,7 +841,7 @@ function ThreadItem({
               "text-xs",
               thread.unread_count > 0
                 ? "text-blue-400 font-medium"
-                : "text-white/30"
+                : "text-white/30",
             )}
           >
             {formatRelativeTime(thread.last_message_at)}
@@ -1064,7 +1082,7 @@ function AIThreadConversation({
 
       try {
         const response = await fetch(
-          `/api/ai-chat?sessionId=${sessionId}&limit=100`
+          `/api/ai-chat?sessionId=${sessionId}&limit=100`,
         );
         if (response.ok) {
           const data = await response.json();
@@ -1087,7 +1105,7 @@ function AIThreadConversation({
                   tokens: (msg.input_tokens || 0) + (msg.output_tokens || 0),
                 });
               }
-            }
+            },
           );
 
           setMessages(loadedMessages);
@@ -1098,7 +1116,7 @@ function AIThreadConversation({
             if (firstUserMsg) {
               setConversationTitle(
                 firstUserMsg.content.slice(0, 40) +
-                  (firstUserMsg.content.length > 40 ? "..." : "")
+                  (firstUserMsg.content.length > 40 ? "..." : ""),
               );
             }
           }
@@ -1145,7 +1163,7 @@ function AIThreadConversation({
       // Update title on first message
       if (messages.length === 0) {
         setConversationTitle(
-          messageText.slice(0, 40) + (messageText.length > 40 ? "..." : "")
+          messageText.slice(0, 40) + (messageText.length > 40 ? "..." : ""),
         );
       }
 
@@ -1181,7 +1199,7 @@ function AIThreadConversation({
         setIsLoading(false);
       }
     },
-    [input, isLoading, messages, currentSessionId]
+    [input, isLoading, messages, currentSessionId],
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1268,7 +1286,7 @@ function AIThreadConversation({
               key={idx}
               className={cn(
                 "flex",
-                msg.role === "user" ? "justify-end" : "justify-start"
+                msg.role === "user" ? "justify-end" : "justify-start",
               )}
             >
               <div
@@ -1276,7 +1294,7 @@ function AIThreadConversation({
                   "px-4 py-2.5 rounded-2xl max-w-[80%]",
                   msg.role === "user"
                     ? "bg-gradient-to-r from-violet-500 to-indigo-500 text-white rounded-br-md"
-                    : "bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 border border-violet-500/30 text-white rounded-bl-md"
+                    : "bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 border border-violet-500/30 text-white rounded-bl-md",
                 )}
               >
                 {msg.role === "assistant" && (
@@ -1288,7 +1306,7 @@ function AIThreadConversation({
                 <p
                   className={cn(
                     "text-xs mt-1",
-                    msg.role === "user" ? "text-white/60" : "text-white/40"
+                    msg.role === "user" ? "text-white/60" : "text-white/40",
                   )}
                 >
                   {msg.timestamp.toLocaleTimeString([], {
@@ -1461,7 +1479,7 @@ function ThreadConversation({
 
   // Action menu state
   const [actionMenuMessage, setActionMenuMessage] = useState<HubMessage | null>(
-    null
+    null,
   );
   const [actionMenuPosition, setActionMenuPosition] = useState<{
     x: number;
@@ -1479,19 +1497,19 @@ function ThreadConversation({
 
   // Track locally converted messages for immediate UI feedback
   const [convertedMessageIds, setConvertedMessageIds] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
 
   // Filter messages with actions (default: hide them)
   const [showActionsFilter, setShowActionsFilter] = useLocalStorage(
     `hub-show-actions-${threadId}`,
-    false
+    false,
   );
 
   // Multi-select mode for deleting messages
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -1514,7 +1532,7 @@ function ThreadConversation({
   const highlightSearchTerms = (text: string, query: string) => {
     if (!query.trim()) return text;
     const parts = text.split(
-      new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi")
+      new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"),
     );
     return parts.map((part, i) =>
       part.toLowerCase() === query.toLowerCase() ? (
@@ -1523,7 +1541,7 @@ function ThreadConversation({
         </mark>
       ) : (
         part
-      )
+      ),
     );
   };
 
@@ -1589,7 +1607,7 @@ function ThreadConversation({
         setActionMenuPosition({ x, y, showBelow });
       }, 500);
     },
-    []
+    [],
   );
 
   const handleMessageTouchEnd = useCallback(
@@ -1599,7 +1617,7 @@ function ThreadConversation({
         longPressTimeoutRef.current = null;
       }
     },
-    []
+    [],
   );
 
   const handleMessageTouchCancel = useCallback(
@@ -1609,7 +1627,7 @@ function ThreadConversation({
         longPressTimeoutRef.current = null;
       }
     },
-    []
+    [],
   );
 
   // Handler for back button - refetch threads to get updated unread counts
@@ -1650,16 +1668,16 @@ function ThreadConversation({
                 household_id: string | null;
                 current_user_id: string;
               }
-            | undefined
+            | undefined,
         ) => {
           if (!oldData) return oldData;
           return {
             ...oldData,
             threads: oldData.threads.map((t) =>
-              t.id === threadId ? { ...t, unread_count: 0 } : t
+              t.id === threadId ? { ...t, unread_count: 0 } : t,
             ),
           };
-        }
+        },
       );
     }
   }, [data, queryClient, threadId]);
@@ -1686,11 +1704,16 @@ function ThreadConversation({
           threadId,
           [messageId],
           "read",
-          data.current_user_id
+          data.current_user_id,
         );
       }
     },
-    [threadId, broadcastReceiptUpdate, markMessageAsRead, data?.current_user_id]
+    [
+      threadId,
+      broadcastReceiptUpdate,
+      markMessageAsRead,
+      data?.current_user_id,
+    ],
   );
 
   // Subscribe to realtime updates - no polling needed!
@@ -1728,7 +1751,7 @@ function ThreadConversation({
       messageActions.some(
         (a: any) =>
           a.message_id === msgId &&
-          (a.action_type === "transaction" || a.action_type === "reminder")
+          (a.action_type === "transaction" || a.action_type === "reminder"),
       )
     );
   };
@@ -1740,7 +1763,7 @@ function ThreadConversation({
 
     // If filter is off (default), hide messages with ANY actions
     const hasAnyAction = messageActions.some(
-      (a: any) => a.message_id === msg.id
+      (a: any) => a.message_id === msg.id,
     );
     return !hasAnyAction;
   });
@@ -1748,7 +1771,7 @@ function ThreadConversation({
   // Further filter by search query
   const searchFilteredMessages = searchQuery.trim()
     ? filteredMessages.filter((msg) =>
-        msg.content?.toLowerCase().includes(searchQuery.toLowerCase())
+        msg.content?.toLowerCase().includes(searchQuery.toLowerCase()),
       )
     : filteredMessages;
 
@@ -1848,7 +1871,7 @@ function ThreadConversation({
         item_quantity: quantity,
       });
     },
-    [sendMessage, threadId, thread?.purpose]
+    [sendMessage, threadId, thread?.purpose],
   );
 
   const handleDeleteShoppingItem = useCallback(
@@ -1872,7 +1895,7 @@ function ThreadConversation({
         }
         console.log(
           "[DELETE] Removing from cache, before count:",
-          old.messages.length
+          old.messages.length,
         );
         const filtered = old.messages.filter((msg) => msg.id !== messageId);
         console.log("[DELETE] After filter count:", filtered.length);
@@ -1935,7 +1958,7 @@ function ThreadConversation({
         toast.error("Network error - failed to delete note");
       }
     },
-    [threadId, queryClient]
+    [threadId, queryClient],
   );
 
   // Toggle item URLs for shopping thread
@@ -1953,10 +1976,10 @@ function ThreadConversation({
           return {
             ...old,
             threads: old.threads.map((t) =>
-              t.id === threadId ? { ...t, enable_item_urls: newValue } : t
+              t.id === threadId ? { ...t, enable_item_urls: newValue } : t,
             ),
           };
-        }
+        },
       );
 
       const res = await fetch("/api/hub/threads", {
@@ -2166,7 +2189,7 @@ function ThreadConversation({
                         "flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-medium transition-all",
                         thread.enable_item_urls
                           ? "text-blue-400 hover:bg-blue-500/30"
-                          : "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60"
+                          : "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60",
                       )}
                       style={
                         thread.enable_item_urls && thread.color
@@ -2218,7 +2241,7 @@ function ThreadConversation({
                       "p-2 rounded-lg transition-all",
                       selectedMessages.size > 0
                         ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                        : "bg-white/5 text-white/30 cursor-not-allowed"
+                        : "bg-white/5 text-white/30 cursor-not-allowed",
                     )}
                   >
                     <Trash2Icon className="w-5 h-5" />
@@ -2238,7 +2261,7 @@ function ThreadConversation({
                       "p-2 rounded-lg transition-all",
                       isSearchOpen
                         ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30"
-                        : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70"
+                        : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70",
                     )}
                     title="Search messages"
                   >
@@ -2262,7 +2285,7 @@ function ThreadConversation({
                           "p-2 rounded-lg transition-all",
                           showActionsFilter
                             ? "text-emerald-400 hover:bg-emerald-500/30"
-                            : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70"
+                            : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70",
                         )}
                         style={
                           showActionsFilter && thread.color
@@ -2392,7 +2415,7 @@ function ThreadConversation({
                         "rounded-2xl p-4 animate-pulse",
                         i % 2 === 0
                           ? "ml-auto max-w-[80%]"
-                          : "mr-auto max-w-[80%]"
+                          : "mr-auto max-w-[80%]",
                       )}
                       style={{
                         backgroundColor: thread?.color
@@ -2434,10 +2457,10 @@ function ThreadConversation({
 
                   // Check if this message has actions
                   const msgActions = messageActions.filter(
-                    (a: any) => a.message_id === msg.id
+                    (a: any) => a.message_id === msg.id,
                   );
                   const hasTransactionAction = msgActions.some(
-                    (a: any) => a.action_type === "transaction"
+                    (a: any) => a.action_type === "transaction",
                   );
 
                   // Date separator logic - only for reminder and budget chats
@@ -2447,7 +2470,7 @@ function ThreadConversation({
                     (index === 0 ||
                       isDifferentDay(
                         msg.created_at,
-                        searchFilteredMessages[index - 1].created_at
+                        searchFilteredMessages[index - 1].created_at,
                       ));
 
                   return (
@@ -2469,7 +2492,7 @@ function ThreadConversation({
                           ref={unreadSeparatorRef}
                           className={cn(
                             "flex items-center gap-3 py-4 my-2",
-                            isUnreadHeaderExiting && "unread-header-exit"
+                            isUnreadHeaderExiting && "unread-header-exit",
                           )}
                         >
                           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
@@ -2511,7 +2534,7 @@ function ThreadConversation({
                                   ? "bg-white/5 border-white/10 cursor-not-allowed opacity-30"
                                   : selectedMessages.has(msg.id)
                                     ? "bg-blue-500 border-blue-500"
-                                    : "bg-white/5 border-white/30 hover:border-white/50"
+                                    : "bg-white/5 border-white/30 hover:border-white/50",
                               )}
                               title={
                                 msgActions.length > 0
@@ -2570,7 +2593,7 @@ function ThreadConversation({
                                 "ring-2 ring-blue-500",
                               isSelectionMode && "cursor-pointer",
                               isSystem ? "max-w-[90%]" : "max-w-[80%]",
-                              styles.bubble
+                              styles.bubble,
                             )}
                           >
                             {/* Action badges in top-right corner */}
@@ -2632,14 +2655,14 @@ function ThreadConversation({
                                                 ? "unhide"
                                                 : "undo",
                                             }),
-                                          }
+                                          },
                                         );
 
                                         if (!response.ok) {
                                           throw new Error(
                                             isHidden
                                               ? "Failed to unhide message"
-                                              : "Failed to undo deletion"
+                                              : "Failed to undo deletion",
                                           );
                                         }
 
@@ -2654,7 +2677,7 @@ function ThreadConversation({
                                         alert(
                                           error instanceof Error
                                             ? error.message
-                                            : "Failed to undo"
+                                            : "Failed to undo",
                                         );
                                       }
                                     }}
@@ -2669,7 +2692,7 @@ function ThreadConversation({
                                 {searchQuery.trim()
                                   ? highlightSearchTerms(
                                       msg.content || "",
-                                      searchQuery
+                                      searchQuery,
                                     )
                                   : msg.content}
                               </p>
@@ -2700,7 +2723,7 @@ function ThreadConversation({
                             <div
                               className={cn(
                                 "flex items-center gap-1 mt-1",
-                                isMe ? "justify-end" : ""
+                                isMe ? "justify-end" : "",
                               )}
                             >
                               <span className={cn("text-xs", styles.timeColor)}>
@@ -2709,7 +2732,7 @@ function ThreadConversation({
                                   {
                                     hour: "2-digit",
                                     minute: "2-digit",
-                                  }
+                                  },
                                 )}
                               </span>
                               {/* Message status icons for sent messages */}
@@ -2817,7 +2840,7 @@ function ThreadConversation({
             {(() => {
               // Check if message already has transaction action (database OR local)
               const hasTransactionAction = isMessageConverted(
-                actionMenuMessage.id
+                actionMenuMessage.id,
               );
 
               // Determine action based on thread purpose
@@ -2840,7 +2863,7 @@ function ThreadConversation({
                       // Parse message for transaction data
                       const parsed = parseMessageForTransaction(
                         actionMenuMessage.content || "",
-                        categories as any[]
+                        categories as any[],
                       );
 
                       // Open transaction modal with prefilled data
@@ -2862,7 +2885,7 @@ function ThreadConversation({
                       "w-full px-4 py-3 flex items-center gap-3 rounded-xl transition-all",
                       hasTransactionAction
                         ? "opacity-50 cursor-not-allowed bg-white/5"
-                        : "hover:bg-white/10 active:scale-[0.98]"
+                        : "hover:bg-white/10 active:scale-[0.98]",
                     )}
                   >
                     <div
@@ -2872,7 +2895,7 @@ function ThreadConversation({
                           ? "bg-emerald-500/20"
                           : myTheme === "pink"
                             ? "bg-gradient-to-br from-pink-500/20 to-rose-500/20"
-                            : "bg-gradient-to-br from-blue-500/20 to-cyan-500/20"
+                            : "bg-gradient-to-br from-blue-500/20 to-cyan-500/20",
                       )}
                     >
                       {hasTransactionAction ? (
@@ -3000,7 +3023,7 @@ function ThreadConversation({
                               } catch (error) {
                                 console.error(
                                   "Failed to delete message:",
-                                  error
+                                  error,
                                 );
                               }
                             }}
@@ -3082,10 +3105,10 @@ function ThreadConversation({
                         messages: old.messages.map((msg) =>
                           idsToDelete.includes(msg.id)
                             ? { ...msg, is_hidden_by_me: true }
-                            : msg
+                            : msg,
                         ),
                       };
-                    }
+                    },
                   );
 
                   // Fire and forget
@@ -3118,10 +3141,10 @@ function ThreadConversation({
               {/* Delete for everyone - only if ALL selected messages are mine */}
               {(() => {
                 const selectedMsgs = searchFilteredMessages.filter((m) =>
-                  selectedMessages.has(m.id)
+                  selectedMessages.has(m.id),
                 );
                 const allMine = selectedMsgs.every(
-                  (m) => m.sender_user_id === currentUserId
+                  (m) => m.sender_user_id === currentUserId,
                 );
 
                 return (
@@ -3141,10 +3164,10 @@ function ThreadConversation({
                           return {
                             ...old,
                             messages: old.messages.filter(
-                              (msg) => !idsToDelete.includes(msg.id)
+                              (msg) => !idsToDelete.includes(msg.id),
                             ),
                           };
-                        }
+                        },
                       );
 
                       // Fire and forget
@@ -3168,13 +3191,13 @@ function ThreadConversation({
                       "w-full p-4 text-left rounded-xl transition-colors",
                       allMine
                         ? "hover:bg-red-500/10"
-                        : "opacity-40 cursor-not-allowed"
+                        : "opacity-40 cursor-not-allowed",
                     )}
                   >
                     <p
                       className={cn(
                         "text-sm font-medium",
-                        allMine ? "text-red-400" : "text-white/50"
+                        allMine ? "text-red-400" : "text-white/50",
                       )}
                     >
                       Delete for everyone
@@ -3369,7 +3392,7 @@ function ThreadSettingsModal({
   const themeClasses = useThemeClasses();
   const [icon, setIcon] = useState(thread.icon);
   const [color, setColor] = useState<string>(
-    thread.color || PURPOSE_CONFIG[thread.purpose]?.defaultColor || "#6366f1"
+    thread.color || PURPOSE_CONFIG[thread.purpose]?.defaultColor || "#6366f1",
   );
   const [isPrivate, setIsPrivate] = useState(thread.is_private ?? false);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -3415,10 +3438,10 @@ function ThreadSettingsModal({
             threads: old.threads.map((t) =>
               t.id === thread.id
                 ? { ...t, icon, color, is_private: isPrivate }
-                : t
+                : t,
             ),
           };
-        }
+        },
       );
 
       const res = await fetch("/api/hub/threads", {
@@ -3474,7 +3497,7 @@ function ThreadSettingsModal({
             ...old,
             threads: old.threads.filter((t) => t.id !== thread.id),
           };
-        }
+        },
       );
 
       const res = await fetch(`/api/hub/threads?thread_id=${thread.id}`, {
@@ -3496,7 +3519,7 @@ function ThreadSettingsModal({
           onClick: async () => {
             const undoRes = await fetch(
               `/api/hub/threads?thread_id=${deletedThreadId}&undo=true`,
-              { method: "DELETE" }
+              { method: "DELETE" },
             );
             if (undoRes.ok) {
               queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
@@ -3629,7 +3652,7 @@ function ThreadSettingsModal({
                       "w-10 h-10 rounded-lg transition-all duration-200 active:scale-95",
                       color === c
                         ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-110"
-                        : "hover:scale-105"
+                        : "hover:scale-105",
                     )}
                     style={{ backgroundColor: c }}
                   />
@@ -3650,7 +3673,7 @@ function ThreadSettingsModal({
                   "group relative p-3 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2.5 overflow-hidden",
                   isPrivate
                     ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow} hover:shadow-[0_0_25px_rgba(168,85,247,0.35),0_0_50px_rgba(147,51,234,0.2)]`
-                    : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`
+                    : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`,
                 )}
               >
                 {/* Animated background glow when private */}
@@ -3665,7 +3688,7 @@ function ThreadSettingsModal({
                     "relative text-sm font-semibold tracking-wide transition-all duration-300",
                     isPrivate
                       ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(168,85,247,0.6)]`
-                      : `${themeClasses.textFaint} ${themeClasses.textHover}`
+                      : `${themeClasses.textFaint} ${themeClasses.textHover}`,
                   )}
                 >
                   {isPrivate ? "Private" : "Public"}
@@ -3675,7 +3698,7 @@ function ThreadSettingsModal({
                     "relative w-5 h-5 transition-all duration-500",
                     isPrivate
                       ? `${themeClasses.textActive} drop-shadow-[0_0_10px_rgba(168,85,247,0.8)] animate-pulse`
-                      : `${themeClasses.textFaint} ${themeClasses.textHover}`
+                      : `${themeClasses.textFaint} ${themeClasses.textHover}`,
                   )}
                   fill="none"
                   viewBox="0 0 24 24"
@@ -3741,7 +3764,7 @@ function ThreadSettingsModal({
             className={cn(
               "flex-1 px-4 py-3 rounded-xl font-medium transition-all",
               "bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 hover:text-white",
-              "border border-slate-700 hover:border-slate-600"
+              "border border-slate-700 hover:border-slate-600",
             )}
           >
             Cancel
@@ -3754,7 +3777,7 @@ function ThreadSettingsModal({
               "bg-gradient-to-r from-cyan-500 to-blue-500 text-white",
               "hover:from-cyan-400 hover:to-blue-400",
               "disabled:opacity-50 disabled:cursor-not-allowed",
-              "shadow-lg shadow-cyan-500/25"
+              "shadow-lg shadow-cyan-500/25",
             )}
           >
             {isSaving ? "Saving..." : "Save Changes"}
@@ -3780,7 +3803,7 @@ function CreateThreadModal({
   const [icon, setIcon] = useState("💬");
   const [purpose, setPurpose] = useState<ThreadPurpose>("general");
   const [color, setColor] = useState<string>(
-    PURPOSE_CONFIG.general.defaultColor
+    PURPOSE_CONFIG.general.defaultColor,
   );
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
@@ -3831,7 +3854,7 @@ function CreateThreadModal({
         onSuccess: (data) => {
           onCreated(data.thread.id);
         },
-      }
+      },
     );
   };
 
@@ -3923,7 +3946,7 @@ function CreateThreadModal({
               className={cn(
                 "w-full px-4 py-3 rounded-xl border transition-all",
                 "bg-slate-900/50 text-white placeholder:text-slate-500",
-                "border-slate-700 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                "border-slate-700 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20",
               )}
               autoFocus
             />
@@ -3947,19 +3970,19 @@ function CreateThreadModal({
                       "flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-200 active:scale-95",
                       isSelected
                         ? "border-cyan-500 bg-cyan-500/10 shadow-lg shadow-cyan-500/20"
-                        : "border-slate-700 bg-slate-900/50 hover:bg-slate-800/50 hover:border-slate-600"
+                        : "border-slate-700 bg-slate-900/50 hover:bg-slate-800/50 hover:border-slate-600",
                     )}
                   >
                     <Icon
                       className={cn(
                         "w-5 h-5 transition-colors",
-                        isSelected ? "text-cyan-400" : "text-slate-400"
+                        isSelected ? "text-cyan-400" : "text-slate-400",
                       )}
                     />
                     <span
                       className={cn(
                         "text-xs font-medium",
-                        isSelected ? "text-white" : "text-slate-400"
+                        isSelected ? "text-white" : "text-slate-400",
                       )}
                     >
                       {config.label}
@@ -3993,7 +4016,7 @@ function CreateThreadModal({
                       "w-10 h-10 rounded-lg transition-all duration-200 active:scale-95",
                       color === c
                         ? "ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-110"
-                        : "hover:scale-105"
+                        : "hover:scale-105",
                     )}
                     style={{ backgroundColor: c }}
                   />
@@ -4014,7 +4037,7 @@ function CreateThreadModal({
                 "w-full group relative p-3 rounded-xl border transition-all duration-300 active:scale-[0.98] flex items-center gap-3 overflow-hidden",
                 isPrivate
                   ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow}`
-                  : `border-slate-700 bg-slate-900/50 hover:bg-slate-800/50 hover:border-slate-600`
+                  : `border-slate-700 bg-slate-900/50 hover:bg-slate-800/50 hover:border-slate-600`,
               )}
             >
               {isPrivate && (
@@ -4028,7 +4051,7 @@ function CreateThreadModal({
                   "relative w-5 h-5 transition-all duration-500 shrink-0",
                   isPrivate
                     ? `${themeClasses.textActive} drop-shadow-[0_0_10px_rgba(20,184,166,0.8)] animate-pulse`
-                    : "text-slate-400"
+                    : "text-slate-400",
                 )}
                 fill="none"
                 viewBox="0 0 24 24"
@@ -4054,7 +4077,7 @@ function CreateThreadModal({
                     "relative text-sm font-semibold tracking-wide transition-all duration-300",
                     isPrivate
                       ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]`
-                      : "text-white"
+                      : "text-white",
                   )}
                 >
                   {isPrivate ? "Private" : "Public"}
@@ -4076,7 +4099,7 @@ function CreateThreadModal({
             className={cn(
               "flex-1 px-4 py-3 rounded-xl font-medium transition-all",
               "bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 hover:text-white",
-              "border border-slate-700 hover:border-slate-600"
+              "border border-slate-700 hover:border-slate-600",
             )}
           >
             Cancel
@@ -4089,7 +4112,7 @@ function CreateThreadModal({
               "bg-gradient-to-r from-cyan-500 to-blue-500 text-white",
               "hover:from-cyan-400 hover:to-blue-400",
               "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-cyan-500 disabled:hover:to-blue-500",
-              "shadow-lg shadow-cyan-500/25"
+              "shadow-lg shadow-cyan-500/25",
             )}
           >
             {createThread.isPending ? "Creating..." : "Create Chat"}
@@ -4309,7 +4332,7 @@ function LeaderboardRow({
     <div
       className={cn(
         "flex items-center gap-3 p-2 rounded-lg",
-        isTop ? "bg-yellow-500/10" : "bg-white/5"
+        isTop ? "bg-yellow-500/10" : "bg-white/5",
       )}
     >
       <span className="text-lg">{rank === 1 ? "🥇" : "🥈"}</span>
@@ -4321,7 +4344,7 @@ function LeaderboardRow({
       <span
         className={cn(
           "text-sm font-semibold",
-          isTop ? "text-yellow-400" : "text-white/50"
+          isTop ? "text-yellow-400" : "text-white/50",
         )}
       >
         {value} {label}
@@ -4332,6 +4355,7 @@ function LeaderboardRow({
 
 // Alerts View - Smart notifications
 function AlertsView() {
+  const { setActiveTab } = useTab();
   const { data, isLoading } = useHubAlerts();
   const dismissAlert = useDismissAlert();
   const confirmTransactions = useConfirmTransactions();
@@ -4342,15 +4366,50 @@ function AlertsView() {
   const [showTimeSettings, setShowTimeSettings] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState("20:00");
 
+  // Modal states for viewing items and transactions
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<{
+    id: string;
+    date: string;
+    category: string | null;
+    subcategory: string | null;
+    amount: number;
+    description: string | null;
+    account_id: string;
+    inserted_at: string;
+  } | null>(null);
+  const [loadingTransaction, setLoadingTransaction] = useState(false);
+
+  // Fetch item data when selectedItemId changes
+  const { data: itemData } = useItem(selectedItemId || undefined);
+
   // Track dismissed alerts in localStorage
   const [dismissedInSession, setDismissedInSession] = useState<Set<string>>(
-    () => getDismissedAlerts()
+    () => getDismissedAlerts(),
   );
 
   // Filter out alerts that have been dismissed in this session
   const alerts = (data?.alerts || []).filter(
-    (alert) => !dismissedInSession.has(alert.id)
+    (alert) => !dismissedInSession.has(alert.id),
   );
+
+  // Fetch transaction by ID
+  const fetchTransaction = async (transactionId: string) => {
+    setLoadingTransaction(true);
+    try {
+      const res = await fetch(`/api/transactions/${transactionId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedTransaction(data.transaction);
+      } else {
+        toast.error("Transaction not found");
+      }
+    } catch {
+      toast.error("Failed to load transaction");
+    } finally {
+      setLoadingTransaction(false);
+    }
+  };
 
   const handleConfirmTransactions = async (alertId: string) => {
     setShowCelebration(alertId);
@@ -4373,7 +4432,7 @@ function AlertsView() {
     });
     setShowSnoozeMenu(null);
     toast.success(
-      `Snoozed for ${minutes >= 60 ? `${minutes / 60}h` : `${minutes}m`}`
+      `Snoozed for ${minutes >= 60 ? `${minutes / 60}h` : `${minutes}m`}`,
     );
   };
 
@@ -4386,13 +4445,83 @@ function AlertsView() {
     toast.success(`Reminder time updated to ${time}`);
   };
 
-  const handleDismiss = (alertId: string) => {
+  const handleDismiss = (alertId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation(); // Prevent navigation when clicking dismiss
     // Add to localStorage cache
     addDismissedAlert(alertId);
     // Update local state to hide immediately
     setDismissedInSession((prev) => new Set([...prev, alertId]));
     // Also dismiss on server
     dismissAlert.mutate(alertId);
+  };
+
+  // Navigate to the relevant item/section based on alert type
+  const handleAlertClick = (alert: HubAlert) => {
+    // For item-related notifications, show item detail modal
+    if (alert.item_id) {
+      setSelectedItemId(alert.item_id);
+      return;
+    }
+
+    // For transaction-related notifications, show transaction detail modal
+    if (alert.transaction_id) {
+      fetchTransaction(alert.transaction_id);
+      return;
+    }
+
+    // For recurring payment notifications, navigate to recurring page
+    if (alert.recurring_payment_id) {
+      window.location.href = "/recurring";
+      return;
+    }
+
+    // Fallback navigation based on notification type
+    switch (alert.notification_type) {
+      case "item_reminder":
+      case "item_due":
+      case "item_overdue":
+        setActiveTab("reminder");
+        break;
+      case "transaction_pending":
+      case "daily_reminder":
+        setActiveTab("expense");
+        break;
+      case "budget_warning":
+      case "budget_exceeded":
+        setActiveTab("dashboard");
+        break;
+      case "bill_due":
+      case "bill_overdue":
+        window.location.href = "/recurring";
+        break;
+      case "chat_message":
+      case "chat_mention":
+        // Already in hub, could switch to chat view
+        break;
+      default:
+        // No specific navigation
+        break;
+    }
+  };
+
+  // Check if alert is navigable
+  const isNavigable = (alert: HubAlert) => {
+    return (
+      alert.item_id ||
+      alert.transaction_id ||
+      alert.recurring_payment_id ||
+      [
+        "item_reminder",
+        "item_due",
+        "item_overdue",
+        "transaction_pending",
+        "daily_reminder",
+        "budget_warning",
+        "budget_exceeded",
+        "bill_due",
+        "bill_overdue",
+      ].includes(alert.notification_type || "")
+    );
   };
 
   if (isLoading) {
@@ -4483,7 +4612,7 @@ function AlertsView() {
                 "p-4 rounded-xl neo-card bg-bg-card-custom border relative overflow-hidden transition-all duration-300",
                 isCelebrating
                   ? "border-green-500/50 bg-green-500/10"
-                  : "border-cyan-500/30"
+                  : "border-cyan-500/30",
               )}
             >
               {/* Celebration animation overlay */}
@@ -4541,7 +4670,7 @@ function AlertsView() {
                     <button
                       onClick={() =>
                         setShowTimeSettings(
-                          isTimeSettingsOpen ? null : alert.id
+                          isTimeSettingsOpen ? null : alert.id,
                         )
                       }
                       className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white/70 transition-all"
@@ -4609,12 +4738,15 @@ function AlertsView() {
         }
 
         // Regular alert UI
+        const navigable = isNavigable(alert);
         return (
           <div
             key={alert.id}
+            onClick={() => navigable && handleAlertClick(alert)}
             className={cn(
-              "p-4 rounded-xl neo-card bg-bg-card-custom flex items-start gap-3 border",
-              getBorderColor(alert.severity)
+              "p-4 rounded-xl neo-card bg-bg-card-custom flex items-start gap-3 border transition-all",
+              getBorderColor(alert.severity),
+              navigable && "cursor-pointer hover:bg-white/5",
             )}
           >
             <div className="text-2xl">
@@ -4625,6 +4757,9 @@ function AlertsView() {
                 <p className="text-sm font-semibold text-white">
                   {alert.title}
                 </p>
+                {navigable && (
+                  <ChevronLeftIcon className="w-4 h-4 text-white/30 rotate-180" />
+                )}
               </div>
               <p className="text-sm text-white/60">{alert.message}</p>
               <p className="text-xs text-white/30 mt-1">
@@ -4632,7 +4767,7 @@ function AlertsView() {
               </p>
             </div>
             <button
-              onClick={() => handleDismiss(alert.id)}
+              onClick={(e) => handleDismiss(alert.id, e)}
               className="text-white/30 hover:text-white/60 text-lg"
             >
               ×
@@ -4640,6 +4775,38 @@ function AlertsView() {
           </div>
         );
       })}
+
+      {/* Item Detail Modal */}
+      {selectedItemId && itemData && (
+        <ItemDetailModal
+          item={itemData}
+          onClose={() => setSelectedItemId(null)}
+          onEdit={() => {
+            setSelectedItemId(null);
+            setActiveTab("reminder");
+          }}
+          onDelete={() => setSelectedItemId(null)}
+        />
+      )}
+
+      {/* Transaction Detail Modal */}
+      {selectedTransaction && (
+        <TransactionDetailModal
+          transaction={selectedTransaction}
+          onClose={() => setSelectedTransaction(null)}
+          onSave={() => setSelectedTransaction(null)}
+          onDelete={() => setSelectedTransaction(null)}
+        />
+      )}
+
+      {/* Loading indicator for transaction fetch */}
+      {loadingTransaction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="p-4 rounded-xl bg-bg-card-custom border border-white/10">
+            <div className="animate-spin w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
