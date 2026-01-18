@@ -1,6 +1,29 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.account_balance_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  previous_balance numeric NOT NULL DEFAULT 0,
+  new_balance numeric NOT NULL,
+  change_amount numeric NOT NULL,
+  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['initial_set'::text, 'manual_set'::text, 'manual_adjustment'::text, 'transfer_in'::text, 'transfer_out'::text, 'transaction_expense'::text, 'transaction_income'::text, 'transaction_deleted'::text, 'split_bill_paid'::text, 'split_bill_received'::text, 'draft_confirmed'::text, 'correction'::text])),
+  transaction_id uuid,
+  transfer_id uuid,
+  reason text,
+  is_reconciliation boolean NOT NULL DEFAULT false,
+  expected_balance numeric,
+  discrepancy_amount numeric,
+  discrepancy_explanation text,
+  effective_date date NOT NULL DEFAULT CURRENT_DATE,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT account_balance_history_pkey PRIMARY KEY (id),
+  CONSTRAINT abh_account_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
+  CONSTRAINT abh_user_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT abh_transaction_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id),
+  CONSTRAINT abh_transfer_fkey FOREIGN KEY (transfer_id) REFERENCES public.transfers(id)
+);
 CREATE TABLE public.account_balances (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   account_id uuid NOT NULL UNIQUE,
@@ -457,6 +480,9 @@ CREATE TABLE public.item_subtasks (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   occurrence_date timestamp with time zone,
   parent_subtask_id uuid,
+  priority integer,
+  kanban_stage text DEFAULT '''To Do''::text'::text,
+  previous_kanban_stage text,
   CONSTRAINT item_subtasks_pkey PRIMARY KEY (id),
   CONSTRAINT item_subtasks_parent_subtask_id_fkey FOREIGN KEY (parent_subtask_id) REFERENCES public.item_subtasks(id),
   CONSTRAINT item_subtasks_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES public.items(id)
@@ -477,6 +503,8 @@ CREATE TABLE public.items (
   responsible_user_id uuid NOT NULL,
   google_event_id text,
   categories ARRAY DEFAULT '{}'::text[],
+  subtask_kanban_stages jsonb DEFAULT '["To Do", "Later", "In Progress", "Done"]'::jsonb,
+  subtask_kanban_enabled boolean DEFAULT false,
   CONSTRAINT items_pkey PRIMARY KEY (id),
   CONSTRAINT items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT items_responsible_user_fkey FOREIGN KEY (responsible_user_id) REFERENCES auth.users(id)
@@ -706,6 +734,21 @@ CREATE TABLE public.transactions (
   CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT transactions_collaborator_id_fkey FOREIGN KEY (collaborator_id) REFERENCES auth.users(id),
   CONSTRAINT transactions_collaborator_account_id_fkey FOREIGN KEY (collaborator_account_id) REFERENCES public.accounts(id)
+);
+CREATE TABLE public.transfers (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  from_account_id uuid NOT NULL,
+  to_account_id uuid NOT NULL,
+  amount numeric NOT NULL CHECK (amount > 0::numeric),
+  description text DEFAULT ''::text,
+  date date NOT NULL DEFAULT CURRENT_DATE,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT transfers_pkey PRIMARY KEY (id),
+  CONSTRAINT transfers_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT transfers_from_account_id_fkey FOREIGN KEY (from_account_id) REFERENCES public.accounts(id),
+  CONSTRAINT transfers_to_account_id_fkey FOREIGN KEY (to_account_id) REFERENCES public.accounts(id)
 );
 CREATE TABLE public.user_categories (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),

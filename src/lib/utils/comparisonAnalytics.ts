@@ -19,7 +19,7 @@ type Transaction = {
 type Account = {
   id: string;
   name: string;
-  type: "income" | "expense";
+  type: "income" | "expense" | "saving";
   country_code?: string | null;
   location_name?: string | null;
 };
@@ -42,7 +42,7 @@ export function comparePeriods(
   currentStart: Date,
   currentEnd: Date,
   previousStart: Date,
-  previousEnd: Date
+  previousEnd: Date,
 ): ComparisonResult {
   const currentTxs = transactions.filter((t) => {
     const date = parseISO(t.date);
@@ -77,7 +77,7 @@ export function comparePeriods(
  * Month over Month comparison
  */
 export function getMonthOverMonth(
-  transactions: Transaction[]
+  transactions: Transaction[],
 ): ComparisonResult {
   const now = new Date();
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -86,7 +86,7 @@ export function getMonthOverMonth(
   const previousMonthEnd = new Date(
     previousMonthStart.getFullYear(),
     previousMonthStart.getMonth() + 1,
-    0
+    0,
   );
 
   return comparePeriods(
@@ -94,7 +94,7 @@ export function getMonthOverMonth(
     currentMonthStart,
     currentMonthEnd,
     previousMonthStart,
-    previousMonthEnd
+    previousMonthEnd,
   );
 }
 
@@ -113,7 +113,7 @@ export function getYearOverYear(transactions: Transaction[]): ComparisonResult {
     currentYearStart,
     currentYearEnd,
     previousYearStart,
-    previousYearEnd
+    previousYearEnd,
   );
 }
 
@@ -121,7 +121,7 @@ export function getYearOverYear(transactions: Transaction[]): ComparisonResult {
  * Compare same month of previous year (e.g., Nov 2025 vs Nov 2024)
  */
 export function getSameMonthLastYear(
-  transactions: Transaction[]
+  transactions: Transaction[],
 ): ComparisonResult {
   const now = new Date();
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -130,7 +130,7 @@ export function getSameMonthLastYear(
   const previousYearMonthEnd = new Date(
     previousYearMonthStart.getFullYear(),
     previousYearMonthStart.getMonth() + 1,
-    0
+    0,
   );
 
   return comparePeriods(
@@ -138,7 +138,7 @@ export function getSameMonthLastYear(
     currentMonthStart,
     currentMonthEnd,
     previousYearMonthStart,
-    previousYearMonthEnd
+    previousYearMonthEnd,
   );
 }
 
@@ -163,7 +163,7 @@ export type SeasonalSpending = {
 };
 
 export function getSeasonalAnalysis(
-  transactions: Transaction[]
+  transactions: Transaction[],
 ): SeasonalSpending[] {
   const seasons: Record<
     Season,
@@ -213,7 +213,7 @@ export function getSeasonalAnalysis(
 }
 
 export function getCurrentSeasonComparison(
-  transactions: Transaction[]
+  transactions: Transaction[],
 ): ComparisonResult & { season: Season } {
   const now = new Date();
   const currentSeason = getSeason(now);
@@ -249,7 +249,7 @@ export function getCurrentSeasonComparison(
       currentSeasonStart,
       currentSeasonEnd,
       previousSeasonStart,
-      previousSeasonEnd
+      previousSeasonEnd,
     ),
     season: currentSeason,
   };
@@ -269,7 +269,7 @@ export type TimeSeriesPoint = {
  */
 export function getDailySpending(
   transactions: Transaction[],
-  days: number = 30
+  days: number = 30,
 ): TimeSeriesPoint[] {
   const now = new Date();
   const data: Record<string, { amount: number; count: number }> = {};
@@ -302,7 +302,7 @@ export function getDailySpending(
  */
 export function getMonthlySpending(
   transactions: Transaction[],
-  months: number = 12
+  months: number = 12,
 ): TimeSeriesPoint[] {
   const now = new Date();
   const data: Record<string, { amount: number; count: number }> = {};
@@ -549,7 +549,7 @@ export const COUNTRY_NAMES: Record<string, string> = {
  */
 export function getSpendingByCountry(
   transactions: Transaction[],
-  accounts: Account[] | undefined
+  accounts: Account[] | undefined,
 ): CountrySpending[] {
   if (!accounts) return [];
 
@@ -647,7 +647,7 @@ export type Trip = {
 
 export function getTripTimeline(
   transactions: Transaction[],
-  accounts: Account[] | undefined
+  accounts: Account[] | undefined,
 ): Trip[] {
   if (!accounts) return [];
 
@@ -728,7 +728,7 @@ export type SpendingPattern = {
 };
 
 export function analyzeSpendingPattern(
-  transactions: Transaction[]
+  transactions: Transaction[],
 ): SpendingPattern {
   const dailyTotals: Record<string, number> = {};
   transactions.forEach((t) => {
@@ -782,7 +782,7 @@ export type BudgetForecast = {
 
 export function forecastMonthEnd(
   transactions: Transaction[],
-  monthlyBudget?: number
+  monthlyBudget?: number,
 ): BudgetForecast {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);

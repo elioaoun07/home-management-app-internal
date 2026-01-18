@@ -102,7 +102,7 @@ export default function NewAccountDrawer({
             icon: ToastIcons.error,
           });
         },
-      }
+      },
     );
   };
 
@@ -136,7 +136,7 @@ export default function NewAccountDrawer({
                 themeClasses.border,
                 themeClasses.focusBorder,
                 "focus:ring-2",
-                themeClasses.focusRing
+                themeClasses.focusRing,
               )}
               autoFocus
             />
@@ -147,27 +147,27 @@ export default function NewAccountDrawer({
             <Label className={`text-sm font-medium ${themeClasses.text}`}>
               Account Type <span className="text-red-400">*</span>
             </Label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <button
                 onClick={() => setType("expense")}
                 className={cn(
                   "p-3 rounded-xl border text-center transition-all active:scale-95",
                   type === "expense"
                     ? `neo-card ${themeClasses.borderActive} bg-gradient-to-br from-red-500/20 to-orange-500/10 shadow-lg shadow-red-500/10`
-                    : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`
+                    : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`,
                 )}
               >
                 <div className="flex flex-col items-center gap-1.5">
                   <div
                     className={cn(
                       "w-9 h-9 rounded-full flex items-center justify-center",
-                      type === "expense" ? "bg-red-500/20" : "bg-slate-700/50"
+                      type === "expense" ? "bg-red-500/20" : "bg-slate-700/50",
                     )}
                   >
                     <svg
                       className={cn(
                         "w-4 h-4",
-                        type === "expense" ? "text-red-400" : "text-slate-400"
+                        type === "expense" ? "text-red-400" : "text-slate-400",
                       )}
                       fill="none"
                       viewBox="0 0 24 24"
@@ -184,7 +184,7 @@ export default function NewAccountDrawer({
                   <span
                     className={cn(
                       "font-semibold text-sm",
-                      type === "expense" ? "text-red-400" : "text-slate-300"
+                      type === "expense" ? "text-red-400" : "text-slate-300",
                     )}
                   >
                     Expense
@@ -198,7 +198,7 @@ export default function NewAccountDrawer({
                   "p-3 rounded-xl border text-center transition-all active:scale-95",
                   type === "income"
                     ? `neo-card ${themeClasses.borderActive} bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 shadow-lg shadow-emerald-500/10`
-                    : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`
+                    : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`,
                 )}
               >
                 <div className="flex flex-col items-center gap-1.5">
@@ -207,7 +207,7 @@ export default function NewAccountDrawer({
                       "w-9 h-9 rounded-full flex items-center justify-center",
                       type === "income"
                         ? "bg-emerald-500/20"
-                        : "bg-slate-700/50"
+                        : "bg-slate-700/50",
                     )}
                   >
                     <svg
@@ -215,7 +215,7 @@ export default function NewAccountDrawer({
                         "w-4 h-4",
                         type === "income"
                           ? "text-emerald-400"
-                          : "text-slate-400"
+                          : "text-slate-400",
                       )}
                       fill="none"
                       viewBox="0 0 24 24"
@@ -232,10 +232,58 @@ export default function NewAccountDrawer({
                   <span
                     className={cn(
                       "font-semibold text-sm",
-                      type === "income" ? "text-emerald-400" : "text-slate-300"
+                      type === "income" ? "text-emerald-400" : "text-slate-300",
                     )}
                   >
                     Income
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setType("saving")}
+                className={cn(
+                  "p-3 rounded-xl border text-center transition-all active:scale-95",
+                  type === "saving"
+                    ? `neo-card ${themeClasses.borderActive} bg-gradient-to-br from-purple-500/20 to-violet-500/10 shadow-lg shadow-purple-500/10`
+                    : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`,
+                )}
+              >
+                <div className="flex flex-col items-center gap-1.5">
+                  <div
+                    className={cn(
+                      "w-9 h-9 rounded-full flex items-center justify-center",
+                      type === "saving"
+                        ? "bg-purple-500/20"
+                        : "bg-slate-700/50",
+                    )}
+                  >
+                    <svg
+                      className={cn(
+                        "w-4 h-4",
+                        type === "saving"
+                          ? "text-purple-400"
+                          : "text-slate-400",
+                      )}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <span
+                    className={cn(
+                      "font-semibold text-sm",
+                      type === "saving" ? "text-purple-400" : "text-slate-300",
+                    )}
+                  >
+                    Saving
                   </span>
                 </div>
               </button>
@@ -258,7 +306,7 @@ export default function NewAccountDrawer({
                     "p-3 rounded-xl border text-center transition-all active:scale-95",
                     withDefaultCategories
                       ? `neo-card ${themeClasses.borderActive} bg-gradient-to-br from-blue-500/20 to-cyan-500/10 shadow-lg shadow-blue-500/10`
-                      : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`
+                      : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`,
                   )}
                 >
                   <div className="flex flex-col items-center gap-1.5">
@@ -267,7 +315,7 @@ export default function NewAccountDrawer({
                         "w-9 h-9 rounded-full flex items-center justify-center",
                         withDefaultCategories
                           ? "bg-blue-500/20"
-                          : "bg-slate-700/50"
+                          : "bg-slate-700/50",
                       )}
                     >
                       <FolderTree
@@ -275,7 +323,7 @@ export default function NewAccountDrawer({
                           "w-4 h-4",
                           withDefaultCategories
                             ? "text-blue-400"
-                            : "text-slate-400"
+                            : "text-slate-400",
                         )}
                       />
                     </div>
@@ -284,7 +332,7 @@ export default function NewAccountDrawer({
                         "font-semibold text-sm",
                         withDefaultCategories
                           ? "text-blue-400"
-                          : "text-slate-300"
+                          : "text-slate-300",
                       )}
                     >
                       Default
@@ -301,7 +349,7 @@ export default function NewAccountDrawer({
                     "p-3 rounded-xl border text-center transition-all active:scale-95",
                     !withDefaultCategories
                       ? `neo-card ${themeClasses.borderActive} bg-gradient-to-br from-amber-500/20 to-orange-500/10 shadow-lg shadow-amber-500/10`
-                      : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`
+                      : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`,
                   )}
                 >
                   <div className="flex flex-col items-center gap-1.5">
@@ -310,7 +358,7 @@ export default function NewAccountDrawer({
                         "w-9 h-9 rounded-full flex items-center justify-center",
                         !withDefaultCategories
                           ? "bg-amber-500/20"
-                          : "bg-slate-700/50"
+                          : "bg-slate-700/50",
                       )}
                     >
                       <PenLine
@@ -318,7 +366,7 @@ export default function NewAccountDrawer({
                           "w-4 h-4",
                           !withDefaultCategories
                             ? "text-amber-400"
-                            : "text-slate-400"
+                            : "text-slate-400",
                         )}
                       />
                     </div>
@@ -327,7 +375,7 @@ export default function NewAccountDrawer({
                         "font-semibold text-sm",
                         !withDefaultCategories
                           ? "text-amber-400"
-                          : "text-slate-300"
+                          : "text-slate-300",
                       )}
                     >
                       Empty
@@ -356,7 +404,7 @@ export default function NewAccountDrawer({
                 onClick={() => setShowCountryPicker(true)}
                 className={cn(
                   "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3",
-                  `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`
+                  `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover}`,
                 )}
               >
                 <MapPin className="w-5 h-5 text-slate-500" />
@@ -366,7 +414,7 @@ export default function NewAccountDrawer({
               <div
                 className={cn(
                   "w-full p-3 rounded-lg border flex items-center justify-between",
-                  `neo-card ${themeClasses.borderActive} bg-blue-500/10`
+                  `neo-card ${themeClasses.borderActive} bg-blue-500/10`,
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -411,7 +459,7 @@ export default function NewAccountDrawer({
                       }
                       className={cn(
                         "p-2 rounded-lg border text-center transition-all active:scale-95",
-                        `neo-card ${themeClasses.border} bg-bg-card-custom hover:border-blue-500/50`
+                        `neo-card ${themeClasses.border} bg-bg-card-custom hover:border-blue-500/50`,
                       )}
                     >
                       <span className="text-xs font-medium text-white">
@@ -431,7 +479,7 @@ export default function NewAccountDrawer({
                     maxLength={2}
                     className={cn(
                       "h-10 bg-bg-card-custom text-white placeholder:text-slate-500 w-24",
-                      themeClasses.border
+                      themeClasses.border,
                     )}
                   />
                   <Input
@@ -441,7 +489,7 @@ export default function NewAccountDrawer({
                     onChange={(e) => setLocationName(e.target.value)}
                     className={cn(
                       "h-10 bg-bg-card-custom text-white placeholder:text-slate-500 flex-1",
-                      themeClasses.border
+                      themeClasses.border,
                     )}
                   />
                 </div>
@@ -453,7 +501,7 @@ export default function NewAccountDrawer({
                     className={cn(
                       "flex-1 bg-transparent",
                       themeClasses.border,
-                      themeClasses.text
+                      themeClasses.text,
                     )}
                   >
                     Cancel
@@ -486,7 +534,7 @@ export default function NewAccountDrawer({
               className={cn(
                 "w-full h-11 bg-transparent",
                 themeClasses.border,
-                themeClasses.text
+                themeClasses.text,
               )}
             >
               Cancel

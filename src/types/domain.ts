@@ -2,7 +2,7 @@
 export type UUID = string;
 
 /** Accounts */
-export type AccountType = "expense" | "income";
+export type AccountType = "expense" | "income" | "saving";
 
 export type Account = {
   id: UUID;

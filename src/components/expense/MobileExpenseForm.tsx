@@ -74,6 +74,24 @@ import VoiceEntryButton from "./VoiceEntryButton";
 
 type Step = SectionKey | "confirm";
 
+/**
+ * Helper to determine if an account type uses positive balance logic
+ * Income and Saving accounts: positive amounts increase balance
+ * Expense accounts: positive amounts decrease balance
+ */
+function isPositiveBalanceType(type: string | undefined): boolean {
+  return type === "income" || type === "saving";
+}
+
+/**
+ * Get the display label for an account type
+ */
+function getTransactionLabel(type: string | undefined): string {
+  if (type === "income") return "Income";
+  if (type === "saving") return "Deposit";
+  return "Expense";
+}
+
 // Delete confirmation state type
 type DeleteConfirmState = {
   id: string;
@@ -154,7 +172,7 @@ export default function MobileExpenseForm() {
   // Derive visible accounts (visible !== false) from the full list
   const accounts = useMemo(
     () => accountsWithHidden.filter((a: any) => a.visible !== false),
-    [accountsWithHidden]
+    [accountsWithHidden],
   );
   const defaultAccount = accounts.find((a: any) => a.is_default);
 
@@ -168,7 +186,7 @@ export default function MobileExpenseForm() {
 
   const firstValidStep = useMemo(
     () => getFirstValidStep(stepFlow, !!defaultAccount),
-    [stepFlow, defaultAccount]
+    [stepFlow, defaultAccount],
   );
 
   const [isInitialized, setIsInitialized] = useState(false);
@@ -295,10 +313,10 @@ export default function MobileExpenseForm() {
           ? categoriesWithHidden
           : categories;
         const subs = dataSource.filter(
-          (c: any) => c.parent_id === selectedCategoryId
+          (c: any) => c.parent_id === selectedCategoryId,
         );
         const selectedCategoryData = dataSource.find(
-          (c: any) => c.id === selectedCategoryId
+          (c: any) => c.id === selectedCategoryId,
         );
         const nestedSubs = (selectedCategoryData as any)?.subcategories || [];
         const newSubs = [...subs, ...nestedSubs];
@@ -538,7 +556,7 @@ export default function MobileExpenseForm() {
             `${deleteConfirm.type === "category" ? "Category" : "Subcategory"} hidden`,
             {
               icon: ToastIcons.delete,
-            }
+            },
           );
         }
         setDeleteConfirm(null);
@@ -577,7 +595,7 @@ export default function MobileExpenseForm() {
     : [];
 
   const selectedCategoryData = categories.find(
-    (c: any) => c.id === selectedCategoryId
+    (c: any) => c.id === selectedCategoryId,
   );
   const nestedSubcategories =
     (selectedCategoryData as any)?.subcategories || [];
@@ -586,10 +604,10 @@ export default function MobileExpenseForm() {
 
   const selectedAccount = accounts.find((a: any) => a.id === selectedAccountId);
   const selectedCategory = categories.find(
-    (c: any) => c.id === selectedCategoryId
+    (c: any) => c.id === selectedCategoryId,
   );
   const selectedSubcategory = allSubcategories.find(
-    (s: any) => s.id === selectedSubcategoryId
+    (s: any) => s.id === selectedSubcategoryId,
   );
 
   const canSubmit = amount && selectedAccountId && selectedCategoryId;
@@ -677,8 +695,8 @@ export default function MobileExpenseForm() {
       },
       onError: () => {
         toast.error(
-          `Failed to add ${selectedAccount?.type === "income" ? "income" : "expense"}`,
-          { icon: ToastIcons.error }
+          `Failed to add ${getTransactionLabel(selectedAccount?.type).toLowerCase()}`,
+          { icon: ToastIcons.error },
         );
       },
     });
@@ -759,7 +777,7 @@ export default function MobileExpenseForm() {
             <h1
               className={`text-sm font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`}
             >
-              New {selectedAccount?.type === "income" ? "Income" : "Expense"}
+              New {getTransactionLabel(selectedAccount?.type)}
             </h1>
             <button
               onClick={
@@ -779,7 +797,7 @@ export default function MobileExpenseForm() {
                 "p-1.5 -mr-2 rounded-lg",
                 closeDisabled
                   ? `${themeClasses.bgSurface} ${themeClasses.border} opacity-50 cursor-not-allowed`
-                  : `${themeClasses.bgSurface} hover:bg-opacity-30 active:scale-95 transition-all ${themeClasses.border}`
+                  : `${themeClasses.bgSurface} hover:bg-opacity-30 active:scale-95 transition-all ${themeClasses.border}`,
               )}
             >
               <XIcon className={`w-5 h-5 ${themeClasses.text}`} />
@@ -806,7 +824,7 @@ export default function MobileExpenseForm() {
             "fixed left-0 right-0 overflow-y-auto px-3 py-3 bg-bg-dark z-[45]",
             selectedAccountId && step === "amount"
               ? "top-[205px]"
-              : "top-[80px]"
+              : "top-[80px]",
           )}
           style={contentAreaStyles}
           onClick={(e) => {
@@ -845,14 +863,14 @@ export default function MobileExpenseForm() {
                       className={cn(
                         "p-2.5 rounded-lg border active:scale-95 transition-all",
                         themeClasses.border,
-                        themeClasses.bgHover
+                        themeClasses.bgHover,
                       )}
                     >
                       <CalculatorIcon
                         className={cn(
                           "w-5 h-5",
                           themeClasses.text,
-                          themeClasses.glow
+                          themeClasses.glow,
                         )}
                       />
                     </button>
@@ -874,13 +892,13 @@ export default function MobileExpenseForm() {
                       }}
                       onDraftCreated={() => {
                         toast.success(
-                          "Voice entry saved! Check drafts to confirm."
+                          "Voice entry saved! Check drafts to confirm.",
                         );
                       }}
                       className={cn(
                         "p-2.5 rounded-lg border active:scale-95 transition-all",
                         themeClasses.border,
-                        themeClasses.bgHover
+                        themeClasses.bgHover,
                       )}
                     />
                   </div>
@@ -897,7 +915,7 @@ export default function MobileExpenseForm() {
                       "h-9 text-sm font-semibold neo-card bg-bg-card-custom transition-all category-appear hover:scale-105 active:scale-95",
                       themeClasses.border,
                       themeClasses.bgHover,
-                      themeClasses.borderHover
+                      themeClasses.borderHover,
                     )}
                     onClick={() => setAmount(val.toString())}
                   >
@@ -921,7 +939,7 @@ export default function MobileExpenseForm() {
                         $
                         {calculateActualValue(
                           parseFloat(amount),
-                          parseFloat(lbpChangeInput)
+                          parseFloat(lbpChangeInput),
                         )?.toFixed(2) ?? "—"}
                       </span>
                     </div>
@@ -929,10 +947,10 @@ export default function MobileExpenseForm() {
                 <div
                   className={`relative flex items-center h-9 w-40 px-3 rounded-md border border-dashed !bg-bg-card-custom/50 ${themeClasses.border} focus-within:ring-1 ${themeClasses.focusRing.replace(
                     "focus:",
-                    "focus-within:"
+                    "focus-within:",
                   )} ${themeClasses.focusBorder.replace(
                     "focus:",
-                    "focus-within:"
+                    "focus-within:",
                   )} transition-all duration-200 ${
                     !lbpRate ? "opacity-50 cursor-not-allowed" : ""
                   }`}
@@ -1001,7 +1019,7 @@ export default function MobileExpenseForm() {
                     "group relative p-2.5 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2 overflow-hidden",
                     isSplitBill
                       ? "border-emerald-400/50 bg-gradient-to-br from-emerald-500/20 to-teal-500/10 shadow-[0_0_15px_rgba(16,185,129,0.25)] hover:shadow-[0_0_25px_rgba(16,185,129,0.35)]"
-                      : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`
+                      : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`,
                   )}
                   title={
                     isSplitBill ? "Cancel split bill" : "Split with partner"
@@ -1018,7 +1036,7 @@ export default function MobileExpenseForm() {
                       "relative w-5 h-5 transition-all duration-500",
                       isSplitBill
                         ? "text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.8)]"
-                        : `${themeClasses.textFaint} ${themeClasses.textHover}`
+                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
                     )}
                     fill="none"
                     viewBox="0 0 24 24"
@@ -1040,7 +1058,7 @@ export default function MobileExpenseForm() {
                       "relative text-xs font-semibold tracking-wide transition-all duration-300",
                       isSplitBill
                         ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]"
-                        : `${themeClasses.textFaint} ${themeClasses.textHover}`
+                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
                     )}
                   >
                     Split
@@ -1061,7 +1079,7 @@ export default function MobileExpenseForm() {
                     isSplitBill && "opacity-50 cursor-not-allowed",
                     isPrivate
                       ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow} hover:shadow-[0_0_25px_rgba(20,184,166,0.35),0_0_50px_rgba(6,182,212,0.2)]`
-                      : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`
+                      : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`,
                   )}
                 >
                   {/* Animated background glow when private */}
@@ -1076,7 +1094,7 @@ export default function MobileExpenseForm() {
                       "relative text-sm font-semibold tracking-wide transition-all duration-300",
                       isPrivate
                         ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]`
-                        : `${themeClasses.textFaint} ${themeClasses.textHover}`
+                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
                     )}
                   >
                     {isPrivate ? "Private" : "Public"}
@@ -1086,7 +1104,7 @@ export default function MobileExpenseForm() {
                       "relative w-5 h-5 transition-all duration-500",
                       isPrivate
                         ? `${themeClasses.textActive} drop-shadow-[0_0_10px_rgba(20,184,166,0.8)] animate-pulse`
-                        : `${themeClasses.textFaint} ${themeClasses.textHover}`
+                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
                     )}
                     fill="none"
                     viewBox="0 0 24 24"
@@ -1159,7 +1177,7 @@ export default function MobileExpenseForm() {
                     <Reorder.Group
                       axis="y"
                       values={orderedAccounts.filter(
-                        (a: any) => a.visible !== false
+                        (a: any) => a.visible !== false,
                       )}
                       onReorder={handleAccountsReorder}
                       className="space-y-2"
@@ -1213,7 +1231,7 @@ export default function MobileExpenseForm() {
                                   "w-full p-2.5 rounded-lg border text-left transition-all flex items-center gap-2",
                                   selectedAccountId === account.id
                                     ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
-                                    : `neo-card ${themeClasses.border} bg-bg-card-custom`
+                                    : `neo-card ${themeClasses.border} bg-bg-card-custom`,
                                 )}
                               >
                                 {/* Drag handle */}
@@ -1253,7 +1271,7 @@ export default function MobileExpenseForm() {
                                     e.stopPropagation();
                                     try {
                                       await unhideAccountMutation.mutateAsync(
-                                        account.id
+                                        account.id,
                                       );
                                       toast.success("Account restored", {
                                         icon: ToastIcons.create,
@@ -1261,7 +1279,7 @@ export default function MobileExpenseForm() {
                                     } catch (error: any) {
                                       toast.error(
                                         error.message || "Failed to restore",
-                                        { icon: ToastIcons.error }
+                                        { icon: ToastIcons.error },
                                       );
                                     }
                                   }}
@@ -1276,7 +1294,7 @@ export default function MobileExpenseForm() {
                                 <div
                                   className={cn(
                                     "w-full p-2.5 rounded-lg border text-left transition-all flex items-center gap-2 opacity-50",
-                                    `neo-card border-slate-700/50 bg-slate-800/30`
+                                    `neo-card border-slate-700/50 bg-slate-800/30`,
                                   )}
                                 >
                                   <div className="flex-1">
@@ -1320,7 +1338,7 @@ export default function MobileExpenseForm() {
                             "w-full p-2.5 rounded-lg border text-left transition-all active:scale-[0.98]",
                             selectedAccountId === account.id
                               ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
-                              : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`
+                              : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`,
                           )}
                         >
                           <div className="flex items-center justify-between">
@@ -1400,7 +1418,7 @@ export default function MobileExpenseForm() {
                     <Reorder.Group
                       axis="y"
                       values={orderedCategories.filter(
-                        (c: any) => c.visible !== false
+                        (c: any) => c.visible !== false,
                       )}
                       onReorder={handleCategoriesReorder}
                       className="space-y-2 pb-4"
@@ -1411,7 +1429,7 @@ export default function MobileExpenseForm() {
                           const color = category.color || "#22d3ee";
                           const IconComponent = getCategoryIcon(
                             category.name,
-                            category.slug
+                            category.slug,
                           );
 
                           return (
@@ -1460,7 +1478,7 @@ export default function MobileExpenseForm() {
                                 <div
                                   className={cn(
                                     "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3",
-                                    `neo-card ${themeClasses.border} bg-bg-card-custom`
+                                    `neo-card ${themeClasses.border} bg-bg-card-custom`,
                                   )}
                                 >
                                   {/* Drag handle */}
@@ -1500,7 +1518,7 @@ export default function MobileExpenseForm() {
                               const color = category.color || "#22d3ee";
                               const IconComponent = getCategoryIcon(
                                 category.name,
-                                category.slug
+                                category.slug,
                               );
 
                               return (
@@ -1511,7 +1529,7 @@ export default function MobileExpenseForm() {
                                       e.stopPropagation();
                                       try {
                                         await unhideCategoryMutation.mutateAsync(
-                                          category.id
+                                          category.id,
                                         );
                                         toast.success("Category restored", {
                                           icon: ToastIcons.create,
@@ -1519,7 +1537,7 @@ export default function MobileExpenseForm() {
                                       } catch (error: any) {
                                         toast.error(
                                           error.message || "Failed to restore",
-                                          { icon: ToastIcons.error }
+                                          { icon: ToastIcons.error },
                                         );
                                       }
                                     }}
@@ -1534,7 +1552,7 @@ export default function MobileExpenseForm() {
                                   <div
                                     className={cn(
                                       "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3 opacity-50",
-                                      `neo-card border-slate-700/50 bg-slate-800/30`
+                                      `neo-card border-slate-700/50 bg-slate-800/30`,
                                     )}
                                   >
                                     <div style={{ color: `${color}60` }}>
@@ -1584,7 +1602,7 @@ export default function MobileExpenseForm() {
                                     setSelectedCategoryId(category.id);
                                     const hasSubcategories =
                                       categories.some(
-                                        (c: any) => c.parent_id === category.id
+                                        (c: any) => c.parent_id === category.id,
                                       ) ||
                                       (category as any).subcategories?.length >
                                         0;
@@ -1624,14 +1642,14 @@ export default function MobileExpenseForm() {
                                       ? "neo-card neo-glow-sm"
                                       : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} hover:bg-primary/5`,
                                     addTransactionMutation.isPending &&
-                                      "opacity-50 cursor-not-allowed"
+                                      "opacity-50 cursor-not-allowed",
                                   )}
                                 >
                                   <div className="flex flex-col items-center justify-center gap-1 h-full">
                                     {(() => {
                                       const IconComponent = getCategoryIcon(
                                         category.name,
-                                        category.slug
+                                        category.slug,
                                       );
                                       return (
                                         <div
@@ -1656,7 +1674,7 @@ export default function MobileExpenseForm() {
                                 </button>
                               </motion.div>
                             );
-                          }
+                          },
                         )}
                       </AnimatePresence>
                     )}
@@ -1720,7 +1738,7 @@ export default function MobileExpenseForm() {
                         <Reorder.Group
                           axis="y"
                           values={orderedSubcategories.filter(
-                            (s: any) => s.visible !== false
+                            (s: any) => s.visible !== false,
                           )}
                           onReorder={handleSubcategoriesReorder}
                           className="space-y-2"
@@ -1777,7 +1795,7 @@ export default function MobileExpenseForm() {
                                     <div
                                       className={cn(
                                         "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3",
-                                        `neo-card ${themeClasses.border} bg-bg-card-custom`
+                                        `neo-card ${themeClasses.border} bg-bg-card-custom`,
                                       )}
                                     >
                                       {/* Drag handle */}
@@ -1804,7 +1822,7 @@ export default function MobileExpenseForm() {
 
                         {/* Hidden subcategories section */}
                         {orderedSubcategories.filter(
-                          (s: any) => s.visible === false
+                          (s: any) => s.visible === false,
                         ).length > 0 && (
                           <div className="mt-4 pt-4 border-t border-slate-700/50">
                             <p className="text-xs text-slate-500 mb-2 flex items-center gap-1.5">
@@ -1817,7 +1835,7 @@ export default function MobileExpenseForm() {
                                 .map((sub: any) => {
                                   const color = sub.color || "#22d3ee";
                                   const IconComponent = getCategoryIcon(
-                                    sub.name
+                                    sub.name,
                                   );
 
                                   return (
@@ -1828,17 +1846,17 @@ export default function MobileExpenseForm() {
                                           e.stopPropagation();
                                           try {
                                             await unhideCategoryMutation.mutateAsync(
-                                              sub.id
+                                              sub.id,
                                             );
                                             toast.success(
                                               "Subcategory restored",
-                                              { icon: ToastIcons.create }
+                                              { icon: ToastIcons.create },
                                             );
                                           } catch (error: any) {
                                             toast.error(
                                               error.message ||
                                                 "Failed to restore",
-                                              { icon: ToastIcons.error }
+                                              { icon: ToastIcons.error },
                                             );
                                           }
                                         }}
@@ -1853,7 +1871,7 @@ export default function MobileExpenseForm() {
                                       <div
                                         className={cn(
                                           "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3 opacity-50",
-                                          `neo-card border-slate-700/50 bg-slate-800/30`
+                                          `neo-card border-slate-700/50 bg-slate-800/30`,
                                         )}
                                       >
                                         <div style={{ color: `${color}60` }}>
@@ -1878,7 +1896,7 @@ export default function MobileExpenseForm() {
                             "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
                             !selectedSubcategoryId
                               ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow shadow-lg`
-                              : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`
+                              : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`,
                           )}
                         >
                           <span
@@ -1886,7 +1904,7 @@ export default function MobileExpenseForm() {
                               "font-semibold text-xs",
                               !selectedSubcategoryId
                                 ? themeClasses.text
-                                : "text-white"
+                                : "text-white",
                             )}
                           >
                             None
@@ -1927,12 +1945,12 @@ export default function MobileExpenseForm() {
                                       "w-full p-2.5 rounded-lg border text-center transition-all min-h-[55px] flex flex-col items-center justify-center gap-1 active:scale-95",
                                       active
                                         ? "neo-card neo-glow shadow-lg"
-                                        : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`
+                                        : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`,
                                     )}
                                   >
                                     {(() => {
                                       const IconComponent = getCategoryIcon(
-                                        sub.name
+                                        sub.name,
                                       );
                                       return (
                                         <div
@@ -1956,7 +1974,7 @@ export default function MobileExpenseForm() {
                                   </button>
                                 </motion.div>
                               );
-                            }
+                            },
                           )}
                         </AnimatePresence>
                         {/* Add New Subcategory Button */}
@@ -2031,7 +2049,7 @@ export default function MobileExpenseForm() {
                   ? "Adding..."
                   : getNextStep()
                     ? "Next"
-                    : `Add ${selectedAccount?.type === "income" ? "Income" : "Expense"}`}
+                    : `Add ${getTransactionLabel(selectedAccount?.type)}`}
               </Button>
             </div>
           )}
@@ -2106,7 +2124,7 @@ export default function MobileExpenseForm() {
                   "text-lg font-semibold",
                   deleteConfirm?.step === "second"
                     ? "text-amber-400"
-                    : themeClasses.text
+                    : themeClasses.text,
                 )}
               >
                 {deleteConfirm?.step === "first"
@@ -2155,7 +2173,7 @@ export default function MobileExpenseForm() {
                   "w-full h-12 text-base font-semibold border-0 shadow-lg transition-all",
                   deleteConfirm?.step === "first"
                     ? "bg-amber-500/80 hover:bg-amber-500 text-white"
-                    : "bg-amber-600 hover:bg-amber-700 text-white"
+                    : "bg-amber-600 hover:bg-amber-700 text-white",
                 )}
               >
                 {isDeleting
@@ -2170,7 +2188,7 @@ export default function MobileExpenseForm() {
                   className={cn(
                     "w-full h-11 bg-transparent",
                     themeClasses.border,
-                    themeClasses.text
+                    themeClasses.text,
                   )}
                 >
                   Cancel

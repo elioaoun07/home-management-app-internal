@@ -45,7 +45,7 @@ export async function GET() {
         sender_user_id,
         created_at
       )
-    `
+    `,
     )
     .eq("household_id", household.id)
     .eq("is_archived", false)
@@ -63,12 +63,15 @@ export async function GET() {
   const threadIds = (threads || []).map((t) => t.id);
 
   // Single query to get all messages from all threads
+  // IMPORTANT: Exclude archived messages from unread count calculation
   const { data: allMessages } =
     threadIds.length > 0
       ? await supabase
           .from("hub_messages")
           .select("id, sender_user_id, thread_id")
           .in("thread_id", threadIds)
+          .is("archived_at", null)
+          .is("deleted_at", null)
       : { data: [] };
 
   // Get all message IDs from other users (messages I need receipts for)
@@ -90,7 +93,7 @@ export async function GET() {
   const readMessageIds = new Set(
     (allReceipts || [])
       .filter((r) => r.status === "read")
-      .map((r) => r.message_id)
+      .map((r) => r.message_id),
   );
 
   // Group messages by thread for unread count calculation
@@ -101,24 +104,24 @@ export async function GET() {
       acc[msg.thread_id]!.push(msg);
       return acc;
     },
-    {} as Record<string, MessageType[]>
+    {} as Record<string, MessageType[]>,
   );
 
   // Build final threads with unread counts
   const threadsWithUnread = (threads || []).map((thread) => {
     const threadMessages = messagesByThread[thread.id] || [];
     const otherUserMsgs = threadMessages.filter(
-      (m) => m.sender_user_id !== user.id
+      (m) => m.sender_user_id !== user.id,
     );
     const unreadCount = otherUserMsgs.filter(
-      (m) => !readMessageIds.has(m.id)
+      (m) => !readMessageIds.has(m.id),
     ).length;
 
     // Get the most recent message for preview
     const lastMessage = Array.isArray(thread.last_message)
       ? thread.last_message.sort(
           (a: any, b: any) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
         )[0]
       : thread.last_message;
 
@@ -162,14 +165,14 @@ export async function POST(request: NextRequest) {
   if (!title?.trim()) {
     return NextResponse.json(
       { error: "Thread title required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   if (!household_id) {
     return NextResponse.json(
       { error: "Household ID required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -250,7 +253,7 @@ export async function PATCH(request: NextRequest) {
   if (!household) {
     return NextResponse.json(
       { error: "Not authorized for this thread" },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
@@ -272,7 +275,7 @@ export async function PATCH(request: NextRequest) {
   if (Object.keys(updates).length === 0) {
     return NextResponse.json(
       { error: "No valid updates provided" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -303,7 +306,7 @@ export async function PATCH(request: NextRequest) {
             "Please run the add_message_archiving.sql migration to add the enable_item_urls column",
           details: updateError.message,
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -313,7 +316,7 @@ export async function PATCH(request: NextRequest) {
         code: updateError.code,
         details: updateError.details,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -361,7 +364,7 @@ export async function DELETE(request: NextRequest) {
   if (!household) {
     return NextResponse.json(
       { error: "Not authorized for this thread" },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
@@ -370,7 +373,7 @@ export async function DELETE(request: NextRequest) {
     if (!thread.deleted_at) {
       return NextResponse.json(
         { error: "Thread is not deleted" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -382,7 +385,7 @@ export async function DELETE(request: NextRequest) {
     if (now.getTime() - deletedAt.getTime() > dayInMs) {
       return NextResponse.json(
         { error: "Undo window has expired (1 day)" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -394,7 +397,7 @@ export async function DELETE(request: NextRequest) {
     if (restoreError) {
       return NextResponse.json(
         { error: "Failed to restore thread" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -411,7 +414,7 @@ export async function DELETE(request: NextRequest) {
     console.error("Thread delete error:", deleteError);
     return NextResponse.json(
       { error: "Failed to delete thread" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 

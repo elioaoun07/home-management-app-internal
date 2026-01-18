@@ -88,7 +88,7 @@ export default function AccountSelect({ value, onChange }: Props) {
       setNewType("expense");
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Failed to create account"
+        err instanceof Error ? err.message : "Failed to create account",
       );
     }
   };
@@ -200,6 +200,15 @@ export default function AccountSelect({ value, onChange }: Props) {
                     className="cursor-pointer font-normal"
                   >
                     Income
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="saving" id="type-saving" />
+                  <Label
+                    htmlFor="type-saving"
+                    className="cursor-pointer font-normal"
+                  >
+                    Saving
                   </Label>
                 </div>
               </RadioGroup>

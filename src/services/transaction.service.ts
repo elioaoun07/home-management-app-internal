@@ -1,5 +1,17 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
+type BalanceChangeType =
+  | "transaction_expense"
+  | "transaction_income"
+  | "transaction_deleted"
+  | "transfer_in"
+  | "transfer_out"
+  | "initial_set"
+  | "manual_set"
+  | "manual_adjustment"
+  | "reconciliation"
+  | "correction";
+
 export interface TransactionFilters {
   start?: string;
   end?: string;
@@ -40,11 +52,55 @@ export class SupabaseTransactionService implements TransactionService {
   constructor(private supabase: SupabaseClient) {}
 
   /**
+   * Logs a balance history entry
+   * Note: Transaction entries are now shown via daily summaries, so we only log
+   * non-transaction changes (transfers, manual adjustments, etc.) to balance_history
+   */
+  private async logBalanceHistory(
+    accountId: string,
+    userId: string,
+    previousBalance: number,
+    newBalance: number,
+    changeAmount: number,
+    changeType: BalanceChangeType,
+    transactionId?: string,
+    effectiveDate?: string,
+  ): Promise<void> {
+    // Skip logging individual transaction entries - they're shown via daily summaries now
+    if (
+      changeType === "transaction_expense" ||
+      changeType === "transaction_income"
+    ) {
+      return;
+    }
+
+    try {
+      await this.supabase.from("account_balance_history").insert({
+        account_id: accountId,
+        user_id: userId,
+        previous_balance: previousBalance,
+        new_balance: newBalance,
+        change_amount: changeAmount,
+        change_type: changeType,
+        transaction_id: transactionId || null,
+        transfer_id: null,
+        effective_date: effectiveDate || new Date().toISOString().split("T")[0],
+      });
+    } catch (e) {
+      console.error("Failed to log balance history:", e);
+    }
+  }
+
+  /**
    * Deducts an amount from the account balance (for expense transactions)
+   * Also logs the balance history
    */
   private async deductFromAccountBalance(
     accountId: string,
-    amount: number
+    userId: string,
+    amount: number,
+    transactionId?: string,
+    effectiveDate?: string,
   ): Promise<void> {
     try {
       const { data: currentBalance, error: fetchError } = await this.supabase
@@ -59,7 +115,9 @@ export class SupabaseTransactionService implements TransactionService {
       }
 
       if (currentBalance) {
-        const newBalance = Number(currentBalance.balance) - amount;
+        const previousBalance = Number(currentBalance.balance);
+        const newBalance = previousBalance - amount;
+
         const { error: updateError } = await this.supabase
           .from("account_balances")
           .update({
@@ -70,10 +128,78 @@ export class SupabaseTransactionService implements TransactionService {
 
         if (updateError) {
           console.error("Error updating account balance:", updateError);
+        } else {
+          // Log balance history
+          await this.logBalanceHistory(
+            accountId,
+            userId,
+            previousBalance,
+            newBalance,
+            -amount,
+            "transaction_expense",
+            transactionId,
+            effectiveDate,
+          );
         }
       }
     } catch (e) {
       console.error("Failed to deduct from account balance:", e);
+    }
+  }
+
+  /**
+   * Restores an amount to the account balance (for deleted transactions)
+   * Also logs the balance history
+   */
+  private async restoreToAccountBalance(
+    accountId: string,
+    userId: string,
+    amount: number,
+    transactionId?: string,
+    effectiveDate?: string,
+  ): Promise<void> {
+    try {
+      const { data: currentBalance, error: fetchError } = await this.supabase
+        .from("account_balances")
+        .select("balance")
+        .eq("account_id", accountId)
+        .single();
+
+      if (fetchError) {
+        console.error("Error fetching account balance:", fetchError);
+        return;
+      }
+
+      if (currentBalance) {
+        const previousBalance = Number(currentBalance.balance);
+        const newBalance = previousBalance + amount;
+
+        const { error: updateError } = await this.supabase
+          .from("account_balances")
+          .update({
+            balance: newBalance,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("account_id", accountId);
+
+        if (updateError) {
+          console.error("Error updating account balance:", updateError);
+        } else {
+          // Log balance history
+          await this.logBalanceHistory(
+            accountId,
+            userId,
+            previousBalance,
+            newBalance,
+            amount,
+            "transaction_deleted",
+            transactionId,
+            effectiveDate,
+          );
+        }
+      }
+    } catch (e) {
+      console.error("Failed to restore account balance:", e);
     }
   }
 
@@ -104,7 +230,7 @@ export class SupabaseTransactionService implements TransactionService {
     const { data: link } = await this.supabase
       .from("household_links")
       .select(
-        "owner_user_id, owner_email, partner_user_id, partner_email, active"
+        "owner_user_id, owner_email, partner_user_id, partner_email, active",
       )
       .or(`owner_user_id.eq.${userId},partner_user_id.eq.${userId}`)
       .eq("active", true)
@@ -125,7 +251,7 @@ export class SupabaseTransactionService implements TransactionService {
         `id, date, category_id, subcategory_id, amount, description, account_id, inserted_at, user_id, is_private,
         split_requested, collaborator_id, collaborator_amount, collaborator_description, split_completed_at, lbp_change_received,
         category:user_categories!transactions_category_fk(name, color),
-        subcategory:user_categories!transactions_subcategory_fk(name, color)`
+        subcategory:user_categories!transactions_subcategory_fk(name, color)`,
       )
       .order("inserted_at", { ascending: false })
       .limit(limit);
@@ -138,7 +264,7 @@ export class SupabaseTransactionService implements TransactionService {
     // Also include transactions where user is the collaborator (for split bills)
     if (partnerId) {
       query = query.or(
-        `user_id.in.(${userId},${partnerId}),collaborator_id.eq.${userId}`
+        `user_id.in.(${userId},${partnerId}),collaborator_id.eq.${userId}`,
       );
     } else {
       query = query.or(`user_id.eq.${userId},collaborator_id.eq.${userId}`);
@@ -189,12 +315,12 @@ export class SupabaseTransactionService implements TransactionService {
     // Fetch category names for partner's categories
     const categoryIds = [
       ...new Set(
-        (rawRows || []).map((r: any) => r.category_id).filter(Boolean)
+        (rawRows || []).map((r: any) => r.category_id).filter(Boolean),
       ),
     ];
     const subcategoryIds = [
       ...new Set(
-        (rawRows || []).map((r: any) => r.subcategory_id).filter(Boolean)
+        (rawRows || []).map((r: any) => r.subcategory_id).filter(Boolean),
       ),
     ];
     let categoryNamesMap: Record<string, { name: string; color?: string }> = {};
@@ -283,7 +409,8 @@ export class SupabaseTransactionService implements TransactionService {
         partnerName = emailName
           .split(" ")
           .map(
-            (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            (word) =>
+              word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
           )
           .join(" ");
       } else {
@@ -478,7 +605,13 @@ export class SupabaseTransactionService implements TransactionService {
 
     // Deduct the transaction amount from the account balance
     // Note: Transactions created via this service are always confirmed (not drafts)
-    await this.deductFromAccountBalance(account_id, amount);
+    await this.deductFromAccountBalance(
+      account_id,
+      userId,
+      amount,
+      created.id,
+      txDate,
+    );
 
     // Fetch the category and subcategory names to return a complete transaction object
     // This is needed for optimistic UI to work correctly

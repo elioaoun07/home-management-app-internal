@@ -1,9 +1,61 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+type BalanceChangeType =
+  | "transaction_expense"
+  | "transaction_deleted"
+  | "transfer_in"
+  | "transfer_out"
+  | "initial_set"
+  | "manual_set"
+  | "manual_adjustment"
+  | "reconciliation"
+  | "correction";
+
+/**
+ * Helper to log balance history entry
+ * Note: Transaction entries (expense/income) are now shown via daily summaries,
+ * so we only log non-transaction changes here. transaction_deleted is still logged
+ * as it's an important audit event.
+ */
+async function logBalanceHistory(
+  supabase: SupabaseClient,
+  accountId: string,
+  userId: string,
+  previousBalance: number,
+  newBalance: number,
+  changeAmount: number,
+  changeType: BalanceChangeType,
+  transactionId?: string,
+  effectiveDate?: string,
+): Promise<void> {
+  // Skip logging individual transaction expense/income entries - they're shown via daily summaries
+  // But DO log transaction_deleted as it's an important balance correction event
+  if (changeType === "transaction_expense") {
+    return;
+  }
+
+  try {
+    await supabase.from("account_balance_history").insert({
+      account_id: accountId,
+      user_id: userId,
+      previous_balance: previousBalance,
+      new_balance: newBalance,
+      change_amount: changeAmount,
+      change_type: changeType,
+      transaction_id: transactionId || null,
+      transfer_id: null,
+      effective_date: effectiveDate || new Date().toISOString().split("T")[0],
+    });
+  } catch (e) {
+    console.error("Failed to log balance history:", e);
+  }
+}
 
 // GET - Fetch a single transaction by ID
 export async function GET(
@@ -296,6 +348,8 @@ export async function DELETE(
         collab_amount: transaction.collaborator_amount,
       });
 
+      const effectiveDate = new Date().toISOString().split("T")[0];
+
       // Restore owner's account balance (add back the transaction amount)
       const { data: ownerBalance, error: ownerFetchError } = await supabase
         .from("account_balances")
@@ -309,8 +363,9 @@ export async function DELETE(
           ownerFetchError,
         );
       } else if (ownerBalance) {
+        const previousBalance = Number(ownerBalance.balance);
         const restoredOwnerBalance =
-          Number(ownerBalance.balance) + Number(transaction.amount);
+          previousBalance + Number(transaction.amount);
         console.log("[Delete Transaction] Restoring owner balance:", {
           current: ownerBalance.balance,
           amount_to_add: transaction.amount,
@@ -329,6 +384,19 @@ export async function DELETE(
           console.error(
             "[Delete Transaction] Error updating owner balance:",
             updateError,
+          );
+        } else {
+          // Log balance history for deletion
+          await logBalanceHistory(
+            supabase,
+            transaction.account_id,
+            user.id,
+            previousBalance,
+            restoredOwnerBalance,
+            Number(transaction.amount),
+            "transaction_deleted",
+            id,
+            effectiveDate,
           );
         }
       }

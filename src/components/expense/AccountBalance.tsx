@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowRightIcon,
   Edit2Icon,
   RefreshIcon,
   SaveIcon,
@@ -19,6 +20,8 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import BalanceHistoryDrawer from "./BalanceHistoryDrawer";
+import TransferDialog from "./TransferDialog";
 
 interface AccountBalanceProps {
   accountId: string | undefined;
@@ -42,6 +45,7 @@ export default function AccountBalance({
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
 
   // Get cached balance for instant display
   const cachedBalance = accountId ? getCachedBalance(accountId) : null;
@@ -95,7 +99,7 @@ export default function AccountBalance({
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to load balance. Please refresh."
+          : "Failed to load balance. Please refresh.",
       );
     }
   }, [error]);
@@ -121,7 +125,7 @@ export default function AccountBalance({
     },
     onError: (error) => {
       toast.error(
-        error instanceof Error ? error.message : "Failed to update balance"
+        error instanceof Error ? error.message : "Failed to update balance",
       );
     },
   });
@@ -189,7 +193,7 @@ export default function AccountBalance({
       className={cn(
         "neo-card p-2.5 shadow-lg",
         themeClasses.cardBg,
-        themeClasses.border
+        themeClasses.border,
       )}
     >
       <div className="flex items-center justify-between">
@@ -197,7 +201,7 @@ export default function AccountBalance({
           <Label
             className={cn(
               "text-[10px] font-medium uppercase tracking-wider",
-              themeClasses.textHighlight
+              themeClasses.textHighlight,
             )}
           >
             {accountName || "Account"} Balance
@@ -214,7 +218,7 @@ export default function AccountBalance({
                   themeClasses.inputBg,
                   themeClasses.border,
                   themeClasses.focusBorder,
-                  themeClasses.focusRing
+                  themeClasses.focusRing,
                 )}
                 autoFocus
                 onKeyDown={(e) => {
@@ -244,14 +248,18 @@ export default function AccountBalance({
           ) : (
             <div className="flex flex-col gap-0.5 mt-1">
               <div className="flex items-center gap-2">
-                <span
+                <button
+                  onClick={() => setShowHistory(true)}
                   className={cn(
-                    `text-xl font-bold tabular-nums bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`,
-                    isFetching && "opacity-70"
+                    "text-xl font-bold tabular-nums bg-gradient-to-r bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition-opacity",
+                    themeClasses.titleGradient,
+                    themeClasses.glow,
+                    isFetching && "opacity-70",
                   )}
+                  title="View balance history"
                 >
                   ${currentBalance.toFixed(2)}
-                </span>
+                </button>
                 {/* Subtle loading indicator while syncing */}
                 {isFetching && (
                   <div
@@ -267,7 +275,7 @@ export default function AccountBalance({
                     "h-7 w-7 rounded-lg active:scale-95 transition-all",
                     themeClasses.bgActive,
                     themeClasses.bgHover,
-                    themeClasses.inputBorder
+                    themeClasses.inputBorder,
                   )}
                   onClick={handleEdit}
                 >
@@ -275,10 +283,33 @@ export default function AccountBalance({
                     className={cn(
                       "h-3.5 w-3.5",
                       themeClasses.textHighlight,
-                      themeClasses.glow
+                      themeClasses.glow,
                     )}
                   />
                 </Button>
+                <TransferDialog
+                  trigger={
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className={cn(
+                        "h-7 w-7 rounded-lg active:scale-95 transition-all",
+                        themeClasses.bgActive,
+                        themeClasses.bgHover,
+                        themeClasses.inputBorder,
+                      )}
+                      title="Transfer between accounts"
+                    >
+                      <ArrowRightIcon
+                        className={cn(
+                          "h-3.5 w-3.5",
+                          themeClasses.textHighlight,
+                          themeClasses.glow,
+                        )}
+                      />
+                    </Button>
+                  }
+                />
               </div>
               <span
                 className={
@@ -304,6 +335,16 @@ export default function AccountBalance({
           </div>
         )}
       </div>
+
+      {/* Balance History Drawer */}
+      {accountId && (
+        <BalanceHistoryDrawer
+          accountId={accountId}
+          accountName={accountName}
+          open={showHistory}
+          onOpenChange={setShowHistory}
+        />
+      )}
     </div>
   );
 }

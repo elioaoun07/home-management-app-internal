@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 // Helper to get partner user ID if linked
 async function getPartnerUserId(
   supabase: any,
-  userId: string
+  userId: string,
 ): Promise<string | null> {
   const { data: link } = await supabase
     .from("household_links")
@@ -27,7 +27,7 @@ async function getPartnerUserId(
 // GET /api/accounts/[id]/balance - Get balance for a specific account
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await supabaseServer(await cookies());
   const {
@@ -126,7 +126,7 @@ export async function GET(
 // POST /api/accounts/[id]/balance - Set/Update balance for an account
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await supabaseServer(await cookies());
   const {
@@ -139,12 +139,12 @@ export async function POST(
 
   const { id: accountId } = await params;
   const body = await req.json();
-  const { balance } = body;
+  const { balance, reason, is_reconciliation, discrepancy_explanation } = body;
 
   if (typeof balance !== "number") {
     return NextResponse.json(
       { error: "Balance must be a number" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -160,9 +160,22 @@ export async function POST(
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
 
+  // Get current balance for history tracking
+  const { data: currentBalanceData } = await supabase
+    .from("account_balances")
+    .select("balance")
+    .eq("account_id", accountId)
+    .eq("user_id", user.id)
+    .single();
+
+  const previousBalance = currentBalanceData?.balance ?? 0;
+  const isInitialSet = !currentBalanceData;
+  const changeAmount = balance - Number(previousBalance);
+
   // Upsert balance (insert or update)
   // Set balance_set_at to now so we calculate from this point forward
   const now = new Date().toISOString();
+  const today = now.split("T")[0];
   const { data, error } = await supabase
     .from("account_balances")
     .upsert(
@@ -175,7 +188,7 @@ export async function POST(
       },
       {
         onConflict: "account_id",
-      }
+      },
     )
     .select()
     .single();
@@ -183,6 +196,31 @@ export async function POST(
   if (error) {
     console.error("Error upserting balance:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Log to balance history
+  const historyEntry = {
+    account_id: accountId,
+    user_id: user.id,
+    previous_balance: Number(previousBalance),
+    new_balance: balance,
+    change_amount: changeAmount,
+    change_type: isInitialSet ? "initial_set" : "manual_set",
+    reason: reason || null,
+    is_reconciliation: is_reconciliation || Math.abs(changeAmount) > 0.01,
+    expected_balance: Number(previousBalance),
+    discrepancy_amount: changeAmount !== 0 ? changeAmount : null,
+    discrepancy_explanation: discrepancy_explanation || null,
+    effective_date: today,
+  };
+
+  const { error: historyError } = await supabase
+    .from("account_balance_history")
+    .insert(historyEntry);
+
+  if (historyError) {
+    // Log but don't fail - history is supplementary
+    console.error("Error logging balance history:", historyError);
   }
 
   return NextResponse.json(data);

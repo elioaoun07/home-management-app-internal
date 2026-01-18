@@ -22,7 +22,7 @@ export type Category = {
 export type AccountSeed = {
   id: string; // stable slug for mapping after DB insert
   name: string; // accounts.name
-  type: "Income" | "Expense"; // accounts.type
+  type: "Income" | "Expense" | "Saving"; // accounts.type
   categories: Category[]; // will become user_categories tied to this account
 };
 

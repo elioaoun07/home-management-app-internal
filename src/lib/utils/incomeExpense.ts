@@ -29,9 +29,31 @@ export type IncomeExpenseSummary = {
  */
 export function getAccountType(
   accountId: string,
-  accounts: Account[] | undefined
-): "income" | "expense" | undefined {
+  accounts: Account[] | undefined,
+): "income" | "expense" | "saving" | undefined {
   return accounts?.find((a) => a.id === accountId)?.type;
+}
+
+/**
+ * Check if an account is a saving account
+ */
+export function isSavingAccount(
+  accountId: string,
+  accounts: Account[] | undefined,
+): boolean {
+  return getAccountType(accountId, accounts) === "saving";
+}
+
+/**
+ * Check if an account uses positive balance logic (income or saving)
+ * These account types treat positive amounts as additions to balance
+ */
+export function isPositiveBalanceAccount(
+  accountId: string,
+  accounts: Account[] | undefined,
+): boolean {
+  const type = getAccountType(accountId, accounts);
+  return type === "income" || type === "saving";
 }
 
 /**
@@ -39,7 +61,7 @@ export function getAccountType(
  */
 export function isIncomeAccount(
   accountId: string,
-  accounts: Account[] | undefined
+  accounts: Account[] | undefined,
 ): boolean {
   return getAccountType(accountId, accounts) === "income";
 }
@@ -49,7 +71,7 @@ export function isIncomeAccount(
  */
 export function isExpenseAccount(
   accountId: string,
-  accounts: Account[] | undefined
+  accounts: Account[] | undefined,
 ): boolean {
   return getAccountType(accountId, accounts) === "expense";
 }
@@ -60,12 +82,12 @@ export function isExpenseAccount(
 export function filterTransactionsByAccountType(
   transactions: TransactionWithAccount[],
   accounts: Account[] | undefined,
-  type: "income" | "expense"
+  type: "income" | "expense" | "saving",
 ): TransactionWithAccount[] {
   if (!accounts || accounts.length === 0) return [];
 
   const accountIds = new Set(
-    accounts.filter((a) => a.type === type).map((a) => a.id)
+    accounts.filter((a) => a.type === type).map((a) => a.id),
   );
 
   return transactions.filter((t) => accountIds.has(t.account_id));
@@ -76,7 +98,7 @@ export function filterTransactionsByAccountType(
  */
 export function getExpenseTransactions(
   transactions: TransactionWithAccount[],
-  accounts: Account[] | undefined
+  accounts: Account[] | undefined,
 ): TransactionWithAccount[] {
   return filterTransactionsByAccountType(transactions, accounts, "expense");
 }
@@ -86,9 +108,19 @@ export function getExpenseTransactions(
  */
 export function getIncomeTransactions(
   transactions: TransactionWithAccount[],
-  accounts: Account[] | undefined
+  accounts: Account[] | undefined,
 ): TransactionWithAccount[] {
   return filterTransactionsByAccountType(transactions, accounts, "income");
+}
+
+/**
+ * Get only saving transactions
+ */
+export function getSavingTransactions(
+  transactions: TransactionWithAccount[],
+  accounts: Account[] | undefined,
+): TransactionWithAccount[] {
+  return filterTransactionsByAccountType(transactions, accounts, "saving");
 }
 
 /**
@@ -96,18 +128,18 @@ export function getIncomeTransactions(
  */
 export function calculateIncomeExpenseSummary(
   transactions: TransactionWithAccount[],
-  accounts: Account[] | undefined
+  accounts: Account[] | undefined,
 ): IncomeExpenseSummary {
   const incomeTransactions = getIncomeTransactions(transactions, accounts);
   const expenseTransactions = getExpenseTransactions(transactions, accounts);
 
   const totalIncome = incomeTransactions.reduce(
     (sum, t) => sum + Number(t.amount),
-    0
+    0,
   );
   const totalExpense = expenseTransactions.reduce(
     (sum, t) => sum + Number(t.amount),
-    0
+    0,
   );
 
   return {
@@ -134,11 +166,29 @@ export function getIncomeAccounts(accounts: Account[] | undefined): Account[] {
 }
 
 /**
+ * Get saving accounts only
+ */
+export function getSavingAccounts(accounts: Account[] | undefined): Account[] {
+  return accounts?.filter((a) => a.type === "saving") ?? [];
+}
+
+/**
+ * Get accounts that use positive balance logic (income + saving)
+ */
+export function getPositiveBalanceAccounts(
+  accounts: Account[] | undefined,
+): Account[] {
+  return (
+    accounts?.filter((a) => a.type === "income" || a.type === "saving") ?? []
+  );
+}
+
+/**
  * Group transactions by category (expense accounts only)
  */
 export function groupExpensesByCategory(
   transactions: TransactionWithAccount[],
-  accounts: Account[] | undefined
+  accounts: Account[] | undefined,
 ): Record<
   string,
   { amount: number; count: number; transactions: TransactionWithAccount[] }
@@ -166,7 +216,7 @@ export function groupExpensesByCategory(
     {} as Record<
       string,
       { amount: number; count: number; transactions: TransactionWithAccount[] }
-    >
+    >,
   );
 }
 
@@ -175,7 +225,7 @@ export function groupExpensesByCategory(
  */
 export function groupTransactionsByAccountType(
   transactions: TransactionWithAccount[],
-  accounts: Account[] | undefined
+  accounts: Account[] | undefined,
 ): {
   income: TransactionWithAccount[];
   expense: TransactionWithAccount[];
@@ -189,7 +239,7 @@ export function groupTransactionsByAccountType(
     };
   }
 
-  const accountTypeMap = new Map<string, "income" | "expense">();
+  const accountTypeMap = new Map<string, "income" | "expense" | "saving">();
   accounts.forEach((a) => {
     accountTypeMap.set(a.id, a.type);
   });
@@ -197,6 +247,7 @@ export function groupTransactionsByAccountType(
   const result = {
     income: [] as TransactionWithAccount[],
     expense: [] as TransactionWithAccount[],
+    saving: [] as TransactionWithAccount[],
     unknown: [] as TransactionWithAccount[],
   };
 
@@ -206,6 +257,8 @@ export function groupTransactionsByAccountType(
       result.income.push(t);
     } else if (type === "expense") {
       result.expense.push(t);
+    } else if (type === "saving") {
+      result.saving.push(t);
     } else {
       result.unknown.push(t);
     }
@@ -219,7 +272,7 @@ export function groupTransactionsByAccountType(
  */
 export function calculateSavingsRate(
   transactions: TransactionWithAccount[],
-  accounts: Account[] | undefined
+  accounts: Account[] | undefined,
 ): number {
   const summary = calculateIncomeExpenseSummary(transactions, accounts);
 
@@ -233,7 +286,7 @@ export function calculateSavingsRate(
  */
 export function getExpenseCategories(
   transactions: TransactionWithAccount[],
-  accounts: Account[] | undefined
+  accounts: Account[] | undefined,
 ): string[] {
   const expenseTransactions = getExpenseTransactions(transactions, accounts);
   const categories = new Set<string>();

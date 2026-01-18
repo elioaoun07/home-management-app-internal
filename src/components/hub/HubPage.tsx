@@ -65,6 +65,12 @@ const AddTransactionFromMessageModal = dynamic(
   { ssr: false },
 );
 
+// Lazy load reminder modal to avoid bundle bloat
+const AddReminderFromMessageModal = dynamic(
+  () => import("@/components/hub/AddReminderFromMessageModal"),
+  { ssr: false },
+);
+
 // Lazy load shopping list view
 const ShoppingListView = dynamic(
   () =>
@@ -1495,6 +1501,13 @@ function ThreadConversation({
     date: string | null;
   } | null>(null);
 
+  // Reminder modal state
+  const [reminderModalData, setReminderModalData] = useState<{
+    messageId: string;
+    title: string;
+    description: string;
+  } | null>(null);
+
   // Track locally converted messages for immediate UI feedback
   const [convertedMessageIds, setConvertedMessageIds] = useState<Set<string>>(
     new Set(),
@@ -2838,88 +2851,156 @@ function ThreadConversation({
             }}
           >
             {(() => {
-              // Check if message already has transaction action (database OR local)
-              const hasTransactionAction = isMessageConverted(
-                actionMenuMessage.id,
-              );
-
               // Determine action based on thread purpose
               const threadPurpose = thread?.purpose || "general";
-              const isBudgetThread = threadPurpose === "budget";
+              const isReminderThread = threadPurpose === "reminder";
 
-              // For budget threads or general, show "Add Transaction" action
-              const actionLabel = "Add as Transaction";
-              const actionDescription = "Create expense entry";
-              const actionIcon = "💰";
-              const actionCompleteLabel = "Transaction Added";
+              // Check if message already has the relevant action
+              const hasTransactionAction =
+                convertedMessageIds.has(actionMenuMessage.id) ||
+                messageActions.some(
+                  (a: any) =>
+                    a.message_id === actionMenuMessage.id &&
+                    a.action_type === "transaction",
+                );
+
+              const hasReminderAction =
+                convertedMessageIds.has(actionMenuMessage.id) ||
+                messageActions.some(
+                  (a: any) =>
+                    a.message_id === actionMenuMessage.id &&
+                    a.action_type === "reminder",
+                );
+
+              // For reminder threads, show "Add as Reminder" action
+              // For other threads, show "Add as Transaction" action
 
               return (
                 <div className="p-2">
-                  {/* Add as Transaction Action */}
-                  <button
-                    onClick={() => {
-                      if (hasTransactionAction) return;
+                  {/* Add as Reminder Action - for reminder threads */}
+                  {isReminderThread && (
+                    <button
+                      onClick={() => {
+                        if (hasReminderAction) return;
 
-                      // Parse message for transaction data
-                      const parsed = parseMessageForTransaction(
-                        actionMenuMessage.content || "",
-                        categories as any[],
-                      );
+                        // Open reminder modal with prefilled data
+                        setReminderModalData({
+                          messageId: actionMenuMessage.id,
+                          title: actionMenuMessage.content || "",
+                          description: actionMenuMessage.content || "",
+                        });
 
-                      // Open transaction modal with prefilled data
-                      setTransactionModalData({
-                        messageId: actionMenuMessage.id,
-                        amount: parsed.amount || 0,
-                        description: parsed.description,
-                        categoryId: parsed.categoryId,
-                        subcategoryId: parsed.subcategoryId,
-                        date: parsed.date,
-                      });
-
-                      // Close action menu
-                      setActionMenuMessage(null);
-                      setActionMenuPosition(null);
-                    }}
-                    disabled={hasTransactionAction}
-                    className={cn(
-                      "w-full px-4 py-3 flex items-center gap-3 rounded-xl transition-all",
-                      hasTransactionAction
-                        ? "opacity-50 cursor-not-allowed bg-white/5"
-                        : "hover:bg-white/10 active:scale-[0.98]",
-                    )}
-                  >
-                    <div
+                        // Close action menu
+                        setActionMenuMessage(null);
+                        setActionMenuPosition(null);
+                      }}
+                      disabled={hasReminderAction}
                       className={cn(
-                        "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
-                        hasTransactionAction
-                          ? "bg-emerald-500/20"
-                          : myTheme === "pink"
-                            ? "bg-gradient-to-br from-pink-500/20 to-rose-500/20"
-                            : "bg-gradient-to-br from-blue-500/20 to-cyan-500/20",
+                        "w-full px-4 py-3 flex items-center gap-3 rounded-xl transition-all",
+                        hasReminderAction
+                          ? "opacity-50 cursor-not-allowed bg-white/5"
+                          : "hover:bg-white/10 active:scale-[0.98]",
                       )}
                     >
-                      {hasTransactionAction ? (
-                        <CheckIcon className="w-5 h-5 text-emerald-400" />
-                      ) : (
-                        <span className="text-xl">{actionIcon}</span>
+                      <div
+                        className={cn(
+                          "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                          hasReminderAction
+                            ? "bg-emerald-500/20"
+                            : myTheme === "pink"
+                              ? "bg-gradient-to-br from-pink-500/20 to-rose-500/20"
+                              : "bg-gradient-to-br from-purple-500/20 to-cyan-500/20",
+                        )}
+                      >
+                        {hasReminderAction ? (
+                          <CheckIcon className="w-5 h-5 text-emerald-400" />
+                        ) : (
+                          <span className="text-xl">⏰</span>
+                        )}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-semibold text-white">
+                          {hasReminderAction
+                            ? "Reminder Added"
+                            : "Add as Reminder"}
+                        </p>
+                        <p className="text-xs text-white/60 mt-0.5">
+                          {hasReminderAction
+                            ? "Already created"
+                            : "Create reminder, event, or task"}
+                        </p>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Add as Transaction Action - for non-reminder threads */}
+                  {!isReminderThread && (
+                    <button
+                      onClick={() => {
+                        if (hasTransactionAction) return;
+
+                        // Parse message for transaction data
+                        const parsed = parseMessageForTransaction(
+                          actionMenuMessage.content || "",
+                          categories as any[],
+                        );
+
+                        // Open transaction modal with prefilled data
+                        setTransactionModalData({
+                          messageId: actionMenuMessage.id,
+                          amount: parsed.amount || 0,
+                          description: parsed.description,
+                          categoryId: parsed.categoryId,
+                          subcategoryId: parsed.subcategoryId,
+                          date: parsed.date,
+                        });
+
+                        // Close action menu
+                        setActionMenuMessage(null);
+                        setActionMenuPosition(null);
+                      }}
+                      disabled={hasTransactionAction}
+                      className={cn(
+                        "w-full px-4 py-3 flex items-center gap-3 rounded-xl transition-all",
+                        hasTransactionAction
+                          ? "opacity-50 cursor-not-allowed bg-white/5"
+                          : "hover:bg-white/10 active:scale-[0.98]",
                       )}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <p className="text-sm font-semibold text-white">
-                        {hasTransactionAction
-                          ? actionCompleteLabel
-                          : actionLabel}
-                      </p>
-                      <p className="text-xs text-white/60 mt-0.5">
-                        {hasTransactionAction
-                          ? "Already created"
-                          : actionDescription}
-                      </p>
-                    </div>
-                  </button>
+                    >
+                      <div
+                        className={cn(
+                          "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                          hasTransactionAction
+                            ? "bg-emerald-500/20"
+                            : myTheme === "pink"
+                              ? "bg-gradient-to-br from-pink-500/20 to-rose-500/20"
+                              : "bg-gradient-to-br from-blue-500/20 to-cyan-500/20",
+                        )}
+                      >
+                        {hasTransactionAction ? (
+                          <CheckIcon className="w-5 h-5 text-emerald-400" />
+                        ) : (
+                          <span className="text-xl">💰</span>
+                        )}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-semibold text-white">
+                          {hasTransactionAction
+                            ? "Transaction Added"
+                            : "Add as Transaction"}
+                        </p>
+                        <p className="text-xs text-white/60 mt-0.5">
+                          {hasTransactionAction
+                            ? "Already created"
+                            : "Create expense entry"}
+                        </p>
+                      </div>
+                    </button>
+                  )}
 
                   {/* Select Message Action - only if message has no actions */}
                   {!hasTransactionAction &&
+                    !hasReminderAction &&
                     (threadPurpose === "shopping" ||
                       threadPurpose === "notes") && (
                       <button
@@ -2950,6 +3031,7 @@ function ThreadConversation({
 
                   {/* Delete Message - For all other chats (budget, reminder, general, etc) */}
                   {!hasTransactionAction &&
+                    !hasReminderAction &&
                     threadPurpose !== "shopping" &&
                     threadPurpose !== "notes" && (
                       <>
@@ -3065,6 +3147,21 @@ function ThreadConversation({
             // Add to local tracking for immediate UI feedback
             setConvertedMessageIds((prev) => new Set(prev).add(messageId));
             setTransactionModalData(null);
+          }}
+        />
+      )}
+
+      {/* Reminder Modal */}
+      {reminderModalData && (
+        <AddReminderFromMessageModal
+          messageId={reminderModalData.messageId}
+          initialTitle={reminderModalData.title}
+          initialDescription={reminderModalData.description}
+          onClose={() => setReminderModalData(null)}
+          onSuccess={(messageId) => {
+            // Add to local tracking for immediate UI feedback
+            setConvertedMessageIds((prev) => new Set(prev).add(messageId));
+            setReminderModalData(null);
           }}
         />
       )}

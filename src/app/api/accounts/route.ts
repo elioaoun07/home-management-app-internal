@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from("accounts")
     .select(
-      "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position,visible"
+      "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position,visible",
     )
     .in("user_id", userIds);
 
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
 
   // Check if current user has any accounts (partner might have accounts but we need to seed for new users)
   const currentUserAccounts = (data || []).filter(
-    (a) => a.user_id === user.id && a.visible !== false
+    (a) => a.user_id === user.id && a.visible !== false,
   );
 
   // If no accounts exist for the CURRENT USER, seed defaults (persist to DB) and return them
@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
       const { data: seeded, error: seededErr } = await supabase
         .from("accounts")
         .select(
-          "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position,visible"
+          "id,user_id,name,type,is_default,inserted_at,country_code,location_name,position,visible",
         )
         .in("user_id", userIds)
         .neq("visible", false)
@@ -165,7 +165,7 @@ export async function GET(req: NextRequest) {
       console.error("Seeding default accounts/categories failed:", e);
       return NextResponse.json(
         { error: "Failed to seed default data" },
-        { status: 500 }
+        { status: 500 },
       );
     }
   }
@@ -194,22 +194,32 @@ export async function POST(req: NextRequest) {
     if (!name || !type) {
       return NextResponse.json(
         { error: "name and type are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Optional: constrain type to known values
     const typeNorm = String(type).toLowerCase();
-    if (!["expense", "income"].includes(typeNorm)) {
+    if (!["expense", "income", "saving"].includes(typeNorm)) {
       return NextResponse.json(
-        { error: "type must be 'expense' or 'income'" },
-        { status: 400 }
+        { error: "type must be 'expense', 'income', or 'saving'" },
+        { status: 400 },
       );
     }
 
-    // Determine if we should seed default categories
-    // Default to true for backward compatibility, but can be explicitly set to false
+    // Determine if we should seed default categories and which ones
+    // - Expense accounts: seed expense categories (DEFAULT_CATEGORIES)
+    // - Income/Saving accounts: seed income categories (from DEFAULT_ACCOUNTS)
+    // Can be explicitly set to false to skip seeding
     const shouldSeedCategories = with_default_categories !== false;
+
+    // Get income categories from DEFAULT_ACCOUNTS for income/saving account types
+    const incomeAccountSeed = DEFAULT_ACCOUNTS.find((a) => a.type === "Income");
+    const incomeCategories = incomeAccountSeed?.categories || [];
+
+    // Choose which categories to seed based on account type
+    const categoriesToSeed =
+      typeNorm === "expense" ? DEFAULT_CATEGORIES : incomeCategories;
 
     const insertData: Record<string, any> = {
       user_id: user.id,
@@ -236,7 +246,7 @@ export async function POST(req: NextRequest) {
       if ((error as any).code === "23505") {
         return NextResponse.json(
           { error: "Account name already exists" },
-          { status: 409 }
+          { status: 409 },
         );
       }
       console.error("Error creating account:", error);
@@ -244,10 +254,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Seed default categories for the new account (only if requested)
-    if (data?.id && shouldSeedCategories) {
+    if (data?.id && shouldSeedCategories && categoriesToSeed.length > 0) {
       try {
         let categoryPosition = 0;
-        for (const cat of DEFAULT_CATEGORIES) {
+        for (const cat of categoriesToSeed) {
           categoryPosition++;
           const { data: root, error: rootErr } = await supabase
             .from("user_categories")
@@ -298,7 +308,7 @@ export async function POST(req: NextRequest) {
     console.error("Failed to create account:", e);
     return NextResponse.json(
       { error: "Failed to create account" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
