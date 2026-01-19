@@ -40,7 +40,9 @@ export default function QRExpensePage() {
   // Resolved IDs
   const [accountId, setAccountId] = useState<string | undefined>(undefined);
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
-  const [subcategoryId, setSubcategoryId] = useState<string | undefined>(undefined);
+  const [subcategoryId, setSubcategoryId] = useState<string | undefined>(
+    undefined,
+  );
 
   // Fetch accounts
   const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
@@ -50,7 +52,7 @@ export default function QRExpensePage() {
     if (accounts.length === 0) return;
     if (accountName) {
       const acc = accounts.find(
-        (a: any) => a.name.toLowerCase() === accountName.toLowerCase()
+        (a: any) => a.name.toLowerCase() === accountName.toLowerCase(),
       );
       if (acc) setAccountId(acc.id);
     }
@@ -72,7 +74,7 @@ export default function QRExpensePage() {
     // Find parent category
     const cat = (categories as any[]).find(
       (c) =>
-        c.name?.toLowerCase() === categoryName.toLowerCase() && !c.parent_id
+        c.name?.toLowerCase() === categoryName.toLowerCase() && !c.parent_id,
     );
 
     if (cat) {
@@ -83,7 +85,7 @@ export default function QRExpensePage() {
         // Check nested subcategories
         if (cat.subcategories) {
           const sub = cat.subcategories.find(
-            (s: any) => s.name?.toLowerCase() === subcategoryName.toLowerCase()
+            (s: any) => s.name?.toLowerCase() === subcategoryName.toLowerCase(),
           );
           if (sub) setSubcategoryId(sub.id);
         } else {
@@ -91,7 +93,7 @@ export default function QRExpensePage() {
           const sub = (categories as any[]).find(
             (c) =>
               c.parent_id === cat.id &&
-              c.name?.toLowerCase() === subcategoryName.toLowerCase()
+              c.name?.toLowerCase() === subcategoryName.toLowerCase(),
           );
           if (sub) setSubcategoryId(sub.id);
         }
@@ -141,7 +143,7 @@ export default function QRExpensePage() {
           toast.error("Failed to add expense", { icon: ToastIcons.error });
           router.push("/dashboard");
         },
-      }
+      },
     );
   };
 
