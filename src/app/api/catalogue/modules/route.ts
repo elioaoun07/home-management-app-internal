@@ -36,7 +36,7 @@ export async function GET() {
       *,
       categories:catalogue_categories(count),
       items:catalogue_items(count)
-    `
+    `,
     )
     .eq("user_id", user.id)
     .eq("is_enabled", true)
@@ -74,12 +74,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = (await req.json()) as CreateModuleInput;
-    const { name, description, icon, color, gradient_from, gradient_to } = body;
+    const { type, name, description, icon, color, gradient_from, gradient_to } =
+      body;
 
     if (!name?.trim()) {
       return NextResponse.json(
         { error: "Module name is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
       .from("catalogue_modules")
       .insert({
         user_id: user.id,
-        type: "custom",
+        type: type || "custom",
         name: name.trim(),
         description: description?.trim() || null,
         icon: icon || "folder",
@@ -122,7 +123,7 @@ export async function POST(req: NextRequest) {
     console.error("Error parsing request:", err);
     return NextResponse.json(
       { error: "Invalid request body" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }

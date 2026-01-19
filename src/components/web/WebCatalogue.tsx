@@ -343,27 +343,28 @@ export default function WebCatalogue() {
               )}
             </div>
 
-            {/* Add Button */}
-            {currentLevel !== "modules" && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (currentLevel === "categories") {
-                    setEditingCategory(null);
-                    setShowCategoryDialog(true);
-                  } else {
-                    setEditingItem(null);
-                    setShowItemDialog(true);
-                  }
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg font-medium shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">
-                  Add {currentLevel === "categories" ? "Category" : "Item"}
-                </span>
-              </button>
-            )}
+            {/* Add Button - hide for inventory modules (they have their own UI) */}
+            {currentLevel !== "modules" &&
+              selectedModule?.type !== "inventory" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (currentLevel === "categories") {
+                      setEditingCategory(null);
+                      setShowCategoryDialog(true);
+                    } else {
+                      setEditingItem(null);
+                      setShowItemDialog(true);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg font-medium shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">
+                    Add {currentLevel === "categories" ? "Category" : "Item"}
+                  </span>
+                </button>
+              )}
           </div>
         </div>
       </div>
