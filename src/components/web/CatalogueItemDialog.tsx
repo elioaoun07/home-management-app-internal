@@ -561,6 +561,64 @@ const MODULE_FIELD_CONFIG: Record<
       },
     ],
   },
+  inventory: {
+    nameLabel: "Item Name",
+    namePlaceholder: "Toilet Paper, Salt, Milk...",
+    showDescription: true,
+    showPriority: false,
+    showStatus: false,
+    showProgress: false,
+    showFrequency: false,
+    showTags: true,
+    customFields: [
+      {
+        key: "barcode",
+        label: "Barcode",
+        type: "text",
+        placeholder: "Scan or enter barcode...",
+      },
+      {
+        key: "unit_type",
+        label: "Unit Type",
+        type: "select",
+        options: [
+          "pieces",
+          "kg",
+          "g",
+          "L",
+          "mL",
+          "pack",
+          "box",
+          "roll",
+          "bottle",
+        ],
+      },
+      {
+        key: "unit_size",
+        label: "Unit Size",
+        type: "number",
+        placeholder: "1",
+      },
+      {
+        key: "consumption_rate_days",
+        label: "Days to Consume",
+        type: "number",
+        placeholder: "How many days to use one unit?",
+      },
+      {
+        key: "minimum_stock",
+        label: "Minimum Stock",
+        type: "number",
+        placeholder: "Alert when below this quantity",
+      },
+      {
+        key: "notes",
+        label: "Notes",
+        type: "textarea",
+        placeholder: "Brand preference, where to buy...",
+      },
+    ],
+  },
 };
 
 const FREQUENCY_OPTIONS = [
@@ -739,7 +797,7 @@ export default function CatalogueItemDialog({
         { id: editingItem.id, ...data },
         {
           onSuccess: () => onOpenChange(false),
-        }
+        },
       );
     } else {
       const createData: CreateItemInput = {
@@ -796,7 +854,7 @@ export default function CatalogueItemDialog({
             placeholder={field.placeholder}
             className={cn(
               themeClasses.inputBg,
-              "border-white/10 text-white min-h-[80px]"
+              "border-white/10 text-white min-h-[80px]",
             )}
           />
         </div>
@@ -818,7 +876,7 @@ export default function CatalogueItemDialog({
             className={cn(
               themeClasses.inputBg,
               "border-white/10 text-white",
-              Icon && "pl-10"
+              Icon && "pl-10",
             )}
           />
         </div>
@@ -832,7 +890,7 @@ export default function CatalogueItemDialog({
         className={cn(
           "max-w-lg max-h-[90vh] overflow-y-auto",
           themeClasses.modalBg,
-          themeClasses.border
+          themeClasses.border,
         )}
       >
         <DialogHeader>
@@ -871,7 +929,7 @@ export default function CatalogueItemDialog({
                 placeholder="Brief description..."
                 className={cn(
                   themeClasses.inputBg,
-                  "border-white/10 text-white min-h-[60px]"
+                  "border-white/10 text-white min-h-[60px]",
                 )}
               />
             </div>
@@ -884,7 +942,7 @@ export default function CatalogueItemDialog({
                 "grid gap-4",
                 config.showStatus && config.showPriority
                   ? "grid-cols-2"
-                  : "grid-cols-1"
+                  : "grid-cols-1",
               )}
             >
               {config.showStatus && (
@@ -897,7 +955,7 @@ export default function CatalogueItemDialog({
                     <SelectTrigger
                       className={cn(
                         themeClasses.inputBg,
-                        "border-white/10 text-white"
+                        "border-white/10 text-white",
                       )}
                     >
                       <SelectValue />
@@ -925,7 +983,7 @@ export default function CatalogueItemDialog({
                     <SelectTrigger
                       className={cn(
                         themeClasses.inputBg,
-                        "border-white/10 text-white"
+                        "border-white/10 text-white",
                       )}
                     >
                       <SelectValue />
@@ -959,7 +1017,7 @@ export default function CatalogueItemDialog({
                 <SelectTrigger
                   className={cn(
                     themeClasses.inputBg,
-                    "border-white/10 text-white"
+                    "border-white/10 text-white",
                   )}
                 >
                   <SelectValue placeholder="How often?" />
@@ -996,7 +1054,7 @@ export default function CatalogueItemDialog({
                   placeholder="Current"
                   className={cn(
                     themeClasses.inputBg,
-                    "border-white/10 text-white"
+                    "border-white/10 text-white",
                   )}
                 />
                 <Input
@@ -1006,7 +1064,7 @@ export default function CatalogueItemDialog({
                   placeholder="Target"
                   className={cn(
                     themeClasses.inputBg,
-                    "border-white/10 text-white"
+                    "border-white/10 text-white",
                   )}
                 />
                 <Input
@@ -1015,7 +1073,7 @@ export default function CatalogueItemDialog({
                   placeholder="Unit ($, %)"
                   className={cn(
                     themeClasses.inputBg,
-                    "border-white/10 text-white"
+                    "border-white/10 text-white",
                   )}
                 />
               </div>
@@ -1039,7 +1097,7 @@ export default function CatalogueItemDialog({
                   placeholder="Add tag..."
                   className={cn(
                     themeClasses.inputBg,
-                    "border-white/10 text-white flex-1"
+                    "border-white/10 text-white flex-1",
                   )}
                 />
                 <Button

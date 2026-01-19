@@ -73,7 +73,7 @@ export interface ItemStats {
  */
 export function calculateNextOccurrence(
   currentDate: string,
-  rrule: string
+  rrule: string,
 ): string {
   const date = parseISO(currentDate);
 
@@ -192,7 +192,7 @@ export function useAllOccurrenceActions() {
 export function isOccurrenceCompleted(
   itemId: string,
   occurrenceDate: Date,
-  actions: ItemOccurrenceAction[]
+  actions: ItemOccurrenceAction[],
 ): boolean {
   // Normalize to YYYY-MM-DD format in LOCAL timezone for comparison
   const targetDate = normalizeToLocalDateString(occurrenceDate);
@@ -240,7 +240,7 @@ export function isOccurrenceCompleted(
 export function getPostponedOccurrencesForDate<T extends { id: string }>(
   items: T[],
   targetDate: Date,
-  actions: ItemOccurrenceAction[]
+  actions: ItemOccurrenceAction[],
 ): Array<{
   item: T;
   occurrenceDate: Date;
@@ -302,7 +302,7 @@ export function getPostponedOccurrencesForDate<T extends { id: string }>(
 export function getCompletedOccurrencesForDate<T extends { id: string }>(
   items: T[],
   targetDate: Date,
-  actions: ItemOccurrenceAction[]
+  actions: ItemOccurrenceAction[],
 ): Array<{
   item: T;
   occurrenceDate: Date;
@@ -469,6 +469,98 @@ export function useCompleteItem() {
   });
 }
 
+export interface UncompleteItemInput {
+  itemId: string;
+  occurrenceDate: string;
+  isRecurring: boolean;
+}
+
+/** Uncomplete an item or occurrence (toggle back to pending) */
+export function useUncompleteItem() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      occurrenceDate,
+      isRecurring,
+    }: UncompleteItemInput) => {
+      const supabase = supabaseBrowser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      if (isRecurring) {
+        // For recurring: delete the completion action for this occurrence
+        const targetDateStr = normalizeToLocalDateString(
+          new Date(occurrenceDate),
+        );
+
+        // Find and delete the completion action for this occurrence
+        const { data: actions, error: fetchError } = await supabase
+          .from("item_occurrence_actions")
+          .select("id, occurrence_date")
+          .eq("item_id", itemId)
+          .eq("action_type", "completed");
+
+        if (fetchError) throw fetchError;
+
+        // Find the action that matches this occurrence date
+        const actionToDelete = actions?.find((action) => {
+          const actionDateStr = parseDbDateToLocalString(
+            action.occurrence_date,
+          );
+          return actionDateStr === targetDateStr;
+        });
+
+        if (actionToDelete) {
+          const { error: deleteError } = await supabase
+            .from("item_occurrence_actions")
+            .delete()
+            .eq("id", actionToDelete.id);
+
+          if (deleteError) throw deleteError;
+        }
+
+        return { type: "occurrence", itemId };
+      } else {
+        // For non-recurring: update item status back to pending
+        const { error } = await supabase
+          .from("items")
+          .update({
+            status: "pending",
+            archived_at: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", itemId);
+
+        if (error) throw error;
+
+        // Also clear completed_at in reminder_details if it exists
+        await supabase
+          .from("reminder_details")
+          .update({ completed_at: null })
+          .eq("item_id", itemId);
+
+        // Delete the completion action record
+        await supabase
+          .from("item_occurrence_actions")
+          .delete()
+          .eq("item_id", itemId)
+          .eq("action_type", "completed");
+
+        return { type: "item", itemId };
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+      queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
+      queryClient.invalidateQueries({ queryKey: [...itemsKeys.all, "stats"] });
+    },
+  });
+}
+
 /** Postpone an item or occurrence */
 export function usePostponeItem() {
   const queryClient = useQueryClient();
@@ -535,7 +627,7 @@ export function usePostponeItem() {
             let newTriggerAt = postponedTo;
             if (alert.kind === "relative" && alert.offset_minutes) {
               newTriggerAt = new Date(
-                postponedDate.getTime() - alert.offset_minutes * 60 * 1000
+                postponedDate.getTime() - alert.offset_minutes * 60 * 1000,
               ).toISOString();
             }
 
@@ -634,7 +726,7 @@ export function useDeleteItemWithUndo() {
           reminder_details (*),
           event_details (*),
           item_recurrence_rules (*)
-        `
+        `,
         )
         .eq("id", itemId)
         .single();
@@ -711,6 +803,7 @@ export function useUndoOccurrenceAction() {
 
 export function useItemActionsWithToast() {
   const completeItem = useCompleteItem();
+  const uncompleteItem = useUncompleteItem();
   const postponeItem = usePostponeItem();
   const cancelItem = useCancelItem();
   const deleteItem = useDeleteItemWithUndo();
@@ -720,7 +813,7 @@ export function useItemActionsWithToast() {
   const handleComplete = async (
     item: ItemWithDetails,
     occurrenceDate: string,
-    reason?: string
+    reason?: string,
   ) => {
     const isRecurring = !!item.recurrence_rule?.rrule;
 
@@ -763,7 +856,7 @@ export function useItemActionsWithToast() {
     occurrenceDate: string,
     postponeType: PostponeType,
     reason?: string,
-    customDate?: string
+    customDate?: string,
   ) => {
     const isRecurring = !!item.recurrence_rule?.rrule;
     let postponedTo: string | undefined;
@@ -772,7 +865,7 @@ export function useItemActionsWithToast() {
     if (postponeType === "next_occurrence" && item.recurrence_rule?.rrule) {
       postponedTo = calculateNextOccurrence(
         occurrenceDate,
-        item.recurrence_rule.rrule
+        item.recurrence_rule.rrule,
       );
     } else if (postponeType === "tomorrow") {
       postponedTo = calculateTomorrowSameTime(occurrenceDate);
@@ -819,7 +912,7 @@ export function useItemActionsWithToast() {
   const handleCancel = async (
     item: ItemWithDetails,
     occurrenceDate?: string,
-    reason?: string
+    reason?: string,
   ) => {
     const isRecurring = !!item.recurrence_rule?.rrule;
 
@@ -871,13 +964,49 @@ export function useItemActionsWithToast() {
     }
   };
 
+  const handleUncomplete = async (
+    item: ItemWithDetails,
+    occurrenceDate: string,
+  ) => {
+    const isRecurring = !!item.recurrence_rule?.rrule;
+
+    try {
+      await uncompleteItem.mutateAsync({
+        itemId: item.id,
+        occurrenceDate,
+        isRecurring,
+      });
+
+      toast.success(`"${item.title}" marked as pending`);
+    } catch (error) {
+      toast.error("Failed to uncomplete item");
+      console.error(error);
+    }
+  };
+
+  const handleToggleComplete = async (
+    item: ItemWithDetails,
+    occurrenceDate: string,
+    isCurrentlyCompleted: boolean,
+    reason?: string,
+  ) => {
+    if (isCurrentlyCompleted) {
+      await handleUncomplete(item, occurrenceDate);
+    } else {
+      await handleComplete(item, occurrenceDate, reason);
+    }
+  };
+
   return {
     handleComplete,
+    handleUncomplete,
+    handleToggleComplete,
     handlePostpone,
     handleCancel,
     handleDelete,
     isLoading:
       completeItem.isPending ||
+      uncompleteItem.isPending ||
       postponeItem.isPending ||
       cancelItem.isPending ||
       deleteItem.isPending,
@@ -900,7 +1029,7 @@ export function areAllSubtasksCompleted(
   subtaskCompletions?: Array<{
     subtask_id: string;
     occurrence_date: string;
-  }>
+  }>,
 ): boolean {
   if (!subtasks || subtasks.length === 0) return false;
 
@@ -912,9 +1041,9 @@ export function areAllSubtasksCompleted(
         .filter(
           (c) =>
             normalizeToLocalDateString(new Date(c.occurrence_date)) ===
-            targetDateStr
+            targetDateStr,
         )
-        .map((c) => c.subtask_id)
+        .map((c) => c.subtask_id),
     );
 
     return subtasks.every((s) => completedSubtaskIds.has(s.id));

@@ -17,6 +17,7 @@ export type CatalogueModuleType =
   | "contacts" // Important contacts by category
   | "documents" // Important documents tracking
   | "movies" // Movies to watch, watched, favorites
+  | "inventory" // Home inventory with barcode scanning
   | "custom"; // User-defined modules
 
 export const MODULE_TYPE_LABELS: Record<CatalogueModuleType, string> = {
@@ -30,6 +31,7 @@ export const MODULE_TYPE_LABELS: Record<CatalogueModuleType, string> = {
   contacts: "Contacts",
   documents: "Documents",
   movies: "Movies & Shows",
+  inventory: "Home Inventory",
   custom: "Custom",
 };
 
@@ -44,6 +46,7 @@ export const MODULE_ICONS: Record<CatalogueModuleType, string> = {
   contacts: "users",
   documents: "file-text",
   movies: "film",
+  inventory: "package",
   custom: "folder",
 };
 
@@ -61,6 +64,7 @@ export const MODULE_COLORS: Record<
   contacts: { color: "#14b8a6", from: "#14b8a6", to: "#0d9488" },
   documents: { color: "#64748b", from: "#64748b", to: "#475569" },
   movies: { color: "#a855f7", from: "#a855f7", to: "#9333ea" },
+  inventory: { color: "#f97316", from: "#f97316", to: "#ea580c" },
   custom: { color: "#3b82f6", from: "#3b82f6", to: "#2563eb" },
 };
 

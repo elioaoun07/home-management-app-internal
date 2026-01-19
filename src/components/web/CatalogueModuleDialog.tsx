@@ -38,6 +38,7 @@ import {
   Heart,
   HeartPulse,
   Loader2,
+  Package,
   Plane,
   Trash2,
   Users,
@@ -62,6 +63,7 @@ const MODULE_TYPE_OPTIONS: CatalogueModuleType[] = [
   "contacts",
   "documents",
   "movies",
+  "inventory",
   "custom",
 ];
 
@@ -76,6 +78,7 @@ const ICON_OPTIONS = [
   { value: "users", label: "Contacts", icon: Users },
   { value: "file-text", label: "Documents", icon: FileText },
   { value: "film", label: "Movies", icon: Film },
+  { value: "package", label: "Inventory", icon: Package },
   { value: "folder", label: "Folder", icon: FolderOpen },
   { value: "heart", label: "Heart", icon: Heart },
   { value: "book", label: "Book", icon: BookOpen },
@@ -168,7 +171,7 @@ export default function CatalogueModuleDialog({
         { id: editingModule.id, ...data },
         {
           onSuccess: () => onOpenChange(false),
-        }
+        },
       );
     } else {
       createModule.mutate(data, {
@@ -190,7 +193,7 @@ export default function CatalogueModuleDialog({
         className={cn(
           "max-w-md max-h-[90vh] overflow-y-auto",
           themeClasses.modalBg,
-          themeClasses.border
+          themeClasses.border,
         )}
       >
         <DialogHeader>
@@ -211,7 +214,7 @@ export default function CatalogueModuleDialog({
               <SelectTrigger
                 className={cn(
                   themeClasses.inputBg,
-                  "border-white/10 text-white"
+                  "border-white/10 text-white",
                 )}
               >
                 <SelectValue />
@@ -255,7 +258,7 @@ export default function CatalogueModuleDialog({
               placeholder="What is this module for?"
               className={cn(
                 themeClasses.inputBg,
-                "border-white/10 text-white min-h-[60px]"
+                "border-white/10 text-white min-h-[60px]",
               )}
             />
           </div>
@@ -275,7 +278,7 @@ export default function CatalogueModuleDialog({
                       "p-2 rounded-lg border transition-all",
                       icon === opt.value
                         ? "border-primary bg-primary/20"
-                        : "border-white/10 hover:border-white/30"
+                        : "border-white/10 hover:border-white/30",
                     )}
                     title={opt.label}
                   >
@@ -299,7 +302,7 @@ export default function CatalogueModuleDialog({
                     "w-8 h-8 rounded-full border-2 transition-all mx-auto",
                     color === opt.value
                       ? "border-white scale-110"
-                      : "border-transparent hover:scale-105"
+                      : "border-transparent hover:scale-105",
                   )}
                   style={{ backgroundColor: opt.value }}
                   title={opt.label}
@@ -314,7 +317,7 @@ export default function CatalogueModuleDialog({
             <div
               className={cn(
                 "p-4 rounded-xl flex items-center gap-3",
-                themeClasses.surfaceBg
+                themeClasses.surfaceBg,
               )}
             >
               <div

@@ -218,7 +218,7 @@ function formatTimeDistance(dateStr: string): {
   const isOverdue = isBefore(date, now);
 
   const totalSeconds = Math.abs(
-    Math.floor((date.getTime() - now.getTime()) / 1000)
+    Math.floor((date.getTime() - now.getTime()) / 1000),
   );
   const days = Math.floor(totalSeconds / 86400);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -255,6 +255,10 @@ export default function SwipeableItemCard({
   const [offset, setOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [showActionsSheet, setShowActionsSheet] = useState(false);
+  // Optimistic completion state - null means use item.status
+  const [optimisticCompleted, setOptimisticCompleted] = useState<
+    boolean | null
+  >(null);
   const startX = useRef(0);
   const currentX = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -269,6 +273,8 @@ export default function SwipeableItemCard({
   // Item actions hook
   const {
     handleComplete: doComplete,
+    handleUncomplete: doUncomplete,
+    handleToggleComplete: doToggleComplete,
     handlePostpone: doPostpone,
     handleCancel: doCancel,
     handleDelete: doDelete,
@@ -316,15 +322,41 @@ export default function SwipeableItemCard({
       setShowActionsSheet(false);
       await doComplete(item, getOccurrenceDate(), reason);
     },
-    [doComplete, getOccurrenceDate, item]
+    [doComplete, getOccurrenceDate, item],
   );
+
+  // Toggle complete with optimistic UI
+  const handleToggleCompleteAction = useCallback(async () => {
+    // Determine current completion state (use optimistic if set, otherwise item.status)
+    const currentlyCompleted =
+      optimisticCompleted !== null
+        ? optimisticCompleted
+        : item.status === "completed";
+
+    // Optimistically toggle UI immediately
+    setOptimisticCompleted(!currentlyCompleted);
+
+    try {
+      await doToggleComplete(item, getOccurrenceDate(), currentlyCompleted);
+      // Reset optimistic state after successful mutation (React Query will update)
+      setOptimisticCompleted(null);
+    } catch (error) {
+      // Revert optimistic state on error
+      setOptimisticCompleted(null);
+    }
+  }, [doToggleComplete, getOccurrenceDate, item, optimisticCompleted]);
 
   const handlePostponeAction = useCallback(
     async (type: PostponeType, reason?: string) => {
       setShowActionsSheet(false);
-      await doPostpone(item, getOccurrenceDate(), type, reason);
+      // For custom type, the reason contains the custom date string
+      if (type === "custom" && reason) {
+        await doPostpone(item, getOccurrenceDate(), type, undefined, reason);
+      } else {
+        await doPostpone(item, getOccurrenceDate(), type, reason);
+      }
     },
-    [doPostpone, getOccurrenceDate, item]
+    [doPostpone, getOccurrenceDate, item],
   );
 
   const handleCancelAction = useCallback(
@@ -332,7 +364,7 @@ export default function SwipeableItemCard({
       setShowActionsSheet(false);
       await doCancel(item, getOccurrenceDate(), reason);
     },
-    [doCancel, getOccurrenceDate, item]
+    [doCancel, getOccurrenceDate, item],
   );
 
   const handleDeleteAction = useCallback(async () => {
@@ -352,7 +384,11 @@ export default function SwipeableItemCard({
   const isReminder = item.type === "reminder";
   const isEvent = item.type === "event";
   const isTask = item.type === "task";
-  const isCompleted = item.status === "completed";
+  // Use optimistic state if set, otherwise use item.status
+  const isCompleted =
+    optimisticCompleted !== null
+      ? optimisticCompleted
+      : item.status === "completed";
   const isRecurring = !!item.recurrence_rule?.rrule;
 
   // Get due/start date
@@ -438,7 +474,7 @@ export default function SwipeableItemCard({
     const diff = touch.clientX - startX.current;
     const newOffset = Math.max(
       -MAX_OFFSET,
-      Math.min(MAX_OFFSET, currentX.current + diff)
+      Math.min(MAX_OFFSET, currentX.current + diff),
     );
 
     if (animationFrameRef.current) {
@@ -496,7 +532,7 @@ export default function SwipeableItemCard({
 
     const newOffset = Math.max(
       -MAX_OFFSET,
-      Math.min(MAX_OFFSET, currentX.current + diff)
+      Math.min(MAX_OFFSET, currentX.current + diff),
     );
 
     if (animationFrameRef.current) {
@@ -558,7 +594,7 @@ export default function SwipeableItemCard({
         <div
           className={cn(
             "flex items-center gap-2 transition-opacity",
-            offset > 30 ? "opacity-100" : "opacity-0"
+            offset > 30 ? "opacity-100" : "opacity-0",
           )}
         >
           <Edit2Icon
@@ -567,13 +603,13 @@ export default function SwipeableItemCard({
               isPink ? "text-pink-400" : "text-cyan-400",
               isPink
                 ? "drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]"
-                : "drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]"
+                : "drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]",
             )}
           />
           <span
             className={cn(
               "text-sm font-medium",
-              isPink ? "text-pink-400" : "text-cyan-400"
+              isPink ? "text-pink-400" : "text-cyan-400",
             )}
           >
             Edit
@@ -584,7 +620,7 @@ export default function SwipeableItemCard({
         <div
           className={cn(
             "flex items-center gap-2 transition-opacity ml-auto",
-            offset < -30 ? "opacity-100" : "opacity-0"
+            offset < -30 ? "opacity-100" : "opacity-0",
           )}
         >
           <span className="text-sm font-medium text-red-400">Delete</span>
@@ -598,7 +634,7 @@ export default function SwipeableItemCard({
           "relative bg-gradient-to-br from-[#1a2942]/90 to-[#0f1d2e]/90 rounded-xl p-2.5 cursor-pointer",
           isCompleted && "opacity-60",
           "neo-card",
-          isDragging ? "" : "transition-transform duration-200 ease-out"
+          isDragging ? "" : "transition-transform duration-200 ease-out",
         )}
         style={{
           transform: `translateX(${offset}px)`,
@@ -623,8 +659,8 @@ export default function SwipeableItemCard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Use the new complete action with undo support
-                  handleCompleteAction();
+                  // Toggle complete/uncomplete with optimistic UI
+                  handleToggleCompleteAction();
                 }}
                 className={cn(
                   "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
@@ -632,7 +668,7 @@ export default function SwipeableItemCard({
                     ? "bg-green-500 border-green-500"
                     : isPink
                       ? "border-pink-400/40 hover:border-pink-400 hover:bg-pink-500/10"
-                      : "border-cyan-400/40 hover:border-cyan-400 hover:bg-cyan-500/10"
+                      : "border-cyan-400/40 hover:border-cyan-400 hover:bg-cyan-500/10",
                 )}
               >
                 {isCompleted && <CheckIcon className="w-3 h-3 text-white" />}
@@ -647,13 +683,13 @@ export default function SwipeableItemCard({
                 }}
                 className={cn(
                   "w-7 h-7 rounded-lg flex items-center justify-center",
-                  isPink ? "bg-pink-500/15" : "bg-cyan-500/15"
+                  isPink ? "bg-pink-500/15" : "bg-cyan-500/15",
                 )}
               >
                 <CalendarIcon
                   className={cn(
                     "w-3.5 h-3.5",
-                    isPink ? "text-pink-400" : "text-cyan-400"
+                    isPink ? "text-pink-400" : "text-cyan-400",
                   )}
                 />
               </button>
@@ -663,11 +699,19 @@ export default function SwipeableItemCard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleCompleteAction();
+                  handleToggleCompleteAction();
                 }}
-                className="w-7 h-7 rounded-lg flex items-center justify-center bg-purple-500/15"
+                className={cn(
+                  "w-7 h-7 rounded-lg flex items-center justify-center transition-all",
+                  isCompleted ? "bg-green-500/20" : "bg-purple-500/15",
+                )}
               >
-                <CheckSquare className="w-3.5 h-3.5 text-purple-400" />
+                <CheckSquare
+                  className={cn(
+                    "w-3.5 h-3.5",
+                    isCompleted ? "text-green-400" : "text-purple-400",
+                  )}
+                />
               </button>
             )}
           </div>
@@ -679,7 +723,7 @@ export default function SwipeableItemCard({
               <h3
                 className={cn(
                   "font-semibold text-white truncate text-sm flex-1",
-                  isCompleted && "line-through text-white/50"
+                  isCompleted && "line-through text-white/50",
                 )}
               >
                 {item.title}
@@ -711,7 +755,7 @@ export default function SwipeableItemCard({
                       } else {
                         window.open(
                           `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`,
-                          "_blank"
+                          "_blank",
                         );
                       }
                     }
@@ -719,7 +763,7 @@ export default function SwipeableItemCard({
                   className={cn(
                     "flex items-center justify-center w-6 h-6 rounded-md transition-all ml-auto",
                     "bg-emerald-500/20 hover:bg-emerald-500/30",
-                    "active:scale-95"
+                    "active:scale-95",
                   )}
                   title={item.event_details.location_text}
                 >
@@ -759,7 +803,7 @@ export default function SwipeableItemCard({
                       : isPink
                         ? "text-pink-400/80"
                         : "text-cyan-400/80",
-                    isCompleted && isRecurring && "opacity-50"
+                    isCompleted && isRecurring && "opacity-50",
                   )}
                 >
                   {timeInfo.isOverdue ? (
@@ -807,7 +851,7 @@ export default function SwipeableItemCard({
                 <div
                   className={cn(
                     "h-full rounded-full transition-all",
-                    isPink ? "bg-pink-400" : "bg-cyan-400"
+                    isPink ? "bg-pink-400" : "bg-cyan-400",
                   )}
                   style={{
                     width: `${

@@ -143,6 +143,13 @@ const MODULE_DISPLAY_FIELDS: Record<
     { key: "watch_date", label: "Watch Date", icon: Calendar, format: "date" },
   ],
   custom: [],
+  inventory: [
+    { key: "barcode", label: "Barcode" },
+    { key: "unit_type", label: "Unit Type" },
+    { key: "unit_size", label: "Unit Size" },
+    { key: "consumption_rate_days", label: "Days to Consume" },
+    { key: "minimum_stock", label: "Min Stock" },
+  ],
 };
 
 export default function CatalogueItemDetailDialog({
@@ -166,7 +173,7 @@ export default function CatalogueItemDetailDialog({
   const progressPercent = hasProgress
     ? Math.min(
         100,
-        ((item.progress_current ?? 0) / item.progress_target!) * 100
+        ((item.progress_current ?? 0) / item.progress_target!) * 100,
       )
     : 0;
 
@@ -241,7 +248,7 @@ export default function CatalogueItemDetailDialog({
         className={cn(
           "max-w-lg max-h-[90vh] overflow-y-auto",
           themeClasses.modalBg,
-          themeClasses.border
+          themeClasses.border,
         )}
       >
         <DialogHeader>
@@ -395,7 +402,7 @@ export default function CatalogueItemDetailDialog({
                     key={subItem.id}
                     className={cn(
                       "flex items-center gap-2 text-sm py-1",
-                      subItem.is_completed && "text-white/50 line-through"
+                      subItem.is_completed && "text-white/50 line-through",
                     )}
                   >
                     <div
@@ -403,7 +410,7 @@ export default function CatalogueItemDetailDialog({
                         "w-4 h-4 rounded border flex items-center justify-center",
                         subItem.is_completed
                           ? "bg-primary border-primary"
-                          : "border-white/30"
+                          : "border-white/30",
                       )}
                     >
                       {subItem.is_completed && (
@@ -426,7 +433,7 @@ export default function CatalogueItemDetailDialog({
               onClick={handleTogglePin}
               className={cn(
                 "border-white/10",
-                item.is_pinned && "text-amber-400 border-amber-400/30"
+                item.is_pinned && "text-amber-400 border-amber-400/30",
               )}
             >
               <Pin className="w-4 h-4 mr-1" />
@@ -439,13 +446,13 @@ export default function CatalogueItemDetailDialog({
               onClick={handleToggleFavorite}
               className={cn(
                 "border-white/10",
-                item.is_favorite && "text-amber-400 border-amber-400/30"
+                item.is_favorite && "text-amber-400 border-amber-400/30",
               )}
             >
               <Star
                 className={cn(
                   "w-4 h-4 mr-1",
-                  item.is_favorite && "fill-amber-400"
+                  item.is_favorite && "fill-amber-400",
                 )}
               />
               {item.is_favorite ? "Unfavorite" : "Favorite"}
@@ -459,7 +466,7 @@ export default function CatalogueItemDetailDialog({
                 className={cn(
                   "border-white/10",
                   item.status === "completed" &&
-                    "text-green-400 border-green-400/30"
+                    "text-green-400 border-green-400/30",
                 )}
               >
                 <CheckCircle2 className="w-4 h-4 mr-1" />

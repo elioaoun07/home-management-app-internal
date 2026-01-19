@@ -152,6 +152,23 @@ export default function WebEvents() {
   const [clickedOccurrenceDate, setClickedOccurrenceDate] =
     useState<Date | null>(null);
 
+  // Track if screen is mobile size for modal positioning
+  const [isMobileScreen, setIsMobileScreen] = useState(false);
+
+  // Update screen size state on mount and resize
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobileScreen(window.innerWidth < 640);
+    };
+
+    // Initial check
+    checkScreenSize();
+
+    // Listen for resize
+    window.addEventListener("resize", checkScreenSize);
+    return () => window.removeEventListener("resize", checkScreenSize);
+  }, []);
+
   // Helper: Check if item is recurring
   const isRecurring = useCallback((item: ItemWithDetails | null) => {
     return !!item?.recurrence_rule?.rrule;
@@ -175,7 +192,7 @@ export default function WebEvents() {
             : null;
       return dateStr ? parseISO(dateStr) : new Date();
     },
-    [clickedOccurrenceDate]
+    [clickedOccurrenceDate],
   );
 
   // Action handlers
@@ -184,7 +201,7 @@ export default function WebEvents() {
     itemActions.handleComplete(
       detailItem,
       getOccurrenceDate(detailItem).toISOString(),
-      actionReason || undefined
+      actionReason || undefined,
     );
     setDetailItem(null);
     setClickedOccurrenceDate(null);
@@ -201,7 +218,7 @@ export default function WebEvents() {
         getOccurrenceDate(detailItem).toISOString(),
         postponeType,
         actionReason || undefined,
-        customDate
+        customDate,
       );
       setDetailItem(null);
       setClickedOccurrenceDate(null);
@@ -211,7 +228,7 @@ export default function WebEvents() {
       setCustomPostponeDate("");
       setActionReason("");
     },
-    [detailItem, itemActions, getOccurrenceDate, actionReason]
+    [detailItem, itemActions, getOccurrenceDate, actionReason],
   );
 
   const handleCancelAction = useCallback(() => {
@@ -219,7 +236,7 @@ export default function WebEvents() {
     itemActions.handleCancel(
       detailItem,
       getOccurrenceDate(detailItem).toISOString(),
-      actionReason || undefined
+      actionReason || undefined,
     );
     setDetailItem(null);
     setClickedOccurrenceDate(null);
@@ -245,7 +262,7 @@ export default function WebEvents() {
     const isCompleted = isOccurrenceCompleted(
       detailItem.id,
       clickedOccurrenceDate,
-      occurrenceActions
+      occurrenceActions,
     );
 
     if (!isCompleted) return null;
@@ -256,7 +273,7 @@ export default function WebEvents() {
       (a) =>
         a.item_id === detailItem.id &&
         a.action_type === "completed" &&
-        a.occurrence_date.split("T")[0] === targetDateStr
+        a.occurrence_date.split("T")[0] === targetDateStr,
     );
 
     return action || null;
@@ -325,7 +342,7 @@ export default function WebEvents() {
   // Handle birthday click to convert to event
   const handleBirthdayClick = (
     birthday: { name: string; category?: string },
-    date: Date
+    date: Date,
   ) => {
     setFormInitialDate(date);
     setEditingItem(null);
@@ -339,7 +356,7 @@ export default function WebEvents() {
   const handleItemClick = (
     item: ItemWithDetails,
     event: React.MouseEvent,
-    occurrenceDate?: Date
+    occurrenceDate?: Date,
   ) => {
     const rect = event.currentTarget.getBoundingClientRect();
     setModalPosition({
@@ -377,7 +394,7 @@ export default function WebEvents() {
     } else {
       // TODO: Implement "edit this occurrence" - requires exception system
       alert(
-        "Editing single occurrences coming soon! For now, editing the entire series."
+        "Editing single occurrences coming soon! For now, editing the entire series.",
       );
       setEditingItem(pendingEditItem);
       setFormDefaultType(pendingEditItem.type);
@@ -486,7 +503,7 @@ export default function WebEvents() {
         className={cn(
           "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
           "bg-pink-500/20 text-pink-300 border border-pink-500/30",
-          "hover:bg-pink-500/30 hover:scale-105 active:scale-95"
+          "hover:bg-pink-500/30 hover:scale-105 active:scale-95",
         )}
       >
         <Calendar className="w-4 h-4" />
@@ -503,7 +520,7 @@ export default function WebEvents() {
         className={cn(
           "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
           "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30",
-          "hover:bg-cyan-500/30 hover:scale-105 active:scale-95"
+          "hover:bg-cyan-500/30 hover:scale-105 active:scale-95",
         )}
       >
         <Bell className="w-4 h-4" />
@@ -520,7 +537,7 @@ export default function WebEvents() {
         className={cn(
           "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
           "bg-purple-500/20 text-purple-300 border border-purple-500/30",
-          "hover:bg-purple-500/30 hover:scale-105 active:scale-95"
+          "hover:bg-purple-500/30 hover:scale-105 active:scale-95",
         )}
       >
         <ListTodo className="w-4 h-4" />
@@ -539,7 +556,7 @@ export default function WebEvents() {
             ? "bg-[#1c1917]/95 border-stone-700"
             : isFrost
               ? "bg-white/95 border-slate-200 shadow-lg"
-              : "bg-[#0a1628]/95 border-white/10"
+              : "bg-[#0a1628]/95 border-white/10",
         )}
       >
         <div className="max-w-lg mx-auto px-3">
@@ -561,7 +578,7 @@ export default function WebEvents() {
                     ? "text-stone-500 hover:text-stone-400"
                     : isFrost
                       ? "text-slate-400 hover:text-slate-600"
-                      : "text-white/50 hover:text-white/70"
+                      : "text-white/50 hover:text-white/70",
               )}
             >
               <Sparkles className="w-4 h-4" />
@@ -584,7 +601,7 @@ export default function WebEvents() {
                     ? "text-stone-500 hover:text-stone-400"
                     : isFrost
                       ? "text-slate-400 hover:text-slate-600"
-                      : "text-white/50 hover:text-white/70"
+                      : "text-white/50 hover:text-white/70",
               )}
             >
               <Target className="w-4 h-4" />
@@ -607,7 +624,7 @@ export default function WebEvents() {
                     ? "text-stone-500 hover:text-stone-400"
                     : isFrost
                       ? "text-slate-400 hover:text-slate-600"
-                      : "text-white/50 hover:text-white/70"
+                      : "text-white/50 hover:text-white/70",
               )}
             >
               <CalendarDays className="w-4 h-4" />
@@ -630,7 +647,7 @@ export default function WebEvents() {
                     ? "text-stone-500 hover:text-stone-400"
                     : isFrost
                       ? "text-slate-400 hover:text-slate-600"
-                      : "text-white/50 hover:text-white/70"
+                      : "text-white/50 hover:text-white/70",
               )}
             >
               <LayoutDashboard className="w-4 h-4" />
@@ -666,7 +683,7 @@ export default function WebEvents() {
                 <div
                   className={cn(
                     "flex items-center p-0.5 rounded",
-                    isFrost ? "bg-slate-100" : "bg-white/5"
+                    isFrost ? "bg-slate-100" : "bg-white/5",
                   )}
                 >
                   <button
@@ -680,7 +697,7 @@ export default function WebEvents() {
                           : "neo-gradient text-white"
                         : isFrost
                           ? "text-slate-500 hover:text-slate-700"
-                          : "text-white/50 hover:text-white"
+                          : "text-white/50 hover:text-white",
                     )}
                     title="Month view"
                   >
@@ -697,7 +714,7 @@ export default function WebEvents() {
                           : "neo-gradient text-white"
                         : isFrost
                           ? "text-slate-500 hover:text-slate-700"
-                          : "text-white/50 hover:text-white"
+                          : "text-white/50 hover:text-white",
                     )}
                     title="Week view"
                   >
@@ -709,7 +726,7 @@ export default function WebEvents() {
                 <div
                   className={cn(
                     "flex items-center p-0.5 rounded",
-                    isFrost ? "bg-slate-100" : "bg-white/5"
+                    isFrost ? "bg-slate-100" : "bg-white/5",
                   )}
                 >
                   {typeFilters.map((filter) => {
@@ -728,7 +745,7 @@ export default function WebEvents() {
                               : "neo-gradient text-white"
                             : isFrost
                               ? "text-slate-500 hover:text-slate-700"
-                              : "text-white/50 hover:text-white"
+                              : "text-white/50 hover:text-white",
                         )}
                         title={filter.label}
                       >
@@ -750,7 +767,7 @@ export default function WebEvents() {
                         : "bg-amber-500/20 text-amber-300"
                       : isFrost
                         ? "text-slate-400 hover:text-slate-600"
-                        : "text-white/40 hover:text-white/60"
+                        : "text-white/40 hover:text-white/60",
                   )}
                   title="Show birthdays"
                 >
@@ -768,7 +785,7 @@ export default function WebEvents() {
                           ? isPink
                             ? "bg-pink-500/20 text-pink-300"
                             : "bg-cyan-500/20 text-cyan-300"
-                          : "text-white/40 hover:text-white/60"
+                          : "text-white/40 hover:text-white/60",
                       )}
                       title="Filter by category"
                     >
@@ -802,7 +819,7 @@ export default function WebEvents() {
                       {CATEGORIES.map((category) => {
                         const Icon = category.icon;
                         const isSelected = selectedCategories.includes(
-                          category.id
+                          category.id,
                         );
                         return (
                           <button
@@ -812,14 +829,14 @@ export default function WebEvents() {
                               setSelectedCategories((prev) =>
                                 isSelected
                                   ? prev.filter((id) => id !== category.id)
-                                  : [...prev, category.id]
+                                  : [...prev, category.id],
                               );
                             }}
                             className={cn(
                               "flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs font-medium transition-all",
                               isSelected
                                 ? "text-white"
-                                : "text-white/60 hover:text-white hover:bg-white/5"
+                                : "text-white/60 hover:text-white hover:bg-white/5",
                             )}
                             style={{
                               backgroundColor: isSelected
@@ -856,7 +873,7 @@ export default function WebEvents() {
                       "w-12 h-12 mx-auto mb-4 border-4 rounded-full",
                       isPink
                         ? "border-pink-500/30 border-t-pink-400"
-                        : "border-cyan-500/30 border-t-cyan-400"
+                        : "border-cyan-500/30 border-t-cyan-400",
                     )}
                   />
                   <p className="text-white/60">Loading your events...</p>
@@ -906,17 +923,39 @@ export default function WebEvents() {
                   }}
                 />
 
-                {/* Floating Modal */}
+                {/* Responsive Floating Modal - Centered on mobile, positioned on desktop */}
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.15 }}
-                  className="fixed z-[101] w-[420px] rounded-2xl overflow-hidden border-2"
+                  className={cn(
+                    "fixed z-[101] rounded-2xl overflow-hidden border-2",
+                    // Mobile: centered, full width with padding
+                    isMobileScreen &&
+                      "inset-x-4 top-1/2 -translate-y-1/2 max-h-[85vh]",
+                    // Tablet and up: fixed width, positioned near click
+                    !isMobileScreen &&
+                      "w-[380px] lg:w-[420px] max-h-[calc(100vh-40px)]",
+                  )}
                   style={{
-                    left: Math.min(modalPosition.x, window.innerWidth - 440),
-                    top: Math.min(modalPosition.y, window.innerHeight - 600),
-                    maxHeight: "calc(100vh - 40px)",
+                    // Only apply absolute position on larger screens
+                    ...(!isMobileScreen
+                      ? {
+                          left: Math.min(
+                            Math.max(modalPosition.x, 16),
+                            (typeof window !== "undefined"
+                              ? window.innerWidth
+                              : 1024) - 420,
+                          ),
+                          top: Math.min(
+                            Math.max(modalPosition.y, 20),
+                            (typeof window !== "undefined"
+                              ? window.innerHeight
+                              : 768) - 500,
+                          ),
+                        }
+                      : {}),
                     backgroundColor: "rgba(15, 23, 42, 0.98)",
                     borderColor: isPink
                       ? "rgba(236, 72, 153, 0.5)"
@@ -963,7 +1002,7 @@ export default function WebEvents() {
                               "p-2 rounded-full hover:bg-amber-500/20 transition-colors",
                               isPink
                                 ? "hover:bg-pink-500/20"
-                                : "hover:bg-cyan-500/20"
+                                : "hover:bg-cyan-500/20",
                             )}
                             title="Postpone"
                           >
@@ -1025,8 +1064,8 @@ export default function WebEvents() {
 
                   {/* Content */}
                   <div
-                    className="p-5 space-y-4 overflow-y-auto"
-                    style={{ maxHeight: "calc(100vh - 120px)" }}
+                    className="p-4 sm:p-5 space-y-4 overflow-y-auto"
+                    style={{ maxHeight: "calc(85vh - 80px)" }}
                   >
                     {/* Color indicator strip */}
                     <div
@@ -1034,7 +1073,7 @@ export default function WebEvents() {
                         "w-1 h-16 rounded-full absolute left-0 top-16",
                         detailItem.type === "event" && "bg-pink-400",
                         detailItem.type === "reminder" && "bg-cyan-400",
-                        detailItem.type === "task" && "bg-purple-400"
+                        detailItem.type === "task" && "bg-purple-400",
                       )}
                     />
 
@@ -1045,7 +1084,7 @@ export default function WebEvents() {
                           "text-xl font-medium mb-1",
                           isCurrentOccurrenceCompleted
                             ? "text-green-300 line-through"
-                            : "text-white"
+                            : "text-white",
                         )}
                       >
                         {detailItem.title}
@@ -1069,19 +1108,19 @@ export default function WebEvents() {
                               <div className="text-white text-sm">
                                 {format(
                                   parseISO(detailItem.event_details.start_at),
-                                  "EEEE, MMMM d"
+                                  "EEEE, MMMM d",
                                 )}
                               </div>
                               {!detailItem.event_details.all_day ? (
                                 <div className="text-white/70 text-sm">
                                   {format(
                                     parseISO(detailItem.event_details.start_at),
-                                    "h:mm a"
+                                    "h:mm a",
                                   )}{" "}
                                   –{" "}
                                   {format(
                                     parseISO(detailItem.event_details.end_at),
-                                    "h:mm a"
+                                    "h:mm a",
                                   )}
                                 </div>
                               ) : (
@@ -1098,13 +1137,13 @@ export default function WebEvents() {
                               <div className="text-white text-sm">
                                 {format(
                                   parseISO(detailItem.reminder_details.due_at),
-                                  "EEEE, MMMM d"
+                                  "EEEE, MMMM d",
                                 )}
                               </div>
                               <div className="text-white/70 text-sm">
                                 {format(
                                   parseISO(detailItem.reminder_details.due_at),
-                                  "h:mm a"
+                                  "h:mm a",
                                 )}
                               </div>
                             </>
@@ -1126,11 +1165,11 @@ export default function WebEvents() {
                         <div className="flex items-start gap-3 pl-3">
                           <MapPin className="w-5 h-5 text-white/40 mt-0.5 flex-shrink-0" />
                           {getLocationUrl(
-                            detailItem.event_details.location_text
+                            detailItem.event_details.location_text,
                           ) ? (
                             <a
                               href={getLocationUrl(
-                                detailItem.event_details.location_text
+                                detailItem.event_details.location_text,
                               )}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -1160,7 +1199,7 @@ export default function WebEvents() {
                           {detailItem.alerts[0].offset_minutes === 1440 &&
                             "1 day before"}
                           {![15, 30, 60, 1440].includes(
-                            detailItem.alerts[0].offset_minutes || 0
+                            detailItem.alerts[0].offset_minutes || 0,
                           ) &&
                             `${detailItem.alerts[0].offset_minutes} minutes before`}
                         </div>
@@ -1173,7 +1212,7 @@ export default function WebEvents() {
                         className={cn(
                           "px-2 py-1 rounded text-xs font-medium capitalize",
                           typeColors[detailItem.type].bg,
-                          typeColors[detailItem.type].text
+                          typeColors[detailItem.type].text,
                         )}
                       >
                         {detailItem.type}
@@ -1188,7 +1227,7 @@ export default function WebEvents() {
                             detailItem.priority === "high" &&
                               "bg-orange-500/20 text-orange-300",
                             detailItem.priority === "low" &&
-                              "bg-gray-500/20 text-gray-300"
+                              "bg-gray-500/20 text-gray-300",
                           )}
                         >
                           {detailItem.priority}
@@ -1231,7 +1270,7 @@ export default function WebEvents() {
                             className={cn(
                               "w-full p-2 rounded-lg bg-white/5 border border-white/10",
                               "text-white text-sm placeholder:text-white/30 resize-none",
-                              "focus:outline-none focus:border-white/20"
+                              "focus:outline-none focus:border-white/20",
                             )}
                             rows={2}
                           />
@@ -1262,14 +1301,14 @@ export default function WebEvents() {
                 <DialogContent
                   className={cn(
                     "sm:max-w-md neo-card border",
-                    isPink ? "border-pink-500/30" : "border-cyan-500/30"
+                    isPink ? "border-pink-500/30" : "border-cyan-500/30",
                   )}
                 >
                   <DialogHeader>
                     <DialogTitle
                       className={cn(
                         "flex items-center gap-2 text-xl",
-                        isPink ? "text-pink-300" : "text-cyan-300"
+                        isPink ? "text-pink-300" : "text-cyan-300",
                       )}
                     >
                       <Repeat className="w-5 h-5" />
@@ -1290,7 +1329,7 @@ export default function WebEvents() {
                         onClick={() => handleRecurringEditChoice("this")}
                         className={cn(
                           "w-full p-4 rounded-xl border text-left transition-all",
-                          "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                          "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
                         )}
                       >
                         <div className="font-semibold text-white mb-1">
@@ -1306,7 +1345,7 @@ export default function WebEvents() {
                         onClick={() => handleRecurringEditChoice("all")}
                         className={cn(
                           "w-full p-4 rounded-xl border text-left transition-all",
-                          "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                          "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
                         )}
                       >
                         <div className="font-semibold text-white mb-1">
@@ -1346,14 +1385,14 @@ export default function WebEvents() {
           <DialogContent
             className={cn(
               "sm:max-w-md neo-card border",
-              isPink ? "border-pink-500/30" : "border-cyan-500/30"
+              isPink ? "border-pink-500/30" : "border-cyan-500/30",
             )}
           >
             <DialogHeader>
               <DialogTitle
                 className={cn(
                   "flex items-center gap-2 text-xl",
-                  isPink ? "text-pink-300" : "text-cyan-300"
+                  isPink ? "text-pink-300" : "text-cyan-300",
                 )}
               >
                 <FastForward className="w-5 h-5" />
@@ -1368,7 +1407,7 @@ export default function WebEvents() {
                   onClick={() => handlePostponeAction("next_occurrence")}
                   className={cn(
                     "w-full p-4 rounded-xl border text-left transition-all",
-                    "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                    "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
                   )}
                 >
                   <div className="font-semibold text-white mb-1">
@@ -1385,7 +1424,7 @@ export default function WebEvents() {
                 onClick={() => handlePostponeAction("tomorrow")}
                 className={cn(
                   "w-full p-4 rounded-xl border text-left transition-all",
-                  "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                  "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
                 )}
               >
                 <div className="font-semibold text-white mb-1">
@@ -1407,7 +1446,7 @@ export default function WebEvents() {
                       ? isPink
                         ? "border-pink-500/40 bg-pink-500/10"
                         : "border-cyan-500/40 bg-cyan-500/10"
-                      : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                      : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
                   )}
                 >
                   <div className="font-semibold text-white mb-1 flex items-center gap-2">
@@ -1435,7 +1474,7 @@ export default function WebEvents() {
                               origDate.getHours(),
                               origDate.getMinutes(),
                               0,
-                              0
+                              0,
                             );
                             setCustomPostponeDate(newDate.toISOString());
                           }
@@ -1444,7 +1483,7 @@ export default function WebEvents() {
                         className={cn(
                           "flex-1 p-2 rounded-lg bg-white/5 border border-white/10",
                           "text-white text-sm",
-                          "focus:outline-none focus:border-white/30"
+                          "focus:outline-none focus:border-white/30",
                         )}
                       />
                       <input
@@ -1467,7 +1506,7 @@ export default function WebEvents() {
                         className={cn(
                           "w-24 p-2 rounded-lg bg-white/5 border border-white/10",
                           "text-white text-sm",
-                          "focus:outline-none focus:border-white/30"
+                          "focus:outline-none focus:border-white/30",
                         )}
                       />
                     </div>
@@ -1483,14 +1522,14 @@ export default function WebEvents() {
                         "w-full",
                         isPink
                           ? "bg-pink-500 hover:bg-pink-600"
-                          : "bg-cyan-500 hover:bg-cyan-600"
+                          : "bg-cyan-500 hover:bg-cyan-600",
                       )}
                     >
                       Postpone to{" "}
                       {customPostponeDate
                         ? format(
                             new Date(customPostponeDate),
-                            "MMM d 'at' h:mm a"
+                            "MMM d 'at' h:mm a",
                           )
                         : "..."}
                     </Button>
@@ -1503,7 +1542,7 @@ export default function WebEvents() {
                 disabled
                 className={cn(
                   "w-full p-4 rounded-xl border text-left opacity-50 cursor-not-allowed",
-                  "border-white/10 bg-white/5"
+                  "border-white/10 bg-white/5",
                 )}
               >
                 <div className="font-semibold text-white/60 mb-1">
@@ -1526,7 +1565,7 @@ export default function WebEvents() {
                   className={cn(
                     "w-full p-3 rounded-lg bg-white/5 border border-white/10",
                     "text-white placeholder:text-white/30 resize-none",
-                    "focus:outline-none focus:border-white/30"
+                    "focus:outline-none focus:border-white/30",
                   )}
                   rows={2}
                 />

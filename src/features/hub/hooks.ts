@@ -98,6 +98,9 @@ export type HubMessage = {
   item_quantity?: string | null; // Quantity for shopping items (e.g., "2 bags", "1 lb")
   topic_id?: string | null; // Topic/section within notes thread
   has_links?: boolean; // Whether item has multiple comparison links
+  // Inventory integration fields
+  source?: "user" | "inventory" | "system" | "ai"; // Origin of the message
+  source_item_id?: string | null; // Reference to catalogue item if from inventory
 };
 
 export type HubFeedItem = {
@@ -347,11 +350,11 @@ export function useBroadcastReceiptUpdate() {
       threadId: string,
       messageIds: string[],
       status: string,
-      userId: string
+      userId: string,
     ) => {
       // Filter out messages we've already broadcasted receipts for
       const newMessageIds = messageIds.filter(
-        (id) => !broadcastedReceiptIds.has(id)
+        (id) => !broadcastedReceiptIds.has(id),
       );
 
       if (!newMessageIds.length) {
@@ -390,7 +393,7 @@ export function useBroadcastReceiptUpdate() {
         newMessageIds.forEach((id) => broadcastedReceiptIds.delete(id));
       }
     },
-    []
+    [],
   );
 }
 
@@ -418,7 +421,7 @@ const activeChannels = new Map<
 // postgres_changes has RLS issues with subqueries, so we use broadcast instead
 export function useRealtimeMessages(
   threadId: string | null,
-  onNewMessageFromOther?: (messageId: string) => void
+  onNewMessageFromOther?: (messageId: string) => void,
 ) {
   const queryClient = useQueryClient();
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -456,7 +459,7 @@ export function useRealtimeMessages(
                 household_id: string;
                 current_user_id: string;
               }
-            | undefined
+            | undefined,
         ) => {
           if (!oldData) return oldData;
 
@@ -474,7 +477,7 @@ export function useRealtimeMessages(
             ...oldData,
             messages: [...oldData.messages, newMessage],
           };
-        }
+        },
       );
 
       // Update thread's last_message in cache (don't refetch - badge might be stale)
@@ -498,7 +501,7 @@ export function useRealtimeMessages(
                 household_id: string | null;
                 current_user_id: string;
               }
-            | undefined
+            | undefined,
         ) => {
           if (!oldData) return oldData;
           return {
@@ -517,13 +520,13 @@ export function useRealtimeMessages(
                     // Don't increment unread - we're viewing the chat right now
                     // The message will be marked as read immediately
                   }
-                : t
+                : t,
             ),
           };
-        }
+        },
       );
     },
-    [queryClient]
+    [queryClient],
   );
 
   // Handle receipt status updates (sent → delivered → read)
@@ -543,7 +546,7 @@ export function useRealtimeMessages(
                 household_id: string;
                 current_user_id: string;
               }
-            | undefined
+            | undefined,
         ) => {
           if (!oldData) return oldData;
 
@@ -587,10 +590,10 @@ export function useRealtimeMessages(
             ...oldData,
             messages: updatedMessages,
           };
-        }
+        },
       );
     },
-    [queryClient]
+    [queryClient],
   );
 
   // Handle item check updates (shopping list items marked as checked/unchecked)
@@ -616,7 +619,7 @@ export function useRealtimeMessages(
                 household_id: string;
                 current_user_id: string;
               }
-            | undefined
+            | undefined,
         ) => {
           if (!oldData) return oldData;
 
@@ -633,14 +636,14 @@ export function useRealtimeMessages(
                   checked_at,
                   checked_by,
                 }
-              : msg
+              : msg,
           );
 
           return {
             ...oldData,
             messages: updatedMessages,
           };
-        }
+        },
       );
 
       // Also update localStorage cache for offline-first sync
@@ -656,14 +659,14 @@ export function useRealtimeMessages(
 
         if (cached?.messages) {
           cached.messages = cached.messages.map((m) =>
-            m.id === message_id ? { ...m, checked_at, checked_by } : m
+            m.id === message_id ? { ...m, checked_at, checked_by } : m,
           );
           cached.cached_at = Date.now();
           setStorageItem(cacheKey, cached);
         }
       }
     },
-    [queryClient]
+    [queryClient],
   );
 
   // Reconnection state
@@ -746,7 +749,7 @@ export function useRealtimeMessages(
     const scheduleReconnect = () => {
       if (reconnectAttempt.current >= SYNC_CONSTANTS.RECONNECT_MAX_ATTEMPTS) {
         console.warn(
-          "Max reconnect attempts reached, starting fallback polling"
+          "Max reconnect attempts reached, starting fallback polling",
         );
         startFallbackPolling();
         return;
@@ -755,7 +758,7 @@ export function useRealtimeMessages(
       const delay = Math.min(
         SYNC_CONSTANTS.RECONNECT_BASE_DELAY *
           Math.pow(2, reconnectAttempt.current),
-        SYNC_CONSTANTS.RECONNECT_MAX_DELAY
+        SYNC_CONSTANTS.RECONNECT_MAX_DELAY,
       );
 
       reconnectTimeout.current = setTimeout(() => {
@@ -794,7 +797,7 @@ export function useRealtimeMessages(
               messageIds: string[];
               status: string;
               userId: string;
-            }
+            },
           );
         }
       })
@@ -807,7 +810,7 @@ export function useRealtimeMessages(
               checked_at: string | null;
               checked_by: string | null;
               updated_by: string;
-            }
+            },
           );
         }
       })
@@ -1064,7 +1067,7 @@ export function useSendMessage() {
               ...old,
               messages: [...old.messages, optimisticMessage],
             };
-          }
+          },
         );
       }
 
@@ -1086,7 +1089,7 @@ export function useSendMessage() {
         queryClient.setQueryData(
           ["hub", "messages", variables.thread_id],
           (
-            old: { messages: HubMessage[]; [key: string]: unknown } | undefined
+            old: { messages: HubMessage[]; [key: string]: unknown } | undefined,
           ) => {
             if (!old) return old;
             // Remove only the optimistic message for this mutation.
@@ -1099,7 +1102,7 @@ export function useSendMessage() {
 
             // Check if real message already exists (from broadcast)
             const existingIndex = filteredMessages.findIndex(
-              (m) => m.id === data.message.id
+              (m) => m.id === data.message.id,
             );
             if (existingIndex >= 0) {
               // Update existing message with final status
@@ -1117,7 +1120,7 @@ export function useSendMessage() {
                 { ...data.message, status: finalStatus },
               ],
             };
-          }
+          },
         );
       }
       queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
@@ -1130,14 +1133,14 @@ export function useSendMessage() {
       queryClient.setQueryData(
         ["hub", "messages", variables.thread_id],
         (
-          old: { messages: HubMessage[]; [key: string]: unknown } | undefined
+          old: { messages: HubMessage[]; [key: string]: unknown } | undefined,
         ) => {
           if (!old) return old;
           return {
             ...old,
             messages: old.messages.filter((m) => m.id !== optimisticId),
           };
-        }
+        },
       );
     },
   });

@@ -34,6 +34,7 @@ import {
   Heart,
   HeartPulse,
   MoreVertical,
+  Package,
   Pencil,
   Pin,
   Plane,
@@ -47,6 +48,7 @@ import {
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { InventoryView } from "../inventory/InventoryView";
 import CatalogueCategoryDialog from "./CatalogueCategoryDialog";
 import CatalogueItemDetailDialog from "./CatalogueItemDetailDialog";
 import CatalogueItemDialog from "./CatalogueItemDialog";
@@ -71,10 +73,11 @@ const MODULE_ICON_COMPONENTS: Record<
   heart: Heart,
   book: BookOpen,
   film: Film,
+  package: Package,
 };
 
 function getModuleIcon(
-  iconName: string
+  iconName: string,
 ): React.ComponentType<{ className?: string; style?: React.CSSProperties }> {
   return MODULE_ICON_COMPONENTS[iconName] || FolderOpen;
 }
@@ -93,7 +96,7 @@ export default function WebCatalogue() {
   // Navigation state
   const [currentLevel, setCurrentLevel] = useState<ViewLevel>("modules");
   const [selectedModule, setSelectedModule] = useState<CatalogueModule | null>(
-    null
+    null,
   );
   const [selectedCategory, setSelectedCategory] =
     useState<CatalogueCategory | null>(null);
@@ -109,7 +112,7 @@ export default function WebCatalogue() {
     useState<CatalogueCategory | null>(null);
   const [showModuleDialog, setShowModuleDialog] = useState(false);
   const [editingModule, setEditingModule] = useState<CatalogueModule | null>(
-    null
+    null,
   );
 
   // Data queries
@@ -119,7 +122,7 @@ export default function WebCatalogue() {
     useCatalogueCategories(selectedModule?.id);
   const { data: items = [], isLoading: itemsLoading } = useCatalogueItems(
     selectedModule?.id,
-    selectedCategory?.id
+    selectedCategory?.id,
   );
 
   // Mutations
@@ -136,7 +139,7 @@ export default function WebCatalogue() {
       (item) =>
         item.name.toLowerCase().includes(query) ||
         item.description?.toLowerCase().includes(query) ||
-        item.tags.some((tag) => tag.toLowerCase().includes(query))
+        item.tags.some((tag) => tag.toLowerCase().includes(query)),
     );
   }, [items, searchQuery]);
 
@@ -146,7 +149,7 @@ export default function WebCatalogue() {
     return categories.filter(
       (cat) =>
         cat.name.toLowerCase().includes(query) ||
-        cat.description?.toLowerCase().includes(query)
+        cat.description?.toLowerCase().includes(query),
     );
   }, [categories, searchQuery]);
 
@@ -307,7 +310,7 @@ export default function WebCatalogue() {
                       "px-2 py-1 rounded-md transition-colors",
                       index === breadcrumbs.length - 1
                         ? "text-white font-medium"
-                        : "text-white/60 hover:text-white hover:bg-white/10"
+                        : "text-white/60 hover:text-white hover:bg-white/10",
                     )}
                     disabled={index === breadcrumbs.length - 1}
                   >
@@ -379,7 +382,7 @@ export default function WebCatalogue() {
                     "group relative overflow-hidden cursor-pointer transition-all duration-300",
                     "hover:scale-[1.02] hover:shadow-xl",
                     themeClasses.cardBg,
-                    themeClasses.border
+                    themeClasses.border,
                   )}
                   onClick={() => navigateToCategories(module)}
                 >
@@ -463,7 +466,7 @@ export default function WebCatalogue() {
                 "group relative overflow-hidden cursor-pointer transition-all duration-300",
                 "hover:scale-[1.02] hover:shadow-xl border-dashed border-2",
                 themeClasses.cardBg,
-                "border-white/20 hover:border-white/40"
+                "border-white/20 hover:border-white/40",
               )}
               onClick={handleAddModule}
             >
@@ -479,99 +482,109 @@ export default function WebCatalogue() {
           </div>
         )}
 
-        {/* Categories Grid */}
-        {currentLevel === "categories" && (
-          <div className="space-y-6">
-            {/* Categories */}
-            <div>
-              <h3 className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
-                <FolderOpen className="w-4 h-4" />
-                Categories ({filteredCategories.length})
-              </h3>
-              {categoriesLoading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {[1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className={`h-24 ${themeClasses.surfaceBg} rounded-xl animate-pulse`}
-                    />
-                  ))}
-                </div>
-              ) : filteredCategories.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredCategories.map((category) => (
-                    <CategoryCard
-                      key={category.id}
-                      category={category}
-                      themeClasses={themeClasses}
-                      onClick={() => navigateToItems(category)}
-                      onEdit={() => handleEditCategory(category)}
-                      onDelete={() => handleDeleteCategory(category)}
-                    />
-                  ))}
-                  {/* Add Category Card */}
-                  <Card
-                    className={cn(
-                      "group relative cursor-pointer transition-all duration-200",
-                      "hover:scale-[1.01] hover:shadow-lg border-dashed border-2",
-                      themeClasses.cardBg,
-                      "border-white/20 hover:border-white/40"
-                    )}
-                    onClick={() => {
+        {/* Inventory View (special handling for inventory module) */}
+        {currentLevel === "categories" &&
+          selectedModule?.type === "inventory" && (
+            <InventoryView
+              moduleId={selectedModule.id}
+              categoryId={selectedCategory?.id}
+            />
+          )}
+
+        {/* Categories Grid (for non-inventory modules) */}
+        {currentLevel === "categories" &&
+          selectedModule?.type !== "inventory" && (
+            <div className="space-y-6">
+              {/* Categories */}
+              <div>
+                <h3 className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
+                  <FolderOpen className="w-4 h-4" />
+                  Categories ({filteredCategories.length})
+                </h3>
+                {categoriesLoading ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {[1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className={`h-24 ${themeClasses.surfaceBg} rounded-xl animate-pulse`}
+                      />
+                    ))}
+                  </div>
+                ) : filteredCategories.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredCategories.map((category) => (
+                      <CategoryCard
+                        key={category.id}
+                        category={category}
+                        themeClasses={themeClasses}
+                        onClick={() => navigateToItems(category)}
+                        onEdit={() => handleEditCategory(category)}
+                        onDelete={() => handleDeleteCategory(category)}
+                      />
+                    ))}
+                    {/* Add Category Card */}
+                    <Card
+                      className={cn(
+                        "group relative cursor-pointer transition-all duration-200",
+                        "hover:scale-[1.01] hover:shadow-lg border-dashed border-2",
+                        themeClasses.cardBg,
+                        "border-white/20 hover:border-white/40",
+                      )}
+                      onClick={() => {
+                        setEditingCategory(null);
+                        setShowCategoryDialog(true);
+                      }}
+                    >
+                      <div className="p-4 flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/10">
+                          <Plus className="w-5 h-5 text-white/50" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-white/50 group-hover:text-white/70 transition-colors">
+                            Add Category
+                          </h4>
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={FolderOpen}
+                    title="No categories yet"
+                    description="Create your first category to organize items"
+                    onAdd={() => {
                       setEditingCategory(null);
                       setShowCategoryDialog(true);
                     }}
-                  >
-                    <div className="p-4 flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/10">
-                        <Plus className="w-5 h-5 text-white/50" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-white/50 group-hover:text-white/70 transition-colors">
-                          Add Category
-                        </h4>
-                      </div>
-                    </div>
-                  </Card>
+                    themeClasses={themeClasses}
+                  />
+                )}
+              </div>
+
+              {/* Uncategorized Items (if viewing a module) */}
+              {selectedModule && (
+                <div>
+                  <h3 className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Items without category
+                  </h3>
+                  <ItemsGrid
+                    items={items.filter((i) => !i.category_id)}
+                    isLoading={itemsLoading}
+                    themeClasses={themeClasses}
+                    onClick={handleViewItem}
+                    onDoubleClick={handleTogglePin}
+                    onEdit={handleEditItem}
+                    onDelete={handleDeleteItem}
+                    onAdd={() => {
+                      setEditingItem(null);
+                      setShowItemDialog(true);
+                    }}
+                  />
                 </div>
-              ) : (
-                <EmptyState
-                  icon={FolderOpen}
-                  title="No categories yet"
-                  description="Create your first category to organize items"
-                  onAdd={() => {
-                    setEditingCategory(null);
-                    setShowCategoryDialog(true);
-                  }}
-                  themeClasses={themeClasses}
-                />
               )}
             </div>
-
-            {/* Uncategorized Items (if viewing a module) */}
-            {selectedModule && (
-              <div>
-                <h3 className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Items without category
-                </h3>
-                <ItemsGrid
-                  items={items.filter((i) => !i.category_id)}
-                  isLoading={itemsLoading}
-                  themeClasses={themeClasses}
-                  onClick={handleViewItem}
-                  onDoubleClick={handleTogglePin}
-                  onEdit={handleEditItem}
-                  onDelete={handleDeleteItem}
-                  onAdd={() => {
-                    setEditingItem(null);
-                    setShowItemDialog(true);
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        )}
+          )}
 
         {/* Items Grid */}
         {currentLevel === "items" && (
@@ -653,7 +666,7 @@ function CategoryCard({
         "group relative cursor-pointer transition-all duration-200",
         "hover:scale-[1.01] hover:shadow-lg",
         themeClasses.cardBg,
-        themeClasses.border
+        themeClasses.border,
       )}
     >
       <div className="p-4 flex items-center gap-4" onClick={onClick}>
@@ -852,7 +865,7 @@ function ItemCard({
   const progressPercent = hasProgress
     ? Math.min(
         100,
-        ((item.progress_current ?? 0) / item.progress_target!) * 100
+        ((item.progress_current ?? 0) / item.progress_target!) * 100,
       )
     : 0;
 
@@ -866,7 +879,7 @@ function ItemCard({
         "hover:scale-[1.01] hover:shadow-lg",
         themeClasses.cardBg,
         themeClasses.border,
-        isCompleted && "opacity-60"
+        isCompleted && "opacity-60",
       )}
       onClick={() => onClick(item)}
       onDoubleClick={(e) => {
@@ -887,7 +900,7 @@ function ItemCard({
             <h4
               className={cn(
                 "font-medium truncate",
-                isCompleted ? "text-white/60 line-through" : "text-white"
+                isCompleted ? "text-white/60 line-through" : "text-white",
               )}
             >
               {item.name}
@@ -1028,7 +1041,7 @@ function EmptyState({
       className={cn(
         "flex flex-col items-center justify-center py-12 px-4 rounded-2xl",
         themeClasses.surfaceBg,
-        themeClasses.border
+        themeClasses.border,
       )}
     >
       <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">

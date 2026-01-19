@@ -29,6 +29,8 @@ interface ShoppingItem {
   senderId: string;
   itemUrl: string | null; // URL for where to get the item
   hasLinks: boolean; // Whether item has multiple links for comparison
+  source: "user" | "inventory" | "system" | "ai"; // Origin of the item
+  sourceItemId: string | null; // Reference to catalogue item if from inventory
 }
 
 interface ShoppingListViewProps {
@@ -54,12 +56,12 @@ export function ShoppingListView({
   const [newItem, setNewItem] = useState("");
   const [isClearing, setIsClearing] = useState(false);
   const [pendingToggles, setPendingToggles] = useState<Map<string, number>>(
-    new Map()
+    new Map(),
   );
   const [editingUrlFor, setEditingUrlFor] = useState<string | null>(null);
   const [urlInputValue, setUrlInputValue] = useState("");
   const [editingQuantityFor, setEditingQuantityFor] = useState<string | null>(
-    null
+    null,
   );
   const [quantityInputValue, setQuantityInputValue] = useState("");
 
@@ -80,7 +82,7 @@ export function ShoppingListView({
         msg.message_type === "text" &&
         msg.content &&
         !msg.deleted_at &&
-        !msg.archived_at
+        !msg.archived_at,
     )
     .map((msg) => ({
       id: msg.id,
@@ -93,6 +95,8 @@ export function ShoppingListView({
       senderId: msg.sender_user_id,
       itemUrl: msg.item_url || null,
       hasLinks: !!(msg as any).has_links, // From database flag
+      source: msg.source || "user",
+      sourceItemId: msg.source_item_id || null,
     }))
     .sort((a, b) => {
       // Unchecked items first, then by creation date
@@ -165,7 +169,7 @@ export function ShoppingListView({
       (line) =>
         /^[-•*●○■□▪▫★☆✓✗◆◇→⇒]/.test(line) || // Bullet points
         /^\d+[.)]/.test(line) || // Numbered lists like "1." or "1)"
-        /^[a-zA-Z][.)]/.test(line) // Lettered lists like "a." or "a)"
+        /^[a-zA-Z][.)]/.test(line), // Lettered lists like "a." or "a)"
     );
 
     const isList = hasMultipleLines || hasListMarkers;
@@ -295,7 +299,7 @@ export function ShoppingListView({
 
         // Show success message
         toast.success(
-          `Added ${items.length} item${items.length > 1 ? "s" : ""} to list`
+          `Added ${items.length} item${items.length > 1 ? "s" : ""} to list`,
         );
       }
     }
@@ -307,7 +311,7 @@ export function ShoppingListView({
     async (
       operation: () => Promise<Response>,
       maxRetries = 3,
-      onError?: () => void
+      onError?: () => void,
     ): Promise<boolean> => {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -338,7 +342,7 @@ export function ShoppingListView({
       onError?.();
       return false;
     },
-    []
+    [],
   );
 
   // Toggle check state via API with instant optimistic UI and retry logic
@@ -355,7 +359,7 @@ export function ShoppingListView({
 
       // Get current state from cache to determine toggle direction
       const currentData = queryClient.getQueryData<{ messages: HubMessage[] }>(
-        queryKey
+        queryKey,
       );
       const currentMessage = currentData?.messages.find((m) => m.id === itemId);
       const shouldCheck = !currentMessage?.checked_at;
@@ -374,7 +378,7 @@ export function ShoppingListView({
                   checked_at: shouldCheck ? new Date().toISOString() : null,
                   checked_by: shouldCheck ? currentUserId : null,
                 }
-              : msg
+              : msg,
           ),
         };
       });
@@ -394,10 +398,10 @@ export function ShoppingListView({
                       checked_at: previousCheckedAt,
                       checked_by: previousCheckedBy,
                     }
-                  : msg
+                  : msg,
               ),
             };
-          }
+          },
         );
         toast.error("Failed to update item. Please try again.", {
           duration: 2000,
@@ -416,7 +420,7 @@ export function ShoppingListView({
             }),
           }),
         3,
-        rollback
+        rollback,
       );
 
       // Clear pending toggle after completion
@@ -433,7 +437,7 @@ export function ShoppingListView({
 
       return success;
     },
-    [queryClient, threadId, currentUserId]
+    [queryClient, threadId, currentUserId],
   );
 
   // Set item quantity
@@ -447,7 +451,7 @@ export function ShoppingListView({
         return {
           ...old,
           messages: old.messages.map((msg) =>
-            msg.id === itemId ? { ...msg, item_quantity: quantity } : msg
+            msg.id === itemId ? { ...msg, item_quantity: quantity } : msg,
           ),
         };
       });
@@ -475,7 +479,7 @@ export function ShoppingListView({
         queryClient.invalidateQueries({ queryKey });
       }
     },
-    [queryClient, threadId]
+    [queryClient, threadId],
   );
 
   // Set item URL
@@ -492,10 +496,10 @@ export function ShoppingListView({
             return {
               ...old,
               messages: old.messages.map((msg) =>
-                msg.id === itemId ? { ...msg, item_url: url } : msg
+                msg.id === itemId ? { ...msg, item_url: url } : msg,
               ),
             };
-          }
+          },
         );
 
         const res = await fetch("/api/hub/messages", {
@@ -522,7 +526,7 @@ export function ShoppingListView({
         queryClient.invalidateQueries({ queryKey });
       }
     },
-    [queryClient, threadId]
+    [queryClient, threadId],
   );
 
   const handleStartEditUrl = (itemId: string, currentUrl: string | null) => {
@@ -666,9 +670,23 @@ export function ShoppingListView({
                 uncheckedItems.map((item) => (
                   <div
                     key={item.id}
-                    className="group neo-card bg-bg-card-custom border border-white/5 rounded-xl overflow-hidden transition-all hover:border-white/10"
+                    className={cn(
+                      "group neo-card bg-bg-card-custom rounded-xl overflow-hidden transition-all",
+                      item.source === "inventory"
+                        ? "border-2 border-orange-500/40 ring-1 ring-orange-500/20"
+                        : "border border-white/5 hover:border-white/10",
+                    )}
                   >
                     <div className="flex items-center gap-3 p-3">
+                      {/* Inventory indicator */}
+                      {item.source === "inventory" && (
+                        <div className="absolute top-0 right-0 px-1.5 py-0.5 bg-orange-500/20 rounded-bl-lg">
+                          <span className="text-[10px] text-orange-400 font-medium">
+                            📦 Auto
+                          </span>
+                        </div>
+                      )}
+
                       {/* Checkbox */}
                       <button
                         onClick={() => toggleCheck(item.id)}
@@ -699,7 +717,7 @@ export function ShoppingListView({
                                     quantityInputValue.trim();
                                   setItemQuantity(
                                     item.id,
-                                    trimmedQuantity || null
+                                    trimmedQuantity || null,
                                   );
                                   setEditingQuantityFor(null);
                                   setQuantityInputValue("");
@@ -713,7 +731,7 @@ export function ShoppingListView({
                                   quantityInputValue.trim();
                                 setItemQuantity(
                                   item.id,
-                                  trimmedQuantity || null
+                                  trimmedQuantity || null,
                                 );
                                 setEditingQuantityFor(null);
                                 setQuantityInputValue("");
@@ -766,7 +784,7 @@ export function ShoppingListView({
                               "p-1.5 rounded-lg transition-all",
                               item.hasLinks
                                 ? "text-purple-400 hover:bg-purple-500/20"
-                                : "text-white/40 hover:bg-white/10 hover:text-white"
+                                : "text-white/40 hover:bg-white/10 hover:text-white",
                             )}
                             title={
                               item.hasLinks
@@ -788,7 +806,7 @@ export function ShoppingListView({
                               "p-1.5 rounded-lg transition-all",
                               item.itemUrl
                                 ? "text-blue-400 hover:bg-blue-500/20"
-                                : "text-white/40 hover:bg-white/10 hover:text-white"
+                                : "text-white/40 hover:bg-white/10 hover:text-white",
                             )}
                             title={
                               item.itemUrl
@@ -869,7 +887,7 @@ export function ShoppingListView({
                       "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
                       isClearing
                         ? "bg-white/5 text-white/30 cursor-not-allowed"
-                        : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                        : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20",
                     )}
                   >
                     <Archive className="w-3.5 h-3.5" />
@@ -913,7 +931,7 @@ export function ShoppingListView({
                                     quantityInputValue.trim();
                                   setItemQuantity(
                                     item.id,
-                                    trimmedQuantity || null
+                                    trimmedQuantity || null,
                                   );
                                   setEditingQuantityFor(null);
                                   setQuantityInputValue("");
@@ -927,7 +945,7 @@ export function ShoppingListView({
                                   quantityInputValue.trim();
                                 setItemQuantity(
                                   item.id,
-                                  trimmedQuantity || null
+                                  trimmedQuantity || null,
                                 );
                                 setEditingQuantityFor(null);
                                 setQuantityInputValue("");

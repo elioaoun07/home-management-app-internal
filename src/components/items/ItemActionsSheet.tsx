@@ -128,8 +128,25 @@ const ChevronDownIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const CalendarPlusIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+    <line x1="16" x2="16" y1="2" y2="6" />
+    <line x1="8" x2="8" y1="2" y2="6" />
+    <line x1="3" x2="21" y1="10" y2="10" />
+    <line x1="12" x2="12" y1="14" y2="18" />
+    <line x1="10" x2="14" y1="16" y2="16" />
+  </svg>
+);
+
 type PostponeOption = {
-  id: "next_occurrence" | "tomorrow" | "ai_slot";
+  id: "next_occurrence" | "tomorrow" | "custom" | "ai_slot";
   label: string;
   sublabel?: string;
   icon: React.FC<{ className?: string }>;
@@ -144,7 +161,7 @@ type Props = {
   onComplete: (reason?: string) => void;
   onPostpone: (
     type: "next_occurrence" | "tomorrow" | "custom" | "ai_slot",
-    reason?: string
+    reason?: string,
   ) => void;
   onCancel: (reason?: string) => void;
   onDelete: () => void;
@@ -165,25 +182,43 @@ export default function ItemActionsSheet({
   const isPink = theme === "pink";
   const [isClosing, setIsClosing] = useState(false);
   const [showPostponeOptions, setShowPostponeOptions] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [reason, setReason] = useState("");
+  const [customDate, setCustomDate] = useState("");
+  const [customTime, setCustomTime] = useState("");
   const [pendingAction, setPendingAction] = useState<
     "complete" | "cancel" | "postpone" | null
   >(null);
   const [pendingPostponeType, setPendingPostponeType] = useState<
-    "next_occurrence" | "tomorrow" | "ai_slot" | null
+    "next_occurrence" | "tomorrow" | "custom" | "ai_slot" | null
   >(null);
   const sheetRef = useRef<HTMLDivElement>(null);
 
   const isRecurring = !!item.recurrence_rule?.rrule;
 
+  // Initialize custom date/time from occurrence date
+  useEffect(() => {
+    if (isOpen && occurrenceDate) {
+      const date = parseISO(occurrenceDate);
+      // Add 1 day for default suggestion
+      date.setDate(date.getDate() + 1);
+      setCustomDate(format(date, "yyyy-MM-dd"));
+      setCustomTime(format(parseISO(occurrenceDate), "HH:mm"));
+    }
+  }, [isOpen, occurrenceDate]);
+
   // Reset state when closed
   useEffect(() => {
     if (!isOpen) {
       setShowPostponeOptions(false);
+      setShowDatePicker(false);
       setShowReasonInput(false);
       setReason("");
+      setCustomDate("");
+      setCustomTime("");
       setPendingAction(null);
+      setPendingPostponeType(null);
       setIsClosing(false);
     }
   }, [isOpen]);
@@ -216,13 +251,39 @@ export default function ItemActionsSheet({
   };
 
   const handlePostponeSelect = (
-    type: "next_occurrence" | "tomorrow" | "ai_slot"
+    type: "next_occurrence" | "tomorrow" | "custom" | "ai_slot",
   ) => {
-    // Show reason input for postpone
+    if (type === "custom") {
+      // Show date picker instead of reason input
+      setShowPostponeOptions(false);
+      setShowDatePicker(true);
+      return;
+    }
+    // Show reason input for other postpone types
     setPendingAction("postpone");
     setPendingPostponeType(type);
     setShowPostponeOptions(false);
     setShowReasonInput(true);
+  };
+
+  const handleCustomDateConfirm = () => {
+    if (!customDate) return;
+
+    // Combine date and time into ISO string
+    const dateTimeStr = customTime
+      ? `${customDate}T${customTime}:00`
+      : `${customDate}T${format(parseISO(occurrenceDate), "HH:mm")}:00`;
+
+    // Call onPostpone with "custom" type
+    // The parent component will need to handle the custom date
+    setShowDatePicker(false);
+    setPendingAction("postpone");
+    setPendingPostponeType("custom");
+
+    // Store the custom date in reason temporarily to pass to parent
+    // Better approach: Update the callback to accept custom date
+    onPostpone("custom", dateTimeStr);
+    handleClose();
   };
 
   const handleDeleteClick = () => {
@@ -245,6 +306,12 @@ export default function ItemActionsSheet({
           icon: CalendarIcon,
         },
         {
+          id: "custom",
+          label: "Pick Specific Date",
+          sublabel: "Choose date and time",
+          icon: CalendarPlusIcon,
+        },
+        {
           id: "ai_slot",
           label: "My Next Available Slot",
           sublabel: "Coming soon",
@@ -258,6 +325,12 @@ export default function ItemActionsSheet({
           label: "Tomorrow",
           sublabel: format(parseISO(occurrenceDate), "h:mm a"),
           icon: CalendarIcon,
+        },
+        {
+          id: "custom",
+          label: "Pick Specific Date",
+          sublabel: "Choose date and time",
+          icon: CalendarPlusIcon,
         },
         {
           id: "ai_slot",
@@ -280,7 +353,7 @@ export default function ItemActionsSheet({
       <div
         className={cn(
           "absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-200",
-          isClosing ? "opacity-0" : "opacity-100"
+          isClosing ? "opacity-0" : "opacity-100",
         )}
       />
 
@@ -292,7 +365,7 @@ export default function ItemActionsSheet({
           "bg-gradient-to-br from-[#1a2942] to-[#0f1d2e]",
           "border border-white/10 shadow-2xl",
           "transition-transform duration-200 ease-out",
-          isClosing ? "translate-y-full" : "translate-y-0"
+          isClosing ? "translate-y-full" : "translate-y-0",
         )}
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -341,7 +414,7 @@ export default function ItemActionsSheet({
                 "bg-white/5 border border-white/10",
                 "text-white placeholder:text-white/30",
                 "focus:outline-none focus:ring-2",
-                isPink ? "focus:ring-pink-500/50" : "focus:ring-cyan-500/50"
+                isPink ? "focus:ring-pink-500/50" : "focus:ring-cyan-500/50",
               )}
               autoFocus
             />
@@ -366,7 +439,7 @@ export default function ItemActionsSheet({
                     ? "bg-amber-500 hover:bg-amber-600"
                     : pendingAction === "cancel"
                       ? "bg-red-500 hover:bg-red-600"
-                      : "bg-green-500 hover:bg-green-600"
+                      : "bg-green-500 hover:bg-green-600",
                 )}
               >
                 {pendingAction === "postpone"
@@ -401,7 +474,7 @@ export default function ItemActionsSheet({
                   "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
                   option.disabled
                     ? "opacity-40 cursor-not-allowed bg-white/5"
-                    : "bg-white/5 hover:bg-white/10 active:scale-[0.98]"
+                    : "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
                 )}
               >
                 <div
@@ -411,7 +484,7 @@ export default function ItemActionsSheet({
                       ? "bg-gray-500/20"
                       : isPink
                         ? "bg-pink-500/20"
-                        : "bg-cyan-500/20"
+                        : "bg-cyan-500/20",
                   )}
                 >
                   <option.icon
@@ -421,7 +494,7 @@ export default function ItemActionsSheet({
                         ? "text-gray-500"
                         : isPink
                           ? "text-pink-400"
-                          : "text-cyan-400"
+                          : "text-cyan-400",
                     )}
                   />
                 </div>
@@ -436,8 +509,120 @@ export default function ItemActionsSheet({
           </div>
         )}
 
+        {/* Date Picker View */}
+        {showDatePicker && !showReasonInput && (
+          <div className="p-4 space-y-4">
+            <button
+              type="button"
+              onClick={() => {
+                setShowDatePicker(false);
+                setShowPostponeOptions(true);
+              }}
+              className="flex items-center gap-2 text-white/50 hover:text-white mb-3"
+            >
+              <ChevronDownIcon className="w-4 h-4 rotate-90" />
+              <span className="text-sm">Back</span>
+            </button>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-2">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  value={customDate}
+                  onChange={(e) => setCustomDate(e.target.value)}
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl",
+                    "bg-white/5 border border-white/10",
+                    "text-white",
+                    "focus:outline-none focus:ring-2",
+                    isPink
+                      ? "focus:ring-pink-500/50"
+                      : "focus:ring-cyan-500/50",
+                    "[color-scheme:dark]",
+                  )}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-2">
+                  Time
+                </label>
+                <input
+                  type="time"
+                  value={customTime}
+                  onChange={(e) => setCustomTime(e.target.value)}
+                  className={cn(
+                    "w-full px-4 py-3 rounded-xl",
+                    "bg-white/5 border border-white/10",
+                    "text-white",
+                    "focus:outline-none focus:ring-2",
+                    isPink
+                      ? "focus:ring-pink-500/50"
+                      : "focus:ring-cyan-500/50",
+                    "[color-scheme:dark]",
+                  )}
+                />
+              </div>
+
+              {/* Preview */}
+              {customDate && (
+                <div
+                  className={cn(
+                    "px-4 py-3 rounded-xl",
+                    "bg-white/5 border border-white/10",
+                  )}
+                >
+                  <p className="text-sm text-white/50 mb-1">Postpone to:</p>
+                  <p
+                    className={cn(
+                      "text-lg font-medium",
+                      isPink ? "text-pink-400" : "text-cyan-400",
+                    )}
+                  >
+                    {format(
+                      new Date(`${customDate}T${customTime || "12:00"}`),
+                      "EEEE, MMM d 'at' h:mm a",
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDatePicker(false);
+                  setShowPostponeOptions(true);
+                }}
+                className="flex-1 py-3 rounded-xl bg-white/10 text-white font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCustomDateConfirm}
+                disabled={!customDate}
+                className={cn(
+                  "flex-1 py-3 rounded-xl font-medium text-white transition-all",
+                  customDate
+                    ? isPink
+                      ? "bg-pink-500 hover:bg-pink-600"
+                      : "bg-cyan-500 hover:bg-cyan-600"
+                    : "bg-gray-500/30 cursor-not-allowed",
+                )}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Main Actions View */}
-        {!showPostponeOptions && !showReasonInput && (
+        {!showPostponeOptions && !showReasonInput && !showDatePicker && (
           <div className="p-4 space-y-2">
             {/* Complete Button */}
             <button
@@ -445,7 +630,7 @@ export default function ItemActionsSheet({
               onClick={handleCompleteClick}
               className={cn(
                 "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
-                "bg-green-500/20 hover:bg-green-500/30 active:scale-[0.98]"
+                "bg-green-500/20 hover:bg-green-500/30 active:scale-[0.98]",
               )}
             >
               <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-green-500">
@@ -463,19 +648,19 @@ export default function ItemActionsSheet({
               onClick={() => setShowPostponeOptions(true)}
               className={cn(
                 "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
-                "bg-white/5 hover:bg-white/10 active:scale-[0.98]"
+                "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
               )}
             >
               <div
                 className={cn(
                   "w-10 h-10 rounded-xl flex items-center justify-center",
-                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                 )}
               >
                 <ClockIcon
                   className={cn(
                     "w-5 h-5",
-                    isPink ? "text-pink-400" : "text-cyan-400"
+                    isPink ? "text-pink-400" : "text-cyan-400",
                   )}
                 />
               </div>
@@ -492,7 +677,7 @@ export default function ItemActionsSheet({
               onClick={handleCancelClick}
               className={cn(
                 "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
-                "bg-white/5 hover:bg-white/10 active:scale-[0.98]"
+                "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
               )}
             >
               <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-orange-500/20">
@@ -516,7 +701,7 @@ export default function ItemActionsSheet({
               onClick={handleDeleteClick}
               className={cn(
                 "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
-                "bg-red-500/10 hover:bg-red-500/20 active:scale-[0.98]"
+                "bg-red-500/10 hover:bg-red-500/20 active:scale-[0.98]",
               )}
             >
               <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-red-500/20">
@@ -547,6 +732,6 @@ export default function ItemActionsSheet({
         }
       `}</style>
     </div>,
-    document.body
+    document.body,
   );
 }
