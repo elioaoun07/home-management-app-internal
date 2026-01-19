@@ -22,7 +22,6 @@ import { useCreateInventoryItem } from "@/features/inventory/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type {
-  BarcodeScanResult,
   CreateInventoryItemInput,
   InventoryUnitType,
 } from "@/types/inventory";
@@ -33,7 +32,6 @@ import {
 } from "@/types/inventory";
 import {
   AlertCircle,
-  Barcode,
   Calendar,
   Hash,
   Loader2,
@@ -49,8 +47,6 @@ interface InventoryItemDialogProps {
   onOpenChange: (open: boolean) => void;
   moduleId: string;
   categoryId?: string;
-  scannedBarcode?: BarcodeScanResult | null;
-  existingItemName?: string | null; // If barcode was found in a database
 }
 
 export function InventoryItemDialog({
@@ -58,16 +54,13 @@ export function InventoryItemDialog({
   onOpenChange,
   moduleId,
   categoryId,
-  scannedBarcode,
-  existingItemName,
 }: InventoryItemDialogProps) {
   const themeClasses = useThemeClasses();
   const createItem = useCreateInventoryItem();
 
   // Form state
-  const [name, setName] = useState(existingItemName || "");
+  const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [barcode, setBarcode] = useState(scannedBarcode?.barcode || "");
   const [unitType, setUnitType] = useState<InventoryUnitType>("pack");
   const [unitSize, setUnitSize] = useState("");
   const [consumptionRateDays, setConsumptionRateDays] = useState<number>(30);
@@ -78,11 +71,10 @@ export function InventoryItemDialog({
   const [notes, setNotes] = useState("");
   const [initialQuantity, setInitialQuantity] = useState<number>(1);
 
-  // Reset form when dialog opens with new barcode
+  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
-      setName(existingItemName || "");
-      setBarcode(scannedBarcode?.barcode || "");
+      setName("");
       setDescription("");
       setUnitType("pack");
       setUnitSize("");
@@ -94,7 +86,7 @@ export function InventoryItemDialog({
       setNotes("");
       setInitialQuantity(1);
     }
-  }, [open, scannedBarcode, existingItemName]);
+  }, [open]);
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
@@ -110,7 +102,6 @@ export function InventoryItemDialog({
       category_id: categoryId,
       name: name.trim(),
       description: description.trim() || undefined,
-      barcode: barcode.trim() || undefined,
       unit_type: unitType,
       unit_size: unitSize.trim(),
       consumption_rate_days: finalConsumptionDays,
@@ -142,17 +133,6 @@ export function InventoryItemDialog({
         </DialogHeader>
 
         <div className="space-y-5 py-2">
-          {/* Barcode display */}
-          {barcode && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/10 border border-primary/20">
-              <Barcode className="w-5 h-5 text-primary" />
-              <div>
-                <p className="text-sm text-white/60">Scanned barcode</p>
-                <p className="font-mono text-white tracking-wider">{barcode}</p>
-              </div>
-            </div>
-          )}
-
           {/* Item Name */}
           <div className="space-y-2">
             <Label className="text-white/80">
@@ -166,7 +146,7 @@ export function InventoryItemDialog({
                 themeClasses.inputBg,
                 "border-white/10 text-white placeholder:text-white/40",
               )}
-              autoFocus={!existingItemName}
+              autoFocus
             />
           </div>
 

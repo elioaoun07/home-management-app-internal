@@ -7,32 +7,25 @@ import { Input } from "@/components/ui/input";
 import {
   useAddToShopping,
   useInventoryItems,
-  useItemByBarcode,
   useLowStockItems,
   useRestockItem,
 } from "@/features/inventory/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import type {
-  BarcodeScanResult,
-  InventoryItemWithStock,
-} from "@/types/inventory";
+import type { InventoryItemWithStock } from "@/types/inventory";
 import {
   AlertTriangle,
-  Barcode,
   Bell,
   ChevronRight,
   Loader2,
   Package,
   PackagePlus,
   Plus,
-  ScanLine,
   Search,
   ShoppingCart,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { BarcodeScanner } from "./BarcodeScanner";
 import { InventoryItemDialog } from "./InventoryItemDialog";
 import { RestockDialog } from "./RestockDialog";
 
@@ -57,17 +50,11 @@ export function InventoryView({
 
   // UI State
   const [searchQuery, setSearchQuery] = useState("");
-  const [showScanner, setShowScanner] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [scannedBarcode, setScannedBarcode] =
-    useState<BarcodeScanResult | null>(null);
   const [showRestockDialog, setShowRestockDialog] = useState(false);
   const [selectedItem, setSelectedItem] =
     useState<InventoryItemWithStock | null>(null);
   const [viewMode, setViewMode] = useState<"all" | "low">("all");
-
-  // Barcode lookup
-  const { data: foundItem } = useItemByBarcode(scannedBarcode?.barcode || "");
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -97,25 +84,6 @@ export function InventoryView({
       return statusOrder[a.stock_status] - statusOrder[b.stock_status];
     });
   }, [filteredItems]);
-
-  // Handle barcode scan
-  const handleScan = (result: BarcodeScanResult) => {
-    setScannedBarcode(result);
-
-    // Check if item exists in inventory
-    const existingItem = items.find(
-      (item) => item.metadata.barcode === result.barcode,
-    );
-
-    if (existingItem) {
-      // Item exists - open restock dialog
-      setSelectedItem(existingItem);
-      setShowRestockDialog(true);
-    } else {
-      // New item - open add dialog
-      setShowAddDialog(true);
-    }
-  };
 
   // Quick restock (increment by typical purchase quantity)
   const handleQuickRestock = async (item: InventoryItemWithStock) => {
@@ -221,21 +189,8 @@ export function InventoryView({
 
         {/* Actions */}
         <Button
-          variant="outline"
           size="sm"
-          onClick={() => setShowScanner(true)}
-          className="gap-2"
-        >
-          <ScanLine className="w-4 h-4" />
-          Scan
-        </Button>
-
-        <Button
-          size="sm"
-          onClick={() => {
-            setScannedBarcode(null);
-            setShowAddDialog(true);
-          }}
+          onClick={() => setShowAddDialog(true)}
           className="gap-2"
         >
           <Plus className="w-4 h-4" />
@@ -306,17 +261,12 @@ export function InventoryView({
             No inventory items yet
           </h3>
           <p className="text-white/60 mb-6 max-w-md mx-auto">
-            Start tracking your household essentials by scanning a barcode or
-            adding items manually.
+            Start tracking your household essentials by adding items manually.
           </p>
           <div className="flex justify-center gap-3">
-            <Button variant="outline" onClick={() => setShowScanner(true)}>
-              <ScanLine className="w-4 h-4 mr-2" />
-              Scan Barcode
-            </Button>
             <Button onClick={() => setShowAddDialog(true)}>
               <Plus className="w-4 h-4 mr-2" />
-              Add Manually
+              Add Item
             </Button>
           </div>
         </Card>
@@ -390,14 +340,6 @@ export function InventoryView({
                   )}
                 </div>
 
-                {/* Barcode (if exists) */}
-                {item.metadata.barcode && (
-                  <div className="flex items-center gap-2 mb-3 text-xs text-white/40">
-                    <Barcode className="w-3 h-3" />
-                    <span className="font-mono">{item.metadata.barcode}</span>
-                  </div>
-                )}
-
                 {/* Actions */}
                 <div className="flex gap-2">
                   <Button
@@ -428,19 +370,11 @@ export function InventoryView({
       )}
 
       {/* Dialogs */}
-      <BarcodeScanner
-        open={showScanner}
-        onOpenChange={setShowScanner}
-        onScan={handleScan}
-      />
-
       <InventoryItemDialog
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         moduleId={moduleId}
         categoryId={categoryId}
-        scannedBarcode={scannedBarcode}
-        existingItemName={foundItem?.name}
       />
 
       <RestockDialog
