@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 // PATCH - Convert draft to confirmed transaction
 export async function PATCH(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await supabaseServer();
@@ -41,11 +41,13 @@ export async function PATCH(
     // Use voice_transcript if description is empty, otherwise keep user's description
     const finalDescription = description || draft?.voice_transcript || "";
 
+    const parsedAmount = parseFloat(amount);
+
     // Update and confirm the transaction
     const { data: transaction, error } = await supabase
       .from("transactions")
       .update({
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         category_id,
         subcategory_id: subcategory_id || null,
         description: finalDescription,
@@ -61,19 +63,30 @@ export async function PATCH(
 
     if (error) throw error;
 
-    // Update account_balances.updated_at since this draft is now confirmed
-    // and will affect the balance calculation
-    await supabase
+    // Deduct the amount from account balance (this was the bug - we only updated updated_at before)
+    const { data: currentBalance } = await supabase
       .from("account_balances")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("account_id", account_id);
+      .select("balance")
+      .eq("account_id", account_id)
+      .single();
+
+    if (currentBalance) {
+      const newBalance = Number(currentBalance.balance) - parsedAmount;
+      await supabase
+        .from("account_balances")
+        .update({
+          balance: newBalance,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("account_id", account_id);
+    }
 
     return NextResponse.json({ transaction });
   } catch (error: any) {
     console.error("Error confirming draft:", error);
     return NextResponse.json(
       { error: error.message || "Failed to confirm draft" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -81,7 +94,7 @@ export async function PATCH(
 // DELETE - Delete a draft transaction
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await supabaseServer();
@@ -109,7 +122,7 @@ export async function DELETE(
     console.error("Error deleting draft:", error);
     return NextResponse.json(
       { error: error.message || "Failed to delete draft" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

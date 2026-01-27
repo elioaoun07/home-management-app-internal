@@ -4,13 +4,11 @@
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-// Types for balance archives
+// Types for balance archives (aggregated from archived daily summaries)
 export interface BalanceArchive {
   id: string;
-  account_id: string;
   year_month: string;
-  month_start_date: string;
-  month_end_date: string;
+  month_name: string;
   opening_balance: number;
   closing_balance: number;
   total_transaction_count: number;
@@ -20,28 +18,49 @@ export interface BalanceArchive {
   total_transfers_in: number;
   total_transfers_out: number;
   transfer_count: number;
-  total_adjustments: number;
-  adjustment_count: number;
-  archived_at: string;
 }
 
 export interface DailySummary {
-  id: string;
-  account_id: string;
-  summary_date: string;
+  date: string;
   opening_balance: number;
   closing_balance: number;
-  transaction_count: number;
-  income_count: number;
-  expense_count: number;
-  total_income: number;
+  net_change: number;
   total_expenses: number;
-  net_transactions: number;
-  largest_income: number | null;
-  largest_income_desc: string | null;
-  largest_expense: number | null;
-  largest_expense_desc: string | null;
-  category_breakdown: CategoryBreakdown[] | null;
+  total_transfers_in: number;
+  total_transfers_out: number;
+  transaction_count: number;
+  transfer_in_count: number;
+  transfer_out_count: number;
+  transactions: DayTransaction[];
+  transfers_in: DayTransferIn[];
+  transfers_out: DayTransferOut[];
+}
+
+export interface DayTransaction {
+  id: string;
+  amount: number;
+  description: string;
+  category: string;
+  category_color: string;
+}
+
+export interface DayTransferIn {
+  id: string;
+  amount: number;
+  description: string;
+  from_account: string;
+}
+
+export interface DayTransferOut {
+  id: string;
+  amount: number;
+  description: string;
+  to_account: string;
+}
+
+export interface DailyResponse {
+  current_balance: number;
+  days: DailySummary[];
 }
 
 export interface CategoryBreakdown {
@@ -89,7 +108,7 @@ async function fetchBalanceArchives(
 async function fetchDailySummaries(
   accountId: string,
   options?: { start?: string; end?: string; limit?: number },
-): Promise<DailySummary[]> {
+): Promise<DailyResponse> {
   const params = new URLSearchParams();
   if (options?.start) params.set("start", options.start);
   if (options?.end) params.set("end", options.end);

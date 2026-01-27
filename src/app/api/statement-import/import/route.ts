@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     ) {
       return NextResponse.json(
         { error: "No transactions to import" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       if (!t.date || !t.account_id || t.amount === undefined) {
         return NextResponse.json(
           { error: "All transactions must have date, amount, and account_id" },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
     // Start import
     const importedTransactions = [];
     const merchantMappingsToSave = [];
+    const accountDeductions: Record<string, number> = {}; // Track deductions per account
 
     for (const t of transactions) {
       // Insert transaction
@@ -71,6 +72,11 @@ export async function POST(req: NextRequest) {
 
       importedTransactions.push(txn);
 
+      // Track balance deduction for this account
+      const amount = Math.abs(t.amount);
+      accountDeductions[t.account_id] =
+        (accountDeductions[t.account_id] || 0) + amount;
+
       // Save merchant mapping if requested
       if (t.save_merchant_mapping && t.merchant_pattern && t.merchant_name) {
         merchantMappingsToSave.push({
@@ -81,6 +87,28 @@ export async function POST(req: NextRequest) {
           subcategory_id: t.subcategory_id || null,
           account_id: t.account_id,
         });
+      }
+    }
+
+    // Update account balances for all affected accounts
+    for (const [accountId, totalDeduction] of Object.entries(
+      accountDeductions,
+    )) {
+      const { data: currentBalance } = await supabase
+        .from("account_balances")
+        .select("balance")
+        .eq("account_id", accountId)
+        .single();
+
+      if (currentBalance) {
+        const newBalance = Number(currentBalance.balance) - totalDeduction;
+        await supabase
+          .from("account_balances")
+          .update({
+            balance: newBalance,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("account_id", accountId);
       }
     }
 
@@ -131,7 +159,7 @@ export async function POST(req: NextRequest) {
     console.error("Failed to import transactions:", error);
     return NextResponse.json(
       { error: "Failed to import transactions" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

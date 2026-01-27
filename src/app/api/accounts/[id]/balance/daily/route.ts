@@ -1,5 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
-import { format, startOfMonth, subDays } from "date-fns";
+import { format, startOfMonth } from "date-fns";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -25,7 +25,36 @@ async function getPartnerUserId(
     : link.owner_user_id;
 }
 
-// GET /api/accounts/[id]/balance/daily - Get daily summaries
+interface Transaction {
+  id: string;
+  date: string;
+  amount: number;
+  description: string | null;
+  category:
+    | { name: string; color: string }
+    | { name: string; color: string }[]
+    | null;
+}
+
+interface Transfer {
+  id: string;
+  date: string;
+  amount: number;
+  description: string | null;
+  from_account_id: string;
+  to_account_id: string;
+  from_account: { name: string } | { name: string }[] | null;
+  to_account: { name: string } | { name: string }[] | null;
+}
+
+interface DayEntry {
+  date: string;
+  transactions: Transaction[];
+  transfers_in: Transfer[];
+  transfers_out: Transfer[];
+}
+
+// GET /api/accounts/[id]/balance/daily - Get daily transaction/transfer summaries
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -41,8 +70,6 @@ export async function GET(
 
   const { id: accountId } = await params;
   const { searchParams } = new URL(req.url);
-  const start = searchParams.get("start");
-  const end = searchParams.get("end");
   const limit = parseInt(searchParams.get("limit") || "30");
 
   // Get partner ID if linked
@@ -61,75 +88,20 @@ export async function GET(
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
 
-  // Try to get from daily summaries table first
-  let query = supabase
-    .from("account_daily_summaries")
-    .select("*")
+  // Get current balance
+  const { data: balanceData } = await supabase
+    .from("account_balances")
+    .select("balance")
     .eq("account_id", accountId)
-    .order("summary_date", { ascending: false })
-    .limit(limit);
+    .single();
 
-  if (start) query = query.gte("summary_date", start);
-  if (end) query = query.lte("summary_date", end);
+  const currentBalance = Number(balanceData?.balance ?? 0);
 
-  const { data: summaries, error } = await query;
+  // Only show current month (non-archived data)
+  const currentMonthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const endDate = format(new Date(), "yyyy-MM-dd");
 
-  if (error) {
-    console.error("Error fetching daily summaries:", error);
-    // Fallback: generate on-the-fly from transactions
-    return await generateDailySummariesOnFly(
-      supabase,
-      accountId,
-      start,
-      end,
-      limit,
-    );
-  }
-
-  // Get the current month boundaries
-  const now = new Date();
-  const currentMonthStart = format(startOfMonth(now), "yyyy-MM-dd");
-
-  // If we have stored summaries, check if we need to supplement with current month data
-  const storedSummaries = summaries || [];
-
-  // Get current month transactions (always compute on-the-fly for current month)
-  const currentMonthSummaries = await getCurrentMonthSummaries(
-    supabase,
-    accountId,
-    currentMonthStart,
-  );
-
-  // Merge: stored summaries for past months + current month on-the-fly
-  // Filter out any stored summaries from current month (they may be stale)
-  const pastMonthSummaries = storedSummaries.filter(
-    (s: any) => s.summary_date < currentMonthStart,
-  );
-
-  // Combine and sort
-  const allSummaries = [...currentMonthSummaries, ...pastMonthSummaries].sort(
-    (a, b) =>
-      new Date(b.summary_date).getTime() - new Date(a.summary_date).getTime(),
-  );
-
-  // Apply date filters if provided
-  let filtered = allSummaries;
-  if (start) {
-    filtered = filtered.filter((s) => s.summary_date >= start);
-  }
-  if (end) {
-    filtered = filtered.filter((s) => s.summary_date <= end);
-  }
-
-  return NextResponse.json(filtered.slice(0, limit));
-}
-
-// Get current month summaries (always computed fresh)
-async function getCurrentMonthSummaries(
-  supabase: any,
-  accountId: string,
-  currentMonthStart: string,
-): Promise<any[]> {
+  // Get transactions (all are expenses, stored as positive amounts)
   const { data: transactions } = await supabase
     .from("transactions")
     .select(
@@ -142,238 +114,173 @@ async function getCurrentMonthSummaries(
     `,
     )
     .eq("account_id", accountId)
+    .eq("is_draft", false)
     .gte("date", currentMonthStart)
-    .order("date", { ascending: false });
-
-  if (!transactions || transactions.length === 0) {
-    return [];
-  }
-
-  type TransactionEntry = {
-    id: string;
-    date: string;
-    amount: number;
-    description: string | null;
-    category: { name: string; color: string } | null;
-  };
-
-  // Group by date
-  const dateGroups: Record<string, TransactionEntry[]> = {};
-  for (const txn of transactions as TransactionEntry[]) {
-    const date = txn.date;
-    if (!dateGroups[date]) {
-      dateGroups[date] = [];
-    }
-    dateGroups[date].push(txn);
-  }
-
-  return Object.entries(dateGroups).map(([date, txns]) => {
-    const incomes = txns.filter((t: TransactionEntry) => Number(t.amount) > 0);
-    const expenses = txns.filter((t: TransactionEntry) => Number(t.amount) < 0);
-
-    const totalIncome = incomes.reduce(
-      (s: number, t: TransactionEntry) => s + Number(t.amount),
-      0,
-    );
-    const totalExpenses = Math.abs(
-      expenses.reduce(
-        (s: number, t: TransactionEntry) => s + Number(t.amount),
-        0,
-      ),
-    );
-    const netTransactions = totalIncome - totalExpenses;
-
-    const largestIncome =
-      incomes.length > 0
-        ? incomes.reduce((max: TransactionEntry, t: TransactionEntry) =>
-            Number(t.amount) > Number(max.amount) ? t : max,
-          )
-        : null;
-    const largestExpense =
-      expenses.length > 0
-        ? expenses.reduce((max: TransactionEntry, t: TransactionEntry) =>
-            Math.abs(Number(t.amount)) > Math.abs(Number(max.amount)) ? t : max,
-          )
-        : null;
-
-    const categoryMap: Record<
-      string,
-      { name: string; color: string; amount: number; count: number }
-    > = {};
-    for (const txn of txns) {
-      const catName = txn.category?.name || "Uncategorized";
-      const catColor = txn.category?.color || "#888888";
-      if (!categoryMap[catName]) {
-        categoryMap[catName] = {
-          name: catName,
-          color: catColor,
-          amount: 0,
-          count: 0,
-        };
-      }
-      categoryMap[catName].amount += Number(txn.amount);
-      categoryMap[catName].count += 1;
-    }
-
-    return {
-      id: `current-${date}`,
-      account_id: accountId,
-      summary_date: date,
-      opening_balance: 0,
-      closing_balance: 0,
-      transaction_count: txns.length,
-      income_count: incomes.length,
-      expense_count: expenses.length,
-      total_income: totalIncome,
-      total_expenses: totalExpenses,
-      net_transactions: netTransactions,
-      largest_income: largestIncome ? Number(largestIncome.amount) : null,
-      largest_income_desc: largestIncome?.description || null,
-      largest_expense: largestExpense
-        ? Math.abs(Number(largestExpense.amount))
-        : null,
-      largest_expense_desc: largestExpense?.description || null,
-      category_breakdown: Object.values(categoryMap),
-    };
-  });
-}
-
-// Generate daily summaries on-the-fly from transactions
-async function generateDailySummariesOnFly(
-  supabase: any,
-  accountId: string,
-  start: string | null,
-  end: string | null,
-  limit: number,
-) {
-  // Default to last 30 days if no range specified
-  const endDate = end || format(new Date(), "yyyy-MM-dd");
-  const startDate = start || format(subDays(new Date(), 30), "yyyy-MM-dd");
-
-  // Get transactions for the date range
-  const { data: transactions } = await supabase
-    .from("transactions")
-    .select(
-      `
-      id,
-      date,
-      amount,
-      description,
-      category:user_categories!transactions_category_fk(name, color)
-    `,
-    )
-    .eq("account_id", accountId)
-    .gte("date", startDate)
     .lte("date", endDate)
     .order("date", { ascending: false });
 
-  if (!transactions || transactions.length === 0) {
-    return NextResponse.json([]);
-  }
+  // Get transfers INTO this account
+  const { data: transfersIn } = await supabase
+    .from("transfers")
+    .select(
+      `
+      id,
+      date,
+      amount,
+      description,
+      from_account_id,
+      to_account_id,
+      from_account:accounts!transfers_from_account_id_fkey(name),
+      to_account:accounts!transfers_to_account_id_fkey(name)
+    `,
+    )
+    .eq("to_account_id", accountId)
+    .gte("date", currentMonthStart)
+    .lte("date", endDate);
 
-  // Define transaction type for proper typing
-  type TransactionEntry = {
-    id: string;
-    date: string;
-    amount: number;
-    description: string | null;
-    category: { name: string; color: string } | null;
+  // Get transfers OUT OF this account
+  const { data: transfersOut } = await supabase
+    .from("transfers")
+    .select(
+      `
+      id,
+      date,
+      amount,
+      description,
+      from_account_id,
+      to_account_id,
+      from_account:accounts!transfers_from_account_id_fkey(name),
+      to_account:accounts!transfers_to_account_id_fkey(name)
+    `,
+    )
+    .eq("from_account_id", accountId)
+    .gte("date", currentMonthStart)
+    .lte("date", endDate);
+
+  // Group everything by date
+  const dayMap: Record<string, DayEntry> = {};
+
+  const ensureDay = (date: string) => {
+    if (!dayMap[date]) {
+      dayMap[date] = {
+        date,
+        transactions: [],
+        transfers_in: [],
+        transfers_out: [],
+      };
+    }
   };
 
-  // Group by date
-  const dateGroups: Record<string, TransactionEntry[]> = {};
-  for (const txn of transactions as TransactionEntry[]) {
-    const date = txn.date;
-    if (!dateGroups[date]) {
-      dateGroups[date] = [];
-    }
-    dateGroups[date].push(txn);
+  // Add transactions
+  for (const txn of (transactions || []) as Transaction[]) {
+    ensureDay(txn.date);
+    dayMap[txn.date].transactions.push(txn);
   }
 
-  // Build summaries
-  const summaries = Object.entries(dateGroups)
-    .map(([date, txns]) => {
-      const incomes = txns.filter(
-        (t: TransactionEntry) => Number(t.amount) > 0,
-      );
-      const expenses = txns.filter(
-        (t: TransactionEntry) => Number(t.amount) < 0,
-      );
+  // Add transfers in
+  for (const tr of (transfersIn || []) as Transfer[]) {
+    ensureDay(tr.date);
+    dayMap[tr.date].transfers_in.push(tr);
+  }
 
-      const totalIncome = incomes.reduce(
-        (s: number, t: TransactionEntry) => s + Number(t.amount),
-        0,
-      );
-      const totalExpenses = Math.abs(
-        expenses.reduce(
-          (s: number, t: TransactionEntry) => s + Number(t.amount),
-          0,
-        ),
-      );
-      const netTransactions = totalIncome - totalExpenses;
+  // Add transfers out
+  for (const tr of (transfersOut || []) as Transfer[]) {
+    ensureDay(tr.date);
+    dayMap[tr.date].transfers_out.push(tr);
+  }
 
-      // Find largest
-      const largestIncome =
-        incomes.length > 0
-          ? incomes.reduce((max: TransactionEntry, t: TransactionEntry) =>
-              Number(t.amount) > Number(max.amount) ? t : max,
-            )
-          : null;
-      const largestExpense =
-        expenses.length > 0
-          ? expenses.reduce((max: TransactionEntry, t: TransactionEntry) =>
-              Math.abs(Number(t.amount)) > Math.abs(Number(max.amount))
-                ? t
-                : max,
-            )
-          : null;
+  // Sort days by date descending
+  const sortedDays = Object.values(dayMap).sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  );
 
-      // Category breakdown
-      const categoryMap: Record<
-        string,
-        { name: string; color: string; amount: number; count: number }
-      > = {};
-      for (const txn of txns) {
-        const catName = txn.category?.name || "Uncategorized";
-        const catColor = txn.category?.color || "#888888";
-        if (!categoryMap[catName]) {
-          categoryMap[catName] = {
-            name: catName,
-            color: catColor,
-            amount: 0,
-            count: 0,
-          };
-        }
-        categoryMap[catName].amount += Number(txn.amount);
-        categoryMap[catName].count += 1;
-      }
+  // Calculate running balances (work backwards from current balance)
+  // For each day: closing_balance = what we had at end of day
+  // opening_balance = what we had at start of day (before any transactions)
+  let runningBalance = currentBalance;
 
-      return {
-        id: `generated-${date}`,
-        account_id: accountId,
-        summary_date: date,
-        opening_balance: 0, // Not available in on-the-fly mode
-        closing_balance: 0, // Not available in on-the-fly mode
-        transaction_count: txns.length,
-        income_count: incomes.length,
-        expense_count: expenses.length,
-        total_income: totalIncome,
-        total_expenses: totalExpenses,
-        net_transactions: netTransactions,
-        largest_income: largestIncome ? Number(largestIncome.amount) : null,
-        largest_income_desc: largestIncome?.description || null,
-        largest_expense: largestExpense
-          ? Math.abs(Number(largestExpense.amount))
-          : null,
-        largest_expense_desc: largestExpense?.description || null,
-        category_breakdown: Object.values(categoryMap),
-      };
-    })
-    .sort(
-      (a, b) =>
-        new Date(b.summary_date).getTime() - new Date(a.summary_date).getTime(),
-    )
-    .slice(0, limit);
+  const result = sortedDays.slice(0, limit).map((day) => {
+    // Calculate net change for this day
+    // Transactions are expenses (subtract from balance)
+    const totalExpenses = day.transactions.reduce(
+      (sum, t) => sum + Number(t.amount),
+      0,
+    );
+    // Transfers in add to balance
+    const totalTransfersIn = day.transfers_in.reduce(
+      (sum, t) => sum + Number(t.amount),
+      0,
+    );
+    // Transfers out subtract from balance
+    const totalTransfersOut = day.transfers_out.reduce(
+      (sum, t) => sum + Number(t.amount),
+      0,
+    );
 
-  return NextResponse.json(summaries);
+    const netChange = totalTransfersIn - totalTransfersOut - totalExpenses;
+
+    // This day's closing balance is the running balance
+    const closingBalance = runningBalance;
+    // Opening balance is before the day's changes
+    const openingBalance = runningBalance - netChange;
+
+    // Move running balance back for the previous day
+    runningBalance = openingBalance;
+
+    // Helper to extract from array or object
+    const getCategoryName = (cat: Transaction["category"]) => {
+      if (!cat) return "Uncategorized";
+      if (Array.isArray(cat)) return cat[0]?.name || "Uncategorized";
+      return cat.name || "Uncategorized";
+    };
+    const getCategoryColor = (cat: Transaction["category"]) => {
+      if (!cat) return "#888888";
+      if (Array.isArray(cat)) return cat[0]?.color || "#888888";
+      return cat.color || "#888888";
+    };
+    const getAccountName = (
+      acc: Transfer["from_account"] | Transfer["to_account"],
+    ) => {
+      if (!acc) return "Unknown";
+      if (Array.isArray(acc)) return acc[0]?.name || "Unknown";
+      return acc.name || "Unknown";
+    };
+
+    return {
+      date: day.date,
+      opening_balance: openingBalance,
+      closing_balance: closingBalance,
+      net_change: netChange,
+      total_expenses: totalExpenses,
+      total_transfers_in: totalTransfersIn,
+      total_transfers_out: totalTransfersOut,
+      transaction_count: day.transactions.length,
+      transfer_in_count: day.transfers_in.length,
+      transfer_out_count: day.transfers_out.length,
+      transactions: day.transactions.map((t) => ({
+        id: t.id,
+        amount: Number(t.amount),
+        description: t.description || "",
+        category: getCategoryName(t.category),
+        category_color: getCategoryColor(t.category),
+      })),
+      transfers_in: day.transfers_in.map((t) => ({
+        id: t.id,
+        amount: Number(t.amount),
+        description: t.description || "",
+        from_account: getAccountName(t.from_account),
+      })),
+      transfers_out: day.transfers_out.map((t) => ({
+        id: t.id,
+        amount: Number(t.amount),
+        description: t.description || "",
+        to_account: getAccountName(t.to_account),
+      })),
+    };
+  });
+
+  return NextResponse.json({
+    current_balance: currentBalance,
+    days: result,
+  });
 }
