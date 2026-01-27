@@ -313,6 +313,54 @@ export const MicIcon = ({ className, size = 24 }: IconProps) => (
   </svg>
 );
 
+export const ScanIcon = ({ className, size = 24 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={cn("transition-all duration-300", className)}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* QR code corners */}
+    <path
+      d="M3 7V5C3 3.89543 3.89543 3 5 3H7"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M17 3H19C20.1046 3 21 3.89543 21 5V7"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M21 17V19C21 20.1046 20.1046 21 19 21H17"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M7 21H5C3.89543 21 3 20.1046 3 19V17"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Scan line */}
+    <path
+      d="M4 12H20"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 export const CalculatorIcon = ({ className, size = 24 }: IconProps) => (
   <svg
     width={size}

@@ -16,6 +16,7 @@ import {
 import SemiDonutFAB, {
   type FABSelection,
 } from "@/components/navigation/SemiDonutFAB";
+import QRScannerDrawer from "@/components/scanner/QRScannerDrawer";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,8 +62,9 @@ export default function MobileNav() {
   const addTransactionMutation = useAddTransaction();
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
   const [showDraftsDrawer, setShowDraftsDrawer] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(
-    null
+    null,
   );
   const [templateAmount, setTemplateAmount] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
@@ -160,7 +162,7 @@ export default function MobileNav() {
             icon: ToastIcons.error,
           });
         },
-      }
+      },
     );
   };
 
@@ -175,6 +177,22 @@ export default function MobileNav() {
 
   return (
     <>
+      {/* Floating QR Scanner Button */}
+      {/* <button
+        type="button"
+        onClick={() => setShowQRScanner(true)}
+        className="fixed bottom-24 left-4 z-50 flex items-center justify-center w-12 h-12 rounded-full bg-cyan-500/90 text-white shadow-lg hover:bg-cyan-600 active:scale-95 transition-all"
+        style={{
+          boxShadow: "0 4px 20px rgba(6, 182, 212, 0.4)",
+        }}
+        aria-label="Scan QR Code"
+      >
+        <ScanIcon className="w-5 h-5" />
+      </button> */}
+
+      {/* QR Scanner Drawer */}
+      <QRScannerDrawer open={showQRScanner} onOpenChange={setShowQRScanner} />
+
       {/* Floating Draft Transactions Badge */}
       {draftCount > 0 && (
         <button
@@ -226,7 +244,7 @@ export default function MobileNav() {
               "active:scale-95",
               activeTab === "dashboard"
                 ? "neo-card neo-glow-sm text-[hsl(var(--nav-icon-active))] bg-[hsl(var(--header-bg))]"
-                : "text-[hsl(var(--nav-text-secondary)/0.75)] hover:text-[hsl(var(--nav-text-secondary))]"
+                : "text-[hsl(var(--nav-text-secondary)/0.75)] hover:text-[hsl(var(--nav-text-secondary))]",
             )}
           >
             <div className="relative">
@@ -261,7 +279,7 @@ export default function MobileNav() {
               "active:scale-95",
               activeTab === "hub"
                 ? "neo-card neo-glow-sm text-[hsl(var(--nav-icon-active))] bg-[hsl(var(--header-bg))]"
-                : "text-[hsl(var(--nav-text-secondary)/0.75)] hover:text-[hsl(var(--nav-text-secondary))]"
+                : "text-[hsl(var(--nav-text-secondary)/0.75)] hover:text-[hsl(var(--nav-text-secondary))]",
             )}
           >
             <div className="relative">
