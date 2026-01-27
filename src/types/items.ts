@@ -143,6 +143,7 @@ export interface RecurrenceRule {
   start_anchor: string; // ISO timestamp
   end_until?: string | null; // ISO timestamp
   count?: number | null;
+  exceptions?: RecurrenceException[]; // Exceptions for this rule
 }
 
 /** Recurrence exception */

@@ -1,6 +1,29 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.account_balance_archives (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  year_month text NOT NULL,
+  month_start_date date NOT NULL,
+  month_end_date date NOT NULL,
+  opening_balance numeric NOT NULL,
+  closing_balance numeric NOT NULL,
+  total_transaction_count integer NOT NULL DEFAULT 0,
+  total_income numeric NOT NULL DEFAULT 0,
+  total_expenses numeric NOT NULL DEFAULT 0,
+  net_change numeric NOT NULL DEFAULT 0,
+  total_transfers_in numeric NOT NULL DEFAULT 0,
+  total_transfers_out numeric NOT NULL DEFAULT 0,
+  transfer_count integer NOT NULL DEFAULT 0,
+  total_adjustments numeric NOT NULL DEFAULT 0,
+  adjustment_count integer NOT NULL DEFAULT 0,
+  archived_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT account_balance_archives_pkey PRIMARY KEY (id),
+  CONSTRAINT aba_account_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
+  CONSTRAINT aba_user_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.account_balance_history (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   account_id uuid NOT NULL,
@@ -36,11 +59,36 @@ CREATE TABLE public.account_balances (
   CONSTRAINT account_balances_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
   CONSTRAINT account_balances_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.account_daily_summaries (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  summary_date date NOT NULL,
+  opening_balance numeric NOT NULL,
+  closing_balance numeric NOT NULL,
+  transaction_count integer NOT NULL DEFAULT 0,
+  income_count integer NOT NULL DEFAULT 0,
+  expense_count integer NOT NULL DEFAULT 0,
+  total_income numeric NOT NULL DEFAULT 0,
+  total_expenses numeric NOT NULL DEFAULT 0,
+  net_transactions numeric NOT NULL DEFAULT 0,
+  largest_income numeric,
+  largest_income_desc text,
+  largest_expense numeric,
+  largest_expense_desc text,
+  category_breakdown jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  is_archived boolean NOT NULL DEFAULT false,
+  CONSTRAINT account_daily_summaries_pkey PRIMARY KEY (id),
+  CONSTRAINT ads_account_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
+  CONSTRAINT ads_user_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.accounts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   user_id uuid NOT NULL,
   name text NOT NULL,
-  type text NOT NULL CHECK (type = ANY (ARRAY['income'::text, 'expense'::text])),
+  type text NOT NULL CHECK (type = ANY (ARRAY['income'::text, 'expense'::text, 'saving'::text])),
   inserted_at timestamp with time zone NOT NULL DEFAULT now(),
   is_default boolean DEFAULT false,
   country_code text,
@@ -356,12 +404,15 @@ CREATE TABLE public.hub_messages (
   topic_id uuid,
   item_quantity text,
   has_links boolean DEFAULT false,
+  source text DEFAULT 'user'::text CHECK (source = ANY (ARRAY['user'::text, 'inventory'::text, 'system'::text, 'ai'::text])),
+  source_item_id uuid,
   CONSTRAINT hub_messages_pkey PRIMARY KEY (id),
   CONSTRAINT hub_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
   CONSTRAINT hub_messages_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
   CONSTRAINT hub_messages_sender_user_id_fkey FOREIGN KEY (sender_user_id) REFERENCES auth.users(id),
   CONSTRAINT hub_messages_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id),
   CONSTRAINT hub_messages_reply_to_id_fkey FOREIGN KEY (reply_to_id) REFERENCES public.hub_messages(id),
+  CONSTRAINT hub_messages_source_item_id_fkey FOREIGN KEY (source_item_id) REFERENCES public.catalogue_items(id),
   CONSTRAINT hub_messages_checked_by_fkey FOREIGN KEY (checked_by) REFERENCES auth.users(id),
   CONSTRAINT hub_messages_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES public.hub_notes_topics(id)
 );
@@ -396,6 +447,39 @@ CREATE TABLE public.hub_user_stats (
   CONSTRAINT hub_user_stats_pkey PRIMARY KEY (id),
   CONSTRAINT hub_user_stats_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT hub_user_stats_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id)
+);
+CREATE TABLE public.inventory_restock_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  stock_id uuid NOT NULL,
+  item_id uuid NOT NULL,
+  quantity_added numeric NOT NULL,
+  quantity_before numeric NOT NULL DEFAULT 0,
+  quantity_after numeric NOT NULL,
+  source text NOT NULL DEFAULT 'manual'::text,
+  restocked_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT inventory_restock_history_pkey PRIMARY KEY (id),
+  CONSTRAINT inventory_restock_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT inventory_restock_history_stock_id_fkey FOREIGN KEY (stock_id) REFERENCES public.inventory_stock(id),
+  CONSTRAINT inventory_restock_history_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.catalogue_items(id)
+);
+CREATE TABLE public.inventory_stock (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  item_id uuid NOT NULL,
+  quantity_on_hand numeric NOT NULL DEFAULT 0 CHECK (quantity_on_hand >= 0::numeric),
+  last_restocked_at timestamp with time zone DEFAULT now(),
+  last_restocked_quantity numeric,
+  estimated_runout_date date,
+  auto_add_to_shopping boolean NOT NULL DEFAULT true,
+  shopping_thread_id uuid,
+  shopping_message_id uuid,
+  last_added_to_shopping_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT inventory_stock_pkey PRIMARY KEY (id),
+  CONSTRAINT inventory_stock_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT inventory_stock_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.catalogue_items(id)
 );
 CREATE TABLE public.item_alerts (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

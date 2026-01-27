@@ -19,6 +19,7 @@ import {
 } from "@/types/catalogue";
 import {
   Calendar,
+  CalendarClock,
   CheckCircle2,
   Clock,
   DollarSign,
@@ -42,6 +43,7 @@ interface Props {
   item: CatalogueItem | null;
   moduleType: CatalogueModuleType;
   onEdit: (item: CatalogueItem) => void;
+  onAddToCalendar?: (item: CatalogueItem) => void;
 }
 
 // Module-specific metadata field display config
@@ -158,6 +160,7 @@ export default function CatalogueItemDetailDialog({
   item,
   moduleType,
   onEdit,
+  onAddToCalendar,
 }: Props) {
   const themeClasses = useThemeClasses();
   const updateItem = useUpdateItem();
@@ -167,6 +170,8 @@ export default function CatalogueItemDetailDialog({
 
   const metadata = item.metadata_json || {};
   const displayFields = MODULE_DISPLAY_FIELDS[moduleType] || [];
+  const isTasksModule = moduleType === "tasks";
+  const isOnCalendar = item.is_active_on_calendar;
 
   // Progress calculation
   const hasProgress = item.progress_target && item.progress_target > 0;
@@ -474,6 +479,43 @@ export default function CatalogueItemDetailDialog({
               </Button>
             )}
           </div>
+
+          {/* Add to Calendar Button (for tasks module) */}
+          {isTasksModule && onAddToCalendar && !isOnCalendar && (
+            <div className="pt-2">
+              <Button
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  onAddToCalendar(item);
+                }}
+                className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white"
+              >
+                <CalendarClock className="w-4 h-4 mr-2" />
+                Add to Calendar
+              </Button>
+            </div>
+          )}
+
+          {/* Calendar Status (if already on calendar) */}
+          {isTasksModule && isOnCalendar && (
+            <div
+              className={cn(
+                "flex items-center gap-2 p-3 rounded-xl",
+                themeClasses.bgHover,
+              )}
+            >
+              <CalendarClock className="w-5 h-5 text-emerald-400" />
+              <div>
+                <p className="text-sm font-medium text-emerald-400">
+                  Active on Calendar
+                </p>
+                <p className="text-xs text-white/50">
+                  This task is scheduled and recurring
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Main Actions */}
           <div className="flex justify-between gap-2 pt-2">

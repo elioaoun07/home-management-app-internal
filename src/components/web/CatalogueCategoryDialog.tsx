@@ -94,6 +94,7 @@ export default function CatalogueCategoryDialog({
   const [description, setDescription] = useState("");
   const [icon, setIcon] = useState("tag");
   const [color, setColor] = useState("#6366f1");
+  const [isPublic, setIsPublic] = useState(true);
 
   const isLoading = createCategory.isPending || updateCategory.isPending;
   const isEditing = !!editingCategory;
@@ -106,11 +107,13 @@ export default function CatalogueCategoryDialog({
         setDescription(editingCategory.description || "");
         setIcon(editingCategory.icon || "tag");
         setColor(editingCategory.color || "#6366f1");
+        setIsPublic(editingCategory.is_public ?? true);
       } else {
         setName("");
         setDescription("");
         setIcon("tag");
         setColor("#6366f1");
+        setIsPublic(true);
       }
     }
   }, [open, editingCategory]);
@@ -128,10 +131,11 @@ export default function CatalogueCategoryDialog({
           description: description.trim() || undefined,
           icon,
           color,
+          is_public: isPublic,
         },
         {
           onSuccess: () => onOpenChange(false),
-        }
+        },
       );
     } else {
       const data: CreateCategoryInput = {
@@ -140,6 +144,7 @@ export default function CatalogueCategoryDialog({
         description: description.trim() || undefined,
         icon,
         color,
+        is_public: isPublic,
       };
       createCategory.mutate(data, {
         onSuccess: () => onOpenChange(false),
@@ -153,7 +158,7 @@ export default function CatalogueCategoryDialog({
         className={cn(
           "max-w-md max-h-[90vh] overflow-y-auto",
           themeClasses.modalBg,
-          themeClasses.border
+          themeClasses.border,
         )}
       >
         <DialogHeader>
@@ -190,7 +195,7 @@ export default function CatalogueCategoryDialog({
               placeholder="Brief description..."
               className={cn(
                 themeClasses.inputBg,
-                "border-white/10 text-white min-h-[60px]"
+                "border-white/10 text-white min-h-[60px]",
               )}
             />
           </div>
@@ -211,13 +216,13 @@ export default function CatalogueCategoryDialog({
                       "aspect-square rounded-lg flex items-center justify-center transition-all",
                       isSelected
                         ? "ring-2 ring-primary bg-primary/20"
-                        : "bg-white/5 hover:bg-white/10"
+                        : "bg-white/5 hover:bg-white/10",
                     )}
                   >
                     <IconComponent
                       className={cn(
                         "w-5 h-5",
-                        isSelected ? "text-primary" : "text-white/60"
+                        isSelected ? "text-primary" : "text-white/60",
                       )}
                     />
                   </button>
@@ -240,7 +245,7 @@ export default function CatalogueCategoryDialog({
                     className={cn(
                       "w-8 h-8 rounded-full flex items-center justify-center transition-transform",
                       isSelected &&
-                        "scale-110 ring-2 ring-white ring-offset-2 ring-offset-transparent"
+                        "scale-110 ring-2 ring-white ring-offset-2 ring-offset-transparent",
                     )}
                     style={{ backgroundColor: c }}
                   >
@@ -251,13 +256,51 @@ export default function CatalogueCategoryDialog({
             </div>
           </div>
 
+          {/* Visibility Toggle */}
+          <div className="space-y-2">
+            <Label className="text-white/70">Visibility</Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsPublic(true)}
+                className={cn(
+                  "flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2",
+                  isPublic
+                    ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50"
+                    : "bg-white/5 text-white/50 hover:bg-white/10",
+                )}
+              >
+                <Users className="w-4 h-4" />
+                Public
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPublic(false)}
+                className={cn(
+                  "flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2",
+                  !isPublic
+                    ? "bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/50"
+                    : "bg-white/5 text-white/50 hover:bg-white/10",
+                )}
+              >
+                <Tag className="w-4 h-4" />
+                Private
+              </button>
+            </div>
+            <p className="text-xs text-white/40">
+              {isPublic
+                ? "Visible to household members"
+                : "Only visible to you"}
+            </p>
+          </div>
+
           {/* Preview */}
           <div className="space-y-2">
             <Label className="text-white/70">Preview</Label>
             <div
               className={cn(
                 "p-4 rounded-lg flex items-center gap-3",
-                themeClasses.surfaceBg
+                themeClasses.surfaceBg,
               )}
             >
               <div

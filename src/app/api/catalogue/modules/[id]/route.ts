@@ -24,7 +24,6 @@ export async function GET(req: NextRequest, context: RouteContext) {
     .from("catalogue_modules")
     .select("*")
     .eq("id", id)
-    .eq("user_id", user.id)
     .single();
 
   if (error) {
@@ -63,6 +62,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       updates.gradient_from = body.gradient_from;
     if (body.gradient_to !== undefined) updates.gradient_to = body.gradient_to;
     if (body.is_enabled !== undefined) updates.is_enabled = body.is_enabled;
+    if (body.is_public !== undefined) updates.is_public = body.is_public;
     if (body.position !== undefined) updates.position = body.position;
     if (body.settings_json !== undefined)
       updates.settings_json = body.settings_json;
@@ -70,7 +70,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
         { error: "No fields to update" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -86,7 +86,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       if (error.code === "PGRST116") {
         return NextResponse.json(
           { error: "Module not found" },
-          { status: 404 }
+          { status: 404 },
         );
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -97,7 +97,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     console.error("Error parsing request:", err);
     return NextResponse.json(
       { error: "Invalid request body" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }
@@ -129,7 +129,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   if (existing.is_system) {
     return NextResponse.json(
       { error: "Cannot delete system modules. You can disable them instead." },
-      { status: 403 }
+      { status: 403 },
     );
   }
 

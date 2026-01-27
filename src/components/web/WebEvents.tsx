@@ -60,6 +60,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import EditOccurrenceDialog from "./EditOccurrenceDialog";
 import { ItemSubtasksList } from "./ItemSubtasks";
 import { WebCalendar } from "./WebCalendar";
 import { WebEventFormDialog } from "./WebEventFormDialog";
@@ -151,6 +152,8 @@ export default function WebEvents() {
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [clickedOccurrenceDate, setClickedOccurrenceDate] =
     useState<Date | null>(null);
+  const [showEditOccurrenceDialog, setShowEditOccurrenceDialog] =
+    useState(false);
 
   // Track if screen is mobile size for modal positioning
   const [isMobileScreen, setIsMobileScreen] = useState(false);
@@ -392,17 +395,21 @@ export default function WebEvents() {
       setFormDefaultType(pendingEditItem.type);
       setIsFormOpen(true);
     } else {
-      // TODO: Implement "edit this occurrence" - requires exception system
-      alert(
-        "Editing single occurrences coming soon! For now, editing the entire series.",
-      );
-      setEditingItem(pendingEditItem);
-      setFormDefaultType(pendingEditItem.type);
-      setIsFormOpen(true);
+      // Open the single occurrence edit dialog
+      if (clickedOccurrenceDate) {
+        setShowEditOccurrenceDialog(true);
+      } else {
+        // Fallback if no occurrence date - edit the whole series
+        toast.info(
+          "Could not determine which occurrence to edit. Editing the entire series.",
+        );
+        setEditingItem(pendingEditItem);
+        setFormDefaultType(pendingEditItem.type);
+        setIsFormOpen(true);
+      }
     }
 
     setShowRecurringDialog(false);
-    setPendingEditItem(null);
   };
 
   // Handle delete item
@@ -1105,9 +1112,15 @@ export default function WebEvents() {
                         {detailItem.type === "event" &&
                           detailItem.event_details && (
                             <>
+                              {/* For recurring items, show the clicked occurrence date, not the original */}
                               <div className="text-white text-sm">
                                 {format(
-                                  parseISO(detailItem.event_details.start_at),
+                                  detailItem.recurrence_rule?.rrule &&
+                                    clickedOccurrenceDate
+                                    ? clickedOccurrenceDate
+                                    : parseISO(
+                                        detailItem.event_details.start_at,
+                                      ),
                                   "EEEE, MMMM d",
                                 )}
                               </div>
@@ -1134,9 +1147,15 @@ export default function WebEvents() {
                           detailItem.type === "task") &&
                           detailItem.reminder_details?.due_at && (
                             <>
+                              {/* For recurring items, show the clicked occurrence date, not the original */}
                               <div className="text-white text-sm">
                                 {format(
-                                  parseISO(detailItem.reminder_details.due_at),
+                                  detailItem.recurrence_rule?.rrule &&
+                                    clickedOccurrenceDate
+                                    ? clickedOccurrenceDate
+                                    : parseISO(
+                                        detailItem.reminder_details.due_at,
+                                      ),
                                   "EEEE, MMMM d",
                                 )}
                               </div>
@@ -1375,6 +1394,30 @@ export default function WebEvents() {
                 </DialogContent>
               </Dialog>
             )}
+
+            {/* Edit Single Occurrence Dialog */}
+            {showEditOccurrenceDialog &&
+              pendingEditItem &&
+              clickedOccurrenceDate && (
+                <EditOccurrenceDialog
+                  open={showEditOccurrenceDialog}
+                  onOpenChange={(open) => {
+                    setShowEditOccurrenceDialog(open);
+                    if (!open) {
+                      setPendingEditItem(null);
+                      setClickedOccurrenceDate(null);
+                    }
+                  }}
+                  item={pendingEditItem}
+                  occurrenceDate={clickedOccurrenceDate}
+                  onSuccess={() => {
+                    setShowEditOccurrenceDialog(false);
+                    setPendingEditItem(null);
+                    setClickedOccurrenceDate(null);
+                    toast.success("Occurrence updated successfully!");
+                  }}
+                />
+              )}
           </div>
         </div>
       )}

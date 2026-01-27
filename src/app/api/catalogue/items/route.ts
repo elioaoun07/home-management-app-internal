@@ -35,9 +35,8 @@ export async function GET(req: NextRequest) {
       *,
       category:catalogue_categories(id, name, icon, color),
       sub_items:catalogue_sub_items(*)
-    `
+    `,
     )
-    .eq("user_id", user.id)
     .order("is_pinned", { ascending: false })
     .order("position", { ascending: true });
 
@@ -134,40 +133,50 @@ export async function POST(req: NextRequest) {
       progress_unit,
       next_due_date,
       frequency,
+      // Task-specific fields
+      item_type,
+      location_context,
+      location_url,
+      preferred_time,
+      preferred_duration_minutes,
+      recurrence_pattern,
+      recurrence_custom_rrule,
+      recurrence_days_of_week,
+      subtasks_text,
+      item_category_ids,
+      is_public,
     } = body;
 
     if (!module_id || !name?.trim()) {
       return NextResponse.json(
         { error: "module_id and name are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Verify module exists
+    // Verify module exists (RLS handles visibility)
     const { data: module } = await supabase
       .from("catalogue_modules")
       .select("id")
       .eq("id", module_id)
-      .eq("user_id", user.id)
       .single();
 
     if (!module) {
       return NextResponse.json({ error: "Module not found" }, { status: 404 });
     }
 
-    // Verify category if provided
+    // Verify category if provided (RLS handles visibility)
     if (category_id) {
       const { data: category } = await supabase
         .from("catalogue_categories")
         .select("id")
         .eq("id", category_id)
-        .eq("user_id", user.id)
         .single();
 
       if (!category) {
         return NextResponse.json(
           { error: "Category not found" },
-          { status: 404 }
+          { status: 404 },
         );
       }
     }
@@ -214,12 +223,24 @@ export async function POST(req: NextRequest) {
         progress_unit: progress_unit || null,
         next_due_date: next_due_date || null,
         frequency: frequency || null,
+        // Task-specific fields
+        item_type: item_type || null,
+        location_context: location_context || null,
+        location_url: location_url || null,
+        preferred_time: preferred_time || null,
+        preferred_duration_minutes: preferred_duration_minutes ?? null,
+        recurrence_pattern: recurrence_pattern || null,
+        recurrence_custom_rrule: recurrence_custom_rrule || null,
+        recurrence_days_of_week: recurrence_days_of_week || [],
+        subtasks_text: subtasks_text || null,
+        item_category_ids: item_category_ids || [],
+        is_public: is_public ?? false,
       })
       .select(
         `
         *,
         category:catalogue_categories(id, name, icon, color)
-      `
+      `,
       )
       .single();
 
@@ -233,7 +254,7 @@ export async function POST(req: NextRequest) {
     console.error("Error parsing request:", err);
     return NextResponse.json(
       { error: "Invalid request body" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }

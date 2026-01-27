@@ -43,12 +43,12 @@ interface WebWeekViewProps {
   onItemClick?: (
     item: ItemWithDetails,
     event: React.MouseEvent,
-    occurrenceDate?: Date
+    occurrenceDate?: Date,
   ) => void;
   onAddEvent?: (date: Date) => void;
   onBirthdayClick?: (
     birthday: { name: string; category?: string },
-    date: Date
+    date: Date,
   ) => void;
   selectedDate?: Date | null;
   showBirthdays?: boolean;
@@ -95,7 +95,7 @@ function buildFullRRuleString(
     rrule: string;
     count?: number | null;
     end_until?: string | null;
-  }
+  },
 ): string {
   let rrulePart = recurrenceRule.rrule;
 
@@ -145,7 +145,7 @@ export function WebWeekView({
    */
   const getOccurrenceDateTimeForItem = (
     item: ItemWithDetails,
-    calendarDate: Date
+    calendarDate: Date,
   ): Date => {
     const dateStr =
       item.event_details?.start_at || item.reminder_details?.due_at;
@@ -159,7 +159,7 @@ export function WebWeekView({
       try {
         const rruleString = buildFullRRuleString(
           itemDate,
-          item.recurrence_rule
+          item.recurrence_rule,
         );
         const rule = RRule.fromString(rruleString);
 
@@ -183,12 +183,12 @@ export function WebWeekView({
       itemDate.getHours(),
       itemDate.getMinutes(),
       itemDate.getSeconds(),
-      0
+      0,
     );
     return result;
   };
 
-  // Expand recurring items (accounting for occurrence actions)
+  // Expand recurring items (accounting for occurrence actions and exceptions)
   const getItemsForDate = useMemo(() => {
     return (date: Date): ItemWithDetails[] => {
       const itemsOnDate: ItemWithDetails[] = [];
@@ -204,7 +204,7 @@ export function WebWeekView({
           try {
             const rruleString = buildFullRRuleString(
               parsedDate,
-              item.recurrence_rule
+              item.recurrence_rule,
             );
             const rule = RRule.fromString(rruleString);
 
@@ -213,16 +213,130 @@ export function WebWeekView({
             const endOfDay = new Date(date);
             endOfDay.setHours(23, 59, 59, 999);
 
+            // Also check wider range to catch rescheduled items
+            const maxDate = item.recurrence_rule.end_until
+              ? parseISO(item.recurrence_rule.end_until)
+              : new Date(parsedDate.getTime() + 365 * 24 * 60 * 60 * 1000);
+            const allOccurrences = rule.between(parsedDate, maxDate, true);
+            const exceptions = item.recurrence_rule.exceptions || [];
+
+            // First, check if any exception has been rescheduled TO this date
+            for (const exception of exceptions) {
+              const override = exception.override_payload_json as Record<
+                string,
+                unknown
+              > | null;
+              if (override?.rescheduled_to) {
+                const rescheduledDate = parseISO(
+                  override.rescheduled_to as string,
+                );
+                if (isSameDay(rescheduledDate, date)) {
+                  // This occurrence was rescheduled TO this date - show it here
+                  const isHandled = isOccurrenceCompleted(
+                    item.id,
+                    parseISO(exception.exdate),
+                    occurrenceActions,
+                  );
+                  if (!isHandled) {
+                    const modifiedItem: ItemWithDetails = {
+                      ...item,
+                      title: (override.title as string) ?? item.title,
+                      description:
+                        (override.description as string) ?? item.description,
+                      event_details: item.event_details
+                        ? {
+                            ...item.event_details,
+                            start_at:
+                              (override.start_at as string) ??
+                              item.event_details.start_at,
+                            end_at:
+                              (override.end_at as string) ??
+                              item.event_details.end_at,
+                            location_text:
+                              (override.location_text as string) ??
+                              item.event_details.location_text,
+                          }
+                        : item.event_details,
+                      _isException: true,
+                      _rescheduledFrom: exception.exdate,
+                    } as ItemWithDetails & {
+                      _isException?: boolean;
+                      _rescheduledFrom?: string;
+                    };
+                    itemsOnDate.push(modifiedItem);
+                  }
+                }
+              }
+            }
+
             const occurrences = rule.between(startOfDay, endOfDay, true);
+
             for (const occ of occurrences) {
+              // Check if this occurrence has an exception
+              const matchingException = exceptions.find((ex) =>
+                isSameDay(parseISO(ex.exdate), occ),
+              );
+
+              // If exception exists but has no override, skip this occurrence (deleted)
+              if (
+                matchingException &&
+                !matchingException.override_payload_json
+              ) {
+                continue;
+              }
+
+              // If exception has rescheduled_to, skip showing on original date
+              if (matchingException?.override_payload_json) {
+                const override =
+                  matchingException.override_payload_json as Record<
+                    string,
+                    unknown
+                  >;
+                if (override.rescheduled_to) {
+                  // This occurrence was rescheduled to another date, don't show on original
+                  continue;
+                }
+              }
+
               // Check if this occurrence has been handled
               const isHandled = isOccurrenceCompleted(
                 item.id,
                 occ,
-                occurrenceActions
+                occurrenceActions,
               );
               if (!isHandled) {
-                itemsOnDate.push(item);
+                // If there's an override (non-reschedule), apply it
+                if (matchingException?.override_payload_json) {
+                  const override =
+                    matchingException.override_payload_json as Record<
+                      string,
+                      unknown
+                    >;
+                  const modifiedItem: ItemWithDetails = {
+                    ...item,
+                    title: (override.title as string) ?? item.title,
+                    description:
+                      (override.description as string) ?? item.description,
+                    event_details: item.event_details
+                      ? {
+                          ...item.event_details,
+                          start_at:
+                            (override.start_at as string) ??
+                            item.event_details.start_at,
+                          end_at:
+                            (override.end_at as string) ??
+                            item.event_details.end_at,
+                          location_text:
+                            (override.location_text as string) ??
+                            item.event_details.location_text,
+                        }
+                      : item.event_details,
+                    _isException: true,
+                  } as ItemWithDetails & { _isException?: boolean };
+                  itemsOnDate.push(modifiedItem);
+                } else {
+                  itemsOnDate.push(item);
+                }
                 break; // Only add once per item per day
               }
             }
@@ -234,7 +348,7 @@ export function WebWeekView({
           const isHandled = isOccurrenceCompleted(
             item.id,
             parsedDate,
-            occurrenceActions
+            occurrenceActions,
           );
           if (!isHandled) {
             itemsOnDate.push(item);
@@ -246,7 +360,7 @@ export function WebWeekView({
       const postponedForDate = getPostponedOccurrencesForDate(
         items,
         date,
-        occurrenceActions
+        occurrenceActions,
       );
       for (const p of postponedForDate) {
         if (!itemsOnDate.some((i) => i.id === p.item.id)) {
@@ -342,13 +456,13 @@ export function WebWeekView({
       <div
         className={cn(
           "absolute -top-40 -right-40 w-80 h-80 rounded-full blur-3xl opacity-20 animate-pulse",
-          isPink ? "bg-pink-500" : "bg-cyan-500"
+          isPink ? "bg-pink-500" : "bg-cyan-500",
         )}
       />
       <div
         className={cn(
           "absolute -bottom-40 -left-40 w-80 h-80 rounded-full blur-3xl opacity-10 animate-pulse",
-          isPink ? "bg-purple-500" : "bg-blue-500"
+          isPink ? "bg-purple-500" : "bg-blue-500",
         )}
         style={{ animationDelay: "1s" }}
       />
@@ -365,7 +479,7 @@ export function WebWeekView({
                   "w-8 h-8 rounded-lg flex items-center justify-center shadow-lg",
                   isPink
                     ? "bg-gradient-to-br from-pink-500 to-purple-600"
-                    : "bg-gradient-to-br from-cyan-500 to-blue-600"
+                    : "bg-gradient-to-br from-cyan-500 to-blue-600",
                 )}
               >
                 <Sparkles className="w-4 h-4 text-white" />
@@ -390,7 +504,7 @@ export function WebWeekView({
                 isPink
                   ? "bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500"
                   : "bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500",
-                "text-white"
+                "text-white",
               )}
             >
               ✨ Today
@@ -446,13 +560,13 @@ export function WebWeekView({
                     ? getBirthdaysForDate(day)
                     : [];
                   const hasEvents = dayItems.some(
-                    (item) => item.type === "event"
+                    (item) => item.type === "event",
                   );
                   const hasReminders = dayItems.some(
-                    (item) => item.type === "reminder"
+                    (item) => item.type === "reminder",
                   );
                   const hasTasks = dayItems.some(
-                    (item) => item.type === "task"
+                    (item) => item.type === "task",
                   );
                   const hasBirthdays = birthdays.length > 0;
                   const totalItems = dayItems.length + birthdays.length;
@@ -473,7 +587,7 @@ export function WebWeekView({
                           ? isPink
                             ? "bg-gradient-to-br from-pink-500/40 to-purple-600/40 border border-pink-400/60"
                             : "bg-gradient-to-br from-cyan-500/40 to-blue-600/40 border border-cyan-400/60"
-                          : "bg-white/5 border border-white/10 hover:bg-white/10"
+                          : "bg-white/5 border border-white/10 hover:bg-white/10",
                       )}
                     >
                       {/* Item count badge */}
@@ -484,7 +598,7 @@ export function WebWeekView({
                               "min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-bold flex items-center justify-center",
                               isPink
                                 ? "bg-pink-500 text-white"
-                                : "bg-cyan-500 text-white"
+                                : "bg-cyan-500 text-white",
                             )}
                           >
                             {totalItems}
@@ -511,7 +625,7 @@ export function WebWeekView({
                             ? isPink
                               ? "text-pink-200"
                               : "text-cyan-200"
-                            : "text-white/40"
+                            : "text-white/40",
                         )}
                       >
                         {format(day, "EEE")}
@@ -523,7 +637,7 @@ export function WebWeekView({
                             ? isPink
                               ? "text-pink-300"
                               : "text-cyan-300"
-                            : "text-white"
+                            : "text-white",
                         )}
                       >
                         {format(day, "d")}
@@ -565,7 +679,7 @@ export function WebWeekView({
                           animate={{ scale: 1 }}
                           className={cn(
                             "text-[7px] font-bold",
-                            isPink ? "text-pink-300" : "text-cyan-300"
+                            isPink ? "text-pink-300" : "text-cyan-300",
                           )}
                         >
                           TODAY
@@ -585,7 +699,7 @@ export function WebWeekView({
                     "text-[8px] font-semibold px-1 py-0.5 rounded",
                     isPink
                       ? "text-pink-300/80 bg-pink-500/10"
-                      : "text-cyan-300/80 bg-cyan-500/10"
+                      : "text-cyan-300/80 bg-cyan-500/10",
                   )}
                 >
                   ALL
@@ -595,7 +709,7 @@ export function WebWeekView({
                 const dayItems = getItemsForDate(day);
                 const birthdays = showBirthdays ? getBirthdaysForDate(day) : [];
                 const allDayEvents = dayItems.filter(
-                  (item) => item.event_details?.all_day
+                  (item) => item.event_details?.all_day,
                 );
                 const hasAllDayItems =
                   birthdays.length > 0 || allDayEvents.length > 0;
@@ -608,7 +722,7 @@ export function WebWeekView({
                       isToday(day)
                         ? "bg-white/[0.05] border-white/20"
                         : "bg-white/[0.02] border-white/10",
-                      hasAllDayItems && "p-0.5"
+                      hasAllDayItems && "p-0.5",
                     )}
                   >
                     <div className="space-y-0.5">
@@ -626,7 +740,7 @@ export function WebWeekView({
                           className={cn(
                             "px-1 py-0.5 rounded cursor-pointer overflow-hidden relative",
                             "bg-gradient-to-r from-amber-500/25 to-amber-600/25",
-                            "border-l-2 border-l-amber-400"
+                            "border-l-2 border-l-amber-400",
                           )}
                         >
                           <div className="flex items-center gap-0.5 relative">
@@ -660,7 +774,7 @@ export function WebWeekView({
                               colors.bg,
                               "border-l-4",
                               colors.border,
-                              "ring-1 ring-white/20 hover:shadow-lg"
+                              "ring-1 ring-white/20 hover:shadow-lg",
                             )}
                           >
                             <div className="flex items-center gap-1.5">
@@ -699,7 +813,7 @@ export function WebWeekView({
                         "text-[11px] font-semibold px-2 py-1 rounded-lg",
                         isPink
                           ? "text-pink-300/80 bg-pink-500/10"
-                          : "text-cyan-300/80 bg-cyan-500/10"
+                          : "text-cyan-300/80 bg-cyan-500/10",
                       )}
                     >
                       {formatTimeRange(hour)}
@@ -712,7 +826,7 @@ export function WebWeekView({
                       key={`${day.toISOString()}-${hour}`}
                       className={cn(
                         "border-l border-t border-white/[0.06] relative group transition-colors cursor-pointer",
-                        isToday(day) && "bg-white/[0.02]"
+                        isToday(day) && "bg-white/[0.02]",
                       )}
                       onClick={() => {
                         if (onAddEvent) {
@@ -756,7 +870,7 @@ export function WebWeekView({
                           "px-2 py-1 rounded-lg text-[10px] font-black shadow-lg",
                           isPink
                             ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white"
-                            : "bg-gradient-to-r from-cyan-500 to-blue-600 text-white"
+                            : "bg-gradient-to-r from-cyan-500 to-blue-600 text-white",
                         )}
                       >
                         {format(now, "h:mm a")}
@@ -770,7 +884,7 @@ export function WebWeekView({
                           "w-3 h-3 rounded-full shadow-lg",
                           isPink
                             ? "bg-pink-500 shadow-pink-500/50"
-                            : "bg-cyan-500 shadow-cyan-500/50"
+                            : "bg-cyan-500 shadow-cyan-500/50",
                         )}
                       />
                       <div
@@ -778,7 +892,7 @@ export function WebWeekView({
                           "flex-1 h-[3px] rounded-full",
                           isPink
                             ? "bg-gradient-to-r from-pink-500 via-purple-500/50 to-transparent"
-                            : "bg-gradient-to-r from-cyan-500 via-blue-500/50 to-transparent"
+                            : "bg-gradient-to-r from-cyan-500 via-blue-500/50 to-transparent",
                         )}
                       />
                     </div>
@@ -794,7 +908,7 @@ export function WebWeekView({
                     const dayItems = getItemsForDate(day);
                     // Filter out all-day events - they're shown in the all-day section above
                     const timedItems = dayItems.filter(
-                      (item) => !item.event_details?.all_day
+                      (item) => !item.event_details?.all_day,
                     );
 
                     return (
@@ -837,7 +951,7 @@ export function WebWeekView({
                                   "absolute left-1 right-1 rounded-xl border-l-4 cursor-pointer pointer-events-auto overflow-hidden",
                                   colors.bg,
                                   colors.border,
-                                  "shadow-xl backdrop-blur-sm"
+                                  "shadow-xl backdrop-blur-sm",
                                 )}
                                 style={{
                                   top: `${style.top}px`,
@@ -860,7 +974,7 @@ export function WebWeekView({
                                     <span
                                       className={cn(
                                         "text-sm font-bold truncate",
-                                        colors.text
+                                        colors.text,
                                       )}
                                     >
                                       {item.title}
@@ -877,7 +991,7 @@ export function WebWeekView({
                                             {" → "}
                                             {format(
                                               parseISO(endTime),
-                                              "h:mm a"
+                                              "h:mm a",
                                             )}
                                           </>
                                         )}

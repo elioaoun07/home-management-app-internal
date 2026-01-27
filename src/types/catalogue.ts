@@ -137,6 +137,7 @@ export interface CatalogueModule {
   gradient_to: string | null;
   is_system: boolean;
   is_enabled: boolean;
+  is_public: boolean;
   position: number;
   settings_json: Record<string, unknown>;
   created_at: string;
@@ -159,6 +160,7 @@ export interface CatalogueCategory {
   color: string | null;
   position: number;
   is_expanded: boolean;
+  is_public: boolean;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -166,6 +168,41 @@ export interface CatalogueCategory {
   item_count?: number;
   children?: CatalogueCategory[];
 }
+
+// Location context for tasks
+export type LocationContext = "home" | "outside" | "anywhere";
+
+// Recurrence patterns
+export type RecurrencePattern =
+  | "daily"
+  | "weekly"
+  | "biweekly"
+  | "monthly"
+  | "quarterly"
+  | "yearly"
+  | "custom";
+
+export const LOCATION_CONTEXT_LABELS: Record<LocationContext, string> = {
+  home: "At Home",
+  outside: "Outside Home",
+  anywhere: "Anywhere",
+};
+
+export const LOCATION_CONTEXT_ICONS: Record<LocationContext, string> = {
+  home: "home",
+  outside: "map-pin",
+  anywhere: "globe",
+};
+
+export const RECURRENCE_PATTERN_LABELS: Record<RecurrencePattern, string> = {
+  daily: "Daily",
+  weekly: "Weekly",
+  biweekly: "Every 2 Weeks",
+  monthly: "Monthly",
+  quarterly: "Every 3 Months",
+  yearly: "Yearly",
+  custom: "Custom",
+};
 
 export interface CatalogueItem {
   id: UUID;
@@ -195,6 +232,22 @@ export interface CatalogueItem {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  // Task-specific fields for calendar integration
+  item_type: "reminder" | "event" | "task" | null;
+  location_context: LocationContext | null;
+  location_url: string | null;
+  preferred_time: string | null; // HH:MM format
+  preferred_duration_minutes: number | null;
+  recurrence_pattern: RecurrencePattern | null;
+  recurrence_custom_rrule: string | null;
+  recurrence_days_of_week: number[]; // 0=Sunday, 6=Saturday
+  subtasks_text: string | null; // Bullet-point subtasks as text
+  is_active_on_calendar: boolean;
+  linked_item_id: UUID | null;
+  // Category multi-select (e.g., "personal", "work", "home")
+  item_category_ids: string[];
+  // Visibility: true = public to household, false = private
+  is_public: boolean;
   // Virtual fields
   sub_items?: CatalogueSubItem[];
   category?: CatalogueCategory;
@@ -226,6 +279,7 @@ export interface CreateModuleInput {
   color?: string;
   gradient_from?: string;
   gradient_to?: string;
+  is_public?: boolean;
 }
 
 export interface UpdateModuleInput {
@@ -237,6 +291,7 @@ export interface UpdateModuleInput {
   gradient_from?: string;
   gradient_to?: string;
   is_enabled?: boolean;
+  is_public?: boolean;
   position?: number;
   settings_json?: Record<string, unknown>;
 }
@@ -248,6 +303,7 @@ export interface CreateCategoryInput {
   parent_id?: UUID;
   icon?: string;
   color?: string;
+  is_public?: boolean;
 }
 
 export interface UpdateCategoryInput {
@@ -259,6 +315,7 @@ export interface UpdateCategoryInput {
   color?: string;
   position?: number;
   is_expanded?: boolean;
+  is_public?: boolean;
 }
 
 export interface CreateItemInput {
@@ -279,6 +336,20 @@ export interface CreateItemInput {
   progress_unit?: string;
   next_due_date?: string;
   frequency?: string;
+  // Task-specific fields
+  item_type?: "reminder" | "event" | "task";
+  location_context?: LocationContext;
+  location_url?: string;
+  preferred_time?: string; // HH:MM format
+  preferred_duration_minutes?: number;
+  recurrence_pattern?: RecurrencePattern;
+  recurrence_custom_rrule?: string;
+  recurrence_days_of_week?: number[];
+  subtasks_text?: string;
+  // Category multi-select (e.g., "personal", "work", "home")
+  item_category_ids?: string[];
+  // Visibility: true = public to household, false = private
+  is_public?: boolean;
 }
 
 export interface UpdateItemInput {
@@ -302,6 +373,22 @@ export interface UpdateItemInput {
   next_due_date?: string;
   frequency?: string;
   position?: number;
+  // Task-specific fields
+  item_type?: "reminder" | "event" | "task";
+  location_context?: LocationContext;
+  location_url?: string;
+  preferred_time?: string;
+  preferred_duration_minutes?: number;
+  recurrence_pattern?: RecurrencePattern;
+  recurrence_custom_rrule?: string;
+  recurrence_days_of_week?: number[];
+  subtasks_text?: string;
+  is_active_on_calendar?: boolean;
+  linked_item_id?: UUID | null;
+  // Category multi-select (e.g., "personal", "work", "home")
+  item_category_ids?: string[];
+  // Visibility: true = public to household, false = private
+  is_public?: boolean;
 }
 
 export interface CreateSubItemInput {

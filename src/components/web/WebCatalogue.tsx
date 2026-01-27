@@ -21,6 +21,7 @@ import type {
 import {
   ArrowLeft,
   BookOpen,
+  CalendarClock,
   CheckCircle2,
   CheckSquare,
   ChefHat,
@@ -49,10 +50,12 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { InventoryView } from "../inventory/InventoryView";
+import AddToCalendarDialog from "./AddToCalendarDialog";
 import CatalogueCategoryDialog from "./CatalogueCategoryDialog";
 import CatalogueItemDetailDialog from "./CatalogueItemDetailDialog";
 import CatalogueItemDialog from "./CatalogueItemDialog";
 import CatalogueModuleDialog from "./CatalogueModuleDialog";
+import CatalogueTaskItemDialog from "./CatalogueTaskItemDialog";
 
 // Icon mapping for modules
 const MODULE_ICON_COMPONENTS: Record<
@@ -104,6 +107,7 @@ export default function WebCatalogue() {
 
   // Dialog state
   const [showItemDialog, setShowItemDialog] = useState(false);
+  const [showTaskItemDialog, setShowTaskItemDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogueItem | null>(null);
   const [showItemDetailDialog, setShowItemDetailDialog] = useState(false);
   const [viewingItem, setViewingItem] = useState<CatalogueItem | null>(null);
@@ -114,6 +118,11 @@ export default function WebCatalogue() {
   const [editingModule, setEditingModule] = useState<CatalogueModule | null>(
     null,
   );
+  const [showCalendarDialog, setShowCalendarDialog] = useState(false);
+  const [calendarItem, setCalendarItem] = useState<CatalogueItem | null>(null);
+
+  // Check if current module is tasks type
+  const isTasksModule = selectedModule?.type === "tasks";
 
   // Data queries
   const { data: modules = [], isLoading: modulesLoading } =
@@ -220,11 +229,29 @@ export default function WebCatalogue() {
 
   const handleEditItem = (item: CatalogueItem) => {
     setEditingItem(item);
-    setShowItemDialog(true);
+    if (isTasksModule) {
+      setShowTaskItemDialog(true);
+    } else {
+      setShowItemDialog(true);
+    }
   };
 
   const handleDeleteItem = (item: CatalogueItem) => {
     deleteItem.mutate(item.id);
+  };
+
+  const handleAddToCalendar = (item: CatalogueItem) => {
+    setCalendarItem(item);
+    setShowCalendarDialog(true);
+  };
+
+  const handleAddItem = () => {
+    setEditingItem(null);
+    if (isTasksModule) {
+      setShowTaskItemDialog(true);
+    } else {
+      setShowItemDialog(true);
+    }
   };
 
   const handleEditCategory = (category: CatalogueCategory) => {
@@ -353,8 +380,7 @@ export default function WebCatalogue() {
                       setEditingCategory(null);
                       setShowCategoryDialog(true);
                     } else {
-                      setEditingItem(null);
-                      setShowItemDialog(true);
+                      handleAddItem();
                     }
                   }}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg font-medium shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all"
@@ -573,14 +599,13 @@ export default function WebCatalogue() {
                     items={items.filter((i) => !i.category_id)}
                     isLoading={itemsLoading}
                     themeClasses={themeClasses}
+                    isTasksModule={isTasksModule}
                     onClick={handleViewItem}
                     onDoubleClick={handleTogglePin}
                     onEdit={handleEditItem}
                     onDelete={handleDeleteItem}
-                    onAdd={() => {
-                      setEditingItem(null);
-                      setShowItemDialog(true);
-                    }}
+                    onAddToCalendar={handleAddToCalendar}
+                    onAdd={handleAddItem}
                   />
                 </div>
               )}
@@ -593,14 +618,13 @@ export default function WebCatalogue() {
             items={filteredItems}
             isLoading={itemsLoading}
             themeClasses={themeClasses}
+            isTasksModule={isTasksModule}
             onClick={handleViewItem}
             onDoubleClick={handleTogglePin}
             onEdit={handleEditItem}
             onDelete={handleDeleteItem}
-            onAdd={() => {
-              setEditingItem(null);
-              setShowItemDialog(true);
-            }}
+            onAddToCalendar={handleAddToCalendar}
+            onAdd={handleAddItem}
           />
         )}
       </div>
@@ -611,6 +635,14 @@ export default function WebCatalogue() {
         onOpenChange={setShowItemDialog}
         moduleId={selectedModule?.id || ""}
         moduleType={selectedModule?.type || "custom"}
+        categoryId={selectedCategory?.id}
+        editingItem={editingItem}
+      />
+
+      <CatalogueTaskItemDialog
+        open={showTaskItemDialog}
+        onOpenChange={setShowTaskItemDialog}
+        moduleId={selectedModule?.id || ""}
         categoryId={selectedCategory?.id}
         editingItem={editingItem}
       />
@@ -628,6 +660,7 @@ export default function WebCatalogue() {
         item={viewingItem}
         moduleType={selectedModule?.type || "custom"}
         onEdit={handleEditItem}
+        onAddToCalendar={isTasksModule ? handleAddToCalendar : undefined}
       />
 
       <CatalogueModuleDialog
@@ -635,6 +668,15 @@ export default function WebCatalogue() {
         onOpenChange={setShowModuleDialog}
         editingModule={editingModule}
       />
+
+      {calendarItem && (
+        <AddToCalendarDialog
+          open={showCalendarDialog}
+          onOpenChange={setShowCalendarDialog}
+          catalogueItem={calendarItem}
+          onSuccess={() => setCalendarItem(null)}
+        />
+      )}
     </div>
   );
 }
@@ -754,10 +796,12 @@ interface ItemsGridProps {
   items: CatalogueItem[];
   isLoading: boolean;
   themeClasses: ReturnType<typeof useThemeClasses>;
+  isTasksModule?: boolean;
   onClick: (item: CatalogueItem) => void;
   onDoubleClick: (item: CatalogueItem) => void;
   onEdit: (item: CatalogueItem) => void;
   onDelete: (item: CatalogueItem) => void;
+  onAddToCalendar?: (item: CatalogueItem) => void;
   onAdd: () => void;
 }
 
@@ -765,10 +809,12 @@ function ItemsGrid({
   items,
   isLoading,
   themeClasses,
+  isTasksModule,
   onClick,
   onDoubleClick,
   onEdit,
   onDelete,
+  onAddToCalendar,
   onAdd,
 }: ItemsGridProps) {
   if (isLoading) {
@@ -814,10 +860,12 @@ function ItemsGrid({
                 key={item.id}
                 item={item}
                 themeClasses={themeClasses}
+                isTasksModule={isTasksModule}
                 onClick={onClick}
                 onDoubleClick={onDoubleClick}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onAddToCalendar={onAddToCalendar}
               />
             ))}
           </div>
@@ -831,10 +879,12 @@ function ItemsGrid({
             key={item.id}
             item={item}
             themeClasses={themeClasses}
+            isTasksModule={isTasksModule}
             onClick={onClick}
             onDoubleClick={onDoubleClick}
             onEdit={onEdit}
             onDelete={onDelete}
+            onAddToCalendar={onAddToCalendar}
           />
         ))}
       </div>
@@ -845,19 +895,23 @@ function ItemsGrid({
 interface ItemCardProps {
   item: CatalogueItem;
   themeClasses: ReturnType<typeof useThemeClasses>;
+  isTasksModule?: boolean;
   onClick: (item: CatalogueItem) => void;
   onDoubleClick: (item: CatalogueItem) => void;
   onEdit: (item: CatalogueItem) => void;
   onDelete: (item: CatalogueItem) => void;
+  onAddToCalendar?: (item: CatalogueItem) => void;
 }
 
 function ItemCard({
   item,
   themeClasses,
+  isTasksModule,
   onClick,
   onDoubleClick,
   onEdit,
   onDelete,
+  onAddToCalendar,
 }: ItemCardProps) {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -872,6 +926,7 @@ function ItemCard({
 
   // Status indicator
   const isCompleted = item.status === "completed";
+  const isOnCalendar = item.is_active_on_calendar;
 
   return (
     <Card
@@ -888,7 +943,17 @@ function ItemCard({
         onDoubleClick(item);
       }}
     >
-      <div className="p-4">
+      {/* Calendar indicator for tasks */}
+      {isTasksModule && isOnCalendar && (
+        <div className="absolute top-2 left-2 z-10">
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30">
+            <CalendarClock className="w-3 h-3 text-emerald-400" />
+            <span className="text-xs text-emerald-400 font-medium">Active</span>
+          </div>
+        </div>
+      )}
+
+      <div className={cn("p-4", isTasksModule && isOnCalendar && "pt-9")}>
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -991,8 +1056,22 @@ function ItemCard({
             }}
           />
           <div
-            className={`absolute right-2 top-10 z-20 w-32 py-1 rounded-lg shadow-xl ${themeClasses.modalBg} ${themeClasses.border}`}
+            className={`absolute right-2 top-10 z-20 w-40 py-1 rounded-lg shadow-xl ${themeClasses.modalBg} ${themeClasses.border}`}
           >
+            {/* Add to Calendar button for tasks module */}
+            {isTasksModule && onAddToCalendar && !isOnCalendar && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                  onAddToCalendar(item);
+                }}
+                className="w-full px-3 py-2 text-left text-sm text-emerald-400 hover:bg-emerald-500/10 flex items-center gap-2"
+              >
+                <CalendarClock className="w-4 h-4" /> Add to Calendar
+              </button>
+            )}
             <button
               type="button"
               onClick={(e) => {

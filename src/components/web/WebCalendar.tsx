@@ -51,53 +51,85 @@ interface WebCalendarProps {
   onItemClick?: (
     item: ItemWithDetails,
     event: React.MouseEvent,
-    occurrenceDate?: Date
+    occurrenceDate?: Date,
   ) => void;
   onAddEvent?: (date: Date) => void;
   onBirthdayClick?: (
     birthday: { name: string; category?: string },
-    date: Date
+    date: Date,
   ) => void;
   selectedDate?: Date | null;
   showBirthdays?: boolean;
 }
 
 // Priority badge colors
-const priorityColors: Record<string, { bg: string; text: string; frostBg: string; frostText: string }> = {
-  low: { bg: "bg-gray-500/20", text: "text-gray-300", frostBg: "bg-gray-100", frostText: "text-gray-600" },
-  normal: { bg: "bg-cyan-500/20", text: "text-cyan-300", frostBg: "bg-indigo-100", frostText: "text-indigo-600" },
-  high: { bg: "bg-orange-500/20", text: "text-orange-300", frostBg: "bg-orange-100", frostText: "text-orange-600" },
-  urgent: { bg: "bg-red-500/20", text: "text-red-300", frostBg: "bg-red-100", frostText: "text-red-600" },
+const priorityColors: Record<
+  string,
+  { bg: string; text: string; frostBg: string; frostText: string }
+> = {
+  low: {
+    bg: "bg-gray-500/20",
+    text: "text-gray-300",
+    frostBg: "bg-gray-100",
+    frostText: "text-gray-600",
+  },
+  normal: {
+    bg: "bg-cyan-500/20",
+    text: "text-cyan-300",
+    frostBg: "bg-indigo-100",
+    frostText: "text-indigo-600",
+  },
+  high: {
+    bg: "bg-orange-500/20",
+    text: "text-orange-300",
+    frostBg: "bg-orange-100",
+    frostText: "text-orange-600",
+  },
+  urgent: {
+    bg: "bg-red-500/20",
+    text: "text-red-300",
+    frostBg: "bg-red-100",
+    frostText: "text-red-600",
+  },
 };
 
 // Item type colors
-const typeColors: Record<string, { bg: string; border: string; text: string; frostBg: string; frostBorder: string; frostText: string }> =
+const typeColors: Record<
+  string,
   {
-    reminder: {
-      bg: "bg-cyan-500/20",
-      border: "border-l-cyan-400",
-      text: "text-cyan-300",
-      frostBg: "bg-indigo-50",
-      frostBorder: "border-l-indigo-400",
-      frostText: "text-indigo-600",
-    },
-    event: {
-      bg: "bg-pink-500/20",
-      border: "border-l-pink-400",
-      text: "text-pink-300",
-      frostBg: "bg-pink-50",
-      frostBorder: "border-l-pink-400",
-      frostText: "text-pink-600",
-    },
-    task: {
-      bg: "bg-purple-500/20",
-      border: "border-l-purple-400",
-      text: "text-purple-300",
-      frostBg: "bg-violet-50",
-      frostBorder: "border-l-violet-400",
-      frostText: "text-violet-600",
-    },
-  };
+    bg: string;
+    border: string;
+    text: string;
+    frostBg: string;
+    frostBorder: string;
+    frostText: string;
+  }
+> = {
+  reminder: {
+    bg: "bg-cyan-500/20",
+    border: "border-l-cyan-400",
+    text: "text-cyan-300",
+    frostBg: "bg-indigo-50",
+    frostBorder: "border-l-indigo-400",
+    frostText: "text-indigo-600",
+  },
+  event: {
+    bg: "bg-pink-500/20",
+    border: "border-l-pink-400",
+    text: "text-pink-300",
+    frostBg: "bg-pink-50",
+    frostBorder: "border-l-pink-400",
+    frostText: "text-pink-600",
+  },
+  task: {
+    bg: "bg-purple-500/20",
+    border: "border-l-purple-400",
+    text: "text-purple-300",
+    frostBg: "bg-violet-50",
+    frostBorder: "border-l-violet-400",
+    frostText: "text-violet-600",
+  },
+};
 
 // Build a full RRULE string including COUNT and UNTIL from recurrence_rule
 function buildFullRRuleString(
@@ -106,7 +138,7 @@ function buildFullRRuleString(
     rrule: string;
     count?: number | null;
     end_until?: string | null;
-  }
+  },
 ): string {
   let rrulePart = recurrenceRule.rrule;
 
@@ -146,7 +178,7 @@ export function WebCalendar({
   const isFrost = theme === "frost";
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [internalSelectedDate, setInternalSelectedDate] = useState<Date | null>(
-    new Date()
+    new Date(),
   );
   const [showCompleted, setShowCompleted] = useState(true);
 
@@ -156,7 +188,7 @@ export function WebCalendar({
    */
   const getOccurrenceDateTimeForItem = (
     item: ItemWithDetails,
-    calendarDate: Date
+    calendarDate: Date,
   ): Date => {
     const dateStr =
       item.type === "reminder" || item.type === "task"
@@ -178,7 +210,7 @@ export function WebCalendar({
           : itemDate;
         const rruleString = buildFullRRuleString(
           startAnchor,
-          item.recurrence_rule
+          item.recurrence_rule,
         );
         const rrule = RRule.fromString(rruleString);
 
@@ -204,7 +236,7 @@ export function WebCalendar({
       itemDate.getHours(),
       itemDate.getMinutes(),
       itemDate.getSeconds(),
-      0
+      0,
     );
     return result;
   };
@@ -234,7 +266,7 @@ export function WebCalendar({
     return days;
   }, [currentMonth]);
 
-  // Get items for a specific date (accounting for occurrence actions)
+  // Get items for a specific date (accounting for occurrence actions and exceptions)
   const getItemsForDate = (date: Date): ItemWithDetails[] => {
     const result: ItemWithDetails[] = [];
 
@@ -259,7 +291,7 @@ export function WebCalendar({
             : itemDate;
           const rruleString = buildFullRRuleString(
             startAnchor,
-            item.recurrence_rule
+            item.recurrence_rule,
           );
           const rrule = RRule.fromString(rruleString);
 
@@ -268,18 +300,127 @@ export function WebCalendar({
             : new Date(startAnchor.getTime() + 365 * 24 * 60 * 60 * 1000);
 
           const occurrences = rrule.between(startAnchor, maxDate, true);
+          const exceptions = item.recurrence_rule.exceptions || [];
+
+          // First, check if any exception has been rescheduled TO this date
+          for (const exception of exceptions) {
+            const override = exception.override_payload_json as Record<
+              string,
+              unknown
+            > | null;
+            if (override?.rescheduled_to) {
+              const rescheduledDate = parseISO(
+                override.rescheduled_to as string,
+              );
+              if (isSameDay(rescheduledDate, date)) {
+                // This occurrence was rescheduled TO this date - show it here
+                const isHandled = isOccurrenceCompleted(
+                  item.id,
+                  parseISO(exception.exdate),
+                  occurrenceActions,
+                );
+                if (!isHandled) {
+                  const modifiedItem: ItemWithDetails = {
+                    ...item,
+                    title: (override.title as string) ?? item.title,
+                    description:
+                      (override.description as string) ?? item.description,
+                    event_details: item.event_details
+                      ? {
+                          ...item.event_details,
+                          start_at:
+                            (override.start_at as string) ??
+                            item.event_details.start_at,
+                          end_at:
+                            (override.end_at as string) ??
+                            item.event_details.end_at,
+                          location_text:
+                            (override.location_text as string) ??
+                            item.event_details.location_text,
+                        }
+                      : item.event_details,
+                    _isException: true,
+                    _rescheduledFrom: exception.exdate,
+                  } as ItemWithDetails & {
+                    _isException?: boolean;
+                    _rescheduledFrom?: string;
+                  };
+                  result.push(modifiedItem);
+                }
+              }
+            }
+          }
 
           // Check if any occurrence matches this date AND is not completed/postponed
           for (const occurrence of occurrences) {
             if (isSameDay(occurrence, date)) {
+              // Check if this occurrence has an exception
+              const matchingException = exceptions.find((ex) =>
+                isSameDay(parseISO(ex.exdate), occurrence),
+              );
+
+              // If exception exists but has no override, skip this occurrence (deleted)
+              if (
+                matchingException &&
+                !matchingException.override_payload_json
+              ) {
+                continue;
+              }
+
+              // If exception has rescheduled_to, skip showing on original date
+              if (matchingException?.override_payload_json) {
+                const override =
+                  matchingException.override_payload_json as Record<
+                    string,
+                    unknown
+                  >;
+                if (override.rescheduled_to) {
+                  // This occurrence was rescheduled to another date, don't show on original
+                  continue;
+                }
+              }
+
               // Check if this occurrence has been handled (completed, cancelled, or postponed)
               const isHandled = isOccurrenceCompleted(
                 item.id,
                 occurrence,
-                occurrenceActions
+                occurrenceActions,
               );
               if (!isHandled) {
-                result.push(item);
+                // If there's an override (non-reschedule), apply it
+                if (matchingException?.override_payload_json) {
+                  const override =
+                    matchingException.override_payload_json as Record<
+                      string,
+                      unknown
+                    >;
+                  const modifiedItem: ItemWithDetails = {
+                    ...item,
+                    title: (override.title as string) ?? item.title,
+                    description:
+                      (override.description as string) ?? item.description,
+                    // Apply event_details overrides if they exist
+                    event_details: item.event_details
+                      ? {
+                          ...item.event_details,
+                          start_at:
+                            (override.start_at as string) ??
+                            item.event_details.start_at,
+                          end_at:
+                            (override.end_at as string) ??
+                            item.event_details.end_at,
+                          location_text:
+                            (override.location_text as string) ??
+                            item.event_details.location_text,
+                        }
+                      : item.event_details,
+                    // Mark as exception for UI purposes
+                    _isException: true,
+                  } as ItemWithDetails & { _isException?: boolean };
+                  result.push(modifiedItem);
+                } else {
+                  result.push(item);
+                }
                 break; // Only add once per item per day
               }
             }
@@ -293,7 +434,7 @@ export function WebCalendar({
           const isHandled = isOccurrenceCompleted(
             item.id,
             itemDate,
-            occurrenceActions
+            occurrenceActions,
           );
           if (!isHandled) {
             result.push(item);
@@ -383,10 +524,15 @@ export function WebCalendar({
                 isFrost
                   ? "bg-white hover:bg-slate-50 border border-slate-200 shadow-sm"
                   : "bg-white/5 hover:bg-white/10 border border-white/10",
-                "hover:scale-105 active:scale-95"
+                "hover:scale-105 active:scale-95",
               )}
             >
-              <ChevronLeft className={cn("w-4 h-4", isFrost ? "text-slate-700" : "text-white")} />
+              <ChevronLeft
+                className={cn(
+                  "w-4 h-4",
+                  isFrost ? "text-slate-700" : "text-white",
+                )}
+              />
             </button>
 
             <AnimatePresence mode="wait" custom={direction}>
@@ -404,7 +550,7 @@ export function WebCalendar({
                     ? "bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500"
                     : isPink
                       ? "bg-gradient-to-r from-pink-300 via-pink-400 to-purple-400"
-                      : "bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400"
+                      : "bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400",
                 )}
               >
                 {format(currentMonth, "MMMM yyyy")}
@@ -419,10 +565,15 @@ export function WebCalendar({
                 isFrost
                   ? "bg-white hover:bg-slate-50 border border-slate-200 shadow-sm"
                   : "bg-white/5 hover:bg-white/10 border border-white/10",
-                "hover:scale-105 active:scale-95"
+                "hover:scale-105 active:scale-95",
               )}
             >
-              <ChevronRight className={cn("w-4 h-4", isFrost ? "text-slate-700" : "text-white")} />
+              <ChevronRight
+                className={cn(
+                  "w-4 h-4",
+                  isFrost ? "text-slate-700" : "text-white",
+                )}
+              />
             </button>
           </div>
 
@@ -437,8 +588,12 @@ export function WebCalendar({
                   ? "bg-white hover:bg-slate-50 border border-slate-200 shadow-sm"
                   : "bg-white/5 hover:bg-white/10 border border-white/10",
                 showCompleted
-                  ? isFrost ? "text-green-600" : "text-green-400"
-                  : isFrost ? "text-slate-400" : "text-white/40"
+                  ? isFrost
+                    ? "text-green-600"
+                    : "text-green-400"
+                  : isFrost
+                    ? "text-slate-400"
+                    : "text-white/40",
               )}
               title={showCompleted ? "Hide completed" : "Show completed"}
             >
@@ -458,9 +613,9 @@ export function WebCalendar({
                   ? "bg-white hover:bg-slate-50 border border-slate-200 shadow-sm text-indigo-600"
                   : cn(
                       "bg-white/5 hover:bg-white/10 border border-white/10",
-                      isPink ? "text-pink-300" : "text-cyan-300"
+                      isPink ? "text-pink-300" : "text-cyan-300",
                     ),
-                "hover:scale-105 active:scale-95"
+                "hover:scale-105 active:scale-95",
               )}
             >
               Today
@@ -475,7 +630,7 @@ export function WebCalendar({
                   isFrost
                     ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-md"
                     : "neo-gradient text-white shadow-lg",
-                  "hover:scale-105 active:scale-95"
+                  "hover:scale-105 active:scale-95",
                 )}
               >
                 <CalendarPlus className="w-3 h-3 lg:w-4 lg:h-4" />
@@ -500,7 +655,7 @@ export function WebCalendar({
                       : "text-cyan-400/80"
                   : isFrost
                     ? "text-slate-600"
-                    : "text-white/60"
+                    : "text-white/60",
               )}
             >
               {day}
@@ -583,7 +738,7 @@ export function WebCalendar({
                       isCurrentMonth &&
                       !isTodayDate &&
                       !isSelected &&
-                      (isFrost ? "bg-indigo-50/50" : "bg-white/[0.02]")
+                      (isFrost ? "bg-indigo-50/50" : "bg-white/[0.02]"),
                   )}
                 >
                   {/* Date Header */}
@@ -615,7 +770,7 @@ export function WebCalendar({
                                     ? "text-pink-300/80"
                                     : "text-cyan-300/80"
                                   : "text-white/90"
-                                : "text-white/30"
+                                : "text-white/30",
                       )}
                     >
                       {format(date, "d")}
@@ -635,7 +790,7 @@ export function WebCalendar({
                           "w-4 h-4 lg:w-6 lg:h-6 rounded-full flex items-center justify-center transition-colors",
                           isFrost
                             ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-600 hover:text-indigo-700"
-                            : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"
+                            : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white",
                         )}
                       >
                         <CalendarPlus className="w-2 h-2 lg:w-3 lg:h-3" />
@@ -660,11 +815,16 @@ export function WebCalendar({
                           "border-l lg:border-l-2 transition-all duration-200",
                           isFrost
                             ? "bg-amber-100 border-l-amber-400 text-amber-700"
-                            : "bg-amber-500/20 border-l-amber-400 text-amber-200"
+                            : "bg-amber-500/20 border-l-amber-400 text-amber-200",
                         )}
                       >
                         <div className="flex items-center gap-0.5">
-                          <Cake className={cn("w-2 h-2 lg:w-3 lg:h-3 flex-shrink-0", isFrost ? "text-amber-600" : "text-amber-300")} />
+                          <Cake
+                            className={cn(
+                              "w-2 h-2 lg:w-3 lg:h-3 flex-shrink-0",
+                              isFrost ? "text-amber-600" : "text-amber-300",
+                            )}
+                          />
                           <span className="truncate font-medium">
                             {getBirthdayDisplayName(birthday, date)}
                           </span>
@@ -699,7 +859,7 @@ export function WebCalendar({
                               "border-l lg:border-l-2 transition-all duration-200",
                               isFrost ? colors.frostBg : colors.bg,
                               isFrost ? colors.frostBorder : colors.border,
-                              isFrost ? colors.frostText : colors.text
+                              isFrost ? colors.frostText : colors.text,
                             )}
                           >
                             <div className="flex items-center gap-0.5">
@@ -722,8 +882,8 @@ export function WebCalendar({
                         0,
                         Math.max(
                           0,
-                          2 - dayItems.length - Math.min(birthdays.length, 1)
-                        )
+                          2 - dayItems.length - Math.min(birthdays.length, 1),
+                        ),
                       )
                       .map((completed) => {
                         const item = completed.item;
@@ -746,7 +906,7 @@ export function WebCalendar({
                               "border lg:border-2 transition-all duration-200 opacity-60",
                               isFrost
                                 ? "bg-green-100 border-green-300 text-green-600"
-                                : "bg-green-500/10 border-green-500/50 text-green-300/70"
+                                : "bg-green-500/10 border-green-500/50 text-green-300/70",
                             )}
                           >
                             <div className="flex items-center gap-0.5">
@@ -772,8 +932,8 @@ export function WebCalendar({
                           2 -
                             dayItems.length -
                             completedItems.length -
-                            Math.min(birthdays.length, 1)
-                        )
+                            Math.min(birthdays.length, 1),
+                        ),
                       )
                       .map((postponed) => {
                         const item = postponed.item;
@@ -796,7 +956,7 @@ export function WebCalendar({
                               "border lg:border-2 transition-all duration-200 opacity-70",
                               isFrost
                                 ? "bg-amber-100 border-amber-300 text-amber-600"
-                                : "bg-amber-500/10 border-amber-500/50 text-amber-300/80"
+                                : "bg-amber-500/10 border-amber-500/50 text-amber-300/80",
                             )}
                           >
                             <div className="flex items-center gap-0.5">
@@ -821,7 +981,7 @@ export function WebCalendar({
                             ? "text-indigo-500"
                             : isPink
                               ? "text-pink-400/70"
-                              : "text-cyan-400/70"
+                              : "text-cyan-400/70",
                         )}
                       >
                         +
@@ -850,7 +1010,7 @@ export function WebCalendar({
               ? "bg-white/80 border-indigo-200 shadow-lg"
               : isPink
                 ? "bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-transparent border-pink-500/20"
-                : "bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-500/20"
+                : "bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-500/20",
           )}
         >
           {selectedDate ? (
@@ -864,12 +1024,17 @@ export function WebCalendar({
                         ? "text-indigo-600"
                         : isPink
                           ? "text-pink-300"
-                          : "text-cyan-300"
+                          : "text-cyan-300",
                     )}
                   >
                     {format(selectedDate, "EEEE")}
                   </h3>
-                  <p className={cn("text-sm", isFrost ? "text-slate-500" : "text-white/60")}>
+                  <p
+                    className={cn(
+                      "text-sm",
+                      isFrost ? "text-slate-500" : "text-white/60",
+                    )}
+                  >
                     {format(selectedDate, "MMMM d, yyyy")}
                   </p>
                 </div>
@@ -881,7 +1046,7 @@ export function WebCalendar({
                       "p-2 rounded-lg transition-all",
                       isFrost
                         ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-600 hover:text-indigo-700"
-                        : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white"
+                        : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white",
                     )}
                   >
                     <CalendarPlus className="w-5 h-5" />
@@ -909,25 +1074,54 @@ export function WebCalendar({
                         "border-l-4 border-l-amber-400 transition-all duration-200",
                         isFrost
                           ? "bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 hover:from-amber-200 hover:via-yellow-100 hover:to-amber-200 ring-1 ring-amber-300"
-                          : "bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-600/20 hover:from-amber-500/30 hover:via-yellow-500/25 hover:to-amber-600/30 hover:shadow-lg hover:shadow-amber-500/20 ring-1 ring-amber-400/30"
+                          : "bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-600/20 hover:from-amber-500/30 hover:via-yellow-500/25 hover:to-amber-600/30 hover:shadow-lg hover:shadow-amber-500/20 ring-1 ring-amber-400/30",
                       )}
                     >
-                      <div className={cn("absolute inset-0 bg-gradient-to-r from-transparent via-amber-300/10 to-transparent", !isFrost && "animate-pulse")} />
+                      <div
+                        className={cn(
+                          "absolute inset-0 bg-gradient-to-r from-transparent via-amber-300/10 to-transparent",
+                          !isFrost && "animate-pulse",
+                        )}
+                      />
                       <div className="flex items-start justify-between gap-2 relative">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <Cake className={cn("w-4 h-4", isFrost ? "text-amber-600" : "text-amber-300")} />
-                            <h4 className={cn("font-semibold truncate", isFrost ? "text-amber-800" : "text-amber-200")}>
+                            <Cake
+                              className={cn(
+                                "w-4 h-4",
+                                isFrost ? "text-amber-600" : "text-amber-300",
+                              )}
+                            />
+                            <h4
+                              className={cn(
+                                "font-semibold truncate",
+                                isFrost ? "text-amber-800" : "text-amber-200",
+                              )}
+                            >
                               {getBirthdayDisplayName(birthday, selectedDate)}
                             </h4>
                           </div>
                           {birthday.category && (
-                            <p className={cn("text-sm mt-1 capitalize", isFrost ? "text-amber-600" : "text-amber-300/70")}>
+                            <p
+                              className={cn(
+                                "text-sm mt-1 capitalize",
+                                isFrost
+                                  ? "text-amber-600"
+                                  : "text-amber-300/70",
+                              )}
+                            >
                               {birthday.category}
                             </p>
                           )}
                         </div>
-                        <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", isFrost ? "bg-amber-200 text-amber-800 border-amber-300" : "bg-amber-500/30 text-amber-200 border-amber-400/30")}>
+                        <span
+                          className={cn(
+                            "px-2 py-0.5 rounded text-xs font-medium border",
+                            isFrost
+                              ? "bg-amber-200 text-amber-800 border-amber-300"
+                              : "bg-amber-500/30 text-amber-200 border-amber-400/30",
+                          )}
+                        >
                           Birthday
                         </span>
                       </div>
@@ -961,7 +1155,7 @@ export function WebCalendar({
                           isFrost
                             ? "bg-slate-50 hover:bg-slate-100"
                             : "bg-white/5 hover:bg-white/10",
-                          isFrost ? colors.frostBorder : colors.border
+                          isFrost ? colors.frostBorder : colors.border,
                         )}
                       >
                         <div
@@ -976,12 +1170,24 @@ export function WebCalendar({
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
-                              <h4 className={cn("font-medium truncate", isFrost ? "text-slate-900" : "text-white")}>
+                              <h4
+                                className={cn(
+                                  "font-medium truncate",
+                                  isFrost ? "text-slate-900" : "text-white",
+                                )}
+                              >
                                 {item.title}
                               </h4>
 
                               {time && (
-                                <div className={cn("flex items-center gap-1 mt-1 text-sm", isFrost ? "text-slate-500" : "text-white/60")}>
+                                <div
+                                  className={cn(
+                                    "flex items-center gap-1 mt-1 text-sm",
+                                    isFrost
+                                      ? "text-slate-500"
+                                      : "text-white/60",
+                                  )}
+                                >
                                   <Clock className="w-3 h-3" />
                                   <span>
                                     {format(parseISO(time), "h:mm a")}
@@ -992,7 +1198,14 @@ export function WebCalendar({
                               )}
 
                               {location && (
-                                <div className={cn("flex items-center gap-1 mt-1 text-sm", isFrost ? "text-slate-500" : "text-white/60")}>
+                                <div
+                                  className={cn(
+                                    "flex items-center gap-1 mt-1 text-sm",
+                                    isFrost
+                                      ? "text-slate-500"
+                                      : "text-white/60",
+                                  )}
+                                >
                                   <MapPin className="w-3 h-3" />
                                   <span className="truncate">{location}</span>
                                 </div>
@@ -1010,7 +1223,7 @@ export function WebCalendar({
                                 className={cn(
                                   "px-2 py-0.5 rounded text-xs capitalize",
                                   isFrost ? colors.frostBg : colors.bg,
-                                  isFrost ? colors.frostText : colors.text
+                                  isFrost ? colors.frostText : colors.text,
                                 )}
                               >
                                 {item.type}
@@ -1019,8 +1232,12 @@ export function WebCalendar({
                                 <span
                                   className={cn(
                                     "px-2 py-0.5 rounded text-xs capitalize",
-                                    isFrost ? priorityColor.frostBg : priorityColor.bg,
-                                    isFrost ? priorityColor.frostText : priorityColor.text
+                                    isFrost
+                                      ? priorityColor.frostBg
+                                      : priorityColor.bg,
+                                    isFrost
+                                      ? priorityColor.frostText
+                                      : priorityColor.text,
                                   )}
                                 >
                                   {item.priority}
@@ -1031,7 +1248,12 @@ export function WebCalendar({
                         </div>
 
                         {/* Subtasks Section */}
-                        <div className={cn("mt-3 pt-2 border-t", isFrost ? "border-slate-200" : "border-white/10")}>
+                        <div
+                          className={cn(
+                            "mt-3 pt-2 border-t",
+                            isFrost ? "border-slate-200" : "border-white/10",
+                          )}
+                        >
                           <ItemSubtasksList
                             itemId={item.id}
                             subtasks={item.subtasks || []}
@@ -1040,7 +1262,7 @@ export function WebCalendar({
                               selectedDate
                                 ? getOccurrenceDateTimeForItem(
                                     item,
-                                    selectedDate
+                                    selectedDate,
                                   ) || selectedDate
                                 : new Date()
                             }
@@ -1053,13 +1275,33 @@ export function WebCalendar({
 
                   {/* Postponed Items Section */}
                   {selectedDatePostponedItems.length > 0 && (
-                    <div className={cn("mt-4 pt-4 border-t", isFrost ? "border-slate-200" : "border-white/10")}>
+                    <div
+                      className={cn(
+                        "mt-4 pt-4 border-t",
+                        isFrost ? "border-slate-200" : "border-white/10",
+                      )}
+                    >
                       <div className="flex items-center gap-2 mb-3">
-                        <FastForward className={cn("w-4 h-4", isFrost ? "text-amber-600" : "text-amber-400")} />
-                        <h4 className={cn("text-sm font-medium", isFrost ? "text-amber-700" : "text-amber-400")}>
+                        <FastForward
+                          className={cn(
+                            "w-4 h-4",
+                            isFrost ? "text-amber-600" : "text-amber-400",
+                          )}
+                        />
+                        <h4
+                          className={cn(
+                            "text-sm font-medium",
+                            isFrost ? "text-amber-700" : "text-amber-400",
+                          )}
+                        >
                           Postponed to this day
                         </h4>
-                        <span className={cn("text-xs", isFrost ? "text-amber-500" : "text-amber-400/60")}>
+                        <span
+                          className={cn(
+                            "text-xs",
+                            isFrost ? "text-amber-500" : "text-amber-400/60",
+                          )}
+                        >
                           ({selectedDatePostponedItems.length})
                         </span>
                       </div>
@@ -1082,7 +1324,7 @@ export function WebCalendar({
                                 onItemClick?.(
                                   item,
                                   e,
-                                  postponed.occurrenceDate
+                                  postponed.occurrenceDate,
                                 );
                               }}
                               className={cn(
@@ -1090,18 +1332,39 @@ export function WebCalendar({
                                 "border-2 transition-all duration-200",
                                 isFrost
                                   ? "border-amber-300 bg-amber-50 hover:bg-amber-100"
-                                  : "border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15"
+                                  : "border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15",
                               )}
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <FastForward className={cn("w-4 h-4 flex-shrink-0", isFrost ? "text-amber-600" : "text-amber-400")} />
-                                    <h4 className={cn("font-medium truncate", isFrost ? "text-amber-800" : "text-amber-300")}>
+                                    <FastForward
+                                      className={cn(
+                                        "w-4 h-4 flex-shrink-0",
+                                        isFrost
+                                          ? "text-amber-600"
+                                          : "text-amber-400",
+                                      )}
+                                    />
+                                    <h4
+                                      className={cn(
+                                        "font-medium truncate",
+                                        isFrost
+                                          ? "text-amber-800"
+                                          : "text-amber-300",
+                                      )}
+                                    >
                                       {item.title}
                                     </h4>
                                   </div>
-                                  <div className={cn("flex items-center gap-1 mt-1 text-sm ml-6", isFrost ? "text-amber-600" : "text-amber-300/60")}>
+                                  <div
+                                    className={cn(
+                                      "flex items-center gap-1 mt-1 text-sm ml-6",
+                                      isFrost
+                                        ? "text-amber-600"
+                                        : "text-amber-300/60",
+                                    )}
+                                  >
                                     <span>
                                       from{" "}
                                       {format(postponed.originalDate, "MMM d")}
@@ -1113,7 +1376,7 @@ export function WebCalendar({
                                     "px-2 py-0.5 rounded text-xs capitalize",
                                     isFrost
                                       ? "bg-amber-200 text-amber-800"
-                                      : "bg-amber-500/20 text-amber-300"
+                                      : "bg-amber-500/20 text-amber-300",
                                   )}
                                 >
                                   {item.type}
@@ -1128,13 +1391,33 @@ export function WebCalendar({
 
                   {/* Completed Items Section */}
                   {selectedDateCompletedItems.length > 0 && (
-                    <div className={cn("mt-4 pt-4 border-t", isFrost ? "border-slate-200" : "border-white/10")}>
+                    <div
+                      className={cn(
+                        "mt-4 pt-4 border-t",
+                        isFrost ? "border-slate-200" : "border-white/10",
+                      )}
+                    >
                       <div className="flex items-center gap-2 mb-3">
-                        <CheckCircle2 className={cn("w-4 h-4", isFrost ? "text-green-600" : "text-green-400")} />
-                        <h4 className={cn("text-sm font-medium", isFrost ? "text-green-700" : "text-green-400")}>
+                        <CheckCircle2
+                          className={cn(
+                            "w-4 h-4",
+                            isFrost ? "text-green-600" : "text-green-400",
+                          )}
+                        />
+                        <h4
+                          className={cn(
+                            "text-sm font-medium",
+                            isFrost ? "text-green-700" : "text-green-400",
+                          )}
+                        >
                           Completed
                         </h4>
-                        <span className={cn("text-xs", isFrost ? "text-green-500" : "text-green-400/60")}>
+                        <span
+                          className={cn(
+                            "text-xs",
+                            isFrost ? "text-green-500" : "text-green-400/60",
+                          )}
+                        >
                           ({selectedDateCompletedItems.length})
                         </span>
                       </div>
@@ -1157,7 +1440,7 @@ export function WebCalendar({
                                 onItemClick?.(
                                   item,
                                   e,
-                                  completed.occurrenceDate
+                                  completed.occurrenceDate,
                                 );
                               }}
                               className={cn(
@@ -1165,31 +1448,59 @@ export function WebCalendar({
                                 "border-2 transition-all duration-200 opacity-70",
                                 isFrost
                                   ? "border-green-300 bg-green-50 hover:bg-green-100"
-                                  : "border-green-500/30 bg-green-500/10 hover:bg-green-500/15"
+                                  : "border-green-500/30 bg-green-500/10 hover:bg-green-500/15",
                               )}
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <CheckCircle2 className={cn("w-4 h-4 flex-shrink-0", isFrost ? "text-green-600" : "text-green-400")} />
-                                    <h4 className={cn("font-medium truncate line-through", isFrost ? "text-green-700" : "text-green-300")}>
+                                    <CheckCircle2
+                                      className={cn(
+                                        "w-4 h-4 flex-shrink-0",
+                                        isFrost
+                                          ? "text-green-600"
+                                          : "text-green-400",
+                                      )}
+                                    />
+                                    <h4
+                                      className={cn(
+                                        "font-medium truncate line-through",
+                                        isFrost
+                                          ? "text-green-700"
+                                          : "text-green-300",
+                                      )}
+                                    >
                                       {item.title}
                                     </h4>
                                   </div>
                                   <div className="flex flex-col gap-0.5 mt-1 ml-6">
                                     {time && (
-                                      <div className={cn("flex items-center gap-1 text-sm", isFrost ? "text-green-600" : "text-green-300/60")}>
+                                      <div
+                                        className={cn(
+                                          "flex items-center gap-1 text-sm",
+                                          isFrost
+                                            ? "text-green-600"
+                                            : "text-green-300/60",
+                                        )}
+                                      >
                                         <Clock className="w-3 h-3" />
                                         <span>
                                           {format(parseISO(time), "h:mm a")}
                                         </span>
                                       </div>
                                     )}
-                                    <div className={cn("text-xs", isFrost ? "text-green-500" : "text-green-400/50")}>
+                                    <div
+                                      className={cn(
+                                        "text-xs",
+                                        isFrost
+                                          ? "text-green-500"
+                                          : "text-green-400/50",
+                                      )}
+                                    >
                                       Completed{" "}
                                       {formatDistanceToNow(
                                         completed.completedAt,
-                                        { addSuffix: true }
+                                        { addSuffix: true },
                                       )}
                                     </div>
                                   </div>
@@ -1199,7 +1510,7 @@ export function WebCalendar({
                                     "px-2 py-0.5 rounded text-xs capitalize",
                                     isFrost
                                       ? "bg-green-200 text-green-800"
-                                      : "bg-green-500/20 text-green-300"
+                                      : "bg-green-500/20 text-green-300",
                                   )}
                                 >
                                   {item.type}
@@ -1214,8 +1525,20 @@ export function WebCalendar({
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <CalendarPlus className={cn("w-12 h-12 mx-auto mb-3", isFrost ? "text-slate-300" : "text-white/20")} />
-                  <p className={cn("text-sm", isFrost ? "text-slate-400" : "text-white/40")}>No events scheduled</p>
+                  <CalendarPlus
+                    className={cn(
+                      "w-12 h-12 mx-auto mb-3",
+                      isFrost ? "text-slate-300" : "text-white/20",
+                    )}
+                  />
+                  <p
+                    className={cn(
+                      "text-sm",
+                      isFrost ? "text-slate-400" : "text-white/40",
+                    )}
+                  >
+                    No events scheduled
+                  </p>
                   {onAddEvent && (
                     <button
                       type="button"
@@ -1224,7 +1547,7 @@ export function WebCalendar({
                         "mt-3 px-4 py-2 rounded-lg text-sm font-medium transition-all",
                         isFrost
                           ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-600 hover:text-indigo-700"
-                          : "bg-white/10 hover:bg-white/20 text-white/70 hover:text-white"
+                          : "bg-white/10 hover:bg-white/20 text-white/70 hover:text-white",
                       )}
                     >
                       Add an event
@@ -1235,7 +1558,12 @@ export function WebCalendar({
             </>
           ) : (
             <div className="text-center py-8">
-              <p className={cn("text-sm", isFrost ? "text-slate-400" : "text-white/40")}>
+              <p
+                className={cn(
+                  "text-sm",
+                  isFrost ? "text-slate-400" : "text-white/40",
+                )}
+              >
                 Select a date to view details
               </p>
             </div>

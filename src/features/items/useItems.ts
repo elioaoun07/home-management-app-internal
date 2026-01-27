@@ -77,7 +77,10 @@ async function fetchItems(
       event_details (*),
       item_subtasks (*),
       item_alerts (*),
-      item_recurrence_rules (*)
+      item_recurrence_rules (
+        *,
+        item_recurrence_exceptions (*)
+      )
     `,
     )
     .is("archived_at", null);
@@ -153,13 +156,21 @@ async function fetchItems(
   });
 
   // Transform the data to match our types
-  return filteredData.map((item: any) => ({
-    ...item,
-    categories: item.categories || [],
-    subtasks: item.item_subtasks || [],
-    alerts: item.item_alerts || [],
-    recurrence_rule: item.item_recurrence_rules?.[0] || null,
-  }));
+  return filteredData.map((item: any) => {
+    const rule = item.item_recurrence_rules?.[0];
+    return {
+      ...item,
+      categories: item.categories || [],
+      subtasks: item.item_subtasks || [],
+      alerts: item.item_alerts || [],
+      recurrence_rule: rule
+        ? {
+            ...rule,
+            exceptions: rule.item_recurrence_exceptions || [],
+          }
+        : null,
+    };
+  });
 }
 
 async function fetchItemById(id: string): Promise<ItemWithDetails | null> {
@@ -174,7 +185,10 @@ async function fetchItemById(id: string): Promise<ItemWithDetails | null> {
       event_details (*),
       item_subtasks (*),
       item_alerts (*),
-      item_recurrence_rules (*),
+      item_recurrence_rules (
+        *,
+        item_recurrence_exceptions (*)
+      ),
       item_attachments (*)
     `,
     )
@@ -186,12 +200,18 @@ async function fetchItemById(id: string): Promise<ItemWithDetails | null> {
     throw error;
   }
 
+  const rule = data.item_recurrence_rules?.[0];
   return {
     ...data,
     categories: data.categories || [],
     subtasks: data.item_subtasks || [],
     alerts: data.item_alerts || [],
-    recurrence_rule: data.item_recurrence_rules?.[0] || null,
+    recurrence_rule: rule
+      ? {
+          ...rule,
+          exceptions: rule.item_recurrence_exceptions || [],
+        }
+      : null,
     attachments: data.item_attachments || [],
   };
 }
@@ -1803,5 +1823,171 @@ export function useAllSubtaskCompletions() {
     },
     staleTime: 0,
     refetchOnMount: true,
+  });
+}
+
+// ============================================
+// RECURRENCE EXCEPTION HOOKS
+// ============================================
+
+export interface CreateRecurrenceExceptionInput {
+  rule_id: string;
+  exdate: string; // ISO timestamp of the occurrence to modify
+  override_payload_json?: {
+    title?: string;
+    description?: string;
+    start_at?: string;
+    end_at?: string;
+    location_text?: string;
+    priority?: string;
+    modified_fields?: string[];
+  };
+}
+
+export interface RecurrenceExceptionWithDetails {
+  id: string;
+  rule_id: string;
+  exdate: string;
+  override_payload_json: Record<string, unknown> | null;
+}
+
+/** Create a recurrence exception (for editing or skipping a single occurrence) */
+export function useCreateRecurrenceException() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CreateRecurrenceExceptionInput) => {
+      const supabase = supabaseBrowser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      console.log("Creating recurrence exception with input:", input);
+
+      // Verify the rule exists and belongs to the user
+      const { data: rule, error: ruleError } = await supabase
+        .from("item_recurrence_rules")
+        .select("id, item_id, items!inner(user_id)")
+        .eq("id", input.rule_id)
+        .eq("items.user_id", user.id)
+        .single();
+
+      if (ruleError) {
+        console.error("Rule lookup error:", ruleError);
+        throw new Error(`Recurrence rule lookup failed: ${ruleError.message}`);
+      }
+      if (!rule) {
+        throw new Error("Recurrence rule not found or access denied");
+      }
+
+      console.log("Rule found:", rule);
+
+      // Create or update the exception (upsert on rule_id + exdate)
+      const { data, error } = await supabase
+        .from("item_recurrence_exceptions")
+        .upsert(
+          {
+            rule_id: input.rule_id,
+            exdate: input.exdate,
+            override_payload_json: input.override_payload_json || null,
+          },
+          {
+            onConflict: "rule_id,exdate",
+          },
+        )
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Upsert error:", error);
+        throw new Error(`Failed to save exception: ${error.message}`);
+      }
+
+      console.log("Exception created:", data);
+      return data as RecurrenceExceptionWithDetails;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+      toast.success("Exception created for this occurrence");
+    },
+    onError: (error) => {
+      console.error("Failed to create recurrence exception:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to update this occurrence",
+      );
+    },
+  });
+}
+
+/** Delete a recurrence exception (restore to normal occurrence) */
+export function useDeleteRecurrenceException() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (exceptionId: string) => {
+      const supabase = supabaseBrowser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // Delete the exception (RLS will ensure proper access)
+      const { error } = await supabase
+        .from("item_recurrence_exceptions")
+        .delete()
+        .eq("id", exceptionId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+      toast.success("Exception removed");
+    },
+    onError: (error) => {
+      console.error("Failed to delete recurrence exception:", error);
+      toast.error("Failed to remove exception");
+    },
+  });
+}
+
+/** Update a recurrence exception's override data */
+export function useUpdateRecurrenceException() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      override_payload_json,
+    }: {
+      id: string;
+      override_payload_json: Record<string, unknown>;
+    }) => {
+      const supabase = supabaseBrowser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase
+        .from("item_recurrence_exceptions")
+        .update({ override_payload_json })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as RecurrenceExceptionWithDetails;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+      toast.success("Occurrence updated");
+    },
+    onError: (error) => {
+      console.error("Failed to update recurrence exception:", error);
+      toast.error("Failed to update occurrence");
+    },
   });
 }

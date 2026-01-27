@@ -24,14 +24,13 @@ export async function GET(req: NextRequest, context: RouteContext) {
     .from("catalogue_categories")
     .select("*")
     .eq("id", id)
-    .eq("user_id", user.id)
     .single();
 
   if (error) {
     if (error.code === "PGRST116") {
       return NextResponse.json(
         { error: "Category not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -63,13 +62,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (body.color !== undefined) updates.color = body.color;
     if (body.position !== undefined) updates.position = body.position;
     if (body.is_expanded !== undefined) updates.is_expanded = body.is_expanded;
+    if (body.is_public !== undefined) updates.is_public = body.is_public;
 
     // Handle parent change (recalculate depth and path)
     if (body.parent_id !== undefined) {
       if (body.parent_id === id) {
         return NextResponse.json(
           { error: "Category cannot be its own parent" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -88,14 +88,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         if (!parent) {
           return NextResponse.json(
             { error: "Parent category not found" },
-            { status: 404 }
+            { status: 404 },
           );
         }
 
         if (parent.depth >= 5) {
           return NextResponse.json(
             { error: "Maximum category depth (5) reached" },
-            { status: 400 }
+            { status: 400 },
           );
         }
 
@@ -108,7 +108,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
         { error: "No fields to update" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -124,7 +124,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       if (error.code === "PGRST116") {
         return NextResponse.json(
           { error: "Category not found" },
-          { status: 404 }
+          { status: 404 },
         );
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -135,7 +135,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     console.error("Error parsing request:", err);
     return NextResponse.json(
       { error: "Invalid request body" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }

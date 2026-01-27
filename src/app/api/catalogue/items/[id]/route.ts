@@ -27,10 +27,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
       *,
       category:catalogue_categories(id, name, icon, color),
       sub_items:catalogue_sub_items(*)
-    `
+    `,
     )
     .eq("id", id)
-    .eq("user_id", user.id)
     .single();
 
   if (error) {
@@ -75,7 +74,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         if (!category) {
           return NextResponse.json(
             { error: "Category not found" },
-            { status: 404 }
+            { status: 404 },
           );
         }
         updates.category_id = body.category_id;
@@ -112,10 +111,36 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (body.frequency !== undefined) updates.frequency = body.frequency;
     if (body.position !== undefined) updates.position = body.position;
 
+    // Task-specific fields
+    if (body.item_type !== undefined) updates.item_type = body.item_type;
+    if (body.location_context !== undefined)
+      updates.location_context = body.location_context;
+    if (body.location_url !== undefined)
+      updates.location_url = body.location_url;
+    if (body.preferred_time !== undefined)
+      updates.preferred_time = body.preferred_time;
+    if (body.preferred_duration_minutes !== undefined)
+      updates.preferred_duration_minutes = body.preferred_duration_minutes;
+    if (body.recurrence_pattern !== undefined)
+      updates.recurrence_pattern = body.recurrence_pattern;
+    if (body.recurrence_custom_rrule !== undefined)
+      updates.recurrence_custom_rrule = body.recurrence_custom_rrule;
+    if (body.recurrence_days_of_week !== undefined)
+      updates.recurrence_days_of_week = body.recurrence_days_of_week;
+    if (body.subtasks_text !== undefined)
+      updates.subtasks_text = body.subtasks_text;
+    if (body.is_active_on_calendar !== undefined)
+      updates.is_active_on_calendar = body.is_active_on_calendar;
+    if (body.linked_item_id !== undefined)
+      updates.linked_item_id = body.linked_item_id;
+    if (body.item_category_ids !== undefined)
+      updates.item_category_ids = body.item_category_ids;
+    if (body.is_public !== undefined) updates.is_public = body.is_public;
+
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
         { error: "No fields to update" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -129,7 +154,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         *,
         category:catalogue_categories(id, name, icon, color),
         sub_items:catalogue_sub_items(*)
-      `
+      `,
       )
       .single();
 
@@ -145,7 +170,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     console.error("Error parsing request:", err);
     return NextResponse.json(
       { error: "Invalid request body" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }

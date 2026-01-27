@@ -27,9 +27,8 @@ export async function GET(req: NextRequest) {
       `
       *,
       items:catalogue_items(count)
-    `
+    `,
     )
-    .eq("user_id", user.id)
     .order("position", { ascending: true });
 
   if (moduleId) {
@@ -72,12 +71,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = (await req.json()) as CreateCategoryInput;
-    const { module_id, name, description, parent_id, icon, color } = body;
+    const { module_id, name, description, parent_id, icon, color, is_public } =
+      body;
 
     if (!module_id || !name?.trim()) {
       return NextResponse.json(
         { error: "module_id and name are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -108,14 +108,14 @@ export async function POST(req: NextRequest) {
       if (!parent) {
         return NextResponse.json(
           { error: "Parent category not found" },
-          { status: 404 }
+          { status: 404 },
         );
       }
 
       if (parent.depth >= 5) {
         return NextResponse.json(
           { error: "Maximum category depth (5) reached" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -155,6 +155,7 @@ export async function POST(req: NextRequest) {
         color: color || null,
         position: nextPosition,
         is_expanded: true,
+        is_public: is_public ?? true, // Default to public
       })
       .select()
       .single();
@@ -169,7 +170,7 @@ export async function POST(req: NextRequest) {
     console.error("Error parsing request:", err);
     return NextResponse.json(
       { error: "Invalid request body" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }

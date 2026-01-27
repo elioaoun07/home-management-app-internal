@@ -17,18 +17,32 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // First check if user has modules, if not initialize defaults
-  const { count } = await supabase
-    .from("catalogue_modules")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
+  // Check if user is a partner in a household (they share modules with owner)
+  const { data: householdAsPartner } = await supabase
+    .from("household_links")
+    .select("id")
+    .eq("partner_user_id", user.id)
+    .eq("active", true)
+    .limit(1)
+    .single();
 
-  if (count === 0) {
-    // Initialize default modules
-    await supabase.rpc("initialize_catalogue_modules", { p_user_id: user.id });
+  // Only initialize default modules if user has none AND is not a household partner
+  // (Partners share modules with the owner, so they don't need their own)
+  if (!householdAsPartner) {
+    const { count } = await supabase
+      .from("catalogue_modules")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+
+    if (count === 0) {
+      // Initialize default modules
+      await supabase.rpc("initialize_catalogue_modules", {
+        p_user_id: user.id,
+      });
+    }
   }
 
-  // Fetch modules with item counts
+  // Fetch modules with item counts - RLS handles visibility (own + partner's public)
   const { data: modules, error } = await supabase
     .from("catalogue_modules")
     .select(
@@ -38,7 +52,6 @@ export async function GET() {
       items:catalogue_items(count)
     `,
     )
-    .eq("user_id", user.id)
     .eq("is_enabled", true)
     .order("position", { ascending: true });
 
@@ -74,8 +87,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = (await req.json()) as CreateModuleInput;
-    const { type, name, description, icon, color, gradient_from, gradient_to } =
-      body;
+    const {
+      type,
+      name,
+      description,
+      icon,
+      color,
+      gradient_from,
+      gradient_to,
+      is_public,
+    } = body;
 
     if (!name?.trim()) {
       return NextResponse.json(
@@ -108,6 +129,7 @@ export async function POST(req: NextRequest) {
         gradient_to: gradient_to || color || "#2563eb",
         is_system: false,
         is_enabled: true,
+        is_public: is_public ?? true,
         position: nextPosition,
       })
       .select()
