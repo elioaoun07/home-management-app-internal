@@ -101,6 +101,10 @@ export type HubMessage = {
   // Inventory integration fields
   source?: "user" | "inventory" | "system" | "ai"; // Origin of the message
   source_item_id?: string | null; // Reference to catalogue item if from inventory
+  // Voice message fields
+  voice_url?: string | null; // URL to the voice message audio file
+  voice_transcript?: string | null; // Transcription of the voice message
+  voice_duration?: number | null; // Duration in seconds
 };
 
 export type HubFeedItem = {

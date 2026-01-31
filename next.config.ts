@@ -9,12 +9,14 @@ const nextConfig: NextConfig = {
     const connectSrc = ["'self'", "https:", "wss:"];
     const scriptSrc = ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:"];
     const styleSrc = ["'self'", "'unsafe-inline'", "https:"];
+    const mediaSrc = ["'self'", "blob:", "data:"];
 
     if (supabaseUrl) {
       try {
         const u = new URL(supabaseUrl);
-        // Allow calling your Supabase project's origin for REST, auth, and realtime
+        // Allow calling your Supabase project's origin for REST, auth, realtime, and storage
         connectSrc.push(u.origin);
+        mediaSrc.push(u.origin);
       } catch {
         // ignore parse errors
       }
@@ -27,6 +29,7 @@ const nextConfig: NextConfig = {
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https://fonts.gstatic.com",
       `connect-src ${connectSrc.join(" ")}`,
+      `media-src ${mediaSrc.join(" ")}`,
       "object-src 'none'",
       "frame-ancestors 'none'",
       "form-action 'self'",

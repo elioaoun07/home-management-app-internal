@@ -89,6 +89,17 @@ const NotesListView = dynamic(
   { ssr: false },
 );
 
+// Lazy load voice message components
+const InlineVoiceRecorder = dynamic(
+  () => import("@/components/hub/InlineVoiceRecorder"),
+  { ssr: false },
+);
+
+const VoiceMessagePlayer = dynamic(
+  () => import("@/components/hub/VoiceMessagePlayer"),
+  { ssr: false },
+);
+
 // Lazy load item detail modal for alert navigation
 const ItemDetailModal = dynamic(
   () => import("@/components/items/ItemDetailModal"),
@@ -1455,6 +1466,7 @@ function ThreadConversation({
   const broadcastReceiptUpdate = useBroadcastReceiptUpdate();
   const markMessageAsRead = useMarkMessageAsRead();
   const [newMessage, setNewMessage] = useState("");
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const unreadSeparatorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -2700,6 +2712,14 @@ function ThreadConversation({
                                   </button>
                                 )}
                               </div>
+                            ) : msg.voice_url ? (
+                              /* Voice message with player and transcript */
+                              <VoiceMessagePlayer
+                                voiceUrl={msg.voice_url}
+                                transcript={msg.voice_transcript}
+                                duration={msg.voice_duration}
+                                isMe={isMe}
+                              />
                             ) : (
                               <p className="text-sm whitespace-pre-wrap">
                                 {searchQuery.trim()
@@ -2777,49 +2797,132 @@ function ThreadConversation({
                   : "rgba(var(--bg-card-custom), 0.95)",
               }}
             >
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) =>
-                    e.key === "Enter" && !e.shiftKey && handleSend()
-                  }
-                  placeholder="Type a message..."
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border text-white placeholder:text-white/30 focus:outline-none transition-all duration-300"
-                  style={{
-                    borderColor: thread?.color
-                      ? `${thread.color}30`
-                      : "rgba(255,255,255,0.1)",
-                  }}
-                  onFocus={(e) => {
-                    if (thread?.color) {
-                      e.target.style.borderColor = `${thread.color}80`;
-                      e.target.style.boxShadow = `0 0 20px ${thread.color}15`;
-                    }
-                  }}
-                  onBlur={(e) => {
-                    if (thread?.color) {
-                      e.target.style.borderColor = `${thread.color}30`;
-                      e.target.style.boxShadow = "none";
-                    }
+              {/* Voice recording mode - inline WhatsApp style */}
+              {isVoiceMode &&
+              (thread?.purpose === "budget" ||
+                thread?.purpose === "reminder") ? (
+                <InlineVoiceRecorder
+                  threadId={threadId}
+                  themeColor={thread?.color}
+                  onCancel={() => setIsVoiceMode(false)}
+                  onSent={() => {
+                    setIsVoiceMode(false);
+                    queryClient.invalidateQueries({
+                      queryKey: ["hub", "messages", threadId],
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: ["hub", "threads"],
+                    });
                   }}
                 />
-                <button
-                  onClick={handleSend}
-                  disabled={!newMessage.trim() || sendMessage.isPending}
-                  className="px-4 py-3 rounded-xl text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-                  style={
-                    thread?.color
-                      ? {
-                          background: `linear-gradient(135deg, ${thread.color}, ${thread.color}dd)`,
-                        }
-                      : undefined
-                  }
-                >
-                  <SendIcon className="w-5 h-5" />
-                </button>
-              </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && !e.shiftKey && handleSend()
+                    }
+                    placeholder="Type a message..."
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border text-white placeholder:text-white/30 focus:outline-none transition-all duration-300"
+                    style={{
+                      borderColor: thread?.color
+                        ? `${thread.color}30`
+                        : "rgba(255,255,255,0.1)",
+                    }}
+                    onFocus={(e) => {
+                      if (thread?.color) {
+                        e.target.style.borderColor = `${thread.color}80`;
+                        e.target.style.boxShadow = `0 0 20px ${thread.color}15`;
+                      }
+                    }}
+                    onBlur={(e) => {
+                      if (thread?.color) {
+                        e.target.style.borderColor = `${thread.color}30`;
+                        e.target.style.boxShadow = "none";
+                      }
+                    }}
+                  />
+                  {/* WhatsApp-style: Show mic when empty, send when typed */}
+                  <div className="relative w-12 h-12 flex items-center justify-center">
+                    {/* Mic button - fades out when typing */}
+                    <button
+                      type="button"
+                      onClick={() => setIsVoiceMode(true)}
+                      className={cn(
+                        "absolute inset-0 flex items-center justify-center rounded-xl text-white transition-all duration-200",
+                        newMessage.trim()
+                          ? "opacity-0 scale-75 pointer-events-none"
+                          : "opacity-100 scale-100",
+                        !(
+                          thread?.purpose === "budget" ||
+                          thread?.purpose === "reminder"
+                        ) && "hidden",
+                      )}
+                      style={
+                        thread?.color
+                          ? {
+                              background: `linear-gradient(135deg, ${thread.color}, ${thread.color}dd)`,
+                            }
+                          : undefined
+                      }
+                      title="Record voice message"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                      </svg>
+                    </button>
+                    {/* Send button - fades in when typing */}
+                    <button
+                      onClick={handleSend}
+                      disabled={!newMessage.trim() || sendMessage.isPending}
+                      className={cn(
+                        "absolute inset-0 flex items-center justify-center rounded-xl text-white transition-all duration-200",
+                        newMessage.trim()
+                          ? "opacity-100 scale-100"
+                          : "opacity-0 scale-75 pointer-events-none",
+                        "disabled:opacity-50 disabled:cursor-not-allowed",
+                      )}
+                      style={
+                        thread?.color
+                          ? {
+                              background: `linear-gradient(135deg, ${thread.color}, ${thread.color}dd)`,
+                            }
+                          : undefined
+                      }
+                    >
+                      <SendIcon className="w-5 h-5" />
+                    </button>
+                    {/* Fallback disabled send for non-voice threads */}
+                    {!(
+                      thread?.purpose === "budget" ||
+                      thread?.purpose === "reminder"
+                    ) &&
+                      !newMessage.trim() && (
+                        <button
+                          disabled
+                          className="absolute inset-0 flex items-center justify-center rounded-xl text-white opacity-50 cursor-not-allowed"
+                          style={
+                            thread?.color
+                              ? {
+                                  background: `linear-gradient(135deg, ${thread.color}, ${thread.color}dd)`,
+                                }
+                              : undefined
+                          }
+                        >
+                          <SendIcon className="w-5 h-5" />
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>
