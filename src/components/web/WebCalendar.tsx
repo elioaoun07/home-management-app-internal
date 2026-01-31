@@ -39,8 +39,9 @@ import {
   FastForward,
   MapPin,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { RRule } from "rrule";
+import { DayExpansionModal } from "./DayExpansionModal";
 import { ItemSubtasksList } from "./ItemSubtasks";
 
 interface WebCalendarProps {
@@ -58,6 +59,7 @@ interface WebCalendarProps {
     birthday: { name: string; category?: string },
     date: Date,
   ) => void;
+  onDayModalClose?: () => void;
   selectedDate?: Date | null;
   showBirthdays?: boolean;
 }
@@ -170,6 +172,7 @@ export function WebCalendar({
   onItemClick,
   onAddEvent,
   onBirthdayClick,
+  onDayModalClose,
   selectedDate: externalSelectedDate,
   showBirthdays = true,
 }: WebCalendarProps) {
@@ -181,6 +184,12 @@ export function WebCalendar({
     new Date(),
   );
   const [showCompleted, setShowCompleted] = useState(true);
+
+  // 3D Day Expansion Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalDate, setModalDate] = useState<Date | null>(null);
+  const [modalAnchorRect, setModalAnchorRect] = useState<DOMRect | null>(null);
+  const dayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   /**
    * Get the actual occurrence datetime for an item on a specific date
@@ -477,10 +486,48 @@ export function WebCalendar({
     onDateSelect?.(today);
   };
 
-  const handleDateClick = (date: Date) => {
-    setInternalSelectedDate(date);
-    onDateSelect?.(date);
-  };
+  // Handle date click - opens the 3D expansion modal
+  const handleDateClick = useCallback(
+    (date: Date, dayElement?: HTMLDivElement | null) => {
+      setInternalSelectedDate(date);
+      onDateSelect?.(date);
+
+      // Get the bounding rect for the 3D animation origin
+      if (dayElement) {
+        setModalAnchorRect(dayElement.getBoundingClientRect());
+      } else {
+        // Try to get from refs
+        const dateKey = date.toISOString().split("T")[0];
+        const ref = dayRefs.current.get(dateKey);
+        if (ref) {
+          setModalAnchorRect(ref.getBoundingClientRect());
+        }
+      }
+
+      setModalDate(date);
+      setIsModalOpen(true);
+    },
+    [onDateSelect],
+  );
+
+  // Close the modal
+  const handleModalClose = useCallback(() => {
+    setIsModalOpen(false);
+    setModalDate(null);
+    setModalAnchorRect(null);
+    // Notify parent so it can clean up any open action dialogs
+    onDayModalClose?.();
+  }, [onDayModalClose]);
+
+  // Handle item click from within the modal - keep modal open so user can return
+  const handleModalItemClick = useCallback(
+    (item: ItemWithDetails, event: React.MouseEvent, occurrenceDate?: Date) => {
+      // Keep the modal open but trigger the item click
+      // The action dialog will appear on top, and when closed, user returns to modal
+      onItemClick?.(item, event, occurrenceDate);
+    },
+    [onItemClick],
+  );
 
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -692,16 +739,25 @@ export function WebCalendar({
                 postponedItems.length > 0;
               const isWeekendDay = isWeekend(date);
               const isHovered = hoveredDate && isSameDay(date, hoveredDate);
+              const dateKey = date.toISOString().split("T")[0];
 
               return (
                 <motion.div
                   key={`${date.toISOString()}-${index}`}
+                  ref={(el) => {
+                    if (el) {
+                      dayRefs.current.set(dateKey, el);
+                    }
+                  }}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: index * 0.005 }}
                   onMouseEnter={() => setHoveredDate(date)}
                   onMouseLeave={() => setHoveredDate(null)}
-                  onClick={() => handleDateClick(date)}
+                  onClick={(e) => {
+                    const target = e.currentTarget as HTMLDivElement;
+                    handleDateClick(date, target);
+                  }}
                   className={cn(
                     "relative rounded-md lg:rounded-xl transition-all duration-200 min-h-[56px] lg:min-h-[100px] p-0.5 lg:p-2 cursor-pointer",
                     "flex flex-col border overflow-hidden group",
@@ -806,12 +862,8 @@ export function WebCalendar({
                         key={birthday.id}
                         initial={{ opacity: 0, x: -5 }}
                         animate={{ opacity: 1, x: 0 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onBirthdayClick?.(birthday, date);
-                        }}
                         className={cn(
-                          "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate cursor-pointer",
+                          "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate pointer-events-none",
                           "border-l lg:border-l-2 transition-all duration-200",
                           isFrost
                             ? "bg-amber-100 border-l-amber-400 text-amber-700"
@@ -847,15 +899,8 @@ export function WebCalendar({
                             key={item.id}
                             initial={{ opacity: 0, x: -5 }}
                             animate={{ opacity: 1, x: 0 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Pass the actual occurrence datetime, not just the calendar date
-                              const occurrenceDateTime =
-                                getOccurrenceDateTimeForItem(item, date);
-                              onItemClick?.(item, e, occurrenceDateTime);
-                            }}
                             className={cn(
-                              "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate cursor-pointer",
+                              "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate pointer-events-none",
                               "border-l lg:border-l-2 transition-all duration-200",
                               isFrost ? colors.frostBg : colors.bg,
                               isFrost ? colors.frostBorder : colors.border,
@@ -897,12 +942,8 @@ export function WebCalendar({
                             key={`completed-${item.id}`}
                             initial={{ opacity: 0, x: -5 }}
                             animate={{ opacity: 1, x: 0 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onItemClick?.(item, e, completed.occurrenceDate);
-                            }}
                             className={cn(
-                              "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate cursor-pointer",
+                              "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate pointer-events-none",
                               "border lg:border-2 transition-all duration-200 opacity-60",
                               isFrost
                                 ? "bg-green-100 border-green-300 text-green-600"
@@ -947,12 +988,8 @@ export function WebCalendar({
                             key={`postponed-${item.id}`}
                             initial={{ opacity: 0, x: -5 }}
                             animate={{ opacity: 1, x: 0 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onItemClick?.(item, e, postponed.occurrenceDate);
-                            }}
                             className={cn(
-                              "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate cursor-pointer",
+                              "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate pointer-events-none",
                               "border lg:border-2 transition-all duration-200 opacity-70",
                               isFrost
                                 ? "bg-amber-100 border-amber-300 text-amber-600"
@@ -1570,6 +1607,29 @@ export function WebCalendar({
           )}
         </div>
       </div>
+
+      {/* 3D Day Expansion Modal */}
+      <DayExpansionModal
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        date={modalDate || new Date()}
+        items={modalDate ? getItemsForDate(modalDate) : []}
+        completedItems={
+          modalDate && showCompleted ? getCompletedItemsForDate(modalDate) : []
+        }
+        postponedItems={modalDate ? getPostponedItemsForDate(modalDate) : []}
+        birthdays={
+          modalDate && showBirthdays ? getBirthdaysForDate(modalDate) : []
+        }
+        onItemClick={handleModalItemClick}
+        onBirthdayClick={(birthday, date) => {
+          handleModalClose();
+          onBirthdayClick?.(birthday, date);
+        }}
+        onAddEvent={onAddEvent}
+        getOccurrenceDateTimeForItem={getOccurrenceDateTimeForItem}
+        anchorRect={modalAnchorRect}
+      />
     </div>
   );
 }

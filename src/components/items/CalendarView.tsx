@@ -1,5 +1,6 @@
 "use client";
 
+import { MobileDayExpansionModal } from "@/components/items/MobileDayExpansionModal";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   isOccurrenceCompleted,
@@ -19,7 +20,7 @@ import {
   startOfWeek,
 } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 // Icon components
 const FilterIcon = ({ className }: { className?: string }) => (
@@ -125,15 +126,32 @@ const CATEGORIES = [
 
 interface CalendarViewProps {
   items: ItemWithDetails[];
+  onItemClick?: (item: ItemWithDetails) => void;
+  onDayModalClose?: () => void;
 }
 
-export function CalendarView({ items }: CalendarViewProps) {
+export function CalendarView({
+  items,
+  onItemClick,
+  onDayModalClose,
+}: CalendarViewProps) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [direction, setDirection] = useState(0);
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
+
+  // 3D Day Expansion Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalDate, setModalDate] = useState<Date | null>(null);
+  const [modalAnchorRect, setModalAnchorRect] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const dayRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   // Category filter state
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -146,7 +164,7 @@ export function CalendarView({ items }: CalendarViewProps) {
     setSelectedCategoryFilters((prev) =>
       prev.includes(categoryId)
         ? prev.filter((id) => id !== categoryId)
-        : [...prev, categoryId]
+        : [...prev, categoryId],
     );
   };
 
@@ -158,7 +176,7 @@ export function CalendarView({ items }: CalendarViewProps) {
   // Select all categories except work
   const selectAllExceptWork = () => {
     setSelectedCategoryFilters(
-      CATEGORIES.filter((cat) => cat.id !== "work").map((cat) => cat.id)
+      CATEGORIES.filter((cat) => cat.id !== "work").map((cat) => cat.id),
     );
   };
 
@@ -179,7 +197,7 @@ export function CalendarView({ items }: CalendarViewProps) {
       if (selectedCategoryFilters.length > 0) {
         const itemCategories = item.categories || [];
         const matchesCategory = selectedCategoryFilters.some((catId) =>
-          itemCategories.includes(catId)
+          itemCategories.includes(catId),
         );
         if (!matchesCategory) return false;
       }
@@ -253,6 +271,59 @@ export function CalendarView({ items }: CalendarViewProps) {
     });
   };
 
+  // Get completed items for a date (from occurrence actions)
+  const getCompletedItemsForDate = useCallback(
+    (date: Date) => {
+      return items.filter((item) => {
+        const dateStr =
+          item.type === "reminder"
+            ? item.reminder_details?.due_at
+            : item.type === "event"
+              ? item.event_details?.start_at
+              : null;
+
+        if (!dateStr) return false;
+        if (!isSameDay(parseISO(dateStr), date)) return false;
+
+        return isOccurrenceCompleted(item.id, date, occurrenceActions);
+      });
+    },
+    [items, occurrenceActions],
+  );
+
+  // Handle day click to open 3D modal
+  const handleDayClick = useCallback(
+    (date: Date, event: React.MouseEvent<HTMLButtonElement>) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setModalAnchorRect({
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height,
+      });
+      setModalDate(date);
+      setSelectedDate(date);
+      setIsModalOpen(true);
+    },
+    [],
+  );
+
+  // Handle modal close
+  const handleModalClose = useCallback(() => {
+    setIsModalOpen(false);
+    // Notify parent to clean up any item detail modals
+    onDayModalClose?.();
+  }, [onDayModalClose]);
+
+  // Handle item click from modal - keep modal open (step navigation)
+  const handleModalItemClick = useCallback(
+    (item: ItemWithDetails) => {
+      // Don't close the modal - allow step 0 -> step 1 -> step 2 navigation
+      onItemClick?.(item);
+    },
+    [onItemClick],
+  );
+
   const goToPreviousMonth = () => {
     setDirection(-1);
     setCurrentMonth((prev) => {
@@ -280,8 +351,6 @@ export function CalendarView({ items }: CalendarViewProps) {
 
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  const selectedDateItems = selectedDate ? getItemsForDate(selectedDate) : [];
-
   // Animation variants
   const monthVariants = {
     enter: (direction: number) => ({
@@ -305,13 +374,13 @@ export function CalendarView({ items }: CalendarViewProps) {
         <div
           className={cn(
             "absolute -top-20 -right-20 w-72 h-72 rounded-full blur-3xl opacity-15",
-            isPink ? "bg-pink-500" : "bg-cyan-500"
+            isPink ? "bg-pink-500" : "bg-cyan-500",
           )}
         />
         <div
           className={cn(
             "absolute top-1/3 -left-20 w-64 h-64 rounded-full blur-3xl opacity-10",
-            isPink ? "bg-purple-500" : "bg-blue-500"
+            isPink ? "bg-purple-500" : "bg-blue-500",
           )}
         />
       </div>
@@ -329,7 +398,7 @@ export function CalendarView({ items }: CalendarViewProps) {
               "absolute inset-0 rounded-2xl backdrop-blur-xl border",
               isPink
                 ? "bg-gradient-to-r from-pink-500/10 via-purple-500/5 to-pink-500/10 border-pink-500/10"
-                : "bg-gradient-to-r from-cyan-500/10 via-blue-500/5 to-cyan-500/10 border-cyan-500/10"
+                : "bg-gradient-to-r from-cyan-500/10 via-blue-500/5 to-cyan-500/10 border-cyan-500/10",
             )}
           />
           <div className="relative flex items-center justify-between p-3">
@@ -341,7 +410,7 @@ export function CalendarView({ items }: CalendarViewProps) {
               className={cn(
                 "p-3 rounded-xl backdrop-blur-md transition-all duration-300",
                 "bg-white/5 hover:bg-white/15 border border-white/10",
-                "shadow-lg shadow-black/20"
+                "shadow-lg shadow-black/20",
               )}
             >
               <svg
@@ -371,7 +440,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                     "text-xl font-bold bg-clip-text text-transparent",
                     isPink
                       ? "bg-gradient-to-r from-pink-300 via-pink-400 to-purple-400"
-                      : "bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400"
+                      : "bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400",
                   )}
                 >
                   {format(currentMonth, "MMMM yyyy")}
@@ -387,7 +456,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                   "backdrop-blur-md border",
                   isPink
                     ? "bg-pink-500/20 text-pink-300 border-pink-400/30 hover:bg-pink-500/30 hover:border-pink-400/50"
-                    : "bg-cyan-500/20 text-cyan-300 border-cyan-400/30 hover:bg-cyan-500/30 hover:border-cyan-400/50"
+                    : "bg-cyan-500/20 text-cyan-300 border-cyan-400/30 hover:bg-cyan-500/30 hover:border-cyan-400/50",
                 )}
               >
                 ✨ Today
@@ -402,7 +471,7 @@ export function CalendarView({ items }: CalendarViewProps) {
               className={cn(
                 "p-3 rounded-xl backdrop-blur-md transition-all duration-300",
                 "bg-white/5 hover:bg-white/15 border border-white/10",
-                "shadow-lg shadow-black/20"
+                "shadow-lg shadow-black/20",
               )}
             >
               <svg
@@ -432,7 +501,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                   ? isPink
                     ? "bg-pink-500/20 text-pink-400 border border-pink-400/40"
                     : "bg-cyan-500/20 text-cyan-400 border border-cyan-400/40"
-                  : "bg-white/5 text-white/50 border border-transparent hover:text-white/80"
+                  : "bg-white/5 text-white/50 border border-transparent hover:text-white/80",
               )}
             >
               <FilterIcon className="w-4 h-4" />
@@ -491,7 +560,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                           onClick={selectAllExceptWork}
                           className={cn(
                             "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-colors",
-                            "bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/80"
+                            "bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/80",
                           )}
                         >
                           <XIcon className="w-3 h-3" />
@@ -510,7 +579,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                   <div className="flex flex-wrap gap-2">
                     {CATEGORIES.map((category) => {
                       const isSelected = selectedCategoryFilters.includes(
-                        category.id
+                        category.id,
                       );
                       const IconComponent = category.icon;
                       return (
@@ -523,7 +592,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                             "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
                             isSelected
                               ? "border"
-                              : "bg-white/5 text-white/60 hover:bg-white/10 border border-transparent"
+                              : "bg-white/5 text-white/60 hover:bg-white/10 border border-transparent",
                           )}
                           style={{
                             backgroundColor: isSelected
@@ -564,7 +633,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                   ? isPink
                     ? "text-pink-400/80"
                     : "text-cyan-400/80"
-                  : "text-white/50"
+                  : "text-white/50",
               )}
             >
               {day}
@@ -596,7 +665,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                 <motion.button
                   key={`${date.toISOString()}-${index}`}
                   type="button"
-                  onClick={() => setSelectedDate(date)}
+                  onClick={(e) => handleDayClick(date, e)}
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: index * 0.01 }}
@@ -623,7 +692,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                     // Weekend highlight
                     isWeekendDay && isCurrentMonth && !isToday && !isSelected
                       ? "bg-white/[0.05]"
-                      : ""
+                      : "",
                   )}
                 >
                   {/* Today indicator ring */}
@@ -634,7 +703,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                         "absolute inset-0 rounded-xl",
                         isPink
                           ? "bg-gradient-to-br from-pink-500/20 via-transparent to-purple-500/20"
-                          : "bg-gradient-to-br from-cyan-500/20 via-transparent to-blue-500/20"
+                          : "bg-gradient-to-br from-cyan-500/20 via-transparent to-blue-500/20",
                       )}
                     />
                   )}
@@ -647,7 +716,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                       animate={{ opacity: 1 }}
                       className={cn(
                         "absolute inset-0 rounded-xl",
-                        isPink ? "bg-pink-500/10" : "bg-cyan-500/10"
+                        isPink ? "bg-pink-500/10" : "bg-cyan-500/10",
                       )}
                     />
                   )}
@@ -658,7 +727,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                       "absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300",
                       isPink
                         ? "bg-gradient-to-br from-pink-500/10 to-transparent"
-                        : "bg-gradient-to-br from-cyan-500/10 to-transparent"
+                        : "bg-gradient-to-br from-cyan-500/10 to-transparent",
                     )}
                   />
 
@@ -680,7 +749,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                                 ? "text-pink-300/80"
                                 : "text-cyan-300/80"
                               : "text-white/90"
-                            : "text-white/30"
+                            : "text-white/30",
                     )}
                   >
                     {format(date, "d")}
@@ -705,7 +774,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                                 ? "bg-cyan-400 shadow-sm shadow-cyan-400/50"
                                 : isEvent
                                   ? "bg-pink-400 shadow-sm shadow-pink-400/50"
-                                  : "bg-purple-400 shadow-sm shadow-purple-400/50"
+                                  : "bg-purple-400 shadow-sm shadow-purple-400/50",
                             )}
                           />
                         );
@@ -714,7 +783,7 @@ export function CalendarView({ items }: CalendarViewProps) {
                         <span
                           className={cn(
                             "text-[8px] font-bold ml-0.5",
-                            isPink ? "text-pink-400" : "text-cyan-400"
+                            isPink ? "text-pink-400" : "text-cyan-400",
                           )}
                         >
                           +{dayItems.length - 3}
@@ -727,102 +796,18 @@ export function CalendarView({ items }: CalendarViewProps) {
             })}
           </motion.div>
         </AnimatePresence>
-        {/* Selected Date Details Panel */}
-        <AnimatePresence>
-          {selectedDate && (
-            <motion.div
-              initial={{ opacity: 0, y: 20, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: "auto" }}
-              exit={{ opacity: 0, y: 20, height: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="mt-3 overflow-hidden flex-shrink-0"
-            >
-              <div
-                className={cn(
-                  "rounded-xl backdrop-blur-xl border p-3",
-                  isPink
-                    ? "bg-gradient-to-br from-pink-500/15 via-purple-500/5 to-transparent border-pink-500/20"
-                    : "bg-gradient-to-br from-cyan-500/15 via-blue-500/5 to-transparent border-cyan-500/20"
-                )}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h3
-                    className={cn(
-                      "font-bold",
-                      isPink ? "text-pink-300" : "text-cyan-300"
-                    )}
-                  >
-                    {format(selectedDate, "EEEE, MMM d")}
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDate(null)}
-                    className="p-1 rounded-lg hover:bg-white/10 transition-colors"
-                  >
-                    <svg
-                      className="w-4 h-4 text-white/60"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
 
-                {selectedDateItems.length > 0 ? (
-                  <div className="space-y-1.5 max-h-24 overflow-y-auto">
-                    {selectedDateItems.map((item, i) => (
-                      <motion.div
-                        key={item.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.05 }}
-                        className={cn(
-                          "flex items-center gap-3 p-2 rounded-lg",
-                          "bg-white/5 hover:bg-white/10 transition-colors"
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "w-2 h-2 rounded-full flex-shrink-0",
-                            item.type === "reminder"
-                              ? "bg-cyan-400"
-                              : item.type === "event"
-                                ? "bg-pink-400"
-                                : "bg-purple-400"
-                          )}
-                        />
-                        <span className="text-sm text-white/80 truncate">
-                          {item.title}
-                        </span>
-                        <span className="text-xs text-white/40 ml-auto">
-                          {item.type === "reminder" &&
-                            item.reminder_details?.due_at &&
-                            format(
-                              parseISO(item.reminder_details.due_at),
-                              "h:mm a"
-                            )}
-                          {item.type === "event" &&
-                            item.event_details?.start_at &&
-                            format(
-                              parseISO(item.event_details.start_at),
-                              "h:mm a"
-                            )}
-                        </span>
-                      </motion.div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-white/40 text-center py-2">
-                    No items scheduled
-                  </p>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* 3D Day Expansion Modal */}
+        <MobileDayExpansionModal
+          isOpen={isModalOpen}
+          onClose={handleModalClose}
+          date={modalDate}
+          items={modalDate ? getItemsForDate(modalDate) : []}
+          completedItems={modalDate ? getCompletedItemsForDate(modalDate) : []}
+          showBirthdays={true}
+          anchorRect={modalAnchorRect}
+          onItemClick={handleModalItemClick}
+        />
       </div>
     </div>
   );

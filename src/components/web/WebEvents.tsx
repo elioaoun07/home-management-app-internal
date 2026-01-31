@@ -69,15 +69,8 @@ import WebTabletMissionControl from "./WebTabletMissionControl";
 import WebTodayView from "./WebTodayView";
 import { WebWeekView } from "./WebWeekView";
 
-// Item type filters
-const typeFilters = [
-  { id: "all", label: "All", icon: CalendarDays },
-  { id: "event", label: "Events", icon: Calendar },
-  { id: "reminder", label: "Reminders", icon: Bell },
-  { id: "task", label: "Tasks", icon: ListTodo },
-] as const;
-
-type TypeFilter = (typeof typeFilters)[number]["id"];
+// Item types for filtering (all visible by default)
+type ItemTypeFilter = "event" | "reminder" | "task";
 
 // Category filters
 const CATEGORIES = [
@@ -130,7 +123,10 @@ export default function WebEvents() {
   const [formInitialDate, setFormInitialDate] = useState<Date | undefined>();
   const [editingItem, setEditingItem] = useState<ItemWithDetails | null>(null);
   const [formDefaultType, setFormDefaultType] = useState<ItemType>("event");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  // Track which item types are visible (all visible by default)
+  const [visibleTypes, setVisibleTypes] = useState<Set<ItemTypeFilter>>(
+    new Set(["event", "reminder", "task"]),
+  );
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showBirthdays, setShowBirthdays] = useState(true);
   const [detailItem, setDetailItem] = useState<ItemWithDetails | null>(null);
@@ -318,10 +314,26 @@ export default function WebEvents() {
     }
   }, [allItems, detailItem]);
 
+  // Toggle visibility of an item type
+  const toggleTypeVisibility = (type: ItemTypeFilter) => {
+    setVisibleTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        // Don't allow hiding all types - keep at least one visible
+        if (next.size > 1) {
+          next.delete(type);
+        }
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
+
   // Filter items by type and category
   const filteredItems = allItems.filter((item) => {
-    // Filter by type
-    const typeMatch = typeFilter === "all" || item.type === typeFilter;
+    // Filter by visible types
+    const typeMatch = visibleTypes.has(item.type as ItemTypeFilter);
 
     // Filter by category (if any categories are selected)
     const categoryMatch =
@@ -496,62 +508,84 @@ export default function WebEvents() {
     setFormInitialDate(undefined);
   };
 
-  // Quick add buttons for different item types
-  const QuickAddButtons = () => (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => {
-          setFormDefaultType("event");
-          setFormInitialDate(selectedDate || new Date());
-          setEditingItem(null);
-          setIsFormOpen(true);
-        }}
+  // Type filter toggle buttons - Modern segmented chip style
+  const TypeFilterButtons = () => {
+    const filters = [
+      {
+        type: "event" as const,
+        icon: Calendar,
+        label: "Events",
+        activeColor: "pink" as const,
+      },
+      {
+        type: "reminder" as const,
+        icon: Bell,
+        label: "Reminders",
+        activeColor: "cyan" as const,
+      },
+      {
+        type: "task" as const,
+        icon: ListTodo,
+        label: "Tasks",
+        activeColor: "purple" as const,
+      },
+    ];
+
+    const colorClasses = {
+      pink: {
+        active:
+          "bg-pink-500/20 text-pink-300 ring-1 ring-pink-500/40 shadow-pink-500/10",
+        inactive: "text-pink-300/50 hover:text-pink-300/70 hover:bg-pink-500/5",
+      },
+      cyan: {
+        active:
+          "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shadow-cyan-500/10",
+        inactive: "text-cyan-300/50 hover:text-cyan-300/70 hover:bg-cyan-500/5",
+      },
+      purple: {
+        active:
+          "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40 shadow-purple-500/10",
+        inactive:
+          "text-purple-300/50 hover:text-purple-300/70 hover:bg-purple-500/5",
+      },
+    } as const;
+
+    return (
+      <div
         className={cn(
-          "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-          "bg-pink-500/20 text-pink-300 border border-pink-500/30",
-          "hover:bg-pink-500/30 hover:scale-105 active:scale-95",
+          "flex items-center gap-0.5 p-1 rounded-xl",
+          isFrost
+            ? "bg-slate-100/80"
+            : "bg-white/[0.03] ring-1 ring-white/[0.06]",
         )}
       >
-        <Calendar className="w-4 h-4" />
-        Event
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          setFormDefaultType("reminder");
-          setFormInitialDate(selectedDate || new Date());
-          setEditingItem(null);
-          setIsFormOpen(true);
-        }}
-        className={cn(
-          "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-          "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30",
-          "hover:bg-cyan-500/30 hover:scale-105 active:scale-95",
-        )}
-      >
-        <Bell className="w-4 h-4" />
-        Reminder
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          setFormDefaultType("task");
-          setFormInitialDate(selectedDate || new Date());
-          setEditingItem(null);
-          setIsFormOpen(true);
-        }}
-        className={cn(
-          "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-          "bg-purple-500/20 text-purple-300 border border-purple-500/30",
-          "hover:bg-purple-500/30 hover:scale-105 active:scale-95",
-        )}
-      >
-        <ListTodo className="w-4 h-4" />
-        Task
-      </button>
-    </div>
-  );
+        {filters.map(({ type, icon: Icon, label, activeColor }) => {
+          const isActive = visibleTypes.has(type);
+          const colors = colorClasses[activeColor];
+          return (
+            <button
+              key={type}
+              type="button"
+              onClick={() => toggleTypeVisibility(type)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200",
+                isActive ? colors.active : colors.inactive,
+                isActive && "shadow-sm",
+              )}
+              title={
+                isActive
+                  ? `Hide ${label.toLowerCase()}`
+                  : `Show ${label.toLowerCase()}`
+              }
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{label}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className={cn("min-h-screen pb-10", themeClasses.pageBg)}>
@@ -566,100 +600,61 @@ export default function WebEvents() {
               : "bg-[#0a1628]/95 border-white/10",
         )}
       >
-        <div className="max-w-lg mx-auto px-3">
-          <div className="flex items-center justify-around py-1.5">
-            <button
-              type="button"
-              onClick={() => setMainView("today")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1 rounded-full transition-all",
-                mainView === "today"
-                  ? isCalm
-                    ? "bg-stone-700 text-stone-200"
-                    : isFrost
-                      ? "bg-indigo-100 text-indigo-600"
-                      : isPink
-                        ? "bg-pink-500/20 text-pink-400"
-                        : "bg-cyan-500/20 text-cyan-400"
-                  : isCalm
-                    ? "text-stone-500 hover:text-stone-400"
-                    : isFrost
-                      ? "text-slate-400 hover:text-slate-600"
-                      : "text-white/50 hover:text-white/70",
-              )}
-            >
-              <Sparkles className="w-4 h-4" />
-              <span className="text-xs font-medium">Today</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainView("mission-control")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1 rounded-full transition-all",
-                mainView === "mission-control"
-                  ? isCalm
-                    ? "bg-stone-700 text-stone-200"
-                    : isFrost
-                      ? "bg-indigo-100 text-indigo-600"
-                      : isPink
-                        ? "bg-pink-500/20 text-pink-400"
-                        : "bg-cyan-500/20 text-cyan-400"
-                  : isCalm
-                    ? "text-stone-500 hover:text-stone-400"
-                    : isFrost
-                      ? "text-slate-400 hover:text-slate-600"
-                      : "text-white/50 hover:text-white/70",
-              )}
-            >
-              <Target className="w-4 h-4" />
-              <span className="text-xs font-medium">Focus</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainView("calendar")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1 rounded-full transition-all",
-                mainView === "calendar"
-                  ? isCalm
-                    ? "bg-stone-700 text-stone-200"
-                    : isFrost
-                      ? "bg-indigo-100 text-indigo-600"
-                      : isPink
-                        ? "bg-pink-500/20 text-pink-400"
-                        : "bg-cyan-500/20 text-cyan-400"
-                  : isCalm
-                    ? "text-stone-500 hover:text-stone-400"
-                    : isFrost
-                      ? "text-slate-400 hover:text-slate-600"
-                      : "text-white/50 hover:text-white/70",
-              )}
-            >
-              <CalendarDays className="w-4 h-4" />
-              <span className="text-xs font-medium">Calendar</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainView("dashboard")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1 rounded-full transition-all",
-                mainView === "dashboard"
-                  ? isCalm
-                    ? "bg-stone-700 text-stone-200"
-                    : isFrost
-                      ? "bg-indigo-100 text-indigo-600"
-                      : isPink
-                        ? "bg-pink-500/20 text-pink-400"
-                        : "bg-cyan-500/20 text-cyan-400"
-                  : isCalm
-                    ? "text-stone-500 hover:text-stone-400"
-                    : isFrost
-                      ? "text-slate-400 hover:text-slate-600"
-                      : "text-white/50 hover:text-white/70",
-              )}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              <span className="text-xs font-medium">Stats</span>
-            </button>
+        <div className="max-w-lg mx-auto px-4">
+          {/* Modern segmented navigation with consistent styling */}
+          <div
+            className={cn(
+              "flex items-center justify-around p-1 rounded-2xl my-1",
+              isCalm
+                ? "bg-stone-800/50"
+                : isFrost
+                  ? "bg-slate-100/80"
+                  : "bg-white/[0.03] ring-1 ring-white/[0.06]",
+            )}
+          >
+            {[
+              { view: "today" as const, icon: Sparkles, label: "Today" },
+              {
+                view: "mission-control" as const,
+                icon: Target,
+                label: "Focus",
+              },
+              {
+                view: "calendar" as const,
+                icon: CalendarDays,
+                label: "Calendar",
+              },
+              {
+                view: "dashboard" as const,
+                icon: LayoutDashboard,
+                label: "Stats",
+              },
+            ].map(({ view: viewItem, icon: Icon, label }) => (
+              <button
+                key={viewItem}
+                type="button"
+                onClick={() => setMainView(viewItem)}
+                className={cn(
+                  "flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all duration-200 flex-1 justify-center",
+                  mainView === viewItem
+                    ? isCalm
+                      ? "bg-stone-700 text-stone-200 shadow-sm"
+                      : isFrost
+                        ? "bg-white text-indigo-600 shadow-sm"
+                        : isPink
+                          ? "bg-pink-500/20 text-pink-400 ring-1 ring-pink-500/30"
+                          : "bg-cyan-500/20 text-cyan-400 ring-1 ring-cyan-500/30"
+                    : isCalm
+                      ? "text-stone-500 hover:text-stone-400 hover:bg-stone-700/50"
+                      : isFrost
+                        ? "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                        : "text-white/50 hover:text-white/70 hover:bg-white/5",
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="text-xs font-medium">{label}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -680,210 +675,269 @@ export default function WebEvents() {
 
       {/* Calendar View */}
       {mainView === "calendar" && (
-        <div className="p-1.5">
+        <div className="px-3 pt-2 pb-1">
           <div className="max-w-[1600px] mx-auto">
-            {/* Compact toolbar - touch-friendly buttons */}
-            <div className="flex items-center justify-between gap-1 mb-1">
-              {/* Left side: View toggle + Type filters */}
-              <div className="flex items-center gap-1">
-                {/* View Toggle */}
-                <div
-                  className={cn(
-                    "flex items-center p-0.5 rounded",
-                    isFrost ? "bg-slate-100" : "bg-white/5",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setView("month")}
-                    className={cn(
-                      "p-1.5 rounded transition-all",
-                      view === "month"
-                        ? isFrost
-                          ? "bg-white text-indigo-600 shadow-sm"
-                          : "neo-gradient text-white"
-                        : isFrost
-                          ? "text-slate-500 hover:text-slate-700"
-                          : "text-white/50 hover:text-white",
-                    )}
-                    title="Month view"
-                  >
-                    <CalendarDays className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setView("week")}
-                    className={cn(
-                      "p-1.5 rounded transition-all",
-                      view === "week"
-                        ? isFrost
-                          ? "bg-white text-indigo-600 shadow-sm"
-                          : "neo-gradient text-white"
-                        : isFrost
-                          ? "text-slate-500 hover:text-slate-700"
-                          : "text-white/50 hover:text-white",
-                    )}
-                    title="Week view"
-                  >
-                    <Calendar className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Type Filter */}
-                <div
-                  className={cn(
-                    "flex items-center p-0.5 rounded",
-                    isFrost ? "bg-slate-100" : "bg-white/5",
-                  )}
-                >
-                  {typeFilters.map((filter) => {
-                    const Icon = filter.icon;
-                    const isActive = typeFilter === filter.id;
-                    return (
-                      <button
-                        key={filter.id}
-                        type="button"
-                        onClick={() => setTypeFilter(filter.id)}
-                        className={cn(
-                          "p-1.5 rounded transition-all",
-                          isActive
-                            ? isFrost
-                              ? "bg-white text-indigo-600 shadow-sm"
-                              : "neo-gradient text-white"
-                            : isFrost
-                              ? "text-slate-500 hover:text-slate-700"
-                              : "text-white/50 hover:text-white",
-                        )}
-                        title={filter.label}
-                      >
-                        <Icon className="w-4 h-4" />
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Birthday Toggle */}
+            {/* Modern toolbar with clear visual hierarchy */}
+            <div
+              className={cn(
+                "flex items-center justify-between gap-3 p-2 rounded-2xl mb-2",
+                isFrost
+                  ? "bg-white/60 backdrop-blur-sm ring-1 ring-slate-200/50 shadow-sm"
+                  : "bg-white/[0.02] backdrop-blur-sm ring-1 ring-white/[0.05]",
+              )}
+            >
+              {/* Left: View Toggle - segmented control style */}
+              <div
+                className={cn(
+                  "flex items-center p-0.5 rounded-xl",
+                  isFrost
+                    ? "bg-slate-100"
+                    : "bg-white/[0.04] ring-1 ring-white/[0.06]",
+                )}
+              >
                 <button
                   type="button"
-                  onClick={() => setShowBirthdays(!showBirthdays)}
+                  onClick={() => setView("month")}
                   className={cn(
-                    "p-1.5 rounded transition-all",
-                    showBirthdays
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200",
+                    view === "month"
                       ? isFrost
-                        ? "bg-amber-100 text-amber-600"
-                        : "bg-amber-500/20 text-amber-300"
+                        ? "bg-white text-indigo-600 shadow-sm"
+                        : isPink
+                          ? "bg-pink-500/20 text-pink-300 ring-1 ring-pink-500/40 shadow-sm"
+                          : "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shadow-sm"
                       : isFrost
-                        ? "text-slate-400 hover:text-slate-600"
-                        : "text-white/40 hover:text-white/60",
+                        ? "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                        : "text-white/50 hover:text-white/70 hover:bg-white/5",
                   )}
-                  title="Show birthdays"
+                  title="Month view"
                 >
-                  <Cake className="w-4 h-4" />
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Month</span>
                 </button>
-
-                {/* Category Filter Dropdown */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className={cn(
-                        "flex items-center gap-1 p-2.5 rounded-lg transition-all",
-                        selectedCategories.length > 0
-                          ? isPink
-                            ? "bg-pink-500/20 text-pink-300"
-                            : "bg-cyan-500/20 text-cyan-300"
-                          : "text-white/40 hover:text-white/60",
-                      )}
-                      title="Filter by category"
-                    >
-                      <Filter className="w-5 h-5" />
-                      {selectedCategories.length > 0 && (
-                        <span className="text-xs font-bold">
-                          {selectedCategories.length}
-                        </span>
-                      )}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-48 p-2 bg-gray-900/95 backdrop-blur-xl border-white/10"
-                    align="start"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-white/70">
-                          Categories
-                        </span>
-                        {selectedCategories.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedCategories([])}
-                            className="text-[10px] text-white/50 hover:text-white"
-                          >
-                            Clear all
-                          </button>
-                        )}
-                      </div>
-                      {CATEGORIES.map((category) => {
-                        const Icon = category.icon;
-                        const isSelected = selectedCategories.includes(
-                          category.id,
-                        );
-                        return (
-                          <button
-                            key={category.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedCategories((prev) =>
-                                isSelected
-                                  ? prev.filter((id) => id !== category.id)
-                                  : [...prev, category.id],
-                              );
-                            }}
-                            className={cn(
-                              "flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs font-medium transition-all",
-                              isSelected
-                                ? "text-white"
-                                : "text-white/60 hover:text-white hover:bg-white/5",
-                            )}
-                            style={{
-                              backgroundColor: isSelected
-                                ? category.color
-                                : undefined,
-                            }}
-                          >
-                            <Icon className="w-3.5 h-3.5" />
-                            {category.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                <button
+                  type="button"
+                  onClick={() => setView("week")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200",
+                    view === "week"
+                      ? isFrost
+                        ? "bg-white text-indigo-600 shadow-sm"
+                        : isPink
+                          ? "bg-pink-500/20 text-pink-300 ring-1 ring-pink-500/40 shadow-sm"
+                          : "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shadow-sm"
+                      : isFrost
+                        ? "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                        : "text-white/50 hover:text-white/70 hover:bg-white/5",
+                  )}
+                  title="Week view"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Week</span>
+                </button>
               </div>
 
-              {/* Right side: Quick add buttons */}
-              <QuickAddButtons />
+              {/* Center: Type filters + Birthday - unified filter group */}
+              <div className="flex items-center gap-1.5 flex-1 justify-center">
+                <TypeFilterButtons />
+
+                {/* Birthday Toggle - matching chip style */}
+                <div
+                  className={cn(
+                    "flex items-center p-1 rounded-xl",
+                    isFrost
+                      ? "bg-slate-100/80"
+                      : "bg-white/[0.03] ring-1 ring-white/[0.06]",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowBirthdays(!showBirthdays)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200",
+                      showBirthdays
+                        ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40 shadow-sm shadow-amber-500/10"
+                        : "text-amber-300/50 hover:text-amber-300/70 hover:bg-amber-500/5",
+                    )}
+                    title={showBirthdays ? "Hide birthdays" : "Show birthdays"}
+                  >
+                    <Cake className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Birthdays</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Right: Category filter - action button style */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all duration-200",
+                      selectedCategories.length > 0
+                        ? isFrost
+                          ? "bg-indigo-100 text-indigo-600"
+                          : isPink
+                            ? "bg-pink-500/20 text-pink-300 ring-1 ring-pink-500/40"
+                            : "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40"
+                        : isFrost
+                          ? "bg-slate-100 text-slate-500 hover:text-slate-700"
+                          : "bg-white/[0.03] text-white/50 hover:text-white/70 ring-1 ring-white/[0.06]",
+                    )}
+                    title="Filter by category"
+                  >
+                    <Filter className="w-4 h-4" />
+                    {selectedCategories.length > 0 ? (
+                      <span className="text-xs font-semibold bg-current/20 px-1.5 py-0.5 rounded">
+                        {selectedCategories.length}
+                      </span>
+                    ) : (
+                      <span className="hidden sm:inline text-xs font-medium">
+                        Filter
+                      </span>
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className={cn(
+                    "w-52 p-2 backdrop-blur-xl border",
+                    isFrost
+                      ? "bg-white/95 border-slate-200"
+                      : "bg-gray-900/95 border-white/10",
+                  )}
+                  align="end"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <span
+                        className={cn(
+                          "text-xs font-semibold",
+                          isFrost ? "text-slate-600" : "text-white/70",
+                        )}
+                      >
+                        Categories
+                      </span>
+                      {selectedCategories.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCategories([])}
+                          className={cn(
+                            "text-[10px] font-medium",
+                            isFrost
+                              ? "text-slate-400 hover:text-slate-600"
+                              : "text-white/50 hover:text-white",
+                          )}
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+                    {CATEGORIES.map((category) => {
+                      const Icon = category.icon;
+                      const isSelected = selectedCategories.includes(
+                        category.id,
+                      );
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategories((prev) =>
+                              isSelected
+                                ? prev.filter((id) => id !== category.id)
+                                : [...prev, category.id],
+                            );
+                          }}
+                          className={cn(
+                            "flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-xs font-medium transition-all",
+                            isSelected
+                              ? "text-white shadow-sm"
+                              : isFrost
+                                ? "text-slate-600 hover:bg-slate-100"
+                                : "text-white/60 hover:text-white hover:bg-white/5",
+                          )}
+                          style={{
+                            backgroundColor: isSelected
+                              ? category.color
+                              : undefined,
+                          }}
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                          {category.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
 
-            {/* Loading State */}
+            {/* Loading State - Modern skeleton-inspired design */}
             {isLoading && (
-              <div className="flex items-center justify-center h-[600px]">
-                <div className="text-center">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{
-                      duration: 1,
-                      repeat: Infinity,
-                      ease: "linear",
-                    }}
+              <div className="flex items-center justify-center h-[500px]">
+                <div
+                  className={cn(
+                    "text-center p-8 rounded-3xl",
+                    isFrost
+                      ? "bg-white/50 ring-1 ring-slate-200/50"
+                      : "bg-white/[0.02] ring-1 ring-white/[0.06]",
+                  )}
+                >
+                  <div className="relative w-16 h-16 mx-auto mb-5">
+                    {/* Outer glow ring */}
+                    <motion.div
+                      animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.1, 0.3] }}
+                      transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: "easeInOut",
+                      }}
+                      className={cn(
+                        "absolute inset-0 rounded-full",
+                        isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                      )}
+                    />
+                    {/* Spinning ring */}
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{
+                        duration: 1.5,
+                        repeat: Infinity,
+                        ease: "linear",
+                      }}
+                      className={cn(
+                        "absolute inset-0 rounded-full border-[3px]",
+                        isPink
+                          ? "border-pink-500/20 border-t-pink-400"
+                          : "border-cyan-500/20 border-t-cyan-400",
+                      )}
+                    />
+                    {/* Center icon */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <CalendarDays
+                        className={cn(
+                          "w-6 h-6",
+                          isPink ? "text-pink-400/50" : "text-cyan-400/50",
+                        )}
+                      />
+                    </div>
+                  </div>
+                  <p
                     className={cn(
-                      "w-12 h-12 mx-auto mb-4 border-4 rounded-full",
-                      isPink
-                        ? "border-pink-500/30 border-t-pink-400"
-                        : "border-cyan-500/30 border-t-cyan-400",
+                      "text-sm font-medium",
+                      isFrost ? "text-slate-500" : "text-white/60",
                     )}
-                  />
-                  <p className="text-white/60">Loading your events...</p>
+                  >
+                    Loading your events...
+                  </p>
+                  <p
+                    className={cn(
+                      "text-xs mt-1",
+                      isFrost ? "text-slate-400" : "text-white/40",
+                    )}
+                  >
+                    This won&apos;t take long
+                  </p>
                 </div>
               </div>
             )}
@@ -899,6 +953,14 @@ export default function WebEvents() {
                 onItemClick={handleItemClick}
                 onAddEvent={handleAddEvent}
                 onBirthdayClick={handleBirthdayClick}
+                onDayModalClose={() => {
+                  // Clean up action dialogs when day modal closes
+                  setDetailItem(null);
+                  setClickedOccurrenceDate(null);
+                  setModalPosition(null);
+                  setShowPostponeDialog(false);
+                  setShowActionDialog(false);
+                }}
                 showBirthdays={showBirthdays}
               />
             )}

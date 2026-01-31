@@ -9,13 +9,17 @@ import {
   BarChart3Icon,
   ChevronDownIcon,
   DollarSignIcon,
+  EyeIcon,
+  EyeOffIcon,
   FilterIcon,
   ListIcon,
   RefreshIcon,
   StarIcon,
 } from "@/components/icons/FuturisticIcons";
+import BlurredAmount from "@/components/ui/BlurredAmount";
 import { Card } from "@/components/ui/card";
 import { SyncIndicator } from "@/components/ui/SyncIndicator";
+import { usePrivacyBlur } from "@/contexts/PrivacyBlurContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
@@ -159,6 +163,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   const { theme: currentUserTheme } = useTheme();
   const themeClasses = useThemeClasses();
   const { data: accounts } = useAccounts();
+  const { isBlurred, toggleBlur } = usePrivacyBlur();
   const [viewMode, setViewMode] = useState<ViewMode>("widgets");
   const [filterCategory, setFilterCategory] = useState<string>("");
   const [filterAccount, setFilterAccount] = useState<string>("");
@@ -181,7 +186,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   // Check if any transaction is pending (optimistic, not yet confirmed)
   const hasPendingTransactions = useMemo(
     () => transactions.some((t) => (t as any)._isPending),
-    [transactions]
+    [transactions],
   );
 
   // ==================== INCOME VS EXPENSE ====================
@@ -198,7 +203,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     // "partner" shows transactions where user is neither owner nor collaborator
     if (ownershipFilter === "mine") {
       filteredTxs = filteredTxs.filter(
-        (t) => t.is_owner === true || t.is_collaborator === true
+        (t) => t.is_owner === true || t.is_collaborator === true,
       );
     } else if (ownershipFilter === "partner") {
       // Partner filter should include:
@@ -207,7 +212,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
       filteredTxs = filteredTxs.filter(
         (t) =>
           t.is_owner === false ||
-          (t.is_owner === true && !!t.split_completed_at)
+          (t.is_owner === true && !!t.split_completed_at),
       );
     }
 
@@ -245,7 +250,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     // "partner" shows transactions where user is neither owner nor collaborator
     if (ownershipFilter === "mine") {
       filtered = filtered.filter(
-        (t) => t.is_owner === true || t.is_collaborator === true
+        (t) => t.is_owner === true || t.is_collaborator === true,
       );
     } else if (ownershipFilter === "partner") {
       // Partner filter should include:
@@ -254,7 +259,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
       filtered = filtered.filter(
         (t) =>
           t.is_owner === false ||
-          (t.is_owner === true && !!t.split_completed_at)
+          (t.is_owner === true && !!t.split_completed_at),
       );
     }
 
@@ -296,7 +301,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   const stats = useMemo(() => {
     const total = filteredTransactions.reduce(
       (sum, t) => sum + getTransactionDisplayAmount(t, ownershipFilter),
-      0
+      0,
     );
     const defaultColor = themeClasses.defaultAccentColor;
     const byCategory = filteredTransactions.reduce(
@@ -309,18 +314,18 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
         };
         return acc;
       },
-      {} as Record<string, { amount: number; color: string }>
+      {} as Record<string, { amount: number; color: string }>,
     );
 
     const topCategory = Object.entries(byCategory).sort(
-      (a, b) => b[1].amount - a[1].amount
+      (a, b) => b[1].amount - a[1].amount,
     )[0];
 
     // Calculate daily average
     const start = new Date(startDate);
     const end = new Date(endDate);
     const daysDiff = Math.ceil(
-      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
     );
     const dailyAvg = daysDiff > 0 ? total / daysDiff : 0;
 
@@ -347,15 +352,15 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
 
   const categories = useMemo(() => {
     return Array.from(
-      new Set(transactions.map((t) => t.category).filter(Boolean))
+      new Set(transactions.map((t) => t.category).filter(Boolean)),
     );
   }, [transactions]);
 
   const accountNames = useMemo(() => {
     return Array.from(
       new Set(
-        typeFilteredTransactions.map((t) => t.account_name).filter(Boolean)
-      )
+        typeFilteredTransactions.map((t) => t.account_name).filter(Boolean),
+      ),
     );
   }, [typeFilteredTransactions]);
 
@@ -425,7 +430,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     let filtered = transactions.filter((t) => t.category === categoryName);
     if (ownershipFilter === "mine") {
       filtered = filtered.filter(
-        (t) => t.is_owner === true || t.is_collaborator === true
+        (t) => t.is_owner === true || t.is_collaborator === true,
       );
     } else if (ownershipFilter === "partner") {
       // Partner filter should include:
@@ -434,7 +439,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
       filtered = filtered.filter(
         (t) =>
           t.is_owner === false ||
-          (t.is_owner === true && !!t.split_completed_at)
+          (t.is_owner === true && !!t.split_completed_at),
       );
     }
     return filtered;
@@ -444,11 +449,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     const categoryTxs = getCategoryTransactions(categoryDetail);
     const totalAmount = categoryTxs.reduce(
       (sum, t) => sum + getTransactionDisplayAmount(t, ownershipFilter),
-      0
+      0,
     );
     // Get category color from the first transaction with this category
     const categoryColor = categoryTxs.find(
-      (t) => t.category_color
+      (t) => t.category_color,
     )?.category_color;
 
     return (
@@ -480,7 +485,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                 ? currentUserTheme === "pink"
                   ? "border-pink-500 text-pink-400"
                   : "border-blue-500 text-blue-400"
-                : "border-transparent text-slate-400 hover:text-slate-300"
+                : "border-transparent text-slate-400 hover:text-slate-300",
             )}
           >
             <UserIcon className="w-3.5 h-3.5" />
@@ -492,7 +497,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all border-b-2",
               ownershipFilter === "all"
                 ? `border-current ${themeClasses.textActive}`
-                : "border-transparent text-slate-400 hover:text-slate-300"
+                : "border-transparent text-slate-400 hover:text-slate-300",
             )}
           >
             <UsersIcon className="w-3.5 h-3.5" />
@@ -506,7 +511,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                 ? currentUserTheme === "pink"
                   ? "border-blue-500 text-blue-400"
                   : "border-pink-500 text-pink-400"
-                : "border-transparent text-slate-400 hover:text-slate-300"
+                : "border-transparent text-slate-400 hover:text-slate-300",
             )}
           >
             <HeartIcon className="w-3.5 h-3.5" />
@@ -528,7 +533,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
                 viewMode === "widgets"
                   ? "neo-gradient text-white shadow-sm"
-                  : `${themeClasses.text} hover:bg-white/5`
+                  : `${themeClasses.text} hover:bg-white/5`,
               )}
             >
               <BarChart3Icon className="w-3.5 h-3.5 inline-block mr-1" />
@@ -544,7 +549,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                 "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
                 viewMode === "list"
                   ? "neo-gradient text-white shadow-sm"
-                  : `${themeClasses.text} hover:bg-white/5`
+                  : `${themeClasses.text} hover:bg-white/5`,
               )}
             >
               <ListIcon className="w-3.5 h-3.5 inline-block mr-1" />
@@ -562,7 +567,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
               showFilters || hasActiveFilters
                 ? `${themeClasses.bgActive} ${themeClasses.textActive}`
-                : `neo-card ${themeClasses.text} hover:bg-white/5`
+                : `neo-card ${themeClasses.text} hover:bg-white/5`,
             )}
           >
             <FilterIcon className="w-3.5 h-3.5" />
@@ -571,6 +576,27 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               <span
                 className={`w-1.5 h-1.5 rounded-full ${themeClasses.bgActive.replace("/20", "")}`}
               />
+            )}
+          </button>
+
+          {/* Privacy Blur Toggle */}
+          <button
+            onClick={() => {
+              if (navigator.vibrate) navigator.vibrate(5);
+              toggleBlur();
+            }}
+            className={cn(
+              "p-1.5 rounded-lg transition-all",
+              isBlurred
+                ? `${themeClasses.bgActive} ${themeClasses.textActive}`
+                : `neo-card ${themeClasses.text} hover:bg-white/5`,
+            )}
+            title={isBlurred ? "Show amounts" : "Hide amounts"}
+          >
+            {isBlurred ? (
+              <EyeOffIcon className="w-4 h-4" />
+            ) : (
+              <EyeIcon className="w-4 h-4" />
             )}
           </button>
 
@@ -615,11 +641,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     getValue: () => ({
                       start: format(
                         startOfWeek(new Date(), { weekStartsOn: 1 }),
-                        "yyyy-MM-dd"
+                        "yyyy-MM-dd",
                       ),
                       end: format(
                         endOfWeek(new Date(), { weekStartsOn: 1 }),
-                        "yyyy-MM-dd"
+                        "yyyy-MM-dd",
                       ),
                     }),
                   },
@@ -630,11 +656,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                       return {
                         start: format(
                           startOfWeek(lw, { weekStartsOn: 1 }),
-                          "yyyy-MM-dd"
+                          "yyyy-MM-dd",
                         ),
                         end: format(
                           endOfWeek(lw, { weekStartsOn: 1 }),
-                          "yyyy-MM-dd"
+                          "yyyy-MM-dd",
                         ),
                       };
                     },
@@ -661,7 +687,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     getValue: () => ({
                       start: format(
                         startOfMonth(subMonths(new Date(), 2)),
-                        "yyyy-MM-dd"
+                        "yyyy-MM-dd",
                       ),
                       end: format(endOfMonth(new Date()), "yyyy-MM-dd"),
                     }),
@@ -697,7 +723,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                         "px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-all flex-shrink-0",
                         isActive
                           ? `neo-gradient text-white shadow-sm`
-                          : `neo-card ${themeClasses.text} hover:bg-white/5`
+                          : `neo-card ${themeClasses.text} hover:bg-white/5`,
                       )}
                     >
                       {preset.label}
@@ -754,7 +780,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                       "px-2 py-1 rounded text-[10px] font-medium flex items-center gap-0.5 transition-all",
                       sortField === field
                         ? `${themeClasses.bgActive} ${themeClasses.textActive}`
-                        : `${themeClasses.textMuted} hover:bg-white/5`
+                        : `${themeClasses.textMuted} hover:bg-white/5`,
                     )}
                   >
                     {field === "recent"
@@ -803,7 +829,9 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     Income
                   </p>
                   <p className="text-xl font-bold text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]">
-                    ${filteredIncomeExpenseSummary.totalIncome.toFixed(0)}
+                    <BlurredAmount>
+                      ${filteredIncomeExpenseSummary.totalIncome.toFixed(0)}
+                    </BlurredAmount>
                   </p>
                 </div>
               </Card>
@@ -821,7 +849,9 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     Expense
                   </p>
                   <p className="text-xl font-bold text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]">
-                    ${filteredIncomeExpenseSummary.totalExpense.toFixed(0)}
+                    <BlurredAmount>
+                      ${filteredIncomeExpenseSummary.totalExpense.toFixed(0)}
+                    </BlurredAmount>
                   </p>
                 </div>
               </Card>
@@ -832,7 +862,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                   "neo-card p-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl spring-bounce shimmer bg-gradient-to-br to-transparent",
                   filteredIncomeExpenseSummary.netBalance >= 0
                     ? "from-cyan-500/10"
-                    : "from-orange-500/10"
+                    : "from-orange-500/10",
                 )}
                 style={{ animationDelay: "100ms" }}
               >
@@ -842,7 +872,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                       "w-8 h-8 rounded-full flex items-center justify-center mb-1.5",
                       filteredIncomeExpenseSummary.netBalance >= 0
                         ? "bg-cyan-500/20 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
-                        : "bg-orange-500/20 shadow-[0_0_12px_rgba(249,115,22,0.3)]"
+                        : "bg-orange-500/20 shadow-[0_0_12px_rgba(249,115,22,0.3)]",
                     )}
                   >
                     <DollarSignIcon
@@ -850,7 +880,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                         "w-4 h-4",
                         filteredIncomeExpenseSummary.netBalance >= 0
                           ? "text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.6)]"
-                          : "text-orange-400 drop-shadow-[0_0_6px_rgba(249,115,22,0.6)]"
+                          : "text-orange-400 drop-shadow-[0_0_6px_rgba(249,115,22,0.6)]",
                       )}
                     />
                   </div>
@@ -859,7 +889,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                       "text-[9px] uppercase tracking-wide mb-0.5",
                       filteredIncomeExpenseSummary.netBalance >= 0
                         ? "text-cyan-300/70"
-                        : "text-orange-300/70"
+                        : "text-orange-300/70",
                     )}
                   >
                     Balance
@@ -869,11 +899,13 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                       "text-xl font-bold",
                       filteredIncomeExpenseSummary.netBalance >= 0
                         ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]"
-                        : "text-orange-400 drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]"
+                        : "text-orange-400 drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]",
                     )}
                   >
-                    {filteredIncomeExpenseSummary.netBalance >= 0 ? "+" : ""}$
-                    {filteredIncomeExpenseSummary.netBalance.toFixed(0)}
+                    <BlurredAmount>
+                      {filteredIncomeExpenseSummary.netBalance >= 0 ? "+" : ""}$
+                      {filteredIncomeExpenseSummary.netBalance.toFixed(0)}
+                    </BlurredAmount>
                   </p>
                 </div>
               </Card>
@@ -913,9 +945,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                       Daily
                     </span>
                   </div>
-                  <span className="text-lg font-bold bg-gradient-to-r from-sky-400 to-cyan-300 bg-clip-text text-transparent">
-                    ${stats.dailyAvg.toFixed(0)}
-                  </span>
+                  <BlurredAmount>
+                    <span className="text-lg font-bold bg-gradient-to-r from-sky-400 to-cyan-300 bg-clip-text text-transparent">
+                      ${stats.dailyAvg.toFixed(0)}
+                    </span>
+                  </BlurredAmount>
                 </div>
               </Card>
             </div>
@@ -954,9 +988,11 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                           >
                             {cat}
                           </span>
-                          <span className="text-xs font-semibold bg-gradient-to-r from-emerald-400 to-teal bg-clip-text text-transparent ml-2">
-                            ${data.amount.toFixed(0)}
-                          </span>
+                          <BlurredAmount blurIntensity="sm">
+                            <span className="text-xs font-semibold bg-gradient-to-r from-emerald-400 to-teal bg-clip-text text-transparent ml-2">
+                              ${data.amount.toFixed(0)}
+                            </span>
+                          </BlurredAmount>
                         </div>
                         <div
                           className={`h-2 ${themeClasses.surfaceBgMuted} rounded-full overflow-hidden shadow-inner`}
@@ -1000,13 +1036,13 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     className={cn(
                       `p-1 rounded-full ${themeClasses.text} ${themeClasses.bgHover} transition-all`,
                       (isRefreshing || hasPendingTransactions) && "opacity-60",
-                      "disabled:cursor-not-allowed"
+                      "disabled:cursor-not-allowed",
                     )}
                   >
                     <RefreshIcon
                       className={cn(
                         `w-4 h-4 ${themeClasses.glow}`,
-                        isRefreshing && "animate-spin"
+                        isRefreshing && "animate-spin",
                       )}
                     />
                   </button>
@@ -1044,7 +1080,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     >
                       {(() => {
                         const IconComponent = getCategoryIcon(
-                          tx.category || undefined
+                          tx.category || undefined,
                         );
                         return (
                           <IconComponent
@@ -1087,18 +1123,20 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                           </svg>
                         </span>
                       )}
-                      <p
-                        className={cn(
-                          `text-sm font-bold bg-gradient-to-br ${themeClasses.titleGradient} bg-clip-text text-transparent`,
-                          (tx as any)._isPending && "opacity-70"
-                        )}
-                      >
-                        $
-                        {getTransactionDisplayAmount(
-                          tx,
-                          ownershipFilter
-                        ).toFixed(0)}
-                      </p>
+                      <BlurredAmount blurIntensity="sm">
+                        <p
+                          className={cn(
+                            `text-sm font-bold bg-gradient-to-br ${themeClasses.titleGradient} bg-clip-text text-transparent`,
+                            (tx as any)._isPending && "opacity-70",
+                          )}
+                        >
+                          $
+                          {getTransactionDisplayAmount(
+                            tx,
+                            ownershipFilter,
+                          ).toFixed(0)}
+                        </p>
+                      </BlurredAmount>
                     </button>
                   );
                 })}
@@ -1123,13 +1161,13 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                 className={cn(
                   `p-1 rounded-full ${themeClasses.text} ${themeClasses.textHover} ${themeClasses.bgHover} transition-all`,
                   (isRefreshing || hasPendingTransactions) && "opacity-60",
-                  "disabled:cursor-not-allowed"
+                  "disabled:cursor-not-allowed",
                 )}
               >
                 <RefreshIcon
                   className={cn(
                     `w-4 h-4 ${themeClasses.glow}`,
-                    isRefreshing && "animate-spin"
+                    isRefreshing && "animate-spin",
                   )}
                 />
               </button>

@@ -2,6 +2,7 @@
 "use client";
 
 import { AppModeProvider } from "@/contexts/AppModeContext";
+import { PrivacyBlurProvider } from "@/contexts/PrivacyBlurContext";
 import { SyncProvider } from "@/contexts/SyncContext";
 import { TabProvider } from "@/contexts/TabContext";
 import { ThemeProvider as ColorThemeProvider } from "@/contexts/ThemeContext";
@@ -53,7 +54,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           },
         },
       }),
-    []
+    [],
   );
 
   useEffect(() => {
@@ -85,7 +86,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       const { createBrowserClient } = await import("@supabase/ssr");
       const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
       );
 
       let currentUserId: string | null = null;
@@ -119,15 +120,17 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <SyncProvider>
           <ColorThemeProvider>
-            <AppModeProvider>
-              <TabProvider>
-                {children}
-                <ReactQueryDevtools
-                  initialIsOpen={false}
-                  buttonPosition="bottom-right"
-                />
-              </TabProvider>
-            </AppModeProvider>
+            <PrivacyBlurProvider>
+              <AppModeProvider>
+                <TabProvider>
+                  {children}
+                  <ReactQueryDevtools
+                    initialIsOpen={false}
+                    buttonPosition="bottom-right"
+                  />
+                </TabProvider>
+              </AppModeProvider>
+            </PrivacyBlurProvider>
           </ColorThemeProvider>
         </SyncProvider>
       </QueryClientProvider>

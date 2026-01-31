@@ -295,7 +295,7 @@ function EmptyState() {
       <div
         className={cn(
           "w-16 h-16 rounded-2xl flex items-center justify-center mb-4",
-          isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+          isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
         )}
       >
         <Icon
@@ -309,7 +309,7 @@ function EmptyState() {
         onClick={() => openCreateForm("reminder")}
         className={cn(
           "px-4 py-2 rounded-lg font-medium transition-all",
-          "neo-gradient text-white"
+          "neo-gradient text-white",
         )}
       >
         Create Item
@@ -347,7 +347,7 @@ export default function ItemsDashboard({
     completed: false,
   });
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
-    null
+    null,
   );
   const [editingItem, setEditingItem] = useState<ItemWithDetails | null>(null);
 
@@ -389,7 +389,7 @@ export default function ItemsDashboard({
     setSelectedCategoryFilters((prev) =>
       prev.includes(categoryId)
         ? prev.filter((id) => id !== categoryId)
-        : [...prev, categoryId]
+        : [...prev, categoryId],
     );
   };
 
@@ -401,7 +401,7 @@ export default function ItemsDashboard({
   // Select all categories except work
   const selectAllExceptWork = () => {
     setSelectedCategoryFilters(
-      CATEGORIES.filter((cat) => cat.id !== "work").map((cat) => cat.id)
+      CATEGORIES.filter((cat) => cat.id !== "work").map((cat) => cat.id),
     );
   };
 
@@ -414,7 +414,7 @@ export default function ItemsDashboard({
       if (selectedCategoryFilters.length > 0) {
         const itemCategories = item.categories || [];
         const hasMatchingCategory = selectedCategoryFilters.some((catId) =>
-          itemCategories.includes(catId)
+          itemCategories.includes(catId),
         );
         if (!hasMatchingCategory) return false;
       }
@@ -570,7 +570,7 @@ export default function ItemsDashboard({
   const progressStats = useMemo(() => {
     const total = filteredItems.length;
     const completedCount = filteredItems.filter(
-      (i) => i.status === "completed"
+      (i) => i.status === "completed",
     ).length;
     const pendingCount = total - completedCount;
     const percentage =
@@ -709,7 +709,7 @@ export default function ItemsDashboard({
             key={i}
             className={cn(
               "h-24 rounded-xl animate-pulse",
-              isPink ? "bg-pink-500/10" : "bg-cyan-500/10"
+              isPink ? "bg-pink-500/10" : "bg-cyan-500/10",
             )}
           />
         ))}
@@ -740,7 +740,7 @@ export default function ItemsDashboard({
       onClick={() => toggleSection(sectionKey)}
       className={cn(
         "w-full flex items-center gap-2 py-1.5 transition-colors",
-        "hover:opacity-80"
+        "hover:opacity-80",
       )}
     >
       <motion.div
@@ -751,7 +751,7 @@ export default function ItemsDashboard({
         <ChevronDownIcon
           className={cn(
             "w-3.5 h-3.5",
-            isOverdue ? "text-red-400" : "text-white/40"
+            isOverdue ? "text-red-400" : "text-white/40",
           )}
         />
       </motion.div>
@@ -759,7 +759,7 @@ export default function ItemsDashboard({
       <span
         className={cn(
           "text-[11px] font-medium tracking-wide uppercase",
-          isOverdue ? "text-red-400" : "text-white/50"
+          isOverdue ? "text-red-400" : "text-white/50",
         )}
       >
         {label}
@@ -771,7 +771,7 @@ export default function ItemsDashboard({
             ? "text-red-400"
             : isPink
               ? "text-pink-400/60"
-              : "text-cyan-400/60"
+              : "text-cyan-400/60",
         )}
       >
         {count}
@@ -799,7 +799,7 @@ export default function ItemsDashboard({
                       ? isPink
                         ? "bg-pink-500/30 text-pink-300"
                         : "bg-cyan-500/30 text-cyan-300"
-                      : "text-white/40 hover:text-white/60"
+                      : "text-white/40 hover:text-white/60",
                   )}
                 >
                   {range === "today"
@@ -821,7 +821,7 @@ export default function ItemsDashboard({
                       ? "bg-green-400"
                       : isPink
                         ? "bg-pink-400"
-                        : "bg-cyan-400"
+                        : "bg-cyan-400",
                   )}
                   initial={{ width: 0 }}
                   animate={{ width: `${progressStats.percentage}%` }}
@@ -833,7 +833,7 @@ export default function ItemsDashboard({
                   "text-[10px] font-medium tabular-nums",
                   progressStats.percentage === 100
                     ? "text-green-400"
-                    : "text-white/40"
+                    : "text-white/40",
                 )}
               >
                 {progressStats.percentage}%
@@ -850,7 +850,7 @@ export default function ItemsDashboard({
                   ? isPink
                     ? "bg-pink-500/20 text-pink-400"
                     : "bg-cyan-500/20 text-cyan-400"
-                  : "text-white/40 hover:text-white/60 hover:bg-white/5"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/5",
               )}
             >
               <FilterIcon className="w-3.5 h-3.5" />
@@ -874,7 +874,7 @@ export default function ItemsDashboard({
                   <div className="flex flex-wrap gap-1.5">
                     {CATEGORIES.map((category) => {
                       const isSelected = selectedCategoryFilters.includes(
-                        category.id
+                        category.id,
                       );
                       const IconComponent = category.icon;
                       return (
@@ -885,7 +885,7 @@ export default function ItemsDashboard({
                           onDoubleClick={() => soloSelectCategory(category.id)}
                           className={cn(
                             "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all",
-                            isSelected ? "" : "bg-white/5 text-white/40"
+                            isSelected ? "" : "bg-white/5 text-white/40",
                           )}
                           style={{
                             backgroundColor: isSelected
@@ -1123,7 +1123,14 @@ export default function ItemsDashboard({
         ) : viewMode === "schedule" ? (
           <ScheduleView items={allItems} />
         ) : (
-          <CalendarView items={allItems} />
+          <CalendarView
+            items={allItems}
+            onItemClick={setSelectedItem}
+            onDayModalClose={() => {
+              // Clean up item detail when day modal closes
+              setSelectedItem(null);
+            }}
+          />
         )}
       </div>
 

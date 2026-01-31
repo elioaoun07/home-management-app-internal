@@ -5,6 +5,7 @@ import {
   SparklesIcon,
   ZapIcon,
 } from "@/components/icons/FuturisticIcons";
+import BlurredAmount from "@/components/ui/BlurredAmount";
 import { Card } from "@/components/ui/card";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
@@ -80,7 +81,7 @@ export default function CategoryDetailView({
           (acc[sub] || 0) + getTransactionDisplayAmount(t, ownershipFilter);
         return acc;
       },
-      {} as Record<string, number>
+      {} as Record<string, number>,
     );
 
     const byAccount = transactions.reduce(
@@ -90,11 +91,11 @@ export default function CategoryDetailView({
           (acc[acct] || 0) + getTransactionDisplayAmount(t, ownershipFilter);
         return acc;
       },
-      {} as Record<string, number>
+      {} as Record<string, number>,
     );
 
     const sortedByDate = [...transactions].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
 
     return {
@@ -110,7 +111,7 @@ export default function CategoryDetailView({
     <div
       className={cn(
         "min-h-screen bg-bg-dark relative",
-        isExiting ? "slide-out-blurred-left" : "slide-in-blurred-right"
+        isExiting ? "slide-out-blurred-left" : "slide-in-blurred-right",
       )}
       style={
         {
@@ -133,7 +134,7 @@ export default function CategoryDetailView({
       <div
         className={cn(
           "sticky top-0 z-30 backdrop-blur-xl border-b px-3 py-15 bg-bg-card-custom/90",
-          themeClasses.border
+          themeClasses.border,
         )}
       >
         <button
@@ -142,13 +143,13 @@ export default function CategoryDetailView({
             "flex items-center gap-2 mb-3 px-4 py-2.5 rounded-lg transition-all duration-300 group shadow-md hover:shadow-lg bg-secondary/10 hover:bg-secondary/20 border",
             themeClasses.text,
             themeClasses.textHover,
-            themeClasses.border
+            themeClasses.border,
           )}
         >
           <ArrowLeftIcon
             className={cn(
               "w-5 h-5 transition-transform group-hover:-translate-x-1",
-              themeClasses.glow
+              themeClasses.glow,
             )}
           />
           <span className="text-sm font-semibold">Back to Dashboard</span>
@@ -213,20 +214,20 @@ export default function CategoryDetailView({
           <Card
             className={cn(
               "neo-card p-4 border backdrop-blur-sm scale-in-center bg-secondary/5 bg-gradient-to-br from-secondary via-primary to-primary bg-opacity-10",
-              themeClasses.border
+              themeClasses.border,
             )}
             style={{ animationDelay: "0.1s" }}
           >
             <p className="text-xs mb-1 text-[#94a3b8]">Total Spent</p>
             <div className="flex items-center gap-2">
               <p className={cn("text-2xl font-bold", themeClasses.text)}>
-                ${totalAmount.toFixed(2)}
+                <BlurredAmount>${totalAmount.toFixed(2)}</BlurredAmount>
               </p>
               <ZapIcon
                 className={cn(
                   "w-5 h-5 animate-pulse",
                   themeClasses.text,
-                  themeClasses.glow
+                  themeClasses.glow,
                 )}
               />
             </div>
@@ -235,13 +236,13 @@ export default function CategoryDetailView({
           <Card
             className={cn(
               "neo-card p-4 border backdrop-blur-sm scale-in-center bg-primary/5",
-              themeClasses.border
+              themeClasses.border,
             )}
             style={{ animationDelay: "0.2s" }}
           >
             <p className="text-xs mb-1 text-[#94a3b8]">Avg per Transaction</p>
             <p className="text-2xl font-bold text-white">
-              ${stats.avgTransaction.toFixed(2)}
+              <BlurredAmount>${stats.avgTransaction.toFixed(2)}</BlurredAmount>
             </p>
           </Card>
         </div>
@@ -251,14 +252,14 @@ export default function CategoryDetailView({
           <Card
             className={cn(
               "neo-card p-4 border backdrop-blur-sm scale-in-center bg-primary/5",
-              themeClasses.border
+              themeClasses.border,
             )}
             style={{ animationDelay: "0.3s" }}
           >
             <h3
               className={cn(
                 "text-sm font-semibold mb-3 flex items-center gap-2",
-                themeClasses.text
+                themeClasses.text,
               )}
             >
               <SparklesIcon className={cn("w-4 h-4", themeClasses.glow)} />
@@ -272,7 +273,7 @@ export default function CategoryDetailView({
                     key={sub}
                     className={cn(
                       "flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 cursor-pointer bg-secondary/10 hover:bg-secondary/20 border fade-in-expand",
-                      themeClasses.border
+                      themeClasses.border,
                     )}
                     style={{ animationDelay: `${0.4 + index * 0.1}s` }}
                   >
@@ -282,7 +283,9 @@ export default function CategoryDetailView({
                     <span
                       className={cn("text-sm font-bold", themeClasses.text)}
                     >
-                      ${amt.toFixed(2)}
+                      <BlurredAmount blurIntensity="sm">
+                        ${amt.toFixed(2)}
+                      </BlurredAmount>
                     </span>
                   </div>
                 ))}
@@ -294,14 +297,14 @@ export default function CategoryDetailView({
         <Card
           className={cn(
             "neo-card p-4 border backdrop-blur-sm scale-in-center bg-primary/5",
-            themeClasses.border
+            themeClasses.border,
           )}
           style={{ animationDelay: "0.5s" }}
         >
           <h3
             className={cn(
               "text-sm font-semibold mb-3 flex items-center gap-2",
-              themeClasses.text
+              themeClasses.text,
             )}
           >
             <ZapIcon className={cn("w-4 h-4", themeClasses.glow)} />
@@ -315,13 +318,15 @@ export default function CategoryDetailView({
                   key={acct}
                   className={cn(
                     "flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 bg-primary/10 hover:bg-primary/20 border fade-in-expand",
-                    themeClasses.border
+                    themeClasses.border,
                   )}
                   style={{ animationDelay: `${0.6 + index * 0.1}s` }}
                 >
                   <span className="text-sm text-white font-medium">{acct}</span>
                   <span className={cn("text-sm font-bold", themeClasses.text)}>
-                    ${amt.toFixed(2)}
+                    <BlurredAmount blurIntensity="sm">
+                      ${amt.toFixed(2)}
+                    </BlurredAmount>
                   </span>
                 </div>
               ))}
@@ -332,14 +337,14 @@ export default function CategoryDetailView({
         <Card
           className={cn(
             "neo-card p-4 border backdrop-blur-sm scale-in-center bg-secondary/5",
-            themeClasses.border
+            themeClasses.border,
           )}
           style={{ animationDelay: "0.7s" }}
         >
           <h3
             className={cn(
               "text-sm font-semibold mb-3 flex items-center gap-2",
-              themeClasses.text
+              themeClasses.text,
             )}
           >
             <SparklesIcon
@@ -351,17 +356,17 @@ export default function CategoryDetailView({
             {transactions
               .sort(
                 (a, b) =>
-                  new Date(b.date).getTime() - new Date(a.date).getTime()
+                  new Date(b.date).getTime() - new Date(a.date).getTime(),
               )
               .map((tx, index) => {
                 // Get the display amount and description based on ownership filter
                 const displayAmount = getTransactionDisplayAmount(
                   tx,
-                  ownershipFilter
+                  ownershipFilter,
                 );
                 const displayDescription = getTransactionDisplayDescription(
                   tx,
-                  ownershipFilter
+                  ownershipFilter,
                 );
 
                 // Owner-based border: current user's theme color if owner, opposite if partner
@@ -392,7 +397,7 @@ export default function CategoryDetailView({
                     key={tx.id}
                     onClick={() => onTransactionClick(tx)}
                     className={cn(
-                      "flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:scale-105 group bg-primary/5 hover:bg-primary/15 fade-in-expand"
+                      "flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:scale-105 group bg-primary/5 hover:bg-primary/15 fade-in-expand",
                     )}
                     style={{
                       animationDelay: `${0.8 + index * 0.05}s`,
@@ -428,15 +433,17 @@ export default function CategoryDetailView({
                       <p
                         className={cn(
                           "text-base font-bold ml-3",
-                          themeClasses.text
+                          themeClasses.text,
                         )}
                       >
-                        ${displayAmount.toFixed(2)}
+                        <BlurredAmount blurIntensity="sm">
+                          ${displayAmount.toFixed(2)}
+                        </BlurredAmount>
                       </p>
                       <div
                         className={cn(
                           "w-1 h-1 rounded-full transition-all group-hover:w-2 group-hover:h-2",
-                          themeClasses.bgActive
+                          themeClasses.bgActive,
                         )}
                       />
                     </div>

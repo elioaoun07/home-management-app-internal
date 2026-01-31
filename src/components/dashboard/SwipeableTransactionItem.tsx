@@ -1,6 +1,7 @@
 "use client";
 
 import { Edit2Icon, Trash2Icon } from "@/components/icons/FuturisticIcons";
+import BlurredAmount from "@/components/ui/BlurredAmount";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLbpSettings } from "@/features/preferences/useLbpSettings";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
@@ -88,13 +89,13 @@ export default function SwipeableTransactionItem({
   // Calculate display amount based on ownership filter and user's role
   const displayAmount = getTransactionDisplayAmount(
     transaction,
-    ownershipFilter
+    ownershipFilter,
   );
 
   // Get display description based on filter and role
   const displayDescription = getTransactionDisplayDescription(
     transaction,
-    ownershipFilter
+    ownershipFilter,
   );
 
   // LBP settings for calculating actual value
@@ -103,7 +104,7 @@ export default function SwipeableTransactionItem({
   const actualValue = hasLbpChange
     ? calculateActualValue(
         Number(transaction.amount),
-        Number(transaction.lbp_change_received)
+        Number(transaction.lbp_change_received),
       )
     : null;
 
@@ -131,7 +132,7 @@ export default function SwipeableTransactionItem({
     const diff = touch.clientX - startX.current;
     const newOffset = Math.max(
       -MAX_OFFSET,
-      Math.min(MAX_OFFSET, currentX.current + diff)
+      Math.min(MAX_OFFSET, currentX.current + diff),
     );
 
     // Cancel animation frame if exists
@@ -180,7 +181,7 @@ export default function SwipeableTransactionItem({
     const diff = e.clientX - startX.current;
     const newOffset = Math.max(
       -MAX_OFFSET,
-      Math.min(MAX_OFFSET, currentX.current + diff)
+      Math.min(MAX_OFFSET, currentX.current + diff),
     );
 
     if (animationFrameRef.current) {
@@ -224,7 +225,7 @@ export default function SwipeableTransactionItem({
         <div
           className={cn(
             "flex items-center gap-2 transition-opacity",
-            offset > 30 ? "opacity-100" : "opacity-0"
+            offset > 30 ? "opacity-100" : "opacity-0",
           )}
         >
           <Edit2Icon
@@ -239,7 +240,7 @@ export default function SwipeableTransactionItem({
         <div
           className={cn(
             "flex items-center gap-2 transition-opacity ml-auto",
-            offset < -30 ? "opacity-100" : "opacity-0"
+            offset < -30 ? "opacity-100" : "opacity-0",
           )}
         >
           <span className="text-sm font-medium text-red-400">Delete</span>
@@ -254,7 +255,7 @@ export default function SwipeableTransactionItem({
           // Theme-based border styling
           // Own transactions get user's theme color border, partner's get opposite color
           "neo-card",
-          isDragging ? "" : "transition-transform duration-200 ease-out"
+          isDragging ? "" : "transition-transform duration-200 ease-out",
         )}
         style={{
           transform: `translateX(${offset}px)`,
@@ -317,7 +318,7 @@ export default function SwipeableTransactionItem({
             <div className="flex items-center gap-2">
               {(() => {
                 const IconComponent = getCategoryIcon(
-                  transaction.category || undefined
+                  transaction.category || undefined,
                 );
                 return (
                   <IconComponent
@@ -387,34 +388,40 @@ export default function SwipeableTransactionItem({
             )}
             <div>
               {/* Display amount based on filter and role */}
-              <p
-                className={cn(
-                  "text-lg font-bold bg-gradient-to-br from-emerald-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]",
-                  transaction._isPending && "opacity-70"
-                )}
-              >
-                ${displayAmount.toFixed(2)}
-              </p>
+              <BlurredAmount blurIntensity="sm">
+                <p
+                  className={cn(
+                    "text-lg font-bold bg-gradient-to-br from-emerald-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]",
+                    transaction._isPending && "opacity-70",
+                  )}
+                >
+                  ${displayAmount.toFixed(2)}
+                </p>
+              </BlurredAmount>
               {/* Show LBP change actual value */}
               {hasLbpChange && actualValue !== null && (
                 <div className="flex items-center gap-1 text-xs">
                   <span className="text-slate-500">→</span>
-                  <span className="text-cyan-400 font-medium">
-                    ${actualValue.toFixed(2)}
-                  </span>
+                  <BlurredAmount blurIntensity="sm">
+                    <span className="text-cyan-400 font-medium">
+                      ${actualValue.toFixed(2)}
+                    </span>
+                  </BlurredAmount>
                   <span className="text-slate-500 text-[10px]">actual</span>
                 </div>
               )}
               {/* Show split breakdown only when viewing "all" for completed splits */}
               {isSplitCompleted && ownershipFilter === "all" && (
                 <div className="flex gap-1 text-xs">
-                  <span className="text-blue-400">
-                    ${transaction.amount.toFixed(0)}
-                  </span>
-                  <span className="text-slate-500">+</span>
-                  <span className="text-pink-400">
-                    ${(transaction.collaborator_amount || 0).toFixed(0)}
-                  </span>
+                  <BlurredAmount blurIntensity="sm">
+                    <span className="text-blue-400">
+                      ${transaction.amount.toFixed(0)}
+                    </span>
+                    <span className="text-slate-500">+</span>
+                    <span className="text-pink-400">
+                      ${(transaction.collaborator_amount || 0).toFixed(0)}
+                    </span>
+                  </BlurredAmount>
                 </div>
               )}
               {/* Description display based on filter */}

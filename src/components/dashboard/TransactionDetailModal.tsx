@@ -5,6 +5,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "@/components/icons/FuturisticIcons";
+import BlurredAmount from "@/components/ui/BlurredAmount";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
@@ -91,7 +92,7 @@ export default function TransactionDetailModal({
     subcategory_id: "",
   });
   const [selectedAccount, setSelectedAccount] = useState<string | undefined>(
-    transaction.account_id
+    transaction.account_id,
   );
 
   const handleSave = () => {
@@ -114,7 +115,7 @@ export default function TransactionDetailModal({
           onSuccess: () => {
             onSave();
           },
-        }
+        },
       );
     }, 200);
   };
@@ -147,7 +148,7 @@ export default function TransactionDetailModal({
   }> = [];
   if (categories && Array.isArray(categories)) {
     const anyHasParent = (categories as any[]).some((c) =>
-      Object.prototype.hasOwnProperty.call(c, "parent_id")
+      Object.prototype.hasOwnProperty.call(c, "parent_id"),
     );
     if (anyHasParent) {
       // DB-flat shape: group by parent_id
@@ -183,7 +184,7 @@ export default function TransactionDetailModal({
     if (!categories) return;
     if (transaction.category) {
       const found = (categories as any[]).find(
-        (c) => c.name === transaction.category || c.id === transaction.category
+        (c) => c.name === transaction.category || c.id === transaction.category,
       );
       if (found) {
         setFormData((prev) => ({ ...prev, category_id: found.id }));
@@ -192,7 +193,7 @@ export default function TransactionDetailModal({
           const subFound = (found.subcategories || []).find(
             (s: any) =>
               s.name === transaction.subcategory ||
-              s.id === transaction.subcategory
+              s.id === transaction.subcategory,
           );
           if (subFound)
             setFormData((prev) => ({ ...prev, subcategory_id: subFound.id }));
@@ -202,7 +203,7 @@ export default function TransactionDetailModal({
               (c) =>
                 c.parent_id === found.id &&
                 (c.name === transaction.subcategory ||
-                  c.id === transaction.subcategory)
+                  c.id === transaction.subcategory),
             );
             if (child)
               setFormData((prev) => ({ ...prev, subcategory_id: child.id }));
@@ -304,7 +305,7 @@ export default function TransactionDetailModal({
               </div>
             ) : (
               <p className="text-4xl font-bold text-emerald-400">
-                ${transaction.amount.toFixed(2)}
+                <BlurredAmount>${transaction.amount.toFixed(2)}</BlurredAmount>
               </p>
             )}
           </div>
@@ -444,7 +445,7 @@ export default function TransactionDetailModal({
                 onClick={() =>
                   isOwner &&
                   setEditingField(
-                    editingField === "category" ? null : "category"
+                    editingField === "category" ? null : "category",
                   )
                 }
                 disabled={!isOwner}
@@ -498,7 +499,7 @@ export default function TransactionDetailModal({
             {/* Subcategory Row - Only if category has subs */}
             {(() => {
               const sel = topCategories.find(
-                (tc) => tc.id === formData.category_id
+                (tc) => tc.id === formData.category_id,
               );
               if (!sel?.sub?.length) return null;
               return (
@@ -507,7 +508,7 @@ export default function TransactionDetailModal({
                     onClick={() =>
                       isOwner &&
                       setEditingField(
-                        editingField === "subcategory" ? null : "subcategory"
+                        editingField === "subcategory" ? null : "subcategory",
                       )
                     }
                     disabled={!isOwner}
@@ -617,6 +618,6 @@ export default function TransactionDetailModal({
         )}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
