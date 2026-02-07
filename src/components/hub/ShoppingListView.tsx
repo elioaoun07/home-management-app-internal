@@ -3,18 +3,22 @@
 
 import { HubChatThread, HubMessage } from "@/features/hub/hooks";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
+import type { MealPlanWithRecipe } from "@/types/recipe";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   Check,
+  ChevronDown,
+  ChevronRight,
   ExternalLink,
   Layers,
   Link as LinkIcon,
   Plus,
   Trash2,
+  UtensilsCrossed,
   X,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ProductComparisonSheet } from "./ProductComparisonSheet";
 
@@ -31,6 +35,16 @@ interface ShoppingItem {
   hasLinks: boolean; // Whether item has multiple links for comparison
   source: "user" | "inventory" | "system" | "ai"; // Origin of the item
   sourceItemId: string | null; // Reference to catalogue item if from inventory
+  mealPlanId: string | null; // Reference to meal plan if from recipe
+}
+
+// Group items by meal plan for collapsible sections
+interface MealPlanGroup {
+  mealPlanId: string | null; // null = manual items
+  recipeName: string | null;
+  plannedDate: string | null;
+  items: ShoppingItem[];
+  isCollapsed: boolean;
 }
 
 interface ShoppingListViewProps {
@@ -97,6 +111,7 @@ export function ShoppingListView({
       hasLinks: !!(msg as any).has_links, // From database flag
       source: msg.source || "user",
       sourceItemId: msg.source_item_id || null,
+      mealPlanId: msg.meal_plan_id || null,
     }))
     .sort((a, b) => {
       // Unchecked items first, then by creation date
@@ -109,6 +124,97 @@ export function ShoppingListView({
   // Separate checked and unchecked items
   const uncheckedItems = items.filter((item) => !item.checked);
   const checkedItemsList = items.filter((item) => item.checked);
+
+  // Collapsed state for meal plan sections
+  const [collapsedMealPlans, setCollapsedMealPlans] = useState<Set<string>>(
+    new Set(),
+  );
+
+  // Get unique meal plan IDs from items
+  const mealPlanIds = useMemo(() => {
+    const ids = new Set<string>();
+    items.forEach((item) => {
+      if (item.mealPlanId) ids.add(item.mealPlanId);
+    });
+    return Array.from(ids);
+  }, [items]);
+
+  // Fetch meal plan details for grouping headers
+  const { data: mealPlans = [] } = useQuery<MealPlanWithRecipe[]>({
+    queryKey: ["meal-plans-for-shopping", mealPlanIds],
+    queryFn: async () => {
+      if (mealPlanIds.length === 0) return [];
+      const params = new URLSearchParams();
+      mealPlanIds.forEach((id) => params.append("ids", id));
+      const res = await fetch(`/api/meal-plans?${params}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: mealPlanIds.length > 0,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Create a map of meal plan ID to meal plan details
+  const mealPlanMap = useMemo(() => {
+    const map = new Map<string, MealPlanWithRecipe>();
+    mealPlans.forEach((mp) => map.set(mp.id, mp));
+    return map;
+  }, [mealPlans]);
+
+  // Group unchecked items by meal plan
+  const uncheckedGrouped = useMemo(() => {
+    const groups: MealPlanGroup[] = [];
+    const byMealPlan = new Map<string | null, ShoppingItem[]>();
+
+    uncheckedItems.forEach((item) => {
+      const key = item.mealPlanId;
+      if (!byMealPlan.has(key)) {
+        byMealPlan.set(key, []);
+      }
+      byMealPlan.get(key)!.push(item);
+    });
+
+    // Manual items first (null meal plan)
+    if (byMealPlan.has(null)) {
+      groups.push({
+        mealPlanId: null,
+        recipeName: null,
+        plannedDate: null,
+        items: byMealPlan.get(null)!,
+        isCollapsed: collapsedMealPlans.has("manual"),
+      });
+    }
+
+    // Then meal plan groups
+    byMealPlan.forEach((groupItems, mealPlanId) => {
+      if (mealPlanId !== null) {
+        const mp = mealPlanMap.get(mealPlanId);
+        groups.push({
+          mealPlanId,
+          recipeName: mp?.recipe?.name || "Unknown Recipe",
+          plannedDate: mp?.planned_date || null,
+          items: groupItems,
+          isCollapsed: collapsedMealPlans.has(mealPlanId),
+        });
+      }
+    });
+
+    return groups;
+  }, [uncheckedItems, mealPlanMap, collapsedMealPlans]);
+
+  // Toggle collapse state for a meal plan section
+  const toggleMealPlanCollapse = useCallback((mealPlanId: string | null) => {
+    const key = mealPlanId ?? "manual";
+    setCollapsedMealPlans((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
 
   const handleAddItem = () => {
     if (!newItem.trim()) return;
@@ -585,6 +691,168 @@ export function ShoppingListView({
     }
   }, [checkedItemsList.length, isClearing, queryClient, threadId]);
 
+  // Helper to render a single shopping item
+  const renderShoppingItem = (item: ShoppingItem) => (
+    <div
+      key={item.id}
+      className={cn(
+        "group neo-card bg-bg-card-custom rounded-xl overflow-hidden transition-all",
+        item.source === "inventory"
+          ? "border-2 border-orange-500/40 ring-1 ring-orange-500/20"
+          : "border border-white/5 hover:border-white/10",
+      )}
+    >
+      <div className="flex items-center gap-3 p-3">
+        {item.source === "inventory" && (
+          <div className="absolute top-0 right-0 px-1.5 py-0.5 bg-orange-500/20 rounded-bl-lg">
+            <span className="text-[10px] text-orange-400 font-medium">
+              📦 Auto
+            </span>
+          </div>
+        )}
+
+        <button
+          onClick={() => toggleCheck(item.id)}
+          className="w-6 h-6 rounded-md border-2 border-white/30 hover:border-white/50 flex items-center justify-center transition-all flex-shrink-0"
+        />
+
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-white text-sm">{item.content}</span>
+
+            {editingQuantityFor === item.id ? (
+              <input
+                type="text"
+                value={quantityInputValue}
+                onChange={(e) => setQuantityInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const trimmedQuantity = quantityInputValue.trim();
+                    setItemQuantity(item.id, trimmedQuantity || null);
+                    setEditingQuantityFor(null);
+                    setQuantityInputValue("");
+                  } else if (e.key === "Escape") {
+                    setEditingQuantityFor(null);
+                    setQuantityInputValue("");
+                  }
+                }}
+                onBlur={() => {
+                  const trimmedQuantity = quantityInputValue.trim();
+                  setItemQuantity(item.id, trimmedQuantity || null);
+                  setEditingQuantityFor(null);
+                  setQuantityInputValue("");
+                }}
+                placeholder="e.g., 2 bags"
+                className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium border border-blue-400/50 focus:outline-none focus:border-blue-400 w-24"
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingQuantityFor(item.id);
+                  setQuantityInputValue(item.quantity || "");
+                }}
+                className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium hover:bg-blue-500/30 transition-all"
+                title="Click to edit quantity"
+              >
+                {item.quantity || "+ qty"}
+              </button>
+            )}
+
+            {enableItemUrls && item.itemUrl && editingUrlFor !== item.id && (
+              <a
+                href={item.itemUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1 rounded hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-all"
+                onClick={(e) => e.stopPropagation()}
+                title={item.itemUrl}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {enableItemUrls && (
+            <button
+              onClick={() => openComparisonSheet(item.id, item.content)}
+              className={cn(
+                "p-1.5 rounded-lg transition-all",
+                item.hasLinks
+                  ? "text-purple-400 hover:bg-purple-500/20"
+                  : "text-white/40 hover:bg-white/10 hover:text-white",
+              )}
+              title={item.hasLinks ? "Compare stores" : "Add store links"}
+            >
+              <Layers className="w-4 h-4" />
+            </button>
+          )}
+
+          {enableItemUrls && (
+            <button
+              onClick={() => handleStartEditUrl(item.id, item.itemUrl)}
+              className={cn(
+                "p-1.5 rounded-lg transition-all",
+                item.itemUrl
+                  ? "text-blue-400 hover:bg-blue-500/20"
+                  : "text-white/40 hover:bg-white/10 hover:text-white",
+              )}
+              title={item.itemUrl ? "Edit quick link" : "Add quick link"}
+            >
+              <LinkIcon className="w-4 h-4" />
+            </button>
+          )}
+
+          <button
+            onClick={() => onDeleteItem(item.id)}
+            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-all"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {editingUrlFor === item.id && (
+        <div className="px-3 pb-3 pt-0">
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={urlInputValue}
+              onChange={(e) => setUrlInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSaveUrl(item.id);
+                } else if (e.key === "Escape") {
+                  handleCancelEditUrl();
+                }
+              }}
+              placeholder="https://..."
+              className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
+              autoFocus
+            />
+            <button
+              onClick={() => handleSaveUrl(item.id)}
+              className="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 text-sm"
+            >
+              Save
+            </button>
+            <button
+              onClick={handleCancelEditUrl}
+              className="px-3 py-1.5 rounded-lg bg-white/5 text-white/50 hover:bg-white/10 text-sm"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-full">
       {/* Add Item Input - Fixed at top */}
@@ -646,8 +914,8 @@ export function ShoppingListView({
           </div>
         ) : (
           <>
-            {/* Unchecked Items */}
-            <div className="py-4 space-y-2">
+            {/* Unchecked Items - Grouped by Meal Plan */}
+            <div className="py-4 space-y-4">
               {uncheckedItems.length === 0 && checkedItemsList.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <span className="text-5xl mb-3">🛒</span>
@@ -667,199 +935,59 @@ export function ShoppingListView({
                   </p>
                 </div>
               ) : (
-                uncheckedItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className={cn(
-                      "group neo-card bg-bg-card-custom rounded-xl overflow-hidden transition-all",
-                      item.source === "inventory"
-                        ? "border-2 border-orange-500/40 ring-1 ring-orange-500/20"
-                        : "border border-white/5 hover:border-white/10",
-                    )}
-                  >
-                    <div className="flex items-center gap-3 p-3">
-                      {/* Inventory indicator */}
-                      {item.source === "inventory" && (
-                        <div className="absolute top-0 right-0 px-1.5 py-0.5 bg-orange-500/20 rounded-bl-lg">
-                          <span className="text-[10px] text-orange-400 font-medium">
-                            📦 Auto
-                          </span>
-                        </div>
+                uncheckedGrouped.map((group) => (
+                  <div key={group.mealPlanId ?? "manual"} className="space-y-2">
+                    {/* Group Header - Collapsible */}
+                    <button
+                      onClick={() => toggleMealPlanCollapse(group.mealPlanId)}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all",
+                        group.mealPlanId
+                          ? "bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20"
+                          : "bg-white/5 hover:bg-white/10 border border-white/10",
                       )}
-
-                      {/* Checkbox */}
-                      <button
-                        onClick={() => toggleCheck(item.id)}
-                        className="w-6 h-6 rounded-md border-2 border-white/30 hover:border-white/50 flex items-center justify-center transition-all flex-shrink-0"
+                    >
+                      {group.isCollapsed ? (
+                        <ChevronRight className="w-4 h-4 text-white/50" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-white/50" />
+                      )}
+                      {group.mealPlanId ? (
+                        <UtensilsCrossed className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <span className="text-base">📝</span>
+                      )}
+                      <span
+                        className={cn(
+                          "text-sm font-medium flex-1 text-left",
+                          group.mealPlanId
+                            ? "text-emerald-300"
+                            : "text-white/70",
+                        )}
                       >
-                        {/* Empty checkbox */}
-                      </button>
-
-                      {/* Content */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-white text-sm">
-                            {item.content}
-                          </span>
-
-                          {/* Quantity - editable */}
-                          {editingQuantityFor === item.id ? (
-                            <input
-                              type="text"
-                              value={quantityInputValue}
-                              onChange={(e) =>
-                                setQuantityInputValue(e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  const trimmedQuantity =
-                                    quantityInputValue.trim();
-                                  setItemQuantity(
-                                    item.id,
-                                    trimmedQuantity || null,
-                                  );
-                                  setEditingQuantityFor(null);
-                                  setQuantityInputValue("");
-                                } else if (e.key === "Escape") {
-                                  setEditingQuantityFor(null);
-                                  setQuantityInputValue("");
-                                }
-                              }}
-                              onBlur={() => {
-                                const trimmedQuantity =
-                                  quantityInputValue.trim();
-                                setItemQuantity(
-                                  item.id,
-                                  trimmedQuantity || null,
-                                );
-                                setEditingQuantityFor(null);
-                                setQuantityInputValue("");
-                              }}
-                              placeholder="e.g., 2 bags"
-                              className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium border border-blue-400/50 focus:outline-none focus:border-blue-400 w-24"
-                              autoFocus
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          ) : (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingQuantityFor(item.id);
-                                setQuantityInputValue(item.quantity || "");
-                              }}
-                              className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium hover:bg-blue-500/30 transition-all"
-                              title="Click to edit quantity"
-                            >
-                              {item.quantity || "+ qty"}
-                            </button>
+                        {group.recipeName ?? "Manual Items"}
+                      </span>
+                      {group.plannedDate && (
+                        <span className="text-xs text-white/40">
+                          {new Date(group.plannedDate).toLocaleDateString(
+                            "en-US",
+                            {
+                              weekday: "short",
+                              month: "short",
+                              day: "numeric",
+                            },
                           )}
+                        </span>
+                      )}
+                      <span className="text-xs text-white/40 bg-white/10 px-2 py-0.5 rounded-full">
+                        {group.items.length}
+                      </span>
+                    </button>
 
-                          {enableItemUrls &&
-                            item.itemUrl &&
-                            editingUrlFor !== item.id && (
-                              <a
-                                href={item.itemUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1 rounded hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-all"
-                                onClick={(e) => e.stopPropagation()}
-                                title={item.itemUrl}
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                            )}
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex items-center gap-1">
-                        {/* Multi-Link Compare Button - Only show if enableItemUrls is true */}
-                        {enableItemUrls && (
-                          <button
-                            onClick={() =>
-                              openComparisonSheet(item.id, item.content)
-                            }
-                            className={cn(
-                              "p-1.5 rounded-lg transition-all",
-                              item.hasLinks
-                                ? "text-purple-400 hover:bg-purple-500/20"
-                                : "text-white/40 hover:bg-white/10 hover:text-white",
-                            )}
-                            title={
-                              item.hasLinks
-                                ? "Compare stores"
-                                : "Add store links"
-                            }
-                          >
-                            <Layers className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {/* Single Link Button - Legacy, only show if enableItemUrls is true */}
-                        {enableItemUrls && (
-                          <button
-                            onClick={() =>
-                              handleStartEditUrl(item.id, item.itemUrl)
-                            }
-                            className={cn(
-                              "p-1.5 rounded-lg transition-all",
-                              item.itemUrl
-                                ? "text-blue-400 hover:bg-blue-500/20"
-                                : "text-white/40 hover:bg-white/10 hover:text-white",
-                            )}
-                            title={
-                              item.itemUrl
-                                ? "Edit quick link"
-                                : "Add quick link"
-                            }
-                          >
-                            <LinkIcon className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {/* Delete Button */}
-                        <button
-                          onClick={() => onDeleteItem(item.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* URL Edit Input */}
-                    {editingUrlFor === item.id && (
-                      <div className="px-3 pb-3 pt-0">
-                        <div className="flex gap-2">
-                          <input
-                            type="url"
-                            value={urlInputValue}
-                            onChange={(e) => setUrlInputValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                handleSaveUrl(item.id);
-                              } else if (e.key === "Escape") {
-                                handleCancelEditUrl();
-                              }
-                            }}
-                            placeholder="https://..."
-                            className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => handleSaveUrl(item.id)}
-                            className="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 text-sm"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={handleCancelEditUrl}
-                            className="px-3 py-1.5 rounded-lg bg-white/5 text-white/50 hover:bg-white/10 text-sm"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
+                    {/* Group Items */}
+                    {!group.isCollapsed && (
+                      <div className="space-y-2 ml-2">
+                        {group.items.map((item) => renderShoppingItem(item))}
                       </div>
                     )}
                   </div>

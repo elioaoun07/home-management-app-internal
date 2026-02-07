@@ -121,6 +121,15 @@ CREATE TABLE public.ai_messages (
   CONSTRAINT ai_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT ai_messages_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.ai_messages(id)
 );
+CREATE TABLE public.ai_rate_limits (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  endpoint text NOT NULL,
+  request_hash text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT ai_rate_limits_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_rate_limits_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.ai_sessions (
   id text NOT NULL,
   user_id uuid NOT NULL,
@@ -164,10 +173,28 @@ CREATE TABLE public.catalogue_categories (
   archived_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  is_public boolean NOT NULL DEFAULT true,
   CONSTRAINT catalogue_categories_pkey PRIMARY KEY (id),
   CONSTRAINT catalogue_categories_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT catalogue_categories_module_id_fkey FOREIGN KEY (module_id) REFERENCES public.catalogue_modules(id),
   CONSTRAINT catalogue_categories_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.catalogue_categories(id)
+);
+CREATE TABLE public.catalogue_item_calendar_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  catalogue_item_id uuid NOT NULL,
+  item_id uuid NOT NULL,
+  action_type text NOT NULL CHECK (action_type = ANY (ARRAY['added_to_calendar'::text, 'removed_from_calendar'::text, 'updated_recurrence'::text, 'paused'::text, 'resumed'::text])),
+  recurrence_start_date date,
+  recurrence_end_date date,
+  recurrence_pattern text,
+  recurrence_rrule text,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT catalogue_item_calendar_history_pkey PRIMARY KEY (id),
+  CONSTRAINT cich_user_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT cich_catalogue_item_fkey FOREIGN KEY (catalogue_item_id) REFERENCES public.catalogue_items(id),
+  CONSTRAINT cich_item_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
 CREATE TABLE public.catalogue_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -197,10 +224,24 @@ CREATE TABLE public.catalogue_items (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   completed_at timestamp with time zone,
+  item_type text DEFAULT 'task'::text CHECK (item_type IS NULL OR (item_type = ANY (ARRAY['reminder'::text, 'event'::text, 'task'::text]))),
+  location_context text CHECK (location_context IS NULL OR (location_context = ANY (ARRAY['home'::text, 'outside'::text, 'anywhere'::text]))),
+  location_url text,
+  preferred_time time without time zone,
+  preferred_duration_minutes integer,
+  recurrence_pattern text CHECK (recurrence_pattern IS NULL OR (recurrence_pattern = ANY (ARRAY['daily'::text, 'weekly'::text, 'biweekly'::text, 'monthly'::text, 'quarterly'::text, 'yearly'::text, 'custom'::text]))),
+  recurrence_custom_rrule text,
+  recurrence_days_of_week ARRAY DEFAULT '{}'::integer[],
+  subtasks_text text,
+  is_active_on_calendar boolean DEFAULT false,
+  linked_item_id uuid,
+  item_category_ids ARRAY DEFAULT '{}'::text[],
+  is_public boolean DEFAULT false,
   CONSTRAINT catalogue_items_pkey PRIMARY KEY (id),
   CONSTRAINT catalogue_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT catalogue_items_module_id_fkey FOREIGN KEY (module_id) REFERENCES public.catalogue_modules(id),
-  CONSTRAINT catalogue_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.catalogue_categories(id)
+  CONSTRAINT catalogue_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.catalogue_categories(id),
+  CONSTRAINT catalogue_items_linked_item_fkey FOREIGN KEY (linked_item_id) REFERENCES public.items(id)
 );
 CREATE TABLE public.catalogue_modules (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -218,6 +259,7 @@ CREATE TABLE public.catalogue_modules (
   settings_json jsonb DEFAULT '{}'::jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  is_public boolean NOT NULL DEFAULT true,
   CONSTRAINT catalogue_modules_pkey PRIMARY KEY (id),
   CONSTRAINT catalogue_modules_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -409,6 +451,7 @@ CREATE TABLE public.hub_messages (
   voice_url text,
   voice_transcript text,
   voice_duration integer,
+  meal_plan_id uuid,
   CONSTRAINT hub_messages_pkey PRIMARY KEY (id),
   CONSTRAINT hub_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
   CONSTRAINT hub_messages_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
@@ -416,6 +459,7 @@ CREATE TABLE public.hub_messages (
   CONSTRAINT hub_messages_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id),
   CONSTRAINT hub_messages_reply_to_id_fkey FOREIGN KEY (reply_to_id) REFERENCES public.hub_messages(id),
   CONSTRAINT hub_messages_source_item_id_fkey FOREIGN KEY (source_item_id) REFERENCES public.catalogue_items(id),
+  CONSTRAINT hub_messages_meal_plan_id_fkey FOREIGN KEY (meal_plan_id) REFERENCES public.meal_plans(id),
   CONSTRAINT hub_messages_checked_by_fkey FOREIGN KEY (checked_by) REFERENCES auth.users(id),
   CONSTRAINT hub_messages_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES public.hub_notes_topics(id)
 );
@@ -526,6 +570,15 @@ CREATE TABLE public.item_occurrence_actions (
   CONSTRAINT item_occurrence_actions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
   CONSTRAINT item_occurrence_actions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
+CREATE TABLE public.item_recurrence_exceptions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  rule_id uuid NOT NULL,
+  exdate timestamp with time zone NOT NULL,
+  override_payload_json jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT item_recurrence_exceptions_pkey PRIMARY KEY (id),
+  CONSTRAINT item_recurrence_exceptions_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.item_recurrence_rules(id)
+);
 CREATE TABLE public.item_recurrence_rules (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   item_id uuid NOT NULL,
@@ -595,6 +648,26 @@ CREATE TABLE public.items (
   CONSTRAINT items_pkey PRIMARY KEY (id),
   CONSTRAINT items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT items_responsible_user_fkey FOREIGN KEY (responsible_user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.meal_plans (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  household_id uuid NOT NULL,
+  recipe_id uuid NOT NULL,
+  planned_date date NOT NULL,
+  meal_type text DEFAULT 'lunch'::text CHECK (meal_type = ANY (ARRAY['breakfast'::text, 'lunch'::text, 'dinner'::text, 'snack'::text])),
+  status text DEFAULT 'planned'::text CHECK (status = ANY (ARRAY['planned'::text, 'shopping_added'::text, 'cooked'::text, 'skipped'::text])),
+  cooked_at timestamp with time zone,
+  notes text,
+  shopping_thread_id uuid,
+  shopping_message_ids ARRAY DEFAULT '{}'::uuid[],
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT meal_plans_pkey PRIMARY KEY (id),
+  CONSTRAINT meal_plans_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT meal_plans_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
+  CONSTRAINT meal_plans_recipe_id_fkey FOREIGN KEY (recipe_id) REFERENCES public.recipes(id),
+  CONSTRAINT meal_plans_shopping_thread_id_fkey FOREIGN KEY (shopping_thread_id) REFERENCES public.hub_chat_threads(id)
 );
 CREATE TABLE public.merchant_mappings (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -692,6 +765,38 @@ CREATE TABLE public.push_subscriptions (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id),
   CONSTRAINT push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.recipes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  household_id uuid,
+  name text NOT NULL,
+  description text,
+  image_url text,
+  source_url text,
+  ingredients jsonb DEFAULT '[]'::jsonb,
+  steps jsonb DEFAULT '[]'::jsonb,
+  prep_time_minutes integer,
+  cook_time_minutes integer,
+  servings integer DEFAULT 4,
+  difficulty text DEFAULT 'medium'::text CHECK (difficulty = ANY (ARRAY['easy'::text, 'medium'::text, 'hard'::text])),
+  category text,
+  cuisine text,
+  tags ARRAY DEFAULT '{}'::text[],
+  ai_generated boolean DEFAULT false,
+  ai_generation_prompt text,
+  last_ai_update timestamp with time zone,
+  feedback jsonb DEFAULT '[]'::jsonb,
+  times_cooked integer DEFAULT 0,
+  last_cooked_at timestamp with time zone,
+  average_rating numeric,
+  is_favorite boolean DEFAULT false,
+  archived_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT recipes_pkey PRIMARY KEY (id),
+  CONSTRAINT recipes_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT recipes_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id)
 );
 CREATE TABLE public.recurring_payments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -853,8 +958,8 @@ CREATE TABLE public.user_categories (
   CONSTRAINT user_categories_pkey PRIMARY KEY (id),
   CONSTRAINT user_categories_default_fk FOREIGN KEY (default_category_id) REFERENCES public.default_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );

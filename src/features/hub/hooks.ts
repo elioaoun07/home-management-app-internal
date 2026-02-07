@@ -105,6 +105,8 @@ export type HubMessage = {
   voice_url?: string | null; // URL to the voice message audio file
   voice_transcript?: string | null; // Transcription of the voice message
   voice_duration?: number | null; // Duration in seconds
+  // Meal plan integration fields
+  meal_plan_id?: string | null; // Reference to meal plan if from recipe
 };
 
 export type HubFeedItem = {

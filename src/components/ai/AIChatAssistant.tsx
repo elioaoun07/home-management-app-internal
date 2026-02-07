@@ -51,6 +51,12 @@ interface UsageStats {
   monthlyLimit: number;
   monthlyPercentage: number;
   responseTimeMs?: number;
+  // Rate limit stats
+  requestsInLastMinute?: number;
+  maxRequestsPerMinute?: number;
+  // Today's stats
+  todayRequests?: number;
+  todayTokens?: number;
 }
 
 const SUGGESTED_PROMPTS = [
@@ -75,7 +81,7 @@ export default function AIChatAssistant() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>(() =>
-    generateSessionId()
+    generateSessionId(),
   );
   const [currentConversationTitle, setCurrentConversationTitle] =
     useState<string>("New Conversation");
@@ -188,7 +194,7 @@ export default function AIChatAssistant() {
 
       // Fetch messages for this session (conv.id IS the session_id)
       const response = await fetch(
-        `/api/ai-chat?sessionId=${conversation.id}&limit=100`
+        `/api/ai-chat?sessionId=${conversation.id}&limit=100`,
       );
       if (response.ok) {
         const data = await response.json();
@@ -217,7 +223,7 @@ export default function AIChatAssistant() {
                   tokens: (msg.input_tokens || 0) + (msg.output_tokens || 0),
                 });
               }
-            }
+            },
           );
         } else {
           // Old format: user_message + assistant_response paired
@@ -225,7 +231,7 @@ export default function AIChatAssistant() {
             .sort(
               (a: { created_at: string }, b: { created_at: string }) =>
                 new Date(a.created_at).getTime() -
-                new Date(b.created_at).getTime()
+                new Date(b.created_at).getTime(),
             )
             .forEach(
               (log: {
@@ -245,7 +251,7 @@ export default function AIChatAssistant() {
                   timestamp: new Date(log.created_at),
                   tokens: log.output_tokens,
                 });
-              }
+              },
             );
         }
 
@@ -268,7 +274,7 @@ export default function AIChatAssistant() {
         `/api/ai-chat/conversations?sessionId=${sessionId}`,
         {
           method: "DELETE",
-        }
+        },
       );
       if (response.ok) {
         setConversations((prev) => prev.filter((c) => c.id !== sessionId));
@@ -447,7 +453,7 @@ export default function AIChatAssistant() {
         setIsLoading(false);
       }
     },
-    [isLoading, messages, currentSessionId]
+    [isLoading, messages, currentSessionId],
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -491,7 +497,7 @@ export default function AIChatAssistant() {
               "border border-violet-400/30",
               "transition-all duration-300 hover:scale-110",
               "flex items-center justify-center",
-              isExiting ? "ai-chat-button-exit" : "ai-chat-button"
+              isExiting ? "ai-chat-button-exit" : "ai-chat-button",
             )}
             size="icon"
           >
@@ -505,7 +511,7 @@ export default function AIChatAssistant() {
           className={cn(
             "w-full sm:w-[400px] sm:max-w-[400px] p-0 flex flex-col",
             themeClasses.surfaceBg,
-            "border-l border-white/10"
+            "border-l border-white/10",
           )}
         >
           {/* Header */}
@@ -538,7 +544,7 @@ export default function AIChatAssistant() {
                     "h-8 w-8 p-0 rounded-full",
                     showHistory ? "bg-violet-500/20" : "",
                     themeClasses.textMuted,
-                    "hover:text-white"
+                    "hover:text-white",
                   )}
                   title="Chat History"
                 >
@@ -553,7 +559,7 @@ export default function AIChatAssistant() {
                     "h-8 w-8 p-0 rounded-full",
                     showUsage ? "bg-violet-500/20" : "",
                     themeClasses.textMuted,
-                    "hover:text-white"
+                    "hover:text-white",
                   )}
                   title="Token Usage"
                 >
@@ -567,7 +573,7 @@ export default function AIChatAssistant() {
                   className={cn(
                     "h-8 w-8 p-0 rounded-full",
                     themeClasses.textMuted,
-                    "hover:text-white"
+                    "hover:text-white",
                   )}
                   title="New Conversation"
                 >
@@ -581,14 +587,15 @@ export default function AIChatAssistant() {
               <div
                 className={cn(
                   "mt-3 p-3 rounded-lg",
-                  "bg-white/5 border border-white/10"
+                  "bg-white/5 border border-white/10",
                 )}
               >
+                {/* Monthly Token Usage */}
                 <div className="flex items-center justify-between mb-2">
                   <span
                     className={cn(
                       "text-xs font-medium",
-                      themeClasses.labelText
+                      themeClasses.labelText,
                     )}
                   >
                     Monthly Token Usage
@@ -606,7 +613,7 @@ export default function AIChatAssistant() {
                         ? "bg-red-500"
                         : usage.monthlyPercentage > 50
                           ? "bg-yellow-500"
-                          : "bg-emerald-500"
+                          : "bg-emerald-500",
                     )}
                     style={{
                       width: `${Math.min(usage.monthlyPercentage, 100)}%`,
@@ -619,15 +626,77 @@ export default function AIChatAssistant() {
                   </span>
                   <span className={themeClasses.textMuted}>
                     {((usage.monthlyLimit - usage.monthlyUsed) / 1000).toFixed(
-                      0
+                      0,
                     )}
                     k remaining
                   </span>
                 </div>
+
+                {/* Rate Limit & Today Stats */}
+                {(usage.requestsInLastMinute !== undefined ||
+                  usage.todayRequests !== undefined) && (
+                  <div className="mt-3 pt-3 border-t border-white/10 grid grid-cols-2 gap-3">
+                    {/* Rate Limit Status */}
+                    {usage.requestsInLastMinute !== undefined && (
+                      <div>
+                        <div className="flex items-center gap-1 mb-1">
+                          <div
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full",
+                              usage.requestsInLastMinute >=
+                                (usage.maxRequestsPerMinute || 5)
+                                ? "bg-red-500"
+                                : usage.requestsInLastMinute >=
+                                    (usage.maxRequestsPerMinute || 5) - 1
+                                  ? "bg-yellow-500"
+                                  : "bg-emerald-500",
+                            )}
+                          />
+                          <span
+                            className={cn(
+                              "text-[10px]",
+                              themeClasses.textMuted,
+                            )}
+                          >
+                            Rate Limit
+                          </span>
+                        </div>
+                        <span
+                          className={cn(
+                            "text-xs font-medium",
+                            themeClasses.labelText,
+                          )}
+                        >
+                          {usage.requestsInLastMinute}/
+                          {usage.maxRequestsPerMinute || 5} req/min
+                        </span>
+                      </div>
+                    )}
+                    {/* Today's Usage */}
+                    {usage.todayRequests !== undefined && (
+                      <div>
+                        <span
+                          className={cn("text-[10px]", themeClasses.textMuted)}
+                        >
+                          Today
+                        </span>
+                        <div
+                          className={cn(
+                            "text-xs font-medium",
+                            themeClasses.labelText,
+                          )}
+                        >
+                          {usage.todayRequests} requests
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <p
                   className={cn(
                     "text-[10px] mt-2 text-center",
-                    themeClasses.textMuted
+                    themeClasses.textMuted,
                   )}
                 >
                   Context limited to last {MAX_CONTEXT_MESSAGES} messages to
@@ -662,7 +731,7 @@ export default function AIChatAssistant() {
                   <MessageSquare
                     className={cn(
                       "h-12 w-12 mx-auto mb-3 opacity-30",
-                      themeClasses.textMuted
+                      themeClasses.textMuted,
                     )}
                   />
                   <p className={cn("text-sm", themeClasses.textMuted)}>
@@ -683,7 +752,7 @@ export default function AIChatAssistant() {
                         "border border-white/10 hover:border-violet-500/50",
                         "hover:bg-violet-500/10",
                         conv.id === currentSessionId &&
-                          "border-violet-500/50 bg-violet-500/10"
+                          "border-violet-500/50 bg-violet-500/10",
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -691,7 +760,7 @@ export default function AIChatAssistant() {
                           <p
                             className={cn(
                               "text-sm font-medium truncate",
-                              themeClasses.labelText
+                              themeClasses.labelText,
                             )}
                           >
                             {conv.title}
@@ -699,7 +768,7 @@ export default function AIChatAssistant() {
                           <p
                             className={cn(
                               "text-xs mt-1",
-                              themeClasses.textMuted
+                              themeClasses.textMuted,
                             )}
                           >
                             {conv.messageCount} messages •{" "}
@@ -711,7 +780,7 @@ export default function AIChatAssistant() {
                           onClick={(e) => deleteConversation(conv.id, e)}
                           className={cn(
                             "h-6 w-6 p-0 rounded-full shrink-0 flex items-center justify-center",
-                            "text-red-400 hover:text-red-300 hover:bg-red-500/20 transition-colors"
+                            "text-red-400 hover:text-red-300 hover:bg-red-500/20 transition-colors",
                           )}
                         >
                           <Trash2 className="h-3 w-3" />
@@ -734,7 +803,7 @@ export default function AIChatAssistant() {
                     <h3
                       className={cn(
                         "text-lg font-medium mb-2",
-                        themeClasses.headerText
+                        themeClasses.headerText,
                       )}
                     >
                       How can I help you today?
@@ -742,7 +811,7 @@ export default function AIChatAssistant() {
                     <p
                       className={cn(
                         "text-sm mb-6 max-w-[280px]",
-                        themeClasses.textMuted
+                        themeClasses.textMuted,
                       )}
                     >
                       Ask me about your spending, budgets, or get personalized
@@ -759,7 +828,7 @@ export default function AIChatAssistant() {
                             "p-3 rounded-lg text-left text-sm transition-all",
                             "border border-white/10 hover:border-violet-500/50",
                             "hover:bg-violet-500/10",
-                            themeClasses.labelText
+                            themeClasses.labelText,
                           )}
                         >
                           {prompt}
@@ -776,7 +845,7 @@ export default function AIChatAssistant() {
                           "flex group",
                           message.role === "user"
                             ? "justify-end"
-                            : "justify-start"
+                            : "justify-start",
                         )}
                       >
                         <div className="flex flex-col max-w-[85%]">
@@ -800,7 +869,7 @@ export default function AIChatAssistant() {
                                   "w-full p-3 rounded-xl text-sm resize-none",
                                   "bg-violet-600/20 border border-violet-500/50",
                                   "text-white placeholder:text-white/40",
-                                  "focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+                                  "focus:outline-none focus:ring-2 focus:ring-violet-500/50",
                                 )}
                                 rows={3}
                               />
@@ -834,8 +903,8 @@ export default function AIChatAssistant() {
                                     ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
                                     : cn(
                                         "bg-white/5 border border-white/10",
-                                        themeClasses.labelText
-                                      )
+                                        themeClasses.labelText,
+                                      ),
                                 )}
                               >
                                 <div className="text-sm whitespace-pre-wrap leading-relaxed">
@@ -846,7 +915,7 @@ export default function AIChatAssistant() {
                                     "text-[10px] mt-1 opacity-60 flex items-center gap-2",
                                     message.role === "user"
                                       ? "text-white/70 justify-end"
-                                      : themeClasses.textMuted
+                                      : themeClasses.textMuted,
                                   )}
                                 >
                                   <span>
@@ -869,7 +938,7 @@ export default function AIChatAssistant() {
                                   "flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity",
                                   message.role === "user"
                                     ? "justify-end"
-                                    : "justify-start"
+                                    : "justify-start",
                                 )}
                               >
                                 {message.role === "user" && !isLoading && (
@@ -877,7 +946,7 @@ export default function AIChatAssistant() {
                                     onClick={() => startEditing(idx)}
                                     className={cn(
                                       "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
-                                      "text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors"
+                                      "text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors",
                                     )}
                                     title="Edit and resend from here"
                                   >
@@ -893,7 +962,7 @@ export default function AIChatAssistant() {
                                       className={cn(
                                         "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
                                         themeClasses.textMuted,
-                                        "hover:text-white hover:bg-white/10 transition-colors"
+                                        "hover:text-white hover:bg-white/10 transition-colors",
                                       )}
                                       title="Regenerate response"
                                     >
@@ -914,7 +983,7 @@ export default function AIChatAssistant() {
                         <div
                           className={cn(
                             "max-w-[85%] rounded-2xl px-4 py-3",
-                            "bg-white/5 border border-white/10"
+                            "bg-white/5 border border-white/10",
                           )}
                         >
                           <div className="flex items-center gap-2">
@@ -965,7 +1034,7 @@ export default function AIChatAssistant() {
                   className={cn(
                     "flex items-end gap-2 p-2 rounded-xl",
                     "bg-white/5 border border-white/10",
-                    "focus-within:border-violet-500/50 transition-colors"
+                    "focus-within:border-violet-500/50 transition-colors",
                   )}
                 >
                   <textarea
@@ -979,7 +1048,7 @@ export default function AIChatAssistant() {
                       "flex-1 bg-transparent border-none outline-none resize-none",
                       "text-sm py-2 px-2 max-h-[100px]",
                       themeClasses.labelText,
-                      "placeholder:text-white/30"
+                      "placeholder:text-white/30",
                     )}
                     disabled={isLoading}
                   />
@@ -991,7 +1060,7 @@ export default function AIChatAssistant() {
                       "h-9 px-4 rounded-lg",
                       "bg-gradient-to-r from-violet-600 to-indigo-600",
                       "hover:from-violet-500 hover:to-indigo-500",
-                      "disabled:opacity-50 disabled:cursor-not-allowed"
+                      "disabled:opacity-50 disabled:cursor-not-allowed",
                     )}
                   >
                     Send
@@ -1000,7 +1069,7 @@ export default function AIChatAssistant() {
                 <p
                   className={cn(
                     "text-[10px] text-center mt-2",
-                    themeClasses.textMuted
+                    themeClasses.textMuted,
                   )}
                 >
                   AI responses may not always be accurate. Verify important

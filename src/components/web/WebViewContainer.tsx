@@ -6,6 +6,8 @@ import WebCatalogue from "@/components/web/WebCatalogue";
 import WebDashboard from "@/components/web/WebDashboard";
 import WebEvents from "@/components/web/WebEvents";
 import WebFuturePurchases from "@/components/web/WebFuturePurchases";
+import WebMealPlanner from "@/components/web/WebMealPlanner";
+import WebRecipes from "@/components/web/WebRecipes";
 import { useUser } from "@/contexts/UserContext";
 import { useUserPreferences } from "@/features/preferences/useUserPreferences";
 import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
@@ -18,30 +20,35 @@ import {
   BookOpen,
   CalendarDays,
   Rocket,
+  UtensilsCrossed,
   Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-// Top-level view modes - Budget, Events, or Catalogue
-export type WebViewMode = "budget" | "events" | "catalogue";
+// Top-level view modes - Budget, Events, Catalogue, or Recipes
+export type WebViewMode = "budget" | "events" | "catalogue" | "recipes";
 
 // Tabs within Budget view
 export type WebTab = "dashboard" | "budget" | "goals";
+
+// Tabs within Recipes view
+export type RecipesTab = "recipes" | "planner";
 
 export default function WebViewContainer() {
   const themeClasses = useThemeClasses();
   const userData = useUser(); // Get user data from context (server-side)
   const [viewMode, setViewMode] = useState<WebViewMode>("events");
   const [activeTab, setActiveTab] = useState<WebTab>("dashboard");
+  const [recipesTab, setRecipesTab] = useState<RecipesTab>("recipes");
   const [monthStartDay, setMonthStartDay] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(
-    undefined
+    undefined,
   );
   const { data: preferences } = useUserPreferences();
 
   const defaultRange = useMemo(
     () => getDefaultDateRange(monthStartDay),
-    [monthStartDay]
+    [monthStartDay],
   );
 
   const [dateRange, setDateRange] = useState(defaultRange);
@@ -240,7 +247,9 @@ export default function WebViewContainer() {
                 ? "Budget Manager"
                 : viewMode === "catalogue"
                   ? "Life Catalogue"
-                  : "Events & Reminders"}
+                  : viewMode === "recipes"
+                    ? "Recipes & Meals"
+                    : "Events & Reminders"}
             </div>
 
             {/* View Mode Toggle */}
@@ -252,7 +261,7 @@ export default function WebViewContainer() {
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                   viewMode === "events"
                     ? "neo-gradient text-white shadow-lg"
-                    : "text-white/60 hover:text-white hover:bg-white/10"
+                    : "text-white/60 hover:text-white hover:bg-white/10",
                 )}
               >
                 <CalendarDays className="w-4 h-4" />
@@ -265,7 +274,7 @@ export default function WebViewContainer() {
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                   viewMode === "budget"
                     ? "neo-gradient text-white shadow-lg"
-                    : "text-white/60 hover:text-white hover:bg-white/10"
+                    : "text-white/60 hover:text-white hover:bg-white/10",
                 )}
               >
                 <Wallet className="w-4 h-4" />
@@ -278,11 +287,24 @@ export default function WebViewContainer() {
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                   viewMode === "catalogue"
                     ? "bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg"
-                    : "text-white/60 hover:text-white hover:bg-white/10"
+                    : "text-white/60 hover:text-white hover:bg-white/10",
                 )}
               >
                 <BookOpen className="w-4 h-4" />
                 Catalogue
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("recipes")}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  viewMode === "recipes"
+                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg"
+                    : "text-white/60 hover:text-white hover:bg-white/10",
+                )}
+              >
+                <UtensilsCrossed className="w-4 h-4" />
+                Recipes
               </button>
             </div>
           </div>
@@ -303,6 +325,21 @@ export default function WebViewContainer() {
 
         {/* Catalogue View */}
         {viewMode === "catalogue" && <WebCatalogue />}
+
+        {/* Recipes & Meal Planner View */}
+        {viewMode === "recipes" && (
+          <>
+            {/* Recipes List */}
+            <div className={recipesTab === "recipes" ? "block" : "hidden"}>
+              <WebRecipes />
+            </div>
+
+            {/* Meal Planner */}
+            <div className={recipesTab === "planner" ? "block" : "hidden"}>
+              <WebMealPlanner />
+            </div>
+          </>
+        )}
 
         {/* Budget Views */}
         {viewMode === "budget" && (
@@ -332,6 +369,62 @@ export default function WebViewContainer() {
         )}
       </main>
 
+      {/* Bottom Navigation - Recipes mode */}
+      {viewMode === "recipes" && (
+        <nav
+          className={`flex-shrink-0 w-full bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-xl border-t ${themeClasses.border}`}
+        >
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-center gap-4 px-6 h-16">
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(10);
+                  setRecipesTab("recipes");
+                }}
+                className={cn(
+                  "flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300",
+                  "hover:scale-105 active:scale-95",
+                  recipesTab === "recipes"
+                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/30"
+                    : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                )}
+              >
+                <BookOpen
+                  className={cn(
+                    "w-5 h-5",
+                    recipesTab === "recipes" && "drop-shadow-lg",
+                  )}
+                />
+                <span className="text-sm font-semibold">Recipes</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(10);
+                  setRecipesTab("planner");
+                }}
+                className={cn(
+                  "flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300",
+                  "hover:scale-105 active:scale-95",
+                  recipesTab === "planner"
+                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/30"
+                    : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                )}
+              >
+                <CalendarDays
+                  className={cn(
+                    "w-5 h-5",
+                    recipesTab === "planner" && "drop-shadow-lg",
+                  )}
+                />
+                <span className="text-sm font-semibold">Meal Planner</span>
+              </button>
+            </div>
+          </div>
+        </nav>
+      )}
+
       {/* Bottom Navigation - Only show for Budget mode */}
       {viewMode === "budget" && (
         <nav
@@ -350,13 +443,13 @@ export default function WebViewContainer() {
                   "hover:scale-105 active:scale-95",
                   activeTab === "dashboard"
                     ? "neo-gradient text-white shadow-lg shadow-primary/30"
-                    : `neo-card ${themeClasses.text} hover:bg-white/5`
+                    : `neo-card ${themeClasses.text} hover:bg-white/5`,
                 )}
               >
                 <BarChart3
                   className={cn(
                     "w-5 h-5",
-                    activeTab === "dashboard" && "drop-shadow-lg"
+                    activeTab === "dashboard" && "drop-shadow-lg",
                   )}
                 />
                 <span className="text-sm font-semibold">Dashboard</span>
@@ -372,13 +465,13 @@ export default function WebViewContainer() {
                   "hover:scale-105 active:scale-95",
                   activeTab === "budget"
                     ? "neo-gradient text-white shadow-lg shadow-primary/30"
-                    : `neo-card ${themeClasses.text} hover:bg-white/5`
+                    : `neo-card ${themeClasses.text} hover:bg-white/5`,
                 )}
               >
                 <Wallet
                   className={cn(
                     "w-5 h-5",
-                    activeTab === "budget" && "drop-shadow-lg"
+                    activeTab === "budget" && "drop-shadow-lg",
                   )}
                 />
                 <span className="text-sm font-semibold">Budget</span>
@@ -394,13 +487,13 @@ export default function WebViewContainer() {
                   "hover:scale-105 active:scale-95",
                   activeTab === "goals"
                     ? "bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg shadow-violet-500/30"
-                    : `neo-card ${themeClasses.text} hover:bg-white/5`
+                    : `neo-card ${themeClasses.text} hover:bg-white/5`,
                 )}
               >
                 <Rocket
                   className={cn(
                     "w-5 h-5",
-                    activeTab === "goals" && "drop-shadow-lg"
+                    activeTab === "goals" && "drop-shadow-lg",
                   )}
                 />
                 <span className="text-sm font-semibold">Goals</span>

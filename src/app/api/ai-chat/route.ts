@@ -4,15 +4,19 @@ import {
   generateSystemPrompt,
   sendMessageToGemini,
 } from "@/lib/ai/gemini";
+import {
+  checkUserRateLimit,
+  generateRequestHash,
+  getAIUsageStats,
+  MONTHLY_TOKEN_LIMIT,
+  recordRequestHash,
+} from "@/lib/ai/rateLimit";
 import { estimateTokens } from "@/lib/ai/tokenUtils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-
-// Monthly token limit (Gemini free tier)
-const MONTHLY_TOKEN_LIMIT = 1_000_000;
 
 // Rate limiting: Track Gemini API rate limits with exponential backoff
 let lastRateLimitError: number = 0;
@@ -41,7 +45,7 @@ function recordRateLimitError(errorMessage: string): number {
   }
 
   console.log(
-    `AI Chat rate limit cooldown set to ${rateLimitCooldownMs / 1000}s`
+    `AI Chat rate limit cooldown set to ${rateLimitCooldownMs / 1000}s`,
   );
   return Math.ceil(rateLimitCooldownMs / 1000);
 }
@@ -83,7 +87,7 @@ export async function POST(req: NextRequest) {
     if (!message || typeof message !== "string") {
       return NextResponse.json(
         { error: "Message is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -99,21 +103,45 @@ export async function POST(req: NextRequest) {
             percentage: 100,
           },
         },
-        { status: 429 }
+        { status: 429 },
       );
     }
 
-    // Check if we're in a rate limit cooldown period
-    const rateLimitStatus = isRateLimited();
-    if (rateLimitStatus.limited) {
+    // Check if we're in a rate limit cooldown period (in-memory, fast check)
+    const inMemoryRateLimit = isRateLimited();
+    if (inMemoryRateLimit.limited) {
       return NextResponse.json(
         {
-          error: `AI is temporarily unavailable due to rate limits. Please try again in ${rateLimitStatus.retryInSeconds} seconds.`,
-          retryAfter: rateLimitStatus.retryInSeconds,
+          error: `AI is temporarily unavailable due to rate limits. Please try again in ${inMemoryRateLimit.retryInSeconds} seconds.`,
+          retryAfter: inMemoryRateLimit.retryInSeconds,
         },
-        { status: 429 }
+        { status: 429 },
       );
     }
+
+    // Generate request hash for deduplication
+    const requestHash = generateRequestHash(message, sessionId);
+
+    // Check persistent rate limit (Supabase-based, works across instances)
+    const rateLimitCheck = await checkUserRateLimit(
+      supabase,
+      user.id,
+      requestHash,
+    );
+    if (!rateLimitCheck.allowed) {
+      return NextResponse.json(
+        {
+          error:
+            rateLimitCheck.reason ||
+            "Rate limit exceeded. Please try again later.",
+          retryAfter: rateLimitCheck.retryAfterSeconds,
+        },
+        { status: 429 },
+      );
+    }
+
+    // Record request hash for deduplication (rate limiting uses ai_messages)
+    await recordRequestHash(supabase, user.id, "ai-chat", requestHash);
 
     // Build budget context if requested
     let budgetContext: BudgetContext | undefined;
@@ -145,7 +173,7 @@ export async function POST(req: NextRequest) {
     const response = await sendMessageToGemini(
       message,
       formattedHistory,
-      budgetContext
+      budgetContext,
     );
 
     const responseTime = Date.now() - startTime;
@@ -205,7 +233,7 @@ export async function POST(req: NextRequest) {
           error: `AI is temporarily unavailable due to rate limits. Please try again in ${retrySeconds} seconds.`,
           retryAfter: retrySeconds,
         },
-        { status: 429 }
+        { status: 429 },
       );
     }
 
@@ -213,13 +241,13 @@ export async function POST(req: NextRequest) {
     if (errorMessage.includes("API key") || errorMessage.includes("401")) {
       return NextResponse.json(
         { error: "AI service not configured. Please check your API key." },
-        { status: 503 }
+        { status: 503 },
       );
     }
 
     return NextResponse.json(
       { error: "Failed to get AI response. Please try again." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -259,7 +287,7 @@ export async function GET(req: NextRequest) {
       const { data: newMessages, error: newError } = await supabase
         .from("ai_messages")
         .select(
-          "id, role, content, created_at, input_tokens, output_tokens, is_edited, sequence_num"
+          "id, role, content, created_at, input_tokens, output_tokens, is_edited, sequence_num",
         )
         .eq("user_id", user.id)
         .eq("session_id", sessionId)
@@ -275,26 +303,32 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Get monthly usage (from both tables)
-    const monthlyUsage = await getMonthlyTokenUsage(supabase, user.id);
+    // Get unified usage stats from ai_messages (single source of truth)
+    const usageStats = await getAIUsageStats(supabase, user.id);
 
     return NextResponse.json({
       messages,
       // Keep chatHistory for backward compatibility
       chatHistory: messages,
       usage: {
-        monthlyUsed: monthlyUsage,
-        monthlyLimit: MONTHLY_TOKEN_LIMIT,
-        monthlyPercentage:
-          Math.round((monthlyUsage / MONTHLY_TOKEN_LIMIT) * 100 * 10) / 10,
-        remaining: MONTHLY_TOKEN_LIMIT - monthlyUsage,
+        // Monthly token stats
+        monthlyUsed: usageStats.monthlyTokensUsed,
+        monthlyLimit: usageStats.monthlyTokenLimit,
+        monthlyPercentage: usageStats.monthlyPercentage,
+        remaining: usageStats.monthlyTokenLimit - usageStats.monthlyTokensUsed,
+        // Rate limit stats (per minute)
+        requestsInLastMinute: usageStats.requestsInLastMinute,
+        maxRequestsPerMinute: usageStats.maxRequestsPerMinute,
+        // Today's stats
+        todayRequests: usageStats.todayRequests,
+        todayTokens: usageStats.todayTokens,
       },
     });
   } catch (error) {
     console.error("AI Chat GET error:", error);
     return NextResponse.json(
       { error: "Failed to fetch data" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -320,7 +354,7 @@ export async function PATCH(req: NextRequest) {
     if (!messageId) {
       return NextResponse.json(
         { error: "Message ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -349,7 +383,7 @@ export async function PATCH(req: NextRequest) {
         console.error("Failed to edit message:", error);
         return NextResponse.json(
           { error: "Failed to edit message" },
-          { status: 500 }
+          { status: 500 },
         );
       }
 
@@ -382,7 +416,7 @@ export async function PATCH(req: NextRequest) {
     console.error("AI Chat PATCH error:", error);
     return NextResponse.json(
       { error: "Failed to update message" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -402,7 +436,7 @@ async function logMessagesToDatabase(
     includedBudgetContext: boolean;
     responseTimeMs: number;
     parentMessageId: string | null;
-  }
+  },
 ): Promise<{
   userMessageId: string | null;
   assistantMessageId: string | null;
@@ -418,7 +452,7 @@ async function logMessagesToDatabase(
           (data.userMessage.length > 50 ? "..." : ""),
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "id" }
+      { onConflict: "id" },
     );
 
     // Get the next sequence number
@@ -489,14 +523,14 @@ async function logMessagesToDatabase(
  */
 async function getMonthlyTokenUsage(
   supabase: Awaited<ReturnType<typeof supabaseServer>>,
-  userId: string
+  userId: string,
 ): Promise<number> {
   try {
     const now = new Date();
     const startOfMonth = new Date(
       now.getFullYear(),
       now.getMonth(),
-      1
+      1,
     ).toISOString();
 
     // Try using total_tokens column first (if migration applied)
@@ -530,7 +564,7 @@ async function getMonthlyTokenUsage(
  */
 async function fetchBudgetContext(
   supabase: Awaited<ReturnType<typeof supabaseServer>>,
-  userId: string
+  userId: string,
 ): Promise<BudgetContext> {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -546,7 +580,7 @@ async function fetchBudgetContext(
   const lastMonthEnd = new Date(
     lastMonthDate.getFullYear(),
     lastMonthDate.getMonth() + 1,
-    0
+    0,
   )
     .toISOString()
     .slice(0, 10);
@@ -561,10 +595,10 @@ async function fetchBudgetContext(
 
   // Separate expense and income account IDs for proper categorization
   const expenseAccountIds = new Set(
-    (accounts || []).filter((a) => a.type === "expense").map((a) => a.id)
+    (accounts || []).filter((a) => a.type === "expense").map((a) => a.id),
   );
   const incomeAccountIds = new Set(
-    (accounts || []).filter((a) => a.type === "income").map((a) => a.id)
+    (accounts || []).filter((a) => a.type === "income").map((a) => a.id),
   );
 
   if (accountIds.length === 0) {
@@ -696,18 +730,18 @@ async function fetchBudgetContext(
 
   // Separate expense and income transactions (current month)
   const expenseTransactions = (transactions || []).filter((tx) =>
-    expenseAccountIds.has(tx.account_id)
+    expenseAccountIds.has(tx.account_id),
   );
   const incomeTransactions = (transactions || []).filter((tx) =>
-    incomeAccountIds.has(tx.account_id)
+    incomeAccountIds.has(tx.account_id),
   );
 
   // Separate expense and income transactions (last month)
   const lastMonthExpenseTransactions = (lastMonthTransactions || []).filter(
-    (tx) => expenseAccountIds.has(tx.account_id)
+    (tx) => expenseAccountIds.has(tx.account_id),
   );
   const lastMonthIncomeTransactions = (lastMonthTransactions || []).filter(
-    (tx) => incomeAccountIds.has(tx.account_id)
+    (tx) => incomeAccountIds.has(tx.account_id),
   );
 
   // Calculate spending by category (current month - EXPENSES ONLY)
@@ -731,13 +765,13 @@ async function fetchBudgetContext(
   // Calculate total income (current month)
   const totalIncome = incomeTransactions.reduce(
     (sum, tx) => sum + tx.amount,
-    0
+    0,
   );
 
   // Calculate total income (last month)
   const lastMonthTotalIncome = lastMonthIncomeTransactions.reduce(
     (sum, tx) => sum + tx.amount,
-    0
+    0,
   );
 
   // Build category budget info
@@ -776,7 +810,7 @@ async function fetchBudgetContext(
   const totalSpent = categoriesArray.reduce((sum, c) => sum + c.spent, 0);
   const lastMonthTotalSpent = lastMonthCategoriesArray.reduce(
     (sum, c) => sum + c.spent,
-    0
+    0,
   );
 
   // Format recent transactions (current month - EXPENSES ONLY with clear labeling)

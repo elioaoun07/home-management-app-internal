@@ -1,0 +1,44 @@
+{
+  "id": "/catalogue-app",
+  "name": "Catalogue - Smart Database",
+  "short_name": "Catalogue",
+  "description": "Organize contacts, tasks, notes, recipes, and more in one place.",
+  "start_url": "/catalogue",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#0a1628",
+  "theme_color": "#10b981",
+  "categories": ["productivity", "utilities", "lifestyle"],
+  "icons": [
+    {
+      "src": "/catalogue-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/catalogue-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/catalogue-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "All Items",
+      "short_name": "Items",
+      "url": "/catalogue",
+      "description": "View all catalogue items",
+      "icons": [
+        { "src": "/catalogue-192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    }
+  ]
+}
