@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Recipe App Icon">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#162033"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#f97316" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#0a1628" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="iconGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feFlood flood-color="#f97316" flood-opacity="0.45"/>
+      <feComposite in2="b" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="dotGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="4"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background — same shape as main app -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+
+  <!-- Subtle border -->
+  <rect x="10" y="10" width="492" height="492" rx="104" fill="none" stroke="url(#accent)" stroke-width="1.5" opacity="0.18"/>
+
+  <!-- Main icon group -->
+  <g filter="url(#iconGlow)" transform="translate(256,252)">
+
+    <!-- Chef hat body -->
+    <ellipse cx="0" cy="-20" rx="70" ry="50" fill="#0f1d2e" stroke="url(#accent)" stroke-width="3.5"/>
+    <!-- Hat top puffs -->
+    <circle cx="-40" cy="-55" r="28" fill="#0f1d2e" stroke="url(#accent)" stroke-width="3"/>
+    <circle cx="0" cy="-68" r="30" fill="#0f1d2e" stroke="url(#accent)" stroke-width="3"/>
+    <circle cx="40" cy="-55" r="28" fill="#0f1d2e" stroke="url(#accent)" stroke-width="3"/>
+    <!-- Hat band -->
+    <rect x="-70" y="-8" width="140" height="22" rx="6" fill="#0f1d2e" stroke="url(#accent)" stroke-width="3"/>
+    <!-- Band detail lines -->
+    <line x1="-55" y1="3" x2="55" y2="3" stroke="url(#accent)" stroke-width="1.5" opacity="0.4"/>
+
+    <!-- Utensils crossed below hat -->
+    <g transform="translate(0,52)" opacity="0.85">
+      <!-- Fork -->
+      <g transform="rotate(-25)">
+        <rect x="-2" y="-20" width="4" height="50" rx="2" fill="url(#accent)" opacity="0.7"/>
+        <rect x="-8" y="-28" width="3" height="14" rx="1.5" fill="url(#accent)" opacity="0.6"/>
+        <rect x="-2" y="-28" width="3" height="14" rx="1.5" fill="url(#accent)" opacity="0.6"/>
+        <rect x="4" y="-28" width="3" height="14" rx="1.5" fill="url(#accent)" opacity="0.6"/>
+      </g>
+      <!-- Spoon -->
+      <g transform="rotate(25)">
+        <rect x="-2" y="-16" width="4" height="46" rx="2" fill="url(#accent)" opacity="0.7"/>
+        <ellipse cx="0" cy="-24" rx="8" ry="12" fill="url(#accent)" opacity="0.5"/>
+      </g>
+    </g>
+
+    <!-- Steam wisps above hat -->
+    <g opacity="0.5" fill="none" stroke="url(#accent)" stroke-width="2" stroke-linecap="round">
+      <path d="M-20,-95 C-20,-105 -10,-105 -10,-115"/>
+      <path d="M5,-100 C5,-112 15,-112 15,-124"/>
+      <path d="M-8,-92 C-8,-100 0,-100 0,-108"/>
+    </g>
+
+    <!-- Heart badge — bottom-right -->
+    <g transform="translate(72,-52)" opacity="0.85">
+      <path d="M0-6 C-4-14 -14-14 -14-6 C-14 2 0 12 0 12 C0 12 14 2 14-6 C14-14 4-14 0-6Z" fill="url(#accent)" stroke="none" transform="scale(0.8)"/>
+    </g>
+  </g>
+
+  <!-- Corner dots — same positions as main app -->
+  <g filter="url(#dotGlow)">
+    <circle cx="130" cy="130" r="4" fill="#fb923c" opacity="0.7"/>
+    <circle cx="382" cy="130" r="3.5" fill="#ea580c" opacity="0.6"/>
+    <circle cx="130" cy="382" r="3.5" fill="#f97316" opacity="0.6"/>
+    <circle cx="382" cy="382" r="4" fill="#fb923c" opacity="0.7"/>
+  </g>
+</svg>

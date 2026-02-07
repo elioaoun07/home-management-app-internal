@@ -24,6 +24,15 @@ const iconSets = [
       { name: "catalogue-maskable-512.png", size: 512 },
     ],
   },
+  {
+    svg: path.join(__dirname, "../public/recipe-icon.svg"),
+    outputs: [
+      { name: "recipe-180.png", size: 180 },
+      { name: "recipe-192.png", size: 192 },
+      { name: "recipe-512.png", size: 512 },
+      { name: "recipe-maskable-512.png", size: 512 },
+    ],
+  },
 ];
 
 async function generateIcons() {
