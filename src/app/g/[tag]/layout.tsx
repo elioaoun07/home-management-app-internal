@@ -1,11 +1,21 @@
 // src/app/g/[tag]/layout.tsx
 // Standalone layout for guest portal — no app header/nav/auth
 import "../../globals.css";
+import type { Viewport } from "next";
 
 export const metadata = {
   title: "Welcome Home • Jarvis Home Portal",
   description:
     "Your personal home assistant portal — powered by Jarvis AI ecosystem",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#0a1628",
 };
 
 export default function GuestPortalLayout({
@@ -14,7 +24,7 @@ export default function GuestPortalLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[#0a1628] text-white overflow-x-hidden">
+    <div className="min-h-[100dvh] bg-[#0a1628] text-white overflow-x-hidden">
       {children}
     </div>
   );

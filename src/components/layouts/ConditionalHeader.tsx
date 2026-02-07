@@ -5,6 +5,7 @@ import { NotificationCenter } from "@/components/notifications";
 import { useTab } from "@/contexts/TabContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
+import { usePathname } from "next/navigation";
 
 type Props = {
   userName: string;
@@ -20,9 +21,10 @@ export default function ConditionalHeader({
   const { activeTab } = useTab();
   const { viewMode } = useViewMode();
   const themeClasses = useThemeClasses();
+  const pathname = usePathname();
 
-  // Hide header in watch/web mode - after all hooks are called
-  if (viewMode === "watch" || viewMode === "web") {
+  // Hide header on guest portal and in watch/web mode
+  if (pathname?.startsWith("/g/") || viewMode === "watch" || viewMode === "web") {
     return null;
   }
 

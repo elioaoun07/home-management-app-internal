@@ -279,6 +279,44 @@ CREATE TABLE public.catalogue_sub_items (
   CONSTRAINT catalogue_sub_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT catalogue_sub_items_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.catalogue_items(id)
 );
+CREATE TABLE public.cooking_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  recipe_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  version_id uuid,
+  actual_prep_minutes integer,
+  actual_cook_minutes integer,
+  perceived_difficulty text CHECK (perceived_difficulty = ANY (ARRAY['easy'::text, 'medium'::text, 'hard'::text])),
+  substitutions jsonb DEFAULT '[]'::jsonb,
+  servings_made integer,
+  rating integer CHECK (rating >= 1 AND rating <= 5),
+  taste_notes text,
+  general_notes text,
+  would_make_again boolean,
+  cooked_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT cooking_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT cooking_logs_recipe_id_fkey FOREIGN KEY (recipe_id) REFERENCES public.recipes(id),
+  CONSTRAINT cooking_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT cooking_logs_version_id_fkey FOREIGN KEY (version_id) REFERENCES public.recipe_versions(id)
+);
+CREATE TABLE public.debts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  transaction_id uuid NOT NULL,
+  debtor_name text NOT NULL,
+  original_amount numeric NOT NULL CHECK (original_amount > 0::numeric),
+  returned_amount numeric NOT NULL DEFAULT 0 CHECK (returned_amount >= 0::numeric),
+  status text NOT NULL DEFAULT 'open'::text CHECK (status = ANY (ARRAY['open'::text, 'archived'::text, 'closed'::text])),
+  notes text,
+  archived_at timestamp with time zone,
+  closed_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT debts_pkey PRIMARY KEY (id),
+  CONSTRAINT debts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT debts_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id)
+);
 CREATE TABLE public.default_categories (
   id uuid NOT NULL,
   name text NOT NULL,
@@ -329,6 +367,68 @@ CREATE TABLE public.future_purchases (
   completed_at timestamp with time zone,
   CONSTRAINT future_purchases_pkey PRIMARY KEY (id),
   CONSTRAINT future_purchases_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.guest_allergies (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tag_id uuid NOT NULL,
+  session_id uuid NOT NULL,
+  guest_name text,
+  allergies text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT guest_allergies_pkey PRIMARY KEY (id),
+  CONSTRAINT guest_allergies_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.guest_portal_tags(id),
+  CONSTRAINT guest_allergies_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.guest_sessions(id)
+);
+CREATE TABLE public.guest_chat_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tag_id uuid NOT NULL,
+  session_id uuid NOT NULL,
+  sender text NOT NULL CHECK (sender = ANY (ARRAY['guest'::text, 'host'::text, 'bot'::text])),
+  message text NOT NULL,
+  guest_name text,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT guest_chat_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT guest_chat_messages_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.guest_portal_tags(id),
+  CONSTRAINT guest_chat_messages_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.guest_sessions(id)
+);
+CREATE TABLE public.guest_feedback (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tag_id uuid NOT NULL,
+  feedback_type text NOT NULL CHECK (feedback_type = ANY (ARRAY['suggestion'::text, 'complaint'::text])),
+  message text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT guest_feedback_pkey PRIMARY KEY (id),
+  CONSTRAINT guest_feedback_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.guest_portal_tags(id)
+);
+CREATE TABLE public.guest_portal_tags (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  tag_slug text NOT NULL UNIQUE,
+  label text,
+  destination text NOT NULL DEFAULT 'welcome'::text,
+  is_active boolean NOT NULL DEFAULT true,
+  wifi_ssid text,
+  wifi_password text,
+  bio_data jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT guest_portal_tags_pkey PRIMARY KEY (id),
+  CONSTRAINT guest_portal_tags_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.guest_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tag_id uuid NOT NULL,
+  guest_name text,
+  fingerprint text,
+  user_agent text,
+  ip_hash text,
+  is_active boolean NOT NULL DEFAULT true,
+  last_seen_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT guest_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT guest_sessions_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.guest_portal_tags(id)
 );
 CREATE TABLE public.household_links (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -766,6 +866,31 @@ CREATE TABLE public.push_subscriptions (
   CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id),
   CONSTRAINT push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.recipe_versions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  recipe_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  version_label text NOT NULL,
+  source text NOT NULL DEFAULT 'user'::text,
+  is_active boolean DEFAULT false,
+  ingredients jsonb DEFAULT '[]'::jsonb,
+  steps jsonb DEFAULT '[]'::jsonb,
+  prep_time_minutes integer,
+  cook_time_minutes integer,
+  servings integer DEFAULT 4,
+  difficulty text DEFAULT 'medium'::text CHECK (difficulty = ANY (ARRAY['easy'::text, 'medium'::text, 'hard'::text])),
+  category text,
+  cuisine text,
+  tags ARRAY DEFAULT '{}'::text[],
+  description text,
+  ai_prompt text,
+  ai_reasoning text,
+  tokens_used integer,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT recipe_versions_pkey PRIMARY KEY (id),
+  CONSTRAINT recipe_versions_recipe_id_fkey FOREIGN KEY (recipe_id) REFERENCES public.recipes(id),
+  CONSTRAINT recipe_versions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.recipes (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -794,9 +919,11 @@ CREATE TABLE public.recipes (
   archived_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  active_version_id uuid,
   CONSTRAINT recipes_pkey PRIMARY KEY (id),
   CONSTRAINT recipes_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT recipes_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id)
+  CONSTRAINT recipes_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
+  CONSTRAINT recipes_active_version_id_fkey FOREIGN KEY (active_version_id) REFERENCES public.recipe_versions(id)
 );
 CREATE TABLE public.recurring_payments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -919,13 +1046,17 @@ CREATE TABLE public.transactions (
   split_completed_at timestamp with time zone,
   collaborator_account_id uuid,
   lbp_change_received numeric,
+  scheduled_date date,
+  is_debt_return boolean NOT NULL DEFAULT false,
+  parent_transaction_id uuid,
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
   CONSTRAINT transactions_category_fk FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_subcategory_fk FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
   CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT transactions_collaborator_id_fkey FOREIGN KEY (collaborator_id) REFERENCES auth.users(id),
-  CONSTRAINT transactions_collaborator_account_id_fkey FOREIGN KEY (collaborator_account_id) REFERENCES public.accounts(id)
+  CONSTRAINT transactions_collaborator_account_id_fkey FOREIGN KEY (collaborator_account_id) REFERENCES public.accounts(id),
+  CONSTRAINT transactions_parent_transaction_id_fkey FOREIGN KEY (parent_transaction_id) REFERENCES public.transactions(id)
 );
 CREATE TABLE public.transfers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -958,8 +1089,8 @@ CREATE TABLE public.user_categories (
   CONSTRAINT user_categories_pkey PRIMARY KEY (id),
   CONSTRAINT user_categories_default_fk FOREIGN KEY (default_category_id) REFERENCES public.default_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );

@@ -40,6 +40,7 @@ import { useViewMode } from "@/hooks/useViewMode";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 
@@ -69,6 +70,7 @@ export default function MobileNav() {
   const [templateAmount, setTemplateAmount] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
   const { viewMode } = useViewMode();
+  const pathname = usePathname();
   const prefetchedRef = useRef({
     dashboard: false,
     expense: false,
@@ -77,6 +79,11 @@ export default function MobileNav() {
 
   // Draft transactions count for floating badge
   const draftCount = useDraftCount();
+
+  // Hide nav on guest portal routes and watch/web mode
+  if (pathname?.startsWith("/g/")) {
+    return null;
+  }
 
   // Prefetch all tabs on initial mount for instant switching
   useEffect(() => {
