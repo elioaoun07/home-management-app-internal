@@ -10,15 +10,35 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  useCreateRecipeVersion,
+  useExtractRecipeFromUrl,
+  useOptimizeRecipe,
+} from "@/features/recipes/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import type { Recipe, RecipeIngredient, RecipeStep } from "@/types/recipe";
+import type {
+  AIFieldChange,
+  Recipe,
+  RecipeDifficulty,
+  RecipeIngredient,
+  RecipeStep,
+} from "@/types/recipe";
 import {
   RECIPE_CATEGORIES,
   RECIPE_CUISINES,
   RECIPE_TAGS,
 } from "@/types/recipe";
-import { Loader2, Plus, X } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  GitBranch,
+  Loader2,
+  Plus,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface RecipeDialogProps {
@@ -38,6 +58,17 @@ export default function RecipeDialog({
 }: RecipeDialogProps) {
   const themeClasses = useThemeClasses();
   const isEditing = !!recipe;
+  const extractFromUrl = useExtractRecipeFromUrl();
+  const optimizeRecipe = useOptimizeRecipe();
+  const createVersion = useCreateRecipeVersion();
+  const [extractionStatus, setExtractionStatus] = useState<string | null>(null);
+  const [aiPreview, setAiPreview] = useState<{
+    recipe: Partial<Recipe>;
+    reasoning: string;
+    changes: AIFieldChange[];
+    tokensUsed: number | null;
+  } | null>(null);
+  const [showChanges, setShowChanges] = useState(false);
 
   // Form state
   const [name, setName] = useState("");
@@ -206,16 +237,85 @@ export default function RecipeDialog({
               <label className="text-sm text-white/60 mb-1.5 block">
                 Source URL
               </label>
-              <Input
-                type="url"
-                value={sourceUrl}
-                onChange={(e) => setSourceUrl(e.target.value)}
-                placeholder="https://..."
-                className={cn(
-                  themeClasses.inputBg,
-                  "border-white/10 text-white",
-                )}
-              />
+              <div className="flex gap-2">
+                <Input
+                  type="url"
+                  value={sourceUrl}
+                  onChange={(e) => {
+                    setSourceUrl(e.target.value);
+                    setExtractionStatus(null);
+                  }}
+                  placeholder="https://... (recipe page or YouTube video)"
+                  className={cn(
+                    "flex-1",
+                    themeClasses.inputBg,
+                    "border-white/10 text-white",
+                  )}
+                  disabled={extractFromUrl.isPending}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!sourceUrl.trim() || extractFromUrl.isPending}
+                  onClick={async () => {
+                    if (!sourceUrl.trim()) return;
+                    setExtractionStatus("Extracting recipe...");
+                    try {
+                      const result = await extractFromUrl.mutateAsync(
+                        sourceUrl.trim(),
+                      );
+                      const r = result.recipe;
+                      // Auto-fill all fields from extracted data
+                      if (r.name) setName(r.name);
+                      if (r.description) setDescription(r.description);
+                      if (r.category) setCategory(r.category);
+                      if (r.cuisine) setCuisine(r.cuisine);
+                      if (r.difficulty)
+                        setDifficulty(
+                          r.difficulty as "easy" | "medium" | "hard",
+                        );
+                      if (r.prep_time_minutes) setPrepTime(r.prep_time_minutes);
+                      if (r.cook_time_minutes) setCookTime(r.cook_time_minutes);
+                      if (r.servings) setServings(r.servings);
+                      if (r.tags?.length) setSelectedTags(r.tags);
+                      if (r.ingredients?.length) setIngredients(r.ingredients);
+                      if (r.steps?.length) setSteps(r.steps);
+                      setExtractionStatus(
+                        `✅ Extracted from ${result.source === "youtube" ? "YouTube" : "website"}` +
+                          (result.tokensUsed
+                            ? ` (${result.tokensUsed} tokens)`
+                            : ""),
+                      );
+                    } catch {
+                      setExtractionStatus(null);
+                    }
+                  }}
+                  className={cn(
+                    "gap-1.5 whitespace-nowrap",
+                    "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10",
+                  )}
+                >
+                  {extractFromUrl.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                  {extractFromUrl.isPending
+                    ? "Extracting..."
+                    : "Extract with AI"}
+                </Button>
+              </div>
+              {extractionStatus && (
+                <p className="text-xs text-emerald-400/80 mt-1.5">
+                  {extractionStatus}
+                </p>
+              )}
+              {extractFromUrl.isError && (
+                <p className="text-xs text-red-400/80 mt-1.5">
+                  {extractFromUrl.error?.message || "Extraction failed"}
+                </p>
+              )}
             </div>
           </div>
 
@@ -489,6 +589,143 @@ export default function RecipeDialog({
             </div>
           </div>
 
+          {/* AI Optimization Preview */}
+          {aiPreview && (
+            <div className="p-4 rounded-xl border-2 border-emerald-500/30 bg-emerald-500/5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-medium text-white text-sm">
+                  AI Suggestions
+                </h3>
+                {aiPreview.tokensUsed && (
+                  <span className="text-xs text-white/30 ml-auto">
+                    {aiPreview.tokensUsed} tokens
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-white/70 leading-relaxed">
+                {aiPreview.reasoning}
+              </p>
+              {aiPreview.changes.length > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowChanges(!showChanges)}
+                    className="flex items-center gap-1.5 text-sm text-white/60 hover:text-white/80"
+                  >
+                    {showChanges ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                    {aiPreview.changes.length} changes
+                  </button>
+                  {showChanges && (
+                    <div className="space-y-1 mt-2">
+                      {aiPreview.changes.map((c, i) => (
+                        <div
+                          key={i}
+                          className="flex items-start gap-2 p-1.5 rounded text-xs bg-white/5"
+                        >
+                          <ArrowRight className="w-3 h-3 text-emerald-400 mt-0.5 shrink-0" />
+                          <div>
+                            <span className="text-white/50">{c.field}: </span>
+                            {c.from != null && (
+                              <>
+                                <span className="text-red-400/60 line-through">
+                                  {String(c.from)}
+                                </span>
+                                <span className="text-white/30 mx-1">→</span>
+                              </>
+                            )}
+                            <span className="text-emerald-400">
+                              {String(c.to)}
+                            </span>
+                            <p className="text-white/40 mt-0.5">{c.reason}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    const r = aiPreview.recipe;
+                    if (r.name) setName(r.name);
+                    if (r.description) setDescription(r.description);
+                    if (r.category) setCategory(r.category);
+                    if (r.cuisine) setCuisine(r.cuisine);
+                    if (r.difficulty)
+                      setDifficulty(r.difficulty as "easy" | "medium" | "hard");
+                    if (r.prep_time_minutes != null)
+                      setPrepTime(r.prep_time_minutes);
+                    if (r.cook_time_minutes != null)
+                      setCookTime(r.cook_time_minutes);
+                    if (r.servings) setServings(r.servings);
+                    if (r.tags) setSelectedTags(r.tags as string[]);
+                    if (r.ingredients) setIngredients(r.ingredients);
+                    if (r.steps) setSteps(r.steps);
+                    setAiPreview(null);
+                  }}
+                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                >
+                  Apply Changes
+                </Button>
+                {isEditing && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const r = aiPreview.recipe;
+                      createVersion.mutate({
+                        recipeId: recipe!.id,
+                        version_label: "AI Optimized",
+                        source: "ai_optimize",
+                        is_active: false,
+                        ingredients: (r.ingredients ||
+                          []) as RecipeIngredient[],
+                        steps: (r.steps || []) as RecipeStep[],
+                        prep_time_minutes:
+                          (r.prep_time_minutes as number) ?? null,
+                        cook_time_minutes:
+                          (r.cook_time_minutes as number) ?? null,
+                        servings: r.servings ?? 4,
+                        difficulty: ((r.difficulty as string) ||
+                          "medium") as RecipeDifficulty,
+                        category: (r.category as string) ?? null,
+                        cuisine: (r.cuisine as string) ?? null,
+                        tags: (r.tags || []) as string[],
+                        description: (r.description as string) ?? null,
+                        ai_reasoning: aiPreview.reasoning,
+                        tokens_used: aiPreview.tokensUsed ?? null,
+                        ai_prompt: null,
+                      });
+                      setAiPreview(null);
+                    }}
+                    className="gap-1.5 border-white/20 text-white/70"
+                  >
+                    <GitBranch className="w-3.5 h-3.5" />
+                    Save as Version
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setAiPreview(null)}
+                  className="text-white/40 ml-auto"
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
             <Button
@@ -498,6 +735,53 @@ export default function RecipeDialog({
               disabled={isLoading}
             >
               Cancel
+            </Button>
+            {/* AI Optimize button */}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!name.trim() || optimizeRecipe.isPending}
+              onClick={async () => {
+                // Build current form state as userInput
+                const userInput = {
+                  name: name.trim(),
+                  description: description.trim() || undefined,
+                  category: category || undefined,
+                  cuisine: cuisine || undefined,
+                  difficulty,
+                  prep_time_minutes: prepTime || null,
+                  cook_time_minutes: cookTime || null,
+                  servings,
+                  tags: selectedTags,
+                  ingredients,
+                  steps,
+                };
+                try {
+                  const result = await optimizeRecipe.mutateAsync({
+                    id: recipe?.id || "new",
+                    userInput,
+                  });
+                  setAiPreview({
+                    recipe: result.recipe,
+                    reasoning: result.reasoning,
+                    changes: result.changes,
+                    tokensUsed: result.tokensUsed,
+                  });
+                } catch {
+                  // handled by hook
+                }
+              }}
+              className={cn(
+                "gap-1.5",
+                "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10",
+              )}
+            >
+              {optimizeRecipe.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4" />
+              )}
+              {optimizeRecipe.isPending ? "Optimizing..." : "Optimize with AI"}
             </Button>
             <Button type="submit" disabled={isLoading || !name.trim()}>
               {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}

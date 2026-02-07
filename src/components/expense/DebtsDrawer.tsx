@@ -230,15 +230,18 @@ export default function DebtsDrawer({ open, onOpenChange }: DebtsDrawerProps) {
                     <div className="flex gap-2 mt-3">
                       {debt.status === "open" && (
                         <Button
-                          onClick={() =>
-                            setSettlementData({
-                              debtId: debt.id,
-                              debtorName: debt.debtor_name,
-                              originalAmount: debt.original_amount,
-                              returnedAmount: debt.returned_amount,
-                              accountId: debt.transaction?.account_id || "",
-                            })
-                          }
+                          onClick={() => {
+                            onOpenChange(false);
+                            setTimeout(() => {
+                              setSettlementData({
+                                debtId: debt.id,
+                                debtorName: debt.debtor_name,
+                                originalAmount: debt.original_amount,
+                                returnedAmount: debt.returned_amount,
+                                accountId: debt.transaction?.account_id || "",
+                              });
+                            }, 300);
+                          }}
                           size="sm"
                           className="flex-1 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-400/20"
                         >

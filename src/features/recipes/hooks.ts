@@ -2,15 +2,23 @@
 "use client";
 
 import type {
+  AIRecipeOptimization,
+  AIServingScale,
+  AISubstitution,
+  CookingLog,
+  CookingLogInsert,
   MealPlan,
   MealPlanInsert,
   MealPlanUpdate,
   MealPlanWithRecipe,
   Recipe,
   RecipeFilters,
+  RecipeIngredient,
   RecipeInsert,
   RecipeListItem,
   RecipeUpdate,
+  RecipeVersion,
+  RecipeVersionInsert,
 } from "@/types/recipe";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -26,6 +34,10 @@ export const recipeKeys = {
   details: () => [...recipeKeys.all, "detail"] as const,
   detail: (id: string) => [...recipeKeys.details(), id] as const,
   favorites: () => [...recipeKeys.all, "favorites"] as const,
+  versions: (recipeId: string) =>
+    [...recipeKeys.all, "versions", recipeId] as const,
+  cookingLogs: (recipeId: string) =>
+    [...recipeKeys.all, "cooking-logs", recipeId] as const,
 };
 
 export const mealPlanKeys = {
@@ -379,6 +391,315 @@ export function useGenerateRecipe() {
       queryClient.setQueryData(recipeKeys.detail(recipe.id), recipe);
       toast.success("Recipe generated with AI!");
     },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+// =============================================================================
+// AI COLLABORATION API FUNCTIONS
+// =============================================================================
+
+async function optimizeRecipe(
+  id: string,
+  userInput?: Partial<Recipe>,
+): Promise<AIRecipeOptimization & { tokensUsed: number | null }> {
+  const res = await fetch(`/api/recipes/${id}/optimize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userInput }),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || "Failed to optimize recipe");
+  }
+  return res.json();
+}
+
+async function scaleRecipe(
+  id: string,
+  targetServings: number,
+  currentServings?: number,
+  ingredients?: RecipeIngredient[],
+): Promise<AIServingScale & { tokensUsed: number | null }> {
+  const res = await fetch(`/api/recipes/${id}/scale`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetServings, currentServings, ingredients }),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || "Failed to scale recipe");
+  }
+  return res.json();
+}
+
+async function substituteIngredient(
+  recipeId: string,
+  ingredient: string,
+  question?: string,
+  recipeName?: string,
+  allIngredients?: string[],
+): Promise<AISubstitution & { answer?: string; tokensUsed: number | null }> {
+  const res = await fetch(`/api/recipes/${recipeId}/substitute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ingredient, question, recipeName, allIngredients }),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || "Failed to get substitution");
+  }
+  return res.json();
+}
+
+// =============================================================================
+// RECIPE VERSION API FUNCTIONS
+// =============================================================================
+
+async function fetchRecipeVersions(recipeId: string): Promise<RecipeVersion[]> {
+  const res = await fetch(`/api/recipes/${recipeId}/versions`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function createRecipeVersion(
+  recipeId: string,
+  data: Omit<RecipeVersionInsert, "recipe_id" | "user_id">,
+): Promise<RecipeVersion> {
+  const res = await fetch(`/api/recipes/${recipeId}/versions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || "Failed to create version");
+  }
+  return res.json();
+}
+
+// =============================================================================
+// COOKING LOG API FUNCTIONS
+// =============================================================================
+
+async function fetchCookingLogs(recipeId: string): Promise<CookingLog[]> {
+  const res = await fetch(`/api/recipes/${recipeId}/cooking-log`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function createCookingLog(
+  recipeId: string,
+  data: Omit<CookingLogInsert, "recipe_id" | "user_id" | "cooked_at">,
+): Promise<CookingLog> {
+  const res = await fetch(`/api/recipes/${recipeId}/cooking-log`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || "Failed to save cooking log");
+  }
+  return res.json();
+}
+
+// =============================================================================
+// AI COLLABORATION HOOKS
+// =============================================================================
+
+export function useOptimizeRecipe() {
+  return useMutation({
+    mutationFn: ({
+      id,
+      userInput,
+    }: {
+      id: string;
+      userInput?: Partial<Recipe>;
+    }) => optimizeRecipe(id, userInput),
+    retry: false,
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useScaleRecipe() {
+  return useMutation({
+    mutationFn: ({
+      id,
+      targetServings,
+      currentServings,
+      ingredients,
+    }: {
+      id: string;
+      targetServings: number;
+      currentServings?: number;
+      ingredients?: RecipeIngredient[];
+    }) => scaleRecipe(id, targetServings, currentServings, ingredients),
+    retry: false,
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useSubstituteIngredient() {
+  return useMutation({
+    mutationFn: ({
+      recipeId,
+      ingredient,
+      question,
+      recipeName,
+      allIngredients,
+    }: {
+      recipeId: string;
+      ingredient: string;
+      question?: string;
+      recipeName?: string;
+      allIngredients?: string[];
+    }) =>
+      substituteIngredient(
+        recipeId,
+        ingredient,
+        question,
+        recipeName,
+        allIngredients,
+      ),
+    retry: false,
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+// =============================================================================
+// RECIPE VERSION HOOKS
+// =============================================================================
+
+export function useRecipeVersions(recipeId: string | null) {
+  return useQuery({
+    queryKey: recipeKeys.versions(recipeId || ""),
+    queryFn: () => fetchRecipeVersions(recipeId!),
+    enabled: !!recipeId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useCreateRecipeVersion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      recipeId,
+      ...data
+    }: Omit<RecipeVersionInsert, "recipe_id" | "user_id"> & {
+      recipeId: string;
+    }) => createRecipeVersion(recipeId, data),
+    onSuccess: (version) => {
+      queryClient.invalidateQueries({
+        queryKey: recipeKeys.versions(version.recipe_id),
+      });
+      queryClient.invalidateQueries({ queryKey: recipeKeys.all });
+      toast.success(`Version "${version.version_label}" saved!`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+// =============================================================================
+// COOKING LOG HOOKS
+// =============================================================================
+
+export function useCookingLogs(recipeId: string | null) {
+  return useQuery({
+    queryKey: recipeKeys.cookingLogs(recipeId || ""),
+    queryFn: () => fetchCookingLogs(recipeId!),
+    enabled: !!recipeId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useCreateCookingLog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      recipeId,
+      ...data
+    }: Omit<CookingLogInsert, "recipe_id" | "user_id" | "cooked_at"> & {
+      recipeId: string;
+    }) => createCookingLog(recipeId, data),
+    onSuccess: (_log, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: recipeKeys.cookingLogs(variables.recipeId),
+      });
+      queryClient.invalidateQueries({ queryKey: recipeKeys.all });
+      toast.success("Cooking feedback saved!");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+// =============================================================================
+// URL EXTRACTION
+// =============================================================================
+
+interface ExtractedRecipeData {
+  name: string;
+  description?: string;
+  category?: string;
+  cuisine?: string;
+  difficulty?: string;
+  prep_time_minutes?: number;
+  cook_time_minutes?: number;
+  servings?: number;
+  tags?: string[];
+  ingredients: Array<{
+    name: string;
+    quantity: string;
+    unit: string;
+    notes?: string;
+  }>;
+  steps: Array<{
+    step: number;
+    instruction: string;
+    duration_minutes?: number;
+    tip?: string;
+  }>;
+}
+
+interface ExtractFromUrlResponse {
+  recipe: ExtractedRecipeData;
+  source: "youtube" | "website";
+  tokensUsed: number | null;
+}
+
+async function extractRecipeFromUrl(
+  url: string,
+): Promise<ExtractFromUrlResponse> {
+  const res = await fetch("/api/recipes/extract-from-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || "Failed to extract recipe from URL");
+  }
+  return res.json();
+}
+
+export function useExtractRecipeFromUrl() {
+  return useMutation({
+    mutationFn: extractRecipeFromUrl,
+    retry: false, // Never retry AI calls
     onError: (error: Error) => {
       toast.error(error.message);
     },

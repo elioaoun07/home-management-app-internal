@@ -4,10 +4,18 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { useGenerateRecipe } from "@/features/recipes/hooks";
+import RecipeCookingMode from "@/components/web/RecipeCookingMode";
+import RecipeVersionCompare from "@/components/web/RecipeVersionCompare";
+import {
+  useCookingLogs,
+  useCreateRecipeVersion,
+  useGenerateRecipe,
+  useRecipeVersions,
+  useUpdateRecipe,
+} from "@/features/recipes/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import type { Recipe } from "@/types/recipe";
+import type { Recipe, RecipeVersion } from "@/types/recipe";
 import { RECIPE_TAGS } from "@/types/recipe";
 import {
   ArrowLeft,
@@ -15,10 +23,18 @@ import {
   ChefHat,
   Clock,
   Edit3,
+  GitBranch,
   Heart,
+  History,
   Loader2,
+  Minus,
+  PlayCircle,
+  Plus,
+  RefreshCw,
   Sparkles,
   Star,
+  ThumbsDown,
+  ThumbsUp,
   Users,
 } from "lucide-react";
 import { useState } from "react";
@@ -38,7 +54,15 @@ export default function RecipeDetailView({
 }: RecipeDetailViewProps) {
   const themeClasses = useThemeClasses();
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [cookingMode, setCookingMode] = useState(false);
+  const [showServingPicker, setShowServingPicker] = useState(false);
+  const [cookingServings, setCookingServings] = useState(recipe.servings || 4);
+  const [showVersions, setShowVersions] = useState(false);
   const generateRecipe = useGenerateRecipe();
+  const updateRecipe = useUpdateRecipe();
+  const createVersion = useCreateRecipeVersion();
+  const { data: versions = [] } = useRecipeVersions(recipe.id);
+  const { data: cookingLogs = [] } = useCookingLogs(recipe.id);
 
   const totalTime =
     (recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0);
@@ -71,6 +95,36 @@ export default function RecipeDetailView({
     );
   }
 
+  // Cooking mode - full screen takeover
+  if (cookingMode) {
+    return (
+      <RecipeCookingMode
+        recipe={recipe}
+        initialServings={cookingServings}
+        onBack={() => setCookingMode(false)}
+        onComplete={() => setCookingMode(false)}
+      />
+    );
+  }
+
+  // Apply a version to the recipe
+  const handleApplyVersion = (version: RecipeVersion) => {
+    updateRecipe.mutate({
+      id: recipe.id,
+      ingredients: version.ingredients,
+      steps: version.steps,
+      prep_time_minutes: version.prep_time_minutes,
+      cook_time_minutes: version.cook_time_minutes,
+      servings: version.servings,
+      difficulty: version.difficulty as "easy" | "medium" | "hard",
+      category: version.category,
+      cuisine: version.cuisine,
+      tags: version.tags,
+      description: version.description,
+      active_version_id: version.id,
+    });
+  };
+
   return (
     <div className={`min-h-full ${themeClasses.pageBg}`}>
       {/* Header */}
@@ -99,6 +153,30 @@ export default function RecipeDetailView({
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {hasContent && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setCookingServings(recipe.servings || 4);
+                    setShowServingPicker(true);
+                  }}
+                  className="gap-2 bg-orange-600 hover:bg-orange-700"
+                >
+                  <PlayCircle className="w-4 h-4" />
+                  Cook
+                </Button>
+              )}
+              {versions.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowVersions(!showVersions)}
+                  className={cn("gap-2", showVersions && "bg-white/10")}
+                >
+                  <GitBranch className="w-4 h-4" />
+                  {versions.length}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -300,7 +378,126 @@ export default function RecipeDetailView({
               </Card>
             )}
 
-            {/* Feedback History */}
+            {/* Cooking Log History */}
+            {cookingLogs.length > 0 && (
+              <Card
+                className={cn("p-6", themeClasses.surfaceBg, "border-white/10")}
+              >
+                <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                  <History className="w-5 h-5" />
+                  Cooking Log ({cookingLogs.length})
+                </h2>
+                <div className="space-y-3">
+                  {cookingLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="p-3 rounded-lg bg-white/5 border border-white/10"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-white/60">
+                          {new Date(log.cooked_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {log.rating && (
+                            <div className="flex items-center gap-1">
+                              <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                              <span className="text-sm text-white">
+                                {log.rating}/5
+                              </span>
+                            </div>
+                          )}
+                          {log.would_make_again !== null &&
+                            (log.would_make_again ? (
+                              <ThumbsUp className="w-3.5 h-3.5 text-green-400" />
+                            ) : (
+                              <ThumbsDown className="w-3.5 h-3.5 text-red-400" />
+                            ))}
+                        </div>
+                      </div>
+                      {/* Timing comparison */}
+                      {(log.actual_prep_minutes || log.actual_cook_minutes) && (
+                        <div className="flex items-center gap-4 mb-2 text-xs">
+                          {log.actual_prep_minutes && (
+                            <span className="text-white/50 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              Prep: {log.actual_prep_minutes}m
+                              {recipe.prep_time_minutes &&
+                                log.actual_prep_minutes !==
+                                  recipe.prep_time_minutes && (
+                                  <span className="text-white/30">
+                                    (recipe: {recipe.prep_time_minutes}m)
+                                  </span>
+                                )}
+                            </span>
+                          )}
+                          {log.actual_cook_minutes && (
+                            <span className="text-white/50 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              Cook: {log.actual_cook_minutes}m
+                              {recipe.cook_time_minutes &&
+                                log.actual_cook_minutes !==
+                                  recipe.cook_time_minutes && (
+                                  <span className="text-white/30">
+                                    (recipe: {recipe.cook_time_minutes}m)
+                                  </span>
+                                )}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {/* Substitutions */}
+                      {log.substitutions &&
+                        (
+                          log.substitutions as Array<{
+                            original: string;
+                            replaced_with: string;
+                          }>
+                        ).length > 0 && (
+                          <div className="mb-2">
+                            {(
+                              log.substitutions as Array<{
+                                original: string;
+                                replaced_with: string;
+                                notes?: string;
+                              }>
+                            ).map((sub, si) => (
+                              <div
+                                key={si}
+                                className="text-xs flex items-center gap-1"
+                              >
+                                <RefreshCw className="w-3 h-3 text-white/30" />
+                                <span className="text-red-400/60 line-through">
+                                  {sub.original}
+                                </span>
+                                <span className="text-white/30">→</span>
+                                <span className="text-emerald-400">
+                                  {sub.replaced_with}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      {log.taste_notes && (
+                        <p className="text-sm text-white/70">
+                          {log.taste_notes}
+                        </p>
+                      )}
+                      {log.general_notes && (
+                        <p className="text-sm text-white/60 mt-1">
+                          {log.general_notes}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Legacy Feedback History */}
             {recipe.feedback && recipe.feedback.length > 0 && (
               <Card
                 className={cn("p-6", themeClasses.surfaceBg, "border-white/10")}
@@ -466,9 +663,110 @@ export default function RecipeDetailView({
                 </a>
               </Card>
             )}
+
+            {/* Versions Panel */}
+            {showVersions && versions.length > 0 && (
+              <RecipeVersionCompare
+                recipe={recipe}
+                versions={versions}
+                onApplyVersion={handleApplyVersion}
+              />
+            )}
+
+            {/* Cook Button (mobile-friendly) */}
+            {hasContent && (
+              <Button
+                onClick={() => {
+                  setCookingServings(recipe.servings || 4);
+                  setShowServingPicker(true);
+                }}
+                className="w-full gap-2 bg-orange-600 hover:bg-orange-700"
+              >
+                <PlayCircle className="w-4 h-4" />
+                Start Cooking
+              </Button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Serving Picker Overlay */}
+      {showServingPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <Card
+            className={cn(
+              "w-[340px] p-6",
+              themeClasses.surfaceBg,
+              "border-white/10",
+            )}
+          >
+            <h2 className="text-lg font-semibold text-white text-center mb-1">
+              How many servings?
+            </h2>
+            <p className="text-sm text-white/50 text-center mb-6">
+              Recipe default: {recipe.servings || 4}
+            </p>
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-10 h-10 p-0 border-white/20 text-lg"
+                onClick={() =>
+                  setCookingServings(Math.max(1, cookingServings - 1))
+                }
+                disabled={cookingServings <= 1}
+              >
+                <Minus className="w-5 h-5" />
+              </Button>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={cookingServings}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value);
+                  if (!isNaN(v) && v >= 1 && v <= 50) setCookingServings(v);
+                }}
+                className={cn(
+                  "w-20 h-14 text-center text-3xl font-bold rounded-xl border",
+                  themeClasses.inputBg,
+                  "border-white/20 text-white focus:outline-none focus:border-primary",
+                )}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-10 h-10 p-0 border-white/20 text-lg"
+                onClick={() =>
+                  setCookingServings(Math.min(50, cookingServings + 1))
+                }
+                disabled={cookingServings >= 50}
+              >
+                <Plus className="w-5 h-5" />
+              </Button>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowServingPicker(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowServingPicker(false);
+                  setCookingMode(true);
+                }}
+                className="flex-1 gap-2 bg-orange-600 hover:bg-orange-700"
+              >
+                <ChefHat className="w-4 h-4" />
+                Start
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
