@@ -125,6 +125,8 @@ export function getSavingTransactions(
 
 /**
  * Calculate income vs expense summary
+ * Note: Debt return transactions (is_debt_return=true) are excluded from income totals
+ * as they represent money being returned, not actual earned income
  */
 export function calculateIncomeExpenseSummary(
   transactions: TransactionWithAccount[],
@@ -133,7 +135,12 @@ export function calculateIncomeExpenseSummary(
   const incomeTransactions = getIncomeTransactions(transactions, accounts);
   const expenseTransactions = getExpenseTransactions(transactions, accounts);
 
-  const totalIncome = incomeTransactions.reduce(
+  // Filter out debt returns from income calculation
+  const realIncomeTransactions = incomeTransactions.filter(
+    (t) => !t.is_debt_return,
+  );
+
+  const totalIncome = realIncomeTransactions.reduce(
     (sum, t) => sum + Number(t.amount),
     0,
   );

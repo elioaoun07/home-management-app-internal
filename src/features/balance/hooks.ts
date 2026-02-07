@@ -17,7 +17,8 @@ export type BalanceChangeType =
   | "split_bill_paid"
   | "split_bill_received"
   | "draft_confirmed"
-  | "correction";
+  | "correction"
+  | "debt_settled";
 
 export interface BalanceHistoryTransaction {
   id: string;
@@ -220,6 +221,12 @@ export function getChangeTypeInfo(changeType: BalanceChangeType): {
       return {
         label: "Correction",
         icon: "🔧",
+        colorClass: "text-orange-400",
+      };
+    case "debt_settled":
+      return {
+        label: "Debt Settled",
+        icon: "🤝",
         colorClass: "text-orange-400",
       };
     default:

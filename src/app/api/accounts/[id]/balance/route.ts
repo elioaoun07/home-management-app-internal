@@ -87,9 +87,10 @@ export async function GET(
   // We only need to account for pending draft transactions here
 
   // Get pending draft transactions (always count all drafts)
+  // Separate regular drafts from future payments (drafts with scheduled_date)
   const { data: draftTransactions, error: draftError } = await supabase
     .from("transactions")
-    .select("amount")
+    .select("amount, scheduled_date")
     .eq("account_id", accountId)
     .eq("user_id", accountOwnerId)
     .eq("is_draft", true);
@@ -98,27 +99,58 @@ export async function GET(
     console.error("Error fetching draft transactions:", draftError);
   }
 
-  const totalDrafts =
-    draftTransactions?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+  // Split into regular drafts and future payments
+  const regularDrafts =
+    draftTransactions?.filter((t) => !t.scheduled_date) || [];
+  const futurePayments =
+    draftTransactions?.filter((t) => t.scheduled_date) || [];
 
-  // Current balance = stored balance - pending drafts
-  // The stored balance already includes all confirmed transactions and split bill contributions
-  const currentBalance = Number(balanceData.balance) - totalDrafts;
+  const totalDrafts = regularDrafts.reduce(
+    (sum, t) => sum + Number(t.amount),
+    0,
+  );
+  const totalFuturePayments = futurePayments.reduce(
+    (sum, t) => sum + Number(t.amount),
+    0,
+  );
+
+  // Current balance = stored balance - all pending drafts (regular + future)
+  const allDraftsTotal = totalDrafts + totalFuturePayments;
+  const currentBalance = Number(balanceData.balance) - allDraftsTotal;
+
+  // Also fetch open debt count for display
+  const { data: openDebts } = await supabase
+    .from("debts")
+    .select("original_amount, returned_amount")
+    .eq("user_id", accountOwnerId)
+    .eq("status", "open");
+
+  const debtCount = openDebts?.length || 0;
+  const totalOutstandingDebt =
+    openDebts?.reduce(
+      (sum, d) => sum + (Number(d.original_amount) - Number(d.returned_amount)),
+      0,
+    ) || 0;
 
   return NextResponse.json({
     account_id: accountId,
     balance: currentBalance,
     pending_drafts: totalDrafts,
-    draft_count: draftTransactions?.length || 0,
+    draft_count: regularDrafts.length,
+    future_payment_total: totalFuturePayments,
+    future_payment_count: futurePayments.length,
+    debt_count: debtCount,
+    outstanding_debt: totalOutstandingDebt,
     balance_set_at: balanceData.balance_set_at,
     created_at: balanceData.created_at,
     updated_at: balanceData.updated_at,
-    // DEBUG - check what's in the database
     _debug: {
       user_id: user.id,
       stored_balance: balanceData.balance,
-      drafts_count: draftTransactions?.length || 0,
+      drafts_count: regularDrafts.length,
       drafts_total: totalDrafts,
+      future_count: futurePayments.length,
+      future_total: totalFuturePayments,
     },
   });
 }

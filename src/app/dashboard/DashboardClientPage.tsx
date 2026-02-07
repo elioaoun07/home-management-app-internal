@@ -8,6 +8,7 @@ import AppModeToggle, {
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useUserPreferences } from "@/features/preferences/useUserPreferences";
 import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
+import { useFuturePaymentAlerts } from "@/hooks/useFuturePaymentAlerts";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -21,16 +22,19 @@ export default function DashboardClientPage() {
   const { appMode, setAppMode, isBudgetMode, isItemsMode } = useAppMode();
   const [monthStartDay, setMonthStartDay] = useState(1);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(
-    undefined
+    undefined,
   );
   const [viewMode, setViewMode] = useState<"agenda" | "schedule" | "calendar">(
-    "agenda"
+    "agenda",
   );
   const { data: preferences } = useUserPreferences();
 
+  // Show toast if any future payments are due
+  useFuturePaymentAlerts();
+
   const defaultRange = useMemo(
     () => getDefaultDateRange(monthStartDay),
-    [monthStartDay]
+    [monthStartDay],
   );
 
   const [dateRange, setDateRange] = useState(defaultRange);
@@ -167,7 +171,7 @@ export default function DashboardClientPage() {
         className={cn(
           "sticky top-14 z-30 py-3 px-4",
           "bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-md",
-          "border-b border-white/5"
+          "border-b border-white/5",
         )}
       >
         <div className="flex items-center justify-between gap-3">

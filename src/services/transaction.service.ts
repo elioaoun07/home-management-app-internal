@@ -10,7 +10,8 @@ type BalanceChangeType =
   | "manual_set"
   | "manual_adjustment"
   | "reconciliation"
-  | "correction";
+  | "correction"
+  | "debt_settled";
 
 export interface TransactionFilters {
   start?: string;
@@ -250,6 +251,7 @@ export class SupabaseTransactionService implements TransactionService {
       .select(
         `id, date, category_id, subcategory_id, amount, description, account_id, inserted_at, user_id, is_private,
         split_requested, collaborator_id, collaborator_amount, collaborator_description, split_completed_at, lbp_change_received,
+        scheduled_date, is_debt_return,
         category:user_categories!transactions_category_fk(name, color),
         subcategory:user_categories!transactions_subcategory_fk(name, color)`,
       )
@@ -418,7 +420,7 @@ export class SupabaseTransactionService implements TransactionService {
       }
     }
 
-    return (filteredRows || []).map((r: any) => ({
+    const result = (filteredRows || []).map((r: any) => ({
       id: r.id,
       date: r.date,
       category:
@@ -466,7 +468,39 @@ export class SupabaseTransactionService implements TransactionService {
           : r.amount,
       // LBP change tracking for Lebanon dual-currency
       lbp_change_received: r.lbp_change_received ?? null,
+      // Future payment / debt return fields
+      scheduled_date: r.scheduled_date ?? null,
+      is_debt_return: r.is_debt_return || false,
     }));
+
+    // Batch-fetch debt data for all transaction IDs
+    const txIds = result.map((r: any) => r.id);
+    if (txIds.length > 0) {
+      const { data: debts } = await this.supabase
+        .from("debts")
+        .select(
+          "id, transaction_id, debtor_name, original_amount, returned_amount, status",
+        )
+        .in("transaction_id", txIds);
+
+      if (debts && debts.length > 0) {
+        const debtByTxId = new Map(
+          debts.map((d: any) => [d.transaction_id, d]),
+        );
+        for (const tx of result) {
+          const debt = debtByTxId.get(tx.id);
+          if (debt) {
+            tx.debt_id = debt.id;
+            tx.debtor_name = debt.debtor_name;
+            tx.debt_status = debt.status;
+            tx.debt_original_amount = Number(debt.original_amount);
+            tx.debt_returned_amount = Number(debt.returned_amount);
+          }
+        }
+      }
+    }
+
+    return result;
   }
 
   async createTransaction(userId: string, data: CreateTransactionDTO) {

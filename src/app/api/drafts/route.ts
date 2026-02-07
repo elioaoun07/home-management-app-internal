@@ -33,7 +33,7 @@ export async function GET(request: Request) {
         accounts!transactions_account_id_fkey(name),
         category:user_categories!transactions_category_fk(name),
         subcategory:user_categories!transactions_subcategory_fk(name)
-      `
+      `,
       )
       .eq("user_id", user.id)
       .eq("is_draft", true)
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     console.error("Error fetching drafts:", error);
     return NextResponse.json(
       { error: error.message || "Failed to fetch drafts" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -73,29 +73,37 @@ export async function POST(request: Request) {
       voice_transcript,
       confidence_score,
       date,
+      scheduled_date,
     } = body;
 
     if (!account_id || !amount) {
       return NextResponse.json(
         { error: "Missing required fields: account_id, amount" },
-        { status: 400 }
+        { status: 400 },
       );
+    }
+
+    const insertData: Record<string, any> = {
+      user_id: user.id,
+      account_id,
+      amount: parseFloat(amount),
+      category_id: category_id || null,
+      subcategory_id: subcategory_id || null,
+      description: description || "",
+      voice_transcript: voice_transcript || null,
+      confidence_score: confidence_score || null,
+      date: date || new Date().toISOString().split("T")[0],
+      is_draft: true,
+    };
+
+    // Add scheduled_date for future payments
+    if (scheduled_date) {
+      insertData.scheduled_date = scheduled_date;
     }
 
     const { data: draft, error } = await supabase
       .from("transactions")
-      .insert({
-        user_id: user.id,
-        account_id,
-        amount: parseFloat(amount),
-        category_id: category_id || null,
-        subcategory_id: subcategory_id || null,
-        description: description || "",
-        voice_transcript: voice_transcript || null,
-        confidence_score: confidence_score || null,
-        date: date || new Date().toISOString().split("T")[0],
-        is_draft: true,
-      })
+      .insert(insertData)
       .select()
       .single();
 
@@ -106,7 +114,7 @@ export async function POST(request: Request) {
     console.error("Error creating draft:", error);
     return NextResponse.json(
       { error: error.message || "Failed to create draft" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

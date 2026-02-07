@@ -44,7 +44,7 @@ export default function AddTransactionFromMessageModal({
   const { data: accounts = [] } = useMyAccounts();
   const defaultAccount = accounts.find((a: any) => a.is_default);
   const [selectedAccount, setSelectedAccount] = useState<string | undefined>(
-    defaultAccount?.id
+    defaultAccount?.id,
   );
 
   // Get categories for selected account
@@ -77,7 +77,7 @@ export default function AddTransactionFromMessageModal({
   }, [onClose]);
 
   // Handle save
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
       toast.error("Please enter a valid amount");
       return;
@@ -85,6 +85,53 @@ export default function AddTransactionFromMessageModal({
 
     if (!formData.account_id) {
       toast.error("Please select an account");
+      return;
+    }
+
+    // Auto-detect future payment: if the selected date is in the future, create as draft
+    const today = yyyyMmDd(new Date());
+    const isFutureDatePayment = formData.date > today;
+
+    if (isFutureDatePayment) {
+      setIsClosing(true);
+      setTimeout(async () => {
+        try {
+          const res = await fetch("/api/drafts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              amount: parseFloat(formData.amount),
+              description: formData.description,
+              date: formData.date,
+              account_id: formData.account_id,
+              category_id: formData.category_id || null,
+              subcategory_id: formData.subcategory_id || null,
+              scheduled_date: formData.date,
+            }),
+          });
+
+          if (!res.ok) throw new Error("Failed to create future payment");
+          const draft = await res.json();
+
+          // Create message action linking to draft
+          try {
+            await createActionMutation.mutateAsync({
+              messageId,
+              actionType: "transaction",
+              transactionId: draft.id,
+            });
+          } catch {
+            // Non-critical
+          }
+
+          toast.success(`Future payment scheduled for ${formData.date}`);
+          onSuccess(messageId);
+          onClose();
+        } catch {
+          toast.error("Failed to create future payment");
+          onClose();
+        }
+      }, 200);
       return;
     }
 
@@ -111,7 +158,7 @@ export default function AddTransactionFromMessageModal({
               });
             } catch (err) {
               toast.error(
-                "Transaction added, but action tracking failed. Check console."
+                "Transaction added, but action tracking failed. Check console.",
               );
             }
 
@@ -123,7 +170,7 @@ export default function AddTransactionFromMessageModal({
             toast.error("Failed to add transaction");
             onClose();
           },
-        }
+        },
       );
     }, 200);
   };
@@ -137,14 +184,14 @@ export default function AddTransactionFromMessageModal({
 
   if (categories && Array.isArray(categories)) {
     const anyHasParent = (categories as any[]).some((c) =>
-      Object.prototype.hasOwnProperty.call(c, "parent_id")
+      Object.prototype.hasOwnProperty.call(c, "parent_id"),
     );
     if (anyHasParent) {
       // DB-flat shape
       const parents = (categories as any[]).filter((c: any) => !c.parent_id);
       for (const p of parents) {
         const subs = (categories as any[]).filter(
-          (s: any) => s.parent_id === p.id
+          (s: any) => s.parent_id === p.id,
         );
         topCategories.push({
           id: p.id,
@@ -316,7 +363,7 @@ export default function AddTransactionFromMessageModal({
           {/* Subcategory */}
           {(() => {
             const sel = topCategories.find(
-              (tc) => tc.id === formData.category_id
+              (tc) => tc.id === formData.category_id,
             );
             if (!sel?.sub?.length) return null;
             return (
@@ -376,6 +423,6 @@ export default function AddTransactionFromMessageModal({
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

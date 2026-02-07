@@ -38,6 +38,15 @@ export type Transaction = {
   collaborator_description?: string;
   split_completed_at?: string;
   total_amount?: number;
+  // Debt fields (joined from debts table)
+  debt_id?: string | null;
+  debtor_name?: string | null;
+  debt_status?: "open" | "archived" | "closed" | null;
+  debt_original_amount?: number | null;
+  debt_returned_amount?: number | null;
+  // Future payment fields
+  scheduled_date?: string | null;
+  is_debt_return?: boolean;
 };
 
 type TransactionInput = {
@@ -92,7 +101,7 @@ export function useDashboardTransactions({
     queryKey: ["transactions", "dashboard", startDate, endDate],
     queryFn: async () => {
       const response = await fetch(
-        `/api/transactions?start=${startDate}&end=${endDate}`
+        `/api/transactions?start=${startDate}&end=${endDate}`,
       );
 
       if (!response.ok) {
@@ -124,13 +133,13 @@ export function useDashboardTransactions({
  */
 export function prefetchDashboardTransactions(
   queryClient: any,
-  params: DashboardParams
+  params: DashboardParams,
 ) {
   return queryClient.prefetchQuery({
     queryKey: ["transactions", "dashboard", params.startDate, params.endDate],
     queryFn: async () => {
       const response = await fetch(
-        `/api/transactions?start=${params.startDate}&end=${params.endDate}`
+        `/api/transactions?start=${params.startDate}&end=${params.endDate}`,
       );
       if (!response.ok) throw new Error("Failed to fetch transactions");
       return response.json();
@@ -204,7 +213,7 @@ export function useDeleteTransaction() {
         (old) => {
           if (!old) return old;
           return old.filter((t) => t.id !== transactionId);
-        }
+        },
       );
 
       // Also update today's transactions
@@ -213,7 +222,7 @@ export function useDeleteTransaction() {
         (old) => {
           if (!old) return old;
           return old.filter((t: any) => t.id !== transactionId);
-        }
+        },
       );
 
       // CRITICAL: Optimistically update the balance (add back the deleted expense)
@@ -249,7 +258,7 @@ export function useDeleteTransaction() {
       if (context?.previousBalance && context?.accountId) {
         queryClient.setQueryData(
           ["account-balance", context.accountId],
-          context.previousBalance
+          context.previousBalance,
         );
       }
     },
@@ -393,7 +402,7 @@ export function useAddTransaction() {
         if (cats) {
           // Handle flat category list (parent categories have no parent_id)
           const cat = cats.find(
-            (c: any) => c.id === newTransaction.category_id
+            (c: any) => c.id === newTransaction.category_id,
           );
           if (cat) {
             categoryName = cat.name;
@@ -401,7 +410,7 @@ export function useAddTransaction() {
             // Look for subcategory in nested subcategories
             if (newTransaction.subcategory_id && cat.subcategories) {
               const sub = cat.subcategories.find(
-                (s: any) => s.id === newTransaction.subcategory_id
+                (s: any) => s.id === newTransaction.subcategory_id,
               );
               if (sub) {
                 subcategoryName = sub.name;
@@ -412,7 +421,7 @@ export function useAddTransaction() {
           // Handle flat structure where subcategories are in the same array (have parent_id)
           if (newTransaction.subcategory_id && !subcategoryName) {
             const sub = cats.find(
-              (c: any) => c.id === newTransaction.subcategory_id
+              (c: any) => c.id === newTransaction.subcategory_id,
             );
             if (sub) {
               subcategoryName = sub.name;
@@ -431,7 +440,7 @@ export function useAddTransaction() {
         for (const [, accounts] of allCachedAccounts) {
           if (accounts && accounts.length > 0) {
             const acc = accounts.find(
-              (a: any) => a.id === newTransaction.account_id
+              (a: any) => a.id === newTransaction.account_id,
             );
             if (acc) {
               accountName = acc.name;
@@ -466,7 +475,7 @@ export function useAddTransaction() {
         (old) => {
           if (!old) return [optimisticTransaction];
           return [optimisticTransaction, ...old];
-        }
+        },
       );
 
       // CRITICAL: Also explicitly set data for the default dashboard date range
@@ -508,7 +517,7 @@ export function useAddTransaction() {
           (old) => {
             if (!old) return [optimisticTransaction];
             return [optimisticTransaction, ...old];
-          }
+          },
         );
       }
 
@@ -519,7 +528,7 @@ export function useAddTransaction() {
           {
             ...previousBalance,
             balance: previousBalance.balance - newTransaction.amount,
-          }
+          },
         );
       }
 
@@ -545,7 +554,7 @@ export function useAddTransaction() {
         if (context.previousDashboardData) {
           queryClient.setQueryData(
             context.dashboardKey,
-            context.previousDashboardData
+            context.previousDashboardData,
           );
         } else {
           // Remove the query if it didn't exist before
@@ -562,7 +571,7 @@ export function useAddTransaction() {
       if (context?.previousBalance && context?.accountId) {
         queryClient.setQueryData(
           ["account-balance", context.accountId],
-          context.previousBalance
+          context.previousBalance,
         );
       }
     },
@@ -577,7 +586,7 @@ export function useAddTransaction() {
           const hasTemp = old.some((t) => t.id.startsWith("temp-"));
           if (hasTemp) {
             return old.map((t) =>
-              t.id.startsWith("temp-") ? serverTransaction : t
+              t.id.startsWith("temp-") ? serverTransaction : t,
             );
           }
           // If no temp found, add the server transaction (avoid duplicates)
@@ -585,7 +594,7 @@ export function useAddTransaction() {
             serverTransaction,
             ...old.filter((t) => t.id !== serverTransaction.id),
           ];
-        }
+        },
       );
 
       // CRITICAL: Also set data directly for common dashboard date ranges
@@ -612,7 +621,7 @@ export function useAddTransaction() {
           const hasTemp = old.some((t) => t.id.startsWith("temp-"));
           if (hasTemp) {
             return old.map((t) =>
-              t.id.startsWith("temp-") ? serverTransaction : t
+              t.id.startsWith("temp-") ? serverTransaction : t,
             );
           }
           // Avoid duplicates
@@ -631,14 +640,14 @@ export function useAddTransaction() {
             const hasTemp = old.some((t: any) => t.id?.startsWith("temp-"));
             if (hasTemp) {
               return old.map((t: any) =>
-                t.id?.startsWith("temp-") ? serverTransaction : t
+                t.id?.startsWith("temp-") ? serverTransaction : t,
               );
             }
             return [
               serverTransaction,
               ...old.filter((t: any) => t.id !== serverTransaction.id),
             ];
-          }
+          },
         );
       }
 
@@ -666,7 +675,7 @@ export function useAddTransaction() {
             try {
               const response = await fetch(
                 `/api/transactions/${serverTransaction.id}`,
-                { method: "DELETE" }
+                { method: "DELETE" },
               );
               if (!response.ok) throw new Error("Failed to delete");
               queryClient.invalidateQueries({ queryKey: ["transactions"] });
@@ -774,9 +783,9 @@ export function useUpdateTransaction() {
                   subcategory: t.subcategory,
                   _isPending: true, // Show sync spinner until API confirms
                 }
-              : t
+              : t,
           );
-        }
+        },
       );
 
       // Also update today's transactions with _isPending flag
@@ -791,9 +800,9 @@ export function useUpdateTransaction() {
                   ...update,
                   _isPending: true, // Show sync spinner until API confirms
                 }
-              : t
+              : t,
           );
-        }
+        },
       );
 
       // Optimistically update balance if amount changed
@@ -804,7 +813,7 @@ export function useUpdateTransaction() {
           {
             ...previousBalance,
             balance: previousBalance.balance - amountDiff,
-          }
+          },
         );
       }
 
@@ -834,7 +843,7 @@ export function useUpdateTransaction() {
       if (context?.previousBalance && context?.accountId) {
         queryClient.setQueryData(
           ["account-balance", context.accountId],
-          context.previousBalance
+          context.previousBalance,
         );
       }
     },
@@ -845,18 +854,18 @@ export function useUpdateTransaction() {
         (old) => {
           if (!old) return old;
           return old.map((t) =>
-            t.id === update.id ? { ...t, _isPending: false } : t
+            t.id === update.id ? { ...t, _isPending: false } : t,
           );
-        }
+        },
       );
       queryClient.setQueriesData<any[]>(
         { queryKey: ["transactions-today"] },
         (old) => {
           if (!old) return old;
           return old.map((t: any) =>
-            t.id === update.id ? { ...t, _isPending: false } : t
+            t.id === update.id ? { ...t, _isPending: false } : t,
           );
-        }
+        },
       );
 
       // Show success toast
@@ -882,7 +891,7 @@ export function useUpdateTransaction() {
                       category_id: original.category_id,
                       subcategory_id: original.subcategory_id,
                     }),
-                  }
+                  },
                 );
                 if (!response.ok) throw new Error("Failed to undo");
                 queryClient.invalidateQueries({ queryKey: ["transactions"] });

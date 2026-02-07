@@ -21,6 +21,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import BalanceHistoryDrawer from "./BalanceHistoryDrawer";
+import DebtsDrawer from "./DebtsDrawer";
+import FuturePaymentsDrawer from "./FuturePaymentsDrawer";
 import TransferDialog from "./TransferDialog";
 
 interface AccountBalanceProps {
@@ -35,6 +37,10 @@ interface Balance {
   balance_set_at?: string;
   pending_drafts?: number;
   draft_count?: number;
+  future_payment_total?: number;
+  future_payment_count?: number;
+  debt_count?: number;
+  outstanding_debt?: number;
 }
 
 export default function AccountBalance({
@@ -46,6 +52,15 @@ export default function AccountBalance({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [showHistory, setShowHistory] = useState(false);
+  const [showDebts, setShowDebts] = useState(false);
+  const [showFuturePayments, setShowFuturePayments] = useState(false);
+
+  // Listen for the custom event dispatched by the due-date toast "View" button
+  useEffect(() => {
+    const handler = () => setShowFuturePayments(true);
+    window.addEventListener("open-future-payments", handler);
+    return () => window.removeEventListener("open-future-payments", handler);
+  }, []);
 
   // Get cached balance for instant display
   const cachedBalance = accountId ? getCachedBalance(accountId) : null;
@@ -324,6 +339,29 @@ export default function AccountBalance({
                   ? ` ($${balance.pending_drafts.toFixed(2)})`
                   : ""}
               </span>
+              {/* Future payments info */}
+              {balance?.future_payment_count &&
+              balance.future_payment_count > 0 ? (
+                <button
+                  onClick={() => setShowFuturePayments(true)}
+                  className="text-xs font-medium text-blue-400/90 drop-shadow-[0_0_6px_rgba(96,165,250,0.3)] hover:text-blue-300 transition-colors text-left"
+                >
+                  {balance.future_payment_count} future payment
+                  {balance.future_payment_count !== 1 ? "s" : ""}
+                  {` ($${(balance.future_payment_total ?? 0).toFixed(2)})`}
+                </button>
+              ) : null}
+              {/* Open debts info */}
+              {balance?.debt_count && balance.debt_count > 0 ? (
+                <button
+                  onClick={() => setShowDebts(true)}
+                  className="text-xs font-medium text-orange-400/90 drop-shadow-[0_0_6px_rgba(251,146,60,0.3)] hover:text-orange-300 transition-colors text-left"
+                >
+                  {balance.debt_count} open debt
+                  {balance.debt_count !== 1 ? "s" : ""}
+                  {` ($${(balance.outstanding_debt ?? 0).toFixed(2)} owed)`}
+                </button>
+              ) : null}
             </div>
           )}
         </div>
@@ -345,6 +383,16 @@ export default function AccountBalance({
           onOpenChange={setShowHistory}
         />
       )}
+
+      {/* Debts Drawer */}
+      <DebtsDrawer open={showDebts} onOpenChange={setShowDebts} />
+
+      {/* Future Payments Drawer */}
+      <FuturePaymentsDrawer
+        open={showFuturePayments}
+        onOpenChange={setShowFuturePayments}
+        accountId={accountId}
+      />
     </div>
   );
 }

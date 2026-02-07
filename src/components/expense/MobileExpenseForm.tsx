@@ -39,6 +39,7 @@ import {
   useCategories,
   useCategoriesWithHidden,
 } from "@/features/categories/useCategoriesQuery";
+import { useCreateDebt } from "@/features/debts/useDebts";
 import { useLbpSettings } from "@/features/preferences/useLbpSettings";
 import {
   useSectionOrder,
@@ -52,6 +53,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
+import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { AnimatePresence, Reorder, motion } from "framer-motion";
 import { Eye, EyeOff, GripVertical, X } from "lucide-react";
@@ -193,6 +195,8 @@ export default function MobileExpenseForm() {
   const [showCalculator, setShowCalculator] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [isSplitBill, setIsSplitBill] = useState(false);
+  const [isDebt, setIsDebt] = useState(false);
+  const [debtorName, setDebtorName] = useState("");
   const [showNewAccountDrawer, setShowNewAccountDrawer] = useState(false);
   const [showNewCategoryDrawer, setShowNewCategoryDrawer] = useState(false);
   const [showNewSubcategoryDrawer, setShowNewSubcategoryDrawer] =
@@ -232,7 +236,9 @@ export default function MobileExpenseForm() {
   const { data: categoriesWithHidden = [] } =
     useCategoriesWithHidden(selectedAccountId);
   const addTransactionMutation = useAddTransaction();
+  const createDebtMutation = useCreateDebt();
   const deleteTransactionMutation = useDeleteTransaction();
+  const queryClient = useQueryClient();
   const deleteAccountMutation = useDeleteAccount();
   const deleteCategoryMutation = useDeleteCategory(selectedAccountId);
   const unhideAccountMutation = useUnhideAccount();
@@ -610,7 +616,11 @@ export default function MobileExpenseForm() {
     (s: any) => s.id === selectedSubcategoryId,
   );
 
-  const canSubmit = amount && selectedAccountId && selectedCategoryId;
+  const canSubmit =
+    amount &&
+    selectedAccountId &&
+    selectedCategoryId &&
+    (!isDebt || debtorName.trim());
   const isAmountStep = step === "amount";
   const closeDisabled =
     isAmountStep && (!amount || Number.parseFloat(amount) <= 0);
@@ -647,6 +657,12 @@ export default function MobileExpenseForm() {
     const categoryNameForToast = selectedCategory?.name;
     const isIncomeForToast = selectedAccount?.type === "income";
     const wasSplitBill = isSplitBill;
+    const wasDebt = isDebt;
+    const debtorNameForToast = debtorName;
+
+    // Auto-detect future payment: if the selected date is in the future, treat as scheduled
+    const today = format(new Date(), "yyyy-MM-dd");
+    const isFutureDatePayment = transactionData.date > today;
 
     // Reset form immediately for instant UI feedback
     setAmount("");
@@ -655,6 +671,8 @@ export default function MobileExpenseForm() {
     setDescription("");
     setIsPrivate(false);
     setIsSplitBill(false);
+    setIsDebt(false);
+    setDebtorName("");
     setLbpChangeInput("");
     const newDefaultAccount = accounts.find((a: any) => a.is_default);
     if (newDefaultAccount) {
@@ -665,41 +683,97 @@ export default function MobileExpenseForm() {
     setStep(firstValidStep);
 
     // Optimistic add - mutation hook handles cache updates
-    addTransactionMutation.mutate(transactionData, {
-      onSuccess: (newTransaction) => {
-        const successMessage = wasSplitBill
-          ? "Split bill sent!"
-          : isIncomeForToast
-            ? "Income added!"
-            : "Expense added!";
-        const successDescription = wasSplitBill
-          ? `$${amountForToast} for ${categoryNameForToast} - awaiting partner's amount`
-          : `$${amountForToast} for ${categoryNameForToast}`;
-        toast.success(successMessage, {
-          icon: ToastIcons.create,
-          description: successDescription,
-          action: {
-            label: "Undo",
-            onClick: () => {
-              deleteTransactionMutation.mutate(newTransaction.id, {
-                onSuccess: () =>
-                  toast.success("Transaction undone", {
-                    icon: ToastIcons.delete,
-                  }),
-                onError: () =>
-                  toast.error("Failed to undo", { icon: ToastIcons.error }),
-              });
-            },
+    if (isFutureDatePayment) {
+      // Create future payment via /api/drafts with scheduled_date = the future date
+      (async () => {
+        try {
+          const res = await fetch("/api/drafts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              account_id: transactionData.account_id,
+              amount: transactionData.amount,
+              category_id: transactionData.category_id,
+              subcategory_id: transactionData.subcategory_id,
+              description: transactionData.description || "",
+              date: transactionData.date,
+              scheduled_date: transactionData.date,
+            }),
+          });
+          if (!res.ok) throw new Error("Failed");
+          toast.success("Future payment scheduled!", {
+            icon: "📅",
+            description: `$${amountForToast} for ${categoryNameForToast} — due ${transactionData.date}`,
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["account-balance", transactionData.account_id],
+          });
+          queryClient.invalidateQueries({ queryKey: ["future-payments"] });
+        } catch {
+          toast.error("Failed to schedule future payment", {
+            icon: ToastIcons.error,
+          });
+        }
+      })();
+    } else if (wasDebt && debtorNameForToast) {
+      // Create debt (creates transaction + debt record via /api/debts)
+      createDebtMutation.mutate(
+        {
+          account_id: transactionData.account_id,
+          category_id: transactionData.category_id,
+          subcategory_id: transactionData.subcategory_id || undefined,
+          amount: transactionData.amount,
+          description: transactionData.description,
+          date: transactionData.date,
+          is_private: transactionData.is_private,
+          debtor_name: debtorNameForToast,
+        },
+        {
+          onSuccess: () => {
+            // Toast is handled by the hook
           },
-        });
-      },
-      onError: () => {
-        toast.error(
-          `Failed to add ${getTransactionLabel(selectedAccount?.type).toLowerCase()}`,
-          { icon: ToastIcons.error },
-        );
-      },
-    });
+          onError: () => {
+            toast.error("Failed to create debt", { icon: ToastIcons.error });
+          },
+        },
+      );
+    } else {
+      addTransactionMutation.mutate(transactionData, {
+        onSuccess: (newTransaction) => {
+          const successMessage = wasSplitBill
+            ? "Split bill sent!"
+            : isIncomeForToast
+              ? "Income added!"
+              : "Expense added!";
+          const successDescription = wasSplitBill
+            ? `$${amountForToast} for ${categoryNameForToast} - awaiting partner's amount`
+            : `$${amountForToast} for ${categoryNameForToast}`;
+          toast.success(successMessage, {
+            icon: ToastIcons.create,
+            description: successDescription,
+            action: {
+              label: "Undo",
+              onClick: () => {
+                deleteTransactionMutation.mutate(newTransaction.id, {
+                  onSuccess: () =>
+                    toast.success("Transaction undone", {
+                      icon: ToastIcons.delete,
+                    }),
+                  onError: () =>
+                    toast.error("Failed to undo", { icon: ToastIcons.error }),
+                });
+              },
+            },
+          });
+        },
+        onError: () => {
+          toast.error(
+            `Failed to add ${getTransactionLabel(selectedAccount?.type).toLowerCase()}`,
+            { icon: ToastIcons.error },
+          );
+        },
+      });
+    } // close else (non-debt path)
   };
 
   const goBack = () => {
@@ -1011,8 +1085,12 @@ export default function MobileExpenseForm() {
                   onClick={() => {
                     if (navigator.vibrate) navigator.vibrate(10);
                     setIsSplitBill(!isSplitBill);
-                    // Split bill transactions cannot be private
-                    if (!isSplitBill) setIsPrivate(false);
+                    // Split bill transactions cannot be private, and mutually exclusive with debt
+                    if (!isSplitBill) {
+                      setIsPrivate(false);
+                      setIsDebt(false);
+                      setDebtorName("");
+                    }
                   }}
                   suppressHydrationWarning
                   className={cn(
@@ -1064,6 +1142,73 @@ export default function MobileExpenseForm() {
                     Split
                   </span>
                 </button>
+
+                {/* Debt Button */}
+                <button
+                  onClick={() => {
+                    if (navigator.vibrate) navigator.vibrate(10);
+                    setIsDebt(!isDebt);
+                    // Debt and split bill are mutually exclusive
+                    if (!isDebt) {
+                      setIsSplitBill(false);
+                    }
+                  }}
+                  suppressHydrationWarning
+                  className={cn(
+                    "group relative p-2.5 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2 overflow-hidden",
+                    isDebt
+                      ? "border-orange-400/50 bg-gradient-to-br from-orange-500/20 to-amber-500/10 shadow-[0_0_15px_rgba(251,146,60,0.25)] hover:shadow-[0_0_25px_rgba(251,146,60,0.35)]"
+                      : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`,
+                  )}
+                  title={isDebt ? "Cancel debt mode" : "Pay on behalf"}
+                >
+                  {isDebt && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-amber-500/10 animate-[shimmer_3s_ease-in-out_infinite]" />
+                  )}
+                  <svg
+                    className={cn(
+                      "relative w-5 h-5 transition-all duration-500",
+                      isDebt
+                        ? "text-orange-400 drop-shadow-[0_0_10px_rgba(251,146,60,0.8)]"
+                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
+                    )}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
+                  </svg>
+                  <span
+                    className={cn(
+                      "relative text-xs font-semibold tracking-wide transition-all duration-300",
+                      isDebt
+                        ? "text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.6)]"
+                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
+                    )}
+                  >
+                    Debt
+                  </span>
+                </button>
+
+                {/* Future Payment Button */}
+                {/* Debtor name input - shown when debt mode is on */}
+                {isDebt && (
+                  <input
+                    type="text"
+                    value={debtorName}
+                    onChange={(e) => setDebtorName(e.target.value)}
+                    placeholder="Who owes you?"
+                    className={cn(
+                      "flex-1 h-10 px-3 rounded-xl text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/40 focus:outline-none focus:border-orange-400/60 transition-all",
+                    )}
+                    autoFocus
+                  />
+                )}
 
                 {/* Private/Public Button */}
                 <button

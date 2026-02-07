@@ -30,7 +30,7 @@ export function parseMessageForTransaction(
     name: string;
     parent_id?: string | null;
     subcategories?: Array<{ id: string; name: string }>;
-  }>
+  }>,
 ): ParsedMessageTransaction {
   const normalized = message.toLowerCase().trim();
 
@@ -49,7 +49,7 @@ export function parseMessageForTransaction(
     normalized,
     parentCategories,
     subcategories,
-    parentBySubId
+    parentBySubId,
   );
 
   return {
@@ -166,10 +166,11 @@ function extractDate(text: string): string | null {
     sat: 6,
   };
 
-  // Check for "last [day]" or "this [day]"
+  // Check for "last [day]", "this [day]", or "next [day]"
   for (const [dayName, dayNum] of Object.entries(daysMap)) {
     const lastPattern = new RegExp(`\\blast\\s+${dayName}\\b`, "i");
     const thisPattern = new RegExp(`\\bthis\\s+${dayName}\\b`, "i");
+    const nextPattern = new RegExp(`\\bnext\\s+${dayName}\\b`, "i");
 
     if (lastPattern.test(text)) {
       return formatDate(getDateForDay(dayNum, true));
@@ -177,6 +178,135 @@ function extractDate(text: string): string | null {
     if (thisPattern.test(text)) {
       return formatDate(getDateForDay(dayNum, false));
     }
+    if (nextPattern.test(text)) {
+      // "next friday" = the upcoming occurrence in the next 7 days (if today is that day, go +7)
+      const result = new Date(today);
+      const currentDay = today.getDay();
+      let diff = dayNum - currentDay;
+      if (diff <= 0) diff += 7;
+      result.setDate(today.getDate() + diff);
+      return formatDate(result);
+    }
+  }
+
+  // Also match bare day names: "pay john friday" → next occurrence of friday
+  for (const [dayName, dayNum] of Object.entries(daysMap)) {
+    const barePattern = new RegExp(`\\b${dayName}\\b`, "i");
+    if (barePattern.test(text)) {
+      // Treat bare day name as the upcoming occurrence
+      const result = new Date(today);
+      const currentDay = today.getDay();
+      let diff = dayNum - currentDay;
+      if (diff <= 0) diff += 7;
+      result.setDate(today.getDate() + diff);
+      return formatDate(result);
+    }
+  }
+
+  // Month name mapping
+  const monthsMap: { [key: string]: number } = {
+    january: 0,
+    jan: 0,
+    february: 1,
+    feb: 1,
+    march: 2,
+    mar: 2,
+    april: 3,
+    apr: 3,
+    may: 4,
+    june: 5,
+    jun: 5,
+    july: 6,
+    jul: 6,
+    august: 7,
+    aug: 7,
+    september: 8,
+    sep: 8,
+    sept: 8,
+    october: 9,
+    oct: 9,
+    november: 10,
+    nov: 10,
+    december: 11,
+    dec: 11,
+  };
+
+  // Check for "on/by/due [Month] [Day]" or "[Month] [Day]" patterns
+  const monthNames = Object.keys(monthsMap).join("|");
+  const monthDayPattern = new RegExp(
+    `(?:on|by|due|before)?\\s*(?:the\\s+)?(${monthNames})\\s+(\\d{1,2})(?:st|nd|rd|th)?`,
+    "i",
+  );
+  const monthDayMatch = text.match(monthDayPattern);
+  if (monthDayMatch) {
+    const monthNum = monthsMap[monthDayMatch[1].toLowerCase()];
+    const dayNum = parseInt(monthDayMatch[2], 10);
+    if (monthNum !== undefined && dayNum >= 1 && dayNum <= 31) {
+      const result = new Date(today.getFullYear(), monthNum, dayNum);
+      // If the date has passed this year, assume next year
+      if (result < today) {
+        result.setFullYear(result.getFullYear() + 1);
+      }
+      return formatDate(result);
+    }
+  }
+
+  // Check for "[Day] [Month]" pattern (e.g. "15 feb", "3rd march")
+  const dayMonthPattern = new RegExp(
+    `(?:on|by|due|before)?\\s*(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNames})`,
+    "i",
+  );
+  const dayMonthMatch = text.match(dayMonthPattern);
+  if (dayMonthMatch) {
+    const dayNum = parseInt(dayMonthMatch[1], 10);
+    const monthNum = monthsMap[dayMonthMatch[2].toLowerCase()];
+    if (monthNum !== undefined && dayNum >= 1 && dayNum <= 31) {
+      const result = new Date(today.getFullYear(), monthNum, dayNum);
+      if (result < today) {
+        result.setFullYear(result.getFullYear() + 1);
+      }
+      return formatDate(result);
+    }
+  }
+
+  // Check for numeric date patterns: MM/DD, M/D, DD/MM (interpret as M/D since locale ambiguous)
+  const numericDatePattern =
+    /(?:on|by|due|before)\s+(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/i;
+  const numericMatch = text.match(numericDatePattern);
+  if (numericMatch) {
+    const first = parseInt(numericMatch[1], 10);
+    const second = parseInt(numericMatch[2], 10);
+    let year = numericMatch[3]
+      ? parseInt(numericMatch[3], 10)
+      : today.getFullYear();
+    if (year < 100) year += 2000;
+    // Treat as M/D
+    const result = new Date(year, first - 1, second);
+    if (!numericMatch[3] && result < today) {
+      result.setFullYear(result.getFullYear() + 1);
+    }
+    if (!isNaN(result.getTime())) {
+      return formatDate(result);
+    }
+  }
+
+  // Check for "in X days/weeks"
+  const inDaysPattern = /\bin\s+(\d+)\s+days?\b/i;
+  const inDaysMatch = text.match(inDaysPattern);
+  if (inDaysMatch) {
+    const days = parseInt(inDaysMatch[1], 10);
+    const result = new Date(today);
+    result.setDate(today.getDate() + days);
+    return formatDate(result);
+  }
+
+  const inWeeksPattern = /\bin\s+(\d+)\s+weeks?\b/i;
+  const inWeeksMatch = text.match(inWeeksPattern);
+  if (inWeeksMatch) {
+    const weeks = parseInt(inWeeksMatch[1], 10);
+    const result = new Date(today);
+    result.setDate(today.getDate() + weeks * 7);
+    return formatDate(result);
   }
 
   // No date found, return null (will default to today)
@@ -192,7 +322,7 @@ function flattenCategories(
     name: string;
     parent_id?: string | null;
     subcategories?: Array<{ id: string; name: string }>;
-  }>
+  }>,
 ): {
   parentCategories: CategoryMatch[];
   subcategories: CategoryMatch[];
@@ -249,7 +379,7 @@ function matchCategory(
   text: string,
   parentCategories: CategoryMatch[],
   subcategories: CategoryMatch[],
-  parentBySubId: Map<string, string>
+  parentBySubId: Map<string, string>,
 ): {
   categoryId: string | null;
   subcategoryId: string | null;
@@ -297,7 +427,7 @@ function matchCategory(
  */
 function findBestMatch(
   text: string,
-  categories: CategoryMatch[]
+  categories: CategoryMatch[],
 ): { match: CategoryMatch | null; score: number } {
   let bestMatch: CategoryMatch | null = null;
   let bestScore = 0;
@@ -365,7 +495,7 @@ function containsInOrder(text: string, pattern: string): boolean {
  */
 function calculateConfidence(
   amount: number | null,
-  categoryMatch: { score: number }
+  categoryMatch: { score: number },
 ): number {
   let confidence = 0;
 

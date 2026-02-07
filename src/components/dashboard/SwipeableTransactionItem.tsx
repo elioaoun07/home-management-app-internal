@@ -41,6 +41,15 @@ type Transaction = {
   split_completed_at?: string;
   /** LBP change received (in thousands, e.g., 600 = 600,000 LBP) */
   lbp_change_received?: number | null;
+  /** Debt fields */
+  debt_id?: string | null;
+  debtor_name?: string | null;
+  debt_status?: "open" | "archived" | "closed" | null;
+  debt_original_amount?: number | null;
+  debt_returned_amount?: number | null;
+  /** Future payment */
+  scheduled_date?: string | null;
+  is_debt_return?: boolean;
 };
 
 type OwnershipFilter = "all" | "mine" | "partner";
@@ -304,6 +313,24 @@ export default function SwipeableTransactionItem({
             }}
           />
         )}
+        {/* Open debt indicator - orange left border */}
+        {transaction.debt_id && transaction.debt_status === "open" && (
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl overflow-hidden animate-pulse"
+            style={{
+              background: "linear-gradient(to bottom, #fb923c, #f97316)",
+            }}
+          />
+        )}
+        {/* Archived debt indicator - muted orange */}
+        {transaction.debt_id && transaction.debt_status === "archived" && (
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl overflow-hidden"
+            style={{
+              background: "linear-gradient(to bottom, #78716c, #a8a29e)",
+            }}
+          />
+        )}
         {/* Pending split indicator (waiting for partner) */}
         {transaction.split_requested && !transaction.split_completed_at && (
           <div
@@ -357,6 +384,31 @@ export default function SwipeableTransactionItem({
                     <span className="text-emerald-400">Split</span>
                   </>
                 )}
+              {/* Debt indicator */}
+              {transaction.debt_id && (
+                <>
+                  <span>•</span>
+                  {transaction.debt_status === "closed" ? (
+                    <span className="text-slate-400">Debt Settled ✓</span>
+                  ) : transaction.debt_status === "archived" ? (
+                    <span className="text-orange-400/70">Debt Archived</span>
+                  ) : (
+                    <span className="text-orange-400">
+                      Debt
+                      {transaction.debtor_name
+                        ? ` · ${transaction.debtor_name}`
+                        : ""}
+                    </span>
+                  )}
+                </>
+              )}
+              {/* Debt return indicator */}
+              {transaction.is_debt_return && (
+                <>
+                  <span>•</span>
+                  <span className="text-green-400">Debt Return</span>
+                </>
+              )}
             </div>
           </div>
 
@@ -420,6 +472,43 @@ export default function SwipeableTransactionItem({
                     <span className="text-slate-500">+</span>
                     <span className="text-pink-400">
                       ${(transaction.collaborator_amount || 0).toFixed(0)}
+                    </span>
+                  </BlurredAmount>
+                </div>
+              )}
+              {/* Debt progress display */}
+              {transaction.debt_id && transaction.debt_status !== "closed" && (
+                <div className="flex gap-1 text-xs items-center">
+                  <BlurredAmount blurIntensity="sm">
+                    <span className="text-orange-400 font-medium">
+                      $
+                      {(Number(transaction.debt_returned_amount) || 0).toFixed(
+                        0,
+                      )}
+                    </span>
+                    <span className="text-slate-500">/</span>
+                    <span className="text-orange-300">
+                      $
+                      {(Number(transaction.debt_original_amount) || 0).toFixed(
+                        0,
+                      )}
+                    </span>
+                  </BlurredAmount>
+                  <span className="text-slate-500 text-[10px]">returned</span>
+                </div>
+              )}
+              {/* Closed debt - show settled amounts */}
+              {transaction.debt_id && transaction.debt_status === "closed" && (
+                <div className="flex gap-1 text-xs items-center">
+                  <BlurredAmount blurIntensity="sm">
+                    <span className="text-slate-400">
+                      $
+                      {(Number(transaction.debt_original_amount) || 0).toFixed(
+                        0,
+                      )}
+                    </span>
+                    <span className="text-green-400 text-[10px] ml-0.5">
+                      $0 owed
                     </span>
                   </BlurredAmount>
                 </div>
