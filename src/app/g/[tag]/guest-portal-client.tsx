@@ -405,7 +405,7 @@ function RulesCard() {
   const dos = [
     {
       icon: Music,
-      text: "Feel free to play music — ask Jarvis for playlist recommendations!",
+      text: "Feel free to play music — ask Our AI Assistant for playlist recommendations!",
     },
     {
       icon: UtensilsCrossed,
@@ -682,7 +682,8 @@ function RecipesCard() {
           Coming Soon
         </p>
         <p className="text-[11px] text-[#38bdf8]/30 text-center max-w-[200px]">
-          Jarvis is compiling the best recipes from this household. Stay tuned!
+          Our AI Assistant is compiling the best recipes from this household.
+          Stay tuned!
         </p>
         <div className="mt-4 px-4 py-2 rounded-xl bg-[#14b8a6]/5 border border-[#14b8a6]/10">
           <div className="flex items-center gap-2 text-[#14b8a6]/70 text-xs">
@@ -717,7 +718,7 @@ function DownloadCard() {
           Coming Soon
         </p>
         <p className="text-[11px] text-[#38bdf8]/30 text-center max-w-[200px]">
-          The Jarvis Home Manager app will be available for download soon.
+          Our AI Assistant Home Manager app will be available for download soon.
         </p>
         <div className="mt-4 px-4 py-2 rounded-xl bg-[#3b82f6]/5 border border-[#3b82f6]/10">
           <div className="flex items-center gap-2 text-[#3b82f6]/70 text-xs">
@@ -798,7 +799,7 @@ function ChatInterface({ tag }: { tag: string }) {
     // Add a welcome message from Jarvis
     const welcomeMsg: ChatMessage = {
       id: crypto.randomUUID(),
-      text: `Welcome, ${guestName.trim()}! 👋 I'm Jarvis, your host's personal AI assistant. Feel free to ask me anything or leave a message for your host. They'll see it in real-time!`,
+      text: `Welcome, ${guestName.trim()}! 👋 I'm Our AI Assistant, your host's personal AI assistant. Feel free to ask me anything or leave a message for your host. They'll see it in real-time!`,
       sender: "host",
       timestamp: Date.now(),
     };
@@ -886,7 +887,7 @@ function ChatInterface({ tag }: { tag: string }) {
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-white truncate">
-            Jarvis Home Chat
+            Our AI Assistant Home Chat
           </h3>
           <div className="flex items-center gap-1 text-[10px] text-[#14b8a6]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#14b8a6] animate-pulse" />
@@ -1038,7 +1039,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
             )}
           >
             <p className="text-[#38bdf8]/50 text-xs uppercase tracking-[0.2em] mb-1">
-              Jarvis Home Portal
+              Our AI Assistant Home Portal
             </p>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2">
               <span className="text-white">{greetingText()},</span>
@@ -1048,8 +1049,8 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
               </span>
             </h1>
             <p className="text-[#38bdf8]/50 text-sm max-w-xs mx-auto leading-relaxed">
-              Make yourself comfortable. Jarvis is here to assist you with
-              anything you need during your stay.
+              Make yourself comfortable. Our AI Assistant is here to assist you
+              with anything you need during your stay.
             </p>
           </div>
 
@@ -1062,7 +1063,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
           >
             <span className="w-2 h-2 rounded-full bg-[#14b8a6] animate-pulse" />
             <span className="text-[11px] text-[#38bdf8]/60">
-              Jarvis AI Assistant is online
+              Our AI Assistant is online
             </span>
             <TypingAnimation />
           </div>
@@ -1193,7 +1194,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-white">
-                      Powered by Jarvis AI
+                      Powered by Our AI Assistant
                     </p>
                     <p className="text-[10px] text-[#38bdf8]/40 leading-relaxed">
                       Your host&apos;s personal ecosystem — intelligent home
@@ -1262,7 +1263,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
               <Home className="w-3 h-3 text-white" />
             </div>
             <span className="text-xs font-semibold text-[#38bdf8]/60">
-              Jarvis Home Portal
+              Our AI Assistant Home Portal
             </span>
           </div>
           <p className="text-[10px] text-[#38bdf8]/25">
