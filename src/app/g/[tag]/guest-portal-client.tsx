@@ -287,8 +287,8 @@ function WiFiCard() {
   const [connecting, setConnecting] = useState(false);
 
   // Wi-Fi network details — change these to your actual values
-  const WIFI_SSID = "MyHomeNetwork";
-  const WIFI_PASSWORD = "ChangeMe123!";
+  const WIFI_SSID = "Wifi@home7";
+  const WIFI_PASSWORD = "E_wIf!7_H";
   const WIFI_TYPE = "WPA"; // WPA, WEP, or nopass
 
   const wifiUri = `WIFI:T:${WIFI_TYPE};S:${WIFI_SSID};P:${WIFI_PASSWORD};;`;
