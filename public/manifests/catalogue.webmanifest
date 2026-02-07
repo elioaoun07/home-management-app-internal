@@ -4,7 +4,7 @@
   "short_name": "Catalogue",
   "description": "Organize contacts, tasks, notes, recipes, and more in one place.",
   "start_url": "/catalogue",
-  "scope": "/catalogue",
+  "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0a1628",
