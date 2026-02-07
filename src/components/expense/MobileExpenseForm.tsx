@@ -197,6 +197,7 @@ export default function MobileExpenseForm() {
   const [isSplitBill, setIsSplitBill] = useState(false);
   const [isDebt, setIsDebt] = useState(false);
   const [debtorName, setDebtorName] = useState("");
+  const [debtAmount, setDebtAmount] = useState(""); // how much the friend owes (defaults to full amount)
   const [showNewAccountDrawer, setShowNewAccountDrawer] = useState(false);
   const [showNewCategoryDrawer, setShowNewCategoryDrawer] = useState(false);
   const [showNewSubcategoryDrawer, setShowNewSubcategoryDrawer] =
@@ -659,6 +660,7 @@ export default function MobileExpenseForm() {
     const wasSplitBill = isSplitBill;
     const wasDebt = isDebt;
     const debtorNameForToast = debtorName;
+    const debtAmountForSubmit = debtAmount ? parseFloat(debtAmount) : undefined;
 
     // Auto-detect future payment: if the selected date is in the future, treat as scheduled
     const today = format(new Date(), "yyyy-MM-dd");
@@ -673,6 +675,7 @@ export default function MobileExpenseForm() {
     setIsSplitBill(false);
     setIsDebt(false);
     setDebtorName("");
+    setDebtAmount("");
     setLbpChangeInput("");
     const newDefaultAccount = accounts.find((a: any) => a.is_default);
     if (newDefaultAccount) {
@@ -723,6 +726,7 @@ export default function MobileExpenseForm() {
           category_id: transactionData.category_id,
           subcategory_id: transactionData.subcategory_id || undefined,
           amount: transactionData.amount,
+          debt_amount: debtAmountForSubmit,
           description: transactionData.description,
           date: transactionData.date,
           is_private: transactionData.is_private,
@@ -1090,6 +1094,7 @@ export default function MobileExpenseForm() {
                       setIsPrivate(false);
                       setIsDebt(false);
                       setDebtorName("");
+                      setDebtAmount("");
                     }
                   }}
                   suppressHydrationWarning
@@ -1195,19 +1200,37 @@ export default function MobileExpenseForm() {
                   </span>
                 </button>
 
-                {/* Future Payment Button */}
-                {/* Debtor name input - shown when debt mode is on */}
+                {/* Debt inputs - shown when debt mode is on */}
                 {isDebt && (
-                  <input
-                    type="text"
-                    value={debtorName}
-                    onChange={(e) => setDebtorName(e.target.value)}
-                    placeholder="Who owes you?"
-                    className={cn(
-                      "flex-1 h-10 px-3 rounded-xl text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/40 focus:outline-none focus:border-orange-400/60 transition-all",
-                    )}
-                    autoFocus
-                  />
+                  <div className="flex gap-2 flex-1">
+                    <input
+                      type="text"
+                      value={debtorName}
+                      onChange={(e) => setDebtorName(e.target.value)}
+                      placeholder="Who owes you?"
+                      className={cn(
+                        "flex-1 h-10 px-3 rounded-xl text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/40 focus:outline-none focus:border-orange-400/60 transition-all",
+                      )}
+                      autoFocus
+                    />
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-orange-400/60 text-xs font-bold">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        value={debtAmount}
+                        onChange={(e) => setDebtAmount(e.target.value)}
+                        placeholder={amount || "All"}
+                        className={cn(
+                          "w-20 h-10 pl-6 pr-2 rounded-xl text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/40 focus:outline-none focus:border-orange-400/60 transition-all text-right",
+                        )}
+                        min="0.01"
+                        step="0.01"
+                        max={amount ? parseFloat(amount) : undefined}
+                      />
+                    </div>
+                  </div>
                 )}
 
                 {/* Private/Public Button */}

@@ -145,6 +145,7 @@ export async function PATCH(
   const txDate = new Date().toISOString().split("T")[0];
 
   // 1. Create an income transaction for the returned amount (is_debt_return = true)
+  //    Link it as a child of the original debt transaction via parent_transaction_id
   if (accountId) {
     const { data: returnTx, error: txError } = await supabase
       .from("transactions")
@@ -159,6 +160,7 @@ export async function PATCH(
         is_draft: false,
         is_private: txData?.is_private || false,
         is_debt_return: true,
+        parent_transaction_id: debt.transaction_id,
       })
       .select()
       .single();

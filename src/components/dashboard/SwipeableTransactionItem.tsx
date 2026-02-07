@@ -47,6 +47,8 @@ type Transaction = {
   debt_status?: "open" | "archived" | "closed" | null;
   debt_original_amount?: number | null;
   debt_returned_amount?: number | null;
+  /** Net cost after settlements (original - returned) */
+  debt_net_cost?: number | null;
   /** Future payment */
   scheduled_date?: string | null;
   is_debt_return?: boolean;
@@ -96,10 +98,15 @@ export default function SwipeableTransactionItem({
     transaction.collaborator_amount !== null;
 
   // Calculate display amount based on ownership filter and user's role
-  const displayAmount = getTransactionDisplayAmount(
+  // For debt transactions, show net cost (what you actually spent after settlements)
+  const rawDisplayAmount = getTransactionDisplayAmount(
     transaction,
     ownershipFilter,
   );
+  const displayAmount =
+    transaction.debt_id && transaction.debt_net_cost != null
+      ? transaction.debt_net_cost
+      : rawDisplayAmount;
 
   // Get display description based on filter and role
   const displayDescription = getTransactionDisplayDescription(
@@ -497,18 +504,17 @@ export default function SwipeableTransactionItem({
                   <span className="text-slate-500 text-[10px]">returned</span>
                 </div>
               )}
-              {/* Closed debt - show settled amounts */}
+              {/* Closed debt - show original amount struck through and net cost */}
               {transaction.debt_id && transaction.debt_status === "closed" && (
                 <div className="flex gap-1 text-xs items-center">
                   <BlurredAmount blurIntensity="sm">
-                    <span className="text-slate-400">
-                      $
-                      {(Number(transaction.debt_original_amount) || 0).toFixed(
-                        0,
-                      )}
+                    <span className="text-slate-500 line-through">
+                      ${(Number(transaction.amount) || 0).toFixed(0)}
                     </span>
-                    <span className="text-green-400 text-[10px] ml-0.5">
-                      $0 owed
+                    <span className="text-emerald-400 text-[10px] ml-0.5 font-medium">
+                      {(transaction.debt_net_cost ?? 0) <= 0
+                        ? "$0 cost"
+                        : `$${(transaction.debt_net_cost ?? 0).toFixed(0)} net`}
                     </span>
                   </BlurredAmount>
                 </div>

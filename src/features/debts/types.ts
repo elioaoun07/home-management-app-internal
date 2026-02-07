@@ -32,6 +32,8 @@ export interface CreateDebtDTO {
   category_id: string;
   subcategory_id?: string;
   amount: number;
+  /** How much the friend owes — defaults to full amount if not provided */
+  debt_amount?: number;
   description?: string;
   date?: string;
   is_private?: boolean;

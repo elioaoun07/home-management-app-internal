@@ -144,10 +144,15 @@ export function calculateIncomeExpenseSummary(
     (sum, t) => sum + Number(t.amount),
     0,
   );
-  const totalExpense = expenseTransactions.reduce(
-    (sum, t) => sum + Number(t.amount),
-    0,
-  );
+  // For debt transactions, use net cost (original - returned) instead of the full amount
+  // This way a $50 expense where $25 was returned only counts as $25 in totals
+  const totalExpense = expenseTransactions.reduce((sum, t) => {
+    const tx = t as any;
+    if (tx.debt_id && tx.debt_net_cost != null) {
+      return sum + Number(tx.debt_net_cost);
+    }
+    return sum + Number(t.amount);
+  }, 0);
 
   return {
     totalIncome,

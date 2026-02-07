@@ -96,6 +96,7 @@ export async function POST(req: NextRequest) {
     category_id,
     subcategory_id,
     amount,
+    debt_amount,
     description,
     date,
     is_private,
@@ -110,9 +111,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // debt_amount = how much the friend owes (defaults to full amount)
+  const effectiveDebtAmount =
+    debt_amount && debt_amount > 0 ? debt_amount : amount;
+
   if (amount <= 0) {
     return NextResponse.json(
       { error: "Amount must be positive" },
+      { status: 400 },
+    );
+  }
+
+  if (effectiveDebtAmount > amount) {
+    return NextResponse.json(
+      { error: "Debt amount cannot exceed the transaction amount" },
       { status: 400 },
     );
   }
@@ -154,13 +166,14 @@ export async function POST(req: NextRequest) {
   const transaction = await txResponse.json();
 
   // 2. Create the debt record linked to that transaction
+  //    debt_amount may be less than transaction amount (e.g. $50 bill, friend owes $25)
   const { data: debt, error: debtError } = await supabase
     .from("debts")
     .insert({
       user_id: user.id,
       transaction_id: transaction.id,
       debtor_name,
-      original_amount: amount,
+      original_amount: effectiveDebtAmount,
       returned_amount: 0,
       status: "open",
       notes: notes || null,

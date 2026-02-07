@@ -44,6 +44,8 @@ export type Transaction = {
   debt_status?: "open" | "archived" | "closed" | null;
   debt_original_amount?: number | null;
   debt_returned_amount?: number | null;
+  /** Net cost after debt settlements (original - returned) */
+  debt_net_cost?: number | null;
   // Future payment fields
   scheduled_date?: string | null;
   is_debt_return?: boolean;

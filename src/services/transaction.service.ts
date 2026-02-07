@@ -251,10 +251,11 @@ export class SupabaseTransactionService implements TransactionService {
       .select(
         `id, date, category_id, subcategory_id, amount, description, account_id, inserted_at, user_id, is_private,
         split_requested, collaborator_id, collaborator_amount, collaborator_description, split_completed_at, lbp_change_received,
-        scheduled_date, is_debt_return,
+        scheduled_date, is_debt_return, parent_transaction_id,
         category:user_categories!transactions_category_fk(name, color),
         subcategory:user_categories!transactions_subcategory_fk(name, color)`,
       )
+      .is("parent_transaction_id", null)
       .order("inserted_at", { ascending: false })
       .limit(limit);
 
@@ -495,6 +496,14 @@ export class SupabaseTransactionService implements TransactionService {
             tx.debt_status = debt.status;
             tx.debt_original_amount = Number(debt.original_amount);
             tx.debt_returned_amount = Number(debt.returned_amount);
+            // Net cost = full bill minus what the friend has paid back so far
+            // e.g. bill $50, friend owes $25, returned $0  → net cost = $50 (still out full amount)
+            //       bill $50, friend owes $25, returned $25 → net cost = $25 (your actual share)
+            //       bill $10, friend owes $10, returned $10 → net cost = $0
+            tx.debt_net_cost = Math.max(
+              0,
+              Number(tx.amount) - Number(debt.returned_amount),
+            );
           }
         }
       }
