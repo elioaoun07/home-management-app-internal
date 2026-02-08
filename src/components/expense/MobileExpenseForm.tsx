@@ -921,25 +921,6 @@ export default function MobileExpenseForm() {
                 {/* Subtle corner accent */}
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-cyan-500/5 to-transparent rounded-bl-full pointer-events-none" />
 
-                {/* Live formatted amount display */}
-                <div className="text-center min-h-[36px] flex items-center justify-center">
-                  {amount && parseFloat(amount) > 0 ? (
-                    <span
-                      className={`text-3xl font-black bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent tracking-tight transition-all duration-300`}
-                    >
-                      $
-                      {parseFloat(amount).toLocaleString("en-US", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  ) : (
-                    <span className="text-sm text-slate-500 tracking-wide">
-                      Enter amount below
-                    </span>
-                  )}
-                </div>
-
                 {/* Amount input */}
                 <div className="relative flex items-center">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-[hsl(var(--text-muted-light)/0.4)] pointer-events-none z-10">
