@@ -1,61 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
-import { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-
-type BalanceChangeType =
-  | "transaction_expense"
-  | "transaction_deleted"
-  | "transfer_in"
-  | "transfer_out"
-  | "initial_set"
-  | "manual_set"
-  | "manual_adjustment"
-  | "reconciliation"
-  | "correction";
-
-/**
- * Helper to log balance history entry
- * Note: Transaction entries (expense/income) are now shown via daily summaries,
- * so we only log non-transaction changes here. transaction_deleted is still logged
- * as it's an important audit event.
- */
-async function logBalanceHistory(
-  supabase: SupabaseClient,
-  accountId: string,
-  userId: string,
-  previousBalance: number,
-  newBalance: number,
-  changeAmount: number,
-  changeType: BalanceChangeType,
-  transactionId?: string,
-  effectiveDate?: string,
-): Promise<void> {
-  // Skip logging individual transaction expense/income entries - they're shown via daily summaries
-  // But DO log transaction_deleted as it's an important balance correction event
-  if (changeType === "transaction_expense") {
-    return;
-  }
-
-  try {
-    await supabase.from("account_balance_history").insert({
-      account_id: accountId,
-      user_id: userId,
-      previous_balance: previousBalance,
-      new_balance: newBalance,
-      change_amount: changeAmount,
-      change_type: changeType,
-      transaction_id: transactionId || null,
-      transfer_id: null,
-      effective_date: effectiveDate || new Date().toISOString().split("T")[0],
-    });
-  } catch (e) {
-    console.error("Failed to log balance history:", e);
-  }
-}
 
 // GET - Fetch a single transaction by ID
 export async function GET(
@@ -263,11 +211,8 @@ export async function PATCH(
       }
     }
 
-    // Update account_balances.updated_at
-    await supabase
-      .from("account_balances")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("account_id", updated.account_id);
+    // Balance is formula-based - no update needed here.
+    // The balance will be recomputed on next GET /api/accounts/[id]/balance.
 
     // Return complete transaction object (icon derived from category name via getCategoryIcon)
     return NextResponse.json({
@@ -379,25 +324,7 @@ export async function DELETE(
 
         // Delete the child transaction
         await adminClient.from("transactions").delete().eq("id", child.id);
-
-        // Reverse the child's balance impact (debt returns added money, so subtract it back)
-        if (!child.is_draft && child.account_id) {
-          const { data: childBalance } = await adminClient
-            .from("account_balances")
-            .select("balance")
-            .eq("account_id", child.account_id)
-            .single();
-
-          if (childBalance) {
-            await adminClient
-              .from("account_balances")
-              .update({
-                balance: Number(childBalance.balance) - Number(child.amount),
-                updated_at: new Date().toISOString(),
-              })
-              .eq("account_id", child.account_id);
-          }
-        }
+        // Balance for child transactions is formula-based - no manual reversal needed
       }
 
       console.log(
@@ -424,129 +351,9 @@ export async function DELETE(
       );
     }
 
-    // Restore account balances for confirmed (non-draft) transactions
-    if (!transaction.is_draft) {
-      console.log("[Delete Transaction] Restoring balances for transaction:", {
-        transaction_id: id,
-        owner_account_id: transaction.account_id,
-        owner_amount: transaction.amount,
-        is_split: transaction.split_requested,
-        split_completed: !!transaction.split_completed_at,
-        collab_account_id: transaction.collaborator_account_id,
-        collab_amount: transaction.collaborator_amount,
-      });
-
-      const effectiveDate = new Date().toISOString().split("T")[0];
-
-      // Restore owner's account balance (add back the transaction amount)
-      const { data: ownerBalance, error: ownerFetchError } = await supabase
-        .from("account_balances")
-        .select("balance")
-        .eq("account_id", transaction.account_id)
-        .single();
-
-      if (ownerFetchError) {
-        console.error(
-          "[Delete Transaction] Error fetching owner balance:",
-          ownerFetchError,
-        );
-      } else if (ownerBalance) {
-        const previousBalance = Number(ownerBalance.balance);
-        const restoredOwnerBalance =
-          previousBalance + Number(transaction.amount);
-        console.log("[Delete Transaction] Restoring owner balance:", {
-          current: ownerBalance.balance,
-          amount_to_add: transaction.amount,
-          new_balance: restoredOwnerBalance,
-        });
-
-        const { error: updateError } = await supabase
-          .from("account_balances")
-          .update({
-            balance: restoredOwnerBalance,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("account_id", transaction.account_id);
-
-        if (updateError) {
-          console.error(
-            "[Delete Transaction] Error updating owner balance:",
-            updateError,
-          );
-        } else {
-          // Log balance history for deletion
-          await logBalanceHistory(
-            supabase,
-            transaction.account_id,
-            user.id,
-            previousBalance,
-            restoredOwnerBalance,
-            Number(transaction.amount),
-            "transaction_deleted",
-            id,
-            effectiveDate,
-          );
-        }
-      }
-
-      // If this was a completed split bill, also restore collaborator's balance
-      if (
-        transaction.split_requested &&
-        transaction.split_completed_at &&
-        transaction.collaborator_amount &&
-        transaction.collaborator_account_id
-      ) {
-        console.log(
-          "[Delete Transaction] This is a completed split bill, restoring collaborator balance",
-        );
-
-        // Use admin client to bypass RLS when updating collaborator's balance
-        // (owner doesn't have permission to update partner's account_balances)
-        const adminClient = supabaseAdmin();
-
-        const { data: collabBalance, error: collabFetchError } =
-          await adminClient
-            .from("account_balances")
-            .select("balance")
-            .eq("account_id", transaction.collaborator_account_id)
-            .single();
-
-        if (collabFetchError) {
-          console.error(
-            "[Delete Transaction] Error fetching collaborator balance:",
-            collabFetchError,
-          );
-        } else if (collabBalance) {
-          const restoredCollabBalance =
-            Number(collabBalance.balance) +
-            Number(transaction.collaborator_amount);
-          console.log("[Delete Transaction] Restoring collaborator balance:", {
-            current: collabBalance.balance,
-            amount_to_add: transaction.collaborator_amount,
-            new_balance: restoredCollabBalance,
-          });
-
-          const { error: updateError } = await adminClient
-            .from("account_balances")
-            .update({
-              balance: restoredCollabBalance,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("account_id", transaction.collaborator_account_id);
-
-          if (updateError) {
-            console.error(
-              "[Delete Transaction] Error updating collaborator balance:",
-              updateError,
-            );
-          } else {
-            console.log(
-              "[Delete Transaction] Successfully restored collaborator balance",
-            );
-          }
-        }
-      }
-    }
+    // Balance is formula-based - no restoration needed.
+    // Deleting the transaction automatically removes it from the formula calculation.
+    // The balance will be recomputed on next GET /api/accounts/[id]/balance.
 
     return NextResponse.json({ success: true });
   } catch (error) {

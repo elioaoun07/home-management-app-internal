@@ -1,7 +1,7 @@
 // src/app/g/[tag]/layout.tsx
 // Standalone layout for guest portal — no app header/nav/auth
-import "../../globals.css";
 import type { Viewport } from "next";
+import "../../globals.css";
 
 export const metadata = {
   title: "Welcome Home • Jarvis Home Portal",

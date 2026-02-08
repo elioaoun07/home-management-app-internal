@@ -7,6 +7,8 @@ type PendingSplit = {
   owner_description: string;
   category_name: string;
   category_color: string;
+  suggested_amount: number | null;
+  total_bill_amount: number | null;
 };
 
 type CompleteSplitParams = {

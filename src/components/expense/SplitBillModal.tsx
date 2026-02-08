@@ -30,6 +30,8 @@ type SplitBillData = {
   owner_description: string;
   category_name: string;
   date?: string;
+  suggested_amount?: number | null;
+  total_bill_amount?: number | null;
 };
 
 type Props = {
@@ -39,7 +41,7 @@ type Props = {
   onComplete: (
     amount: number,
     description: string,
-    accountId: string
+    accountId: string,
   ) => Promise<void>;
 };
 
@@ -56,20 +58,22 @@ export default function SplitBillModal({
   const [accountId, setAccountId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset form when modal opens
+  // Reset form when modal opens — pre-fill with suggested amount if available
   useEffect(() => {
     if (open) {
-      setAmount("");
+      setAmount(
+        splitData.suggested_amount ? splitData.suggested_amount.toString() : "",
+      );
       setDescription("");
       // Default to "Wallet" account if available, otherwise first account
       if (accounts && accounts.length > 0) {
         const walletAccount = accounts.find(
-          (a) => a.name.toLowerCase() === "wallet"
+          (a) => a.name.toLowerCase() === "wallet",
         );
         setAccountId(walletAccount ? walletAccount.id : accounts[0].id);
       }
     }
-  }, [open, accounts]);
+  }, [open, accounts, splitData.suggested_amount]);
 
   const ownerAmount = splitData.owner_amount ?? 0;
   const myAmount = parseFloat(amount) || 0;
@@ -95,7 +99,7 @@ export default function SplitBillModal({
         className={cn(
           "neo-card border-2",
           themeClasses.border,
-          themeClasses.modalBg
+          themeClasses.modalBg,
         )}
       >
         <div className="mx-auto w-full max-w-sm flex flex-col max-h-[75vh] overflow-hidden">
@@ -129,6 +133,11 @@ export default function SplitBillModal({
                   "{splitData.owner_description}"
                 </p>
               )}
+              {splitData.total_bill_amount && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Total bill: ${splitData.total_bill_amount.toFixed(2)}
+                </p>
+              )}
             </div>
 
             {/* My portion (editable) */}
@@ -150,7 +159,7 @@ export default function SplitBillModal({
                   placeholder="0.00"
                   className={cn(
                     "pl-8 pr-4 h-14 text-2xl font-bold neo-card",
-                    "focus:ring-2 focus:ring-emerald-400/50"
+                    "focus:ring-2 focus:ring-emerald-400/50",
                   )}
                   autoFocus
                 />
@@ -223,7 +232,7 @@ export default function SplitBillModal({
               disabled={myAmount <= 0 || !accountId || isSubmitting}
               className={cn(
                 "flex-1 neo-gradient text-white",
-                "disabled:opacity-50 disabled:cursor-not-allowed"
+                "disabled:opacity-50 disabled:cursor-not-allowed",
               )}
             >
               {isSubmitting ? "Saving..." : "Confirm"}

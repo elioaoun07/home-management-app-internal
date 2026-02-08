@@ -4,86 +4,50 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// Helper to update account balance and log history
-async function updateAccountBalanceWithHistory(
-  supabase: any,
-  accountId: string,
-  userId: string,
-  delta: number,
-  changeType: string,
-  transferId: string | null,
-  effectiveDate: string,
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const { data: balanceData, error: fetchError } = await supabase
-      .from("account_balances")
-      .select("balance")
-      .eq("account_id", accountId)
-      .eq("user_id", userId)
-      .single();
+const TRANSFER_SELECT = `
+  id,
+  user_id,
+  from_account_id,
+  to_account_id,
+  amount,
+  description,
+  date,
+  transfer_type,
+  recipient_user_id,
+  fee_amount,
+  returned_amount,
+  household_link_id,
+  created_at,
+  updated_at,
+  from_account:accounts!transfers_from_account_id_fkey(id, name, type, user_id),
+  to_account:accounts!transfers_to_account_id_fkey(id, name, type, user_id)
+`;
 
-    let previousBalance = 0;
-    let newBalance = delta;
-
-    if (fetchError) {
-      if (fetchError.code === "PGRST116") {
-        const { error: insertError } = await supabase
-          .from("account_balances")
-          .insert({
-            account_id: accountId,
-            user_id: userId,
-            balance: delta,
-            balance_set_at: new Date().toISOString(),
-          });
-
-        if (insertError) {
-          return { success: false, error: insertError.message };
-        }
-        previousBalance = 0;
-        newBalance = delta;
-      } else {
-        return { success: false, error: fetchError.message };
-      }
-    } else {
-      previousBalance = Number(balanceData.balance);
-      newBalance = previousBalance + delta;
-      const { error: updateError } = await supabase
-        .from("account_balances")
-        .update({
-          balance: newBalance,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("account_id", accountId)
-        .eq("user_id", userId);
-
-      if (updateError) {
-        return { success: false, error: updateError.message };
-      }
-    }
-
-    // Log to balance history
-    const { error: historyError } = await supabase
-      .from("account_balance_history")
-      .insert({
-        account_id: accountId,
-        user_id: userId,
-        previous_balance: previousBalance,
-        new_balance: newBalance,
-        change_amount: delta,
-        change_type: changeType,
-        transfer_id: transferId,
-        effective_date: effectiveDate,
-        is_reconciliation: false,
-      });
-
-    if (historyError) {
-      console.error("Error logging balance history:", historyError);
-    }
-
-    return { success: true };
-  } catch (e: any) {
-    return { success: false, error: e.message };
-  }
+function formatTransfer(transfer: any, currentUserId: string) {
+  return {
+    id: transfer.id,
+    user_id: transfer.user_id,
+    from_account_id: transfer.from_account_id,
+    to_account_id: transfer.to_account_id,
+    from_account_name: (transfer.from_account as any)?.name || "Unknown",
+    to_account_name: (transfer.to_account as any)?.name || "Unknown",
+    from_account_type: (transfer.from_account as any)?.type || "expense",
+    to_account_type: (transfer.to_account as any)?.type || "expense",
+    from_account_user_id: (transfer.from_account as any)?.user_id || null,
+    to_account_user_id: (transfer.to_account as any)?.user_id || null,
+    amount: transfer.amount,
+    description: transfer.description,
+    date: transfer.date,
+    transfer_type: transfer.transfer_type || "self",
+    recipient_user_id: transfer.recipient_user_id,
+    fee_amount: transfer.fee_amount || 0,
+    returned_amount: transfer.returned_amount || 0,
+    household_link_id: transfer.household_link_id,
+    created_at: transfer.created_at,
+    updated_at: transfer.updated_at,
+    is_owner: transfer.user_id === currentUserId,
+    is_recipient: transfer.recipient_user_id === currentUserId,
+  };
 }
 
 // GET /api/transfers/[id] - Get a specific transfer
@@ -102,50 +66,22 @@ export async function GET(
 
   const { id } = await params;
 
+  // Allow fetching if user is the owner OR the recipient
   const { data: transfer, error } = await supabase
     .from("transfers")
-    .select(
-      `
-      id,
-      user_id,
-      from_account_id,
-      to_account_id,
-      amount,
-      description,
-      date,
-      created_at,
-      updated_at,
-      from_account:accounts!transfers_from_account_id_fkey(id, name, type),
-      to_account:accounts!transfers_to_account_id_fkey(id, name, type)
-    `,
-    )
+    .select(TRANSFER_SELECT)
     .eq("id", id)
-    .eq("user_id", user.id)
+    .or(`user_id.eq.${user.id},recipient_user_id.eq.${user.id}`)
     .single();
 
   if (error) {
     return NextResponse.json({ error: "Transfer not found" }, { status: 404 });
   }
 
-  return NextResponse.json({
-    id: transfer.id,
-    user_id: transfer.user_id,
-    from_account_id: transfer.from_account_id,
-    to_account_id: transfer.to_account_id,
-    from_account_name: (transfer.from_account as any)?.name || "Unknown",
-    to_account_name: (transfer.to_account as any)?.name || "Unknown",
-    from_account_type: (transfer.from_account as any)?.type || "expense",
-    to_account_type: (transfer.to_account as any)?.type || "expense",
-    amount: transfer.amount,
-    description: transfer.description,
-    date: transfer.date,
-    created_at: transfer.created_at,
-    updated_at: transfer.updated_at,
-    is_owner: true,
-  });
+  return NextResponse.json(formatTransfer(transfer, user.id));
 }
 
-// DELETE /api/transfers/[id] - Delete a transfer and reverse balance changes
+// DELETE /api/transfers/[id] - Delete a transfer
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -161,10 +97,10 @@ export async function DELETE(
 
   const { id } = await params;
 
-  // First fetch the transfer to get the details for reversal
+  // Only the creator (sender) can delete
   const { data: transfer, error: fetchError } = await supabase
     .from("transfers")
-    .select("id, from_account_id, to_account_id, amount")
+    .select("id")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -188,30 +124,9 @@ export async function DELETE(
     );
   }
 
-  const today = new Date().toISOString().split("T")[0];
-
-  // Reverse the balance changes with history (correction type)
-  // Add back to source account
-  await updateAccountBalanceWithHistory(
-    supabase,
-    transfer.from_account_id,
-    user.id,
-    Number(transfer.amount),
-    "correction",
-    null, // Transfer is deleted, so no reference
-    today,
-  );
-
-  // Subtract from destination account
-  await updateAccountBalanceWithHistory(
-    supabase,
-    transfer.to_account_id,
-    user.id,
-    -Number(transfer.amount),
-    "correction",
-    null,
-    today,
-  );
+  // Balance is formula-based — no manual balance reversal needed.
+  // Deleting the transfer automatically removes it from the formula calculation.
+  // The balance will be recomputed on next GET /api/accounts/[id]/balance.
 
   return NextResponse.json({ success: true });
 }
@@ -232,12 +147,12 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { amount, description, date } = body;
+  const { amount, description, date, fee_amount, returned_amount } = body;
 
-  // Fetch current transfer
+  // Only the creator can update
   const { data: currentTransfer, error: fetchError } = await supabase
     .from("transfers")
-    .select("id, from_account_id, to_account_id, amount")
+    .select("id, amount, fee_amount, returned_amount")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -263,40 +178,54 @@ export async function PATCH(
     updateFields.date = date;
   }
 
-  // Handle amount change - need to adjust balances
-  if (amount !== undefined && amount !== currentTransfer.amount) {
-    if (amount <= 0) {
+  if (fee_amount !== undefined) {
+    if (fee_amount < 0) {
       return NextResponse.json(
-        { error: "Amount must be positive" },
+        { error: "Fee amount cannot be negative" },
         { status: 400 },
       );
     }
+    updateFields.fee_amount = Number(fee_amount);
+  }
 
-    const amountDiff = Number(amount) - Number(currentTransfer.amount);
-    updateFields.amount = Number(amount);
-    const effectiveDate = date || new Date().toISOString().split("T")[0];
+  if (returned_amount !== undefined) {
+    if (returned_amount < 0) {
+      return NextResponse.json(
+        { error: "Returned amount cannot be negative" },
+        { status: 400 },
+      );
+    }
+    updateFields.returned_amount = Number(returned_amount);
+  }
 
-    // Adjust source account (subtract the difference) with history
-    await updateAccountBalanceWithHistory(
-      supabase,
-      currentTransfer.from_account_id,
-      user.id,
-      -amountDiff,
-      "manual_adjustment",
-      id,
-      effectiveDate,
+  // Validate final amounts
+  const newAmount =
+    amount !== undefined ? Number(amount) : Number(currentTransfer.amount);
+  const newFee =
+    fee_amount !== undefined
+      ? Number(fee_amount)
+      : Number(currentTransfer.fee_amount || 0);
+  const newReturned =
+    returned_amount !== undefined
+      ? Number(returned_amount)
+      : Number(currentTransfer.returned_amount || 0);
+
+  if (newAmount <= 0) {
+    return NextResponse.json(
+      { error: "Amount must be positive" },
+      { status: 400 },
     );
+  }
 
-    // Adjust destination account (add the difference) with history
-    await updateAccountBalanceWithHistory(
-      supabase,
-      currentTransfer.to_account_id,
-      user.id,
-      amountDiff,
-      "manual_adjustment",
-      id,
-      effectiveDate,
+  if (newFee + newReturned > newAmount) {
+    return NextResponse.json(
+      { error: "Fee + returned amount cannot exceed transfer amount" },
+      { status: 400 },
     );
+  }
+
+  if (amount !== undefined) {
+    updateFields.amount = newAmount;
   }
 
   if (Object.keys(updateFields).length === 0) {
@@ -305,26 +234,15 @@ export async function PATCH(
 
   updateFields.updated_at = new Date().toISOString();
 
+  // Balance is formula-based — no manual balance adjustments needed.
+  // The balance will be recomputed on next GET /api/accounts/[id]/balance.
+
   const { data: updated, error: updateError } = await supabase
     .from("transfers")
     .update(updateFields)
     .eq("id", id)
     .eq("user_id", user.id)
-    .select(
-      `
-      id,
-      user_id,
-      from_account_id,
-      to_account_id,
-      amount,
-      description,
-      date,
-      created_at,
-      updated_at,
-      from_account:accounts!transfers_from_account_id_fkey(id, name, type),
-      to_account:accounts!transfers_to_account_id_fkey(id, name, type)
-    `,
-    )
+    .select(TRANSFER_SELECT)
     .single();
 
   if (updateError) {
@@ -335,20 +253,5 @@ export async function PATCH(
     );
   }
 
-  return NextResponse.json({
-    id: updated.id,
-    user_id: updated.user_id,
-    from_account_id: updated.from_account_id,
-    to_account_id: updated.to_account_id,
-    from_account_name: (updated.from_account as any)?.name || "Unknown",
-    to_account_name: (updated.to_account as any)?.name || "Unknown",
-    from_account_type: (updated.from_account as any)?.type || "expense",
-    to_account_type: (updated.to_account as any)?.type || "expense",
-    amount: updated.amount,
-    description: updated.description,
-    date: updated.date,
-    created_at: updated.created_at,
-    updated_at: updated.updated_at,
-    is_owner: true,
-  });
+  return NextResponse.json(formatTransfer(updated, user.id));
 }

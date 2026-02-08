@@ -14,12 +14,20 @@ export interface Transfer {
   to_account_name: string;
   from_account_type: "income" | "expense" | "saving";
   to_account_type: "income" | "expense" | "saving";
+  from_account_user_id: string | null;
+  to_account_user_id: string | null;
   amount: number;
   description: string;
   date: string;
+  transfer_type: "self" | "household";
+  recipient_user_id: string | null;
+  fee_amount: number;
+  returned_amount: number;
+  household_link_id: string | null;
   created_at: string;
   updated_at: string;
   is_owner: boolean;
+  is_recipient: boolean;
 }
 
 export interface CreateTransferInput {
@@ -28,6 +36,10 @@ export interface CreateTransferInput {
   amount: number;
   description?: string;
   date?: string;
+  transfer_type?: "self" | "household";
+  recipient_user_id?: string;
+  fee_amount?: number;
+  returned_amount?: number;
 }
 
 export interface UpdateTransferInput {
@@ -35,6 +47,8 @@ export interface UpdateTransferInput {
   amount?: number;
   description?: string;
   date?: string;
+  fee_amount?: number;
+  returned_amount?: number;
 }
 
 // Query keys

@@ -195,6 +195,7 @@ export default function MobileExpenseForm() {
   const [showCalculator, setShowCalculator] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [isSplitBill, setIsSplitBill] = useState(false);
+  const [splitBillTotal, setSplitBillTotal] = useState("");
   const [isDebt, setIsDebt] = useState(false);
   const [debtorName, setDebtorName] = useState("");
   const [debtAmount, setDebtAmount] = useState(""); // how much the friend owes (defaults to full amount)
@@ -642,6 +643,8 @@ export default function MobileExpenseForm() {
       date: format(date, "yyyy-MM-dd"),
       is_private: isPrivate,
       split_requested: isSplitBill,
+      total_bill_amount:
+        isSplitBill && splitBillTotal ? parseFloat(splitBillTotal) : undefined,
       lbp_change_received: parsedLbpChange,
       // Include display names for optimistic UI
       _optimistic: {
@@ -673,6 +676,7 @@ export default function MobileExpenseForm() {
     setDescription("");
     setIsPrivate(false);
     setIsSplitBill(false);
+    setSplitBillTotal("");
     setIsDebt(false);
     setDebtorName("");
     setDebtAmount("");
@@ -1095,6 +1099,8 @@ export default function MobileExpenseForm() {
                       setIsDebt(false);
                       setDebtorName("");
                       setDebtAmount("");
+                    } else {
+                      setSplitBillTotal("");
                     }
                   }}
                   suppressHydrationWarning
@@ -1147,6 +1153,36 @@ export default function MobileExpenseForm() {
                     Split
                   </span>
                 </button>
+
+                {/* Split bill total input */}
+                {isSplitBill && (
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-400/60 text-xs font-bold">
+                      $
+                    </span>
+                    <input
+                      type="number"
+                      value={splitBillTotal}
+                      onChange={(e) => setSplitBillTotal(e.target.value)}
+                      placeholder="Total bill"
+                      className={cn(
+                        "w-28 h-10 pl-6 pr-2 rounded-xl text-sm bg-emerald-500/10 border border-emerald-400/30 text-emerald-200 placeholder:text-emerald-400/40 focus:outline-none focus:border-emerald-400/60 transition-all text-right",
+                      )}
+                      min="0.01"
+                      step="0.01"
+                    />
+                    {splitBillTotal &&
+                      amount &&
+                      parseFloat(splitBillTotal) > parseFloat(amount) && (
+                        <span className="absolute -bottom-4 left-0 text-[10px] text-emerald-400/70">
+                          Partner: $
+                          {(
+                            parseFloat(splitBillTotal) - parseFloat(amount)
+                          ).toFixed(2)}
+                        </span>
+                      )}
+                  </div>
+                )}
 
                 {/* Debt Button */}
                 <button

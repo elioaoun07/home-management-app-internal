@@ -24,7 +24,11 @@ export default function ConditionalHeader({
   const pathname = usePathname();
 
   // Hide header on guest portal and in watch/web mode
-  if (pathname?.startsWith("/g/") || viewMode === "watch" || viewMode === "web") {
+  if (
+    pathname?.startsWith("/g/") ||
+    viewMode === "watch" ||
+    viewMode === "web"
+  ) {
     return null;
   }
 

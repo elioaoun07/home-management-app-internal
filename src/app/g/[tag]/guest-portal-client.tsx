@@ -1287,7 +1287,8 @@ function ChatInterface({
                 🤖 Jarvis
               </p>
               <div className="whitespace-pre-wrap">
-                Hey {guestName || session?.guest_name}! 👋 How can I help? Tap any option below or type your own question.
+                Hey {guestName || session?.guest_name}! 👋 How can I help? Tap
+                any option below or type your own question.
               </div>
               <div className="mt-2.5 flex flex-wrap gap-1.5">
                 {quickActions.map((action) => (
@@ -1336,21 +1337,25 @@ function ChatInterface({
                 )}
                 {/* Render markdown bold */}
                 <div className="whitespace-pre-wrap">
-                  {(msg.message.split(/(\*\*[^*]+\*\*)/) as string[]).map((part, i) => {
-                    if (part.startsWith("**") && part.endsWith("**")) {
-                      return (
-                        <strong key={i} className="font-semibold text-white">
-                          {part.slice(2, -2)}
-                        </strong>
-                      );
-                    }
-                    return <span key={i}>{part}</span>;
-                  })}
+                  {(msg.message.split(/(\*\*[^*]+\*\*)/) as string[]).map(
+                    (part, i) => {
+                      if (part.startsWith("**") && part.endsWith("**")) {
+                        return (
+                          <strong key={i} className="font-semibold text-white">
+                            {part.slice(2, -2)}
+                          </strong>
+                        );
+                      }
+                      return <span key={i}>{part}</span>;
+                    },
+                  )}
                 </div>
                 {/* Quick actions — always on the last bot message */}
                 {isLastBotMsg && (
                   <div className="mt-2.5 pt-2 border-t border-[#06b6d4]/10">
-                    <p className="text-[9px] text-[#38bdf8]/40 mb-1.5">Ask me about:</p>
+                    <p className="text-[9px] text-[#38bdf8]/40 mb-1.5">
+                      Ask me about:
+                    </p>
                     <div className="flex flex-wrap gap-1.5">
                       {quickActions.map((action) => (
                         <button
@@ -1772,7 +1777,11 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
 
           {activeSection === "allergies" && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <AllergiesCard tagInfo={tagInfo} session={session} onNameSet={handleNameSet} />
+              <AllergiesCard
+                tagInfo={tagInfo}
+                session={session}
+                onNameSet={handleNameSet}
+              />
             </div>
           )}
 
@@ -1805,8 +1814,6 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
             </div>
           )}
         </div>
-
-
       </div>
 
       {/* Scroll to top */}

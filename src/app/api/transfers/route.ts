@@ -4,176 +4,33 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// Helper to get partner user ID if linked
-async function getPartnerUserId(
+// Helper to get partner user ID and household link if linked
+async function getHouseholdInfo(
   supabase: any,
   userId: string,
-): Promise<string | null> {
+): Promise<{ partnerId: string | null; householdLinkId: string | null }> {
   const { data: link } = await supabase
     .from("household_links")
-    .select("owner_user_id, partner_user_id, active")
+    .select("id, owner_user_id, partner_user_id, active")
     .or(`owner_user_id.eq.${userId},partner_user_id.eq.${userId}`)
     .eq("active", true)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (!link) return null;
-  return link.owner_user_id === userId
-    ? link.partner_user_id
-    : link.owner_user_id;
+  if (!link) return { partnerId: null, householdLinkId: null };
+  const partnerId =
+    link.owner_user_id === userId ? link.partner_user_id : link.owner_user_id;
+  return { partnerId, householdLinkId: link.id };
 }
 
-// Helper to update account balance
-async function updateAccountBalance(
+// Legacy helper for backward compatibility
+async function getPartnerUserId(
   supabase: any,
-  accountId: string,
   userId: string,
-  delta: number, // positive = add, negative = subtract
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // Get current balance
-    const { data: balanceData, error: fetchError } = await supabase
-      .from("account_balances")
-      .select("balance")
-      .eq("account_id", accountId)
-      .eq("user_id", userId)
-      .single();
-
-    if (fetchError) {
-      // If no balance exists yet, create one with the delta
-      if (fetchError.code === "PGRST116") {
-        const { error: insertError } = await supabase
-          .from("account_balances")
-          .insert({
-            account_id: accountId,
-            user_id: userId,
-            balance: delta,
-            balance_set_at: new Date().toISOString(),
-          });
-
-        if (insertError) {
-          console.error("Error creating account balance:", insertError);
-          return { success: false, error: insertError.message };
-        }
-        return { success: true };
-      }
-
-      console.error("Error fetching account balance:", fetchError);
-      return { success: false, error: fetchError.message };
-    }
-
-    // Update the balance
-    const newBalance = Number(balanceData.balance) + delta;
-    const { error: updateError } = await supabase
-      .from("account_balances")
-      .update({
-        balance: newBalance,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("account_id", accountId)
-      .eq("user_id", userId);
-
-    if (updateError) {
-      console.error("Error updating account balance:", updateError);
-      return { success: false, error: updateError.message };
-    }
-
-    return { success: true };
-  } catch (e: any) {
-    console.error("Error in updateAccountBalance:", e);
-    return { success: false, error: e.message };
-  }
-}
-
-// Helper to update account balance and log history
-async function updateAccountBalanceWithHistory(
-  supabase: any,
-  accountId: string,
-  userId: string,
-  delta: number, // positive = add, negative = subtract
-  changeType: "transfer_in" | "transfer_out",
-  transferId: string,
-  effectiveDate: string,
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // Get current balance
-    const { data: balanceData, error: fetchError } = await supabase
-      .from("account_balances")
-      .select("balance")
-      .eq("account_id", accountId)
-      .eq("user_id", userId)
-      .single();
-
-    let previousBalance = 0;
-    let newBalance = delta;
-
-    if (fetchError) {
-      // If no balance exists yet, create one with the delta
-      if (fetchError.code === "PGRST116") {
-        const { error: insertError } = await supabase
-          .from("account_balances")
-          .insert({
-            account_id: accountId,
-            user_id: userId,
-            balance: delta,
-            balance_set_at: new Date().toISOString(),
-          });
-
-        if (insertError) {
-          console.error("Error creating account balance:", insertError);
-          return { success: false, error: insertError.message };
-        }
-        previousBalance = 0;
-        newBalance = delta;
-      } else {
-        console.error("Error fetching account balance:", fetchError);
-        return { success: false, error: fetchError.message };
-      }
-    } else {
-      // Update the balance
-      previousBalance = Number(balanceData.balance);
-      newBalance = previousBalance + delta;
-      const { error: updateError } = await supabase
-        .from("account_balances")
-        .update({
-          balance: newBalance,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("account_id", accountId)
-        .eq("user_id", userId);
-
-      if (updateError) {
-        console.error("Error updating account balance:", updateError);
-        return { success: false, error: updateError.message };
-      }
-    }
-
-    // Log to balance history
-    const { error: historyError } = await supabase
-      .from("account_balance_history")
-      .insert({
-        account_id: accountId,
-        user_id: userId,
-        previous_balance: previousBalance,
-        new_balance: newBalance,
-        change_amount: delta,
-        change_type: changeType,
-        transfer_id: transferId,
-        effective_date: effectiveDate,
-        is_reconciliation: false,
-      });
-
-    if (historyError) {
-      console.error("Error logging balance history:", historyError);
-      // Don't fail - history is supplementary
-    }
-
-    return { success: true };
-  } catch (e: any) {
-    console.error("Error in updateAccountBalanceWithHistory:", e);
-    return { success: false, error: e.message };
-  }
+): Promise<string | null> {
+  const { partnerId } = await getHouseholdInfo(supabase, userId);
+  return partnerId;
 }
 
 // GET /api/transfers - Get all transfers for the user
@@ -209,20 +66,61 @@ export async function GET(req: NextRequest) {
         amount,
         description,
         date,
+        transfer_type,
+        recipient_user_id,
+        fee_amount,
+        returned_amount,
+        household_link_id,
         created_at,
         updated_at,
-        from_account:accounts!transfers_from_account_id_fkey(id, name, type),
-        to_account:accounts!transfers_to_account_id_fkey(id, name, type)
+        from_account:accounts!transfers_from_account_id_fkey(id, name, type, user_id),
+        to_account:accounts!transfers_to_account_id_fkey(id, name, type, user_id)
       `,
       )
       .in("user_id", allowedUserIds)
       .order("date", { ascending: false })
       .limit(limit);
 
-    if (start) query = query.gte("date", start);
-    if (end) query = query.lte("date", end);
+    // Also include transfers where the current user or partner is the recipient
+    // We need a second query for household transfers where the user is the recipient
+    let recipientQuery = supabase
+      .from("transfers")
+      .select(
+        `
+        id,
+        user_id,
+        from_account_id,
+        to_account_id,
+        amount,
+        description,
+        date,
+        transfer_type,
+        recipient_user_id,
+        fee_amount,
+        returned_amount,
+        household_link_id,
+        created_at,
+        updated_at,
+        from_account:accounts!transfers_from_account_id_fkey(id, name, type, user_id),
+        to_account:accounts!transfers_to_account_id_fkey(id, name, type, user_id)
+      `,
+      )
+      .eq("recipient_user_id", user.id)
+      .not("user_id", "in", `(${allowedUserIds.join(",")})`)
+      .order("date", { ascending: false })
+      .limit(limit);
 
-    const { data: transfers, error } = await query;
+    if (start) {
+      query = query.gte("date", start);
+      recipientQuery = recipientQuery.gte("date", start);
+    }
+    if (end) {
+      query = query.lte("date", end);
+      recipientQuery = recipientQuery.lte("date", end);
+    }
+
+    const [{ data: transfers, error }, { data: recipientTransfers }] =
+      await Promise.all([query, recipientQuery]);
 
     if (error) {
       console.error("Error fetching transfers:", error);
@@ -232,8 +130,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Merge and deduplicate
+    const allTransfers = [...(transfers || []), ...(recipientTransfers || [])];
+    const uniqueMap = new Map<string, any>();
+    allTransfers.forEach((t) => uniqueMap.set(t.id, t));
+    const uniqueTransfers = Array.from(uniqueMap.values());
+    uniqueTransfers.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+
     // Format response
-    const formattedTransfers = (transfers || []).map((t: any) => ({
+    const formattedTransfers = uniqueTransfers.map((t: any) => ({
       id: t.id,
       user_id: t.user_id,
       from_account_id: t.from_account_id,
@@ -242,12 +149,20 @@ export async function GET(req: NextRequest) {
       to_account_name: t.to_account?.name || "Unknown",
       from_account_type: t.from_account?.type || "expense",
       to_account_type: t.to_account?.type || "expense",
+      from_account_user_id: t.from_account?.user_id || null,
+      to_account_user_id: t.to_account?.user_id || null,
       amount: t.amount,
       description: t.description,
       date: t.date,
+      transfer_type: t.transfer_type || "self",
+      recipient_user_id: t.recipient_user_id,
+      fee_amount: t.fee_amount || 0,
+      returned_amount: t.returned_amount || 0,
+      household_link_id: t.household_link_id,
       created_at: t.created_at,
       updated_at: t.updated_at,
       is_owner: t.user_id === user.id,
+      is_recipient: t.recipient_user_id === user.id,
     }));
 
     return NextResponse.json(formattedTransfers);
@@ -273,7 +188,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { from_account_id, to_account_id, amount, description, date } = body;
+    const {
+      from_account_id,
+      to_account_id,
+      amount,
+      description,
+      date,
+      transfer_type = "self",
+      recipient_user_id,
+      fee_amount = 0,
+      returned_amount = 0,
+    } = body;
 
     // Validation
     if (!from_account_id || !to_account_id) {
@@ -297,22 +222,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify both accounts belong to user
-    const { data: accounts, error: accountsError } = await supabase
-      .from("accounts")
-      .select("id, name, type")
-      .eq("user_id", user.id)
-      .in("id", [from_account_id, to_account_id]);
-
-    if (accountsError || !accounts || accounts.length !== 2) {
+    if (fee_amount < 0) {
       return NextResponse.json(
-        { error: "One or both accounts not found" },
-        { status: 404 },
+        { error: "Fee amount cannot be negative" },
+        { status: 400 },
       );
     }
 
-    const fromAccount = accounts.find((a: any) => a.id === from_account_id);
-    const toAccount = accounts.find((a: any) => a.id === to_account_id);
+    if (returned_amount < 0) {
+      return NextResponse.json(
+        { error: "Returned amount cannot be negative" },
+        { status: 400 },
+      );
+    }
+
+    if (returned_amount > amount) {
+      return NextResponse.json(
+        { error: "Returned amount cannot exceed transfer amount" },
+        { status: 400 },
+      );
+    }
+
+    if (fee_amount + returned_amount > amount) {
+      return NextResponse.json(
+        { error: "Fee + returned amount cannot exceed transfer amount" },
+        { status: 400 },
+      );
+    }
 
     // Determine date
     let transferDate: string;
@@ -322,67 +258,164 @@ export async function POST(req: NextRequest) {
       transferDate = new Date().toISOString().split("T")[0];
     }
 
-    // Create the transfer record
-    const { data: transfer, error: insertError } = await supabase
-      .from("transfers")
-      .insert({
-        user_id: user.id,
-        from_account_id,
-        to_account_id,
-        amount: Number(amount),
-        description: description || "",
-        date: transferDate,
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error("Error creating transfer:", insertError);
-      return NextResponse.json(
-        { error: "Failed to create transfer" },
-        { status: 500 },
+    if (transfer_type === "household") {
+      // === HOUSEHOLD TRANSFER ===
+      // Verify household link exists
+      const { partnerId, householdLinkId } = await getHouseholdInfo(
+        supabase,
+        user.id,
       );
+
+      if (!partnerId || !householdLinkId) {
+        return NextResponse.json(
+          { error: "No active household link found" },
+          { status: 400 },
+        );
+      }
+
+      // The recipient must be the partner
+      const actualRecipientId = recipient_user_id || partnerId;
+      if (actualRecipientId !== partnerId) {
+        return NextResponse.json(
+          { error: "Recipient must be your household partner" },
+          { status: 400 },
+        );
+      }
+
+      // Verify from_account belongs to the current user (sender)
+      const { data: fromAccount, error: fromErr } = await supabase
+        .from("accounts")
+        .select("id, name, type, user_id")
+        .eq("id", from_account_id)
+        .eq("user_id", user.id)
+        .single();
+
+      if (fromErr || !fromAccount) {
+        return NextResponse.json(
+          { error: "Source account not found or doesn't belong to you" },
+          { status: 404 },
+        );
+      }
+
+      // Verify to_account belongs to the partner (recipient)
+      const { data: toAccount, error: toErr } = await supabase
+        .from("accounts")
+        .select("id, name, type, user_id")
+        .eq("id", to_account_id)
+        .eq("user_id", partnerId)
+        .single();
+
+      if (toErr || !toAccount) {
+        return NextResponse.json(
+          {
+            error:
+              "Destination account not found or doesn't belong to your partner",
+          },
+          { status: 404 },
+        );
+      }
+
+      // Create the transfer record
+      const { data: transfer, error: insertError } = await supabase
+        .from("transfers")
+        .insert({
+          user_id: user.id,
+          from_account_id,
+          to_account_id,
+          amount: Number(amount),
+          description: description || "",
+          date: transferDate,
+          transfer_type: "household",
+          recipient_user_id: partnerId,
+          fee_amount: Number(fee_amount),
+          returned_amount: Number(returned_amount),
+          household_link_id: householdLinkId,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("Error creating household transfer:", insertError);
+        return NextResponse.json(
+          { error: "Failed to create transfer" },
+          { status: 500 },
+        );
+      }
+
+      // Balance is formula-based — no manual balance updates needed.
+      // The balance will be recomputed on next GET /api/accounts/[id]/balance
+      // via computeAccountBalance() which includes transfer impact.
+
+      return NextResponse.json({
+        ...transfer,
+        from_account_name: fromAccount?.name || "Unknown",
+        to_account_name: toAccount?.name || "Unknown",
+        from_account_type: fromAccount?.type || "expense",
+        to_account_type: toAccount?.type || "expense",
+        from_account_user_id: user.id,
+        to_account_user_id: partnerId,
+        is_owner: true,
+        is_recipient: false,
+      });
+    } else {
+      // === SELF TRANSFER ===
+      // Verify both accounts belong to user
+      const { data: accounts, error: accountsError } = await supabase
+        .from("accounts")
+        .select("id, name, type")
+        .eq("user_id", user.id)
+        .in("id", [from_account_id, to_account_id]);
+
+      if (accountsError || !accounts || accounts.length !== 2) {
+        return NextResponse.json(
+          { error: "One or both accounts not found" },
+          { status: 404 },
+        );
+      }
+
+      const fromAccount = accounts.find((a: any) => a.id === from_account_id);
+      const toAccount = accounts.find((a: any) => a.id === to_account_id);
+
+      // Create the transfer record
+      const { data: transfer, error: insertError } = await supabase
+        .from("transfers")
+        .insert({
+          user_id: user.id,
+          from_account_id,
+          to_account_id,
+          amount: Number(amount),
+          description: description || "",
+          date: transferDate,
+          transfer_type: "self",
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("Error creating transfer:", insertError);
+        return NextResponse.json(
+          { error: "Failed to create transfer" },
+          { status: 500 },
+        );
+      }
+
+      // Balance is formula-based — no manual balance updates needed.
+      // The balance will be recomputed on next GET /api/accounts/[id]/balance
+      // via computeAccountBalance() which includes transfer impact.
+
+      // Return the complete transfer with account info
+      return NextResponse.json({
+        ...transfer,
+        from_account_name: fromAccount?.name || "Unknown",
+        to_account_name: toAccount?.name || "Unknown",
+        from_account_type: fromAccount?.type || "expense",
+        to_account_type: toAccount?.type || "expense",
+        from_account_user_id: user.id,
+        to_account_user_id: user.id,
+        is_owner: true,
+        is_recipient: false,
+      });
     }
-
-    // Update source account balance (subtract) with history
-    const fromResult = await updateAccountBalanceWithHistory(
-      supabase,
-      from_account_id,
-      user.id,
-      -Number(amount),
-      "transfer_out",
-      transfer.id,
-      transferDate,
-    );
-
-    if (!fromResult.success) {
-      console.error("Failed to update source balance:", fromResult.error);
-    }
-
-    // Update destination account balance (add) with history
-    const toResult = await updateAccountBalanceWithHistory(
-      supabase,
-      to_account_id,
-      user.id,
-      Number(amount),
-      "transfer_in",
-      transfer.id,
-      transferDate,
-    );
-
-    if (!toResult.success) {
-      console.error("Failed to update destination balance:", toResult.error);
-    }
-
-    // Return the complete transfer with account info
-    return NextResponse.json({
-      ...transfer,
-      from_account_name: fromAccount?.name || "Unknown",
-      to_account_name: toAccount?.name || "Unknown",
-      from_account_type: fromAccount?.type || "expense",
-      to_account_type: toAccount?.type || "expense",
-      is_owner: true,
-    });
   } catch (e: any) {
     console.error("Error in POST /api/transfers:", e);
     return NextResponse.json(

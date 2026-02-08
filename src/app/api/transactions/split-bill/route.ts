@@ -45,14 +45,34 @@ export async function GET() {
     }
 
     // Format the response
-    const formatted = (pendingSplits || []).map((tx: any) => ({
-      transaction_id: tx.id,
-      date: tx.date,
-      owner_amount: tx.amount,
-      owner_description: tx.description,
-      category_name: tx.category?.name || "Expense",
-      category_color: tx.category?.color || "#38bdf8",
-    }));
+    const formatted = await Promise.all(
+      (pendingSplits || []).map(async (tx: any) => {
+        // Try to get suggested_amount from the notification action_data
+        const { data: notification } = await supabase
+          .from("notifications")
+          .select("action_data")
+          .eq("transaction_id", tx.id)
+          .eq("user_id", user.id)
+          .eq("notification_type", "transaction_pending")
+          .maybeSingle();
+
+        const actionData = notification?.action_data as Record<
+          string,
+          any
+        > | null;
+
+        return {
+          transaction_id: tx.id,
+          date: tx.date,
+          owner_amount: tx.amount,
+          owner_description: tx.description,
+          category_name: tx.category?.name || "Expense",
+          category_color: tx.category?.color || "#38bdf8",
+          suggested_amount: actionData?.suggested_amount ?? null,
+          total_bill_amount: actionData?.total_bill_amount ?? null,
+        };
+      }),
+    );
 
     return NextResponse.json({ pending_splits: formatted });
   } catch (error) {
@@ -172,29 +192,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Deduct the amount from the collaborator's account balance
-    const { data: currentBalance, error: balanceFetchError } = await supabase
-      .from("account_balances")
-      .select("balance")
-      .eq("account_id", account_id)
-      .single();
-
-    if (balanceFetchError) {
-      console.error("Error fetching account balance:", balanceFetchError);
-    } else if (currentBalance) {
-      const newBalance = Number(currentBalance.balance) - amount;
-      const { error: balanceUpdateError } = await supabase
-        .from("account_balances")
-        .update({
-          balance: newBalance,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("account_id", account_id);
-
-      if (balanceUpdateError) {
-        console.error("Error updating account balance:", balanceUpdateError);
-      }
-    }
+    // Balance is formula-based — no manual balance deduction needed.
+    // The balance will be recomputed on next GET /api/accounts/[id]/balance
+    // via computeAccountBalance() which includes split bill impact.
 
     // Send notification to the original owner
     await supabase.from("notifications").insert({

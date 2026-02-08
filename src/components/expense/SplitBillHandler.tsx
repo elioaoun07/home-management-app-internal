@@ -31,9 +31,12 @@ export default function SplitBillHandler() {
       !hasShownToast
     ) {
       const firstSplit = data.pending_splits[0];
+      const suggestedText = firstSplit.suggested_amount
+        ? ` · Your share: $${firstSplit.suggested_amount.toFixed(2)}`
+        : "";
       toast(`Split bill request for $${firstSplit.owner_amount.toFixed(2)}`, {
         icon: "🔀",
-        description: `${firstSplit.category_name} - Tap to add your portion`,
+        description: `${firstSplit.category_name}${suggestedText} - Tap to add your portion`,
         duration: 10000,
         action: {
           label: "Add Amount",
@@ -47,7 +50,7 @@ export default function SplitBillHandler() {
   const handleComplete = async (
     amount: number,
     description: string,
-    accountId: string
+    accountId: string,
   ) => {
     if (!currentSplit) return;
 

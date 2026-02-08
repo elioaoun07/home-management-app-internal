@@ -1,18 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
-type BalanceChangeType =
-  | "transaction_expense"
-  | "transaction_income"
-  | "transaction_deleted"
-  | "transfer_in"
-  | "transfer_out"
-  | "initial_set"
-  | "manual_set"
-  | "manual_adjustment"
-  | "reconciliation"
-  | "correction"
-  | "debt_settled";
-
 export interface TransactionFilters {
   start?: string;
   end?: string;
@@ -28,6 +15,8 @@ export interface CreateTransactionDTO {
   date?: string;
   is_private?: boolean;
   split_requested?: boolean;
+  /** Total bill amount for split bills — partner's suggested share = total - amount */
+  total_bill_amount?: number;
   /** LBP change received (in thousands, e.g., 600 = 600,000 LBP). For Lebanon dual-currency. */
   lbp_change_received?: number | null;
 }
@@ -52,177 +41,8 @@ export interface TransactionService {
 export class SupabaseTransactionService implements TransactionService {
   constructor(private supabase: SupabaseClient) {}
 
-  /**
-   * Logs a balance history entry
-   * Note: Transaction entries are now shown via daily summaries, so we only log
-   * non-transaction changes (transfers, manual adjustments, etc.) to balance_history
-   */
-  private async logBalanceHistory(
-    accountId: string,
-    userId: string,
-    previousBalance: number,
-    newBalance: number,
-    changeAmount: number,
-    changeType: BalanceChangeType,
-    transactionId?: string,
-    effectiveDate?: string,
-  ): Promise<void> {
-    // Skip logging individual transaction entries - they're shown via daily summaries now
-    if (
-      changeType === "transaction_expense" ||
-      changeType === "transaction_income"
-    ) {
-      return;
-    }
-
-    try {
-      await this.supabase.from("account_balance_history").insert({
-        account_id: accountId,
-        user_id: userId,
-        previous_balance: previousBalance,
-        new_balance: newBalance,
-        change_amount: changeAmount,
-        change_type: changeType,
-        transaction_id: transactionId || null,
-        transfer_id: null,
-        effective_date: effectiveDate || new Date().toISOString().split("T")[0],
-      });
-    } catch (e) {
-      console.error("Failed to log balance history:", e);
-    }
-  }
-
-  /**
-   * Deducts an amount from the account balance (for expense transactions)
-   * Also logs the balance history
-   */
-  private async deductFromAccountBalance(
-    accountId: string,
-    userId: string,
-    amount: number,
-    transactionId?: string,
-    effectiveDate?: string,
-  ): Promise<void> {
-    try {
-      const { data: currentBalance, error: fetchError } = await this.supabase
-        .from("account_balances")
-        .select("balance")
-        .eq("account_id", accountId)
-        .single();
-
-      if (fetchError) {
-        console.error("Error fetching account balance:", fetchError);
-        return;
-      }
-
-      if (currentBalance) {
-        const previousBalance = Number(currentBalance.balance);
-        const newBalance = previousBalance - amount;
-
-        const { error: updateError } = await this.supabase
-          .from("account_balances")
-          .update({
-            balance: newBalance,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("account_id", accountId);
-
-        if (updateError) {
-          console.error("Error updating account balance:", updateError);
-        } else {
-          // Log balance history
-          await this.logBalanceHistory(
-            accountId,
-            userId,
-            previousBalance,
-            newBalance,
-            -amount,
-            "transaction_expense",
-            transactionId,
-            effectiveDate,
-          );
-        }
-      }
-    } catch (e) {
-      console.error("Failed to deduct from account balance:", e);
-    }
-  }
-
-  /**
-   * Restores an amount to the account balance (for deleted transactions)
-   * Also logs the balance history
-   */
-  private async restoreToAccountBalance(
-    accountId: string,
-    userId: string,
-    amount: number,
-    transactionId?: string,
-    effectiveDate?: string,
-  ): Promise<void> {
-    try {
-      const { data: currentBalance, error: fetchError } = await this.supabase
-        .from("account_balances")
-        .select("balance")
-        .eq("account_id", accountId)
-        .single();
-
-      if (fetchError) {
-        console.error("Error fetching account balance:", fetchError);
-        return;
-      }
-
-      if (currentBalance) {
-        const previousBalance = Number(currentBalance.balance);
-        const newBalance = previousBalance + amount;
-
-        const { error: updateError } = await this.supabase
-          .from("account_balances")
-          .update({
-            balance: newBalance,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("account_id", accountId);
-
-        if (updateError) {
-          console.error("Error updating account balance:", updateError);
-        } else {
-          // Log balance history
-          await this.logBalanceHistory(
-            accountId,
-            userId,
-            previousBalance,
-            newBalance,
-            amount,
-            "transaction_deleted",
-            transactionId,
-            effectiveDate,
-          );
-        }
-      }
-    } catch (e) {
-      console.error("Failed to restore account balance:", e);
-    }
-  }
-
-  /**
-   * Updates the updated_at timestamp on account_balances when a confirmed transaction
-   * affects the balance. Draft transactions should NOT trigger this update.
-   */
-  private async touchAccountBalanceUpdatedAt(accountId: string): Promise<void> {
-    try {
-      const { error } = await this.supabase
-        .from("account_balances")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("account_id", accountId);
-
-      if (error) {
-        console.error("Error updating account_balances.updated_at:", error);
-        // Non-critical error - don't throw, just log
-      }
-    } catch (e) {
-      console.error("Failed to touch account balance updated_at:", e);
-    }
-  }
+  // Balance is now formula-based (computed in GET /api/accounts/[id]/balance).
+  // No imperative balance updates needed on transaction create/edit/delete.
 
   async getTransactions(userId: string, filters: TransactionFilters = {}) {
     const { start, end, limit = 200 } = filters;
@@ -522,6 +342,7 @@ export class SupabaseTransactionService implements TransactionService {
       date,
       is_private,
       split_requested,
+      total_bill_amount,
       lbp_change_received,
     } = data;
 
@@ -626,10 +447,18 @@ export class SupabaseTransactionService implements TransactionService {
         .eq("id", category_id)
         .single();
 
+      // Compute partner's suggested amount from total bill if provided
+      const suggestedAmount =
+        total_bill_amount && total_bill_amount > amount
+          ? total_bill_amount - amount
+          : null;
+
       await this.supabase.from("notifications").insert({
         user_id: collaboratorId,
         title: "Split Bill Request",
-        message: `You've been asked to add your portion to a $${amount} ${categoryData?.name || "expense"}`,
+        message: suggestedAmount
+          ? `You've been asked to add your portion ($${suggestedAmount.toFixed(2)}) to a $${total_bill_amount!.toFixed(2)} ${categoryData?.name || "expense"}`
+          : `You've been asked to add your portion to a $${amount} ${categoryData?.name || "expense"}`,
         icon: "split",
         notification_type: "transaction_pending",
         severity: "action",
@@ -641,20 +470,15 @@ export class SupabaseTransactionService implements TransactionService {
           owner_amount: amount,
           owner_description: description || "",
           category_name: categoryData?.name || "",
+          ...(suggestedAmount != null && { suggested_amount: suggestedAmount }),
+          ...(total_bill_amount && { total_bill_amount }),
         },
         transaction_id: created.id,
       });
     }
 
-    // Deduct the transaction amount from the account balance
-    // Note: Transactions created via this service are always confirmed (not drafts)
-    await this.deductFromAccountBalance(
-      account_id,
-      userId,
-      amount,
-      created.id,
-      txDate,
-    );
+    // Balance is formula-based - no imperative deduction needed.
+    // The balance will be recomputed on next GET /api/accounts/[id]/balance.
 
     // Fetch the category and subcategory names to return a complete transaction object
     // This is needed for optimistic UI to work correctly
@@ -797,15 +621,8 @@ export class SupabaseTransactionService implements TransactionService {
       throw new Error("Failed to update transaction");
     }
 
-    // Update account_balances.updated_at if this is a confirmed transaction
-    // and we updated fields that affect the balance (amount or date)
-    if (
-      updated &&
-      !updated.is_draft &&
-      (updateFields.amount !== undefined || updateFields.date !== undefined)
-    ) {
-      await this.touchAccountBalanceUpdatedAt(updated.account_id);
-    }
+    // Balance is formula-based - no touch/update needed.
+    // The balance will be recomputed on next GET /api/accounts/[id]/balance.
 
     return updated;
   }

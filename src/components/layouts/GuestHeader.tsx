@@ -12,7 +12,11 @@ export default function GuestHeader() {
   const pathname = usePathname();
 
   // Hide on guest portal and in watch/web mode
-  if (pathname?.startsWith("/g/") || viewMode === "watch" || viewMode === "web") {
+  if (
+    pathname?.startsWith("/g/") ||
+    viewMode === "watch" ||
+    viewMode === "web"
+  ) {
     return null;
   }
 

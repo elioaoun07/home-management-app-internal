@@ -1068,10 +1068,17 @@ CREATE TABLE public.transfers (
   date date NOT NULL DEFAULT CURRENT_DATE,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  transfer_type text NOT NULL DEFAULT 'self'::text CHECK (transfer_type = ANY (ARRAY['self'::text, 'household'::text])),
+  recipient_user_id uuid,
+  fee_amount numeric DEFAULT 0 CHECK (fee_amount >= 0::numeric),
+  returned_amount numeric DEFAULT 0 CHECK (returned_amount >= 0::numeric),
+  household_link_id uuid,
   CONSTRAINT transfers_pkey PRIMARY KEY (id),
   CONSTRAINT transfers_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT transfers_from_account_id_fkey FOREIGN KEY (from_account_id) REFERENCES public.accounts(id),
-  CONSTRAINT transfers_to_account_id_fkey FOREIGN KEY (to_account_id) REFERENCES public.accounts(id)
+  CONSTRAINT transfers_to_account_id_fkey FOREIGN KEY (to_account_id) REFERENCES public.accounts(id),
+  CONSTRAINT transfers_recipient_user_id_fkey FOREIGN KEY (recipient_user_id) REFERENCES auth.users(id),
+  CONSTRAINT transfers_household_link_id_fkey FOREIGN KEY (household_link_id) REFERENCES public.household_links(id)
 );
 CREATE TABLE public.user_categories (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -1089,8 +1096,8 @@ CREATE TABLE public.user_categories (
   CONSTRAINT user_categories_pkey PRIMARY KEY (id),
   CONSTRAINT user_categories_default_fk FOREIGN KEY (default_category_id) REFERENCES public.default_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
