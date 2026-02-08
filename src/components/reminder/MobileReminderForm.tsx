@@ -105,6 +105,20 @@ const FlagIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const ClipboardCheckIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="M9 14l2 2 4-4" />
+  </svg>
+);
+
 const TagIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
@@ -313,6 +327,9 @@ export default function MobileReminderForm() {
   const [missingFieldType, setMissingFieldType] = useState<
     "event" | "reminder" | "task" | null
   >(null);
+  const [dateModalIntent, setDateModalIntent] = useState<"set-date" | "submit">(
+    "set-date",
+  );
   const [editingDateField, setEditingDateField] = useState<string | null>(null);
 
   // Voice input state
@@ -514,6 +531,7 @@ export default function MobileReminderForm() {
           setEndTime(defaultEndTime);
 
           setMissingFieldType("event");
+          setDateModalIntent("submit");
           setShowMissingFieldsModal(true);
           return;
         }
@@ -566,6 +584,7 @@ export default function MobileReminderForm() {
           setDueTime(defaultDueTime);
 
           setMissingFieldType("task");
+          setDateModalIntent("submit");
           setShowMissingFieldsModal(true);
           return;
         }
@@ -618,6 +637,7 @@ export default function MobileReminderForm() {
           setDueTime(defaultDueTime);
 
           setMissingFieldType("reminder");
+          setDateModalIntent("submit");
           setShowMissingFieldsModal(true);
           return;
         }
@@ -681,10 +701,10 @@ export default function MobileReminderForm() {
     // Type chip
     const typeLabel =
       parsedItem.type === "event"
-        ? "📅 Event"
+        ? "Event"
         : parsedItem.type === "task"
-          ? "✅ Task"
-          : "⏰ Reminder";
+          ? "Task"
+          : "Reminder";
     chips.push({
       label: typeLabel,
       color: "from-cyan-500/30 to-blue-500/30",
@@ -811,26 +831,22 @@ export default function MobileReminderForm() {
             transition={{ duration: 0.2 }}
             className="space-y-4"
           >
-            {/* SMART TEXT INPUT */}
-            <div className="space-y-2">
-              <Label
-                className={cn(
-                  "mb-1 block text-sm font-medium",
-                  themeClasses.headerText,
-                )}
-              >
-                What do you want to remember?
-              </Label>
+            {/* ── Hero Input Card ── */}
+            <div className="relative rounded-2xl bg-gradient-to-b from-slate-800/60 via-slate-900/40 to-transparent border border-slate-700/40 p-4 space-y-3 overflow-hidden">
+              {/* Subtle corner accent */}
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-purple-500/5 to-transparent rounded-bl-full pointer-events-none" />
+
               <div className="relative flex gap-2">
                 <div className="relative flex-1">
                   <Input
                     ref={inputRef}
                     type="text"
-                    placeholder='e.g., "Remind me to call Thomas tomorrow at 6 pm"'
+                    placeholder="What do you want to remember?"
                     value={smartInput}
                     onChange={(e) => setSmartInput(e.target.value)}
                     className={cn(
-                      "text-base py-4 pl-4 pr-10 neo-card border-0 w-full",
+                      "text-base py-4 pl-4 pr-10 border bg-bg-dark/60 rounded-xl w-full",
+                      themeClasses.border,
                       themeClasses.text,
                       isListening && "ring-2 ring-red-500/50",
                     )}
@@ -937,11 +953,12 @@ export default function MobileReminderForm() {
                     if (!dueTime) setDueTime(formatTimeStr(today));
                     setMissingFieldType("reminder");
                   }
+                  setDateModalIntent("set-date");
                   setShowMissingFieldsModal(true);
                 }}
                 className={cn(
                   "flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all hover:scale-[1.02] active:scale-[0.98]",
-                  "neo-card",
+                  "bg-bg-dark/40 border",
                   themeClasses.border,
                   themeClasses.text,
                 )}
@@ -973,15 +990,13 @@ export default function MobileReminderForm() {
               </button>
             </div>
 
-            {/* DIVIDER */}
-            <div className="flex items-center gap-3 py-1">
-              <div className={cn("flex-1 h-px", themeClasses.bgSurface)} />
-              <span
-                className={cn("text-xs font-medium", themeClasses.textMuted)}
-              >
-                Quick Options
+            {/* ── Section divider ── */}
+            <div className="flex items-center gap-3 px-1">
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent" />
+              <span className="text-[10px] text-slate-600 uppercase tracking-[0.15em] select-none">
+                Options
               </span>
-              <div className={cn("flex-1 h-px", themeClasses.bgSurface)} />
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent" />
             </div>
 
             {/* TYPE SELECTOR */}
@@ -998,11 +1013,31 @@ export default function MobileReminderForm() {
                 {[
                   {
                     type: "reminder" as ItemType,
-                    icon: "⏰",
+                    icon: BellIcon,
                     label: "Reminder",
+                    activeClasses:
+                      "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]",
+                    inactiveClasses:
+                      "text-cyan-300/50 hover:text-cyan-300/70 hover:bg-cyan-500/5",
                   },
-                  { type: "event" as ItemType, icon: "📅", label: "Event" },
-                  { type: "task" as ItemType, icon: "✅", label: "Task" },
+                  {
+                    type: "event" as ItemType,
+                    icon: CalendarIcon,
+                    label: "Event",
+                    activeClasses:
+                      "bg-pink-500/20 text-pink-300 ring-1 ring-pink-500/40 shadow-[0_0_15px_rgba(236,72,153,0.25)]",
+                    inactiveClasses:
+                      "text-pink-300/50 hover:text-pink-300/70 hover:bg-pink-500/5",
+                  },
+                  {
+                    type: "task" as ItemType,
+                    icon: ClipboardCheckIcon,
+                    label: "Task",
+                    activeClasses:
+                      "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.25)]",
+                    inactiveClasses:
+                      "text-purple-300/50 hover:text-purple-300/70 hover:bg-purple-500/5",
+                  },
                 ].map((item) => (
                   <button
                     key={item.type}
@@ -1012,13 +1047,14 @@ export default function MobileReminderForm() {
                       setManualOverrides((prev) => ({ ...prev, type: true }));
                     }}
                     className={cn(
-                      "flex-1 py-2.5 px-3 rounded-xl text-sm font-semibold transition-all active:scale-95",
+                      "flex-1 py-2.5 px-3 rounded-xl text-sm font-semibold transition-all active:scale-95 flex items-center justify-center gap-1.5",
                       itemType === item.type
-                        ? "neo-gradient text-white shadow-lg"
-                        : `neo-card ${themeClasses.border} ${themeClasses.text} ${themeClasses.borderHover}`,
+                        ? item.activeClasses
+                        : `neo-card ${themeClasses.border} ${item.inactiveClasses}`,
                     )}
                   >
-                    {item.icon} {item.label}
+                    <item.icon className="w-4 h-4" />
+                    {item.label}
                   </button>
                 ))}
               </div>
@@ -1222,27 +1258,17 @@ export default function MobileReminderForm() {
               </div>
             </div>
 
-            {/* Private/Public Toggle */}
-            <div className="flex items-center justify-end px-1">
+            {/* CREATE BUTTON + PRIVATE TOGGLE */}
+            <div className="flex items-center gap-2 mt-2">
               <button
                 onClick={() => setIsPrivate(!isPrivate)}
                 className={cn(
-                  "group relative p-2.5 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2 overflow-hidden",
+                  "group relative h-12 px-3 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-1.5 overflow-hidden flex-shrink-0",
                   isPrivate
                     ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow}`
                     : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`,
                 )}
               >
-                <span
-                  className={cn(
-                    "relative text-xs font-semibold tracking-wide transition-all duration-300",
-                    isPrivate
-                      ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]`
-                      : `${themeClasses.textFaint} ${themeClasses.textHover}`,
-                  )}
-                >
-                  {isPrivate ? "Private" : "Public"}
-                </span>
                 <svg
                   className={cn(
                     "relative w-4 h-4 transition-all duration-500",
@@ -1267,40 +1293,49 @@ export default function MobileReminderForm() {
                     </>
                   )}
                 </svg>
+                <span
+                  className={cn(
+                    "relative text-[10px] font-semibold tracking-wide transition-all duration-300",
+                    isPrivate
+                      ? `${themeClasses.textActive}`
+                      : `${themeClasses.textFaint}`,
+                  )}
+                >
+                  {isPrivate ? "Private" : "Public"}
+                </span>
               </button>
-            </div>
 
-            {/* CREATE BUTTON */}
-            <Button
-              onClick={handleSubmit}
-              disabled={!title.trim() || isPending}
-              className="w-full h-12 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5 transition-all active:scale-[0.98] spring-bounce mt-2"
-            >
-              {isPending ? (
-                <span className="flex items-center gap-2">
-                  <motion.span
-                    animate={{ rotate: 360 }}
-                    transition={{
-                      repeat: Infinity,
-                      duration: 1,
-                      ease: "linear",
-                    }}
-                    className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
-                  />
-                  Creating...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <CheckIcon className="w-5 h-5" />
-                  Create{" "}
-                  {itemType === "event"
-                    ? "Event"
-                    : itemType === "task"
-                      ? "Task"
-                      : "Reminder"}
-                </span>
-              )}
-            </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={!title.trim() || isPending}
+                className="flex-1 h-12 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5 transition-all active:scale-[0.98] spring-bounce"
+              >
+                {isPending ? (
+                  <span className="flex items-center gap-2">
+                    <motion.span
+                      animate={{ rotate: 360 }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 1,
+                        ease: "linear",
+                      }}
+                      className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+                    />
+                    Creating...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <CheckIcon className="w-5 h-5" />
+                    Create{" "}
+                    {itemType === "event"
+                      ? "Event"
+                      : itemType === "task"
+                        ? "Task"
+                        : "Reminder"}
+                  </span>
+                )}
+              </Button>
+            </div>
           </motion.div>
         </div>
       </div>
@@ -1521,8 +1556,11 @@ export default function MobileReminderForm() {
                 <Button
                   onClick={() => {
                     setShowMissingFieldsModal(false);
-                    // Retry submit after fields are filled
-                    setTimeout(() => handleSubmit(), 100);
+                    if (dateModalIntent === "submit") {
+                      // User clicked Create without date — now submit
+                      setTimeout(() => handleSubmit(), 100);
+                    }
+                    // If intent is "set-date", just close — user continues filling the form
                   }}
                   disabled={
                     missingFieldType === "event"
@@ -1531,7 +1569,9 @@ export default function MobileReminderForm() {
                   }
                   className="flex-1 h-11 neo-gradient text-white border-0 shadow-lg"
                 >
-                  Continue
+                  {dateModalIntent === "submit"
+                    ? `Create ${itemType === "event" ? "Event" : itemType === "task" ? "Task" : "Reminder"}`
+                    : "Continue"}
                 </Button>
               </div>
             </motion.div>
