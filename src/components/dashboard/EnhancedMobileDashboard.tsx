@@ -45,7 +45,6 @@ import {
   subYears,
 } from "date-fns";
 import { memo, useMemo, useState } from "react";
-import { toast } from "sonner";
 
 // SVG Icons for ownership filter
 const UserIcon = ({ className }: { className?: string }) => (
@@ -174,14 +173,20 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   const [sortField, setSortField] = useState<SortField>("recent");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] =
-    useState<Transaction | null>(null);
+  // Store only IDs — derive fresh data from transactions prop to avoid stale snapshots
+  const [selectedTransactionId, setSelectedTransactionId] = useState<
+    string | null
+  >(null);
   const [categoryDetail, setCategoryDetail] = useState<string | null>(null);
-  const [editingTransaction, setEditingTransaction] =
-    useState<Transaction | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const queryClient = useQueryClient();
   const deleteMutation = useDeleteTransaction();
+
+  // Derive fresh transaction from props (never stale after optimistic update)
+  const selectedTransaction = useMemo(() => {
+    if (!selectedTransactionId) return null;
+    return transactions.find((t) => t.id === selectedTransactionId) || null;
+  }, [selectedTransactionId, transactions]);
 
   // Check if any transaction is pending (optimistic, not yet confirmed)
   const hasPendingTransactions = useMemo(
@@ -289,7 +294,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
 
     return filtered;
   }, [
-    transactions,
+    typeFilteredTransactions,
     filterCategory,
     filterAccount,
     ownershipFilter,
@@ -384,16 +389,8 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     filterCategory || filterAccount || ownershipFilter !== "all";
 
   const handleDelete = (id: string) => {
-    // Use mutate (not mutateAsync) for instant optimistic UI
-    // The mutation hook handles cache updates automatically
-    deleteMutation.mutate(id, {
-      onSuccess: () => {
-        toast.success("Transaction deleted");
-      },
-      onError: () => {
-        toast.error("Failed to delete transaction");
-      },
-    });
+    // Mutation hook handles optimistic cache updates, toast with Undo, and error handling
+    deleteMutation.mutate(id);
   };
 
   const handleRefresh = async () => {
@@ -417,8 +414,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   };
 
   const handleEdit = (tx: Transaction) => {
-    setEditingTransaction(tx);
-    setSelectedTransaction(tx);
+    setSelectedTransactionId(tx.id);
   };
 
   const handleCategoryClick = (categoryName: string) => {
@@ -464,7 +460,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
         totalAmount={totalAmount}
         ownershipFilter={ownershipFilter}
         onBack={() => setCategoryDetail(null)}
-        onTransactionClick={setSelectedTransaction}
+        onTransactionClick={(tx) => setSelectedTransactionId(tx.id)}
       />
     );
   }
@@ -1075,7 +1071,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                   return (
                     <button
                       key={tx.id}
-                      onClick={() => setSelectedTransaction(tx)}
+                      onClick={() => setSelectedTransactionId(tx.id)}
                       className={`w-full flex items-center gap-2 p-2 rounded-lg ${themeClasses.bgSurface} ${themeClasses.bgHover} shadow-[0_0_0_1px_rgba(255,255,255,0.05)_inset] ${themeClasses.borderHover} transition-all`}
                     >
                       {(() => {
@@ -1198,7 +1194,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
                     transaction={tx}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
-                    onClick={setSelectedTransaction}
+                    onClick={(tx) => setSelectedTransactionId(tx.id)}
                     currentUserId={currentUserId}
                     ownershipFilter={ownershipFilter}
                   />
@@ -1213,14 +1209,14 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
       {selectedTransaction && (
         <TransactionDetailModal
           transaction={selectedTransaction}
-          onClose={() => setSelectedTransaction(null)}
+          onClose={() => setSelectedTransactionId(null)}
           onSave={() => {
             // Mutation hook already invalidates queries - just clear selection
-            setSelectedTransaction(null);
+            setSelectedTransactionId(null);
           }}
           onDelete={() => {
             // Mutation hook already invalidates queries - just clear selection
-            setSelectedTransaction(null);
+            setSelectedTransactionId(null);
           }}
           currentUserId={currentUserId}
         />

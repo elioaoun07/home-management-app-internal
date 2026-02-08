@@ -758,27 +758,25 @@ export default function MobileExpenseForm() {
             : `$${amountForToast} for ${categoryNameForToast}`;
           toast.success(successMessage, {
             icon: ToastIcons.create,
+            duration: 4000,
             description: successDescription,
             action: {
               label: "Undo",
               onClick: () => {
-                deleteTransactionMutation.mutate(newTransaction.id, {
-                  onSuccess: () =>
-                    toast.success("Transaction undone", {
-                      icon: ToastIcons.delete,
-                    }),
-                  onError: () =>
-                    toast.error("Failed to undo", { icon: ToastIcons.error }),
-                });
+                deleteTransactionMutation.mutate(
+                  { id: newTransaction.id, _silent: true },
+                  {
+                    onSuccess: () =>
+                      toast.success("Transaction undone", {
+                        icon: ToastIcons.delete,
+                      }),
+                    onError: () =>
+                      toast.error("Failed to undo", { icon: ToastIcons.error }),
+                  },
+                );
               },
             },
           });
-        },
-        onError: () => {
-          toast.error(
-            `Failed to add ${getTransactionLabel(selectedAccount?.type).toLowerCase()}`,
-            { icon: ToastIcons.error },
-          );
         },
       });
     } // close else (non-debt path)

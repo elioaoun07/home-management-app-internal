@@ -157,7 +157,8 @@ export function useDeleteTransaction() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (transactionId: string) => {
+    mutationFn: async (input: string | { id: string; _silent?: boolean }) => {
+      const transactionId = typeof input === "string" ? input : input.id;
       const response = await fetch(`/api/transactions/${transactionId}`, {
         method: "DELETE",
       });
@@ -168,7 +169,8 @@ export function useDeleteTransaction() {
 
       return transactionId;
     },
-    onMutate: async (transactionId) => {
+    onMutate: async (input) => {
+      const transactionId = typeof input === "string" ? input : input.id;
       // Cancel outgoing refetches for ALL transaction queries
       await queryClient.cancelQueries({
         queryKey: ["transactions"],
@@ -243,7 +245,7 @@ export function useDeleteTransaction() {
         deletedTransaction,
       };
     },
-    onError: (err, transactionId, context) => {
+    onError: (err, input, context) => {
       // Rollback on error
       toast.error("Failed to delete transaction", { icon: ToastIcons.error });
       if (context?.previousTransactions) {
@@ -281,7 +283,10 @@ export function useDeleteTransaction() {
         refetchType: "none",
       });
     },
-    onSuccess: (_, __, context) => {
+    onSuccess: (_, input, context) => {
+      const isSilent = typeof input === "object" && input._silent;
+      if (isSilent) return; // Caller handles its own toast (e.g. undo flows)
+
       const deleted = context?.deletedTransaction;
       toast.success("Transaction deleted", {
         icon: ToastIcons.delete,
@@ -653,8 +658,8 @@ export function useAddTransaction() {
         );
       }
 
-      // Note: Success toast for "add" is handled by the calling component
-      // which can include amount and category in the message
+      // Success toast is handled by the calling component
+      // which provides context-specific messages (e.g. "Expense added!", "Income added!", "Split bill sent!")
 
       // Send push notification if this is a split bill request
       if (variables.split_requested && serverTransaction.collaborator_id) {
@@ -666,32 +671,6 @@ export function useAddTransaction() {
           description: serverTransaction.description || undefined,
         });
       }
-
-      // Provide Undo capability by storing the created transaction ID
-      toast.success("Transaction added!", {
-        icon: ToastIcons.create,
-        duration: 4000,
-        action: {
-          label: "Undo",
-          onClick: async () => {
-            try {
-              const response = await fetch(
-                `/api/transactions/${serverTransaction.id}`,
-                { method: "DELETE" },
-              );
-              if (!response.ok) throw new Error("Failed to delete");
-              queryClient.invalidateQueries({ queryKey: ["transactions"] });
-              queryClient.invalidateQueries({
-                queryKey: ["transactions-today"],
-              });
-              queryClient.invalidateQueries({ queryKey: ["account-balance"] });
-              toast.success("Transaction removed");
-            } catch {
-              toast.error("Failed to undo");
-            }
-          },
-        },
-      });
     },
     onSettled: () => {
       // Mark all transaction queries as stale - they will refetch when next accessed

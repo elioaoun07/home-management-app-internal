@@ -16,7 +16,10 @@ import {
 } from "@/components/ui/popover";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
-import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
+import {
+  useAddTransaction,
+  useDeleteTransaction,
+} from "@/features/transactions/useDashboardTransactions";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
@@ -54,6 +57,7 @@ export default function ExpenseForm() {
 
   // Mutation for adding transactions with optimistic updates
   const addTransactionMutation = useAddTransaction();
+  const deleteTransactionMutation = useDeleteTransaction();
 
   // Auto-select default account when available
   useEffect(() => {
@@ -126,13 +130,13 @@ export default function ExpenseForm() {
 
   // Look up selected category/subcategory data for optimistic UI
   const selectedCategory = categories.find(
-    (c: any) => c.id === selectedCategoryId
+    (c: any) => c.id === selectedCategoryId,
   );
   // Subcategory might be in flat list or nested
   const selectedSubcategory = selectedSubcategoryId
     ? categories.find((c: any) => c.id === selectedSubcategoryId) ||
       (selectedCategory as any)?.subcategories?.find(
-        (s: any) => s.id === selectedSubcategoryId
+        (s: any) => s.id === selectedSubcategoryId,
       )
     : undefined;
 
@@ -168,20 +172,30 @@ export default function ExpenseForm() {
     setAmount("");
     setDescription("");
 
-    // Optimistic add - mutation hook handles cache updates
+    // Optimistic add - mutation hook handles cache updates and error toasts
     addTransactionMutation.mutate(txData, {
-      onSuccess: () => {
+      onSuccess: (newTransaction) => {
         toast.success("Expense added!", {
           icon: ToastIcons.create,
+          duration: 4000,
           description: `$${txData.amount.toFixed(2)} added`,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              deleteTransactionMutation.mutate(
+                { id: newTransaction.id, _silent: true },
+                {
+                  onSuccess: () =>
+                    toast.success("Transaction undone", {
+                      icon: ToastIcons.delete,
+                    }),
+                  onError: () =>
+                    toast.error("Failed to undo", { icon: ToastIcons.error }),
+                },
+              );
+            },
+          },
         });
-      },
-      onError: (error) => {
-        console.error("Error creating transaction:", error);
-        toast.error(
-          error instanceof Error ? error.message : "Failed to add expense",
-          { icon: ToastIcons.error }
-        );
       },
     });
   };
@@ -254,7 +268,7 @@ export default function ExpenseForm() {
       amount,
       description,
       // speechPreview removed as per patch
-    ]
+    ],
   );
 
   // Handle template selection: populate all fields except amount/description
@@ -287,7 +301,7 @@ export default function ExpenseForm() {
                 className={cn(
                   "h-9 gap-2",
                   // Make button compact on small screens
-                  "sm:h-10"
+                  "sm:h-10",
                 )}
                 aria-label="Select date"
               >
@@ -384,7 +398,7 @@ function useReparseOnCategories(
     setSelectedSubcategoryId: (id?: string) => void;
     setAmount: (v: string) => void;
     clearPending: () => void;
-  }
+  },
 ) {
   const {
     setSelectedCategoryId,
