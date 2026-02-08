@@ -915,9 +915,9 @@ export default function MobileExpenseForm() {
           }}
         >
           {step === "amount" && (
-            <div key="amount-step" className="space-y-3 step-slide-in">
+            <div key="amount-step" className="space-y-4 step-slide-in">
               {/* ── Hero Amount Card ── */}
-              <div className="relative rounded-2xl bg-gradient-to-b from-slate-800/60 via-slate-900/40 to-transparent border border-slate-700/40 p-4 space-y-3 overflow-hidden">
+              <div className="relative rounded-2xl bg-gradient-to-b from-slate-800/60 via-slate-900/40 to-transparent border border-slate-700/40 p-5 space-y-4 overflow-hidden">
                 {/* Subtle corner accent */}
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-cyan-500/5 to-transparent rounded-bl-full pointer-events-none" />
 
@@ -983,79 +983,46 @@ export default function MobileExpenseForm() {
                     />
                   </div>
                 </div>
-
-                {/* Quick amount chips */}
-                <div className="flex justify-center gap-2 pt-1">
-                  {[5, 10, 20, 50].map((val, index) => (
-                    <button
-                      key={val}
-                      suppressHydrationWarning
-                      style={{ animationDelay: `${80 + index * 30}ms` }}
-                      className={cn(
-                        "h-8 px-4 text-xs font-semibold rounded-full transition-all category-appear active:scale-90",
-                        amount === val.toString()
-                          ? `bg-gradient-to-r ${themeClasses.activeItemGradient} text-white shadow-md`
-                          : `bg-slate-800/80 ${themeClasses.textFaint} hover:bg-slate-700/80 hover:text-white border border-slate-700/50`,
-                      )}
-                      onClick={() => setAmount(val.toString())}
-                    >
-                      ${val}
-                    </button>
-                  ))}
-                </div>
               </div>
 
-              {/* LBP Change Input - always visible, inline and discrete */}
-              <div className="flex items-center justify-end gap-2 px-1 pt-2">
+              {/* LBP Change — compact side note aligned right */}
+              <div className="flex items-center justify-end gap-2.5 px-1">
                 {lbpRate &&
                   lbpChangeInput &&
                   parseFloat(lbpChangeInput) > 0 &&
                   amount &&
                   parseFloat(amount) > 0 && (
-                    <div className="flex flex-col items-end justify-center leading-tight">
-                      <span className="text-[10px] text-slate-400">Actual</span>
-                      <span
-                        className={`text-sm font-medium ${themeClasses.text}`}
-                      >
+                    <span className="text-[11px] text-slate-500">
+                      actual{" "}
+                      <span className={`font-semibold ${themeClasses.text}`}>
                         $
                         {calculateActualValue(
                           parseFloat(amount),
                           parseFloat(lbpChangeInput),
                         )?.toFixed(2) ?? "—"}
                       </span>
-                    </div>
+                    </span>
                   )}
                 <div
-                  className={`relative flex items-center h-9 w-40 px-3 rounded-md border border-dashed !bg-bg-card-custom/50 ${themeClasses.border} focus-within:ring-1 ${themeClasses.focusRing.replace(
-                    "focus:",
-                    "focus-within:",
-                  )} ${themeClasses.focusBorder.replace(
-                    "focus:",
-                    "focus-within:",
-                  )} transition-all duration-200 ${
-                    !lbpRate ? "opacity-50 cursor-not-allowed" : ""
+                  className={`relative flex items-center h-7 w-28 px-2 rounded-md border border-dashed bg-transparent ${themeClasses.border} focus-within:border-cyan-500/40 transition-all duration-200 ${
+                    !lbpRate ? "opacity-40 cursor-not-allowed" : ""
                   }`}
                 >
+                  <span className="text-[10px] text-slate-600 pointer-events-none mr-1 shrink-0">
+                    LBP
+                  </span>
                   <input
                     type="number"
                     inputMode="numeric"
-                    placeholder={lbpRate ? "LBP" : "Rate?"}
+                    placeholder={lbpRate ? "0" : "—"}
                     value={lbpChangeInput}
                     onChange={(e) => setLbpChangeInput(e.target.value)}
-                    // Ensure input is disabled during SSR/hydration to avoid
-                    // server/client attribute mismatches. `isInitialized` is
-                    // set to true in a useEffect after mount.
                     disabled={!isInitialized ? true : !lbpRate}
-                    // When third-party extensions or the browser modify attributes
-                    // between server and client renders, React may warn about
-                    // hydration mismatches. This flag suppresses that specific
-                    // warning for this input which is intentionally controlled
-                    // after mount.
                     suppressHydrationWarning
-                    className="flex-1 bg-transparent border-none outline-none text-right text-sm text-white placeholder:text-slate-600 disabled:cursor-not-allowed p-0 w-full"
+                    className="flex-1 bg-transparent border-none outline-none text-right text-[11px] text-slate-400 placeholder:text-slate-700 disabled:cursor-not-allowed p-0 w-full"
                   />
                   <span
-                    className={`text-sm text-slate-500 pointer-events-none ml-0.5 transition-opacity duration-200 ${
+                    className={`text-[10px] text-slate-600 pointer-events-none ml-0.5 transition-opacity duration-200 ${
                       lbpChangeInput ? "opacity-100" : "opacity-0"
                     }`}
                   >
@@ -1064,275 +1031,7 @@ export default function MobileExpenseForm() {
                 </div>
               </div>
 
-              {/* ── Section divider ── */}
-              <div className="flex items-center gap-3 px-1">
-                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent" />
-                <span className="text-[10px] text-slate-600 uppercase tracking-[0.15em] select-none">
-                  Options
-                </span>
-                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent" />
-              </div>
-
-              {/* Split / Debt / Private toggles */}
-              <div className="flex items-center justify-center gap-2 px-1">
-                {/* Split Bill Button */}
-                <button
-                  onClick={() => {
-                    if (navigator.vibrate) navigator.vibrate(10);
-                    setIsSplitBill(!isSplitBill);
-                    // Split bill transactions cannot be private, and mutually exclusive with debt
-                    if (!isSplitBill) {
-                      setIsPrivate(false);
-                      setIsDebt(false);
-                      setDebtorName("");
-                      setDebtAmount("");
-                    } else {
-                      setSplitBillTotal("");
-                    }
-                  }}
-                  suppressHydrationWarning
-                  className={cn(
-                    "group relative p-2.5 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2 overflow-hidden",
-                    isSplitBill
-                      ? "border-emerald-400/50 bg-gradient-to-br from-emerald-500/20 to-teal-500/10 shadow-[0_0_15px_rgba(16,185,129,0.25)] hover:shadow-[0_0_25px_rgba(16,185,129,0.35)]"
-                      : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`,
-                  )}
-                  title={
-                    isSplitBill ? "Cancel split bill" : "Split with partner"
-                  }
-                >
-                  {/* Animated background glow when active */}
-                  {isSplitBill && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 animate-[shimmer_3s_ease-in-out_infinite]" />
-                  )}
-
-                  {/* Split icon */}
-                  <svg
-                    className={cn(
-                      "relative w-5 h-5 transition-all duration-500",
-                      isSplitBill
-                        ? "text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.8)]"
-                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
-                    )}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    {/* Split/divide icon */}
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 4v16m-6-8h12"
-                    />
-                    <circle cx="6" cy="8" r="2" />
-                    <circle cx="18" cy="16" r="2" />
-                  </svg>
-
-                  <span
-                    className={cn(
-                      "relative text-xs font-semibold tracking-wide transition-all duration-300",
-                      isSplitBill
-                        ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]"
-                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
-                    )}
-                  >
-                    Split
-                  </span>
-                </button>
-
-                {/* Split bill total input */}
-                {isSplitBill && (
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-400/60 text-xs font-bold">
-                      $
-                    </span>
-                    <input
-                      type="number"
-                      value={splitBillTotal}
-                      onChange={(e) => setSplitBillTotal(e.target.value)}
-                      placeholder="Total bill"
-                      className={cn(
-                        "w-28 h-10 pl-6 pr-2 rounded-xl text-sm bg-emerald-500/10 border border-emerald-400/30 text-emerald-200 placeholder:text-emerald-400/40 focus:outline-none focus:border-emerald-400/60 transition-all text-right",
-                      )}
-                      min="0.01"
-                      step="0.01"
-                    />
-                    {splitBillTotal &&
-                      amount &&
-                      parseFloat(splitBillTotal) > parseFloat(amount) && (
-                        <span className="absolute -bottom-4 left-0 text-[10px] text-emerald-400/70">
-                          Partner: $
-                          {(
-                            parseFloat(splitBillTotal) - parseFloat(amount)
-                          ).toFixed(2)}
-                        </span>
-                      )}
-                  </div>
-                )}
-
-                {/* Debt Button */}
-                <button
-                  onClick={() => {
-                    if (navigator.vibrate) navigator.vibrate(10);
-                    setIsDebt(!isDebt);
-                    // Debt and split bill are mutually exclusive
-                    if (!isDebt) {
-                      setIsSplitBill(false);
-                    }
-                  }}
-                  suppressHydrationWarning
-                  className={cn(
-                    "group relative p-2.5 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2 overflow-hidden",
-                    isDebt
-                      ? "border-orange-400/50 bg-gradient-to-br from-orange-500/20 to-amber-500/10 shadow-[0_0_15px_rgba(251,146,60,0.25)] hover:shadow-[0_0_25px_rgba(251,146,60,0.35)]"
-                      : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`,
-                  )}
-                  title={isDebt ? "Cancel debt mode" : "Pay on behalf"}
-                >
-                  {isDebt && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-amber-500/10 animate-[shimmer_3s_ease-in-out_infinite]" />
-                  )}
-                  <svg
-                    className={cn(
-                      "relative w-5 h-5 transition-all duration-500",
-                      isDebt
-                        ? "text-orange-400 drop-shadow-[0_0_10px_rgba(251,146,60,0.8)]"
-                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
-                    )}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-                    />
-                  </svg>
-                  <span
-                    className={cn(
-                      "relative text-xs font-semibold tracking-wide transition-all duration-300",
-                      isDebt
-                        ? "text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.6)]"
-                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
-                    )}
-                  >
-                    Debt
-                  </span>
-                </button>
-
-                {/* Debt inputs - shown when debt mode is on */}
-                {isDebt && (
-                  <div className="flex gap-2 flex-1">
-                    <input
-                      type="text"
-                      value={debtorName}
-                      onChange={(e) => setDebtorName(e.target.value)}
-                      placeholder="Who owes you?"
-                      className={cn(
-                        "flex-1 h-10 px-3 rounded-xl text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/40 focus:outline-none focus:border-orange-400/60 transition-all",
-                      )}
-                      autoFocus
-                    />
-                    <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-orange-400/60 text-xs font-bold">
-                        $
-                      </span>
-                      <input
-                        type="number"
-                        value={debtAmount}
-                        onChange={(e) => setDebtAmount(e.target.value)}
-                        placeholder={amount || "All"}
-                        className={cn(
-                          "w-20 h-10 pl-6 pr-2 rounded-xl text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/40 focus:outline-none focus:border-orange-400/60 transition-all text-right",
-                        )}
-                        min="0.01"
-                        step="0.01"
-                        max={amount ? parseFloat(amount) : undefined}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Private/Public Button */}
-                <button
-                  onClick={() => {
-                    // Cannot make private if split bill is enabled
-                    if (isSplitBill && !isPrivate) return;
-                    setIsPrivate(!isPrivate);
-                  }}
-                  disabled={isSplitBill}
-                  suppressHydrationWarning
-                  className={cn(
-                    "group relative p-3 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-2.5 overflow-hidden",
-                    isSplitBill && "opacity-50 cursor-not-allowed",
-                    isPrivate
-                      ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow} hover:shadow-[0_0_25px_rgba(20,184,166,0.35),0_0_50px_rgba(6,182,212,0.2)]`
-                      : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`,
-                  )}
-                >
-                  {/* Animated background glow when private */}
-                  {isPrivate && (
-                    <div
-                      className={`absolute inset-0 bg-gradient-to-r ${themeClasses.iconBg} animate-[shimmer_3s_ease-in-out_infinite]`}
-                    />
-                  )}
-
-                  <span
-                    className={cn(
-                      "relative text-sm font-semibold tracking-wide transition-all duration-300",
-                      isPrivate
-                        ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]`
-                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
-                    )}
-                  >
-                    {isPrivate ? "Private" : "Public"}
-                  </span>
-                  <svg
-                    className={cn(
-                      "relative w-5 h-5 transition-all duration-500",
-                      isPrivate
-                        ? `${themeClasses.textActive} drop-shadow-[0_0_10px_rgba(20,184,166,0.8)] animate-pulse`
-                        : `${themeClasses.textFaint} ${themeClasses.textHover}`,
-                    )}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2.5}
-                  >
-                    {isPrivate ? (
-                      // Locked icon
-                      <>
-                        <rect
-                          x="5"
-                          y="11"
-                          width="14"
-                          height="10"
-                          rx="2"
-                          ry="2"
-                        />
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                      </>
-                    ) : (
-                      // Unlocked icon
-                      <>
-                        <rect
-                          x="5"
-                          y="11"
-                          width="14"
-                          height="10"
-                          rx="2"
-                          ry="2"
-                        />
-                        <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-                      </>
-                    )}
-                  </svg>
-                </button>
-              </div>
-
+              {/* Next button */}
               <Button
                 size="lg"
                 className="w-full h-12 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5 transition-all active:scale-[0.98] spring-bounce"
@@ -1349,6 +1048,195 @@ export default function MobileExpenseForm() {
               >
                 Next
               </Button>
+
+              {/* ── Optional features (secondary, below Next) ── */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="flex items-center justify-center gap-2.5">
+                  {/* Split Bill Pill */}
+                  <button
+                    onClick={() => {
+                      if (navigator.vibrate) navigator.vibrate(10);
+                      setIsSplitBill(!isSplitBill);
+                      if (!isSplitBill) {
+                        setIsPrivate(false);
+                        setIsDebt(false);
+                        setDebtorName("");
+                        setDebtAmount("");
+                      } else {
+                        setSplitBillTotal("");
+                      }
+                    }}
+                    suppressHydrationWarning
+                    className={cn(
+                      "relative h-9 px-4 rounded-full text-xs font-semibold transition-all duration-200 active:scale-95 flex items-center gap-1.5",
+                      isSplitBill
+                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-400/40"
+                        : "bg-slate-800/60 text-slate-500 border border-slate-700/40 hover:text-slate-300 hover:border-slate-600/60",
+                    )}
+                  >
+                    <svg
+                      className="w-3.5 h-3.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 4v16m-6-8h12"
+                      />
+                      <circle cx="6" cy="8" r="2" />
+                      <circle cx="18" cy="16" r="2" />
+                    </svg>
+                    Split
+                  </button>
+
+                  {/* Debt Pill */}
+                  <button
+                    onClick={() => {
+                      if (navigator.vibrate) navigator.vibrate(10);
+                      setIsDebt(!isDebt);
+                      if (!isDebt) {
+                        setIsSplitBill(false);
+                      }
+                    }}
+                    suppressHydrationWarning
+                    className={cn(
+                      "relative h-9 px-4 rounded-full text-xs font-semibold transition-all duration-200 active:scale-95 flex items-center gap-1.5",
+                      isDebt
+                        ? "bg-orange-500/15 text-orange-400 border border-orange-400/40"
+                        : "bg-slate-800/60 text-slate-500 border border-slate-700/40 hover:text-slate-300 hover:border-slate-600/60",
+                    )}
+                  >
+                    <svg
+                      className="w-3.5 h-3.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+                      />
+                    </svg>
+                    Debt
+                  </button>
+
+                  {/* Private/Public Pill */}
+                  <button
+                    onClick={() => {
+                      if (isSplitBill && !isPrivate) return;
+                      setIsPrivate(!isPrivate);
+                    }}
+                    disabled={isSplitBill}
+                    suppressHydrationWarning
+                    className={cn(
+                      "relative h-9 px-4 rounded-full text-xs font-semibold transition-all duration-200 active:scale-95 flex items-center gap-1.5",
+                      isSplitBill && "opacity-40 cursor-not-allowed",
+                      isPrivate
+                        ? `bg-cyan-500/15 ${themeClasses.textActive} border border-cyan-400/40`
+                        : "bg-slate-800/60 text-slate-500 border border-slate-700/40 hover:text-slate-300 hover:border-slate-600/60",
+                    )}
+                  >
+                    <svg
+                      className="w-3.5 h-3.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                    >
+                      {isPrivate ? (
+                        <>
+                          <rect
+                            x="5"
+                            y="11"
+                            width="14"
+                            height="10"
+                            rx="2"
+                            ry="2"
+                          />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </>
+                      ) : (
+                        <>
+                          <rect
+                            x="5"
+                            y="11"
+                            width="14"
+                            height="10"
+                            rx="2"
+                            ry="2"
+                          />
+                          <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                        </>
+                      )}
+                    </svg>
+                    {isPrivate ? "Private" : "Public"}
+                  </button>
+                </div>
+
+                {/* Split bill total input - expands below when active */}
+                {isSplitBill && (
+                  <div className="flex items-center justify-center gap-2 w-full max-w-xs">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400/60 text-xs font-bold">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        value={splitBillTotal}
+                        onChange={(e) => setSplitBillTotal(e.target.value)}
+                        placeholder="Total bill"
+                        className="w-full h-9 pl-7 pr-2 rounded-lg text-sm bg-emerald-500/10 border border-emerald-400/30 text-emerald-200 placeholder:text-emerald-400/30 focus:outline-none focus:border-emerald-400/60 transition-all text-right"
+                        min="0.01"
+                        step="0.01"
+                      />
+                    </div>
+                    {splitBillTotal &&
+                      amount &&
+                      parseFloat(splitBillTotal) > parseFloat(amount) && (
+                        <span className="text-[11px] text-emerald-400/70 shrink-0">
+                          Partner: $
+                          {(
+                            parseFloat(splitBillTotal) - parseFloat(amount)
+                          ).toFixed(2)}
+                        </span>
+                      )}
+                  </div>
+                )}
+
+                {/* Debt inputs - expands below when active */}
+                {isDebt && (
+                  <div className="flex items-center justify-center gap-2 w-full max-w-xs">
+                    <input
+                      type="text"
+                      value={debtorName}
+                      onChange={(e) => setDebtorName(e.target.value)}
+                      placeholder="Who owes you?"
+                      className="flex-1 min-w-0 h-9 px-3 rounded-lg text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/30 focus:outline-none focus:border-orange-400/60 transition-all"
+                      autoFocus
+                    />
+                    <div className="relative shrink-0">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-orange-400/60 text-xs font-bold">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        value={debtAmount}
+                        onChange={(e) => setDebtAmount(e.target.value)}
+                        placeholder={amount || "All"}
+                        className="w-20 h-9 pl-6 pr-2 rounded-lg text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/30 focus:outline-none focus:border-orange-400/60 transition-all text-right"
+                        min="0.01"
+                        step="0.01"
+                        max={amount ? parseFloat(amount) : undefined}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
