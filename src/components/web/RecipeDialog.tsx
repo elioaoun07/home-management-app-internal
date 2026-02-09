@@ -493,7 +493,7 @@ export default function RecipeDialog({
               {ingredients.map((ing, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <Input
-                    value={ing.quantity}
+                    value={ing.quantity ?? ""}
                     onChange={(e) =>
                       updateIngredient(index, { quantity: e.target.value })
                     }
@@ -505,7 +505,7 @@ export default function RecipeDialog({
                     )}
                   />
                   <Input
-                    value={ing.unit}
+                    value={ing.unit ?? ""}
                     onChange={(e) =>
                       updateIngredient(index, { unit: e.target.value })
                     }
@@ -517,7 +517,7 @@ export default function RecipeDialog({
                     )}
                   />
                   <Input
-                    value={ing.name}
+                    value={ing.name ?? ""}
                     onChange={(e) =>
                       updateIngredient(index, { name: e.target.value })
                     }
@@ -565,7 +565,7 @@ export default function RecipeDialog({
                     {step.step}
                   </span>
                   <Textarea
-                    value={step.instruction}
+                    value={step.instruction ?? ""}
                     onChange={(e) =>
                       updateStep(index, { instruction: e.target.value })
                     }
