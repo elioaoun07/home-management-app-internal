@@ -460,7 +460,7 @@ function RulesCard({ bioData }: { bioData?: Record<string, unknown> }) {
     },
     {
       icon: Heart,
-      text: "You\u2019re here to have fun, not to iron. But if you insist, the board\u2019s behind the door \uD83D\uDC54",
+      text: "You\u2019re here to have fun, not to work. But if you insist, the board\u2019s behind the door \uD83D\uDC54",
     },
   ];
 
