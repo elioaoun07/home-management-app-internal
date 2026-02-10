@@ -189,8 +189,8 @@ function PortalParticles() {
   );
 }
 
-// ─── Jarvis Orb ────────────────────────────────────────
-function JarvisOrb({ pulsing = true }: { pulsing?: boolean }) {
+// ─── ERA Orb ───────────────────────────────────────────
+function EraOrb({ pulsing = true }: { pulsing?: boolean }) {
   return (
     <div className="relative w-28 h-28 mx-auto">
       <div
@@ -451,33 +451,32 @@ function WiFiCard({
 function RulesCard({ bioData }: { bioData?: Record<string, unknown> }) {
   const dos = [
     {
-      icon: Music,
-      text: "Feel free to play music — ask Jarvis for playlist recommendations!",
+      icon: PartyPopper,
+      text: "Settle in, relax, and enjoy every moment \ud83d\ude0a",
     },
     {
       icon: UtensilsCrossed,
-      text: "Help yourself to anything in the fridge — mi casa es su casa 🏠",
-    },
-    {
-      icon: PartyPopper,
-      text: "Make yourself at home and enjoy every moment!",
+      text: "Help yourself to anything in the fridge. Mi casa es su casa \ud83c\udfe1",
     },
     {
       icon: Heart,
-      text: "Leave good vibes only — positive energy is always welcome ✨",
+      text: "You\u2019re here to have fun, not to iron. But if you insist, the board\u2019s behind the door \uD83D\uDC54",
     },
   ];
 
   const donts = [
     {
       icon: Cigarette,
-      text: "No smoking inside the house — balcony is available for that 🚬",
+      text: "No smoking indoors. The balcony is all yours for that \ud83d\udead\ufe0f",
     },
   ];
 
-  // Add extra rules from bio_data if present
-  const extraRules = bioData?.house_rules_extra;
-  const extraRulesList: string[] = Array.isArray(extraRules) ? extraRules : [];
+  const disclaimers = [
+    {
+      icon: Music,
+      text: "We run on Metal & Classical here. Other genres? Sure, but headphones exist for a reason \ud83c\udfa7",
+    },
+  ];
 
   return (
     <GlowCard className="p-5" glow="teal">
@@ -531,20 +530,21 @@ function RulesCard({ bioData }: { bioData?: Record<string, unknown> }) {
         </div>
       </div>
 
-      {/* Extra rules from bio */}
-      {extraRulesList.length > 0 && (
+      {/* Good to Know */}
+      {disclaimers.length > 0 && (
         <div className="mt-4">
-          <div className="text-[10px] uppercase tracking-wider text-[#38bdf8]/40 font-semibold mb-2 flex items-center gap-1.5">
-            <HelpCircle className="w-3 h-3" /> Additional Notes
+          <div className="text-[10px] uppercase tracking-wider text-violet-400 font-semibold mb-2 flex items-center gap-1.5">
+            <HelpCircle className="w-3 h-3" /> Good to Know
           </div>
           <div className="space-y-2">
-            {extraRulesList.map((rule, i) => (
+            {disclaimers.map((item, i) => (
               <div
                 key={i}
-                className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#3b82f6]/5 border border-[#3b82f6]/10"
+                className="flex items-start gap-2.5 p-2.5 rounded-xl bg-violet-500/5 border border-violet-500/10"
               >
+                <item.icon className="w-4 h-4 text-violet-400 mt-0.5 shrink-0" />
                 <span className="text-xs text-[#38bdf8]/80 leading-relaxed">
-                  {rule}
+                  {item.text}
                 </span>
               </div>
             ))}
@@ -668,7 +668,21 @@ function AllergiesCard({
               {existing.guest_name}
             </p>
           )}
-          <p className="text-sm text-[#38bdf8]/80">{existing.allergies}</p>
+          <div className="text-sm text-[#38bdf8]/80 space-y-1.5">
+            {existing.allergies.includes("\n") ? (
+              existing.allergies
+                .split("\n")
+                .filter((l: string) => l.trim())
+                .map((line: string, i: number) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="text-[#06b6d4] mt-0.5 shrink-0">•</span>
+                    <span>{line.trim()}</span>
+                  </div>
+                ))
+            ) : (
+              <p>{existing.allergies}</p>
+            )}
+          </div>
         </div>
       </GlowCard>
     );
@@ -750,6 +764,8 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
   const [feedback, setFeedback] = useState("");
   const [type, setType] = useState<"suggestion" | "complaint">("suggestion");
   const [submitted, setSubmitted] = useState(false);
+  const [complaintBlocked, setComplaintBlocked] = useState(false);
+  const [blockPhase, setBlockPhase] = useState(0);
 
   const handleSubmit = async () => {
     if (!feedback.trim() || !tagInfo?.id) return;
@@ -773,8 +789,82 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
     }, 3000);
   };
 
+  const handleComplaintClick = () => {
+    setComplaintBlocked(true);
+    setBlockPhase(0);
+    setTimeout(() => setBlockPhase(1), 400);
+    setTimeout(() => setBlockPhase(2), 1200);
+    setTimeout(() => setBlockPhase(3), 2500);
+    setTimeout(() => {
+      setComplaintBlocked(false);
+      setBlockPhase(0);
+      setType("suggestion");
+    }, 4500);
+  };
+
   return (
-    <GlowCard className="p-5" glow="blue">
+    <GlowCard className="p-5 relative overflow-hidden" glow="blue">
+      {/* Complaint Blocked Animation */}
+      {complaintBlocked && (
+        <div className="absolute inset-0 z-10 rounded-2xl bg-[#0a1628]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-300">
+          <div
+            className={cn(
+              "mb-4 transition-all duration-500",
+              blockPhase >= 1 ? "scale-100" : "scale-0",
+            )}
+          >
+            <div
+              className="w-20 h-20 rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center"
+              style={{
+                animation: blockPhase >= 1 ? "shake 0.6s ease-in-out" : "none",
+              }}
+            >
+              <Lock className="w-10 h-10 text-red-400" />
+            </div>
+          </div>
+          <div
+            className={cn(
+              "transition-all duration-300 delay-100",
+              blockPhase >= 1
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 translate-y-4",
+            )}
+          >
+            <p className="text-sm font-bold text-red-400 tracking-[0.3em] uppercase mb-2 text-center">
+              Access Denied
+            </p>
+          </div>
+          <div
+            className={cn(
+              "transition-all duration-500 text-center",
+              blockPhase >= 2
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 translate-y-4",
+            )}
+          >
+            <p className="text-xs text-[#38bdf8]/60 mb-1">
+              Your complaint has been securely forwarded to
+            </p>
+            <p className="text-sm font-mono text-[#06b6d4]">
+              /household/police
+            </p>
+            <p className="text-[10px] text-[#38bdf8]/30 mt-2">
+              Clearance Level Required: Above Your Pay Grade 😎
+            </p>
+          </div>
+          <div
+            className={cn(
+              "mt-4 transition-all duration-300",
+              blockPhase >= 3 ? "opacity-100" : "opacity-0",
+            )}
+          >
+            <p className="text-[10px] text-[#14b8a6] animate-pulse">
+              Redirecting to Suggestions… because that&apos;s what you really
+              meant 💡
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-3 mb-3">
         <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#3b82f6]/20 to-violet-500/10 flex items-center justify-center">
           <MessageCircle className="w-6 h-6 text-[#3b82f6] drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
@@ -793,7 +883,7 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
       <div className="mb-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14b8a6]/5 border border-[#14b8a6]/10 w-fit">
         <ShieldAlert className="w-3 h-3 text-[#14b8a6]" />
         <span className="text-[10px] text-[#14b8a6] font-medium">
-          🔒 100% Anonymous — your identity is never attached
+          🔒 100% Anonymous — your identity is never attached 😉
         </span>
       </div>
 
@@ -802,7 +892,9 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
         {(["suggestion", "complaint"] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setType(t)}
+            onClick={() =>
+              t === "complaint" ? handleComplaintClick() : setType(t)
+            }
             className={cn(
               "flex-1 py-2 rounded-xl text-xs font-medium transition-all duration-200 border",
               type === t
@@ -878,10 +970,10 @@ function RecipesCard() {
           Coming Soon
         </p>
         <p className="text-[11px] text-[#38bdf8]/30 text-center max-w-[200px]">
-          Jarvis is compiling the best recipes from this household. Stay tuned!
+          ERA is compiling the best recipes from this household. Stay tuned!
         </p>
         <p className="text-[10px] text-[#06b6d4]/40 mt-2">
-          💡 Ask Jarvis in the chat for today&apos;s menu or recipe list!
+          💡 Ask ERA in the chat for today&apos;s menu or recipe list!
         </p>
       </div>
     </GlowCard>
@@ -909,7 +1001,7 @@ function DownloadCard() {
           Coming Soon
         </p>
         <p className="text-[11px] text-[#38bdf8]/30 text-center max-w-[200px]">
-          The Jarvis Home Manager app will be available for download soon.
+          The ERA Home Manager app will be available for download soon.
         </p>
       </div>
     </GlowCard>
@@ -1214,11 +1306,9 @@ function ChatInterface({
             <Bot className="w-6 h-6 text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">
-              Jarvis Assistant
-            </h3>
+            <h3 className="text-sm font-semibold text-white">ERA Assistant</h3>
             <p className="text-[10px] text-[#38bdf8]/50">
-              Chat with your host&apos;s AI assistant
+              Chat with your host&apos;s AI concierge
             </p>
           </div>
         </div>
@@ -1226,10 +1316,11 @@ function ChatInterface({
         <div className="text-center py-6">
           <Bot className="w-12 h-12 mx-auto mb-3 text-[#06b6d4] drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]" />
           <p className="text-sm text-white font-medium mb-1">
-            Hi! I&apos;m Jarvis 👋
+            Welcome. I&apos;m ERA.
           </p>
           <p className="text-xs text-[#38bdf8]/50 mb-4">
-            Your host&apos;s personal AI assistant. What&apos;s your name?
+            Your host&apos;s AI concierge — at your service. How shall I address
+            you?
           </p>
           <div className="flex gap-2">
             <input
@@ -1265,7 +1356,7 @@ function ChatInterface({
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-white truncate">
-            Jarvis Home Chat
+            ERA Home Chat
           </h3>
           <div className="flex items-center gap-1 text-[10px] text-[#14b8a6]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#14b8a6] animate-pulse" />
@@ -1284,7 +1375,7 @@ function ChatInterface({
           <div className="flex justify-start">
             <div className="max-w-[85%] px-3.5 py-2 rounded-2xl rounded-bl-md bg-[#0f1d2e] border border-[#06b6d4]/15 text-sm leading-relaxed text-[#38bdf8]/90">
               <p className="text-[9px] font-semibold mb-0.5 text-[#06b6d4]/60">
-                🤖 Jarvis
+                🤖 ERA
               </p>
               <div className="whitespace-pre-wrap">
                 Hey {guestName || session?.guest_name}! 👋 How can I help? Tap
@@ -1332,7 +1423,7 @@ function ChatInterface({
               >
                 {msg.sender !== "guest" && (
                   <p className="text-[9px] font-semibold mb-0.5 text-[#06b6d4]/60">
-                    {msg.sender === "bot" ? "🤖 Jarvis" : "🏠 Host"}
+                    {msg.sender === "bot" ? "🤖 ERA" : "🏠 Host"}
                   </p>
                 )}
                 {/* Render markdown bold */}
@@ -1390,7 +1481,7 @@ function ChatInterface({
           <div className="flex justify-start">
             <div className="px-3.5 py-2 rounded-2xl rounded-bl-md bg-[#0f1d2e] border border-[#06b6d4]/15">
               <p className="text-[9px] font-semibold mb-0.5 text-[#06b6d4]/60">
-                🤖 Jarvis
+                🤖 ERA
               </p>
               <TypingAnimation />
             </div>
@@ -1408,7 +1499,7 @@ function ChatInterface({
               if (!typingText) setInput(e.target.value);
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Ask Jarvis or message your host..."
+            placeholder="Ask ERA or message your host..."
             className="flex-1 px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#3b82f6]/10 text-sm text-white placeholder:text-[#38bdf8]/30 focus:outline-none focus:border-[#06b6d4]/30 transition-all duration-200"
             readOnly={!!typingText}
           />
@@ -1436,6 +1527,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
   const [tagInfo, setTagInfo] = useState<TagInfo | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [portalNotFound, setPortalNotFound] = useState(false);
+  const [homeNameInput, setHomeNameInput] = useState("");
 
   useEffect(() => {
     setMounted(true);
@@ -1530,7 +1622,6 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
       { id: "allergies", icon: AlertTriangle, label: "Allergies" },
       { id: "recipes", icon: CookingPot, label: "Recipes" },
       { id: "feedback", icon: MessageCircle, label: "Feedback" },
-      { id: "chat", icon: Bot, label: "Chat" },
       { id: "download", icon: Download, label: "App" },
     ],
     [],
@@ -1566,9 +1657,9 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
     return (
       <div className="min-h-[100dvh] bg-[#0a1628] flex items-center justify-center">
         <div className="text-center">
-          <JarvisOrb pulsing />
+          <EraOrb pulsing />
           <p className="mt-6 text-sm text-[#38bdf8]/50 animate-pulse">
-            Initializing Jarvis…
+            Initializing ERA…
           </p>
         </div>
       </div>
@@ -1599,7 +1690,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                 : "opacity-0 translate-y-10 scale-90",
             )}
           >
-            <JarvisOrb />
+            <EraOrb />
           </div>
 
           <div
@@ -1615,21 +1706,27 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
               </span>
             </h1>
             <p className="text-[#38bdf8]/45 text-xs max-w-[260px] mx-auto leading-relaxed">
-              Make yourself comfortable — Jarvis is here to help.
+              Make yourself comfortable — ERA is here to assist.
             </p>
           </div>
 
-          <div
+          <button
+            onClick={() => setActiveSection("chat")}
             className={cn(
-              "mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#0f1d2e]/80 backdrop-blur border border-[#3b82f6]/15 transition-all duration-1000 delay-400",
+              "mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur border transition-all duration-1000 delay-400 active:scale-95",
+              activeSection === "chat"
+                ? "bg-[#06b6d4]/15 border-[#06b6d4]/30 shadow-lg shadow-[#06b6d4]/10"
+                : "bg-[#0f1d2e]/80 border-[#3b82f6]/15 hover:border-[#06b6d4]/30 hover:bg-[#0f1d2e]",
               mounted ? "opacity-100" : "opacity-0",
             )}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-[#14b8a6] animate-pulse" />
-            <span className="text-[10px] text-[#38bdf8]/50">
-              Jarvis is online
+            <span className="text-[10px] text-[#38bdf8]/60 font-medium">
+              ERA is online
             </span>
-          </div>
+            <span className="text-[10px] text-[#06b6d4]">— tap to chat</span>
+            <Bot className="w-3.5 h-3.5 text-[#06b6d4]" />
+          </button>
         </section>
 
         {/* ── NAVIGATION PILLS ──────────────────────── */}
@@ -1661,105 +1758,139 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
         >
           {activeSection === "home" && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="grid grid-cols-2 gap-3">
-                <GlowCard
-                  className="p-4 text-center"
-                  glow="blue"
-                  onClick={() => setActiveSection("wifi")}
-                >
-                  <Wifi className="w-7 h-7 mx-auto mb-2 text-[#06b6d4] drop-shadow-[0_0_10px_rgba(6,182,212,0.4)]" />
-                  <p className="text-xs font-medium text-white">Connect WiFi</p>
-                  <p className="text-[9px] text-[#38bdf8]/40 mt-0.5">
-                    Copy password
-                  </p>
-                </GlowCard>
-
-                <GlowCard
-                  className="p-4 text-center"
-                  glow="teal"
-                  onClick={() => setActiveSection("rules")}
-                >
-                  <ShieldCheck className="w-7 h-7 mx-auto mb-2 text-[#14b8a6] drop-shadow-[0_0_10px_rgba(20,184,166,0.4)]" />
-                  <p className="text-xs font-medium text-white">House Rules</p>
-                  <p className="text-[9px] text-[#38bdf8]/40 mt-0.5">
-                    Dos & Don&apos;ts
-                  </p>
-                </GlowCard>
-
-                <GlowCard
-                  className="p-4 text-center"
-                  glow="amber"
-                  onClick={() => setActiveSection("allergies")}
-                >
-                  <AlertTriangle className="w-7 h-7 mx-auto mb-2 text-amber-400 drop-shadow-[0_0_10px_rgba(245,158,11,0.4)]" />
-                  <p className="text-xs font-medium text-white">Allergies</p>
-                  <p className="text-[9px] text-[#38bdf8]/40 mt-0.5">
-                    Tell us yours
-                  </p>
-                </GlowCard>
-
-                <GlowCard
-                  className="p-4 text-center"
-                  glow="cyan"
-                  onClick={() => setActiveSection("chat")}
-                >
-                  <Bot className="w-7 h-7 mx-auto mb-2 text-[#22d3ee] drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]" />
-                  <p className="text-xs font-medium text-white">Chat Jarvis</p>
-                  <p className="text-[9px] text-[#38bdf8]/40 mt-0.5">
-                    Ask anything
-                  </p>
-                </GlowCard>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <GlowCard
-                  className="p-3 text-center"
-                  glow="teal"
-                  onClick={() => setActiveSection("recipes")}
-                >
-                  <CookingPot className="w-5 h-5 mx-auto mb-1.5 text-[#14b8a6]" />
-                  <p className="text-[10px] font-medium text-[#38bdf8]/70">
-                    Recipes
-                  </p>
-                </GlowCard>
-                <GlowCard
-                  className="p-3 text-center"
-                  glow="blue"
-                  onClick={() => setActiveSection("feedback")}
-                >
-                  <MessageCircle className="w-5 h-5 mx-auto mb-1.5 text-[#3b82f6]" />
-                  <p className="text-[10px] font-medium text-[#38bdf8]/70">
-                    Feedback
-                  </p>
-                </GlowCard>
-                <GlowCard
-                  className="p-3 text-center"
-                  glow="blue"
-                  onClick={() => setActiveSection("download")}
-                >
-                  <Download className="w-5 h-5 mx-auto mb-1.5 text-[#3b82f6]" />
-                  <p className="text-[10px] font-medium text-[#38bdf8]/70">
-                    Get App
-                  </p>
-                </GlowCard>
-              </div>
-
-              <GlowCard className="p-4" glow="cyan">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3b82f6] to-[#06b6d4] flex items-center justify-center shrink-0">
-                    <Sparkles className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-white">
-                      Powered by Jarvis AI
+              {!session?.guest_name ? (
+                <GlowCard className="p-6 text-center" glow="cyan">
+                  <EraOrb />
+                  <div className="mt-5 mb-2">
+                    <p className="text-sm text-[#38bdf8]/70 leading-relaxed">
+                      Welcome. I am{" "}
+                      <span className="text-[#06b6d4] font-semibold">ERA</span>,
+                      your host&apos;s AI concierge.
                     </p>
-                    <p className="text-[10px] text-[#38bdf8]/40 leading-relaxed">
-                      Your host&apos;s personal ecosystem — intelligent home
-                      management, automation, and beyond.
+                    <p className="text-sm text-white font-medium mt-2">
+                      How shall I address you?
                     </p>
                   </div>
-                </div>
-              </GlowCard>
+                  <div className="flex gap-2 max-w-xs mx-auto mt-4">
+                    <input
+                      value={homeNameInput}
+                      onChange={(e) => setHomeNameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && homeNameInput.trim()) {
+                          handleNameSet(homeNameInput.trim());
+                        }
+                      }}
+                      placeholder="Your name"
+                      className="flex-1 px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#3b82f6]/10 text-sm text-white text-center placeholder:text-[#38bdf8]/30 focus:outline-none focus:border-[#06b6d4]/40 focus:ring-1 focus:ring-[#06b6d4]/20 transition-all duration-200"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() =>
+                        homeNameInput.trim() &&
+                        handleNameSet(homeNameInput.trim())
+                      }
+                      disabled={!homeNameInput.trim()}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] text-sm font-semibold text-white shadow-lg shadow-[#06b6d4]/20 hover:shadow-[#06b6d4]/40 transition-all duration-300 disabled:opacity-40"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </GlowCard>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <GlowCard
+                      className="p-4 text-center"
+                      glow="blue"
+                      onClick={() => setActiveSection("wifi")}
+                    >
+                      <Wifi className="w-6 h-6 mx-auto mb-2 text-[#06b6d4] drop-shadow-[0_0_10px_rgba(6,182,212,0.4)]" />
+                      <p className="text-[11px] font-medium text-white">WiFi</p>
+                      <p className="text-[9px] text-[#38bdf8]/40 mt-0.5">
+                        Copy password
+                      </p>
+                    </GlowCard>
+
+                    <GlowCard
+                      className="p-4 text-center"
+                      glow="teal"
+                      onClick={() => setActiveSection("rules")}
+                    >
+                      <ShieldCheck className="w-6 h-6 mx-auto mb-2 text-[#14b8a6] drop-shadow-[0_0_10px_rgba(20,184,166,0.4)]" />
+                      <p className="text-[11px] font-medium text-white">
+                        Rules
+                      </p>
+                      <p className="text-[9px] text-[#38bdf8]/40 mt-0.5">
+                        Dos & Don&apos;ts
+                      </p>
+                    </GlowCard>
+
+                    <GlowCard
+                      className="p-4 text-center"
+                      glow="amber"
+                      onClick={() => setActiveSection("allergies")}
+                    >
+                      <AlertTriangle className="w-6 h-6 mx-auto mb-2 text-amber-400 drop-shadow-[0_0_10px_rgba(245,158,11,0.4)]" />
+                      <p className="text-[11px] font-medium text-white">
+                        Allergies
+                      </p>
+                      <p className="text-[9px] text-[#38bdf8]/40 mt-0.5">
+                        Tell us yours
+                      </p>
+                    </GlowCard>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <GlowCard
+                      className="p-3 text-center"
+                      glow="teal"
+                      onClick={() => setActiveSection("recipes")}
+                    >
+                      <CookingPot className="w-5 h-5 mx-auto mb-1.5 text-[#14b8a6]" />
+                      <p className="text-[10px] font-medium text-[#38bdf8]/70">
+                        Recipes
+                      </p>
+                    </GlowCard>
+                    <GlowCard
+                      className="p-3 text-center"
+                      glow="blue"
+                      onClick={() => setActiveSection("feedback")}
+                    >
+                      <MessageCircle className="w-5 h-5 mx-auto mb-1.5 text-[#3b82f6]" />
+                      <p className="text-[10px] font-medium text-[#38bdf8]/70">
+                        Feedback
+                      </p>
+                    </GlowCard>
+                    <GlowCard
+                      className="p-3 text-center"
+                      glow="blue"
+                      onClick={() => setActiveSection("download")}
+                    >
+                      <Download className="w-5 h-5 mx-auto mb-1.5 text-[#3b82f6]" />
+                      <p className="text-[10px] font-medium text-[#38bdf8]/70">
+                        Get App
+                      </p>
+                    </GlowCard>
+                  </div>
+
+                  <GlowCard className="p-4" glow="cyan">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3b82f6] to-[#06b6d4] flex items-center justify-center shrink-0">
+                        <Sparkles className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-white">
+                          Powered by ERA AI
+                        </p>
+                        <p className="text-[10px] text-[#38bdf8]/40 leading-relaxed">
+                          Your host&apos;s personal ecosystem — intelligent home
+                          management, automation, and beyond.
+                        </p>
+                      </div>
+                    </div>
+                  </GlowCard>
+                </>
+              )}
             </div>
           )}
 
@@ -1835,6 +1966,25 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
           }
           50% {
             transform: translateY(-15px) rotate(3deg);
+          }
+        }
+        @keyframes shake {
+          0%,
+          100% {
+            transform: translateX(0) rotate(0deg);
+          }
+          10%,
+          30%,
+          50%,
+          70%,
+          90% {
+            transform: translateX(-4px) rotate(-2deg);
+          }
+          20%,
+          40%,
+          60%,
+          80% {
+            transform: translateX(4px) rotate(2deg);
           }
         }
         @keyframes gradient {

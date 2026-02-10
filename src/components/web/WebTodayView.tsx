@@ -178,7 +178,7 @@ function getItemDate(item: ItemWithDetails): Date | null {
 
 function buildFullRRuleString(
   startDate: Date,
-  recurrenceRule: { rrule: string }
+  recurrenceRule: { rrule: string },
 ): string {
   const dtstart = `DTSTART:${format(startDate, "yyyyMMdd'T'HHmmss")}`;
   const rrule = recurrenceRule.rrule.startsWith("RRULE:")
@@ -191,7 +191,7 @@ function expandRecurringItems(
   items: ItemWithDetails[],
   startDate: Date,
   endDate: Date,
-  actions: ItemOccurrenceAction[]
+  actions: ItemOccurrenceAction[],
 ): ExpandedOccurrence[] {
   const result: ExpandedOccurrence[] = [];
 
@@ -203,7 +203,7 @@ function expandRecurringItems(
       try {
         const rruleString = buildFullRRuleString(
           itemDate,
-          item.recurrence_rule
+          item.recurrence_rule,
         );
         const rule = RRule.fromString(rruleString);
         const occurrences = rule.between(startDate, endDate, true);
@@ -237,13 +237,13 @@ function expandRecurringItems(
     const dayPostponed = getPostponedOccurrencesForDate(
       items,
       currentDate,
-      actions
+      actions,
     );
     for (const p of dayPostponed) {
       const alreadyExists = result.some(
         (r) =>
           r.item.id === p.item.id &&
-          isSameDay(r.occurrenceDate, p.occurrenceDate)
+          isSameDay(r.occurrenceDate, p.occurrenceDate),
       );
       if (!alreadyExists) {
         result.push({
@@ -259,7 +259,7 @@ function expandRecurringItems(
   }
 
   return result.sort(
-    (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime()
+    (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime(),
   );
 }
 
@@ -395,7 +395,7 @@ export default function WebTodayView() {
     // These will create natural paragraph-like breaks
     speech = speech.replace(
       /(today|tonight|this morning)[.,]\s*/gi,
-      "$1. ... "
+      "$1. ... ",
     );
     speech = speech.replace(/(And your top priorities are:)/gi, "... $1");
     speech = speech.replace(/(Up next is)/gi, "... $1");
@@ -441,7 +441,7 @@ export default function WebTodayView() {
 
       window.speechSynthesis.speak(utterance);
     },
-    [isSpeaking, prepareTextForSpeech, getPreferredVoice]
+    [isSpeaking, prepareTextForSpeech, getPreferredVoice],
   );
 
   // Stop speaking when component unmounts or view changes
@@ -481,7 +481,7 @@ export default function WebTodayView() {
       (item) =>
         item.status !== "archived" &&
         item.status !== "cancelled" &&
-        !item.archived_at
+        !item.archived_at,
     );
   }, [allItems]);
 
@@ -500,7 +500,7 @@ export default function WebTodayView() {
       activeItems,
       scopeStart,
       scopeEnd,
-      occurrenceActions
+      occurrenceActions,
     );
 
     const pastStart = addDays(today, -30);
@@ -508,10 +508,10 @@ export default function WebTodayView() {
       activeItems,
       pastStart,
       today,
-      occurrenceActions
+      occurrenceActions,
     );
     const overdueOccs = allPastOccs.filter(
-      (occ) => isBefore(occ.occurrenceDate, today) && !occ.isCompleted
+      (occ) => isBefore(occ.occurrenceDate, today) && !occ.isCompleted,
     );
 
     // Sort based on selected mode
@@ -519,7 +519,7 @@ export default function WebTodayView() {
 
     if (sortMode === "time") {
       sortedTasks.sort(
-        (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime()
+        (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime(),
       );
     } else if (sortMode === "priority") {
       sortedTasks.sort((a, b) => {
@@ -560,7 +560,7 @@ export default function WebTodayView() {
     };
   }, [scopedTasks]);
 
-  // AI Briefing Data - JARVIS style
+  // AI Briefing Data - ERA style
   const briefingData = useMemo(() => {
     const now = currentTime;
     const hour = now.getHours();
@@ -572,7 +572,7 @@ export default function WebTodayView() {
       activeItems,
       today,
       todayEnd,
-      occurrenceActions
+      occurrenceActions,
     )
       .filter((o) => !o.isCompleted)
       .sort((a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime());
@@ -639,7 +639,7 @@ export default function WebTodayView() {
         acc[cat].push(task);
         return acc;
       },
-      {} as Record<string, ExpandedOccurrence[]>
+      {} as Record<string, ExpandedOccurrence[]>,
     );
 
     return {
@@ -655,7 +655,7 @@ export default function WebTodayView() {
     };
   }, [currentTime, activeItems, occurrenceActions, today]);
 
-  // Generate JARVIS-style narrative briefing
+  // Generate ERA-style narrative briefing
   const narrative = useMemo(() => {
     const {
       greeting,
@@ -681,15 +681,15 @@ export default function WebTodayView() {
     // Opening with context
     if (hour < 12) {
       parts.push(
-        `You have ${totalToday} ${totalToday === 1 ? "item" : "items"} on your agenda today.`
+        `You have ${totalToday} ${totalToday === 1 ? "item" : "items"} on your agenda today.`,
       );
     } else {
       const remaining = scopedTasks.filter(
-        (t) => t.occurrenceDate > currentTime
+        (t) => t.occurrenceDate > currentTime,
       ).length;
       if (remaining > 0) {
         parts.push(
-          `${remaining} ${remaining === 1 ? "item remains" : "items remain"} for the rest of today.`
+          `${remaining} ${remaining === 1 ? "item remains" : "items remain"} for the rest of today.`,
         );
       } else {
         parts.push("You've made it through today's schedule. Well done.");
@@ -699,20 +699,20 @@ export default function WebTodayView() {
     // Current focus
     if (now) {
       parts.push(
-        `\n\n🎯 Currently: "${now.item.title}" at ${format(now.occurrenceDate, "h:mm a")}.`
+        `\n\n🎯 Currently: "${now.item.title}" at ${format(now.occurrenceDate, "h:mm a")}.`,
       );
     }
 
     // What's next
     if (next) {
       const timeUntil = Math.round(
-        (next.occurrenceDate.getTime() - currentTime.getTime()) / (1000 * 60)
+        (next.occurrenceDate.getTime() - currentTime.getTime()) / (1000 * 60),
       );
       if (timeUntil <= 60) {
         parts.push(`\n\n⏰ In ${timeUntil} minutes: "${next.item.title}".`);
       } else {
         parts.push(
-          `\n\n📍 Next up at ${format(next.occurrenceDate, "h:mm a")}: "${next.item.title}".`
+          `\n\n📍 Next up at ${format(next.occurrenceDate, "h:mm a")}: "${next.item.title}".`,
         );
       }
     }
@@ -728,7 +728,7 @@ export default function WebTodayView() {
     // Time-sensitive warning
     if (timeSensitive.length > 1) {
       parts.push(
-        `\n\n💡 Heads up: You have ${timeSensitive.length} items coming up in the next 2 hours.`
+        `\n\n💡 Heads up: You have ${timeSensitive.length} items coming up in the next 2 hours.`,
       );
     }
 
@@ -739,14 +739,14 @@ export default function WebTodayView() {
         t.item.title.toLowerCase().includes("bring") ||
         t.item.title.toLowerCase().includes("take") ||
         t.item.title.toLowerCase().includes("deliver") ||
-        t.item.title.toLowerCase().includes("birthday")
+        t.item.title.toLowerCase().includes("birthday"),
     );
 
     if (thingsToTake.length > 0) {
       parts.push("\n\n📦 Don't forget to prepare:");
       thingsToTake.forEach((t) => {
         parts.push(
-          `\n  • ${t.item.title} (${format(t.occurrenceDate, "h:mm a")})`
+          `\n  • ${t.item.title} (${format(t.occurrenceDate, "h:mm a")})`,
         );
       });
     }
@@ -760,7 +760,7 @@ export default function WebTodayView() {
         <div
           className={cn(
             "w-2 h-2 rounded-full animate-pulse",
-            isFrost ? "bg-indigo-400" : isPink ? "bg-pink-400" : "bg-cyan-400"
+            isFrost ? "bg-indigo-400" : isPink ? "bg-pink-400" : "bg-cyan-400",
           )}
         />
       </div>
@@ -770,7 +770,7 @@ export default function WebTodayView() {
   const accentColor = isFrost ? "indigo" : isPink ? "pink" : "cyan";
 
   // ==========================================
-  // BRIEFING VIEW - JARVIS-style Day at a Glance
+  // BRIEFING VIEW - ERA-style Day at a Glance
   // ==========================================
   const renderBriefingView = () => {
     const {
@@ -790,7 +790,7 @@ export default function WebTodayView() {
           <p
             className={cn(
               "text-lg font-medium mb-1",
-              isFrost ? "text-slate-700" : "text-white/90"
+              isFrost ? "text-slate-700" : "text-white/90",
             )}
           >
             {greeting.emoji} {greeting.text}
@@ -798,7 +798,7 @@ export default function WebTodayView() {
           <h1
             className={cn(
               "text-sm",
-              isFrost ? "text-slate-500" : "text-white/50"
+              isFrost ? "text-slate-500" : "text-white/50",
             )}
           >
             {totalToday === 0 ? (
@@ -826,7 +826,7 @@ export default function WebTodayView() {
                 "rounded-xl p-4 border-l-4",
                 isFrost
                   ? "bg-white border-l-emerald-500 shadow-sm"
-                  : "bg-white/[0.04] border-l-emerald-500 border border-white/[0.08]"
+                  : "bg-white/[0.04] border-l-emerald-500 border border-white/[0.08]",
               )}
             >
               <div className="flex items-center gap-2 mb-2">
@@ -835,7 +835,7 @@ export default function WebTodayView() {
                     "w-6 h-6 rounded-full flex items-center justify-center",
                     isFrost
                       ? "bg-emerald-100 text-emerald-600"
-                      : "bg-emerald-500/20 text-emerald-400"
+                      : "bg-emerald-500/20 text-emerald-400",
                   )}
                 >
                   <Zap className="w-3.5 h-3.5" />
@@ -843,7 +843,7 @@ export default function WebTodayView() {
                 <span
                   className={cn(
                     "text-xs font-bold uppercase tracking-wider",
-                    isFrost ? "text-emerald-600" : "text-emerald-400"
+                    isFrost ? "text-emerald-600" : "text-emerald-400",
                   )}
                 >
                   NOW
@@ -854,7 +854,7 @@ export default function WebTodayView() {
                   <h3
                     className={cn(
                       "font-semibold text-sm mb-1 line-clamp-2",
-                      isFrost ? "text-slate-800" : "text-white"
+                      isFrost ? "text-slate-800" : "text-white",
                     )}
                   >
                     {now.item.title}
@@ -862,7 +862,7 @@ export default function WebTodayView() {
                   <p
                     className={cn(
                       "text-xs",
-                      isFrost ? "text-slate-500" : "text-white/50"
+                      isFrost ? "text-slate-500" : "text-white/50",
                     )}
                   >
                     @ {format(now.occurrenceDate, "h:mm a")}
@@ -872,7 +872,7 @@ export default function WebTodayView() {
                 <p
                   className={cn(
                     "text-sm",
-                    isFrost ? "text-slate-400" : "text-white/40"
+                    isFrost ? "text-slate-400" : "text-white/40",
                   )}
                 >
                   Nothing active right now
@@ -886,7 +886,7 @@ export default function WebTodayView() {
                 "rounded-xl p-4 border-l-4",
                 isFrost
                   ? "bg-white border-l-blue-500 shadow-sm"
-                  : "bg-white/[0.04] border-l-blue-500 border border-white/[0.08]"
+                  : "bg-white/[0.04] border-l-blue-500 border border-white/[0.08]",
               )}
             >
               <div className="flex items-center gap-2 mb-2">
@@ -895,7 +895,7 @@ export default function WebTodayView() {
                     "w-6 h-6 rounded-full flex items-center justify-center",
                     isFrost
                       ? "bg-blue-100 text-blue-600"
-                      : "bg-blue-500/20 text-blue-400"
+                      : "bg-blue-500/20 text-blue-400",
                   )}
                 >
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -903,7 +903,7 @@ export default function WebTodayView() {
                 <span
                   className={cn(
                     "text-xs font-bold uppercase tracking-wider",
-                    isFrost ? "text-blue-600" : "text-blue-400"
+                    isFrost ? "text-blue-600" : "text-blue-400",
                   )}
                 >
                   NEXT
@@ -914,7 +914,7 @@ export default function WebTodayView() {
                   <h3
                     className={cn(
                       "font-semibold text-sm mb-1 line-clamp-2",
-                      isFrost ? "text-slate-800" : "text-white"
+                      isFrost ? "text-slate-800" : "text-white",
                     )}
                   >
                     {next.item.title}
@@ -922,7 +922,7 @@ export default function WebTodayView() {
                   <p
                     className={cn(
                       "text-xs",
-                      isFrost ? "text-slate-500" : "text-white/50"
+                      isFrost ? "text-slate-500" : "text-white/50",
                     )}
                   >
                     @ {format(next.occurrenceDate, "h:mm a")}
@@ -932,7 +932,7 @@ export default function WebTodayView() {
                 <p
                   className={cn(
                     "text-sm",
-                    isFrost ? "text-slate-400" : "text-white/40"
+                    isFrost ? "text-slate-400" : "text-white/40",
                   )}
                 >
                   Nothing coming up
@@ -946,7 +946,7 @@ export default function WebTodayView() {
                 "rounded-xl p-4 border-l-4",
                 isFrost
                   ? "bg-white border-l-amber-500 shadow-sm"
-                  : "bg-white/[0.04] border-l-amber-500 border border-white/[0.08]"
+                  : "bg-white/[0.04] border-l-amber-500 border border-white/[0.08]",
               )}
             >
               <div className="flex items-center gap-2 mb-2">
@@ -955,7 +955,7 @@ export default function WebTodayView() {
                     "w-6 h-6 rounded-full flex items-center justify-center",
                     isFrost
                       ? "bg-amber-100 text-amber-600"
-                      : "bg-amber-500/20 text-amber-400"
+                      : "bg-amber-500/20 text-amber-400",
                   )}
                 >
                   <Star className="w-3.5 h-3.5" />
@@ -963,7 +963,7 @@ export default function WebTodayView() {
                 <span
                   className={cn(
                     "text-xs font-bold uppercase tracking-wider",
-                    isFrost ? "text-amber-600" : "text-amber-400"
+                    isFrost ? "text-amber-600" : "text-amber-400",
                   )}
                 >
                   Top Priorities
@@ -976,7 +976,7 @@ export default function WebTodayView() {
                       key={`priority-${task.item.id}-${idx}`}
                       className={cn(
                         "text-xs flex items-start gap-1.5",
-                        isFrost ? "text-slate-600" : "text-white/70"
+                        isFrost ? "text-slate-600" : "text-white/70",
                       )}
                     >
                       <span
@@ -984,7 +984,7 @@ export default function WebTodayView() {
                           "flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold",
                           isFrost
                             ? "bg-slate-100 text-slate-500"
-                            : "bg-white/10 text-white/50"
+                            : "bg-white/10 text-white/50",
                         )}
                       >
                         {idx + 1}
@@ -997,7 +997,7 @@ export default function WebTodayView() {
                 <p
                   className={cn(
                     "text-sm",
-                    isFrost ? "text-slate-400" : "text-white/40"
+                    isFrost ? "text-slate-400" : "text-white/40",
                   )}
                 >
                   No priorities set
@@ -1014,7 +1014,7 @@ export default function WebTodayView() {
               "rounded-xl p-4 flex items-start gap-3",
               isFrost
                 ? "bg-orange-50 border border-orange-100"
-                : "bg-orange-500/10 border border-orange-500/20"
+                : "bg-orange-500/10 border border-orange-500/20",
             )}
           >
             <div
@@ -1022,7 +1022,7 @@ export default function WebTodayView() {
                 "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
                 isFrost
                   ? "bg-orange-100 text-orange-600"
-                  : "bg-orange-500/20 text-orange-400"
+                  : "bg-orange-500/20 text-orange-400",
               )}
             >
               <Clock className="w-4 h-4" />
@@ -1031,7 +1031,7 @@ export default function WebTodayView() {
               <h4
                 className={cn(
                   "font-semibold text-sm mb-1",
-                  isFrost ? "text-orange-800" : "text-orange-300"
+                  isFrost ? "text-orange-800" : "text-orange-300",
                 )}
               >
                 Don't miss these coming up
@@ -1042,7 +1042,7 @@ export default function WebTodayView() {
                     key={`urgent-${task.item.id}-${idx}`}
                     className={cn(
                       "text-xs flex items-center gap-2",
-                      isFrost ? "text-orange-700" : "text-orange-300/80"
+                      isFrost ? "text-orange-700" : "text-orange-300/80",
                     )}
                   >
                     <span className="font-medium">
@@ -1063,7 +1063,7 @@ export default function WebTodayView() {
             "rounded-xl p-5",
             isFrost
               ? "bg-gradient-to-br from-slate-50 to-indigo-50/50 border border-slate-100"
-              : "bg-gradient-to-br from-white/[0.03] to-cyan-500/[0.03] border border-white/[0.06]"
+              : "bg-gradient-to-br from-white/[0.03] to-cyan-500/[0.03] border border-white/[0.06]",
           )}
         >
           <div className="flex items-center justify-between mb-3">
@@ -1075,7 +1075,7 @@ export default function WebTodayView() {
                     ? "bg-gradient-to-br from-indigo-500 to-purple-500 text-white"
                     : isPink
                       ? "bg-gradient-to-br from-pink-500 to-purple-500 text-white"
-                      : "bg-gradient-to-br from-cyan-500 to-blue-500 text-white"
+                      : "bg-gradient-to-br from-cyan-500 to-blue-500 text-white",
                 )}
               >
                 <Sparkles className="w-4 h-4" />
@@ -1083,7 +1083,7 @@ export default function WebTodayView() {
               <h3
                 className={cn(
                   "font-semibold text-sm",
-                  isFrost ? "text-slate-700" : "text-white/90"
+                  isFrost ? "text-slate-700" : "text-white/90",
                 )}
               >
                 Your Personal Briefing
@@ -1104,7 +1104,7 @@ export default function WebTodayView() {
                       : "bg-cyan-500/20 text-cyan-400"
                   : isFrost
                     ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    : "bg-white/[0.05] text-white/60 hover:bg-white/[0.1]"
+                    : "bg-white/[0.05] text-white/60 hover:bg-white/[0.1]",
               )}
             >
               {isSpeaking ? (
@@ -1123,7 +1123,7 @@ export default function WebTodayView() {
           <p
             className={cn(
               "text-sm leading-relaxed whitespace-pre-wrap",
-              isFrost ? "text-slate-600" : "text-white/70"
+              isFrost ? "text-slate-600" : "text-white/70",
             )}
             style={{ fontFamily: "'Georgia', serif" }}
           >
@@ -1137,7 +1137,7 @@ export default function WebTodayView() {
             <h3
               className={cn(
                 "text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2",
-                isFrost ? "text-slate-400" : "text-white/40"
+                isFrost ? "text-slate-400" : "text-white/40",
               )}
             >
               <Layers className="w-3.5 h-3.5" />
@@ -1151,14 +1151,14 @@ export default function WebTodayView() {
                     "rounded-lg p-3",
                     isFrost
                       ? "bg-white border border-slate-100 shadow-sm"
-                      : "bg-white/[0.03] border border-white/[0.06]"
+                      : "bg-white/[0.03] border border-white/[0.06]",
                   )}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span
                       className={cn(
                         "text-xs font-medium",
-                        isFrost ? "text-slate-600" : "text-white/70"
+                        isFrost ? "text-slate-600" : "text-white/70",
                       )}
                     >
                       {category}
@@ -1168,7 +1168,7 @@ export default function WebTodayView() {
                         "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
                         isFrost
                           ? "bg-slate-100 text-slate-500"
-                          : "bg-white/10 text-white/50"
+                          : "bg-white/10 text-white/50",
                       )}
                     >
                       {tasks.length}
@@ -1180,7 +1180,7 @@ export default function WebTodayView() {
                         key={`cat-${task.item.id}-${idx}`}
                         className={cn(
                           "text-[11px] truncate",
-                          isFrost ? "text-slate-400" : "text-white/40"
+                          isFrost ? "text-slate-400" : "text-white/40",
                         )}
                       >
                         {task.item.title}
@@ -1190,7 +1190,7 @@ export default function WebTodayView() {
                       <p
                         className={cn(
                           "text-[10px]",
-                          isFrost ? "text-slate-300" : "text-white/20"
+                          isFrost ? "text-slate-300" : "text-white/20",
                         )}
                       >
                         +{tasks.length - 2} more
@@ -1209,7 +1209,7 @@ export default function WebTodayView() {
             <h3
               className={cn(
                 "text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2",
-                isFrost ? "text-slate-400" : "text-white/40"
+                isFrost ? "text-slate-400" : "text-white/40",
               )}
             >
               <CalendarDays className="w-3.5 h-3.5" />
@@ -1220,7 +1220,7 @@ export default function WebTodayView() {
                 "rounded-xl overflow-hidden divide-y",
                 isFrost
                   ? "bg-white border border-slate-100 divide-slate-50"
-                  : "bg-white/[0.02] border border-white/[0.06] divide-white/[0.04]"
+                  : "bg-white/[0.02] border border-white/[0.06] divide-white/[0.04]",
               )}
             >
               {scopedTasks.slice(0, 5).map((occ, idx) => {
@@ -1233,7 +1233,7 @@ export default function WebTodayView() {
                     key={`schedule-${item.id}-${idx}`}
                     className={cn(
                       "flex items-center gap-3 px-4 py-3",
-                      isFrost ? "hover:bg-slate-50" : "hover:bg-white/[0.02]"
+                      isFrost ? "hover:bg-slate-50" : "hover:bg-white/[0.02]",
                     )}
                   >
                     <div
@@ -1250,7 +1250,7 @@ export default function WebTodayView() {
                         item.type === "task" &&
                           (isFrost
                             ? "bg-purple-50 text-purple-500"
-                            : "bg-purple-500/10 text-purple-400")
+                            : "bg-purple-500/10 text-purple-400"),
                       )}
                     >
                       <Icon className="w-4 h-4" />
@@ -1259,7 +1259,7 @@ export default function WebTodayView() {
                       <h4
                         className={cn(
                           "text-sm font-medium truncate",
-                          isFrost ? "text-slate-800" : "text-white"
+                          isFrost ? "text-slate-800" : "text-white",
                         )}
                       >
                         {item.title}
@@ -1268,7 +1268,7 @@ export default function WebTodayView() {
                         <p
                           className={cn(
                             "text-xs truncate",
-                            isFrost ? "text-slate-400" : "text-white/40"
+                            isFrost ? "text-slate-400" : "text-white/40",
                           )}
                         >
                           {item.description}
@@ -1279,7 +1279,7 @@ export default function WebTodayView() {
                       <p
                         className={cn(
                           "text-xs font-medium tabular-nums",
-                          isFrost ? "text-slate-600" : "text-white/70"
+                          isFrost ? "text-slate-600" : "text-white/70",
                         )}
                       >
                         {format(occurrenceDate, "h:mm a")}
@@ -1288,7 +1288,7 @@ export default function WebTodayView() {
                         <p
                           className={cn(
                             "text-[10px]",
-                            isFrost ? "text-slate-400" : "text-white/40"
+                            isFrost ? "text-slate-400" : "text-white/40",
                           )}
                         >
                           {format(occurrenceDate, "EEE")}
@@ -1302,13 +1302,13 @@ export default function WebTodayView() {
                 <div
                   className={cn(
                     "px-4 py-2 text-center",
-                    isFrost ? "bg-slate-50" : "bg-white/[0.01]"
+                    isFrost ? "bg-slate-50" : "bg-white/[0.01]",
                   )}
                 >
                   <p
                     className={cn(
                       "text-xs",
-                      isFrost ? "text-slate-400" : "text-white/40"
+                      isFrost ? "text-slate-400" : "text-white/40",
                     )}
                   >
                     +{scopedTasks.length - 5} more items
@@ -1326,7 +1326,7 @@ export default function WebTodayView() {
               "text-center py-8 rounded-xl",
               isFrost
                 ? "bg-white border border-slate-100"
-                : "bg-white/[0.02] border border-white/[0.06]"
+                : "bg-white/[0.02] border border-white/[0.06]",
             )}
           >
             <div
@@ -1334,7 +1334,7 @@ export default function WebTodayView() {
                 "w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center",
                 isFrost
                   ? "bg-slate-100 text-slate-400"
-                  : "bg-white/5 text-white/20"
+                  : "bg-white/5 text-white/20",
               )}
             >
               <Target className="w-8 h-8" />
@@ -1342,7 +1342,7 @@ export default function WebTodayView() {
             <h3
               className={cn(
                 "font-semibold mb-1",
-                isFrost ? "text-slate-700" : "text-white/80"
+                isFrost ? "text-slate-700" : "text-white/80",
               )}
             >
               All Clear
@@ -1350,7 +1350,7 @@ export default function WebTodayView() {
             <p
               className={cn(
                 "text-sm",
-                isFrost ? "text-slate-400" : "text-white/40"
+                isFrost ? "text-slate-400" : "text-white/40",
               )}
             >
               No {timeScope === "today" ? "tasks for today" : "tasks this week"}
@@ -1371,7 +1371,7 @@ export default function WebTodayView() {
         <div
           className={cn(
             "text-center py-8",
-            isFrost ? "text-slate-400" : "text-white/40"
+            isFrost ? "text-slate-400" : "text-white/40",
           )}
         >
           <p>Nothing scheduled</p>
@@ -1389,7 +1389,7 @@ export default function WebTodayView() {
                 <span
                   className={cn(
                     "text-[11px] font-medium tabular-nums",
-                    isFrost ? "text-slate-500" : "text-white/60"
+                    isFrost ? "text-slate-500" : "text-white/60",
                   )}
                 >
                   {format(occurrenceDate, "h:mm")}
@@ -1397,7 +1397,7 @@ export default function WebTodayView() {
                 <span
                   className={cn(
                     "text-[9px] uppercase",
-                    isFrost ? "text-slate-400" : "text-white/30"
+                    isFrost ? "text-slate-400" : "text-white/30",
                   )}
                 >
                   {format(occurrenceDate, "a")}
@@ -1407,7 +1407,7 @@ export default function WebTodayView() {
                   <div
                     className={cn(
                       "w-px flex-1 my-1.5 min-h-[24px]",
-                      isFrost ? "bg-slate-200" : "bg-white/10"
+                      isFrost ? "bg-slate-200" : "bg-white/10",
                     )}
                   />
                 )}
@@ -1420,7 +1420,7 @@ export default function WebTodayView() {
                     "rounded-xl p-3",
                     isFrost
                       ? "bg-white shadow-sm border border-slate-100"
-                      : "bg-white/[0.03] border border-white/[0.06]"
+                      : "bg-white/[0.03] border border-white/[0.06]",
                   )}
                 >
                   <div className="flex items-start gap-2">
@@ -1438,7 +1438,7 @@ export default function WebTodayView() {
                         item.type === "task" &&
                           (isFrost
                             ? "bg-purple-50 text-purple-500"
-                            : "bg-purple-500/10 text-purple-400")
+                            : "bg-purple-500/10 text-purple-400"),
                       )}
                     >
                       <Icon className="w-3 h-3" />
@@ -1447,7 +1447,7 @@ export default function WebTodayView() {
                       <h3
                         className={cn(
                           "text-sm font-medium leading-tight",
-                          isFrost ? "text-slate-800" : "text-white"
+                          isFrost ? "text-slate-800" : "text-white",
                         )}
                       >
                         {item.title}
@@ -1456,7 +1456,7 @@ export default function WebTodayView() {
                         <p
                           className={cn(
                             "text-xs mt-0.5 line-clamp-2",
-                            isFrost ? "text-slate-500" : "text-white/50"
+                            isFrost ? "text-slate-500" : "text-white/50",
                           )}
                         >
                           {item.description}
@@ -1482,7 +1482,7 @@ export default function WebTodayView() {
         <div
           className={cn(
             "text-center py-8",
-            isFrost ? "text-slate-400" : "text-white/40"
+            isFrost ? "text-slate-400" : "text-white/40",
           )}
         >
           <p>Nothing scheduled</p>
@@ -1499,7 +1499,7 @@ export default function WebTodayView() {
                 "rounded-xl p-3",
                 isFrost
                   ? "bg-white shadow-sm border border-slate-100"
-                  : "bg-white/[0.04] border border-white/[0.08]"
+                  : "bg-white/[0.04] border border-white/[0.08]",
               )}
             >
               <div className="flex items-center justify-between gap-3">
@@ -1518,7 +1518,7 @@ export default function WebTodayView() {
                       item.type === "task" &&
                         (isFrost
                           ? "bg-purple-50 text-purple-500"
-                          : "bg-purple-500/10 text-purple-400")
+                          : "bg-purple-500/10 text-purple-400"),
                     )}
                   >
                     <Icon className="w-3 h-3" />
@@ -1527,7 +1527,7 @@ export default function WebTodayView() {
                     <h3
                       className={cn(
                         "text-sm font-medium truncate",
-                        isFrost ? "text-slate-800" : "text-white"
+                        isFrost ? "text-slate-800" : "text-white",
                       )}
                     >
                       {item.title}
@@ -1536,7 +1536,7 @@ export default function WebTodayView() {
                       <p
                         className={cn(
                           "text-xs truncate",
-                          isFrost ? "text-slate-500" : "text-white/50"
+                          isFrost ? "text-slate-500" : "text-white/50",
                         )}
                       >
                         {item.description}
@@ -1547,7 +1547,7 @@ export default function WebTodayView() {
                 <span
                   className={cn(
                     "text-xs font-medium tabular-nums flex-shrink-0",
-                    isFrost ? "text-slate-500" : "text-white/60"
+                    isFrost ? "text-slate-500" : "text-white/60",
                   )}
                 >
                   {format(occurrenceDate, "h:mm a")}
@@ -1569,13 +1569,13 @@ export default function WebTodayView() {
       <div
         className={cn(
           "text-center pb-3 mb-3 border-b",
-          isFrost ? "border-slate-200" : "border-white/10"
+          isFrost ? "border-slate-200" : "border-white/10",
         )}
       >
         <p
           className={cn(
             "text-[10px] uppercase tracking-[0.15em] mb-0.5",
-            isFrost ? "text-slate-400" : "text-white/30"
+            isFrost ? "text-slate-400" : "text-white/30",
           )}
         >
           {format(today, "EEEE")}
@@ -1583,7 +1583,7 @@ export default function WebTodayView() {
         <h1
           className={cn(
             "text-xl font-serif font-bold",
-            isFrost ? "text-slate-800" : "text-white"
+            isFrost ? "text-slate-800" : "text-white",
           )}
         >
           {format(today, "MMMM d, yyyy")}
@@ -1594,7 +1594,7 @@ export default function WebTodayView() {
         <p
           className={cn(
             "text-center italic py-6 text-sm",
-            isFrost ? "text-slate-400" : "text-white/40"
+            isFrost ? "text-slate-400" : "text-white/40",
           )}
         >
           No appointments for today
@@ -1605,13 +1605,13 @@ export default function WebTodayView() {
           <div
             className={cn(
               "pb-3 border-b",
-              isFrost ? "border-slate-100" : "border-white/5"
+              isFrost ? "border-slate-100" : "border-white/5",
             )}
           >
             <p
               className={cn(
                 "text-xs mb-0.5",
-                isFrost ? "text-slate-500" : "text-white/50"
+                isFrost ? "text-slate-500" : "text-white/50",
               )}
             >
               {format(todayTasks[0].occurrenceDate, "h:mm a")}
@@ -1619,7 +1619,7 @@ export default function WebTodayView() {
             <h2
               className={cn(
                 "text-lg font-serif font-bold leading-tight",
-                isFrost ? "text-slate-800" : "text-white"
+                isFrost ? "text-slate-800" : "text-white",
               )}
             >
               {todayTasks[0].item.title}
@@ -1628,7 +1628,7 @@ export default function WebTodayView() {
               <p
                 className={cn(
                   "mt-1 text-sm leading-relaxed",
-                  isFrost ? "text-slate-600" : "text-white/60"
+                  isFrost ? "text-slate-600" : "text-white/60",
                 )}
               >
                 {todayTasks[0].item.description}
@@ -1642,7 +1642,7 @@ export default function WebTodayView() {
               <p
                 className={cn(
                   "text-[10px] uppercase tracking-wider",
-                  isFrost ? "text-slate-400" : "text-white/30"
+                  isFrost ? "text-slate-400" : "text-white/30",
                 )}
               >
                 Also Today
@@ -1655,7 +1655,7 @@ export default function WebTodayView() {
                   <span
                     className={cn(
                       "text-xs tabular-nums w-12 flex-shrink-0",
-                      isFrost ? "text-slate-400" : "text-white/40"
+                      isFrost ? "text-slate-400" : "text-white/40",
                     )}
                   >
                     {format(occ.occurrenceDate, "h:mm a")}
@@ -1664,7 +1664,7 @@ export default function WebTodayView() {
                     <p
                       className={cn(
                         "text-sm font-medium",
-                        isFrost ? "text-slate-700" : "text-white/90"
+                        isFrost ? "text-slate-700" : "text-white/90",
                       )}
                     >
                       {occ.item.title}
@@ -1688,7 +1688,7 @@ export default function WebTodayView() {
         <p
           className={cn(
             "text-center py-8",
-            isFrost ? "text-slate-400" : "text-white/40"
+            isFrost ? "text-slate-400" : "text-white/40",
           )}
         >
           Nothing today
@@ -1701,13 +1701,13 @@ export default function WebTodayView() {
               className={cn(
                 "flex items-baseline gap-3 py-2",
                 idx > 0 && "border-t",
-                isFrost ? "border-slate-100" : "border-white/[0.04]"
+                isFrost ? "border-slate-100" : "border-white/[0.04]",
               )}
             >
               <span
                 className={cn(
                   "text-xs tabular-nums w-14 flex-shrink-0",
-                  isFrost ? "text-slate-400" : "text-white/40"
+                  isFrost ? "text-slate-400" : "text-white/40",
                 )}
               >
                 {format(occ.occurrenceDate, "h:mm a")}
@@ -1716,7 +1716,7 @@ export default function WebTodayView() {
                 <span
                   className={cn(
                     "text-sm",
-                    isFrost ? "text-slate-800" : "text-white"
+                    isFrost ? "text-slate-800" : "text-white",
                   )}
                 >
                   {occ.item.title}
@@ -1738,7 +1738,7 @@ export default function WebTodayView() {
         <div
           className={cn(
             "text-center py-8",
-            isFrost ? "text-slate-400" : "text-white/40"
+            isFrost ? "text-slate-400" : "text-white/40",
           )}
         >
           <p>Nothing scheduled</p>
@@ -1768,14 +1768,14 @@ export default function WebTodayView() {
                   item.type === "task" &&
                     (isFrost
                       ? "border-l-2 border-l-purple-400"
-                      : "border-l-2 border-l-purple-500")
+                      : "border-l-2 border-l-purple-500"),
                 )}
               >
                 <div className="flex items-center justify-between gap-1 mb-1">
                   <span
                     className={cn(
                       "text-[10px] font-medium tabular-nums",
-                      isFrost ? "text-slate-400" : "text-white/50"
+                      isFrost ? "text-slate-400" : "text-white/50",
                     )}
                   >
                     {format(occurrenceDate, "h:mm a")}
@@ -1788,14 +1788,14 @@ export default function WebTodayView() {
                       item.type === "reminder" &&
                         (isFrost ? "text-cyan-400" : "text-cyan-400"),
                       item.type === "task" &&
-                        (isFrost ? "text-purple-400" : "text-purple-400")
+                        (isFrost ? "text-purple-400" : "text-purple-400"),
                     )}
                   />
                 </div>
                 <h3
                   className={cn(
                     "text-sm font-medium leading-tight flex-1",
-                    isFrost ? "text-slate-800" : "text-white"
+                    isFrost ? "text-slate-800" : "text-white",
                   )}
                 >
                   {item.title}
@@ -1804,7 +1804,7 @@ export default function WebTodayView() {
                   <p
                     className={cn(
                       "text-[11px] mt-1 line-clamp-2",
-                      isFrost ? "text-slate-500" : "text-white/40"
+                      isFrost ? "text-slate-500" : "text-white/40",
                     )}
                   >
                     {item.description}
@@ -1826,7 +1826,7 @@ export default function WebTodayView() {
     const morning = todayTasks.filter((t) => t.occurrenceDate.getHours() < 12);
     const afternoon = todayTasks.filter(
       (t) =>
-        t.occurrenceDate.getHours() >= 12 && t.occurrenceDate.getHours() < 17
+        t.occurrenceDate.getHours() >= 12 && t.occurrenceDate.getHours() < 17,
     );
     const evening = todayTasks.filter((t) => t.occurrenceDate.getHours() >= 17);
 
@@ -1837,7 +1837,7 @@ export default function WebTodayView() {
           <div
             className={cn(
               "text-[10px] uppercase tracking-wider mb-1.5 px-1",
-              isFrost ? "text-slate-400" : "text-white/30"
+              isFrost ? "text-slate-400" : "text-white/30",
             )}
           >
             {label}{" "}
@@ -1856,7 +1856,7 @@ export default function WebTodayView() {
                     "flex-shrink-0 w-36 rounded-xl p-2.5",
                     isFrost
                       ? "bg-white shadow-sm border border-slate-100"
-                      : "bg-white/[0.04] border border-white/[0.08]"
+                      : "bg-white/[0.04] border border-white/[0.08]",
                   )}
                 >
                   <div className="flex items-center gap-1.5 mb-1">
@@ -1874,7 +1874,7 @@ export default function WebTodayView() {
                         item.type === "task" &&
                           (isFrost
                             ? "bg-purple-50 text-purple-500"
-                            : "bg-purple-500/10 text-purple-400")
+                            : "bg-purple-500/10 text-purple-400"),
                       )}
                     >
                       <Icon className="w-2.5 h-2.5" />
@@ -1882,7 +1882,7 @@ export default function WebTodayView() {
                     <span
                       className={cn(
                         "text-[10px] tabular-nums",
-                        isFrost ? "text-slate-400" : "text-white/50"
+                        isFrost ? "text-slate-400" : "text-white/50",
                       )}
                     >
                       {format(occurrenceDate, "h:mm a")}
@@ -1891,7 +1891,7 @@ export default function WebTodayView() {
                   <p
                     className={cn(
                       "text-xs font-medium leading-tight line-clamp-2",
-                      isFrost ? "text-slate-800" : "text-white"
+                      isFrost ? "text-slate-800" : "text-white",
                     )}
                   >
                     {item.title}
@@ -1910,7 +1910,7 @@ export default function WebTodayView() {
           <div
             className={cn(
               "text-center py-8",
-              isFrost ? "text-slate-400" : "text-white/40"
+              isFrost ? "text-slate-400" : "text-white/40",
             )}
           >
             <p>Nothing scheduled</p>
@@ -1935,7 +1935,7 @@ export default function WebTodayView() {
         <p
           className={cn(
             "text-center py-8",
-            isFrost ? "text-slate-400" : "text-white/40"
+            isFrost ? "text-slate-400" : "text-white/40",
           )}
         >
           Nothing scheduled
@@ -1944,7 +1944,7 @@ export default function WebTodayView() {
         <div
           className={cn(
             "divide-y",
-            isFrost ? "divide-slate-100" : "divide-white/[0.04]"
+            isFrost ? "divide-slate-100" : "divide-white/[0.04]",
           )}
         >
           {todayTasks.map((occ, idx) => {
@@ -1955,7 +1955,7 @@ export default function WebTodayView() {
                 key={`${item.id}-${idx}`}
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02]",
-                  isFrost ? "hover:bg-slate-50" : "hover:bg-white/[0.02]"
+                  isFrost ? "hover:bg-slate-50" : "hover:bg-white/[0.02]",
                 )}
               >
                 <div
@@ -1972,7 +1972,7 @@ export default function WebTodayView() {
                     item.type === "task" &&
                       (isFrost
                         ? "bg-purple-100/50 text-purple-600"
-                        : "bg-purple-500/10 text-purple-400")
+                        : "bg-purple-500/10 text-purple-400"),
                   )}
                 >
                   <Icon className="w-4 h-4" />
@@ -1982,7 +1982,7 @@ export default function WebTodayView() {
                     <h3
                       className={cn(
                         "text-sm font-medium truncate",
-                        isFrost ? "text-slate-900" : "text-white"
+                        isFrost ? "text-slate-900" : "text-white",
                       )}
                     >
                       {item.title}
@@ -1992,7 +1992,7 @@ export default function WebTodayView() {
                         "text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded",
                         isFrost
                           ? "bg-slate-100 text-slate-500"
-                          : "bg-white/10 text-white/50"
+                          : "bg-white/10 text-white/50",
                       )}
                     >
                       {item.type}
@@ -2001,7 +2001,7 @@ export default function WebTodayView() {
                   <p
                     className={cn(
                       "text-xs truncate",
-                      isFrost ? "text-slate-500" : "text-white/50"
+                      isFrost ? "text-slate-500" : "text-white/50",
                     )}
                   >
                     {item.description || "No description"}
@@ -2011,7 +2011,7 @@ export default function WebTodayView() {
                   <p
                     className={cn(
                       "text-xs font-medium tabular-nums",
-                      isFrost ? "text-slate-700" : "text-white/80"
+                      isFrost ? "text-slate-700" : "text-white/80",
                     )}
                   >
                     {format(occurrenceDate, "h:mm a")}
@@ -2019,7 +2019,7 @@ export default function WebTodayView() {
                   <p
                     className={cn(
                       "text-[10px]",
-                      isFrost ? "text-slate-400" : "text-white/30"
+                      isFrost ? "text-slate-400" : "text-white/30",
                     )}
                   >
                     {format(occurrenceDate, "MMM d")}
@@ -2060,7 +2060,7 @@ export default function WebTodayView() {
     // For the list below, show subsequent tasks
     const laterTasks = nextTask
       ? todayTasks.filter(
-          (t) => t.occurrenceDate.getTime() > nextTask.occurrenceDate.getTime()
+          (t) => t.occurrenceDate.getTime() > nextTask.occurrenceDate.getTime(),
         )
       : [];
 
@@ -2072,7 +2072,7 @@ export default function WebTodayView() {
               "p-4 rounded-full mb-4",
               isFrost
                 ? "bg-slate-100 text-slate-400"
-                : "bg-white/5 text-white/20"
+                : "bg-white/5 text-white/20",
             )}
           >
             <Calendar className="w-8 h-8" />
@@ -2092,7 +2092,7 @@ export default function WebTodayView() {
           <div
             className={cn(
               "text-xs font-medium uppercase tracking-widest mb-4",
-              isFrost ? "text-slate-400" : "text-white/40"
+              isFrost ? "text-slate-400" : "text-white/40",
             )}
           >
             Up Next
@@ -2111,7 +2111,7 @@ export default function WebTodayView() {
               nextTask.item.type === "task" &&
                 (isFrost
                   ? "bg-purple-100 text-purple-500 shadow-purple-200"
-                  : "bg-purple-500/20 text-purple-400 shadow-purple-900/20")
+                  : "bg-purple-500/20 text-purple-400 shadow-purple-900/20"),
             )}
           >
             <Icon className="w-8 h-8" />
@@ -2119,7 +2119,7 @@ export default function WebTodayView() {
           <h2
             className={cn(
               "text-2xl font-bold mb-2",
-              isFrost ? "text-slate-800" : "text-white"
+              isFrost ? "text-slate-800" : "text-white",
             )}
           >
             {nextTask.item.title}
@@ -2127,7 +2127,7 @@ export default function WebTodayView() {
           <p
             className={cn(
               "text-xl font-medium tabular-nums mb-4",
-              isFrost ? "text-slate-500" : "text-white/60"
+              isFrost ? "text-slate-500" : "text-white/60",
             )}
           >
             {format(nextTask.occurrenceDate, "h:mm a")}
@@ -2136,7 +2136,7 @@ export default function WebTodayView() {
             <p
               className={cn(
                 "text-sm max-w-xs mx-auto",
-                isFrost ? "text-slate-400" : "text-white/40"
+                isFrost ? "text-slate-400" : "text-white/40",
               )}
             >
               {nextTask.item.description}
@@ -2150,13 +2150,13 @@ export default function WebTodayView() {
               "flex-shrink-0 p-4 border-t",
               isFrost
                 ? "bg-slate-50 border-slate-100"
-                : "bg-black/20 border-white/5"
+                : "bg-black/20 border-white/5",
             )}
           >
             <p
               className={cn(
                 "text-xs font-medium uppercase tracking-wider mb-3",
-                isFrost ? "text-slate-400" : "text-white/30"
+                isFrost ? "text-slate-400" : "text-white/30",
               )}
             >
               Later
@@ -2175,7 +2175,7 @@ export default function WebTodayView() {
                   <span
                     className={cn(
                       isFrost ? "text-slate-400" : "text-white/30",
-                      "text-xs tabular-nums"
+                      "text-xs tabular-nums",
                     )}
                   >
                     {format(occ.occurrenceDate, "h:mm a")}
@@ -2186,7 +2186,7 @@ export default function WebTodayView() {
                 <p
                   className={cn(
                     "text-xs text-center pt-1",
-                    isFrost ? "text-slate-400" : "text-white/30"
+                    isFrost ? "text-slate-400" : "text-white/30",
                   )}
                 >
                   + {laterTasks.length - 3} more
@@ -2207,33 +2207,33 @@ export default function WebTodayView() {
     const morning = todayTasks.filter((t) => t.occurrenceDate.getHours() < 12);
     const afternoon = todayTasks.filter(
       (t) =>
-        t.occurrenceDate.getHours() >= 12 && t.occurrenceDate.getHours() < 17
+        t.occurrenceDate.getHours() >= 12 && t.occurrenceDate.getHours() < 17,
     );
     const evening = todayTasks.filter((t) => t.occurrenceDate.getHours() >= 17);
 
     const renderColumn = (
       label: string,
       items: ExpandedOccurrence[],
-      colorClass: string
+      colorClass: string,
     ) => (
       <div
         className={cn(
           "flex-shrink-0 w-64 flex flex-col rounded-xl h-full overflow-hidden border",
           isFrost
             ? "bg-slate-50 border-slate-200"
-            : "bg-white/[0.02] border-white/[0.06]"
+            : "bg-white/[0.02] border-white/[0.06]",
         )}
       >
         <div
           className={cn(
             "px-3 py-2 border-b flex items-center justify-between",
-            isFrost ? "border-slate-200" : "border-white/[0.06]"
+            isFrost ? "border-slate-200" : "border-white/[0.06]",
           )}
         >
           <span
             className={cn(
               "font-medium text-xs",
-              isFrost ? "text-slate-600" : "text-white/70"
+              isFrost ? "text-slate-600" : "text-white/70",
             )}
           >
             {label}
@@ -2243,7 +2243,7 @@ export default function WebTodayView() {
               "text-[10px] px-1.5 py-0.5 rounded-full",
               isFrost
                 ? "bg-slate-200 text-slate-600"
-                : "bg-white/10 text-white/50"
+                : "bg-white/10 text-white/50",
             )}
           >
             {items.length}
@@ -2260,14 +2260,14 @@ export default function WebTodayView() {
                   "p-2.5 rounded-lg border",
                   isFrost
                     ? "bg-white border-slate-200 shadow-sm"
-                    : "bg-black/40 border-white/5"
+                    : "bg-black/40 border-white/5",
                 )}
               >
                 <div className="flex justify-between items-start mb-1">
                   <span
                     className={cn(
                       "text-[10px] font-medium px-1.5 py-0.5 rounded",
-                      colorClass
+                      colorClass,
                     )}
                   >
                     {format(occurrenceDate, "h:mm a")}
@@ -2279,7 +2279,7 @@ export default function WebTodayView() {
                 <p
                   className={cn(
                     "text-sm font-medium leading-tight mb-1",
-                    isFrost ? "text-slate-800" : "text-white"
+                    isFrost ? "text-slate-800" : "text-white",
                   )}
                 >
                   {item.title}
@@ -2288,7 +2288,7 @@ export default function WebTodayView() {
                   <p
                     className={cn(
                       "text-[10px] line-clamp-2",
-                      isFrost ? "text-slate-400" : "text-white/40"
+                      isFrost ? "text-slate-400" : "text-white/40",
                     )}
                   >
                     {item.description}
@@ -2308,19 +2308,19 @@ export default function WebTodayView() {
           morning,
           isFrost
             ? "bg-amber-100 text-amber-700"
-            : "bg-amber-500/20 text-amber-300"
+            : "bg-amber-500/20 text-amber-300",
         )}
         {renderColumn(
           "Afternoon",
           afternoon,
-          isFrost ? "bg-sky-100 text-sky-700" : "bg-sky-500/20 text-sky-300"
+          isFrost ? "bg-sky-100 text-sky-700" : "bg-sky-500/20 text-sky-300",
         )}
         {renderColumn(
           "Evening",
           evening,
           isFrost
             ? "bg-indigo-100 text-indigo-700"
-            : "bg-indigo-500/20 text-indigo-300"
+            : "bg-indigo-500/20 text-indigo-300",
         )}
       </div>
     );
@@ -2360,7 +2360,7 @@ export default function WebTodayView() {
           "flex-shrink-0 px-3 py-2 flex items-center justify-between gap-2",
           isFrost
             ? "bg-slate-50 border-b border-slate-100"
-            : "bg-white/[0.02] border-b border-white/[0.04]"
+            : "bg-white/[0.02] border-b border-white/[0.04]",
         )}
       >
         {/* Time scope toggle (Today / This Week) */}
@@ -2368,7 +2368,7 @@ export default function WebTodayView() {
           <div
             className={cn(
               "flex rounded-lg p-0.5",
-              isFrost ? "bg-slate-100" : "bg-white/[0.05]"
+              isFrost ? "bg-slate-100" : "bg-white/[0.05]",
             )}
           >
             {(["today", "week"] as TimeScope[]).map((scope) => (
@@ -2386,7 +2386,7 @@ export default function WebTodayView() {
                         : "bg-cyan-500/30 text-cyan-300"
                     : isFrost
                       ? "text-slate-500 hover:text-slate-700"
-                      : "text-white/40 hover:text-white/60"
+                      : "text-white/40 hover:text-white/60",
                 )}
               >
                 {timeScopeLabels[scope]}
@@ -2399,7 +2399,7 @@ export default function WebTodayView() {
             <p
               className={cn(
                 "text-xs",
-                isFrost ? "text-slate-500" : "text-white/50"
+                isFrost ? "text-slate-500" : "text-white/50",
               )}
             >
               {timeScope === "today"
@@ -2419,7 +2419,7 @@ export default function WebTodayView() {
                 "flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors",
                 isFrost
                   ? "text-slate-500 hover:bg-slate-100"
-                  : "text-white/50 hover:bg-white/[0.05]"
+                  : "text-white/50 hover:bg-white/[0.05]",
               )}
             >
               {sortMode === "time" && <Clock className="w-3 h-3" />}
@@ -2437,7 +2437,7 @@ export default function WebTodayView() {
                 "absolute right-0 top-full mt-1 py-1 rounded-lg shadow-lg z-20 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all",
                 isFrost
                   ? "bg-white border border-slate-200"
-                  : "bg-slate-900 border border-white/10"
+                  : "bg-slate-900 border border-white/10",
               )}
             >
               {(["time", "priority", "category"] as SortMode[]).map((mode) => (
@@ -2453,7 +2453,7 @@ export default function WebTodayView() {
                         : "bg-cyan-500/10 text-cyan-400"
                       : isFrost
                         ? "text-slate-600 hover:bg-slate-50"
-                        : "text-white/70 hover:bg-white/5"
+                        : "text-white/70 hover:bg-white/5",
                   )}
                 >
                   {mode === "time" && <Clock className="w-3 h-3" />}
@@ -2478,7 +2478,7 @@ export default function WebTodayView() {
                     : "bg-amber-500/20 text-amber-300"
                   : isFrost
                     ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
-                    : "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                    : "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20",
               )}
             >
               <AlertCircle className="w-3 h-3" />
@@ -2499,7 +2499,7 @@ export default function WebTodayView() {
                     : "bg-cyan-500/20 text-cyan-400"
                   : isFrost
                     ? "text-slate-400 hover:bg-slate-100"
-                    : "text-white/40 hover:bg-white/[0.05]"
+                    : "text-white/40 hover:bg-white/[0.05]",
               )}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -2512,7 +2512,7 @@ export default function WebTodayView() {
       <div
         className={cn(
           "flex-shrink-0 px-3 py-1.5 flex gap-1 overflow-x-auto",
-          isFrost ? "bg-slate-50/50" : "bg-white/[0.01]"
+          isFrost ? "bg-slate-50/50" : "bg-white/[0.01]",
         )}
       >
         {(Object.keys(viewModeLabels) as ViewMode[]).map((mode) => (
@@ -2530,7 +2530,7 @@ export default function WebTodayView() {
                     : "bg-cyan-500 text-black"
                 : isFrost
                   ? "text-slate-500 hover:bg-slate-100"
-                  : "text-white/50 hover:bg-white/[0.05]"
+                  : "text-white/50 hover:bg-white/[0.05]",
             )}
           >
             {viewModeLabels[mode]}
@@ -2545,7 +2545,7 @@ export default function WebTodayView() {
             "flex-shrink-0 mx-3 mt-2 rounded-lg overflow-hidden",
             isFrost
               ? "bg-amber-50 border border-amber-100"
-              : "bg-amber-500/5 border border-amber-500/10"
+              : "bg-amber-500/5 border border-amber-500/10",
           )}
         >
           <div
@@ -2553,13 +2553,13 @@ export default function WebTodayView() {
               "flex items-center justify-between px-2.5 py-1.5",
               isFrost
                 ? "border-b border-amber-100"
-                : "border-b border-amber-500/10"
+                : "border-b border-amber-500/10",
             )}
           >
             <span
               className={cn(
                 "text-[11px] font-medium",
-                isFrost ? "text-amber-700" : "text-amber-400"
+                isFrost ? "text-amber-700" : "text-amber-400",
               )}
             >
               Overdue Items
@@ -2571,7 +2571,7 @@ export default function WebTodayView() {
                 "p-0.5 rounded",
                 isFrost
                   ? "hover:bg-amber-100 text-amber-500"
-                  : "hover:bg-amber-500/10 text-amber-400"
+                  : "hover:bg-amber-500/10 text-amber-400",
               )}
             >
               <X className="w-3 h-3" />
@@ -2586,7 +2586,7 @@ export default function WebTodayView() {
                 <span
                   className={cn(
                     "text-[10px] w-10 flex-shrink-0",
-                    isFrost ? "text-amber-600" : "text-amber-400/70"
+                    isFrost ? "text-amber-600" : "text-amber-400/70",
                   )}
                 >
                   {format(occ.occurrenceDate, "MMM d")}
@@ -2594,7 +2594,7 @@ export default function WebTodayView() {
                 <span
                   className={cn(
                     "truncate",
-                    isFrost ? "text-amber-800" : "text-amber-300"
+                    isFrost ? "text-amber-800" : "text-amber-300",
                   )}
                 >
                   {occ.item.title}
@@ -2614,14 +2614,14 @@ export default function WebTodayView() {
               ? "bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100"
               : isPink
                 ? "bg-gradient-to-br from-pink-500/5 to-purple-500/5 border border-pink-500/10"
-                : "bg-gradient-to-br from-cyan-500/5 to-blue-500/5 border border-cyan-500/10"
+                : "bg-gradient-to-br from-cyan-500/5 to-blue-500/5 border border-cyan-500/10",
           )}
         >
           <div className="flex items-start justify-between gap-2">
             <p
               className={cn(
                 "text-xs leading-relaxed whitespace-pre-wrap",
-                isFrost ? "text-slate-600" : "text-white/70"
+                isFrost ? "text-slate-600" : "text-white/70",
               )}
             >
               {narrative}
@@ -2633,7 +2633,7 @@ export default function WebTodayView() {
                 "p-0.5 rounded flex-shrink-0",
                 isFrost
                   ? "hover:bg-indigo-100 text-indigo-400"
-                  : "hover:bg-white/10 text-white/40"
+                  : "hover:bg-white/10 text-white/40",
               )}
             >
               <X className="w-3 h-3" />

@@ -1,5 +1,5 @@
 // src/app/api/guest-portal/bot/route.ts
-// Jarvis chatbot — answers guest questions from recipes, bio, schedule (no AI)
+// ERA chatbot — answers guest questions from recipes, bio, schedule (no AI)
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -52,13 +52,11 @@ export async function POST(request: NextRequest) {
     switch (intent) {
       case "bedtime": {
         const sleep = bio.sleep_time;
-        const wake = bio.wake_time;
-        if (sleep && wake) {
+        const wake = bio.wake_time || "6:20 AM";
+        if (sleep) {
           botResponse = `🌙 The household usually winds down around **${sleep}** and wakes up at **${wake}**. Feel free to adjust to your own rhythm though — we just ask to keep noise low after ${sleep}. Sweet dreams! ✨`;
-        } else if (sleep) {
-          botResponse = `🌙 We typically head to bed around **${sleep}**. Please keep things quiet after that. Rest well! 😊`;
         } else {
-          botResponse = `🌙 No specific bedtime is set, but we're usually night owls! Just be considerate of noise levels late at night. 😄`;
+          botResponse = `🌙 The household typically wakes up around **${wake}**. No strict bedtime rules — just be considerate of noise levels late at night. Rest well! 😊`;
         }
         break;
       }
@@ -198,7 +196,7 @@ export async function POST(request: NextRequest) {
       }
 
       case "house_rules": {
-        let rules = `📋 **House Guidelines:**\n\n✅ **Do:**\n• Play music — ask for playlist suggestions!\n• Help yourself to anything in the fridge\n• Make yourself at home\n• Leave good vibes only ✨\n\n❌ **Don't:**\n• No smoking inside (balcony available)`;
+        let rules = `📋 **House Guidelines:**\n\n✅ **Do:**\n• Settle in, relax, and enjoy every moment 😊\n• Help yourself to anything in the fridge. Mi casa es su casa 🏡\n• You're here to have fun, not to iron. But if you insist, the board's behind the door 👔\n\n❌ **Don't:**\n• No smoking indoors. The balcony is all yours for that 🚭\n\n📌 **Good to Know:**\n• We run on Metal & Classical here. Other genres? Sure, but headphones exist for a reason 🎧`;
 
         if (bio.house_rules_extra && bio.house_rules_extra.length > 0) {
           rules += `\n\n📌 **Additional Notes:**\n${bio.house_rules_extra.map((r) => `• ${r}`).join("\n")}`;
@@ -257,7 +255,7 @@ export async function POST(request: NextRequest) {
           "• 💬 Or just type anything — your host will be notified!",
         );
 
-        botResponse = `Hey there! 👋 Welcome! I'm Jarvis, your host's assistant. Here's what I can help with:\n\n${features.join("\n")}\n\nJust tap a suggestion below or type your question!`;
+        botResponse = `Hey there! 👋 Welcome! I'm ERA, your host's AI concierge. Here's what I can help with:\n\n${features.join("\n")}\n\nJust tap a suggestion below or type your question!`;
         break;
       }
 
