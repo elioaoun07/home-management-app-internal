@@ -14,15 +14,18 @@ export default function ChatStandalonePage() {
   if (!mounted) {
     // Return a loading skeleton that matches the server render
     return (
-      <main className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-14">
-        <div className="min-h-screen pb-4 px-4">
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="p-4 rounded-xl neo-card bg-bg-card-custom border border-white/5 animate-pulse"
-              >
-                <div className="h-16 bg-white/5 rounded" />
+      <main className="h-screen bg-background pt-14 overflow-hidden">
+        <div className="h-full overflow-y-auto">
+          <div className="divide-y divide-white/5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="px-4 py-3 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-white/5" />
+                  <div className="flex-1">
+                    <div className="h-4 w-32 bg-white/5 rounded mb-2" />
+                    <div className="h-3 w-48 bg-white/5 rounded" />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -32,7 +35,7 @@ export default function ChatStandalonePage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-14">
+    <main className="h-screen bg-background pt-14 overflow-hidden">
       <HubPage standalone />
     </main>
   );

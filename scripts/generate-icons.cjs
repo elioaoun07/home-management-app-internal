@@ -46,11 +46,15 @@ const remindersOutputs = [
 
 async function generateIcons(srcSvgPath, outputs, label) {
   if (!fs.existsSync(srcSvgPath)) {
-    console.log(`Skipping ${label} icons - source SVG not found: ${srcSvgPath}`);
+    console.log(
+      `Skipping ${label} icons - source SVG not found: ${srcSvgPath}`,
+    );
     return;
   }
 
-  console.log(`\nGenerating ${label} icons from ${path.basename(srcSvgPath)}...`);
+  console.log(
+    `\nGenerating ${label} icons from ${path.basename(srcSvgPath)}...`,
+  );
 
   if (sharp) {
     for (const { size, file } of outputs) {
@@ -95,16 +99,28 @@ async function generateIcons(srcSvgPath, outputs, label) {
 
 async function main() {
   // Generate main app icons
-  await generateIcons(path.join(publicDir, "appicon.svg"), mainOutputs, "Main App");
-  
+  await generateIcons(
+    path.join(publicDir, "appicon.svg"),
+    mainOutputs,
+    "Main App",
+  );
+
   // Generate chat app icons
-  await generateIcons(path.join(publicDir, "chat-icon.svg"), chatOutputs, "Chat App");
-  
+  await generateIcons(
+    path.join(publicDir, "chat-icon.svg"),
+    chatOutputs,
+    "Chat App",
+  );
+
   // Generate reminders app icons (if SVG exists)
-  await generateIcons(path.join(publicDir, "reminders-icon.svg"), remindersOutputs, "Reminders App");
+  await generateIcons(
+    path.join(publicDir, "reminders-icon.svg"),
+    remindersOutputs,
+    "Reminders App",
+  );
 
   console.log("\nIcon generation complete.");
-  
+
   // Create favicon.ico if possible
   if (toIco) {
     try {

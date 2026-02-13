@@ -180,7 +180,12 @@ export default function HubPage({ standalone = false }: HubPageProps) {
   }, [hubDefaultView, setHubDefaultView, setActiveView, setActiveThreadId]);
 
   return (
-    <div className={cn("min-h-screen pb-24", themeClasses.bgPage)}>
+    <div
+      className={cn(
+        themeClasses.bgPage,
+        activeThreadId ? "h-full" : "min-h-screen pb-24",
+      )}
+    >
       {/* Offline/Error Banner - Shows when connectivity issues */}
       <OfflineBanner />
 
@@ -219,7 +224,9 @@ export default function HubPage({ standalone = false }: HubPageProps) {
       )}
 
       {/* View Content */}
-      <div className={cn(!activeThreadId && "px-4")}>
+      <div
+        className={cn(!activeThreadId && "px-4", activeThreadId && "h-full")}
+      >
         {(activeView === "chat" || standalone) && (
           <ChatView
             activeThreadId={activeThreadId}
@@ -508,51 +515,54 @@ function ChatView({
   }
 
   return (
-    <>
-      {/* Search + New Chat Row */}
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Search + New Chat Row - Sticky Header */}
       {householdId && (
-        <div className="mb-3 flex items-center gap-2">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-2 pl-9 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-blue-500/50 transition-all"
-            />
-            <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-white/10 text-white/40 hover:text-white/60 transition-all"
+        <div className="shrink-0 px-4 py-2 bg-background border-b border-white/5">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-3 py-2 pl-9 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-blue-500/50 transition-all"
+              />
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
               >
-                <XIcon className="w-3.5 h-3.5" />
-              </button>
-            )}
+                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-white/10 text-white/40 hover:text-white/60 transition-all"
+                >
+                  <XIcon className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white shrink-0"
+              title="New Chat"
+            >
+              <PlusIcon className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white shrink-0"
-            title="New Chat"
-          >
-            <PlusIcon className="w-5 h-5" />
-          </button>
         </div>
       )}
 
-      {/* Combined Filters Row - Scrollable */}
-      {householdId && threads.length > 0 && (
-        <div className="mb-3 -mx-4 px-4 overflow-x-auto scrollbar-hide">
-          <div className="flex items-center gap-1.5 pb-1">
-            {/* Visibility Toggle */}
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Combined Filters Row */}
+        {householdId && threads.length > 0 && (
+          <div className="px-4 py-2 flex items-center gap-1.5 border-b border-white/5">
+            {/* Visibility Toggle - Fixed */}
             <div className="flex bg-white/5 rounded-lg p-0.5 shrink-0">
               <button
                 onClick={() => setVisibilityFilter("all")}
@@ -611,121 +621,134 @@ function ChatView({
             {/* Separator */}
             <div className="w-px h-5 bg-white/10 shrink-0" />
 
-            {/* Category Filter - Expandable */}
-            {!showCategoryPicker ? (
-              // Collapsed: Show current filter as clickable button
-              <button
-                onClick={() => setShowCategoryPicker(true)}
-                className={cn(
-                  "flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap shrink-0",
-                  purposeFilter === "all"
-                    ? "bg-white/5 text-white/60 hover:bg-white/10"
-                    : "bg-blue-500/20 text-blue-400",
-                )}
-              >
-                {purposeFilter === "all" ? (
-                  <>
+            {/* Category Filter - Scrollable */}
+            <div className="flex-1 overflow-x-auto scrollbar-hide -mr-4 pr-4">
+              <div className="flex items-center gap-1.5">
+                {/* Collapsed trigger button */}
+                <button
+                  onClick={() => setShowCategoryPicker(!showCategoryPicker)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap shrink-0",
+                    showCategoryPicker && "hidden",
+                    purposeFilter === "all"
+                      ? "bg-white/5 text-white/60 hover:bg-white/10"
+                      : "bg-blue-500/20 text-blue-400",
+                  )}
+                >
+                  {purposeFilter === "all" ? (
                     <span>All</span>
-                    <svg
-                      className="w-3 h-3 text-white/40"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </>
-                ) : (
-                  <>
-                    {
-                      purposeOptions.find((o) => o.value === purposeFilter)
-                        ?.icon
-                    }
-                    <span>
+                  ) : (
+                    <>
                       {
                         purposeOptions.find((o) => o.value === purposeFilter)
-                          ?.label
+                          ?.icon
                       }
-                    </span>
-                    <svg
-                      className="w-3 h-3 text-white/40"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </>
-                )}
-              </button>
-            ) : (
-              // Expanded: Show all category options
-              <>
-                {purposeOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => {
-                      setPurposeFilter(option.value);
-                      setShowCategoryPicker(false);
-                    }}
-                    className={cn(
-                      "flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap shrink-0",
-                      purposeFilter === option.value
-                        ? "bg-blue-500/20 text-blue-400"
-                        : "text-white/40 hover:text-white/60 hover:bg-white/5",
-                    )}
+                      <span>
+                        {
+                          purposeOptions.find((o) => o.value === purposeFilter)
+                            ?.label
+                        }
+                      </span>
+                    </>
+                  )}
+                  <svg
+                    className="w-3 h-3 text-white/40"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
                   >
-                    {option.icon}
-                    <span>{option.value === "all" ? "All" : option.label}</span>
-                  </button>
-                ))}
-              </>
-            )}
-          </div>
-        </div>
-      )}
+                    <path d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
 
-      {/* AI Assistant - Always First */}
-      <AIAssistantItem onClick={() => setActiveThreadId(AI_THREAD_ID)} />
+                {/* Expanded category options */}
+                {showCategoryPicker &&
+                  purposeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setPurposeFilter(option.value);
+                        setShowCategoryPicker(false);
+                      }}
+                      className={cn(
+                        "flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap shrink-0 animate-in fade-in duration-150",
+                        purposeFilter === option.value
+                          ? "bg-blue-500/20 text-blue-400"
+                          : "text-white/40 hover:text-white/60 hover:bg-white/5",
+                      )}
+                    >
+                      {option.icon}
+                      <span>
+                        {option.value === "all" ? "All" : option.label}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </div>
 
-      {/* Household Threads */}
-      {householdId && filteredThreads.length > 0 && (
-        <div className="space-y-2 mt-2">
-          {filteredThreads.map((thread) => (
-            <ThreadItem
-              key={thread.id}
-              thread={thread}
-              currentUserId={data.current_user_id}
-              onClick={() => setActiveThreadId(thread.id)}
-            />
-          ))}
-        </div>
-      )}
+            {/* Separator */}
+            <div className="w-px h-5 bg-white/10 shrink-0" />
 
-      {/* No results message */}
-      {householdId &&
-        threads.length > 0 &&
-        filteredThreads.length === 0 &&
-        purposeFilter !== "all" && (
-          <div className="p-6 rounded-2xl neo-card bg-bg-card-custom border border-white/5 text-center mt-4">
-            <MessageIcon className="w-10 h-10 mx-auto mb-2 text-blue-400/30" />
-            <p className="text-sm text-white/50">
-              No {purposeFilter} conversations yet
-            </p>
+            {/* AI Chatbot Icon */}
+            <button
+              onClick={() => setActiveThreadId(AI_THREAD_ID)}
+              className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-white/10 text-cyan-400 hover:text-cyan-300 hover:border-cyan-500/30 transition-all shrink-0"
+              title="Budget AI"
+            >
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z" />
+                <circle cx="8" cy="14" r="1" fill="currentColor" />
+                <circle cx="16" cy="14" r="1" fill="currentColor" />
+                <path d="M9 18h6" strokeLinecap="round" />
+              </svg>
+            </button>
           </div>
         )}
 
-      {/* No household message - but AI is still available */}
-      {!householdId && (
-        <div className="p-6 rounded-2xl neo-card bg-bg-card-custom border border-white/5 text-center mt-4">
-          <MessageIcon className="w-10 h-10 mx-auto mb-2 text-blue-400/30" />
-          <p className="text-sm text-white/50">
-            Link with a partner in Settings to chat with your household
-          </p>
-        </div>
-      )}
+        {/* Household Threads */}
+        {householdId && filteredThreads.length > 0 && (
+          <div className="divide-y divide-white/5">
+            {filteredThreads.map((thread) => (
+              <ThreadItem
+                key={thread.id}
+                thread={thread}
+                currentUserId={data.current_user_id}
+                onClick={() => setActiveThreadId(thread.id)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* No results message */}
+        {householdId &&
+          threads.length > 0 &&
+          filteredThreads.length === 0 &&
+          purposeFilter !== "all" && (
+            <div className="px-4 py-12 text-center">
+              <MessageIcon className="w-10 h-10 mx-auto mb-2 text-blue-400/30" />
+              <p className="text-sm text-white/50">
+                No {purposeFilter} conversations yet
+              </p>
+            </div>
+          )}
+
+        {/* No household message - but AI is still available */}
+        {!householdId && (
+          <div className="px-4 py-12 text-center">
+            <MessageIcon className="w-10 h-10 mx-auto mb-2 text-blue-400/30" />
+            <p className="text-sm text-white/50">
+              Link with a partner in Settings to chat with your household
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Create Thread Modal */}
       {showCreateModal && householdId && (
@@ -738,7 +761,7 @@ function ChatView({
           }}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -763,111 +786,60 @@ function ThreadItem({
   const threadColor = thread.color || purposeConfig.defaultColor;
 
   return (
-    <div className="relative">
-      <button
-        onClick={onClick}
-        className="w-full p-4 rounded-xl neo-card bg-bg-card-custom border transition-all flex items-center gap-3 text-left"
-        style={{
-          borderColor:
-            thread.unread_count > 0
-              ? `${threadColor}30`
-              : "rgba(255,255,255,0.05)",
-          backgroundColor:
-            thread.unread_count > 0 ? `${threadColor}05` : undefined,
-        }}
-      >
-        {/* Icon */}
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full pl-3 pr-4 py-3 flex items-center gap-2.5 text-left transition-colors active:bg-white/5",
+        thread.unread_count > 0 && "bg-white/[0.02]",
+      )}
+    >
+      {/* Icon with lock badge */}
+      <div className="relative shrink-0">
         <div
-          className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 relative transition-all"
+          className="w-11 h-11 rounded-full flex items-center justify-center"
           style={{
-            backgroundColor: `${threadColor}25`,
+            backgroundColor: `${threadColor}20`,
             color: threadColor,
           }}
         >
-          <IconComponent className="w-6 h-6" />
+          <IconComponent className="w-5 h-5" />
         </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3
-              className={cn(
-                "text-sm font-semibold truncate",
-                thread.unread_count > 0 ? "text-white" : "text-white/90",
-              )}
+        {/* Private lock badge */}
+        {thread.is_private && (
+          <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-purple-500 flex items-center justify-center border-2 border-slate-900">
+            <svg
+              className="w-2.5 h-2.5 text-purple-300"
+              fill="currentColor"
+              viewBox="0 0 24 24"
             >
-              {thread.title}
-            </h3>
-            {/* Private indicator */}
-            {thread.is_private && (
-              <svg
-                className="w-4 h-4 text-purple-400"
+              <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+              <path
+                d="M7 11V7a5 5 0 0 1 10 0v4"
                 fill="none"
-                viewBox="0 0 24 24"
                 stroke="currentColor"
-                strokeWidth={2.5}
-              >
-                <title>Private - only you can see this</title>
-                <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-            )}
-            {/* Purpose badge */}
-            {thread.purpose && thread.purpose !== "general" && (
-              <span
-                className={cn(
-                  "px-2 py-0.5 rounded-full text-xs font-medium",
-                  thread.purpose === "budget" &&
-                    "bg-emerald-500/20 text-emerald-400",
-                  thread.purpose === "reminder" &&
-                    "bg-amber-500/20 text-amber-400",
-                  thread.purpose === "shopping" &&
-                    "bg-blue-500/20 text-blue-400",
-                  thread.purpose === "travel" &&
-                    "bg-purple-500/20 text-purple-400",
-                  thread.purpose === "health" && "bg-red-500/20 text-red-400",
-                  thread.purpose === "notes" &&
-                    "bg-yellow-500/20 text-yellow-400",
-                  thread.purpose === "other" &&
-                    "bg-slate-500/20 text-slate-400",
-                )}
-              >
-                {thread.purpose}
-              </span>
-            )}
-            {thread.unread_count > 0 && (
-              <span className="relative flex items-center justify-center badge-enter">
-                <span className="absolute w-5 h-5 rounded-full bg-blue-500/50 animate-ping" />
-                <span className="relative px-2 py-0.5 min-w-[20px] text-center rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs font-bold shadow-lg shadow-blue-500/30">
-                  {thread.unread_count}
-                </span>
-              </span>
-            )}
+                strokeWidth="2"
+              />
+            </svg>
           </div>
-          {lastMessage ? (
-            <p
-              className={cn(
-                "text-xs truncate mt-0.5",
-                thread.unread_count > 0
-                  ? "text-white/70 font-medium"
-                  : "text-white/50",
-              )}
-            >
-              {isMyLastMessage ? "You: " : ""}
-              {lastMessage.content}
-            </p>
-          ) : (
-            <p className="text-xs text-white/30 italic mt-0.5">
-              No messages yet
-            </p>
-          )}
-        </div>
+        )}
+      </div>
 
-        {/* Time */}
-        <div className="flex flex-col items-end gap-1 shrink-0">
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        {/* Title row */}
+        <div className="flex items-center gap-1.5">
+          <h3
+            className={cn(
+              "text-sm font-semibold truncate flex-1",
+              thread.unread_count > 0 ? "text-white" : "text-white/90",
+            )}
+          >
+            {thread.title}
+          </h3>
+          {/* Time */}
           <span
             className={cn(
-              "text-xs",
+              "text-[11px] shrink-0",
               thread.unread_count > 0
                 ? "text-blue-400 font-medium"
                 : "text-white/30",
@@ -876,8 +848,53 @@ function ThreadItem({
             {formatRelativeTime(thread.last_message_at)}
           </span>
         </div>
-      </button>
-    </div>
+        {/* Preview row */}
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {lastMessage ? (
+            <p
+              className={cn(
+                "text-xs truncate flex-1",
+                thread.unread_count > 0 ? "text-white/60" : "text-white/40",
+              )}
+            >
+              {isMyLastMessage ? "You: " : ""}
+              {lastMessage.content}
+            </p>
+          ) : (
+            <p className="text-xs text-white/30 italic flex-1">
+              No messages yet
+            </p>
+          )}
+          {/* Purpose badge - compact, right aligned */}
+          {thread.purpose && thread.purpose !== "general" && (
+            <span
+              className={cn(
+                "px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0",
+                thread.purpose === "budget" &&
+                  "bg-emerald-500/20 text-emerald-400",
+                thread.purpose === "reminder" &&
+                  "bg-amber-500/20 text-amber-400",
+                thread.purpose === "shopping" && "bg-blue-500/20 text-blue-400",
+                thread.purpose === "travel" &&
+                  "bg-purple-500/20 text-purple-400",
+                thread.purpose === "health" && "bg-red-500/20 text-red-400",
+                thread.purpose === "notes" &&
+                  "bg-yellow-500/20 text-yellow-400",
+                thread.purpose === "other" && "bg-slate-500/20 text-slate-400",
+              )}
+            >
+              {thread.purpose}
+            </span>
+          )}
+          {/* Unread badge */}
+          {thread.unread_count > 0 && (
+            <span className="min-w-[20px] px-1.5 py-0.5 text-center rounded-full bg-blue-500 text-white text-[10px] font-bold shrink-0">
+              {thread.unread_count}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -967,9 +984,9 @@ function AIConversationView({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-56px)]">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-bg-card-custom">
+      <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-bg-card-custom">
         <button
           onClick={onBack}
           className="p-2 rounded-lg hover:bg-white/5 text-white/70 hover:text-white transition-colors"
@@ -1246,9 +1263,9 @@ function AIThreadConversation({
   };
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-56px)]">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-bg-card-custom">
+      <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-bg-card-custom">
         <button
           onClick={onBack}
           className="p-2 rounded-lg hover:bg-white/5 text-white/70 hover:text-white transition-colors"
@@ -2113,7 +2130,7 @@ function ThreadConversation({
   };
 
   return (
-    <div ref={containerRef} className="flex flex-col min-h-[calc(100vh-56px)]">
+    <div ref={containerRef} className="h-full flex flex-col overflow-hidden">
       {/* Thread Header - Fixed below app header with solid background and color accent */}
       <div
         className="fixed top-14 left-0 right-0 z-30 flex items-center gap-3 px-4 py-3 border-b transition-all duration-300"
