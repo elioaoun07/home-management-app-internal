@@ -73,11 +73,31 @@ export function usePushNotifications() {
   const hasAttemptedRestore = useRef(false);
   // Track retry timers so we can clean up
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track how many background restore attempts we've made
+  const backgroundRetryCount = useRef(0);
 
-  // Initialize on mount
+  // Initialize on mount + retry on visibility change (PWA coming back to foreground)
   useEffect(() => {
     initializePushState();
+
+    // When PWA comes back to foreground, re-check subscription
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        // Only retry if we think we should be subscribed but don't have a subscription object
+        const shouldBeSubscribed = getPushEnabledFromStorage();
+        if (shouldBeSubscribed) {
+          // Reset restore flag so we can try again
+          hasAttemptedRestore.current = false;
+          backgroundRetryCount.current = 0;
+          initializePushState();
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,7 +201,11 @@ export function usePushNotifications() {
       );
 
       try {
-        const restored = await createLocalPushSubscription(registration);
+        // Wait for SW to be fully active before subscribing
+        const activeRegistration = await waitForActiveServiceWorker();
+        const restored = await createLocalPushSubscription(
+          activeRegistration || registration,
+        );
         if (restored) {
           console.log("[Push] Successfully re-established local subscription");
           setPushEnabledInStorage(true);
@@ -201,29 +225,33 @@ export function usePushNotifications() {
         console.error("[Push] Auto-restore failed:", error);
       }
 
-      // Auto-restore failed - DON'T clear localStorage yet
-      // The user explicitly enabled notifications and might just need to re-enable
-      // Only clear on explicit unsubscribe or denied permission
-      console.log("[Push] Could not restore subscription");
+      // Auto-restore failed - keep showing as subscribed since the user
+      // explicitly enabled notifications. Schedule background retry.
+      console.log(
+        "[Push] Could not restore subscription yet, will retry in background",
+      );
+      setState({
+        isSupported: true,
+        permission,
+        isSubscribed: true, // Keep showing as subscribed
+        isLoading: false,
+        error: null,
+        subscription: null,
+      });
+      // Schedule background retry
+      scheduleBackgroundRestore(registration);
+      return;
     }
 
-    // Step 4: Not subscribed
+    // Step 4: Not subscribed (user never enabled or permission not granted)
     setState({
       isSupported: true,
       permission,
       isSubscribed: false,
       isLoading: false,
-      error: wasEnabledBefore
-        ? "Subscription could not be restored. Please re-enable notifications."
-        : null,
+      error: null,
       subscription: null,
     });
-
-    // Clear localStorage only if we're sure there's no subscription
-    // and not just a temporary failure
-    if (!wasEnabledBefore) {
-      setPushEnabledInStorage(false);
-    }
   }, []);
 
   // Request notification permission
@@ -413,7 +441,7 @@ export function usePushNotifications() {
 // HELPER FUNCTIONS
 // ============================================
 
-// Get or register the service worker
+// Get or register the service worker (quick check, doesn't wait for activation)
 async function getOrRegisterServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!("serviceWorker" in navigator)) return null;
 
@@ -427,15 +455,33 @@ async function getOrRegisterServiceWorker(): Promise<ServiceWorkerRegistration |
       });
     }
 
-    // Wait for the service worker to be ready (with generous timeout for slow networks)
-    await Promise.race([
-      navigator.serviceWorker.ready,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
-    ]);
-
     return registration;
   } catch (error) {
     console.error("[Push] Service worker setup failed:", error);
+    return null;
+  }
+}
+
+// Wait for the service worker to be fully activated (needed before pushManager.subscribe)
+async function waitForActiveServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!("serviceWorker" in navigator)) return null;
+
+  try {
+    // navigator.serviceWorker.ready resolves when a SW is active
+    // Use a generous timeout for cold PWA starts on slow devices
+    const result = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
+    ]);
+
+    if (!result) {
+      console.warn("[Push] Timed out waiting for service worker to activate");
+      return null;
+    }
+
+    return result;
+  } catch (error) {
+    console.error("[Push] Error waiting for active service worker:", error);
     return null;
   }
 }
@@ -470,6 +516,65 @@ async function createLocalPushSubscription(
     console.error("[Push] Failed to create local subscription:", error);
     return null;
   }
+}
+
+// Schedule background retry to restore subscription
+// This runs when the initial auto-restore fails (e.g., SW not active yet on cold PWA start)
+async function scheduleBackgroundRestore(
+  registration: ServiceWorkerRegistration | null,
+  attempt: number = 0,
+): Promise<void> {
+  const MAX_ATTEMPTS = 5;
+  const delay = 3000 * Math.pow(2, attempt); // 3s, 6s, 12s, 24s, 48s
+
+  if (attempt >= MAX_ATTEMPTS) {
+    console.log(
+      "[Push] Background restore: max attempts reached, giving up for this session",
+    );
+    return;
+  }
+
+  console.log(
+    `[Push] Background restore: scheduling attempt ${attempt + 1} in ${delay}ms`,
+  );
+
+  setTimeout(async () => {
+    try {
+      // Try to get the active SW registration
+      const activeReg = await waitForActiveServiceWorker();
+      const reg = activeReg || registration;
+
+      if (!reg) {
+        console.log("[Push] Background restore: no registration, retrying...");
+        scheduleBackgroundRestore(registration, attempt + 1);
+        return;
+      }
+
+      // Check if we already have a subscription now (maybe restored by the browser)
+      let subscription = await reg.pushManager.getSubscription();
+
+      if (!subscription) {
+        // Try to create a new one
+        subscription = await createLocalPushSubscription(reg);
+      }
+
+      if (subscription) {
+        console.log("[Push] Background restore: subscription established!");
+        // Save to DB with retry
+        saveSubscriptionWithRetry(subscription);
+        // Note: we can't call setState from outside the hook,
+        // but the visibilitychange handler will pick up the subscription
+        // on next foreground event. The subscription object in the PushManager
+        // is what matters for receiving notifications.
+      } else {
+        console.log("[Push] Background restore: still failed, retrying...");
+        scheduleBackgroundRestore(registration, attempt + 1);
+      }
+    } catch (error) {
+      console.error("[Push] Background restore error:", error);
+      scheduleBackgroundRestore(registration, attempt + 1);
+    }
+  }, delay);
 }
 
 // Convert base64 URL to Uint8Array for applicationServerKey
