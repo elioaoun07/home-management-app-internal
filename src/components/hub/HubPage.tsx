@@ -1225,10 +1225,21 @@ function AIThreadConversation({
           }),
         });
 
-        const data = await response.json();
+        // Debug: capture raw response
+        const responseText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          throw new Error(
+            `JSON parse failed (${response.status}): ${responseText.slice(0, 200)}`,
+          );
+        }
 
         if (!response.ok) {
-          throw new Error(data.error || "Failed to get response");
+          throw new Error(
+            `API Error (${response.status}): ${data.error || responseText.slice(0, 200)}`,
+          );
         }
 
         const assistantMessage: AIChatMessage = {
@@ -1240,7 +1251,10 @@ function AIThreadConversation({
 
         setMessages((prev) => [...prev, assistantMessage]);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong");
+        // Debug: show full error details
+        const errorDetails =
+          err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        setError(errorDetails);
       } finally {
         setIsLoading(false);
       }
