@@ -249,46 +249,22 @@ export function usePushNotifications() {
           subscription: null,
         });
 
-        // Then try to restore the subscription
-        try {
-          console.log("[Push] Attempting to restore subscription...");
-          const activeRegistration = await waitForActiveServiceWorker();
-          console.log(
-            "[Push] Active registration:",
-            activeRegistration ? "OK" : "FAILED",
-          );
-
-          const restored = await createLocalPushSubscription(
-            activeRegistration || registration,
-          );
-
-          if (restored) {
-            console.log("[Push] Successfully restored subscription!");
-            // Also update permission state since we successfully subscribed
-            const updatedPermission =
-              Notification.permission as PushPermissionState;
-            setState({
-              isSupported: true,
-              permission: updatedPermission,
-              isSubscribed: true,
-              isLoading: false,
-              error: null,
-              subscription: restored,
-            });
-            saveSubscriptionWithRetry(restored);
-            return;
-          }
-        } catch (error) {
-          console.error("[Push] Restore attempt failed:", error);
-        }
-
-        // If restore failed, schedule background retry (but keep showing as subscribed)
-        console.log("[Push] Restore failed, scheduling background retry...");
+        // IMPORTANT: On mobile PWAs, calling pushManager.subscribe() during page load
+        // can sometimes trigger Chrome to open a new browser window. To avoid this,
+        // we ONLY try to restore the subscription in the background after a delay,
+        // and we DON'T call pushManager.subscribe() synchronously during initialization.
+        // The background restore uses a longer delay to let the PWA fully stabilize.
+        console.log(
+          "[Push] Scheduling background restore (delayed to avoid PWA issues)...",
+        );
         if (!backgroundRestoreScheduled.current) {
           backgroundRestoreScheduled.current = true;
-          scheduleBackgroundRestore(registration, () => {
-            backgroundRestoreScheduled.current = false;
-          });
+          // Use a longer initial delay to let the PWA fully initialize
+          setTimeout(() => {
+            scheduleBackgroundRestore(registration, () => {
+              backgroundRestoreScheduled.current = false;
+            });
+          }, 2000); // 2 second delay before starting restore attempts
         }
         return;
       }
@@ -499,18 +475,34 @@ export function usePushNotifications() {
 // ============================================
 
 // Get or register the service worker (quick check, doesn't wait for activation)
+// IMPORTANT: On mobile PWAs, calling register() can sometimes open a new browser instance
+// So we try to avoid it if possible by checking existing registrations first
 async function getOrRegisterServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!("serviceWorker" in navigator)) return null;
 
   try {
+    // First, check if we already have a controlling service worker
+    // This is the safest path that won't trigger new windows
+    if (navigator.serviceWorker.controller) {
+      console.log("[Push] Already have a controlling service worker");
+      const registration = await navigator.serviceWorker.ready;
+      return registration;
+    }
+
+    // Check for existing registration without triggering register()
     let registration = await navigator.serviceWorker.getRegistration("/");
 
-    if (!registration) {
-      console.log("[Push] Registering service worker...");
-      registration = await navigator.serviceWorker.register("/sw.js", {
-        scope: "/",
-      });
+    if (registration) {
+      console.log("[Push] Found existing service worker registration");
+      return registration;
     }
+
+    // Only register if we don't have one at all
+    // On mobile PWAs this can sometimes open a new window, but it's necessary
+    console.log("[Push] No service worker found, registering...");
+    registration = await navigator.serviceWorker.register("/sw.js", {
+      scope: "/",
+    });
 
     return registration;
   } catch (error) {
