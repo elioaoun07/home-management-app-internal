@@ -1,17 +1,20 @@
 // src/hooks/usePushNotifications.ts
 // Hook for managing Web Push notifications subscription
+// Handles PWA lifecycle: subscription persistence, auto-restore, and DB sync with retry
 
 "use client";
 
-import { supabaseBrowser } from "@/lib/supabase/client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // The VAPID public key - must match the server's public key
-// You need to generate this and set it in your environment variables
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
 // LocalStorage key to track subscription state
 const PUSH_ENABLED_KEY = "push_notifications_enabled";
+
+// Retry config for DB operations (auth may not be ready on PWA restart)
+const MAX_DB_RETRIES = 5;
+const INITIAL_RETRY_DELAY_MS = 1500;
 
 export type PushPermissionState =
   | "prompt"
@@ -53,10 +56,14 @@ function setPushEnabledInStorage(enabled: boolean): void {
 }
 
 export function usePushNotifications() {
+  // Initialize isSubscribed from localStorage so the UI doesn't flash "Enable"
+  // on every PWA restart while async checks are running
+  const wasEnabled = getPushEnabledFromStorage();
+
   const [state, setState] = useState<PushNotificationState>({
     isSupported: false,
     permission: "unsupported",
-    isSubscribed: false,
+    isSubscribed: wasEnabled,
     isLoading: true,
     error: null,
     subscription: null,
@@ -64,16 +71,27 @@ export function usePushNotifications() {
 
   // Track if we've already tried to auto-restore subscription
   const hasAttemptedRestore = useRef(false);
+  // Track retry timers so we can clean up
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Check if push is supported and current permission state
+  // Initialize on mount
   useEffect(() => {
-    checkSupport();
+    initializePushState();
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const checkSupport = useCallback(async () => {
+  // Main initialization - separates local checks from DB operations
+  const initializePushState = useCallback(async () => {
     // Check browser support
     if (typeof window === "undefined") {
-      setState((prev) => ({ ...prev, isLoading: false }));
+      setState((prev) => ({
+        ...prev,
+        isLoading: false,
+        isSubscribed: false,
+      }));
       return;
     }
 
@@ -83,77 +101,76 @@ export function usePushNotifications() {
       "Notification" in window;
 
     if (!isSupported) {
-      setState((prev) => ({
-        ...prev,
+      setState({
         isSupported: false,
         permission: "unsupported",
+        isSubscribed: false,
         isLoading: false,
-      }));
+        error: null,
+        subscription: null,
+      });
       return;
     }
 
-    // Get current permission state
     const permission = Notification.permission as PushPermissionState;
 
-    // Check localStorage first - if user previously enabled notifications
-    const wasEnabledBefore = getPushEnabledFromStorage();
-
-    // Check if already subscribed via local PushManager
-    let subscription: PushSubscription | null = null;
-    let isSubscribed = false;
-
-    try {
-      // First, ensure service worker is registered (especially important on Android PWA restart)
-      let registration: ServiceWorkerRegistration | null = null;
-
-      try {
-        // Check if there's an existing registration
-        const existingReg = await navigator.serviceWorker.getRegistration("/");
-        registration = existingReg || null;
-
-        if (!registration) {
-          console.log(
-            "[Push] No service worker registration found, registering...",
-          );
-          registration = await navigator.serviceWorker.register("/sw.js", {
-            scope: "/",
-          });
-        }
-
-        // Wait for the service worker to be ready
-        await Promise.race([
-          navigator.serviceWorker.ready,
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
-        ]);
-      } catch (swError) {
-        console.error("[Push] Service worker setup error:", swError);
-      }
-
-      if (registration) {
-        subscription = await registration.pushManager.getSubscription();
-        isSubscribed = subscription !== null;
-
-        if (subscription) {
-          console.log(
-            "[Push] Local subscription found:",
-            subscription.endpoint.substring(0, 50) + "...",
-          );
-          // Ensure localStorage is synced
-          setPushEnabledInStorage(true);
-          // Verify/update the subscription in database (async, don't wait)
-          verifySubscriptionInDatabase(subscription).catch(console.error);
-        }
-      } else {
-        console.log("[Push] No service worker registration available");
-      }
-    } catch (error) {
-      console.error("[Push] Error checking subscription:", error);
+    // If permission was revoked, clear everything
+    if (permission === "denied") {
+      setPushEnabledInStorage(false);
+      setState({
+        isSupported: true,
+        permission: "denied",
+        isSubscribed: false,
+        isLoading: false,
+        error: null,
+        subscription: null,
+      });
+      return;
     }
 
-    // If no local subscription but user previously enabled notifications and permission is still granted
-    // This handles Android PWA losing subscription state on restart
+    const wasEnabledBefore = getPushEnabledFromStorage();
+
+    // Step 1: Ensure service worker is registered
+    let registration: ServiceWorkerRegistration | null = null;
+    try {
+      registration = await getOrRegisterServiceWorker();
+    } catch (swError) {
+      console.error("[Push] Service worker setup error:", swError);
+    }
+
+    // Step 2: Check for existing local push subscription
+    let subscription: PushSubscription | null = null;
+
+    if (registration) {
+      try {
+        subscription = await registration.pushManager.getSubscription();
+      } catch (error) {
+        console.error("[Push] Error getting subscription:", error);
+      }
+    }
+
+    if (subscription) {
+      // Local subscription exists -> we're subscribed
+      console.log(
+        "[Push] Local subscription found:",
+        subscription.endpoint.substring(0, 50) + "...",
+      );
+      setPushEnabledInStorage(true);
+      setState({
+        isSupported: true,
+        permission,
+        isSubscribed: true,
+        isLoading: false,
+        error: null,
+        subscription,
+      });
+      // Ensure this subscription is saved in DB (fire-and-forget with retry)
+      saveSubscriptionWithRetry(subscription);
+      return;
+    }
+
+    // Step 3: No local subscription - try to restore if previously enabled
     if (
-      !isSubscribed &&
       permission === "granted" &&
       wasEnabledBefore &&
       !hasAttemptedRestore.current
@@ -164,61 +181,50 @@ export function usePushNotifications() {
       );
 
       try {
-        const restored = await autoResubscribe();
+        const restored = await createLocalPushSubscription(registration);
         if (restored) {
-          subscription = restored;
-          isSubscribed = true;
-          console.log("[Push] Successfully re-established subscription");
-        } else {
-          // Failed to restore, clear the localStorage flag
-          console.log("[Push] Failed to restore subscription");
-          setPushEnabledInStorage(false);
+          console.log("[Push] Successfully re-established local subscription");
+          setPushEnabledInStorage(true);
+          setState({
+            isSupported: true,
+            permission,
+            isSubscribed: true,
+            isLoading: false,
+            error: null,
+            subscription: restored,
+          });
+          // Save to DB with retry (auth might not be ready yet)
+          saveSubscriptionWithRetry(restored);
+          return;
         }
       } catch (error) {
-        console.error("[Push] Error auto-restoring subscription:", error);
-        setPushEnabledInStorage(false);
+        console.error("[Push] Auto-restore failed:", error);
       }
+
+      // Auto-restore failed - DON'T clear localStorage yet
+      // The user explicitly enabled notifications and might just need to re-enable
+      // Only clear on explicit unsubscribe or denied permission
+      console.log("[Push] Could not restore subscription");
     }
 
-    // If permission was revoked, clear storage
-    if (permission === "denied") {
-      setPushEnabledInStorage(false);
-    }
-
+    // Step 4: Not subscribed
     setState({
       isSupported: true,
       permission,
-      isSubscribed,
+      isSubscribed: false,
       isLoading: false,
-      error: null,
-      subscription,
+      error: wasEnabledBefore
+        ? "Subscription could not be restored. Please re-enable notifications."
+        : null,
+      subscription: null,
     });
+
+    // Clear localStorage only if we're sure there's no subscription
+    // and not just a temporary failure
+    if (!wasEnabledBefore) {
+      setPushEnabledInStorage(false);
+    }
   }, []);
-
-  // Register service worker
-  const registerServiceWorker =
-    useCallback(async (): Promise<ServiceWorkerRegistration | null> => {
-      if (!("serviceWorker" in navigator)) {
-        return null;
-      }
-
-      try {
-        // Register the service worker
-        const registration = await navigator.serviceWorker.register("/sw.js", {
-          scope: "/",
-        });
-
-        console.log("[Push] Service worker registered:", registration.scope);
-
-        // Wait for the service worker to be ready
-        await navigator.serviceWorker.ready;
-
-        return registration;
-      } catch (error) {
-        console.error("[Push] Service worker registration failed:", error);
-        throw error;
-      }
-    }, []);
 
   // Request notification permission
   const requestPermission = useCallback(async (): Promise<boolean> => {
@@ -263,8 +269,8 @@ export function usePushNotifications() {
         }
       }
 
-      // Register/get service worker
-      const registration = await registerServiceWorker();
+      // Get or register service worker
+      const registration = await getOrRegisterServiceWorker();
       if (!registration) {
         throw new Error("Failed to register service worker");
       }
@@ -274,21 +280,24 @@ export function usePushNotifications() {
         throw new Error("VAPID public key not configured");
       }
 
-      // Convert VAPID key to Uint8Array
-      const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+      // Check for existing subscription first - reuse if possible
+      let subscription = await registration.pushManager.getSubscription();
 
-      // Subscribe to push manager
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true, // Required - all push must show a notification
-        applicationServerKey: applicationServerKey as BufferSource,
-      });
+      if (!subscription) {
+        // Create new subscription
+        const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey as BufferSource,
+        });
+      }
 
-      console.log("[Push] Subscription created:", subscription.endpoint);
+      console.log("[Push] Subscription ready:", subscription.endpoint);
 
-      // Save subscription to database
-      await saveSubscription(subscription);
+      // Save subscription to database (direct call, not retry - user is actively waiting)
+      await saveSubscriptionToApi(subscription);
 
-      // Save to localStorage for quick restore on next app open
+      // Save to localStorage
       setPushEnabledInStorage(true);
 
       setState((prev) => ({
@@ -309,7 +318,7 @@ export function usePushNotifications() {
       }));
       return false;
     }
-  }, [requestPermission, registerServiceWorker]);
+  }, [requestPermission]);
 
   // Unsubscribe from push notifications
   const unsubscribe = useCallback(async (): Promise<boolean> => {
@@ -327,7 +336,8 @@ export function usePushNotifications() {
         await removeSubscription(subscription.endpoint);
       }
 
-      // Clear localStorage flag
+      // Clear localStorage flag - this is the ONLY place we clear it
+      // (besides permission denied)
       setPushEnabledInStorage(false);
 
       setState((prev) => ({
@@ -356,6 +366,15 @@ export function usePushNotifications() {
       throw new Error("Not subscribed to push notifications");
     }
 
+    // Before sending test, ensure current subscription is in DB
+    if (state.subscription) {
+      try {
+        await saveSubscriptionToApi(state.subscription);
+      } catch {
+        // Continue anyway - DB might already have it
+      }
+    }
+
     try {
       const response = await fetch("/api/notifications/test", {
         method: "POST",
@@ -363,14 +382,22 @@ export function usePushNotifications() {
       });
 
       if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || "Failed to send test notification");
+        const data = await response.json().catch(() => ({}));
+        throw new Error(
+          data.error || `Failed to send test notification (${response.status})`,
+        );
       }
     } catch (error) {
       console.error("[Push] Test notification failed:", error);
       throw error;
     }
-  }, [state.isSubscribed]);
+  }, [state.isSubscribed, state.subscription]);
+
+  // Manual refresh - re-checks subscription state and syncs with DB
+  const refreshSubscription = useCallback(async (): Promise<void> => {
+    hasAttemptedRestore.current = false;
+    await initializePushState();
+  }, [initializePushState]);
 
   return {
     ...state,
@@ -378,13 +405,72 @@ export function usePushNotifications() {
     subscribe,
     unsubscribe,
     sendTestNotification,
-    checkSupport,
+    refreshSubscription,
   };
 }
 
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+
+// Get or register the service worker
+async function getOrRegisterServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!("serviceWorker" in navigator)) return null;
+
+  try {
+    let registration = await navigator.serviceWorker.getRegistration("/");
+
+    if (!registration) {
+      console.log("[Push] Registering service worker...");
+      registration = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+      });
+    }
+
+    // Wait for the service worker to be ready (with generous timeout for slow networks)
+    await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+    ]);
+
+    return registration;
+  } catch (error) {
+    console.error("[Push] Service worker setup failed:", error);
+    return null;
+  }
+}
+
+// Create a new push subscription locally (PushManager only, no DB)
+async function createLocalPushSubscription(
+  existingRegistration: ServiceWorkerRegistration | null,
+): Promise<PushSubscription | null> {
+  if (!VAPID_PUBLIC_KEY) {
+    console.error("[Push] VAPID key not configured");
+    return null;
+  }
+
+  try {
+    const registration =
+      existingRegistration || (await getOrRegisterServiceWorker());
+    if (!registration) return null;
+
+    const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: applicationServerKey as BufferSource,
+    });
+
+    console.log(
+      "[Push] Local subscription created:",
+      subscription.endpoint.substring(0, 50) + "...",
+    );
+    return subscription;
+  } catch (error) {
+    console.error("[Push] Failed to create local subscription:", error);
+    return null;
+  }
+}
 
 // Convert base64 URL to Uint8Array for applicationServerKey
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -400,17 +486,12 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
-// Save subscription to database via API
-async function saveSubscription(subscription: PushSubscription): Promise<void> {
-  const supabase = supabaseBrowser();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Not authenticated");
-  }
-
+// Save subscription to database via API - NO client-side auth check
+// The API route handles auth via cookies. This avoids the race condition
+// where supabaseBrowser().auth.getUser() returns null before session is restored.
+async function saveSubscriptionToApi(
+  subscription: PushSubscription,
+): Promise<void> {
   const subscriptionData = subscription.toJSON();
 
   const response = await fetch("/api/notifications/subscribe", {
@@ -425,22 +506,68 @@ async function saveSubscription(subscription: PushSubscription): Promise<void> {
     }),
   });
 
+  if (response.status === 401) {
+    throw new Error("AUTH_NOT_READY");
+  }
+
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || "Failed to save subscription");
   }
 }
 
+// Save subscription with retry - handles auth not being ready on PWA restart
+async function saveSubscriptionWithRetry(
+  subscription: PushSubscription,
+  attempt: number = 0,
+): Promise<void> {
+  try {
+    await saveSubscriptionToApi(subscription);
+    console.log("[Push] Subscription saved to database successfully");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+
+    if (message === "AUTH_NOT_READY" && attempt < MAX_DB_RETRIES) {
+      const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+      console.log(
+        `[Push] Auth not ready, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_DB_RETRIES})...`,
+      );
+      setTimeout(() => {
+        saveSubscriptionWithRetry(subscription, attempt + 1);
+      }, delay);
+    } else if (attempt < MAX_DB_RETRIES) {
+      // Other errors - still retry but log
+      const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+      console.error(
+        `[Push] DB save failed (attempt ${attempt + 1}), retrying in ${delay}ms:`,
+        error,
+      );
+      setTimeout(() => {
+        saveSubscriptionWithRetry(subscription, attempt + 1);
+      }, delay);
+    } else {
+      console.error(
+        "[Push] Failed to save subscription to DB after all retries:",
+        error,
+      );
+    }
+  }
+}
+
 // Remove subscription from database
 async function removeSubscription(endpoint: string): Promise<void> {
-  const response = await fetch("/api/notifications/unsubscribe", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ endpoint }),
-  });
+  try {
+    const response = await fetch("/api/notifications/unsubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint }),
+    });
 
-  if (!response.ok) {
-    console.error("[Push] Failed to remove subscription from database");
+    if (!response.ok) {
+      console.error("[Push] Failed to remove subscription from database");
+    }
+  } catch (error) {
+    console.error("[Push] Error removing subscription:", error);
   }
 }
 
@@ -459,103 +586,4 @@ function getDeviceName(): string {
   if (/Linux/i.test(ua)) return "Linux";
 
   return "Unknown Device";
-}
-
-// Check database subscription status
-async function checkDatabaseSubscriptionStatus(): Promise<{
-  hasActiveSubscription: boolean;
-  count: number;
-} | null> {
-  try {
-    const response = await fetch("/api/notifications/status", {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error("[Push] Error checking database status:", error);
-    return null;
-  }
-}
-
-// Verify/update subscription in database
-async function verifySubscriptionInDatabase(
-  subscription: PushSubscription,
-): Promise<void> {
-  try {
-    const subscriptionData = subscription.toJSON();
-
-    const response = await fetch("/api/notifications/status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        endpoint: subscriptionData.endpoint,
-      }),
-    });
-
-    if (!response.ok) {
-      console.error("[Push] Failed to verify subscription in database");
-      return;
-    }
-
-    const { exists, isActive } = await response.json();
-
-    // If subscription doesn't exist in database or is inactive, save it
-    if (!exists || !isActive) {
-      console.log("[Push] Updating subscription in database...");
-      await saveSubscription(subscription);
-    }
-  } catch (error) {
-    console.error("[Push] Error verifying subscription:", error);
-  }
-}
-
-// Auto re-subscribe when permission is granted but local subscription is lost
-async function autoResubscribe(): Promise<PushSubscription | null> {
-  try {
-    if (!VAPID_PUBLIC_KEY) {
-      console.error("[Push] VAPID key not configured");
-      return null;
-    }
-
-    // Ensure service worker is registered
-    let registration: ServiceWorkerRegistration;
-
-    try {
-      registration = await navigator.serviceWorker.register("/sw.js", {
-        scope: "/",
-      });
-      await navigator.serviceWorker.ready;
-    } catch (error) {
-      console.error("[Push] Failed to register service worker:", error);
-      return null;
-    }
-
-    // Convert VAPID key to Uint8Array
-    const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-
-    // Subscribe to push manager
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: applicationServerKey as BufferSource,
-    });
-
-    console.log(
-      "[Push] Auto re-subscribe successful:",
-      subscription.endpoint.substring(0, 50) + "...",
-    );
-
-    // Save to database (this will also clean up old subscriptions)
-    await saveSubscription(subscription);
-
-    return subscription;
-  } catch (error) {
-    console.error("[Push] Auto re-subscribe failed:", error);
-    return null;
-  }
 }

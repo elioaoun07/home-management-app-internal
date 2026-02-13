@@ -28,28 +28,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // First, delete all old subscriptions for this user on same device type
-    // This prevents accumulation of stale subscriptions when endpoint changes (common on Android PWAs)
+    // Determine device type from user agent for grouping
     const deviceType = getDeviceType(user_agent || "");
 
-    // Delete existing subscriptions for this user that match the device type
-    // Keep only the most recent one (the one we're about to upsert)
+    // Step 1: Delete ALL old subscriptions for this user on same device type
+    // This prevents accumulation of stale subscriptions when endpoint changes
+    // (common on Android PWAs and iOS Safari)
     const { error: deleteError } = await supabase
       .from("push_subscriptions")
       .delete()
       .eq("user_id", user.id)
       .eq("device_name", deviceType)
-      .neq("endpoint", endpoint); // Don't delete if it's the same endpoint we're upserting
+      .neq("endpoint", endpoint);
 
     if (deleteError) {
       console.log(
         "[Subscribe] Note: Could not clean up old subscriptions:",
         deleteError.message,
       );
-      // Continue anyway - this is not critical
     }
 
-    // Upsert the subscription (update if exists, create if not)
+    // Step 2: Also clean up any inactive subscriptions for this user (any device)
+    const { error: inactiveDeleteError } = await supabase
+      .from("push_subscriptions")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("is_active", false);
+
+    if (inactiveDeleteError) {
+      console.log(
+        "[Subscribe] Note: Could not clean up inactive subscriptions:",
+        inactiveDeleteError.message,
+      );
+    }
+
+    // Step 3: Upsert the subscription (update if exists, create if not)
     const { data, error } = await supabase
       .from("push_subscriptions")
       .upsert(

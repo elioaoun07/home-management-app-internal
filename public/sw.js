@@ -1,7 +1,7 @@
 // Service Worker for Push Notifications
 // Handles push events and displays notifications with alarm-like behavior
 
-const SW_VERSION = "1.0.1";
+const SW_VERSION = "1.0.2";
 
 // ============================================
 // INSTALL & ACTIVATE
@@ -30,7 +30,7 @@ async function notifyClientsToPlaySound(data) {
   console.log(
     "[SW] Notifying",
     allClients.length,
-    "clients to play alarm sound"
+    "clients to play alarm sound",
   );
 
   for (const client of allClients) {
@@ -133,7 +133,7 @@ self.addEventListener("push", (event) => {
       isTransactionReminder
         ? Promise.resolve()
         : notifyClientsToPlaySound(data),
-    ])
+    ]),
   );
 });
 
@@ -415,7 +415,7 @@ self.addEventListener("message", (event) => {
             { action: "snooze", title: "⏰ Snooze 5min" },
             { action: "dismiss", title: "✓ Dismiss" },
           ],
-        }
+        },
       );
       break;
   }

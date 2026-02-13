@@ -20,6 +20,7 @@ import {
   Loader2,
   MessageSquare,
   Pencil,
+  RefreshCw,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
@@ -36,10 +37,12 @@ export function NotificationSettings() {
     subscribe,
     unsubscribe,
     sendTestNotification,
+    refreshSubscription,
   } = usePushNotifications();
 
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [isCheckingDue, setIsCheckingDue] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleSubscribe = async () => {
     const success = await subscribe();
@@ -107,6 +110,22 @@ export function NotificationSettings() {
       });
     } finally {
       setIsCheckingDue(false);
+    }
+  };
+
+  const handleRefreshSubscription = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshSubscription();
+      toast.success("Subscription refreshed", {
+        description: "Push notification subscription has been verified.",
+      });
+    } catch (error) {
+      toast.error("Failed to refresh subscription", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -278,6 +297,19 @@ export function NotificationSettings() {
               Check Due Reminders Now
             </Button>
             <Button
+              onClick={handleRefreshSubscription}
+              disabled={isRefreshing}
+              variant="outline"
+              className={`w-full ${themeClasses.border} border rounded-xl py-3`}
+            >
+              {isRefreshing ? (
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              ) : (
+                <RefreshCw className="w-5 h-5 mr-2" />
+              )}
+              Refresh Subscription
+            </Button>
+            <Button
               onClick={handleUnsubscribe}
               disabled={isLoading}
               variant="ghost"
@@ -346,14 +378,14 @@ function InAppNotificationPreferences() {
   // Get preferred times array from metadata (for multiple reminders per day)
   const getPreferredTimes = (
     key: string,
-    defaultTimes = ["18:00"]
+    defaultTimes = ["18:00"],
   ): string[] => {
     const pref = getPreference(key);
     const metadata = pref?.metadata as Record<string, unknown> | null;
     if (metadata?.preferred_times && Array.isArray(metadata.preferred_times)) {
       // Convert "HH:mm:ss" to "HH:mm"
       return (metadata.preferred_times as string[]).map((t) =>
-        t.substring(0, 5)
+        t.substring(0, 5),
       );
     }
     // Fallback to old preferred_time field
@@ -379,7 +411,7 @@ function InAppNotificationPreferences() {
   const handleTimeChange = async (
     key: string,
     time: string,
-    index: number = 0
+    index: number = 0,
   ) => {
     const pref = getPreference(key);
     const currentMetadata = (pref?.metadata as Record<string, unknown>) || {};
@@ -391,7 +423,7 @@ function InAppNotificationPreferences() {
 
     // Convert to "HH:mm:ss" format for storage
     const timesWithSeconds = newTimes.map((t) =>
-      t.length === 5 ? t + ":00" : t
+      t.length === 5 ? t + ":00" : t,
     );
 
     try {
@@ -425,7 +457,7 @@ function InAppNotificationPreferences() {
     }
 
     const timesWithSeconds = newTimes.map((t) =>
-      t.length === 5 ? t + ":00" : t
+      t.length === 5 ? t + ":00" : t,
     );
 
     try {
@@ -437,7 +469,7 @@ function InAppNotificationPreferences() {
         },
       });
       toast.success(
-        enable ? "Second reminder added" : "Second reminder removed"
+        enable ? "Second reminder added" : "Second reminder removed",
       );
     } catch {
       toast.error("Failed to update reminders");
@@ -557,7 +589,7 @@ function InAppNotificationPreferences() {
                   onCheckedChange={(checked) =>
                     handleToggleSecondReminder(
                       "daily_transaction_reminder",
-                      checked
+                      checked,
                     )
                   }
                   disabled={updatePreference.isPending}
@@ -582,7 +614,7 @@ function InAppNotificationPreferences() {
                         handleTimeChange(
                           "daily_transaction_reminder",
                           preset.value,
-                          0
+                          0,
                         )
                       }
                       disabled={updatePreference.isPending}
@@ -607,7 +639,7 @@ function InAppNotificationPreferences() {
                       handleTimeChange(
                         "daily_transaction_reminder",
                         e.target.value,
-                        0
+                        0,
                       )
                     }
                     disabled={updatePreference.isPending}
@@ -632,7 +664,7 @@ function InAppNotificationPreferences() {
                           handleTimeChange(
                             "daily_transaction_reminder",
                             preset.value,
-                            1
+                            1,
                           )
                         }
                         disabled={updatePreference.isPending}
@@ -657,7 +689,7 @@ function InAppNotificationPreferences() {
                         handleTimeChange(
                           "daily_transaction_reminder",
                           e.target.value,
-                          1
+                          1,
                         )
                       }
                       disabled={updatePreference.isPending}
