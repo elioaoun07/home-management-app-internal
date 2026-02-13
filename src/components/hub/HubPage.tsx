@@ -227,9 +227,15 @@ export default function HubPage({ standalone = false }: HubPageProps) {
             standalone={standalone}
           />
         )}
-        {activeView === "feed" && !activeThreadId && !standalone && <FeedView />}
-        {activeView === "score" && !activeThreadId && !standalone && <ScoreboardView />}
-        {activeView === "alerts" && !activeThreadId && !standalone && <AlertsView />}
+        {activeView === "feed" && !activeThreadId && !standalone && (
+          <FeedView />
+        )}
+        {activeView === "score" && !activeThreadId && !standalone && (
+          <ScoreboardView />
+        )}
+        {activeView === "alerts" && !activeThreadId && !standalone && (
+          <AlertsView />
+        )}
       </div>
     </div>
   );
@@ -309,7 +315,7 @@ function ChatView({
     "all" | "public" | "private"
   >("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
   const threads = data?.threads || [];
   const householdId = data?.household_id;
@@ -439,9 +445,6 @@ function ChatView({
     },
   ];
 
-  const selectedPurpose =
-    purposeOptions.find((p) => p.value === purposeFilter) || purposeOptions[0];
-
   // Sync threads to localStorage cache when data loads
   useEffect(() => {
     if (data && data.threads && data.threads.length > 0) {
@@ -506,30 +509,16 @@ function ChatView({
 
   return (
     <>
-      {/* Header with Create Button */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-white">Conversations</h2>
-        {householdId && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-medium"
-          >
-            <PlusIcon className="w-4 h-4" />
-            New Chat
-          </button>
-        )}
-      </div>
-
-      {/* Search Bar */}
-      {householdId && threads.length > 0 && (
-        <div className="mb-4">
-          <div className="relative">
+      {/* Search + New Chat Row */}
+      {householdId && (
+        <div className="mb-3 flex items-center gap-2">
+          <div className="relative flex-1">
             <input
               type="text"
-              placeholder="Search conversations..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2.5 pl-10 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50 transition-all"
+              className="w-full px-3 py-2 pl-9 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-blue-500/50 transition-all"
             />
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"
@@ -543,149 +532,163 @@ function ChatView({
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-white/10 text-white/40 hover:text-white/60 transition-all"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-white/10 text-white/40 hover:text-white/60 transition-all"
               >
-                <XIcon className="w-4 h-4" />
+                <XIcon className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white shrink-0"
+            title="New Chat"
+          >
+            <PlusIcon className="w-5 h-5" />
+          </button>
         </div>
       )}
 
-      {/* Clean Filters */}
+      {/* Combined Filters Row - Scrollable */}
       {householdId && threads.length > 0 && (
-        <div className="mb-3 flex items-center gap-2">
-          {/* Visibility Toggle - Segmented Control */}
-          <div className="flex bg-white/5 rounded-lg p-0.5 shrink-0">
-            <button
-              onClick={() => setVisibilityFilter("all")}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                visibilityFilter === "all"
-                  ? "bg-gradient-to-r from-blue-500/30 to-purple-500/30 text-white border border-blue-500/30"
-                  : "text-white/50 hover:text-white/70",
-              )}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setVisibilityFilter("public")}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1",
-                visibilityFilter === "public"
-                  ? "bg-gradient-to-r from-cyan-500/30 to-blue-500/30 text-cyan-300 border border-cyan-500/30"
-                  : "text-white/50 hover:text-white/70",
-              )}
-            >
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path d="M8 11V7a4 4 0 018 0m-4 8v2m-6-2a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2v-6a2 2 0 00-2-2H6z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => setVisibilityFilter("private")}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1",
-                visibilityFilter === "private"
-                  ? "bg-gradient-to-r from-purple-500/30 to-pink-500/30 text-pink-300 border border-purple-500/30"
-                  : "text-white/50 hover:text-white/70",
-              )}
-            >
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Category Dropdown */}
-          <div className="relative flex-1">
-            <button
-              onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-              className={cn(
-                "w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                purposeFilter !== "all"
-                  ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white border border-blue-500/30"
-                  : "bg-white/5 text-white/60 hover:bg-white/10",
-              )}
-            >
-              <span className="flex items-center gap-1.5">
-                {selectedPurpose.icon}
-                {selectedPurpose.label}
-              </span>
-              <svg
+        <div className="mb-3 -mx-4 px-4 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-1.5 pb-1">
+            {/* Visibility Toggle */}
+            <div className="flex bg-white/5 rounded-lg p-0.5 shrink-0">
+              <button
+                onClick={() => setVisibilityFilter("all")}
                 className={cn(
-                  "w-3 h-3 transition-transform",
-                  showCategoryDropdown && "rotate-180",
+                  "px-2 py-1 rounded-md text-xs font-medium transition-all",
+                  visibilityFilter === "all"
+                    ? "bg-white/10 text-white"
+                    : "text-white/40 hover:text-white/60",
                 )}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
               >
-                <path d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+                All
+              </button>
+              <button
+                onClick={() => setVisibilityFilter("public")}
+                className={cn(
+                  "p-1 rounded-md transition-all",
+                  visibilityFilter === "public"
+                    ? "bg-cyan-500/20 text-cyan-400"
+                    : "text-white/40 hover:text-white/60",
+                )}
+                title="Public"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path d="M8 11V7a4 4 0 018 0m-4 8v2m-6-2a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2v-6a2 2 0 00-2-2H6z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setVisibilityFilter("private")}
+                className={cn(
+                  "p-1 rounded-md transition-all",
+                  visibilityFilter === "private"
+                    ? "bg-purple-500/20 text-purple-400"
+                    : "text-white/40 hover:text-white/60",
+                )}
+                title="Private"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </button>
+            </div>
 
-            {/* Dropdown Menu */}
-            {showCategoryDropdown && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowCategoryDropdown(false)}
-                />
-                <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl z-20 py-1 max-h-60 overflow-y-auto">
-                  {purposeOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => {
-                        setPurposeFilter(option.value);
-                        setShowCategoryDropdown(false);
-                      }}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-3 py-2 text-xs transition-all",
-                        purposeFilter === option.value
-                          ? "bg-blue-500/20 text-white"
-                          : "text-white/70 hover:bg-white/5 hover:text-white",
-                      )}
+            {/* Separator */}
+            <div className="w-px h-5 bg-white/10 shrink-0" />
+
+            {/* Category Filter - Expandable */}
+            {!showCategoryPicker ? (
+              // Collapsed: Show current filter as clickable button
+              <button
+                onClick={() => setShowCategoryPicker(true)}
+                className={cn(
+                  "flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap shrink-0",
+                  purposeFilter === "all"
+                    ? "bg-white/5 text-white/60 hover:bg-white/10"
+                    : "bg-blue-500/20 text-blue-400",
+                )}
+              >
+                {purposeFilter === "all" ? (
+                  <>
+                    <span>All</span>
+                    <svg
+                      className="w-3 h-3 text-white/40"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
                     >
-                      {option.icon}
-                      {option.label}
-                      {purposeFilter === option.value && (
-                        <svg
-                          className="w-3 h-3 ml-auto text-blue-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-                  ))}
-                </div>
+                      <path d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </>
+                ) : (
+                  <>
+                    {
+                      purposeOptions.find((o) => o.value === purposeFilter)
+                        ?.icon
+                    }
+                    <span>
+                      {
+                        purposeOptions.find((o) => o.value === purposeFilter)
+                          ?.label
+                      }
+                    </span>
+                    <svg
+                      className="w-3 h-3 text-white/40"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </>
+                )}
+              </button>
+            ) : (
+              // Expanded: Show all category options
+              <>
+                {purposeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => {
+                      setPurposeFilter(option.value);
+                      setShowCategoryPicker(false);
+                    }}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap shrink-0",
+                      purposeFilter === option.value
+                        ? "bg-blue-500/20 text-blue-400"
+                        : "text-white/40 hover:text-white/60 hover:bg-white/5",
+                    )}
+                  >
+                    {option.icon}
+                    <span>{option.value === "all" ? "All" : option.label}</span>
+                  </button>
+                ))}
               </>
             )}
           </div>
         </div>
       )}
 
-      {/* AI Assistant - Always First (hidden in standalone mode) */}
-      {!standalone && (
-        <AIAssistantItem onClick={() => setActiveThreadId(AI_THREAD_ID)} />
-      )}
+      {/* AI Assistant - Always First */}
+      <AIAssistantItem onClick={() => setActiveThreadId(AI_THREAD_ID)} />
 
       {/* Household Threads */}
       {householdId && filteredThreads.length > 0 && (

@@ -25,6 +25,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface ChatMessage {
@@ -97,14 +98,17 @@ export default function AIChatAssistant() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const editInputRef = useRef<HTMLTextAreaElement>(null);
   const themeClasses = useThemeClasses();
+  const pathname = usePathname();
 
-  // Hide AI chat button on Hub tab (Hub has its own AI chat)
+  // Hide AI chat button on Hub tab (Hub has its own AI chat) and standalone /chat page
   const isHubTab = tabContext?.activeTab === "hub";
+  const isChatPage = pathname?.startsWith("/chat");
+  const shouldHideButton = isHubTab || isChatPage;
   const [isExiting, setIsExiting] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Handle exit/enter animation when switching tabs
+  // Handle exit/enter animation when switching tabs or navigating to /chat
   useEffect(() => {
     // Clear any pending timer
     if (exitTimerRef.current) {
@@ -112,8 +116,8 @@ export default function AIChatAssistant() {
       exitTimerRef.current = null;
     }
 
-    if (isHubTab) {
-      // Going to Hub - start exit animation
+    if (shouldHideButton) {
+      // Going to Hub or /chat - start exit animation
       setIsExiting(true);
       setShouldRender(true); // Keep rendered during animation
       exitTimerRef.current = setTimeout(() => {
@@ -121,7 +125,7 @@ export default function AIChatAssistant() {
         setIsExiting(false);
       }, 500);
     } else {
-      // Leaving Hub - show button immediately
+      // Leaving Hub/chat - show button immediately
       setIsExiting(false);
       setShouldRender(true);
     }
@@ -131,7 +135,7 @@ export default function AIChatAssistant() {
         clearTimeout(exitTimerRef.current);
       }
     };
-  }, [isHubTab]);
+  }, [shouldHideButton]);
 
   // Fetch initial usage stats when opening
   useEffect(() => {
