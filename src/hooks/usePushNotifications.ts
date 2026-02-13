@@ -234,7 +234,9 @@ export function usePushNotifications() {
           "[Push] User previously enabled (localStorage=true) - keeping isSubscribed=true while restoring...",
         );
         console.log(
-          "[Push] NOTE: permission is '" + permission + "' but we trust localStorage",
+          "[Push] NOTE: permission is '" +
+            permission +
+            "' but we trust localStorage",
         );
 
         // First, immediately set state to show as subscribed (prevents UI flicker)
@@ -263,7 +265,8 @@ export function usePushNotifications() {
           if (restored) {
             console.log("[Push] Successfully restored subscription!");
             // Also update permission state since we successfully subscribed
-            const updatedPermission = Notification.permission as PushPermissionState;
+            const updatedPermission =
+              Notification.permission as PushPermissionState;
             setState({
               isSupported: true,
               permission: updatedPermission,
