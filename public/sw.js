@@ -1,7 +1,7 @@
 // Service Worker for Push Notifications
 // Handles push events and displays notifications with alarm-like behavior
 
-const SW_VERSION = "1.0.2";
+const SW_VERSION = "1.0.3";
 
 // ============================================
 // INSTALL & ACTIVATE

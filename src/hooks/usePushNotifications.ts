@@ -75,20 +75,26 @@ export function usePushNotifications() {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track how many background restore attempts we've made
   const backgroundRetryCount = useRef(0);
+  // Track if initialization is in progress (prevent double-init)
+  const isInitializing = useRef(false);
 
   // Initialize on mount + retry on visibility change (PWA coming back to foreground)
   useEffect(() => {
+    console.log("[Push] useEffect mount - calling initializePushState");
     initializePushState();
 
     // When PWA comes back to foreground, re-check subscription
     const handleVisibilityChange = () => {
+      console.log("[Push] Visibility changed:", document.visibilityState);
       if (document.visibilityState === "visible") {
         // Only retry if we think we should be subscribed but don't have a subscription object
         const shouldBeSubscribed = getPushEnabledFromStorage();
-        if (shouldBeSubscribed) {
+        console.log("[Push] Should be subscribed:", shouldBeSubscribed);
+        if (shouldBeSubscribed && !isInitializing.current) {
           // Reset restore flag so we can try again
           hasAttemptedRestore.current = false;
           backgroundRetryCount.current = 0;
+          console.log("[Push] Re-initializing after visibility change");
           initializePushState();
         }
       }
@@ -105,153 +111,204 @@ export function usePushNotifications() {
 
   // Main initialization - separates local checks from DB operations
   const initializePushState = useCallback(async () => {
-    // Check browser support
-    if (typeof window === "undefined") {
-      setState((prev) => ({
-        ...prev,
-        isLoading: false,
-        isSubscribed: false,
-      }));
+    // Prevent concurrent initialization
+    if (isInitializing.current) {
+      console.log("[Push] Already initializing, skipping...");
       return;
     }
+    isInitializing.current = true;
 
-    const isSupported =
-      "serviceWorker" in navigator &&
-      "PushManager" in window &&
-      "Notification" in window;
-
-    if (!isSupported) {
-      setState({
-        isSupported: false,
-        permission: "unsupported",
-        isSubscribed: false,
-        isLoading: false,
-        error: null,
-        subscription: null,
-      });
-      return;
-    }
-
-    const permission = Notification.permission as PushPermissionState;
-
-    // If permission was revoked, clear everything
-    if (permission === "denied") {
-      setPushEnabledInStorage(false);
-      setState({
-        isSupported: true,
-        permission: "denied",
-        isSubscribed: false,
-        isLoading: false,
-        error: null,
-        subscription: null,
-      });
-      return;
-    }
-
-    const wasEnabledBefore = getPushEnabledFromStorage();
-
-    // Step 1: Ensure service worker is registered
-    let registration: ServiceWorkerRegistration | null = null;
     try {
-      registration = await getOrRegisterServiceWorker();
-    } catch (swError) {
-      console.error("[Push] Service worker setup error:", swError);
-    }
+      console.log("[Push] === initializePushState START ===");
 
-    // Step 2: Check for existing local push subscription
-    let subscription: PushSubscription | null = null;
-
-    if (registration) {
-      try {
-        subscription = await registration.pushManager.getSubscription();
-      } catch (error) {
-        console.error("[Push] Error getting subscription:", error);
+      // Check browser support
+      if (typeof window === "undefined") {
+        console.log("[Push] No window - SSR");
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          isSubscribed: false,
+        }));
+        return;
       }
-    }
 
-    if (subscription) {
-      // Local subscription exists -> we're subscribed
-      console.log(
-        "[Push] Local subscription found:",
-        subscription.endpoint.substring(0, 50) + "...",
-      );
-      setPushEnabledInStorage(true);
-      setState({
-        isSupported: true,
-        permission,
-        isSubscribed: true,
-        isLoading: false,
-        error: null,
-        subscription,
-      });
-      // Ensure this subscription is saved in DB (fire-and-forget with retry)
-      saveSubscriptionWithRetry(subscription);
-      return;
-    }
+      const isSupported =
+        "serviceWorker" in navigator &&
+        "PushManager" in window &&
+        "Notification" in window;
 
-    // Step 3: No local subscription - try to restore if previously enabled
-    if (
-      permission === "granted" &&
-      wasEnabledBefore &&
-      !hasAttemptedRestore.current
-    ) {
-      hasAttemptedRestore.current = true;
-      console.log(
-        "[Push] No local subscription but was enabled before, auto-restoring...",
-      );
+      console.log("[Push] Browser support:", isSupported);
 
+      if (!isSupported) {
+        setState({
+          isSupported: false,
+          permission: "unsupported",
+          isSubscribed: false,
+          isLoading: false,
+          error: null,
+          subscription: null,
+        });
+        return;
+      }
+
+      const permission = Notification.permission as PushPermissionState;
+      const wasEnabledBefore = getPushEnabledFromStorage();
+
+      console.log("[Push] Permission:", permission);
+      console.log("[Push] localStorage wasEnabledBefore:", wasEnabledBefore);
+
+      // If permission was revoked, clear everything
+      if (permission === "denied") {
+        console.log("[Push] Permission denied - clearing state");
+        setPushEnabledInStorage(false);
+        setState({
+          isSupported: true,
+          permission: "denied",
+          isSubscribed: false,
+          isLoading: false,
+          error: null,
+          subscription: null,
+        });
+        return;
+      }
+
+      // Step 1: Ensure service worker is registered
+      console.log("[Push] Step 1: Getting service worker registration...");
+      let registration: ServiceWorkerRegistration | null = null;
       try {
-        // Wait for SW to be fully active before subscribing
-        const activeRegistration = await waitForActiveServiceWorker();
-        const restored = await createLocalPushSubscription(
-          activeRegistration || registration,
+        registration = await getOrRegisterServiceWorker();
+        console.log(
+          "[Push] Service worker registration:",
+          registration ? "OK" : "FAILED",
         );
-        if (restored) {
-          console.log("[Push] Successfully re-established local subscription");
-          setPushEnabledInStorage(true);
-          setState({
-            isSupported: true,
-            permission,
-            isSubscribed: true,
-            isLoading: false,
-            error: null,
-            subscription: restored,
-          });
-          // Save to DB with retry (auth might not be ready yet)
-          saveSubscriptionWithRetry(restored);
-          return;
-        }
-      } catch (error) {
-        console.error("[Push] Auto-restore failed:", error);
+      } catch (swError) {
+        console.error("[Push] Service worker setup error:", swError);
       }
 
-      // Auto-restore failed - keep showing as subscribed since the user
-      // explicitly enabled notifications. Schedule background retry.
+      // Step 2: Check for existing local push subscription
+      console.log("[Push] Step 2: Checking for existing push subscription...");
+      let subscription: PushSubscription | null = null;
+
+      if (registration) {
+        try {
+          subscription = await registration.pushManager.getSubscription();
+          console.log(
+            "[Push] Existing subscription:",
+            subscription ? "FOUND" : "NOT FOUND",
+          );
+        } catch (error) {
+          console.error("[Push] Error getting subscription:", error);
+        }
+      }
+
+      if (subscription) {
+        // Local subscription exists -> we're subscribed
+        console.log(
+          "[Push] Local subscription found:",
+          subscription.endpoint.substring(0, 50) + "...",
+        );
+        setPushEnabledInStorage(true);
+        setState({
+          isSupported: true,
+          permission,
+          isSubscribed: true,
+          isLoading: false,
+          error: null,
+          subscription,
+        });
+        // Ensure this subscription is saved in DB (fire-and-forget with retry)
+        saveSubscriptionWithRetry(subscription);
+        return;
+      }
+
+      // Step 3: No local subscription - try to restore if previously enabled
+      console.log("[Push] Step 3: Checking if should restore...");
+      console.log("[Push]   - permission:", permission);
+      console.log("[Push]   - wasEnabledBefore:", wasEnabledBefore);
       console.log(
-        "[Push] Could not restore subscription yet, will retry in background",
+        "[Push]   - hasAttemptedRestore:",
+        hasAttemptedRestore.current,
       );
+
+      if (
+        permission === "granted" &&
+        wasEnabledBefore &&
+        !hasAttemptedRestore.current
+      ) {
+        hasAttemptedRestore.current = true;
+        console.log("[Push] Auto-restoring subscription...");
+
+        try {
+          // Wait for SW to be fully active before subscribing
+          console.log("[Push] Waiting for active service worker...");
+          const activeRegistration = await waitForActiveServiceWorker();
+          console.log(
+            "[Push] Active registration:",
+            activeRegistration ? "OK" : "FAILED",
+          );
+
+          console.log("[Push] Creating local push subscription...");
+          const restored = await createLocalPushSubscription(
+            activeRegistration || registration,
+          );
+          console.log(
+            "[Push] Restored subscription:",
+            restored ? "SUCCESS" : "FAILED",
+          );
+
+          if (restored) {
+            console.log(
+              "[Push] Successfully re-established local subscription",
+            );
+            setPushEnabledInStorage(true);
+            setState({
+              isSupported: true,
+              permission,
+              isSubscribed: true,
+              isLoading: false,
+              error: null,
+              subscription: restored,
+            });
+            // Save to DB with retry (auth might not be ready yet)
+            saveSubscriptionWithRetry(restored);
+            return;
+          }
+        } catch (error) {
+          console.error("[Push] Auto-restore failed:", error);
+        }
+
+        // Auto-restore failed - keep showing as subscribed since the user
+        // explicitly enabled notifications. Schedule background retry.
+        console.log(
+          "[Push] Could not restore subscription yet, will retry in background",
+        );
+        setState({
+          isSupported: true,
+          permission,
+          isSubscribed: true, // Keep showing as subscribed
+          isLoading: false,
+          error: null,
+          subscription: null,
+        });
+        // Schedule background retry
+        scheduleBackgroundRestore(registration);
+        return;
+      }
+
+      // Step 4: Not subscribed (user never enabled or permission not granted)
+      console.log("[Push] Step 4: Not subscribed - setting isSubscribed=false");
       setState({
         isSupported: true,
         permission,
-        isSubscribed: true, // Keep showing as subscribed
+        isSubscribed: false,
         isLoading: false,
         error: null,
         subscription: null,
       });
-      // Schedule background retry
-      scheduleBackgroundRestore(registration);
-      return;
+    } finally {
+      isInitializing.current = false;
+      console.log("[Push] === initializePushState END ===");
     }
-
-    // Step 4: Not subscribed (user never enabled or permission not granted)
-    setState({
-      isSupported: true,
-      permission,
-      isSubscribed: false,
-      isLoading: false,
-      error: null,
-      subscription: null,
-    });
   }, []);
 
   // Request notification permission
