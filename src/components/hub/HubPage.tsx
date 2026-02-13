@@ -152,7 +152,11 @@ const viewOptions: Array<{
   { id: "alerts", icon: AlertBellIcon, label: "Alerts" },
 ];
 
-export default function HubPage() {
+interface HubPageProps {
+  standalone?: boolean;
+}
+
+export default function HubPage({ standalone = false }: HubPageProps) {
   const themeClasses = useThemeClasses();
   const { hubDefaultView, setHubDefaultView } = useTab();
 
@@ -187,8 +191,8 @@ export default function HubPage() {
         </div>
       )}
 
-      {/* View Switcher - Hide when inside a thread */}
-      {!activeThreadId && (
+      {/* View Switcher - Hide when inside a thread or in standalone mode */}
+      {!activeThreadId && !standalone && (
         <div className="px-4 mb-4">
           <div className="flex gap-1 p-1 rounded-2xl neo-card bg-bg-card-custom border border-white/5">
             {viewOptions.map((option) => {
@@ -216,15 +220,16 @@ export default function HubPage() {
 
       {/* View Content */}
       <div className={cn(!activeThreadId && "px-4")}>
-        {activeView === "chat" && (
+        {(activeView === "chat" || standalone) && (
           <ChatView
             activeThreadId={activeThreadId}
             setActiveThreadId={setActiveThreadId}
+            standalone={standalone}
           />
         )}
-        {activeView === "feed" && !activeThreadId && <FeedView />}
-        {activeView === "score" && !activeThreadId && <ScoreboardView />}
-        {activeView === "alerts" && !activeThreadId && <AlertsView />}
+        {activeView === "feed" && !activeThreadId && !standalone && <FeedView />}
+        {activeView === "score" && !activeThreadId && !standalone && <ScoreboardView />}
+        {activeView === "alerts" && !activeThreadId && !standalone && <AlertsView />}
       </div>
     </div>
   );
@@ -290,9 +295,11 @@ function isDifferentDay(date1: Date | string, date2: Date | string): boolean {
 function ChatView({
   activeThreadId,
   setActiveThreadId,
+  standalone = false,
 }: {
   activeThreadId: string | null;
   setActiveThreadId: (id: string | null) => void;
+  standalone?: boolean;
 }) {
   const { data, isLoading } = useHubThreads();
   const { syncThreadsToCache } = useCacheSync();
@@ -675,8 +682,10 @@ function ChatView({
         </div>
       )}
 
-      {/* AI Assistant - Always First */}
-      <AIAssistantItem onClick={() => setActiveThreadId(AI_THREAD_ID)} />
+      {/* AI Assistant - Always First (hidden in standalone mode) */}
+      {!standalone && (
+        <AIAssistantItem onClick={() => setActiveThreadId(AI_THREAD_ID)} />
+      )}
 
       {/* Household Threads */}
       {householdId && filteredThreads.length > 0 && (
