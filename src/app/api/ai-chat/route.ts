@@ -169,12 +169,24 @@ export async function POST(req: NextRequest) {
       estimateTokens(chatHistoryText) +
       estimateTokens(message);
 
-    // Send message to Gemini
-    const response = await sendMessageToGemini(
-      message,
-      formattedHistory,
-      budgetContext,
-    );
+    // Send message to Gemini with detailed error capture
+    let response: string;
+    try {
+      response = await sendMessageToGemini(
+        message,
+        formattedHistory,
+        budgetContext,
+      );
+    } catch (geminiError) {
+      // Capture Gemini-specific errors with full details
+      const errMsg =
+        geminiError instanceof Error ? geminiError.message : String(geminiError);
+      const errStack =
+        geminiError instanceof Error ? geminiError.stack : undefined;
+      throw new Error(`Gemini call failed: ${errMsg}`, {
+        cause: { stack: errStack },
+      });
+    }
 
     const responseTime = Date.now() - startTime;
 
@@ -282,9 +294,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Return more descriptive error for debugging
+    // Return full error details for debugging (temporarily)
     return NextResponse.json(
-      { error: `Failed to get AI response: ${errorName}` },
+      {
+        error: `Failed to get AI response: ${errorMessage}`,
+        debug: {
+          name: errorName,
+          message: errorMessage,
+          stack: errorStack?.split("\n").slice(0, 5).join("\n"),
+        },
+      },
       { status: 500 },
     );
   }

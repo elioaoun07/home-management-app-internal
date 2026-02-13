@@ -1237,8 +1237,12 @@ function AIThreadConversation({
         }
 
         if (!response.ok) {
+          // Include debug info if available
+          const debugInfo = data.debug
+            ? ` | Debug: ${JSON.stringify(data.debug)}`
+            : "";
           throw new Error(
-            `API Error (${response.status}): ${data.error || responseText.slice(0, 200)}`,
+            `API Error (${response.status}): ${data.error || responseText.slice(0, 200)}${debugInfo}`,
           );
         }
 
