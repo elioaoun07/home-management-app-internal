@@ -253,6 +253,20 @@ export function NotificationSettings() {
         </div>
       )}
 
+      {/* Debug Info Panel - helps diagnose mobile issues */}
+      <details className={`p-3 rounded-xl ${themeClasses.bgSurface} ${themeClasses.border} border text-xs`}>
+        <summary className={`cursor-pointer ${themeClasses.textMuted} select-none`}>
+          Debug Info (tap to expand)
+        </summary>
+        <div className={`mt-2 space-y-1 font-mono ${themeClasses.textMuted}`}>
+          <div>localStorage: <span className={typeof window !== 'undefined' && localStorage.getItem('push_notifications_enabled') === 'true' ? 'text-green-400' : 'text-red-400'}>{typeof window !== 'undefined' ? localStorage.getItem('push_notifications_enabled') || 'null' : 'SSR'}</span></div>
+          <div>permission: <span className={permission === 'granted' ? 'text-green-400' : permission === 'denied' ? 'text-red-400' : 'text-yellow-400'}>{permission}</span></div>
+          <div>isSubscribed: <span className={isSubscribed ? 'text-green-400' : 'text-red-400'}>{String(isSubscribed)}</span></div>
+          <div>isSupported: <span className={isSupported ? 'text-green-400' : 'text-red-400'}>{String(isSupported)}</span></div>
+          <div>isLoading: {String(isLoading)}</div>
+        </div>
+      </details>
+
       {/* Actions */}
       <div className="flex flex-col gap-3">
         {!isSubscribed ? (

@@ -218,16 +218,25 @@ export function usePushNotifications() {
       }
 
       // Step 3: No local subscription - check if we should restore or show as disabled
-      console.log("[Push] Step 3: No subscription found, checking restore conditions...");
+      console.log(
+        "[Push] Step 3: No subscription found, checking restore conditions...",
+      );
       console.log("[Push]   - permission:", permission);
       console.log("[Push]   - wasEnabledBefore:", wasEnabledBefore);
 
-      // CRITICAL FIX: If user previously enabled notifications AND permission is still granted,
-      // ALWAYS keep showing as subscribed and try to restore in background.
-      // This prevents the UI from flickering to "Disabled" on app restart.
-      if (permission === "granted" && wasEnabledBefore) {
-        console.log("[Push] User previously enabled - keeping isSubscribed=true while restoring...");
-        
+      // CRITICAL FIX: Trust localStorage over Notification.permission!
+      // On mobile PWAs, Notification.permission can return "default" on cold starts
+      // even though permission was previously granted. We trust localStorage because
+      // it's only set to true after successful subscription.
+      // Only give up if permission is explicitly "denied" (already handled above).
+      if (wasEnabledBefore) {
+        console.log(
+          "[Push] User previously enabled (localStorage=true) - keeping isSubscribed=true while restoring...",
+        );
+        console.log(
+          "[Push] NOTE: permission is '" + permission + "' but we trust localStorage",
+        );
+
         // First, immediately set state to show as subscribed (prevents UI flicker)
         setState({
           isSupported: true,
@@ -250,12 +259,14 @@ export function usePushNotifications() {
           const restored = await createLocalPushSubscription(
             activeRegistration || registration,
           );
-          
+
           if (restored) {
             console.log("[Push] Successfully restored subscription!");
+            // Also update permission state since we successfully subscribed
+            const updatedPermission = Notification.permission as PushPermissionState;
             setState({
               isSupported: true,
-              permission,
+              permission: updatedPermission,
               isSubscribed: true,
               isLoading: false,
               error: null,
@@ -280,7 +291,9 @@ export function usePushNotifications() {
       }
 
       // Step 4: Not subscribed - user never enabled OR permission not granted yet
-      console.log("[Push] Step 4: Not subscribed (user never enabled or permission not granted)");
+      console.log(
+        "[Push] Step 4: Not subscribed (user never enabled or permission not granted)",
+      );
       setState({
         isSupported: true,
         permission,
