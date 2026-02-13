@@ -69,14 +69,12 @@ export function usePushNotifications() {
     subscription: null,
   });
 
-  // Track if we've already tried to auto-restore subscription
-  const hasAttemptedRestore = useRef(false);
   // Track retry timers so we can clean up
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track how many background restore attempts we've made
-  const backgroundRetryCount = useRef(0);
   // Track if initialization is in progress (prevent double-init)
   const isInitializing = useRef(false);
+  // Track if a background restore is already scheduled
+  const backgroundRestoreScheduled = useRef(false);
 
   // Initialize on mount + retry on visibility change (PWA coming back to foreground)
   useEffect(() => {
@@ -87,13 +85,10 @@ export function usePushNotifications() {
     const handleVisibilityChange = () => {
       console.log("[Push] Visibility changed:", document.visibilityState);
       if (document.visibilityState === "visible") {
-        // Only retry if we think we should be subscribed but don't have a subscription object
+        // Re-check subscription state when app comes to foreground
         const shouldBeSubscribed = getPushEnabledFromStorage();
         console.log("[Push] Should be subscribed:", shouldBeSubscribed);
-        if (shouldBeSubscribed && !isInitializing.current) {
-          // Reset restore flag so we can try again
-          hasAttemptedRestore.current = false;
-          backgroundRetryCount.current = 0;
+        if (!isInitializing.current) {
           console.log("[Push] Re-initializing after visibility change");
           initializePushState();
         }
@@ -110,6 +105,7 @@ export function usePushNotifications() {
   }, []);
 
   // Main initialization - separates local checks from DB operations
+  // IMPORTANT: This function must be idempotent and safe to call multiple times
   const initializePushState = useCallback(async () => {
     // Prevent concurrent initialization
     if (isInitializing.current) {
@@ -221,46 +217,42 @@ export function usePushNotifications() {
         return;
       }
 
-      // Step 3: No local subscription - try to restore if previously enabled
-      console.log("[Push] Step 3: Checking if should restore...");
+      // Step 3: No local subscription - check if we should restore or show as disabled
+      console.log("[Push] Step 3: No subscription found, checking restore conditions...");
       console.log("[Push]   - permission:", permission);
       console.log("[Push]   - wasEnabledBefore:", wasEnabledBefore);
-      console.log(
-        "[Push]   - hasAttemptedRestore:",
-        hasAttemptedRestore.current,
-      );
 
-      if (
-        permission === "granted" &&
-        wasEnabledBefore &&
-        !hasAttemptedRestore.current
-      ) {
-        hasAttemptedRestore.current = true;
-        console.log("[Push] Auto-restoring subscription...");
+      // CRITICAL FIX: If user previously enabled notifications AND permission is still granted,
+      // ALWAYS keep showing as subscribed and try to restore in background.
+      // This prevents the UI from flickering to "Disabled" on app restart.
+      if (permission === "granted" && wasEnabledBefore) {
+        console.log("[Push] User previously enabled - keeping isSubscribed=true while restoring...");
+        
+        // First, immediately set state to show as subscribed (prevents UI flicker)
+        setState({
+          isSupported: true,
+          permission,
+          isSubscribed: true, // ALWAYS show as subscribed if user previously enabled
+          isLoading: false,
+          error: null,
+          subscription: null,
+        });
 
+        // Then try to restore the subscription
         try {
-          // Wait for SW to be fully active before subscribing
-          console.log("[Push] Waiting for active service worker...");
+          console.log("[Push] Attempting to restore subscription...");
           const activeRegistration = await waitForActiveServiceWorker();
           console.log(
             "[Push] Active registration:",
             activeRegistration ? "OK" : "FAILED",
           );
 
-          console.log("[Push] Creating local push subscription...");
           const restored = await createLocalPushSubscription(
             activeRegistration || registration,
           );
-          console.log(
-            "[Push] Restored subscription:",
-            restored ? "SUCCESS" : "FAILED",
-          );
-
+          
           if (restored) {
-            console.log(
-              "[Push] Successfully re-established local subscription",
-            );
-            setPushEnabledInStorage(true);
+            console.log("[Push] Successfully restored subscription!");
             setState({
               isSupported: true,
               permission,
@@ -269,34 +261,26 @@ export function usePushNotifications() {
               error: null,
               subscription: restored,
             });
-            // Save to DB with retry (auth might not be ready yet)
             saveSubscriptionWithRetry(restored);
             return;
           }
         } catch (error) {
-          console.error("[Push] Auto-restore failed:", error);
+          console.error("[Push] Restore attempt failed:", error);
         }
 
-        // Auto-restore failed - keep showing as subscribed since the user
-        // explicitly enabled notifications. Schedule background retry.
-        console.log(
-          "[Push] Could not restore subscription yet, will retry in background",
-        );
-        setState({
-          isSupported: true,
-          permission,
-          isSubscribed: true, // Keep showing as subscribed
-          isLoading: false,
-          error: null,
-          subscription: null,
-        });
-        // Schedule background retry
-        scheduleBackgroundRestore(registration);
+        // If restore failed, schedule background retry (but keep showing as subscribed)
+        console.log("[Push] Restore failed, scheduling background retry...");
+        if (!backgroundRestoreScheduled.current) {
+          backgroundRestoreScheduled.current = true;
+          scheduleBackgroundRestore(registration, () => {
+            backgroundRestoreScheduled.current = false;
+          });
+        }
         return;
       }
 
-      // Step 4: Not subscribed (user never enabled or permission not granted)
-      console.log("[Push] Step 4: Not subscribed - setting isSubscribed=false");
+      // Step 4: Not subscribed - user never enabled OR permission not granted yet
+      console.log("[Push] Step 4: Not subscribed (user never enabled or permission not granted)");
       setState({
         isSupported: true,
         permission,
@@ -480,7 +464,7 @@ export function usePushNotifications() {
 
   // Manual refresh - re-checks subscription state and syncs with DB
   const refreshSubscription = useCallback(async (): Promise<void> => {
-    hasAttemptedRestore.current = false;
+    backgroundRestoreScheduled.current = false; // Allow new restore attempts
     await initializePushState();
   }, [initializePushState]);
 
@@ -577,8 +561,10 @@ async function createLocalPushSubscription(
 
 // Schedule background retry to restore subscription
 // This runs when the initial auto-restore fails (e.g., SW not active yet on cold PWA start)
+// The onComplete callback is called when max attempts reached or subscription established
 async function scheduleBackgroundRestore(
   registration: ServiceWorkerRegistration | null,
+  onComplete?: () => void,
   attempt: number = 0,
 ): Promise<void> {
   const MAX_ATTEMPTS = 5;
@@ -588,6 +574,7 @@ async function scheduleBackgroundRestore(
     console.log(
       "[Push] Background restore: max attempts reached, giving up for this session",
     );
+    onComplete?.();
     return;
   }
 
@@ -603,7 +590,7 @@ async function scheduleBackgroundRestore(
 
       if (!reg) {
         console.log("[Push] Background restore: no registration, retrying...");
-        scheduleBackgroundRestore(registration, attempt + 1);
+        scheduleBackgroundRestore(registration, onComplete, attempt + 1);
         return;
       }
 
@@ -619,17 +606,18 @@ async function scheduleBackgroundRestore(
         console.log("[Push] Background restore: subscription established!");
         // Save to DB with retry
         saveSubscriptionWithRetry(subscription);
+        onComplete?.();
         // Note: we can't call setState from outside the hook,
         // but the visibilitychange handler will pick up the subscription
         // on next foreground event. The subscription object in the PushManager
         // is what matters for receiving notifications.
       } else {
         console.log("[Push] Background restore: still failed, retrying...");
-        scheduleBackgroundRestore(registration, attempt + 1);
+        scheduleBackgroundRestore(registration, onComplete, attempt + 1);
       }
     } catch (error) {
       console.error("[Push] Background restore error:", error);
-      scheduleBackgroundRestore(registration, attempt + 1);
+      scheduleBackgroundRestore(registration, onComplete, attempt + 1);
     }
   }, delay);
 }
