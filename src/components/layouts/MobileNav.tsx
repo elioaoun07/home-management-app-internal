@@ -80,8 +80,16 @@ export default function MobileNav() {
   // Draft transactions count for floating badge
   const draftCount = useDraftCount();
 
-  // Hide nav on guest portal routes and watch/web mode
-  if (pathname?.startsWith("/g/")) {
+  // Hide nav on guest portal and standalone PWA routes
+  // Standalone apps: /catalogue, /recipe, /chat, /reminders
+  const standaloneRoutes = [
+    "/g/",
+    "/catalogue",
+    "/recipe",
+    "/chat",
+    "/reminders",
+  ];
+  if (standaloneRoutes.some((route) => pathname?.startsWith(route))) {
     return null;
   }
 
