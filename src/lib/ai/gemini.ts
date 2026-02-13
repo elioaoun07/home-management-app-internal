@@ -160,7 +160,7 @@ Budget Categories (This Month - EXPENSES ONLY):
 ${context.categories
   .map(
     (c) =>
-      `- ${c.name}: Budget $${c.budget.toFixed(2)}, Spent $${c.spent.toFixed(2)}, Remaining $${c.remaining.toFixed(2)}`
+      `- ${c.name}: Budget $${c.budget.toFixed(2)}, Spent $${c.spent.toFixed(2)}, Remaining $${c.remaining.toFixed(2)}`,
   )
   .join("\n")}
 
@@ -170,7 +170,7 @@ ${
     ? context.recurringPayments
         .map(
           (p) =>
-            `- ${p.name}: $${p.amount.toFixed(2)} (${p.recurrence}, Next due: ${p.nextDue})`
+            `- ${p.name}: $${p.amount.toFixed(2)} (${p.recurrence}, Next due: ${p.nextDue})`,
         )
         .join("\n")
     : "No recurring payments set up."
@@ -182,7 +182,7 @@ ${
     ? context.futurePurchases
         .map(
           (g) =>
-            `- ${g.name}: Target $${g.targetAmount.toFixed(2)}, Saved $${g.saved.toFixed(2)}, Due ${g.targetDate}`
+            `- ${g.name}: Target $${g.targetAmount.toFixed(2)}, Saved $${g.saved.toFixed(2)}, Due ${g.targetDate}`,
         )
         .join("\n")
     : "No future goals set."
@@ -204,7 +204,7 @@ ${
         .slice(0, 10)
         .map(
           (t) =>
-            `- ${t.date}: ${t.description} - $${t.amount.toFixed(2)} (${t.category})`
+            `- ${t.date}: ${t.description} - $${t.amount.toFixed(2)} (${t.category})`,
         )
         .join("\n")
     : "No expense transactions this month yet."
@@ -233,8 +233,13 @@ ${context.lastMonth.categories
 export async function sendMessageToGemini(
   message: string,
   chatHistory: ChatMessage[] = [],
-  context?: BudgetContext
+  context?: BudgetContext,
 ): Promise<string> {
+  // Check if API key is configured
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+
   const systemPrompt = generateSystemPrompt(context);
 
   // Build conversation history for Gemini (only actual chat, no fake ack)
@@ -249,26 +254,41 @@ export async function sendMessageToGemini(
     },
   ];
 
-  const response = await genAI.models.generateContent({
-    model: geminiModel,
-    contents,
-    config: {
-      // Use systemInstruction for the system prompt - cleaner and saves tokens
-      systemInstruction: systemPrompt,
-      temperature: 0.7,
-      topP: 0.9,
-      topK: 40,
-      maxOutputTokens: 1024,
-    },
-  });
+  try {
+    const response = await genAI.models.generateContent({
+      model: geminiModel,
+      contents,
+      config: {
+        // Use systemInstruction for the system prompt - cleaner and saves tokens
+        systemInstruction: systemPrompt,
+        temperature: 0.7,
+        topP: 0.9,
+        topK: 40,
+        maxOutputTokens: 1024,
+      },
+    });
 
-  const text = response.text;
+    const text = response.text;
 
-  if (!text) {
-    throw new Error("No response from Gemini");
+    if (!text) {
+      throw new Error("No response from Gemini");
+    }
+
+    return text;
+  } catch (error) {
+    // Re-throw with more context
+    if (error instanceof Error) {
+      // Check for common SDK errors
+      if (error.message.includes("Could not find model")) {
+        throw new Error(`Invalid model: ${geminiModel}`);
+      }
+      if (error.message.includes("safety")) {
+        throw new Error("Response blocked by safety filters");
+      }
+      throw error;
+    }
+    throw new Error(`Gemini API error: ${String(error)}`);
   }
-
-  return text;
 }
 
 /**
@@ -285,7 +305,7 @@ export async function analyzeSpending(context: BudgetContext): Promise<string> {
 
 export async function suggestCategory(
   description: string,
-  categories: string[]
+  categories: string[],
 ): Promise<string> {
   const prompt = `Given this transaction description: "${description}"
   

@@ -218,6 +218,30 @@ export async function POST(req: NextRequest) {
 
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorName = error instanceof Error ? error.name : "UnknownError";
+
+    // Log detailed error to database for debugging
+    try {
+      const supabase = await supabaseServer(await cookies());
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("error_logs").insert({
+          user_id: user.id,
+          error_message: `AI Chat Error: ${errorMessage}`,
+          error_stack: errorStack || null,
+          context: JSON.stringify({
+            errorName,
+            endpoint: "/api/ai-chat",
+            timestamp: new Date().toISOString(),
+          }),
+        });
+      }
+    } catch (logError) {
+      console.error("Failed to log error:", logError);
+    }
 
     // Check for rate limit (429) errors
     if (
@@ -245,8 +269,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check for network/timeout errors
+    if (
+      errorMessage.includes("timeout") ||
+      errorMessage.includes("ETIMEDOUT") ||
+      errorMessage.includes("ECONNRESET") ||
+      errorMessage.includes("fetch failed")
+    ) {
+      return NextResponse.json(
+        { error: "AI service timed out. Please try again." },
+        { status: 504 },
+      );
+    }
+
+    // Return more descriptive error for debugging
     return NextResponse.json(
-      { error: "Failed to get AI response. Please try again." },
+      { error: `Failed to get AI response: ${errorName}` },
       { status: 500 },
     );
   }
