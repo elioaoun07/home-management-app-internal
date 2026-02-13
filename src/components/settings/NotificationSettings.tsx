@@ -282,11 +282,7 @@ export function NotificationSettings() {
             permission:{" "}
             <span
               className={
-                permission === "granted"
-                  ? "text-green-400"
-                  : permission === "denied"
-                    ? "text-red-400"
-                    : "text-yellow-400"
+                permission === "granted" ? "text-green-400" : "text-yellow-400"
               }
             >
               {permission}
