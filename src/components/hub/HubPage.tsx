@@ -184,8 +184,8 @@ export default function HubPage({ standalone = false }: HubPageProps) {
       {/* Offline/Error Banner - Shows when connectivity issues */}
       <OfflineBanner />
 
-      {/* Daily Pulse Header - Hide when inside a thread */}
-      {!activeThreadId && (
+      {/* Daily Pulse Header - Hide when inside a thread or in standalone mode */}
+      {!activeThreadId && !standalone && (
         <div className="px-4 py-3">
           <DailyPulse />
         </div>
