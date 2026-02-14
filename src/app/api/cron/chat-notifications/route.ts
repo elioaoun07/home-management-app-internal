@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
 
     if (orphanReceiptIds.length > 0) {
       console.log(
-        `[Chat Notifications] Marking ${orphanReceiptIds.length} orphan receipts as skipped (deleted/archived messages)`
+        `[Chat Notifications] Marking ${orphanReceiptIds.length} orphan receipts as skipped (deleted/archived messages)`,
       );
       await supabase
         .from("hub_message_receipts")
