@@ -5,15 +5,31 @@ import ExpenseTagsBarWrapper from "@/components/expense/ExpenseTagsBarWrapper";
 import ExpenseShell from "@/components/layouts/ExpenseShell";
 import { useTab } from "@/contexts/TabContext";
 import { useViewMode } from "@/hooks/useViewMode";
-import React from "react";
+import React, { useEffect } from "react";
+
+// Key for setting initial tab from external navigation (e.g., /focus)
+const INITIAL_TAB_KEY = "initial-active-tab";
 
 export default function ExpenseLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { activeTab } = useTab();
+  const { activeTab, setActiveTab } = useTab();
   const { viewMode } = useViewMode();
+
+  // Check for explicit tab override (e.g., from /focus navigation)
+  // Note: FAB selection is handled in TabProvider's initial state
+  useEffect(() => {
+    const initialTab = localStorage.getItem(INITIAL_TAB_KEY);
+    if (
+      initialTab &&
+      ["dashboard", "expense", "reminder", "hub"].includes(initialTab)
+    ) {
+      localStorage.removeItem(INITIAL_TAB_KEY);
+      setActiveTab(initialTab as "dashboard" | "expense" | "reminder" | "hub");
+    }
+  }, [setActiveTab]);
 
   // Only show tags bar when actively on the expense tab (not dashboard or drafts)
   // and only in mobile view mode (not web or watch)

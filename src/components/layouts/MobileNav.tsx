@@ -47,13 +47,20 @@ import { toast } from "sonner";
 type TabId = "dashboard" | "expense" | "reminder" | "hub";
 
 // Nav items without the primary FAB (now handled by SemiDonutFAB)
+// Left side: Dashboard | Right side: Hub
 const navItems: Array<{
   id: TabId;
   icon: any;
   label: string;
+  position: "left" | "right";
 }> = [
-  { id: "dashboard", icon: BarChart3Icon, label: "Dashboard" },
-  { id: "hub", icon: HubIcon, label: "Hub" },
+  {
+    id: "dashboard",
+    icon: BarChart3Icon,
+    label: "Dashboard",
+    position: "left",
+  },
+  { id: "hub", icon: HubIcon, label: "Hub", position: "right" },
 ];
 
 export default function MobileNav() {
@@ -80,18 +87,15 @@ export default function MobileNav() {
   // Draft transactions count for floating badge
   const draftCount = useDraftCount();
 
-  // Hide nav on guest portal and standalone PWA routes
-  // Standalone apps: /catalogue, /recipe, /chat, /reminders
+  // Standalone routes list (checked after hooks)
   const standaloneRoutes = [
     "/g/",
     "/catalogue",
     "/recipe",
     "/chat",
     "/reminders",
+    "/focus",
   ];
-  if (standaloneRoutes.some((route) => pathname?.startsWith(route))) {
-    return null;
-  }
 
   // Prefetch all tabs on initial mount for instant switching
   useEffect(() => {
@@ -190,6 +194,11 @@ export default function MobileNav() {
     return null;
   }
 
+  // Hide nav on guest portal and standalone PWA routes
+  if (standaloneRoutes.some((route) => pathname?.startsWith(route))) {
+    return null;
+  }
+
   return (
     <>
       {/* Floating QR Scanner Button */}
@@ -239,7 +248,7 @@ export default function MobileNav() {
           boxShadow: themeClasses.navShadow,
         }}
       >
-        <div className="flex items-center justify-around gap-2 px-4 h-full">
+        <div className="flex items-center justify-around gap-1 px-2 h-full">
           {/* Dashboard Tab */}
           <button
             type="button"
@@ -255,7 +264,7 @@ export default function MobileNav() {
             onTouchStart={handleDashboardPrefetch}
             suppressHydrationWarning
             className={cn(
-              "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-2xl transition-all min-w-[68px] hover:scale-105",
+              "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-2xl transition-all min-w-[52px] hover:scale-105",
               "active:scale-95",
               activeTab === "dashboard"
                 ? "neo-card neo-glow-sm text-[hsl(var(--nav-icon-active))] bg-[hsl(var(--header-bg))]"
@@ -265,7 +274,7 @@ export default function MobileNav() {
             <div className="relative">
               <BarChart3Icon className="w-5 h-5" />
             </div>
-            <span className="text-[10px] font-medium whitespace-nowrap">
+            <span className="text-[9px] font-medium whitespace-nowrap">
               Dashboard
             </span>
           </button>
@@ -290,7 +299,7 @@ export default function MobileNav() {
             }}
             suppressHydrationWarning
             className={cn(
-              "flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-2xl transition-all min-w-[68px] hover:scale-105",
+              "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-2xl transition-all min-w-[52px] hover:scale-105",
               "active:scale-95",
               activeTab === "hub"
                 ? "neo-card neo-glow-sm text-[hsl(var(--nav-icon-active))] bg-[hsl(var(--header-bg))]"
@@ -300,7 +309,7 @@ export default function MobileNav() {
             <div className="relative">
               <HubIcon className="w-5 h-5" />
             </div>
-            <span className="text-[10px] font-medium whitespace-nowrap">
+            <span className="text-[9px] font-medium whitespace-nowrap">
               Hub
             </span>
           </button>

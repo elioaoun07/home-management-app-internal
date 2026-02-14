@@ -9,11 +9,11 @@ import dynamic from "next/dynamic";
 // MobileExpenseForm is the default start page, so it's loaded eagerly
 const DashboardClientPage = dynamic(
   () => import("@/app/dashboard/DashboardClientPage"),
-  { ssr: false }
+  { ssr: false },
 );
 const MobileReminderForm = dynamic(
   () => import("@/components/reminder/MobileReminderForm"),
-  { ssr: false }
+  { ssr: false },
 );
 const HubPage = dynamic(() => import("@/components/hub/HubPage"), {
   ssr: false,
@@ -22,23 +22,23 @@ const HubPage = dynamic(() => import("@/components/hub/HubPage"), {
 // Lazy load view modes that aren't the default mobile view
 const SimpleWatchView = dynamic(
   () => import("@/components/watch/SimpleWatchView"),
-  { ssr: false }
+  { ssr: false },
 );
 const WatchErrorBoundary = dynamic(
   () =>
     import("@/components/watch/WatchErrorBoundary").then(
-      (mod) => mod.WatchErrorBoundary
+      (mod) => mod.WatchErrorBoundary,
     ),
-  { ssr: false }
+  { ssr: false },
 );
 const WebViewContainer = dynamic(
   () => import("@/components/web/WebViewContainer"),
-  { ssr: false }
+  { ssr: false },
 );
 
 export default function TabContainer() {
   const { viewMode } = useViewMode();
-  const { activeTab } = useTab();
+  const { activeTab, isHydrated } = useTab();
 
   // INSTANT RENDER - No loading screens
   // Always render immediately using cached data
@@ -58,9 +58,12 @@ export default function TabContainer() {
     return <WebViewContainer />;
   }
 
-  // Default mobile view - renders instantly
+  // Default mobile view
+  // Use visibility to prevent hydration mismatch while avoiding flash
+  // Server and client both render with visibility:hidden initially
+  // After useLayoutEffect runs, isHydrated becomes true and correct tab is shown
   return (
-    <>
+    <div style={{ visibility: isHydrated ? "visible" : "hidden" }}>
       <div className={activeTab === "dashboard" ? "block" : "hidden"}>
         <DashboardClientPage />
       </div>
@@ -77,6 +80,6 @@ export default function TabContainer() {
       <div className={activeTab === "hub" ? "block pt-14" : "hidden"}>
         <HubPage />
       </div>
-    </>
+    </div>
   );
 }
