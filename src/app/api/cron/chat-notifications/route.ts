@@ -90,6 +90,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Step 2: Get the messages for these receipts
+    // IMPORTANT: Filter out deleted and archived messages
     const messageIds = [...new Set(unreadReceipts.map((r) => r.message_id))];
 
     const { data: messages, error: messagesError } = await supabase
@@ -97,7 +98,9 @@ export async function GET(req: NextRequest) {
       .select(
         "id, content, sender_user_id, thread_id, created_at, household_id",
       )
-      .in("id", messageIds);
+      .in("id", messageIds)
+      .is("deleted_at", null) // Exclude soft-deleted messages
+      .is("archived_at", null); // Exclude archived messages
 
     if (messagesError) {
       return NextResponse.json(
@@ -108,6 +111,25 @@ export async function GET(req: NextRequest) {
 
     // Create a message lookup map
     const messageMap = new Map(messages?.map((m) => [m.id, m]) || []);
+
+    // Step 2b: Clean up orphan receipts (messages that are deleted/archived)
+    // Mark them as "skipped" so they don't get processed again
+    const orphanReceiptIds = unreadReceipts
+      .filter((r) => !messageMap.has(r.message_id))
+      .map((r) => r.id);
+
+    if (orphanReceiptIds.length > 0) {
+      console.log(
+        `[Chat Notifications] Marking ${orphanReceiptIds.length} orphan receipts as skipped (deleted/archived messages)`
+      );
+      await supabase
+        .from("hub_message_receipts")
+        .update({
+          push_status: "skipped",
+          push_sent_at: new Date().toISOString(),
+        })
+        .in("id", orphanReceiptIds);
+    }
 
     // Step 3: Get thread details (including is_private)
     const threadIds = [
@@ -417,6 +439,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       unread_receipts: unreadReceipts.length,
+      orphan_receipts_cleaned: orphanReceiptIds.length,
+      valid_messages: messages?.length || 0,
       users_with_unread: groupedByUser.size,
       notifications_sent: notificationsSent,
       push_sent: pushSent,
