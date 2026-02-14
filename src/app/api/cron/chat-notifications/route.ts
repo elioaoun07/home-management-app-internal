@@ -177,53 +177,28 @@ export async function GET(req: NextRequest) {
 
     const groupedByUser = new Map<string, Map<string, GroupedReceipt[]>>();
 
-    // Debug counters
-    let skipNoMessage = 0;
-    let skipNoThreadId = 0;
-    let skipThreadNotFound = 0;
-    let skipPrivate = 0;
-    let skipWrongPurpose = 0;
-    let addedToGroup = 0;
-
-    console.log("[Chat Notifications] DEBUG: Starting grouping loop");
-    console.log("[Chat Notifications] DEBUG: unreadReceipts count:", unreadReceipts.length);
-    console.log("[Chat Notifications] DEBUG: messageMap size:", messageMap.size);
-    console.log("[Chat Notifications] DEBUG: threadMap size:", threadMap.size);
-    console.log("[Chat Notifications] DEBUG: threadMap entries:", [...threadMap.entries()].map(([id, t]) => ({ id, purpose: t.purpose, is_private: t.is_private })));
+    // Track receipts to mark as "skipped" (won't need push notifications)
+    const privateThreadReceiptIds: string[] = [];
+    const wrongPurposeReceiptIds: string[] = [];
 
     for (const receipt of unreadReceipts) {
       const message = messageMap.get(receipt.message_id);
-      if (!message) {
-        skipNoMessage++;
-        continue;
-      }
-      if (!message.thread_id) {
-        skipNoThreadId++;
-        continue;
-      }
+      if (!message || !message.thread_id) continue;
 
       const thread = threadMap.get(message.thread_id);
+      if (!thread) continue;
 
-      // Skip if thread not found
-      if (!thread) {
-        skipThreadNotFound++;
-        console.log("[Chat Notifications] DEBUG: Thread not found for thread_id:", message.thread_id);
-        continue;
-      }
-
-      // Skip private threads (only creator can see them, no push to others)
+      // Private threads: mark as skipped (only creator sees them)
       if (thread.is_private) {
-        skipPrivate++;
+        privateThreadReceiptIds.push(receipt.id);
         continue;
       }
 
-      // Only send push notifications for budget and reminder threads
+      // Wrong purpose: mark as skipped (only budget/reminder get push)
       if (thread.purpose !== "budget" && thread.purpose !== "reminder") {
-        skipWrongPurpose++;
+        wrongPurposeReceiptIds.push(receipt.id);
         continue;
       }
-
-      addedToGroup++;
       const userId = receipt.user_id;
       const threadId = message.thread_id;
 
@@ -242,6 +217,28 @@ export async function GET(req: NextRequest) {
         sender_user_id: message.sender_user_id,
         created_at: message.created_at,
       });
+    }
+
+    // Mark private thread receipts as "skipped" so they don't get reprocessed
+    if (privateThreadReceiptIds.length > 0) {
+      await supabase
+        .from("hub_message_receipts")
+        .update({
+          push_status: "skipped",
+          push_sent_at: new Date().toISOString(),
+        })
+        .in("id", privateThreadReceiptIds);
+    }
+
+    // Mark wrong purpose receipts as "skipped" so they don't get reprocessed
+    if (wrongPurposeReceiptIds.length > 0) {
+      await supabase
+        .from("hub_message_receipts")
+        .update({
+          push_status: "skipped",
+          push_sent_at: new Date().toISOString(),
+        })
+        .in("id", wrongPurposeReceiptIds);
     }
 
     let notificationsSent = 0;
@@ -473,23 +470,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       unread_receipts: unreadReceipts.length,
-      orphan_receipts_cleaned: orphanReceiptIds.length,
-      valid_messages: messages?.length || 0,
-      users_with_unread: groupedByUser.size,
+      cleaned: {
+        orphan_deleted: orphanReceiptIds.length,
+        private_threads: privateThreadReceiptIds.length,
+        wrong_purpose: wrongPurposeReceiptIds.length,
+      },
+      to_process: groupedByUser.size,
       notifications_sent: notificationsSent,
       push_sent: pushSent,
       push_failed: pushFailed,
       skipped_duplicate: skippedDuplicate,
       skipped_no_push_subs: skippedNoPushSubs,
-      debug: {
-        skip_no_message: skipNoMessage,
-        skip_no_thread_id: skipNoThreadId,
-        skip_thread_not_found: skipThreadNotFound,
-        skip_private: skipPrivate,
-        skip_wrong_purpose: skipWrongPurpose,
-        added_to_group: addedToGroup,
-        thread_count: threadMap.size,
-      },
       checked_at: now.toISOString(),
     });
   } catch (error) {
