@@ -177,19 +177,53 @@ export async function GET(req: NextRequest) {
 
     const groupedByUser = new Map<string, Map<string, GroupedReceipt[]>>();
 
+    // Debug counters
+    let skipNoMessage = 0;
+    let skipNoThreadId = 0;
+    let skipThreadNotFound = 0;
+    let skipPrivate = 0;
+    let skipWrongPurpose = 0;
+    let addedToGroup = 0;
+
+    console.log("[Chat Notifications] DEBUG: Starting grouping loop");
+    console.log("[Chat Notifications] DEBUG: unreadReceipts count:", unreadReceipts.length);
+    console.log("[Chat Notifications] DEBUG: messageMap size:", messageMap.size);
+    console.log("[Chat Notifications] DEBUG: threadMap size:", threadMap.size);
+    console.log("[Chat Notifications] DEBUG: threadMap entries:", [...threadMap.entries()].map(([id, t]) => ({ id, purpose: t.purpose, is_private: t.is_private })));
+
     for (const receipt of unreadReceipts) {
       const message = messageMap.get(receipt.message_id);
-      if (!message || !message.thread_id) continue;
+      if (!message) {
+        skipNoMessage++;
+        continue;
+      }
+      if (!message.thread_id) {
+        skipNoThreadId++;
+        continue;
+      }
 
       const thread = threadMap.get(message.thread_id);
 
+      // Skip if thread not found
+      if (!thread) {
+        skipThreadNotFound++;
+        console.log("[Chat Notifications] DEBUG: Thread not found for thread_id:", message.thread_id);
+        continue;
+      }
+
       // Skip private threads (only creator can see them, no push to others)
-      if (thread?.is_private) continue;
+      if (thread.is_private) {
+        skipPrivate++;
+        continue;
+      }
 
       // Only send push notifications for budget and reminder threads
-      if (thread?.purpose !== "budget" && thread?.purpose !== "reminder")
+      if (thread.purpose !== "budget" && thread.purpose !== "reminder") {
+        skipWrongPurpose++;
         continue;
+      }
 
+      addedToGroup++;
       const userId = receipt.user_id;
       const threadId = message.thread_id;
 
@@ -447,6 +481,15 @@ export async function GET(req: NextRequest) {
       push_failed: pushFailed,
       skipped_duplicate: skippedDuplicate,
       skipped_no_push_subs: skippedNoPushSubs,
+      debug: {
+        skip_no_message: skipNoMessage,
+        skip_no_thread_id: skipNoThreadId,
+        skip_thread_not_found: skipThreadNotFound,
+        skip_private: skipPrivate,
+        skip_wrong_purpose: skipWrongPurpose,
+        added_to_group: addedToGroup,
+        thread_count: threadMap.size,
+      },
       checked_at: now.toISOString(),
     });
   } catch (error) {
