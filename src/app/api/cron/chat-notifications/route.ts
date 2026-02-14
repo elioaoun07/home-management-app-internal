@@ -119,9 +119,6 @@ export async function GET(req: NextRequest) {
       .map((r) => r.id);
 
     if (orphanReceiptIds.length > 0) {
-      console.log(
-        `[Chat Notifications] Marking ${orphanReceiptIds.length} orphan receipts as skipped (deleted/archived messages)`,
-      );
       await supabase
         .from("hub_message_receipts")
         .update({
@@ -153,15 +150,6 @@ export async function GET(req: NextRequest) {
       .from("profiles")
       .select("id, display_name, email")
       .in("id", senderIds);
-
-    if (profilesError) {
-      console.error(
-        "[Chat Notifications] Error fetching profiles:",
-        profilesError,
-      );
-    }
-
-    console.log("[Chat Notifications] Fetched profiles:", profiles);
 
     // Create profile lookup map
     const profileMap = new Map(profiles?.map((p) => [p.id, p]) || []);
@@ -241,6 +229,15 @@ export async function GET(req: NextRequest) {
         .in("id", wrongPurposeReceiptIds);
     }
 
+    // Early return if nothing to process after cleanup
+    if (groupedByUser.size === 0) {
+      return NextResponse.json({
+        success: true,
+        message: "No chats to process",
+        checked_at: now.toISOString(),
+      });
+    }
+
     let notificationsSent = 0;
     let pushSent = 0;
     let pushFailed = 0;
@@ -279,13 +276,6 @@ export async function GET(req: NextRequest) {
         );
         const lastReceipt = sortedReceipts[0];
         const senderProfile = profileMap.get(lastReceipt.sender_user_id);
-
-        console.log("[Chat Notifications] Sender lookup:", {
-          sender_user_id: lastReceipt.sender_user_id,
-          profile: senderProfile,
-          profileMapSize: profileMap.size,
-        });
-
         const senderName =
           senderProfile?.display_name ||
           senderProfile?.email?.split("@")[0] ||
@@ -336,9 +326,6 @@ export async function GET(req: NextRequest) {
               push_sent_at: new Date().toISOString(),
             })
             .in("id", receiptIds);
-          console.log(
-            `[Chat Cron] Skipped push for thread ${threadId} - user already read`,
-          );
           continue;
         }
 
@@ -398,10 +385,6 @@ export async function GET(req: NextRequest) {
           );
 
           pushSent++;
-          console.log(
-            `[Chat Notifications] ✓ Push sent to ${primarySub.device_name}`,
-          );
-
           await supabase
             .from("notifications")
             .update({
@@ -469,18 +452,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      unread_receipts: unreadReceipts.length,
-      cleaned: {
-        orphan_deleted: orphanReceiptIds.length,
-        private_threads: privateThreadReceiptIds.length,
-        wrong_purpose: wrongPurposeReceiptIds.length,
-      },
-      to_process: groupedByUser.size,
-      notifications_sent: notificationsSent,
+      users_notified: groupedByUser.size,
       push_sent: pushSent,
       push_failed: pushFailed,
       skipped_duplicate: skippedDuplicate,
-      skipped_no_push_subs: skippedNoPushSubs,
       checked_at: now.toISOString(),
     });
   } catch (error) {
