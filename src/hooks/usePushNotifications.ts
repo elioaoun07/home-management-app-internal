@@ -1,6 +1,6 @@
 // src/hooks/usePushNotifications.ts
 // Hook for managing Web Push notifications subscription
-// Handles PWA lifecycle: subscription persistence, auto-restore, and DB sync with retry
+// ROBUST version: Proactive sync on every foreground, unique device ID, endpoint change detection
 
 "use client";
 
@@ -9,12 +9,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // The VAPID public key - must match the server's public key
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
-// LocalStorage key to track subscription state
+// LocalStorage keys
 const PUSH_ENABLED_KEY = "push_notifications_enabled";
+const DEVICE_ID_KEY = "push_device_id";
+const LAST_ENDPOINT_KEY = "push_last_endpoint";
+const LAST_SYNC_KEY = "push_last_sync";
 
-// Retry config for DB operations (auth may not be ready on PWA restart)
-const MAX_DB_RETRIES = 5;
-const INITIAL_RETRY_DELAY_MS = 1500;
+// Minimum time between foreground syncs (prevent spam on rapid focus/blur)
+const MIN_SYNC_INTERVAL_MS = 30000; // 30 seconds
+
+// Type for ServiceWorkerRegistration with PushManager
+type SWRegistrationWithPush = ServiceWorkerRegistration & {
+  pushManager: PushManager;
+};
 
 export type PushPermissionState =
   | "prompt"
@@ -31,7 +38,51 @@ export interface PushNotificationState {
   subscription: PushSubscription | null;
 }
 
-// Helper to check if user previously enabled notifications
+// ============================================
+// PERSISTENT DEVICE ID
+// ============================================
+
+// Generate or retrieve a persistent device ID
+// This survives app restarts and is unique per browser/device
+function getOrCreateDeviceId(): string {
+  if (typeof window === "undefined") return "unknown";
+
+  try {
+    let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+    if (!deviceId) {
+      // Generate a unique ID: timestamp + random + basic fingerprint
+      const timestamp = Date.now().toString(36);
+      const random = Math.random().toString(36).substring(2, 10);
+      const fingerprint = navigator.userAgent.length.toString(36);
+      deviceId = `${timestamp}-${random}-${fingerprint}`;
+      localStorage.setItem(DEVICE_ID_KEY, deviceId);
+      console.log("[Push] Generated new device ID:", deviceId);
+    }
+    return deviceId;
+  } catch {
+    return "fallback-" + Date.now().toString(36);
+  }
+}
+
+// Get device type for display purposes
+function getDeviceType(): string {
+  const ua = navigator.userAgent;
+  if (/iPhone/i.test(ua)) return "iPhone";
+  if (/iPad/i.test(ua)) return "iPad";
+  if (/Android/i.test(ua)) {
+    if (/Mobile/i.test(ua)) return "Android Phone";
+    return "Android Tablet";
+  }
+  if (/Windows/i.test(ua)) return "Windows PC";
+  if (/Mac/i.test(ua)) return "Mac";
+  if (/Linux/i.test(ua)) return "Linux";
+  return "Unknown Device";
+}
+
+// ============================================
+// LOCAL STORAGE HELPERS
+// ============================================
+
 function getPushEnabledFromStorage(): boolean {
   if (typeof window === "undefined") return false;
   try {
@@ -41,7 +92,6 @@ function getPushEnabledFromStorage(): boolean {
   }
 }
 
-// Helper to save push enabled state
 function setPushEnabledInStorage(enabled: boolean): void {
   if (typeof window === "undefined") return;
   try {
@@ -55,9 +105,51 @@ function setPushEnabledInStorage(enabled: boolean): void {
   }
 }
 
+function getLastEndpointFromStorage(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(LAST_ENDPOINT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setLastEndpointInStorage(endpoint: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (endpoint) {
+      localStorage.setItem(LAST_ENDPOINT_KEY, endpoint);
+    } else {
+      localStorage.removeItem(LAST_ENDPOINT_KEY);
+    }
+  } catch {
+    // Ignore
+  }
+}
+
+function getLastSyncTime(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    return parseInt(localStorage.getItem(LAST_SYNC_KEY) || "0", 10);
+  } catch {
+    return 0;
+  }
+}
+
+function setLastSyncTime(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LAST_SYNC_KEY, Date.now().toString());
+  } catch {
+    // Ignore
+  }
+}
+
+// ============================================
+// MAIN HOOK
+// ============================================
+
 export function usePushNotifications() {
-  // Initialize isSubscribed from localStorage so the UI doesn't flash "Enable"
-  // on every PWA restart while async checks are running
   const wasEnabled = getPushEnabledFromStorage();
 
   const [state, setState] = useState<PushNotificationState>({
@@ -69,45 +161,66 @@ export function usePushNotifications() {
     subscription: null,
   });
 
-  // Track retry timers so we can clean up
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track if initialization is in progress (prevent double-init)
   const isInitializing = useRef(false);
-  // Track if a background restore is already scheduled
-  const backgroundRestoreScheduled = useRef(false);
+  const isSyncing = useRef(false);
 
-  // Initialize on mount + retry on visibility change (PWA coming back to foreground)
-  useEffect(() => {
-    console.log("[Push] useEffect mount - calling initializePushState");
-    initializePushState();
-
-    // When PWA comes back to foreground, re-check subscription
-    const handleVisibilityChange = () => {
-      console.log("[Push] Visibility changed:", document.visibilityState);
-      if (document.visibilityState === "visible") {
-        // Re-check subscription state when app comes to foreground
-        const shouldBeSubscribed = getPushEnabledFromStorage();
-        console.log("[Push] Should be subscribed:", shouldBeSubscribed);
-        if (!isInitializing.current) {
-          console.log("[Push] Re-initializing after visibility change");
-          initializePushState();
+  // ========== CORE: Sync subscription to DB ==========
+  // This is the KEY function - called on init AND every foreground
+  const syncSubscriptionToDb = useCallback(
+    async (
+      subscription: PushSubscription,
+      force: boolean = false,
+    ): Promise<boolean> => {
+      // Throttle syncs unless forced
+      if (!force) {
+        const lastSync = getLastSyncTime();
+        const timeSinceLastSync = Date.now() - lastSync;
+        if (timeSinceLastSync < MIN_SYNC_INTERVAL_MS) {
+          console.log(
+            `[Push] Skipping sync - only ${Math.round(timeSinceLastSync / 1000)}s since last sync`,
+          );
+          return true;
         }
       }
-    };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+      // Check if endpoint changed (this is critical!)
+      const currentEndpoint = subscription.endpoint;
+      const lastEndpoint = getLastEndpointFromStorage();
+      const endpointChanged = lastEndpoint && lastEndpoint !== currentEndpoint;
 
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      if (endpointChanged) {
+        console.log(
+          "[Push] ⚠️ ENDPOINT CHANGED! Old:",
+          lastEndpoint?.substring(0, 50),
+        );
+        console.log(
+          "[Push] ⚠️ ENDPOINT CHANGED! New:",
+          currentEndpoint.substring(0, 50),
+        );
+      }
 
-  // Main initialization - separates local checks from DB operations
-  // IMPORTANT: This function must be idempotent and safe to call multiple times
+      console.log(
+        "[Push] Syncing subscription to DB...",
+        force ? "(forced)" : "",
+      );
+
+      try {
+        await saveSubscriptionToApi(subscription);
+        setLastEndpointInStorage(currentEndpoint);
+        setLastSyncTime();
+        console.log("[Push] ✓ Subscription synced to DB successfully");
+        return true;
+      } catch (error) {
+        console.error("[Push] ✗ Failed to sync subscription:", error);
+        return false;
+      }
+    },
+    [],
+  );
+
+  // ========== Initialize Push State ==========
   const initializePushState = useCallback(async () => {
-    // Prevent concurrent initialization
     if (isInitializing.current) {
       console.log("[Push] Already initializing, skipping...");
       return;
@@ -117,9 +230,7 @@ export function usePushNotifications() {
     try {
       console.log("[Push] === initializePushState START ===");
 
-      // Check browser support
       if (typeof window === "undefined") {
-        console.log("[Push] No window - SSR");
         setState((prev) => ({
           ...prev,
           isLoading: false,
@@ -132,8 +243,6 @@ export function usePushNotifications() {
         "serviceWorker" in navigator &&
         "PushManager" in window &&
         "Notification" in window;
-
-      console.log("[Push] Browser support:", isSupported);
 
       if (!isSupported) {
         setState({
@@ -153,10 +262,11 @@ export function usePushNotifications() {
       console.log("[Push] Permission:", permission);
       console.log("[Push] localStorage wasEnabledBefore:", wasEnabledBefore);
 
-      // If permission was revoked, clear everything
+      // If permission explicitly denied, clear everything
       if (permission === "denied") {
         console.log("[Push] Permission denied - clearing state");
         setPushEnabledInStorage(false);
+        setLastEndpointInStorage(null);
         setState({
           isSupported: true,
           permission: "denied",
@@ -168,41 +278,30 @@ export function usePushNotifications() {
         return;
       }
 
-      // Step 1: Ensure service worker is registered
-      console.log("[Push] Step 1: Getting service worker registration...");
-      let registration: ServiceWorkerRegistration | null = null;
-      try {
-        registration = await getOrRegisterServiceWorker();
-        console.log(
-          "[Push] Service worker registration:",
-          registration ? "OK" : "FAILED",
-        );
-      } catch (swError) {
-        console.error("[Push] Service worker setup error:", swError);
+      // Get or register service worker
+      const registration = await getOrRegisterServiceWorker();
+      if (!registration) {
+        console.error("[Push] Failed to get service worker registration");
+        setState({
+          isSupported: true,
+          permission,
+          isSubscribed: wasEnabledBefore,
+          isLoading: false,
+          error: "Service worker not available",
+          subscription: null,
+        });
+        return;
       }
 
-      // Step 2: Check for existing local push subscription
-      console.log("[Push] Step 2: Checking for existing push subscription...");
-      let subscription: PushSubscription | null = null;
-
-      if (registration) {
-        try {
-          subscription = await registration.pushManager.getSubscription();
-          console.log(
-            "[Push] Existing subscription:",
-            subscription ? "FOUND" : "NOT FOUND",
-          );
-        } catch (error) {
-          console.error("[Push] Error getting subscription:", error);
-        }
-      }
+      // Check for existing local subscription
+      let subscription = await registration.pushManager.getSubscription();
+      console.log(
+        "[Push] Existing subscription:",
+        subscription ? "FOUND" : "NOT FOUND",
+      );
 
       if (subscription) {
-        // Local subscription exists -> we're subscribed
-        console.log(
-          "[Push] Local subscription found:",
-          subscription.endpoint.substring(0, 50) + "...",
-        );
+        // We have a local subscription - sync it to DB immediately
         setPushEnabledInStorage(true);
         setState({
           isSupported: true,
@@ -212,67 +311,46 @@ export function usePushNotifications() {
           error: null,
           subscription,
         });
-        // Ensure this subscription is saved in DB (fire-and-forget with retry)
-        saveSubscriptionWithRetry(subscription);
+
+        // Sync to DB (don't await - let it happen in background)
+        syncSubscriptionToDb(subscription, false);
         return;
       }
 
-      // Step 3: No local subscription - check if we should restore or show as disabled
-      console.log(
-        "[Push] Step 3: No subscription found, checking restore conditions...",
-      );
-      console.log("[Push]   - permission:", permission);
-      console.log("[Push]   - wasEnabledBefore:", wasEnabledBefore);
-
-      // CRITICAL FIX: Trust localStorage over Notification.permission!
-      // On mobile PWAs, Notification.permission can return "default" on cold starts
-      // even though permission was previously granted. We trust localStorage because
-      // it's only set to true after successful subscription.
-      // Only give up if permission is explicitly "denied" (already handled above).
-      if (wasEnabledBefore) {
+      // No local subscription - check if we should restore
+      if (wasEnabledBefore && permission === "granted") {
         console.log(
-          "[Push] User previously enabled (localStorage=true) - keeping isSubscribed=true while restoring...",
-        );
-        console.log(
-          "[Push] NOTE: permission is '" +
-            permission +
-            "' but we trust localStorage",
+          "[Push] User had notifications enabled - attempting restore...",
         );
 
-        // First, immediately set state to show as subscribed (prevents UI flicker)
+        // Show as subscribed while restoring
         setState({
           isSupported: true,
           permission,
-          isSubscribed: true, // ALWAYS show as subscribed if user previously enabled
+          isSubscribed: true,
           isLoading: false,
           error: null,
           subscription: null,
         });
 
-        // IMPORTANT: On mobile PWAs, calling pushManager.subscribe() during page load
-        // can sometimes trigger Chrome to open a new browser window. To avoid this,
-        // we ONLY try to restore the subscription in the background after a delay,
-        // and we DON'T call pushManager.subscribe() synchronously during initialization.
-        // The background restore uses a longer delay to let the PWA fully stabilize.
-        console.log(
-          "[Push] Scheduling background restore (delayed to avoid PWA issues)...",
-        );
-        if (!backgroundRestoreScheduled.current) {
-          backgroundRestoreScheduled.current = true;
-          // Use a longer initial delay to let the PWA fully initialize
-          setTimeout(() => {
-            scheduleBackgroundRestore(registration, () => {
-              backgroundRestoreScheduled.current = false;
-            });
-          }, 2000); // 2 second delay before starting restore attempts
+        // Try to restore subscription
+        try {
+          subscription = await createLocalPushSubscription(registration);
+          if (subscription) {
+            console.log("[Push] ✓ Subscription restored!");
+            setState((prev) => ({ ...prev, subscription }));
+            syncSubscriptionToDb(subscription, true);
+          } else {
+            console.warn("[Push] Could not restore subscription");
+            // Keep showing as subscribed - will retry on next foreground
+          }
+        } catch (error) {
+          console.error("[Push] Restore failed:", error);
         }
         return;
       }
 
-      // Step 4: Not subscribed - user never enabled OR permission not granted yet
-      console.log(
-        "[Push] Step 4: Not subscribed (user never enabled or permission not granted)",
-      );
+      // Not subscribed - user never enabled or permission not granted
       setState({
         isSupported: true,
         permission,
@@ -285,14 +363,90 @@ export function usePushNotifications() {
       isInitializing.current = false;
       console.log("[Push] === initializePushState END ===");
     }
-  }, []);
+  }, [syncSubscriptionToDb]);
 
-  // Request notification permission
+  // ========== Foreground Sync (CRITICAL!) ==========
+  // This is called EVERY TIME the app comes to foreground
+  const handleForegroundSync = useCallback(async () => {
+    if (isSyncing.current) return;
+    if (!getPushEnabledFromStorage()) return;
+
+    isSyncing.current = true;
+    console.log("[Push] App came to foreground - checking subscription...");
+
+    try {
+      const registration = (await navigator.serviceWorker?.ready) as
+        | SWRegistrationWithPush
+        | undefined;
+      if (!registration) return;
+
+      const subscription = await registration.pushManager.getSubscription();
+
+      if (subscription) {
+        // Check if endpoint changed
+        const currentEndpoint = subscription.endpoint;
+        const lastEndpoint = getLastEndpointFromStorage();
+
+        if (lastEndpoint !== currentEndpoint) {
+          console.log(
+            "[Push] 🔄 Endpoint changed on foreground - forcing sync!",
+          );
+          await syncSubscriptionToDb(subscription, true);
+          setState((prev) => ({ ...prev, subscription }));
+        } else {
+          // Same endpoint - still sync but not forced (will be throttled)
+          syncSubscriptionToDb(subscription, false);
+        }
+      } else if (getPushEnabledFromStorage()) {
+        // Subscription disappeared! Try to restore it
+        console.log("[Push] ⚠️ Subscription disappeared - restoring...");
+        const restored = await createLocalPushSubscription(registration);
+        if (restored) {
+          console.log("[Push] ✓ Subscription restored on foreground");
+          await syncSubscriptionToDb(restored, true);
+          setState((prev) => ({ ...prev, subscription: restored }));
+        }
+      }
+    } catch (error) {
+      console.error("[Push] Foreground sync error:", error);
+    } finally {
+      isSyncing.current = false;
+    }
+  }, [syncSubscriptionToDb]);
+
+  // ========== Effect: Initialize + Foreground Listener ==========
+  useEffect(() => {
+    console.log("[Push] useEffect mount");
+    initializePushState();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        // Small delay to let auth session restore
+        setTimeout(handleForegroundSync, 1000);
+      }
+    };
+
+    // Also sync on focus (covers more cases than visibilitychange)
+    const handleFocus = () => {
+      setTimeout(handleForegroundSync, 500);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
+  }, [initializePushState, handleForegroundSync]);
+
+  // ========== Request Permission ==========
   const requestPermission = useCallback(async (): Promise<boolean> => {
     if (!state.isSupported) {
       setState((prev) => ({
         ...prev,
-        error: "Push notifications are not supported in this browser",
+        error: "Push notifications are not supported",
       }));
       return false;
     }
@@ -302,26 +456,20 @@ export function usePushNotifications() {
       setState((prev) => ({
         ...prev,
         permission: permission as PushPermissionState,
-        error:
-          permission === "denied" ? "Notification permission was denied" : null,
+        error: permission === "denied" ? "Permission denied" : null,
       }));
       return permission === "granted";
     } catch (error) {
-      console.error("[Push] Error requesting permission:", error);
-      setState((prev) => ({
-        ...prev,
-        error: "Failed to request notification permission",
-      }));
+      console.error("[Push] Permission request failed:", error);
       return false;
     }
   }, [state.isSupported]);
 
-  // Subscribe to push notifications
+  // ========== Subscribe ==========
   const subscribe = useCallback(async (): Promise<boolean> => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      // First, ensure we have permission
       if (Notification.permission !== "granted") {
         const granted = await requestPermission();
         if (!granted) {
@@ -330,22 +478,19 @@ export function usePushNotifications() {
         }
       }
 
-      // Get or register service worker
       const registration = await getOrRegisterServiceWorker();
       if (!registration) {
-        throw new Error("Failed to register service worker");
+        throw new Error("Service worker not available");
       }
 
-      // Check if VAPID key is configured
       if (!VAPID_PUBLIC_KEY) {
-        throw new Error("VAPID public key not configured");
+        throw new Error("VAPID key not configured");
       }
 
-      // Check for existing subscription first - reuse if possible
+      // Get or create subscription
       let subscription = await registration.pushManager.getSubscription();
 
       if (!subscription) {
-        // Create new subscription
         const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
@@ -353,13 +498,18 @@ export function usePushNotifications() {
         });
       }
 
-      console.log("[Push] Subscription ready:", subscription.endpoint);
+      console.log(
+        "[Push] Subscription ready:",
+        subscription.endpoint.substring(0, 50),
+      );
 
-      // Save subscription to database (direct call, not retry - user is actively waiting)
+      // Save to API (blocking - user is waiting)
       await saveSubscriptionToApi(subscription);
 
-      // Save to localStorage
+      // Update local storage
       setPushEnabledInStorage(true);
+      setLastEndpointInStorage(subscription.endpoint);
+      setLastSyncTime();
 
       setState((prev) => ({
         ...prev,
@@ -371,35 +521,33 @@ export function usePushNotifications() {
 
       return true;
     } catch (error) {
-      console.error("[Push] Subscription failed:", error);
+      console.error("[Push] Subscribe failed:", error);
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to subscribe",
+        error: error instanceof Error ? error.message : "Subscribe failed",
       }));
       return false;
     }
   }, [requestPermission]);
 
-  // Unsubscribe from push notifications
+  // ========== Unsubscribe ==========
   const unsubscribe = useCallback(async (): Promise<boolean> => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = (await navigator.serviceWorker
+        .ready) as SWRegistrationWithPush;
       const subscription = await registration.pushManager.getSubscription();
 
       if (subscription) {
-        // Unsubscribe from push manager
         await subscription.unsubscribe();
-
-        // Remove from database
         await removeSubscription(subscription.endpoint);
       }
 
-      // Clear localStorage flag - this is the ONLY place we clear it
-      // (besides permission denied)
+      // Clear ALL local storage related to push
       setPushEnabledInStorage(false);
+      setLastEndpointInStorage(null);
 
       setState((prev) => ({
         ...prev,
@@ -415,50 +563,44 @@ export function usePushNotifications() {
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to unsubscribe",
+        error: error instanceof Error ? error.message : "Unsubscribe failed",
       }));
       return false;
     }
   }, []);
 
-  // Send a test notification
+  // ========== Send Test Notification ==========
   const sendTestNotification = useCallback(async (): Promise<void> => {
     if (!state.isSubscribed) {
       throw new Error("Not subscribed to push notifications");
     }
 
-    // Before sending test, ensure current subscription is in DB
+    // Force sync before sending test to ensure DB has current endpoint
     if (state.subscription) {
       try {
-        await saveSubscriptionToApi(state.subscription);
+        await syncSubscriptionToDb(state.subscription, true);
       } catch {
-        // Continue anyway - DB might already have it
+        // Continue anyway
       }
     }
 
-    try {
-      const response = await fetch("/api/notifications/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+    const response = await fetch("/api/notifications/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(
-          data.error || `Failed to send test notification (${response.status})`,
-        );
-      }
-    } catch (error) {
-      console.error("[Push] Test notification failed:", error);
-      throw error;
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `Test failed (${response.status})`);
     }
-  }, [state.isSubscribed, state.subscription]);
+  }, [state.isSubscribed, state.subscription, syncSubscriptionToDb]);
 
-  // Manual refresh - re-checks subscription state and syncs with DB
+  // ========== Refresh Subscription ==========
   const refreshSubscription = useCallback(async (): Promise<void> => {
-    backgroundRestoreScheduled.current = false; // Allow new restore attempts
-    await initializePushState();
-  }, [initializePushState]);
+    console.log("[Push] Manual refresh requested");
+    isSyncing.current = false; // Reset sync lock
+    await handleForegroundSync();
+  }, [handleForegroundSync]);
 
   return {
     ...state,
@@ -474,70 +616,32 @@ export function usePushNotifications() {
 // HELPER FUNCTIONS
 // ============================================
 
-// Get or register the service worker (quick check, doesn't wait for activation)
-// IMPORTANT: On mobile PWAs, calling register() can sometimes open a new browser instance
-// So we try to avoid it if possible by checking existing registrations first
-async function getOrRegisterServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+async function getOrRegisterServiceWorker(): Promise<SWRegistrationWithPush | null> {
   if (!("serviceWorker" in navigator)) return null;
 
   try {
-    // First, check if we already have a controlling service worker
-    // This is the safest path that won't trigger new windows
+    // First try to get existing registration
     if (navigator.serviceWorker.controller) {
-      console.log("[Push] Already have a controlling service worker");
-      const registration = await navigator.serviceWorker.ready;
-      return registration;
+      return navigator.serviceWorker.ready as Promise<SWRegistrationWithPush>;
     }
 
-    // Check for existing registration without triggering register()
     let registration = await navigator.serviceWorker.getRegistration("/");
+    if (registration) return registration as SWRegistrationWithPush;
 
-    if (registration) {
-      console.log("[Push] Found existing service worker registration");
-      return registration;
-    }
-
-    // Only register if we don't have one at all
-    // On mobile PWAs this can sometimes open a new window, but it's necessary
-    console.log("[Push] No service worker found, registering...");
+    // Register new service worker
+    console.log("[Push] Registering service worker...");
     registration = await navigator.serviceWorker.register("/sw.js", {
       scope: "/",
     });
-
-    return registration;
+    return registration as SWRegistrationWithPush;
   } catch (error) {
     console.error("[Push] Service worker setup failed:", error);
     return null;
   }
 }
 
-// Wait for the service worker to be fully activated (needed before pushManager.subscribe)
-async function waitForActiveServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (!("serviceWorker" in navigator)) return null;
-
-  try {
-    // navigator.serviceWorker.ready resolves when a SW is active
-    // Use a generous timeout for cold PWA starts on slow devices
-    const result = await Promise.race([
-      navigator.serviceWorker.ready,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
-    ]);
-
-    if (!result) {
-      console.warn("[Push] Timed out waiting for service worker to activate");
-      return null;
-    }
-
-    return result;
-  } catch (error) {
-    console.error("[Push] Error waiting for active service worker:", error);
-    return null;
-  }
-}
-
-// Create a new push subscription locally (PushManager only, no DB)
 async function createLocalPushSubscription(
-  existingRegistration: ServiceWorkerRegistration | null,
+  registration: SWRegistrationWithPush,
 ): Promise<PushSubscription | null> {
   if (!VAPID_PUBLIC_KEY) {
     console.error("[Push] VAPID key not configured");
@@ -545,112 +649,36 @@ async function createLocalPushSubscription(
   }
 
   try {
-    const registration =
-      existingRegistration || (await getOrRegisterServiceWorker());
-    if (!registration) return null;
-
     const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: applicationServerKey as BufferSource,
     });
-
-    console.log(
-      "[Push] Local subscription created:",
-      subscription.endpoint.substring(0, 50) + "...",
-    );
+    console.log("[Push] Local subscription created");
     return subscription;
   } catch (error) {
-    console.error("[Push] Failed to create local subscription:", error);
+    console.error("[Push] Failed to create subscription:", error);
     return null;
   }
 }
 
-// Schedule background retry to restore subscription
-// This runs when the initial auto-restore fails (e.g., SW not active yet on cold PWA start)
-// The onComplete callback is called when max attempts reached or subscription established
-async function scheduleBackgroundRestore(
-  registration: ServiceWorkerRegistration | null,
-  onComplete?: () => void,
-  attempt: number = 0,
-): Promise<void> {
-  const MAX_ATTEMPTS = 5;
-  const delay = 3000 * Math.pow(2, attempt); // 3s, 6s, 12s, 24s, 48s
-
-  if (attempt >= MAX_ATTEMPTS) {
-    console.log(
-      "[Push] Background restore: max attempts reached, giving up for this session",
-    );
-    onComplete?.();
-    return;
-  }
-
-  console.log(
-    `[Push] Background restore: scheduling attempt ${attempt + 1} in ${delay}ms`,
-  );
-
-  setTimeout(async () => {
-    try {
-      // Try to get the active SW registration
-      const activeReg = await waitForActiveServiceWorker();
-      const reg = activeReg || registration;
-
-      if (!reg) {
-        console.log("[Push] Background restore: no registration, retrying...");
-        scheduleBackgroundRestore(registration, onComplete, attempt + 1);
-        return;
-      }
-
-      // Check if we already have a subscription now (maybe restored by the browser)
-      let subscription = await reg.pushManager.getSubscription();
-
-      if (!subscription) {
-        // Try to create a new one
-        subscription = await createLocalPushSubscription(reg);
-      }
-
-      if (subscription) {
-        console.log("[Push] Background restore: subscription established!");
-        // Save to DB with retry
-        saveSubscriptionWithRetry(subscription);
-        onComplete?.();
-        // Note: we can't call setState from outside the hook,
-        // but the visibilitychange handler will pick up the subscription
-        // on next foreground event. The subscription object in the PushManager
-        // is what matters for receiving notifications.
-      } else {
-        console.log("[Push] Background restore: still failed, retrying...");
-        scheduleBackgroundRestore(registration, onComplete, attempt + 1);
-      }
-    } catch (error) {
-      console.error("[Push] Background restore error:", error);
-      scheduleBackgroundRestore(registration, onComplete, attempt + 1);
-    }
-  }, delay);
-}
-
-// Convert base64 URL to Uint8Array for applicationServerKey
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
-
   for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
 }
 
-// Save subscription to database via API - NO client-side auth check
-// The API route handles auth via cookies. This avoids the race condition
-// where supabaseBrowser().auth.getUser() returns null before session is restored.
 async function saveSubscriptionToApi(
   subscription: PushSubscription,
 ): Promise<void> {
   const subscriptionData = subscription.toJSON();
+  const deviceId = getOrCreateDeviceId();
+  const deviceType = getDeviceType();
 
   const response = await fetch("/api/notifications/subscribe", {
     method: "POST",
@@ -659,7 +687,8 @@ async function saveSubscriptionToApi(
       endpoint: subscriptionData.endpoint,
       p256dh: subscriptionData.keys?.p256dh,
       auth: subscriptionData.keys?.auth,
-      device_name: getDeviceName(),
+      device_id: deviceId,
+      device_name: `${deviceType} (${deviceId.substring(0, 8)})`,
       user_agent: navigator.userAgent,
     }),
   });
@@ -674,74 +703,14 @@ async function saveSubscriptionToApi(
   }
 }
 
-// Save subscription with retry - handles auth not being ready on PWA restart
-async function saveSubscriptionWithRetry(
-  subscription: PushSubscription,
-  attempt: number = 0,
-): Promise<void> {
-  try {
-    await saveSubscriptionToApi(subscription);
-    console.log("[Push] Subscription saved to database successfully");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-
-    if (message === "AUTH_NOT_READY" && attempt < MAX_DB_RETRIES) {
-      const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
-      console.log(
-        `[Push] Auth not ready, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_DB_RETRIES})...`,
-      );
-      setTimeout(() => {
-        saveSubscriptionWithRetry(subscription, attempt + 1);
-      }, delay);
-    } else if (attempt < MAX_DB_RETRIES) {
-      // Other errors - still retry but log
-      const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
-      console.error(
-        `[Push] DB save failed (attempt ${attempt + 1}), retrying in ${delay}ms:`,
-        error,
-      );
-      setTimeout(() => {
-        saveSubscriptionWithRetry(subscription, attempt + 1);
-      }, delay);
-    } else {
-      console.error(
-        "[Push] Failed to save subscription to DB after all retries:",
-        error,
-      );
-    }
-  }
-}
-
-// Remove subscription from database
 async function removeSubscription(endpoint: string): Promise<void> {
   try {
-    const response = await fetch("/api/notifications/unsubscribe", {
+    await fetch("/api/notifications/unsubscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint }),
     });
-
-    if (!response.ok) {
-      console.error("[Push] Failed to remove subscription from database");
-    }
   } catch (error) {
     console.error("[Push] Error removing subscription:", error);
   }
-}
-
-// Get a friendly device name
-function getDeviceName(): string {
-  const ua = navigator.userAgent;
-
-  if (/iPhone/i.test(ua)) return "iPhone";
-  if (/iPad/i.test(ua)) return "iPad";
-  if (/Android/i.test(ua)) {
-    if (/Mobile/i.test(ua)) return "Android Phone";
-    return "Android Tablet";
-  }
-  if (/Windows/i.test(ua)) return "Windows PC";
-  if (/Mac/i.test(ua)) return "Mac";
-  if (/Linux/i.test(ua)) return "Linux";
-
-  return "Unknown Device";
 }

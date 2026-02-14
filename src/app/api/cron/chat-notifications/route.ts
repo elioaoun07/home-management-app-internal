@@ -196,12 +196,13 @@ export async function GET(req: NextRequest) {
 
     // Step 6: Process each user
     for (const [userId, userThreads] of groupedByUser) {
-      // Get user's push subscriptions
+      // Get user's push subscriptions - ORDER BY last_used_at DESC to get the most recent
       const { data: subscriptions, error: subsError } = await supabase
         .from("push_subscriptions")
-        .select("id, endpoint, p256dh, auth")
+        .select("id, endpoint, p256dh, auth, device_name, last_used_at")
         .eq("user_id", userId)
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .order("last_used_at", { ascending: false });
 
       if (subsError) continue;
 
@@ -209,6 +210,9 @@ export async function GET(req: NextRequest) {
         skippedNoPushSubs++;
         continue;
       }
+
+      // Use the most recently used subscription
+      const primarySub = subscriptions[0];
 
       // Process each thread
       for (const [threadId, receipts] of userThreads) {
@@ -315,7 +319,7 @@ export async function GET(req: NextRequest) {
 
         notificationsSent++;
 
-        // Send push notification
+        // Send push notification to primary subscription only
         const payload = JSON.stringify({
           title,
           body,
@@ -331,70 +335,81 @@ export async function GET(req: NextRequest) {
           },
         });
 
-        for (const sub of subscriptions) {
-          try {
-            await webpush.sendNotification(
-              {
-                endpoint: sub.endpoint,
-                keys: { p256dh: sub.p256dh, auth: sub.auth },
-              },
-              payload,
-            );
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: primarySub.endpoint,
+              keys: { p256dh: primarySub.p256dh, auth: primarySub.auth },
+            },
+            payload,
+          );
 
-            pushSent++;
+          pushSent++;
+          console.log(
+            `[Chat Notifications] ✓ Push sent to ${primarySub.device_name}`,
+          );
 
+          await supabase
+            .from("notifications")
+            .update({
+              push_status: "sent",
+              push_sent_at: new Date().toISOString(),
+            })
+            .eq("id", notification.id);
+
+          // Update last_used_at
+          await supabase
+            .from("push_subscriptions")
+            .update({ last_used_at: new Date().toISOString() })
+            .eq("id", primarySub.id);
+
+          // Also update the receipts' push_status so we don't retry
+          const receiptIds = receipts.map((r) => r.receipt_id);
+          await supabase
+            .from("hub_message_receipts")
+            .update({
+              push_status: "sent",
+              push_sent_at: new Date().toISOString(),
+            })
+            .in("id", receiptIds);
+        } catch (error: unknown) {
+          pushFailed++;
+          console.error(
+            `[Chat Notifications] ✗ Push failed to ${primarySub.device_name}:`,
+            error,
+          );
+
+          const statusCode =
+            error && typeof error === "object" && "statusCode" in error
+              ? (error as { statusCode: number }).statusCode
+              : null;
+
+          // Deactivate invalid subscriptions
+          if (statusCode === 404 || statusCode === 410) {
             await supabase
-              .from("notifications")
-              .update({
-                push_status: "sent",
-                push_sent_at: new Date().toISOString(),
-              })
-              .eq("id", notification.id);
-
-            // Also update the receipts' push_status so we don't retry
-            const receiptIds = receipts.map((r) => r.receipt_id);
-            await supabase
-              .from("hub_message_receipts")
-              .update({
-                push_status: "sent",
-                push_sent_at: new Date().toISOString(),
-              })
-              .in("id", receiptIds);
-          } catch (error: unknown) {
-            pushFailed++;
-
-            const statusCode =
-              error && typeof error === "object" && "statusCode" in error
-                ? (error as { statusCode: number }).statusCode
-                : null;
-
-            // Deactivate invalid subscriptions
-            if (statusCode === 404 || statusCode === 410) {
-              await supabase
-                .from("push_subscriptions")
-                .update({ is_active: false })
-                .eq("id", sub.id);
-            }
-
-            await supabase
-              .from("notifications")
-              .update({
-                push_status: "failed",
-                push_error: error instanceof Error ? error.message : "Unknown",
-              })
-              .eq("id", notification.id);
-
-            // Also mark receipts as failed so we can retry later or stop retrying
-            const receiptIds = receipts.map((r) => r.receipt_id);
-            await supabase
-              .from("hub_message_receipts")
-              .update({
-                push_status: "failed",
-                push_sent_at: new Date().toISOString(),
-                push_error: error instanceof Error ? error.message : "Unknown",
-              })
-              .in("id", receiptIds);
+              .from("push_subscriptions")
+              .update({ is_active: false })
+              .eq("id", primarySub.id);
           }
+
+          await supabase
+            .from("notifications")
+            .update({
+              push_status: "failed",
+              push_error: error instanceof Error ? error.message : "Unknown",
+            })
+            .eq("id", notification.id);
+
+          // Also mark receipts as failed so we can retry later or stop retrying
+          const receiptIds = receipts.map((r) => r.receipt_id);
+          await supabase
+            .from("hub_message_receipts")
+            .update({
+              push_status: "failed",
+              push_sent_at: new Date().toISOString(),
+              push_error: error instanceof Error ? error.message : "Unknown",
+            })
+            .in("id", receiptIds);
         }
       }
     }

@@ -1,5 +1,6 @@
 // src/app/api/notifications/subscribe/route.ts
 // API route to save push subscription to database
+// ROBUST version: Uses unique device_id for proper stale subscription cleanup
 
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { endpoint, p256dh, auth, device_name, user_agent } = body;
+    const { endpoint, p256dh, auth, device_id, device_name, user_agent } = body;
 
     if (!endpoint || !p256dh || !auth) {
       return NextResponse.json(
@@ -28,27 +29,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Determine device type from user agent for grouping
-    const deviceType = getDeviceType(user_agent || "");
+    console.log(
+      `[Subscribe] Processing subscription for user ${user.id.substring(0, 8)}...`,
+    );
+    console.log(`[Subscribe] Device ID: ${device_id || "not provided"}`);
+    console.log(`[Subscribe] Device Name: ${device_name}`);
+    console.log(`[Subscribe] Endpoint: ${endpoint.substring(0, 60)}...`);
 
-    // Step 1: Delete ALL old subscriptions for this user on same device type
-    // This prevents accumulation of stale subscriptions when endpoint changes
-    // (common on Android PWAs and iOS Safari)
-    const { error: deleteError } = await supabase
-      .from("push_subscriptions")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("device_name", deviceType)
-      .neq("endpoint", endpoint);
+    // Step 1: If device_id provided, delete ALL other subscriptions for this device
+    // This is the KEY fix - device_id is unique per browser installation
+    if (device_id) {
+      // Delete any subscription with matching device_id but different endpoint
+      // This handles the case where FCM token changed
+      const { data: deletedByDeviceId, error: deleteError } = await supabase
+        .from("push_subscriptions")
+        .delete()
+        .eq("user_id", user.id)
+        .ilike("device_name", `%${device_id.substring(0, 8)}%`)
+        .neq("endpoint", endpoint)
+        .select("id, endpoint");
 
-    if (deleteError) {
-      console.log(
-        "[Subscribe] Note: Could not clean up old subscriptions:",
-        deleteError.message,
-      );
+      if (deletedByDeviceId && deletedByDeviceId.length > 0) {
+        console.log(
+          `[Subscribe] ✓ Cleaned up ${deletedByDeviceId.length} stale subscription(s) for this device`,
+        );
+      }
+      if (deleteError) {
+        console.log(
+          "[Subscribe] Note: Could not clean up by device_id:",
+          deleteError.message,
+        );
+      }
     }
 
-    // Step 2: Also clean up any inactive subscriptions for this user (any device)
+    // Step 2: Also clean up any inactive subscriptions for this user
     const { error: inactiveDeleteError } = await supabase
       .from("push_subscriptions")
       .delete()
@@ -71,7 +85,7 @@ export async function POST(req: NextRequest) {
           endpoint,
           p256dh,
           auth,
-          device_name: deviceType,
+          device_name: device_name || getDeviceType(user_agent || ""),
           user_agent,
           is_active: true,
           last_used_at: new Date().toISOString(),
@@ -85,16 +99,31 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
-      console.error("Failed to save push subscription:", error);
+      console.error("[Subscribe] Failed to save push subscription:", error);
       return NextResponse.json(
         { error: "Failed to save subscription" },
         { status: 500 },
       );
     }
 
-    return NextResponse.json({ success: true, id: data.id });
+    // Step 4: Count active subscriptions for this user (for debugging)
+    const { count } = await supabase
+      .from("push_subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("is_active", true);
+
+    console.log(
+      `[Subscribe] ✓ Subscription saved. User now has ${count} active subscription(s)`,
+    );
+
+    return NextResponse.json({
+      success: true,
+      id: data.id,
+      active_subscriptions: count,
+    });
   } catch (error) {
-    console.error("Error in subscribe route:", error);
+    console.error("[Subscribe] Error in subscribe route:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

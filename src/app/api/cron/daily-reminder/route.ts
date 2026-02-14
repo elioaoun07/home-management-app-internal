@@ -35,7 +35,7 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 function isTimeMatch(
   currentTotalMinutes: number,
   targetHour: number,
-  targetMinute: number
+  targetMinute: number,
 ): boolean {
   const targetTotalMinutes = targetHour * 60 + targetMinute;
 
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
       console.error("[Daily Reminder] Missing Supabase credentials");
       return NextResponse.json(
         { error: "Server configuration error: Missing Supabase credentials" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
     const currentTotalMinutes = currentHour * 60 + currentMinute;
 
     console.log(
-      `[Daily Reminder] Running at ${currentHour}:${String(currentMinute).padStart(2, "0")} UTC`
+      `[Daily Reminder] Running at ${currentHour}:${String(currentMinute).padStart(2, "0")} UTC`,
     );
 
     // Get all users with daily_transaction_reminder enabled
@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
           if (todaySentSlots.includes(timeSlot)) {
             alreadySentForSlot++;
             console.log(
-              `[Daily Reminder] User ${pref.user_id}: Already sent for slot ${timeSlot} today`
+              `[Daily Reminder] User ${pref.user_id}: Already sent for slot ${timeSlot} today`,
             );
             continue;
           }
@@ -171,7 +171,7 @@ export async function GET(req: NextRequest) {
     }
 
     console.log(
-      `[Daily Reminder] ${eligibleUsers.length} users due for reminder`
+      `[Daily Reminder] ${eligibleUsers.length} users due for reminder`,
     );
 
     let notificationsSent = 0;
@@ -226,7 +226,7 @@ export async function GET(req: NextRequest) {
             transactions_count: todayCount || 0,
           },
           expires_at: new Date(
-            now.getTime() + 24 * 60 * 60 * 1000
+            now.getTime() + 24 * 60 * 60 * 1000,
           ).toISOString(),
           push_status: "pending",
         })
@@ -236,7 +236,7 @@ export async function GET(req: NextRequest) {
       if (insertError) {
         console.error(
           `Failed to create notification for ${userId}:`,
-          insertError
+          insertError,
         );
         continue;
       }
@@ -285,15 +285,22 @@ export async function GET(req: NextRequest) {
       if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
         const { data: subscriptions } = await supabase
           .from("push_subscriptions")
-          .select("id, endpoint, p256dh, auth")
+          .select("id, endpoint, p256dh, auth, device_name, last_used_at")
           .eq("user_id", userId)
-          .eq("is_active", true);
+          .eq("is_active", true)
+          .order("last_used_at", { ascending: false });
 
         console.log(
-          `[Daily Reminder] User ${userId}: Found ${subscriptions?.length || 0} active push subscriptions`
+          `[Daily Reminder] User ${userId.substring(0, 8)}: Found ${subscriptions?.length || 0} active push subscriptions`,
         );
 
         if (subscriptions && subscriptions.length > 0) {
+          // Use the most recently used subscription (most likely valid)
+          const primarySub = subscriptions[0];
+          console.log(
+            `[Daily Reminder] Sending to: ${primarySub.device_name} (last used: ${primarySub.last_used_at})`,
+          );
+
           const payload = JSON.stringify({
             title,
             body: message,
@@ -307,60 +314,69 @@ export async function GET(req: NextRequest) {
             },
           });
 
-          for (const sub of subscriptions) {
-            try {
-              await webpush.sendNotification(
-                {
-                  endpoint: sub.endpoint,
-                  keys: { p256dh: sub.p256dh, auth: sub.auth },
-                },
-                payload
-              );
+          try {
+            await webpush.sendNotification(
+              {
+                endpoint: primarySub.endpoint,
+                keys: { p256dh: primarySub.p256dh, auth: primarySub.auth },
+              },
+              payload,
+            );
 
-              pushSent++;
+            pushSent++;
+            console.log(
+              `[Daily Reminder] ✓ Push sent successfully to ${primarySub.device_name}`,
+            );
 
+            await supabase
+              .from("notifications")
+              .update({
+                push_status: "sent",
+                push_sent_at: new Date().toISOString(),
+              })
+              .eq("id", notification.id);
+
+            // Update last_used_at
+            await supabase
+              .from("push_subscriptions")
+              .update({ last_used_at: new Date().toISOString() })
+              .eq("id", primarySub.id);
+          } catch (error: unknown) {
+            pushFailed++;
+            console.error(
+              `[Daily Reminder] ✗ Push failed for ${primarySub.device_name}:`,
+              error,
+            );
+
+            const statusCode =
+              error && typeof error === "object" && "statusCode" in error
+                ? (error as { statusCode: number }).statusCode
+                : null;
+
+            // Deactivate invalid subscriptions
+            if (statusCode === 404 || statusCode === 410) {
               await supabase
-                .from("notifications")
-                .update({
-                  push_status: "sent",
-                  push_sent_at: new Date().toISOString(),
-                })
-                .eq("id", notification.id);
-            } catch (error: unknown) {
-              pushFailed++;
-              console.error(`Push failed for user ${userId}:`, error);
-
-              const statusCode =
-                error && typeof error === "object" && "statusCode" in error
-                  ? (error as { statusCode: number }).statusCode
-                  : null;
-
-              // Deactivate invalid subscriptions
-              if (statusCode === 404 || statusCode === 410) {
-                await supabase
-                  .from("push_subscriptions")
-                  .update({ is_active: false })
-                  .eq("id", sub.id);
-              }
-
-              await supabase
-                .from("notifications")
-                .update({
-                  push_status: "failed",
-                  push_error:
-                    error instanceof Error ? error.message : "Unknown",
-                })
-                .eq("id", notification.id);
+                .from("push_subscriptions")
+                .update({ is_active: false })
+                .eq("id", primarySub.id);
             }
+
+            await supabase
+              .from("notifications")
+              .update({
+                push_status: "failed",
+                push_error: error instanceof Error ? error.message : "Unknown",
+              })
+              .eq("id", notification.id);
           }
         } else {
           console.log(
-            `[Daily Reminder] User ${userId}: No active push subscriptions found`
+            `[Daily Reminder] User ${userId.substring(0, 8)}: No active push subscriptions found`,
           );
         }
       } else {
         console.log(
-          `[Daily Reminder] VAPID keys not configured, skipping push`
+          `[Daily Reminder] VAPID keys not configured, skipping push`,
         );
       }
     }
@@ -380,7 +396,7 @@ export async function GET(req: NextRequest) {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

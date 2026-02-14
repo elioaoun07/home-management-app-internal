@@ -180,7 +180,9 @@ export async function POST(req: NextRequest) {
     } catch (geminiError) {
       // Capture Gemini-specific errors with full details
       const errMsg =
-        geminiError instanceof Error ? geminiError.message : String(geminiError);
+        geminiError instanceof Error
+          ? geminiError.message
+          : String(geminiError);
       const errStack =
         geminiError instanceof Error ? geminiError.stack : undefined;
       throw new Error(`Gemini call failed: ${errMsg}`, {

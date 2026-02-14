@@ -169,14 +169,27 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Get user's push subscriptions
+      // Get user's push subscriptions - ORDER BY last_used_at DESC to get the most recent
+      // The most recently used subscription is most likely to be valid
       const { data: subscriptions } = await supabase
         .from("push_subscriptions")
-        .select("id, endpoint, p256dh, auth")
+        .select("id, endpoint, p256dh, auth, device_name, last_used_at")
         .eq("user_id", userId)
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .order("last_used_at", { ascending: false });
 
       if (subscriptions && subscriptions.length > 0) {
+        console.log(
+          `[Item Reminders] User ${userId.substring(0, 8)} has ${subscriptions.length} active subscription(s)`,
+        );
+
+        // IMPORTANT: Only send to the MOST RECENT subscription (first one after ordering)
+        // This avoids sending to stale endpoints that haven't been cleaned up yet
+        const primarySub = subscriptions[0];
+        console.log(
+          `[Item Reminders] Sending to: ${primarySub.device_name} (last used: ${primarySub.last_used_at})`,
+        );
+
         const payload = JSON.stringify({
           title: item.title,
           body: item.description || `Your ${item.type} is due now`,
@@ -192,51 +205,97 @@ export async function GET(req: NextRequest) {
           },
         });
 
-        for (const sub of subscriptions) {
-          try {
-            await webpush.sendNotification(
-              {
-                endpoint: sub.endpoint,
-                keys: { p256dh: sub.p256dh, auth: sub.auth },
-              },
-              payload,
+        // Send ONLY to the primary (most recent) subscription
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: primarySub.endpoint,
+              keys: { p256dh: primarySub.p256dh, auth: primarySub.auth },
+            },
+            payload,
+          );
+
+          sent++;
+          console.log(
+            `[Item Reminders] ✓ Push sent successfully to ${primarySub.device_name}`,
+          );
+
+          // Update push status
+          await supabase
+            .from("notifications")
+            .update({
+              push_status: "sent",
+              push_sent_at: new Date().toISOString(),
+            })
+            .eq("id", notification?.id);
+
+          // Update last_used_at to keep track of which subscriptions are working
+          await supabase
+            .from("push_subscriptions")
+            .update({ last_used_at: new Date().toISOString() })
+            .eq("id", primarySub.id);
+        } catch (error: unknown) {
+          failed++;
+          console.error(
+            `[Item Reminders] ✗ Push failed to ${primarySub.device_name}:`,
+            error,
+          );
+
+          const statusCode =
+            error && typeof error === "object" && "statusCode" in error
+              ? (error as { statusCode: number }).statusCode
+              : null;
+
+          // Mark subscription as inactive if it's definitively gone
+          if (statusCode === 404 || statusCode === 410) {
+            console.log(
+              `[Item Reminders] Marking subscription ${primarySub.id} as inactive (status ${statusCode})`,
             );
-
-            sent++;
-
-            // Update push status
             await supabase
-              .from("notifications")
-              .update({
-                push_status: "sent",
-                push_sent_at: new Date().toISOString(),
-              })
-              .eq("id", notification?.id);
-          } catch (error: unknown) {
-            failed++;
-            console.error(`Push failed:`, error);
+              .from("push_subscriptions")
+              .update({ is_active: false })
+              .eq("id", primarySub.id);
 
-            const statusCode =
-              error && typeof error === "object" && "statusCode" in error
-                ? (error as { statusCode: number }).statusCode
-                : null;
-
-            if (statusCode === 404 || statusCode === 410) {
-              await supabase
-                .from("push_subscriptions")
-                .update({ is_active: false })
-                .eq("id", sub.id);
+            // Try the next subscription if primary failed
+            if (subscriptions.length > 1) {
+              const fallback = subscriptions[1];
+              console.log(
+                `[Item Reminders] Trying fallback: ${fallback.device_name}`,
+              );
+              try {
+                await webpush.sendNotification(
+                  {
+                    endpoint: fallback.endpoint,
+                    keys: { p256dh: fallback.p256dh, auth: fallback.auth },
+                  },
+                  payload,
+                );
+                sent++;
+                failed--; // Undo the failed count
+                console.log(
+                  `[Item Reminders] ✓ Fallback succeeded to ${fallback.device_name}`,
+                );
+              } catch (fallbackError) {
+                console.error(
+                  `[Item Reminders] Fallback also failed:`,
+                  fallbackError,
+                );
+              }
             }
-
-            await supabase
-              .from("notifications")
-              .update({
-                push_status: "failed",
-                push_error: error instanceof Error ? error.message : "Unknown",
-              })
-              .eq("id", notification?.id);
           }
+
+          await supabase
+            .from("notifications")
+            .update({
+              push_status: "failed",
+              push_error: error instanceof Error ? error.message : "Unknown",
+            })
+            .eq("id", notification?.id);
         }
+      } else {
+        console.log(
+          `[Item Reminders] No active subscriptions for user ${userId.substring(0, 8)}`,
+        );
       }
 
       // Mark alert as fired
