@@ -8,12 +8,13 @@ import {
   useHouseholdMembers,
 } from "@/hooks/useHouseholdMembers";
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown, User, Users } from "lucide-react";
+import { Check, ChevronDown, User, Users, UsersRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 interface ResponsibleUserPickerProps {
   value: string | undefined;
-  onChange: (userId: string) => void;
+  notifyAllHousehold?: boolean;
+  onChange: (userId: string, notifyAllHousehold: boolean) => void;
   disabled?: boolean;
   isPublic?: boolean;
   className?: string;
@@ -22,6 +23,7 @@ interface ResponsibleUserPickerProps {
 
 export function ResponsibleUserPicker({
   value,
+  notifyAllHousehold = false,
   onChange,
   disabled = false,
   isPublic = true,
@@ -38,7 +40,7 @@ export function ResponsibleUserPicker({
 
   // Get selected member info
   const selectedMember = members.find((m) => m.id === value);
-  const displayName = selectedMember?.displayName || "Me";
+  const displayName = notifyAllHousehold ? "All Household" : (selectedMember?.displayName || "Me");
   const isMe = selectedMember?.isCurrentUser ?? true;
 
   // Close dropdown when clicking outside
@@ -57,10 +59,10 @@ export function ResponsibleUserPicker({
 
   // Auto-select current user if no value and currentUserId is available
   useEffect(() => {
-    if (!value && currentUserId) {
-      onChange(currentUserId);
+    if (!value && currentUserId && !notifyAllHousehold) {
+      onChange(currentUserId, false);
     }
-  }, [value, currentUserId, onChange]);
+  }, [value, currentUserId, onChange, notifyAllHousehold]);
 
   // If private item, only show current user (disabled)
   if (!isPublic) {
@@ -112,7 +114,13 @@ export function ResponsibleUserPicker({
   }
 
   const handleSelect = (member: HouseholdMember) => {
-    onChange(member.id);
+    onChange(member.id, false);
+    setIsOpen(false);
+  };
+
+  const handleSelectAllHousehold = () => {
+    // When selecting "All Household", keep current user as responsible but set notify flag
+    onChange(currentUserId || value || "", true);
     setIsOpen(false);
   };
 
@@ -131,7 +139,9 @@ export function ResponsibleUserPicker({
           variant === "compact" && "py-1.5 text-sm"
         )}
       >
-        {isMe ? (
+        {notifyAllHousehold ? (
+          <UsersRound className="w-4 h-4 text-amber-400" />
+        ) : isMe ? (
           <User className="w-4 h-4 text-cyan-400" />
         ) : (
           <Users className="w-4 h-4 text-pink-400" />
@@ -139,7 +149,7 @@ export function ResponsibleUserPicker({
         <span
           className={cn(
             "flex-1 text-left",
-            isMe ? "text-white" : "text-pink-300"
+            notifyAllHousehold ? "text-amber-300" : isMe ? "text-white" : "text-pink-300"
           )}
         >
           {displayName}
@@ -169,7 +179,7 @@ export function ResponsibleUserPicker({
               className={cn(
                 "flex items-center gap-2 w-full px-3 py-2",
                 "hover:bg-white/5 transition-colors duration-150",
-                member.id === value && "bg-white/10"
+                member.id === value && !notifyAllHousehold && "bg-white/10"
               )}
             >
               {member.isCurrentUser ? (
@@ -188,11 +198,33 @@ export function ResponsibleUserPicker({
               {member.email && !member.isCurrentUser && (
                 <span className="text-xs text-white/40">{member.email}</span>
               )}
-              {member.id === value && (
+              {member.id === value && !notifyAllHousehold && (
                 <Check className="w-4 h-4 text-green-400" />
               )}
             </button>
           ))}
+          
+          {/* All Household option - only show when there's a partner */}
+          <div className="border-t border-white/10 mt-1 pt-1">
+            <button
+              type="button"
+              onClick={handleSelectAllHousehold}
+              className={cn(
+                "flex items-center gap-2 w-full px-3 py-2",
+                "hover:bg-white/5 transition-colors duration-150",
+                notifyAllHousehold && "bg-amber-500/10"
+              )}
+            >
+              <UsersRound className="w-4 h-4 text-amber-400" />
+              <span className="flex-1 text-left text-amber-300">
+                All Household
+              </span>
+              <span className="text-xs text-white/40">Both get notified</span>
+              {notifyAllHousehold && (
+                <Check className="w-4 h-4 text-green-400" />
+              )}
+            </button>
+          </div>
         </div>
       )}
     </div>

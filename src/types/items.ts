@@ -43,6 +43,7 @@ export interface Item {
   archived_at?: string | null; // ISO timestamp
   is_public: boolean;
   responsible_user_id: UUID;
+  notify_all_household?: boolean; // When true, alerts are sent to ALL household members
   google_event_id?: string | null;
   categories?: string[]; // Array of category IDs (e.g., ["work", "personal"])
   subtask_kanban_enabled?: boolean; // Whether kanban view is enabled for subtasks
@@ -117,6 +118,7 @@ export interface ItemAlert {
   trigger_at?: string | null; // ISO timestamp (for absolute alerts)
   offset_minutes?: number | null; // For relative alerts
   relative_to?: AlertRelativeTo | null; // For relative alerts
+  custom_time?: string | null; // HH:MM format - when set, fires at this specific time on the calculated day
   repeat_every_minutes?: number | null;
   max_repeats?: number | null;
   channel: AlertChannel;
@@ -200,6 +202,7 @@ export interface CreateItemInput {
   metadata_json?: Record<string, unknown> | null;
   is_public?: boolean;
   responsible_user_id?: UUID; // Defaults to current user
+  notify_all_household?: boolean; // When true, alerts are sent to ALL household members
 }
 
 /** Input for creating a reminder */
@@ -247,6 +250,7 @@ export interface CreateAlertInput {
   trigger_at?: string | null; // For absolute alerts
   offset_minutes?: number | null; // For relative alerts
   relative_to?: AlertRelativeTo | null;
+  custom_time?: string | null; // HH:MM format - when set, fires at this specific time
   repeat_every_minutes?: number | null;
   max_repeats?: number | null;
   channel?: AlertChannel;
@@ -271,6 +275,7 @@ export interface UpdateItemInput {
   archived_at?: string | null;
   categories?: string[];
   responsible_user_id?: string | null;
+  notify_all_household?: boolean; // When true, alerts are sent to ALL household members
 }
 
 /** Input for updating reminder details */

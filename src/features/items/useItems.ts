@@ -365,6 +365,7 @@ export function useCreateReminder() {
           metadata_json: input.metadata_json,
           is_public: input.is_public || false,
           responsible_user_id: input.responsible_user_id || user.id,
+          notify_all_household: input.notify_all_household || false,
           categories: input.category_ids || [],
         })
         .select()
@@ -402,13 +403,29 @@ export function useCreateReminder() {
         const alerts = input.alerts.map((a) => {
           // For relative alerts, compute the actual trigger_at based on due_at
           let computedTriggerAt = a.trigger_at;
-          if (a.kind === "relative" && a.offset_minutes && input.due_at) {
+          if (a.kind === "relative" && input.due_at) {
             const baseTime = new Date(input.due_at);
-            computedTriggerAt = new Date(
-              baseTime.getTime() - a.offset_minutes * 60 * 1000,
-            ).toISOString();
+            
+            // Check if custom_time is set (e.g., "1 day before at 9am")
+            if (a.custom_time && a.offset_minutes) {
+              // Calculate the day offset (e.g., 1440 minutes = 1 day before)
+              const daysOffset = Math.floor((a.offset_minutes || 0) / 1440);
+              const alertDate = new Date(baseTime);
+              alertDate.setDate(alertDate.getDate() - daysOffset);
+              
+              // Set the specific time from custom_time (HH:MM format)
+              const [hours, minutes] = a.custom_time.split(":").map(Number);
+              alertDate.setHours(hours, minutes, 0, 0);
+              
+              computedTriggerAt = alertDate.toISOString();
+            } else if (a.offset_minutes) {
+              // Standard offset calculation
+              computedTriggerAt = new Date(
+                baseTime.getTime() - a.offset_minutes * 60 * 1000,
+              ).toISOString();
+            }
           }
-          return {
+          const alertData: Record<string, unknown> = {
             item_id: item.id,
             kind: a.kind,
             trigger_at: computedTriggerAt,
@@ -418,6 +435,11 @@ export function useCreateReminder() {
             max_repeats: a.max_repeats,
             channel: a.channel || "push",
           };
+          // Only include custom_time if set (column may not exist in DB yet)
+          if (a.custom_time) {
+            alertData.custom_time = a.custom_time;
+          }
+          return alertData;
         });
         const { error: alertsError } = await supabase
           .from("item_alerts")
@@ -501,6 +523,7 @@ export function useCreateEvent() {
           metadata_json: input.metadata_json,
           is_public: input.is_public || false,
           responsible_user_id: input.responsible_user_id || user.id,
+          notify_all_household: input.notify_all_household || false,
           categories: input.category_ids || [],
         })
         .select()
@@ -540,17 +563,33 @@ export function useCreateEvent() {
         const alerts = input.alerts.map((a) => {
           // For relative alerts, compute the actual trigger_at based on start_at or end_at
           let computedTriggerAt = a.trigger_at;
-          if (a.kind === "relative" && a.offset_minutes) {
+          if (a.kind === "relative") {
             const baseTimeStr =
               a.relative_to === "end" ? input.end_at : input.start_at;
             if (baseTimeStr) {
               const baseTime = new Date(baseTimeStr);
-              computedTriggerAt = new Date(
-                baseTime.getTime() - a.offset_minutes * 60 * 1000,
-              ).toISOString();
+              
+              // Check if custom_time is set (e.g., "1 day before at 9am")
+              if (a.custom_time && a.offset_minutes) {
+                // Calculate the day offset (e.g., 1440 minutes = 1 day before)
+                const daysOffset = Math.floor((a.offset_minutes || 0) / 1440);
+                const alertDate = new Date(baseTime);
+                alertDate.setDate(alertDate.getDate() - daysOffset);
+                
+                // Set the specific time from custom_time (HH:MM format)
+                const [hours, minutes] = a.custom_time.split(":").map(Number);
+                alertDate.setHours(hours, minutes, 0, 0);
+                
+                computedTriggerAt = alertDate.toISOString();
+              } else if (a.offset_minutes) {
+                // Standard offset calculation
+                computedTriggerAt = new Date(
+                  baseTime.getTime() - a.offset_minutes * 60 * 1000,
+                ).toISOString();
+              }
             }
           }
-          return {
+          const alertData: Record<string, unknown> = {
             item_id: item.id,
             kind: a.kind,
             trigger_at: computedTriggerAt,
@@ -560,6 +599,11 @@ export function useCreateEvent() {
             max_repeats: a.max_repeats,
             channel: a.channel || "push",
           };
+          // Only include custom_time if set (column may not exist in DB yet)
+          if (a.custom_time) {
+            alertData.custom_time = a.custom_time;
+          }
+          return alertData;
         });
         const { error: alertsError } = await supabase
           .from("item_alerts")
@@ -600,6 +644,7 @@ export function useCreateTask() {
           metadata_json: input.metadata_json,
           is_public: input.is_public || false,
           responsible_user_id: input.responsible_user_id || user.id,
+          notify_all_household: input.notify_all_household || false,
           categories: input.category_ids || [],
         })
         .select()

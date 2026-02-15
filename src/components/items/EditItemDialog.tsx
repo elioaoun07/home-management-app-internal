@@ -25,6 +25,7 @@ import { Bell, MapPin, Tag, User, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ResponsibleUserPicker } from "./ResponsibleUserPicker";
+import { SmartAlertPicker, type SmartAlertValue } from "./SmartAlertPicker";
 
 interface EditItemDialogProps {
   item: ItemWithDetails | null;
@@ -55,11 +56,15 @@ export default function EditItemDialog({
   const [location, setLocation] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [alertMinutes, setAlertMinutes] = useState(0);
+  const [alertValue, setAlertValue] = useState<SmartAlertValue>({
+    offsetMinutes: 0,
+    customTime: null,
+  });
   const [saving, setSaving] = useState(false);
   const [responsibleUserId, setResponsibleUserId] = useState<
     string | undefined
   >(undefined);
+  const [notifyAllHousehold, setNotifyAllHousehold] = useState(false);
   const [originalResponsibleUserId, setOriginalResponsibleUserId] = useState<
     string | undefined
   >(undefined);
@@ -72,17 +77,6 @@ export default function EditItemDialog({
     { id: "community", name: "Community", color: "#22C55E" },
     { id: "friends", name: "Friends", color: "#EC4899" },
     { id: "work", name: "Work", color: "#FF3B30" },
-  ];
-
-  // Alert presets
-  const alertPresets = [
-    { label: "None", value: 0 },
-    { label: "At time", value: 0, atTime: true },
-    { label: "5 min", value: 5 },
-    { label: "15 min", value: 15 },
-    { label: "30 min", value: 30 },
-    { label: "1 hour", value: 60 },
-    { label: "1 day", value: 1440 },
   ];
 
   // Mutations
@@ -100,18 +94,22 @@ export default function EditItemDialog({
     setIsPublic(item.is_public ?? true);
     setSelectedCategories(item.categories || []);
     setResponsibleUserId(item.responsible_user_id);
+    setNotifyAllHousehold(item.notify_all_household ?? false);
     setOriginalResponsibleUserId(item.responsible_user_id);
 
     // Initialize alert
     if (item.alerts && item.alerts.length > 0) {
       const firstAlert = item.alerts[0];
       if (firstAlert.kind === "relative") {
-        setAlertMinutes(firstAlert.offset_minutes || 15);
+        setAlertValue({
+          offsetMinutes: firstAlert.offset_minutes || 15,
+          customTime: firstAlert.custom_time || null,
+        });
       } else {
-        setAlertMinutes(15);
+        setAlertValue({ offsetMinutes: 15, customTime: null });
       }
     } else {
-      setAlertMinutes(0);
+      setAlertValue({ offsetMinutes: 0, customTime: null });
     }
 
     // Parse date/time based on item type
@@ -158,6 +156,7 @@ export default function EditItemDialog({
       is_public: item.is_public,
       categories: item.categories,
       responsible_user_id: item.responsible_user_id,
+      notify_all_household: item.notify_all_household,
     };
 
     setSaving(true);
@@ -175,6 +174,7 @@ export default function EditItemDialog({
         is_public: isPublic,
         categories: selectedCategories,
         responsible_user_id: responsibleUserId,
+        notify_all_household: notifyAllHousehold,
       });
 
       // Check if responsible user changed and send notification
@@ -441,28 +441,11 @@ export default function EditItemDialog({
               <Bell className="w-4 h-4" />
               Alert
             </Label>
-            <div className="flex flex-wrap gap-2">
-              {alertPresets.map((preset) => (
-                <button
-                  key={preset.label}
-                  type="button"
-                  onClick={() => setAlertMinutes(preset.value)}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                    alertMinutes === preset.value
-                      ? isPink
-                        ? "bg-pink-500/30 border-pink-500/50 text-pink-200"
-                        : "bg-cyan-500/30 border-cyan-500/50 text-cyan-200"
-                      : "bg-white/5 text-white/50 hover:bg-white/10"
-                  )}
-                  style={{
-                    borderWidth: alertMinutes === preset.value ? "1px" : "0",
-                  }}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
+            <SmartAlertPicker
+              value={alertValue}
+              onChange={setAlertValue}
+              eventTime={startTime}
+            />
           </div>
 
           {/* Priority */}
@@ -540,8 +523,10 @@ export default function EditItemDialog({
               </Label>
               <ResponsibleUserPicker
                 value={responsibleUserId}
-                onChange={(userId) => {
+                notifyAllHousehold={notifyAllHousehold}
+                onChange={(userId, allHousehold) => {
                   setResponsibleUserId(userId);
+                  setNotifyAllHousehold(allHousehold);
                   // If assigning to someone else, ensure item is public
                   if (userId !== householdData.currentUserId && !isPublic) {
                     setIsPublic(true);
@@ -550,7 +535,13 @@ export default function EditItemDialog({
                 isPublic={isPublic}
                 disabled={!isPublic}
               />
+              {isPublic && notifyAllHousehold && (
+                <p className="text-xs text-amber-300/70">
+                  ✨ Both household members will be notified
+                </p>
+              )}
               {isPublic &&
+                !notifyAllHousehold &&
                 responsibleUserId &&
                 responsibleUserId !== householdData.currentUserId &&
                 responsibleUserId !== originalResponsibleUserId && (

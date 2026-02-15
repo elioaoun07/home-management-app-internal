@@ -9,4 +9,9 @@ export {
   ResponsibleUserBadge,
   ResponsibleUserPicker,
 } from "./ResponsibleUserPicker";
+export {
+  SmartAlertPicker,
+  formatAlertDisplay,
+  type SmartAlertValue,
+} from "./SmartAlertPicker";
 export { default as SwipeableItemCard } from "./SwipeableItemCard";

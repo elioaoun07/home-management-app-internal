@@ -1271,18 +1271,37 @@ export default function WebEvents() {
                       <div className="flex items-start gap-3 pl-3">
                         <Bell className="w-5 h-5 text-white/40 mt-0.5 flex-shrink-0" />
                         <div className="text-white/60 text-sm">
-                          {detailItem.alerts[0].offset_minutes === 15 &&
-                            "15 minutes before"}
-                          {detailItem.alerts[0].offset_minutes === 30 &&
-                            "30 minutes before"}
-                          {detailItem.alerts[0].offset_minutes === 60 &&
-                            "1 hour before"}
-                          {detailItem.alerts[0].offset_minutes === 1440 &&
-                            "1 day before"}
-                          {![15, 30, 60, 1440].includes(
-                            detailItem.alerts[0].offset_minutes || 0,
-                          ) &&
-                            `${detailItem.alerts[0].offset_minutes} minutes before`}
+                          {(() => {
+                            const alert = detailItem.alerts[0];
+                            const offsetMinutes = alert.offset_minutes || 0;
+                            const customTime = alert.custom_time;
+
+                            // If custom_time is set, format as "X day(s) before at HH:MM AM/PM"
+                            if (customTime) {
+                              const days = Math.floor(offsetMinutes / 1440);
+                              const [hours, minutes] = customTime
+                                .split(":")
+                                .map(Number);
+                              const h = hours % 12 || 12;
+                              const ampm = hours < 12 ? "AM" : "PM";
+                              const timeFormatted = `${h}:${minutes.toString().padStart(2, "0")} ${ampm}`;
+                              if (days === 0) {
+                                return `Same day at ${timeFormatted}`;
+                              }
+                              return `${days} day${days > 1 ? "s" : ""} before at ${timeFormatted}`;
+                            }
+
+                            // Standard offset display
+                            if (offsetMinutes === 0) return "At time of event";
+                            if (offsetMinutes < 60)
+                              return `${offsetMinutes} minutes before`;
+                            if (offsetMinutes < 1440) {
+                              const hours = offsetMinutes / 60;
+                              return `${hours} hour${hours > 1 ? "s" : ""} before`;
+                            }
+                            const days = offsetMinutes / 1440;
+                            return `${days} day${days > 1 ? "s" : ""} before`;
+                          })()}
                         </div>
                       </div>
                     )}

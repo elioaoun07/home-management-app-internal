@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
           id,
           user_id,
           responsible_user_id,
+          notify_all_household,
           title,
           description,
           type,
@@ -112,6 +113,7 @@ export async function GET(req: NextRequest) {
         id: string;
         user_id: string;
         responsible_user_id: string | null;
+        notify_all_household: boolean | null;
         title: string;
         description: string | null;
         type: string;
@@ -125,9 +127,37 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Send notification to the responsible user (who should do the task)
-      // Falls back to owner if no responsible user is set
-      const userId = item.responsible_user_id || item.user_id;
+      // Determine which users should receive the notification
+      let targetUserIds: string[] = [];
+
+      if (item.notify_all_household) {
+        // Get all household members for this item's owner
+        const { data: householdLink } = await supabase
+          .from("household_links")
+          .select("owner_user_id, partner_user_id")
+          .or(`owner_user_id.eq.${item.user_id},partner_user_id.eq.${item.user_id}`)
+          .eq("active", true)
+          .maybeSingle();
+
+        if (householdLink) {
+          // Include both owner and partner
+          targetUserIds = [
+            householdLink.owner_user_id,
+            householdLink.partner_user_id,
+          ].filter((id): id is string => !!id);
+          console.log(
+            `[Item Reminders] notify_all_household=true, sending to ${targetUserIds.length} household members`,
+          );
+        } else {
+          // Fallback to just the owner if no household link found
+          targetUserIds = [item.user_id];
+        }
+      } else {
+        // Send notification to the responsible user (who should do the task)
+        // Falls back to owner if no responsible user is set
+        const userId = item.responsible_user_id || item.user_id;
+        targetUserIds = [userId];
+      }
 
       // Determine notification type based on item type
       const notificationType =
@@ -135,170 +165,173 @@ export async function GET(req: NextRequest) {
       const icon =
         item.type === "event" ? "📅" : item.type === "task" ? "✅" : "⏰";
 
-      // Create notification in unified table
-      const { data: notification, error: insertError } = await supabase
-        .from("notifications")
-        .insert({
-          user_id: userId,
-          notification_type: notificationType,
-          title: item.title,
-          message: item.description || `Your ${item.type} is due now`,
-          icon,
-          severity: item.priority === "urgent" ? "warning" : "info",
-          source: "item",
-          priority: item.priority || "normal",
-          action_type: "complete_task",
-          action_url: null, // Items are viewed via reminder tab, not direct URL
-          action_data: {
-            item_id: item.id,
-            alert_id: alert.id,
-            item_type: item.type,
-          },
-          item_id: item.id,
-          group_key: `item_${item.id}_${alert.id}`,
-          expires_at: new Date(
-            now.getTime() + 24 * 60 * 60 * 1000,
-          ).toISOString(),
-          push_status: "pending",
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        console.error(`Failed to create notification:`, insertError);
-        continue;
-      }
-
-      // Get user's push subscriptions - ORDER BY last_used_at DESC to get the most recent
-      // The most recently used subscription is most likely to be valid
-      const { data: subscriptions } = await supabase
-        .from("push_subscriptions")
-        .select("id, endpoint, p256dh, auth, device_name, last_used_at")
-        .eq("user_id", userId)
-        .eq("is_active", true)
-        .order("last_used_at", { ascending: false });
-
-      if (subscriptions && subscriptions.length > 0) {
-        console.log(
-          `[Item Reminders] User ${userId.substring(0, 8)} has ${subscriptions.length} active subscription(s)`,
-        );
-
-        // IMPORTANT: Only send to the MOST RECENT subscription (first one after ordering)
-        // This avoids sending to stale endpoints that haven't been cleaned up yet
-        const primarySub = subscriptions[0];
-        console.log(
-          `[Item Reminders] Sending to: ${primarySub.device_name} (last used: ${primarySub.last_used_at})`,
-        );
-
-        const payload = JSON.stringify({
-          title: item.title,
-          body: item.description || `Your ${item.type} is due now`,
-          icon: "/appicon-192.png",
-          badge: "/appicon-192.png",
-          tag: `item-${item.id}`,
-          data: {
-            type: "item_reminder",
-            notification_id: notification?.id,
-            item_id: item.id,
-            alert_id: alert.id,
+      // Send notification to each target user
+      for (const userId of targetUserIds) {
+        // Create notification in unified table
+        const { data: notification, error: insertError } = await supabase
+          .from("notifications")
+          .insert({
+            user_id: userId,
+            notification_type: notificationType,
+            title: item.title,
+            message: item.description || `Your ${item.type} is due now`,
+            icon,
+            severity: item.priority === "urgent" ? "warning" : "info",
+            source: "item",
+            priority: item.priority || "normal",
+            action_type: "complete_task",
             action_url: null, // Items are viewed via reminder tab, not direct URL
-          },
-        });
-
-        // Send ONLY to the primary (most recent) subscription
-        try {
-          await webpush.sendNotification(
-            {
-              endpoint: primarySub.endpoint,
-              keys: { p256dh: primarySub.p256dh, auth: primarySub.auth },
+            action_data: {
+              item_id: item.id,
+              alert_id: alert.id,
+              item_type: item.type,
             },
-            payload,
-          );
+            item_id: item.id,
+            group_key: `item_${item.id}_${alert.id}_${userId}`,
+            expires_at: new Date(
+              now.getTime() + 24 * 60 * 60 * 1000,
+            ).toISOString(),
+            push_status: "pending",
+          })
+          .select()
+          .single();
 
-          sent++;
+        if (insertError) {
+          console.error(`Failed to create notification for user ${userId}:`, insertError);
+          continue;
+        }
+
+        // Get user's push subscriptions - ORDER BY last_used_at DESC to get the most recent
+        // The most recently used subscription is most likely to be valid
+        const { data: subscriptions } = await supabase
+          .from("push_subscriptions")
+          .select("id, endpoint, p256dh, auth, device_name, last_used_at")
+          .eq("user_id", userId)
+          .eq("is_active", true)
+          .order("last_used_at", { ascending: false });
+
+        if (subscriptions && subscriptions.length > 0) {
           console.log(
-            `[Item Reminders] ✓ Push sent successfully to ${primarySub.device_name}`,
+            `[Item Reminders] User ${userId.substring(0, 8)} has ${subscriptions.length} active subscription(s)`,
           );
 
-          // Update push status
-          await supabase
-            .from("notifications")
-            .update({
-              push_status: "sent",
-              push_sent_at: new Date().toISOString(),
-            })
-            .eq("id", notification?.id);
-
-          // Update last_used_at to keep track of which subscriptions are working
-          await supabase
-            .from("push_subscriptions")
-            .update({ last_used_at: new Date().toISOString() })
-            .eq("id", primarySub.id);
-        } catch (error: unknown) {
-          failed++;
-          console.error(
-            `[Item Reminders] ✗ Push failed to ${primarySub.device_name}:`,
-            error,
+          // IMPORTANT: Only send to the MOST RECENT subscription (first one after ordering)
+          // This avoids sending to stale endpoints that haven't been cleaned up yet
+          const primarySub = subscriptions[0];
+          console.log(
+            `[Item Reminders] Sending to: ${primarySub.device_name} (last used: ${primarySub.last_used_at})`,
           );
 
-          const statusCode =
-            error && typeof error === "object" && "statusCode" in error
-              ? (error as { statusCode: number }).statusCode
-              : null;
+          const payload = JSON.stringify({
+            title: item.title,
+            body: item.description || `Your ${item.type} is due now`,
+            icon: "/appicon-192.png",
+            badge: "/appicon-192.png",
+            tag: `item-${item.id}-${userId}`,
+            data: {
+              type: "item_reminder",
+              notification_id: notification?.id,
+              item_id: item.id,
+              alert_id: alert.id,
+              action_url: null, // Items are viewed via reminder tab, not direct URL
+            },
+          });
 
-          // Mark subscription as inactive if it's definitively gone
-          if (statusCode === 404 || statusCode === 410) {
-            console.log(
-              `[Item Reminders] Marking subscription ${primarySub.id} as inactive (status ${statusCode})`,
+          // Send ONLY to the primary (most recent) subscription
+          try {
+            await webpush.sendNotification(
+              {
+                endpoint: primarySub.endpoint,
+                keys: { p256dh: primarySub.p256dh, auth: primarySub.auth },
+              },
+              payload,
             );
+
+            sent++;
+            console.log(
+              `[Item Reminders] ✓ Push sent successfully to ${primarySub.device_name}`,
+            );
+
+            // Update push status
+            await supabase
+              .from("notifications")
+              .update({
+                push_status: "sent",
+                push_sent_at: new Date().toISOString(),
+              })
+              .eq("id", notification?.id);
+
+            // Update last_used_at to keep track of which subscriptions are working
             await supabase
               .from("push_subscriptions")
-              .update({ is_active: false })
+              .update({ last_used_at: new Date().toISOString() })
               .eq("id", primarySub.id);
+          } catch (error: unknown) {
+            failed++;
+            console.error(
+              `[Item Reminders] ✗ Push failed to ${primarySub.device_name}:`,
+              error,
+            );
 
-            // Try the next subscription if primary failed
-            if (subscriptions.length > 1) {
-              const fallback = subscriptions[1];
+            const statusCode =
+              error && typeof error === "object" && "statusCode" in error
+                ? (error as { statusCode: number }).statusCode
+                : null;
+
+            // Mark subscription as inactive if it's definitively gone
+            if (statusCode === 404 || statusCode === 410) {
               console.log(
-                `[Item Reminders] Trying fallback: ${fallback.device_name}`,
+                `[Item Reminders] Marking subscription ${primarySub.id} as inactive (status ${statusCode})`,
               );
-              try {
-                await webpush.sendNotification(
-                  {
-                    endpoint: fallback.endpoint,
-                    keys: { p256dh: fallback.p256dh, auth: fallback.auth },
-                  },
-                  payload,
-                );
-                sent++;
-                failed--; // Undo the failed count
+              await supabase
+                .from("push_subscriptions")
+                .update({ is_active: false })
+                .eq("id", primarySub.id);
+
+              // Try the next subscription if primary failed
+              if (subscriptions.length > 1) {
+                const fallback = subscriptions[1];
                 console.log(
-                  `[Item Reminders] ✓ Fallback succeeded to ${fallback.device_name}`,
+                  `[Item Reminders] Trying fallback: ${fallback.device_name}`,
                 );
-              } catch (fallbackError) {
-                console.error(
-                  `[Item Reminders] Fallback also failed:`,
-                  fallbackError,
-                );
+                try {
+                  await webpush.sendNotification(
+                    {
+                      endpoint: fallback.endpoint,
+                      keys: { p256dh: fallback.p256dh, auth: fallback.auth },
+                    },
+                    payload,
+                  );
+                  sent++;
+                  failed--; // Undo the failed count
+                  console.log(
+                    `[Item Reminders] ✓ Fallback succeeded to ${fallback.device_name}`,
+                  );
+                } catch (fallbackError) {
+                  console.error(
+                    `[Item Reminders] Fallback also failed:`,
+                    fallbackError,
+                  );
+                }
               }
             }
+
+            await supabase
+              .from("notifications")
+              .update({
+                push_status: "failed",
+                push_error: error instanceof Error ? error.message : "Unknown",
+              })
+              .eq("id", notification?.id);
           }
-
-          await supabase
-            .from("notifications")
-            .update({
-              push_status: "failed",
-              push_error: error instanceof Error ? error.message : "Unknown",
-            })
-            .eq("id", notification?.id);
+        } else {
+          console.log(
+            `[Item Reminders] No active subscriptions for user ${userId.substring(0, 8)}`,
+          );
         }
-      } else {
-        console.log(
-          `[Item Reminders] No active subscriptions for user ${userId.substring(0, 8)}`,
-        );
-      }
+      } // End of userId loop
 
-      // Mark alert as fired
+      // Mark alert as fired (after all users have been notified)
       await supabase
         .from("item_alerts")
         .update({ last_fired_at: now.toISOString() })

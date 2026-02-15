@@ -1,14 +1,13 @@
 "use client";
 
 /**
- * FocusPage - Personal AI Assistant Experience
+ * FocusPage - AI-Powered Personal Assistant
  *
- * Key innovations:
- * - Living avatar that breathes and reacts
- * - Typing animation for messages (character by character)
- * - Conversational personality with contextual awareness
+ * Key features:
+ * - AI-generated daily briefing (cached, refreshed once per day)
+ * - Smart insights and priority suggestions
+ * - Living avatar that reacts to user actions
  * - Celebration effects on task completion
- * - Proactive suggestions
  * - Ambient life through subtle animations
  */
 
@@ -21,6 +20,11 @@ import {
   useItemActionsWithToast,
 } from "@/features/items/useItemActions";
 import { useItems } from "@/features/items/useItems";
+import {
+  useFocusInsights,
+  generateFallbackInsights,
+  type FocusItem,
+} from "@/features/items/useFocusInsights";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
@@ -40,15 +44,20 @@ import {
   AlertTriangle,
   ArrowRight,
   Bell,
+  Brain,
   Calendar,
   Check,
   ChevronRight,
   Clock,
   Eye,
   EyeOff,
+  Lightbulb,
   ListTodo,
   Plus,
+  RefreshCw,
   Sparkles,
+  Target,
+  Zap,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -88,7 +97,7 @@ function getItemDate(item: ItemWithDetails): Date | null {
 
 function buildFullRRuleString(
   startDate: Date,
-  recurrenceRule: { rrule: string },
+  recurrenceRule: { rrule: string }
 ): string {
   const dtstart = `DTSTART:${format(startDate, "yyyyMMdd'T'HHmmss")}`;
   const rrule = recurrenceRule.rrule.startsWith("RRULE:")
@@ -101,7 +110,7 @@ function expandRecurringItems(
   items: ItemWithDetails[],
   startDate: Date,
   endDate: Date,
-  actions: any[],
+  actions: any[]
 ): ExpandedOccurrence[] {
   const result: ExpandedOccurrence[] = [];
 
@@ -116,13 +125,13 @@ function expandRecurringItems(
       try {
         const fullRruleStr = buildFullRRuleString(
           itemDate,
-          item.recurrence_rule!,
+          item.recurrence_rule!
         );
         const rule = RRule.fromString(fullRruleStr);
         const exceptions = new Set(
           (item.recurrence_rule?.exceptions || []).map((e: any) =>
-            format(parseISO(e.exception_date), "yyyy-MM-dd"),
-          ),
+            format(parseISO(e.exception_date), "yyyy-MM-dd")
+          )
         );
         const occurrences = rule.between(startDate, endDate, true);
         for (const occ of occurrences) {
@@ -152,130 +161,29 @@ function expandRecurringItems(
   }
 
   result.sort(
-    (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime(),
+    (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime()
   );
   return result;
+}
+
+// Convert ExpandedOccurrence to FocusItem for AI
+function toFocusItem(occ: ExpandedOccurrence, today: Date): FocusItem {
+  return {
+    id: occ.item.id,
+    type: occ.item.type,
+    title: occ.item.title,
+    description: occ.item.description || undefined,
+    dueAt: occ.occurrenceDate.toISOString(),
+    priority: occ.item.priority,
+    isCompleted: occ.isCompleted,
+    isOverdue: isBefore(occ.occurrenceDate, today) && !occ.isCompleted,
+  };
 }
 
 // ============================================
 // ASSISTANT NAME
 // ============================================
 const ASSISTANT_NAME = "Focus";
-
-// ============================================
-// AI PERSONALITY - Contextual Messages
-// ============================================
-interface Message {
-  text: string;
-  suggestion?: { text: string; action: () => void };
-}
-
-function generateGreeting(): string {
-  const hour = new Date().getHours();
-  const greetings = {
-    earlyMorning: [
-      "Early bird! Let's make today extraordinary.",
-      "Up before the sun? I like your style.",
-      "The quiet hours are perfect for focus.",
-    ],
-    morning: [
-      "Good morning! Ready to conquer the day?",
-      "Rise and shine! Here's your game plan.",
-      "Morning! Let's turn plans into progress.",
-    ],
-    midday: [
-      "Midday check-in! How's the flow going?",
-      "Keeping the momentum strong!",
-      "Perfect time to tackle what matters most.",
-    ],
-    afternoon: [
-      "Afternoon push! You've got this.",
-      "Let's power through the rest of the day.",
-      "Sun's still up, and so are we!",
-    ],
-    evening: [
-      "Evening wrap-up time. Let's review.",
-      "Winding down but staying sharp.",
-      "End the day on a high note!",
-    ],
-    night: [
-      "Night owl mode activated.",
-      "Burning the midnight oil, I see!",
-      "Late night productivity session.",
-    ],
-  };
-
-  let pool: string[];
-  if (hour < 5) pool = greetings.earlyMorning;
-  else if (hour < 9) pool = greetings.morning;
-  else if (hour < 12) pool = greetings.midday;
-  else if (hour < 17) pool = greetings.afternoon;
-  else if (hour < 21) pool = greetings.evening;
-  else pool = greetings.night;
-
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-function generateContextualMessage(
-  currentItem: ExpandedOccurrence | null,
-  remaining: number,
-  overdueCount: number,
-  completedCount: number,
-): Message {
-  if (!currentItem && remaining === 0 && overdueCount === 0) {
-    if (completedCount > 0) {
-      const celebrations = [
-        `Amazing work! You've cleared ${completedCount} item${completedCount > 1 ? "s" : ""} today.`,
-        `${completedCount} down, zero to go! You're on fire.`,
-        `A clean slate! ${completedCount} task${completedCount > 1 ? "s" : ""} conquered.`,
-      ];
-      return {
-        text: celebrations[Math.floor(Math.random() * celebrations.length)],
-      };
-    }
-    return {
-      text: "Your canvas is blank. What will you create today?",
-      suggestion: {
-        text: "Add a task",
-        action: () => {},
-      },
-    };
-  }
-
-  if (!currentItem && overdueCount > 0) {
-    return {
-      text: `I noticed ${overdueCount} item${overdueCount > 1 ? "s" : ""} need${overdueCount === 1 ? "s" : ""} your attention from before.`,
-    };
-  }
-
-  if (currentItem) {
-    const typeWords = {
-      reminder: "reminder",
-      task: "task",
-      event: "event",
-    };
-    const type = typeWords[currentItem.item.type] || "item";
-
-    const phrases =
-      remaining > 1
-        ? [
-            `Here's your next ${type}. ${remaining - 1} more waiting in the wings.`,
-            `Focus on this ${type} first. You've got ${remaining - 1} more after.`,
-            `One step at a time. This ${type}, then ${remaining - 1} more.`,
-          ]
-        : [
-            `This is it—your final ${type} for now!`,
-            `Last one on the list. Make it count!`,
-            `Just this ${type} stands between you and freedom.`,
-          ];
-
-    return {
-      text: phrases[Math.floor(Math.random() * phrases.length)],
-    };
-  }
-
-  return { text: "I'm here when you need me." };
-}
 
 // ============================================
 // TYPING ANIMATION HOOK
@@ -370,10 +278,10 @@ function CelebrationParticles({ trigger }: { trigger: number }) {
 // ============================================
 function AssistantAvatar({
   mood,
-  themeClasses,
+  isGenerating,
 }: {
   mood: AssistantMood;
-  themeClasses: ReturnType<typeof useThemeClasses>;
+  isGenerating?: boolean;
 }) {
   const pulseVariants = {
     neutral: {
@@ -431,30 +339,32 @@ function AssistantAvatar({
     },
   };
 
+  const currentMood = isGenerating ? "thinking" : mood;
+
   return (
     <div className="relative flex items-center justify-center w-16 h-16">
       {/* Outer glow */}
       <motion.div
         variants={glowVariants}
-        animate={mood}
+        animate={currentMood}
         className="absolute inset-0 rounded-full bg-[var(--primary)]/30 blur-xl"
       />
 
       {/* Middle ring */}
       <motion.div
         variants={pulseVariants}
-        animate={mood}
+        animate={currentMood}
         className="absolute inset-1 rounded-full border-2 border-[var(--primary)]/30"
       />
 
       {/* Core orb */}
       <motion.div
         variants={pulseVariants}
-        animate={mood}
+        animate={currentMood}
         className={cn(
           "relative w-12 h-12 rounded-full flex items-center justify-center",
           "bg-gradient-to-br from-[var(--primary)] to-[var(--primary)]/60",
-          "shadow-[0_0_30px_var(--primary)]",
+          "shadow-[0_0_30px_var(--primary)]"
         )}
       >
         {/* Inner highlight */}
@@ -462,27 +372,27 @@ function AssistantAvatar({
 
         {/* Icon based on mood */}
         <motion.div
-          key={mood}
+          key={currentMood}
           initial={{ scale: 0, rotate: -180 }}
           animate={{ scale: 1, rotate: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
         >
-          {mood === "celebrating" ? (
+          {currentMood === "celebrating" ? (
             <Sparkles className="w-5 h-5 text-white" />
-          ) : mood === "thinking" ? (
+          ) : currentMood === "thinking" ? (
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
               className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
             />
           ) : (
-            <Sparkles className="w-5 h-5 text-white" />
+            <Brain className="w-5 h-5 text-white" />
           )}
         </motion.div>
       </motion.div>
 
       {/* Orbiting particles when happy/celebrating */}
-      {(mood === "happy" || mood === "celebrating") && (
+      {(currentMood === "happy" || currentMood === "celebrating") && (
         <>
           {[0, 120, 240].map((angle, i) => (
             <motion.div
@@ -509,63 +419,298 @@ function AssistantAvatar({
 }
 
 // ============================================
-// MESSAGE BUBBLE
+// AI BRIEFING CARD
 // ============================================
-function MessageBubble({
-  message,
-  isTyping,
-  displayedText,
+function AIBriefingCard({
+  insight,
+  isLoading,
+  isStale,
+  canRefresh,
+  onRefresh,
   themeClasses,
 }: {
-  message: Message;
-  isTyping: boolean;
-  displayedText: string;
+  insight: {
+    greeting: string;
+    summary: string;
+    focusTip: string | null;
+    encouragement: string | null;
+    newItemsSinceGeneration?: number;
+  } | null;
+  isLoading: boolean;
+  isStale: boolean;
+  canRefresh: boolean;
+  onRefresh: () => void;
   themeClasses: ReturnType<typeof useThemeClasses>;
 }) {
+  const { displayedText, isTyping } = useTypingAnimation(
+    insight?.summary || "",
+    25
+  );
+
+  if (isLoading && !insight) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className={cn(
+          "p-4 rounded-2xl border",
+          "bg-bg-card-custom/50",
+          themeClasses.border
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+            className={cn(
+              "w-5 h-5 border-2 rounded-full",
+              "border-[var(--primary)]/30 border-t-[var(--primary)]"
+            )}
+          />
+          <span className={cn("text-sm", themeClasses.textMuted)}>
+            Analyzing your schedule...
+          </span>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (!insight) return null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
-        "relative p-4 rounded-2xl rounded-tl-sm",
-        "bg-bg-card-custom/80 border",
-        themeClasses.border,
+        "relative overflow-hidden rounded-2xl border",
+        "bg-gradient-to-br from-bg-card-custom/80 to-bg-card-custom/40",
+        isStale ? "border-amber-500/30" : themeClasses.border
       )}
     >
-      <p
-        className={cn(
-          "text-sm leading-relaxed relative z-10",
-          themeClasses.headerText,
-        )}
-      >
-        {displayedText}
-        {isTyping && (
-          <motion.span
-            animate={{ opacity: [1, 0] }}
-            transition={{ duration: 0.5, repeat: Infinity }}
-            className={cn("ml-0.5", themeClasses.text)}
-          >
-            |
-          </motion.span>
-        )}
-      </p>
+      {/* Subtle gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[var(--primary)]/5 via-transparent to-transparent pointer-events-none" />
 
-      {message.suggestion && !isTyping && (
-        <motion.button
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          onClick={message.suggestion.action}
+      <div className="relative p-4 space-y-3">
+        {/* Header with greeting */}
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <p className={cn("text-lg font-semibold", themeClasses.headerText)}>
+              {insight.greeting}
+            </p>
+          </div>
+          {canRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isLoading}
+              className={cn(
+                "p-2 rounded-lg transition-all",
+                "hover:bg-[var(--primary)]/10",
+                themeClasses.textMuted
+              )}
+              title={isStale ? "Refresh insights" : "Insights are up to date"}
+            >
+              <RefreshCw
+                className={cn("w-4 h-4", isLoading && "animate-spin")}
+              />
+            </button>
+          )}
+        </div>
+
+        {/* Summary with typing effect */}
+        <div
           className={cn(
-            "mt-3 px-3 py-1.5 rounded-full text-xs font-medium",
-            "bg-[var(--primary)]/10 border border-[var(--primary)]/20",
-            themeClasses.text,
-            "hover:bg-[var(--primary)]/20 transition-colors",
+            "p-3 rounded-xl",
+            "bg-bg-dark/30 border",
+            themeClasses.border
           )}
         >
-          {message.suggestion.text}
-        </motion.button>
-      )}
+          <div className="flex items-start gap-2">
+            <Zap
+              className={cn(
+                "w-4 h-4 mt-0.5 flex-shrink-0",
+                themeClasses.text
+              )}
+            />
+            <p className={cn("text-sm leading-relaxed", themeClasses.text)}>
+              {displayedText}
+              {isTyping && (
+                <motion.span
+                  animate={{ opacity: [1, 0] }}
+                  transition={{ duration: 0.5, repeat: Infinity }}
+                  className="ml-0.5"
+                >
+                  |
+                </motion.span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Focus Tip */}
+        {insight.focusTip && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className={cn(
+              "flex items-start gap-2 p-3 rounded-xl",
+              "bg-[var(--primary)]/10 border border-[var(--primary)]/20"
+            )}
+          >
+            <Lightbulb
+              className={cn("w-4 h-4 mt-0.5 flex-shrink-0", themeClasses.text)}
+            />
+            <p className={cn("text-sm", themeClasses.text)}>
+              {insight.focusTip}
+            </p>
+          </motion.div>
+        )}
+
+        {/* Encouragement */}
+        {insight.encouragement && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="flex items-center gap-2 pt-1"
+          >
+            <Sparkles
+              className={cn("w-3.5 h-3.5", "text-emerald-400")}
+            />
+            <p className="text-xs text-emerald-400">{insight.encouragement}</p>
+          </motion.div>
+        )}
+
+        {/* New items indicator */}
+        {insight.newItemsSinceGeneration && insight.newItemsSinceGeneration > 0 && (
+          <div className="flex items-center gap-2 pt-1">
+            <Plus className={cn("w-3.5 h-3.5", themeClasses.textFaint)} />
+            <p className={cn("text-xs", themeClasses.textFaint)}>
+              {insight.newItemsSinceGeneration} new item
+              {insight.newItemsSinceGeneration > 1 ? "s" : ""} since last
+              analysis
+            </p>
+          </div>
+        )}
+
+        {/* Stale indicator */}
+        {isStale && (
+          <div className="flex items-center gap-2 pt-1">
+            <Clock className="w-3.5 h-3.5 text-amber-400/70" />
+            <p className="text-xs text-amber-400/70">
+              Insights from earlier today • Tap refresh for fresh analysis
+            </p>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ============================================
+// PRIORITY INSIGHTS SECTION
+// ============================================
+function PriorityInsightsSection({
+  insights,
+  items,
+  onItemClick,
+  themeClasses,
+}: {
+  insights: Array<{
+    itemId: string | null;
+    reason: string;
+    suggestedAction?: string;
+  }>;
+  items: ExpandedOccurrence[];
+  onItemClick: (item: ItemWithDetails, date: Date) => void;
+  themeClasses: ReturnType<typeof useThemeClasses>;
+}) {
+  if (!insights || insights.length === 0) return null;
+
+  const validInsights = insights.filter((i) => i.itemId);
+
+  if (validInsights.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2 }}
+      className="space-y-2"
+    >
+      <div className="flex items-center gap-2">
+        <Target className={cn("w-4 h-4", themeClasses.text)} />
+        <span
+          className={cn(
+            "text-xs font-semibold uppercase tracking-wider",
+            themeClasses.textMuted
+          )}
+        >
+          AI Priorities
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {validInsights.map((insight, idx) => {
+          const matchedOcc = items.find((i) => i.item.id === insight.itemId);
+          if (!matchedOcc) return null;
+
+          return (
+            <motion.button
+              key={insight.itemId}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 * idx }}
+              onClick={() =>
+                onItemClick(matchedOcc.item, matchedOcc.occurrenceDate)
+              }
+              className={cn(
+                "w-full text-left p-3 rounded-xl transition-all",
+                "bg-bg-card-custom/50 border",
+                themeClasses.border,
+                "hover:bg-bg-card-custom/80 hover:border-[var(--primary)]/30"
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0",
+                    "bg-[var(--primary)]/20"
+                  )}
+                >
+                  <span className={cn("text-xs font-bold", themeClasses.text)}>
+                    {idx + 1}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p
+                    className={cn(
+                      "text-sm font-medium truncate",
+                      themeClasses.headerText
+                    )}
+                  >
+                    {matchedOcc.item.title}
+                  </p>
+                  <p className={cn("text-xs mt-0.5", themeClasses.textMuted)}>
+                    {insight.reason}
+                  </p>
+                  {insight.suggestedAction && (
+                    <p className={cn("text-xs mt-1", themeClasses.text)}>
+                      → {insight.suggestedAction}
+                    </p>
+                  )}
+                </div>
+                <ChevronRight
+                  className={cn(
+                    "w-4 h-4 flex-shrink-0",
+                    themeClasses.textFaint
+                  )}
+                />
+              </div>
+            </motion.button>
+          );
+        })}
+      </div>
     </motion.div>
   );
 }
@@ -606,7 +751,7 @@ function TaskCard({
         "relative rounded-2xl overflow-hidden",
         isHighlighted
           ? "bg-bg-card-custom border-2 border-[var(--primary)]/40 shadow-[0_0_30px_-10px_var(--primary)]"
-          : cn("bg-bg-card-custom/50 border", themeClasses.border),
+          : cn("bg-bg-card-custom/50 border", themeClasses.border)
       )}
     >
       {isHighlighted && (
@@ -619,13 +764,13 @@ function TaskCard({
             <div
               className={cn(
                 "w-10 h-10 rounded-xl flex items-center justify-center",
-                isHighlighted ? "bg-[var(--primary)]/20" : "bg-bg-medium",
+                isHighlighted ? "bg-[var(--primary)]/20" : "bg-bg-medium"
               )}
             >
               <TypeIcon
                 className={cn(
                   "w-5 h-5",
-                  isHighlighted ? themeClasses.text : themeClasses.textMuted,
+                  isHighlighted ? themeClasses.text : themeClasses.textMuted
                 )}
               />
             </div>
@@ -633,7 +778,7 @@ function TaskCard({
               <span
                 className={cn(
                   "text-[10px] font-semibold uppercase tracking-wider",
-                  themeClasses.textMuted,
+                  themeClasses.textMuted
                 )}
               >
                 {item.type}
@@ -655,7 +800,7 @@ function TaskCard({
           className={cn(
             "text-lg font-semibold mb-2",
             isCompleted && "line-through opacity-50",
-            themeClasses.headerText,
+            themeClasses.headerText
           )}
         >
           {item.title}
@@ -682,7 +827,7 @@ function TaskCard({
               "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-all",
               isCompleted
                 ? "bg-emerald-500/20 text-emerald-400"
-                : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400",
+                : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400"
             )}
           >
             <Check className="w-5 h-5" />
@@ -700,7 +845,7 @@ function TaskCard({
             className={cn(
               "px-4 py-3 rounded-xl",
               "bg-bg-medium",
-              themeClasses.textMuted,
+              themeClasses.textMuted
             )}
           >
             <ChevronRight className="w-5 h-5" />
@@ -738,13 +883,13 @@ function MiniTaskRow({
       whileHover={{ x: 4 }}
       className={cn(
         "w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all",
-        "hover:bg-bg-card-custom/50",
+        "hover:bg-bg-card-custom/50"
       )}
     >
       <div
         className={cn(
           "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
-          occ.isCompleted ? "bg-emerald-500/10" : "bg-bg-medium",
+          occ.isCompleted ? "bg-emerald-500/10" : "bg-bg-medium"
         )}
       >
         {occ.isCompleted ? (
@@ -758,7 +903,7 @@ function MiniTaskRow({
           className={cn(
             "text-sm font-medium truncate",
             occ.isCompleted && "line-through opacity-50",
-            themeClasses.headerText,
+            themeClasses.headerText
           )}
         >
           {occ.item.title}
@@ -786,7 +931,7 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
   const [timeScope, setTimeScope] = useState<TimeScope>("today");
   const [showOverdue, setShowOverdue] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
-    null,
+    null
   );
   const [editingItem, setEditingItem] = useState<ItemWithDetails | null>(null);
   const [selectedOccurrenceDate, setSelectedOccurrenceDate] =
@@ -794,7 +939,6 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
   const [mounted, setMounted] = useState(false);
   const [assistantMood, setAssistantMood] = useState<AssistantMood>("neutral");
   const [celebrationTrigger, setCelebrationTrigger] = useState(0);
-  const [greeting] = useState(() => generateGreeting());
 
   useEffect(() => {
     setMounted(true);
@@ -812,7 +956,7 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
       (item) =>
         item.status !== "archived" &&
         !item.archived_at &&
-        item.status !== "cancelled",
+        item.status !== "cancelled"
     );
   }, [allItems]);
 
@@ -824,7 +968,7 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
 
   const weekStart = useMemo(
     () => startOfWeek(today, { weekStartsOn: 1 }),
-    [today],
+    [today]
   );
   const weekEnd = useMemo(() => endOfWeek(today, { weekStartsOn: 1 }), [today]);
 
@@ -837,7 +981,7 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
       activeItems,
       pastStart,
       scopeEnd,
-      occurrenceActions,
+      occurrenceActions
     );
 
     const overdue: ExpandedOccurrence[] = [];
@@ -863,6 +1007,54 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
     return { overdue, upcoming, completed };
   }, [activeItems, occurrenceActions, today, weekStart, weekEnd, timeScope]);
 
+  // Convert to FocusItems for AI
+  const focusItemsForAI = useMemo(() => {
+    const all = [
+      ...organizedTasks.overdue,
+      ...organizedTasks.upcoming,
+      ...organizedTasks.completed,
+    ];
+    return all.map((occ) => toFocusItem(occ, today));
+  }, [organizedTasks, today]);
+
+  // AI Insights hook
+  const {
+    insight: aiInsight,
+    isLoading: insightLoading,
+    isGenerating,
+    isStale,
+    refresh: refreshInsight,
+    canRefresh,
+  } = useFocusInsights(focusItemsForAI);
+
+  // Fallback insights when AI is not available
+  const fallbackInsight = useMemo(() => {
+    return generateFallbackInsights(
+      focusItemsForAI,
+      organizedTasks.completed.length,
+      organizedTasks.overdue.length
+    );
+  }, [focusItemsForAI, organizedTasks.completed.length, organizedTasks.overdue.length]);
+
+  // Use AI insight if available, otherwise fallback
+  const displayInsight = useMemo(() => {
+    if (aiInsight) {
+      return {
+        greeting: aiInsight.greeting,
+        summary: aiInsight.summary,
+        focusTip: aiInsight.focusTip,
+        encouragement: aiInsight.encouragement,
+        priorityInsights: aiInsight.priorityInsights,
+        newItemsSinceGeneration: aiInsight.newItemsSinceGeneration,
+      };
+    }
+    return {
+      ...fallbackInsight,
+      priorityInsights: [],
+      newItemsSinceGeneration: 0,
+    };
+  }, [aiInsight, fallbackInsight]);
+
   const currentItem = organizedTasks.upcoming[0] || null;
 
   const stats = useMemo(
@@ -871,24 +1063,11 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
       overdueCount: organizedTasks.overdue.length,
       completedCount: organizedTasks.completed.length,
     }),
-    [organizedTasks],
+    [organizedTasks]
   );
-
-  const message = useMemo(
-    () =>
-      generateContextualMessage(
-        currentItem,
-        stats.remaining,
-        stats.overdueCount,
-        stats.completedCount,
-      ),
-    [currentItem, stats],
-  );
-
-  const { displayedText, isTyping } = useTypingAnimation(message.text, 25);
 
   useEffect(() => {
-    if (isLoading) {
+    if (isLoading || insightLoading) {
       setAssistantMood("thinking");
     } else if (
       stats.remaining === 0 &&
@@ -899,7 +1078,7 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
     } else {
       setAssistantMood("neutral");
     }
-  }, [isLoading, stats]);
+  }, [isLoading, insightLoading, stats]);
 
   const handleQuickEntry = useCallback(() => {
     localStorage.setItem("fab-last-selection", "reminder");
@@ -922,7 +1101,7 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
 
       await itemActions.handleComplete(item, date.toISOString());
     },
-    [itemActions],
+    [itemActions]
   );
 
   const handleEdit = useCallback((item: ItemWithDetails) => {
@@ -940,7 +1119,7 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
       }
       setSelectedItem(null);
     },
-    [itemActions],
+    [itemActions]
   );
 
   const contentStyle: CSSProperties = {
@@ -957,11 +1136,18 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
 
       <div className="relative z-10 flex-1 overflow-y-auto">
         <div className="px-5 pt-16 pb-2">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <p className={cn("text-sm", themeClasses.textMuted)}>
-                {format(new Date(), "EEEE, MMMM d")}
-              </p>
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <AssistantAvatar mood={assistantMood} isGenerating={isGenerating} />
+              <div>
+                <h1 className={cn("text-xl font-bold", themeClasses.headerText)}>
+                  {ASSISTANT_NAME}
+                </h1>
+                <p className={cn("text-xs", themeClasses.textMuted)}>
+                  {format(new Date(), "EEEE, MMMM d")}
+                </p>
+              </div>
             </div>
             <div className="flex gap-1.5">
               <button
@@ -972,9 +1158,9 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
                   timeScope === "today"
                     ? cn(
                         "bg-[var(--primary)]/20 border border-[var(--primary)]/40",
-                        themeClasses.text,
+                        themeClasses.text
                       )
-                    : cn("bg-bg-card-custom", themeClasses.textMuted),
+                    : cn("bg-bg-card-custom", themeClasses.textMuted)
                 )}
               >
                 Today
@@ -987,9 +1173,9 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
                   timeScope === "week"
                     ? cn(
                         "bg-[var(--primary)]/20 border border-[var(--primary)]/40",
-                        themeClasses.text,
+                        themeClasses.text
                       )
-                    : cn("bg-bg-card-custom", themeClasses.textMuted),
+                    : cn("bg-bg-card-custom", themeClasses.textMuted)
                 )}
               >
                 Week
@@ -997,28 +1183,19 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
             </div>
           </div>
 
-          <div className="flex items-start gap-4 mb-6">
-            <AssistantAvatar mood={assistantMood} themeClasses={themeClasses} />
-
-            <div className="flex-1 min-w-0">
-              <p
-                className={cn(
-                  "text-lg font-semibold mb-2",
-                  themeClasses.headerText,
-                )}
-              >
-                {greeting}
-              </p>
-
-              <MessageBubble
-                message={message}
-                isTyping={isTyping}
-                displayedText={displayedText}
-                themeClasses={themeClasses}
-              />
-            </div>
+          {/* AI Briefing Card */}
+          <div className="mb-4">
+            <AIBriefingCard
+              insight={displayInsight}
+              isLoading={insightLoading || isGenerating}
+              isStale={isStale}
+              canRefresh={canRefresh}
+              onRefresh={() => refreshInsight(true)}
+              themeClasses={themeClasses}
+            />
           </div>
 
+          {/* Stats Bar */}
           <div className="flex items-center gap-4 mb-4">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-[var(--primary)]" />
@@ -1060,231 +1237,254 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                 className={cn(
                   "w-8 h-8 border-2 rounded-full mb-4",
-                  "border-[var(--primary)]/30 border-t-[var(--primary)]",
+                  "border-[var(--primary)]/30 border-t-[var(--primary)]"
                 )}
               />
               <p className={cn("text-sm", themeClasses.textMuted)}>
                 Getting your tasks...
               </p>
             </div>
-          ) : currentItem ? (
+          ) : (
             <>
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className={cn("w-4 h-4", themeClasses.text)} />
-                  <span
-                    className={cn(
-                      "text-xs font-semibold uppercase tracking-wider",
-                      themeClasses.textMuted,
-                    )}
-                  >
-                    Current Focus
-                  </span>
-                </div>
-                <AnimatePresence mode="wait">
-                  <TaskCard
-                    key={`${currentItem.item.id}-${currentItem.occurrenceDate.toISOString()}`}
-                    occ={currentItem}
-                    onComplete={() =>
-                      handleComplete(
-                        currentItem.item,
-                        currentItem.occurrenceDate,
-                      )
-                    }
-                    onDetails={() =>
-                      handleItemClick(
-                        currentItem.item,
-                        currentItem.occurrenceDate,
-                      )
-                    }
-                    themeClasses={themeClasses}
-                    isHighlighted
-                  />
-                </AnimatePresence>
-              </div>
-
-              {organizedTasks.upcoming.length > 1 && (
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <ArrowRight
-                      className={cn("w-4 h-4", themeClasses.textMuted)}
+              {/* AI Priority Insights */}
+              {displayInsight.priorityInsights &&
+                displayInsight.priorityInsights.length > 0 && (
+                  <div className="mb-6">
+                    <PriorityInsightsSection
+                      insights={displayInsight.priorityInsights}
+                      items={[
+                        ...organizedTasks.overdue,
+                        ...organizedTasks.upcoming,
+                      ]}
+                      onItemClick={handleItemClick}
+                      themeClasses={themeClasses}
                     />
-                    <span
-                      className={cn(
-                        "text-xs font-semibold uppercase tracking-wider",
-                        themeClasses.textMuted,
-                      )}
-                    >
-                      Up Next
-                    </span>
-                    <span
-                      className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded-full",
-                        "bg-bg-card-custom",
-                        themeClasses.textFaint,
-                      )}
-                    >
-                      {organizedTasks.upcoming.length - 1}
-                    </span>
                   </div>
-                  <div
-                    className={cn("rounded-2xl border", themeClasses.border)}
-                  >
-                    {organizedTasks.upcoming.slice(1, 4).map((occ, idx) => (
-                      <div
-                        key={`${occ.item.id}-${occ.occurrenceDate.toISOString()}`}
+                )}
+
+              {/* Current Focus */}
+              {currentItem ? (
+                <>
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Sparkles className={cn("w-4 h-4", themeClasses.text)} />
+                      <span
                         className={cn(
-                          idx > 0 && "border-t",
-                          themeClasses.border,
+                          "text-xs font-semibold uppercase tracking-wider",
+                          themeClasses.textMuted
                         )}
                       >
-                        <MiniTaskRow
-                          occ={occ}
-                          onClick={() =>
-                            handleItemClick(occ.item, occ.occurrenceDate)
-                          }
-                          themeClasses={themeClasses}
+                        Current Focus
+                      </span>
+                    </div>
+                    <AnimatePresence mode="wait">
+                      <TaskCard
+                        key={`${currentItem.item.id}-${currentItem.occurrenceDate.toISOString()}`}
+                        occ={currentItem}
+                        onComplete={() =>
+                          handleComplete(
+                            currentItem.item,
+                            currentItem.occurrenceDate
+                          )
+                        }
+                        onDetails={() =>
+                          handleItemClick(
+                            currentItem.item,
+                            currentItem.occurrenceDate
+                          )
+                        }
+                        themeClasses={themeClasses}
+                        isHighlighted
+                      />
+                    </AnimatePresence>
+                  </div>
+
+                  {organizedTasks.upcoming.length > 1 && (
+                    <div className="mb-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <ArrowRight
+                          className={cn("w-4 h-4", themeClasses.textMuted)}
                         />
-                      </div>
-                    ))}
-                    {organizedTasks.upcoming.length > 4 && (
-                      <div
-                        className={cn(
-                          "p-3 text-center border-t",
-                          themeClasses.border,
-                        )}
-                      >
-                        <span className={cn("text-xs", themeClasses.textFaint)}>
-                          +{organizedTasks.upcoming.length - 4} more
+                        <span
+                          className={cn(
+                            "text-xs font-semibold uppercase tracking-wider",
+                            themeClasses.textMuted
+                          )}
+                        >
+                          Up Next
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[10px] px-1.5 py-0.5 rounded-full",
+                            "bg-bg-card-custom",
+                            themeClasses.textFaint
+                          )}
+                        >
+                          {organizedTasks.upcoming.length - 1}
                         </span>
                       </div>
+                      <div
+                        className={cn("rounded-2xl border", themeClasses.border)}
+                      >
+                        {organizedTasks.upcoming.slice(1, 4).map((occ, idx) => (
+                          <div
+                            key={`${occ.item.id}-${occ.occurrenceDate.toISOString()}`}
+                            className={cn(
+                              idx > 0 && "border-t",
+                              themeClasses.border
+                            )}
+                          >
+                            <MiniTaskRow
+                              occ={occ}
+                              onClick={() =>
+                                handleItemClick(occ.item, occ.occurrenceDate)
+                              }
+                              themeClasses={themeClasses}
+                            />
+                          </div>
+                        ))}
+                        {organizedTasks.upcoming.length > 4 && (
+                          <div
+                            className={cn(
+                              "p-3 text-center border-t",
+                              themeClasses.border
+                            )}
+                          >
+                            <span
+                              className={cn("text-xs", themeClasses.textFaint)}
+                            >
+                              +{organizedTasks.upcoming.length - 4} more
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center justify-center py-12 text-center"
+                >
+                  <motion.div
+                    animate={{ scale: [1, 1.05, 1] }}
+                    transition={{ duration: 3, repeat: Infinity }}
+                    className={cn(
+                      "w-20 h-20 rounded-2xl flex items-center justify-center mb-4",
+                      "bg-[var(--primary)]/10 border border-[var(--primary)]/20"
                     )}
-                  </div>
+                  >
+                    <Check className={cn("w-10 h-10", themeClasses.text)} />
+                  </motion.div>
+                  <h3
+                    className={cn(
+                      "text-lg font-semibold mb-2",
+                      themeClasses.headerText
+                    )}
+                  >
+                    All Clear!
+                  </h3>
+                  <p
+                    className={cn(
+                      "text-sm max-w-[240px] mb-6",
+                      themeClasses.textMuted
+                    )}
+                  >
+                    {stats.completedCount > 0
+                      ? "You've crushed it today. Time to relax or dream up something new."
+                      : "Nothing on the agenda. Perfect time to plan ahead!"}
+                  </p>
+                  <motion.button
+                    type="button"
+                    onClick={handleQuickEntry}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={cn(
+                      "flex items-center gap-2 px-5 py-3 rounded-xl font-medium",
+                      "bg-[var(--primary)]/20 border border-[var(--primary)]/30",
+                      themeClasses.text
+                    )}
+                  >
+                    <Plus className="w-5 h-5" />
+                    <span>Add Something</span>
+                  </motion.button>
+                </motion.div>
+              )}
+
+              {stats.overdueCount > 0 && (
+                <div className="mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowOverdue(!showOverdue)}
+                    className={cn(
+                      "w-full flex items-center justify-between p-4 rounded-xl",
+                      "bg-amber-500/10 border border-amber-500/20"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <AlertTriangle className="w-5 h-5 text-amber-400" />
+                      <span className="text-sm font-medium text-amber-400">
+                        {stats.overdueCount} Overdue
+                      </span>
+                    </div>
+                    {showOverdue ? (
+                      <EyeOff className="w-4 h-4 text-amber-400/70" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-amber-400/70" />
+                    )}
+                  </button>
+
+                  <AnimatePresence>
+                    {showOverdue && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="overflow-hidden"
+                      >
+                        <div
+                          className={cn(
+                            "mt-2 rounded-xl border divide-y",
+                            themeClasses.border
+                          )}
+                        >
+                          {organizedTasks.overdue.map((occ) => (
+                            <MiniTaskRow
+                              key={`${occ.item.id}-${occ.occurrenceDate.toISOString()}`}
+                              occ={occ}
+                              onClick={() =>
+                                handleItemClick(occ.item, occ.occurrenceDate)
+                              }
+                              themeClasses={themeClasses}
+                            />
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
+              )}
+
+              {currentItem && (
+                <motion.button
+                  type="button"
+                  onClick={handleQuickEntry}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  className={cn(
+                    "w-full mt-6 flex items-center justify-center gap-2 p-4 rounded-xl",
+                    "bg-bg-card-custom/30 border border-dashed",
+                    themeClasses.border,
+                    themeClasses.textFaint
+                  )}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="text-sm">Add something new</span>
+                </motion.button>
               )}
             </>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center justify-center py-12 text-center"
-            >
-              <motion.div
-                animate={{ scale: [1, 1.05, 1] }}
-                transition={{ duration: 3, repeat: Infinity }}
-                className={cn(
-                  "w-20 h-20 rounded-2xl flex items-center justify-center mb-4",
-                  "bg-[var(--primary)]/10 border border-[var(--primary)]/20",
-                )}
-              >
-                <Check className={cn("w-10 h-10", themeClasses.text)} />
-              </motion.div>
-              <h3
-                className={cn(
-                  "text-lg font-semibold mb-2",
-                  themeClasses.headerText,
-                )}
-              >
-                All Clear!
-              </h3>
-              <p
-                className={cn(
-                  "text-sm max-w-[240px] mb-6",
-                  themeClasses.textMuted,
-                )}
-              >
-                {stats.completedCount > 0
-                  ? "You've crushed it today. Time to relax or dream up something new."
-                  : "Nothing on the agenda. Perfect time to plan ahead!"}
-              </p>
-              <motion.button
-                type="button"
-                onClick={handleQuickEntry}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={cn(
-                  "flex items-center gap-2 px-5 py-3 rounded-xl font-medium",
-                  "bg-[var(--primary)]/20 border border-[var(--primary)]/30",
-                  themeClasses.text,
-                )}
-              >
-                <Plus className="w-5 h-5" />
-                <span>Add Something</span>
-              </motion.button>
-            </motion.div>
-          )}
-
-          {stats.overdueCount > 0 && (
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={() => setShowOverdue(!showOverdue)}
-                className={cn(
-                  "w-full flex items-center justify-between p-4 rounded-xl",
-                  "bg-amber-500/10 border border-amber-500/20",
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-400" />
-                  <span className="text-sm font-medium text-amber-400">
-                    {stats.overdueCount} Overdue
-                  </span>
-                </div>
-                {showOverdue ? (
-                  <EyeOff className="w-4 h-4 text-amber-400/70" />
-                ) : (
-                  <Eye className="w-4 h-4 text-amber-400/70" />
-                )}
-              </button>
-
-              <AnimatePresence>
-                {showOverdue && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="overflow-hidden"
-                  >
-                    <div
-                      className={cn(
-                        "mt-2 rounded-xl border divide-y",
-                        themeClasses.border,
-                      )}
-                    >
-                      {organizedTasks.overdue.map((occ) => (
-                        <MiniTaskRow
-                          key={`${occ.item.id}-${occ.occurrenceDate.toISOString()}`}
-                          occ={occ}
-                          onClick={() =>
-                            handleItemClick(occ.item, occ.occurrenceDate)
-                          }
-                          themeClasses={themeClasses}
-                        />
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
-
-          {currentItem && (
-            <motion.button
-              type="button"
-              onClick={handleQuickEntry}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              className={cn(
-                "w-full mt-6 flex items-center justify-center gap-2 p-4 rounded-xl",
-                "bg-bg-card-custom/30 border border-dashed",
-                themeClasses.border,
-                themeClasses.textFaint,
-              )}
-            >
-              <Plus className="w-4 h-4" />
-              <span className="text-sm">Add something new</span>
-            </motion.button>
           )}
         </div>
       </div>

@@ -38,6 +38,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ResponsibleUserPicker } from "./ResponsibleUserPicker";
+import { SmartAlertPicker, type SmartAlertValue } from "./SmartAlertPicker";
 
 /**
  * MobileItemForm - A mobile-friendly form for creating reminders, events, and notes
@@ -186,6 +187,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
   const [responsibleUserId, setResponsibleUserId] = useState<
     string | undefined
   >(undefined);
+  const [notifyAllHousehold, setNotifyAllHousehold] = useState(false);
 
   // Reminder-specific state
   const [dueDate, setDueDate] = useState("");
@@ -199,9 +201,12 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
   const [allDay, setAllDay] = useState(false);
   const [location, setLocation] = useState("");
 
-  // Alert state
-  const [enableAlert, setEnableAlert] = useState(true);
-  const [alertMinutes, setAlertMinutes] = useState(15);
+  // Alert state (using SmartAlertPicker)
+  const [alertValue, setAlertValue] = useState<SmartAlertValue>({
+    offsetMinutes: 15,
+    customTime: null,
+  });
+  const enableAlert = alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime);
 
   // Recurrence state
   const [recurrenceRule, setRecurrenceRule] = useState("");
@@ -235,6 +240,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
       setPriority("normal");
       setIsPublic(true);
       setResponsibleUserId(householdData?.currentUserId ?? undefined);
+      setNotifyAllHousehold(false);
       setDueDate(format(new Date(), "yyyy-MM-dd"));
       setDueTime("12:00");
       setStartDate(format(new Date(), "yyyy-MM-dd"));
@@ -243,8 +249,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
       setEndTime("10:00");
       setAllDay(false);
       setLocation("");
-      setEnableAlert(true);
-      setAlertMinutes(15);
+      setAlertValue({ offsetMinutes: 15, customTime: null });
       setRecurrenceRule("");
     }
   }, [isOpen]);
@@ -301,9 +306,10 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
         if (enableAlert && dueDate && dueTime) {
           alerts.push({
             kind: "relative",
-            offset_minutes: alertMinutes,
+            offset_minutes: alertValue.offsetMinutes,
             relative_to: "due",
             channel: "push",
+            custom_time: alertValue.customTime || undefined,
           });
         }
 
@@ -326,6 +332,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           recurrence_rule,
           is_public: isPublic,
           responsible_user_id: responsibleUserId,
+          notify_all_household: notifyAllHousehold,
         };
 
         const item = await createReminder.mutateAsync(input);
@@ -367,9 +374,10 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
         if (enableAlert) {
           alerts.push({
             kind: "relative",
-            offset_minutes: alertMinutes,
+            offset_minutes: alertValue.offsetMinutes,
             relative_to: "start",
             channel: "push",
+            custom_time: alertValue.customTime || undefined,
           });
         }
 
@@ -400,6 +408,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           recurrence_rule,
           is_public: isPublic,
           responsible_user_id: responsibleUserId,
+          notify_all_household: notifyAllHousehold,
         };
 
         const item = await createEvent.mutateAsync(input);
@@ -446,6 +455,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           estimate_minutes: undefined,
           is_public: isPublic,
           responsible_user_id: responsibleUserId,
+          notify_all_household: notifyAllHousehold,
         };
 
         const item = await createTask.mutateAsync(input);
@@ -839,60 +849,16 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                 {/* Alert setting */}
                 {(isReminder || isEvent) && (
                   <div className="space-y-3 pt-2 border-t border-white/10">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <BellIcon className="w-4 h-4 text-white/60" />
-                        <Label className="text-sm text-white/80">
-                          Remind me
-                        </Label>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setEnableAlert(!enableAlert)}
-                        className={cn(
-                          "w-12 h-6 rounded-full transition-colors relative",
-                          enableAlert
-                            ? isPink
-                              ? "bg-pink-500"
-                              : "bg-cyan-500"
-                            : "bg-white/20"
-                        )}
-                      >
-                        <motion.div
-                          className="absolute top-1 w-4 h-4 rounded-full bg-white"
-                          animate={{
-                            left: enableAlert ? "calc(100% - 20px)" : "4px",
-                          }}
-                          transition={{
-                            type: "spring",
-                            stiffness: 500,
-                            damping: 30,
-                          }}
-                        />
-                      </button>
+                    <div className="flex items-center gap-2 mb-2">
+                      <BellIcon className="w-4 h-4 text-white/60" />
+                      <Label className="text-sm text-white/80">Alert</Label>
                     </div>
-
-                    {enableAlert && (
-                      <div className="flex gap-2">
-                        {[5, 15, 30, 60].map((mins) => (
-                          <button
-                            key={mins}
-                            type="button"
-                            onClick={() => setAlertMinutes(mins)}
-                            className={cn(
-                              "flex-1 py-2 rounded-lg text-xs font-medium transition-colors",
-                              alertMinutes === mins
-                                ? isPink
-                                  ? "bg-pink-500/30 text-pink-300"
-                                  : "bg-cyan-500/30 text-cyan-300"
-                                : "bg-white/10 text-white/60 hover:bg-white/20"
-                            )}
-                          >
-                            {mins < 60 ? `${mins}m` : "1h"}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <SmartAlertPicker
+                      value={alertValue}
+                      onChange={setAlertValue}
+                      eventTime={isReminder ? dueTime : startTime}
+                      variant="compact"
+                    />
                   </div>
                 )}
               </motion.div>
@@ -996,11 +962,21 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                     </Label>
                     <ResponsibleUserPicker
                       value={responsibleUserId}
-                      onChange={setResponsibleUserId}
+                      notifyAllHousehold={notifyAllHousehold}
+                      onChange={(userId, allHousehold) => {
+                        setResponsibleUserId(userId);
+                        setNotifyAllHousehold(allHousehold);
+                      }}
                       isPublic={isPublic}
                       disabled={!isPublic}
                     />
+                    {isPublic && notifyAllHousehold && (
+                      <p className="text-xs text-amber-300/70 mt-2">
+                        ✨ Both household members will be notified
+                      </p>
+                    )}
                     {isPublic &&
+                      !notifyAllHousehold &&
                       responsibleUserId &&
                       responsibleUserId !== householdData.currentUserId && (
                         <p className="text-xs text-pink-300/70 mt-2">

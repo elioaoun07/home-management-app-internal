@@ -1,6 +1,7 @@
 "use client";
 
 import { ResponsibleUserPicker } from "@/components/items/ResponsibleUserPicker";
+import { SmartAlertPicker, type SmartAlertValue } from "@/components/items/SmartAlertPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -120,17 +121,6 @@ const typeConfig: Record<
   },
 };
 
-// Alert presets
-const alertPresets = [
-  { label: "None", value: 0 },
-  { label: "At time", value: 0, atTime: true },
-  { label: "5 min before", value: 5 },
-  { label: "15 min before", value: 15 },
-  { label: "30 min before", value: 30 },
-  { label: "1 hour before", value: 60 },
-  { label: "1 day before", value: 1440 },
-];
-
 // Recurrence presets - using iCal RRULE format
 const recurrencePresets = [
   { label: "Never", value: "" },
@@ -183,8 +173,11 @@ export function WebEventFormDialog({
   const [allDay, setAllDay] = useState(false);
   const [location, setLocation] = useState("");
 
-  // Alert state
-  const [alertMinutes, setAlertMinutes] = useState(15);
+  // Alert state (using SmartAlertPicker)
+  const [alertValue, setAlertValue] = useState<SmartAlertValue>({
+    offsetMinutes: 15,
+    customTime: null,
+  });
 
   // Recurrence state
   const [recurrenceRule, setRecurrenceRule] = useState("");
@@ -206,6 +199,7 @@ export function WebEventFormDialog({
   const [responsibleUserId, setResponsibleUserId] = useState<
     string | undefined
   >(undefined);
+  const [notifyAllHousehold, setNotifyAllHousehold] = useState(false);
 
   // Mutations
   const createReminder = useCreateReminder();
@@ -232,6 +226,7 @@ export function WebEventFormDialog({
           (editItem.responsible_user_id || householdData?.currentUserId) ??
             undefined
         );
+        setNotifyAllHousehold(editItem.notify_all_household ?? false);
 
         // Initialize categories
         setSelectedCategories(editItem.categories || ["personal"]);
@@ -261,12 +256,15 @@ export function WebEventFormDialog({
         if (editItem.alerts && editItem.alerts.length > 0) {
           const firstAlert = editItem.alerts[0];
           if (firstAlert.kind === "relative") {
-            setAlertMinutes(firstAlert.offset_minutes || 15);
+            setAlertValue({
+              offsetMinutes: firstAlert.offset_minutes || 15,
+              customTime: firstAlert.custom_time || null,
+            });
           } else {
-            setAlertMinutes(15); // default
+            setAlertValue({ offsetMinutes: 15, customTime: null });
           }
         } else {
-          setAlertMinutes(0); // No alert
+          setAlertValue({ offsetMinutes: 0, customTime: null });
         }
 
         if (editItem.type === "event" && editItem.event_details) {
@@ -298,7 +296,7 @@ export function WebEventFormDialog({
         setEndTime("10:00");
         setAllDay(prefillTitle ? true : false);
         setLocation("");
-        setAlertMinutes(15);
+        setAlertValue({ offsetMinutes: 15, customTime: null });
         setRecurrenceRule("");
         setRecurrenceEndDate("");
         setRecurrenceCount(undefined);
@@ -308,6 +306,7 @@ export function WebEventFormDialog({
         );
         setIsPublic(true);
         setResponsibleUserId(householdData?.currentUserId ?? undefined);
+        setNotifyAllHousehold(false);
       }
     }
   }, [
@@ -449,13 +448,15 @@ export function WebEventFormDialog({
         });
       } else {
         // Create new item
+        const enableAlert = alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime);
         const alerts: CreateAlertInput[] = [];
-        if (alertMinutes > 0) {
+        if (enableAlert) {
           alerts.push({
             kind: "relative",
-            offset_minutes: alertMinutes,
+            offset_minutes: alertValue.offsetMinutes,
             relative_to: itemType === "event" ? "start" : "due",
             channel: "push",
+            custom_time: alertValue.customTime || undefined,
           });
         }
 
@@ -466,6 +467,20 @@ export function WebEventFormDialog({
               ? new Date(`${startDate}T${startTime}:00`).toISOString()
               : undefined;
 
+          // Build recurrence rule if set
+          let recurrence_rule: CreateRecurrenceInput | undefined;
+          if (recurrenceRule && dueAtIso) {
+            const endUntilIso = recurrenceEndDate
+              ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString()
+              : undefined;
+            recurrence_rule = {
+              rrule: recurrenceRule,
+              start_anchor: dueAtIso,
+              end_until: !recurrenceForever ? endUntilIso : undefined,
+              count: !recurrenceForever ? recurrenceCount : undefined,
+            };
+          }
+
           const input: CreateReminderInput = {
             type: "reminder",
             title: title.trim(),
@@ -473,10 +488,12 @@ export function WebEventFormDialog({
             priority,
             due_at: dueAtIso,
             alerts: alerts.length > 0 ? alerts : undefined,
+            recurrence_rule,
             category_ids:
               selectedCategories.length > 0 ? selectedCategories : undefined,
             is_public: isPublic,
             responsible_user_id: responsibleUserId,
+            notify_all_household: notifyAllHousehold,
           };
           const newReminder = await createReminder.mutateAsync(input);
 
@@ -564,6 +581,7 @@ export function WebEventFormDialog({
             recurrence_rule,
             is_public: isPublic,
             responsible_user_id: responsibleUserId,
+            notify_all_household: notifyAllHousehold,
           };
           const newEvent = await createEvent.mutateAsync(input);
 
@@ -629,6 +647,7 @@ export function WebEventFormDialog({
             recurrence_rule,
             is_public: isPublic,
             responsible_user_id: responsibleUserId,
+            notify_all_household: notifyAllHousehold,
           };
           const newTask = await createTask.mutateAsync(input);
 
@@ -1175,27 +1194,11 @@ export function WebEventFormDialog({
                   Alert
                 </Label>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {alertPresets.map((preset) => (
-                  <motion.button
-                    key={preset.label}
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setAlertMinutes(preset.value)}
-                    className={cn(
-                      "px-4 py-2 rounded-xl border text-sm font-medium transition-all",
-                      alertMinutes === preset.value
-                        ? isPink
-                          ? "bg-gradient-to-r from-pink-500/30 to-pink-600/20 border-pink-500/50 text-pink-200 shadow-lg shadow-pink-500/20"
-                          : "bg-gradient-to-r from-cyan-500/30 to-cyan-600/20 border-cyan-500/50 text-cyan-200 shadow-lg shadow-cyan-500/20"
-                        : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:border-white/20"
-                    )}
-                  >
-                    {preset.label}
-                  </motion.button>
-                ))}
-              </div>
+              <SmartAlertPicker
+                value={alertValue}
+                onChange={setAlertValue}
+                eventTime={itemType === "event" ? startTime : startTime}
+              />
             </div>
           }
 
@@ -1324,8 +1327,10 @@ export function WebEventFormDialog({
               </div>
               <ResponsibleUserPicker
                 value={responsibleUserId}
-                onChange={(userId) => {
+                notifyAllHousehold={notifyAllHousehold}
+                onChange={(userId, allHousehold) => {
                   setResponsibleUserId(userId);
+                  setNotifyAllHousehold(allHousehold);
                   // If assigning to someone else, ensure item is public
                   if (userId !== householdData.currentUserId && !isPublic) {
                     setIsPublic(true);
@@ -1334,7 +1339,14 @@ export function WebEventFormDialog({
                 isPublic={isPublic}
                 disabled={!isPublic}
               />
+              {isPublic && notifyAllHousehold && (
+                <p className="text-xs text-amber-300/70 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" />
+                  Both household members will be notified
+                </p>
+              )}
               {isPublic &&
+                !notifyAllHousehold &&
                 responsibleUserId &&
                 responsibleUserId !== householdData.currentUserId && (
                   <p className="text-xs text-pink-300/70 flex items-center gap-1">

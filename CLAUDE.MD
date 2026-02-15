@@ -219,12 +219,16 @@ Component → TanStack Query Hook → API Route → Supabase → Database
 - Recurrence rules (RRULE)
 - Recurrence exceptions
 - Alert notifications
+- **Responsible user assignment** with "All Household" option
+  - Select "Me", partner, or "All Household" for task responsibility
+  - "All Household" sends alert notifications to both household members
 
 **Migrations**:
 
 - `add_items_system.sql`
 - `add_nested_subtasks.sql`
 - `add_item_occurrence_actions.sql`
+- `add_notify_all_household.sql`
 
 ### 9. Catalogue System
 
@@ -280,6 +284,36 @@ Component → TanStack Query Hook → API Route → Supabase → Database
 **Migrations**:
 
 - `add_error_logs.sql`
+
+### 14. AI-Powered Focus Page
+
+**Files**: `src/components/focus/FocusPage.tsx`, `src/features/items/useFocusInsights.ts`, `src/app/api/focus-insights/`
+
+- **Smart AI Briefing**: Gemini generates personalized daily/weekly briefings
+- **Persistent Caching**: Insights cached for 24 hours, only 1 API call per day per user
+- **Smart Refresh**: Cache persists across page visits, manual refresh available
+- **Priority Insights**: AI suggests which tasks to focus on first
+- **Pattern Detection**: AI identifies patterns in user's task habits
+- **Fallback System**: Deterministic fallback when AI unavailable
+- **Rate Limiting**: Max 2 refreshes per day to prevent API abuse
+- **New Item Detection**: Shows count of new items since last analysis
+
+**Key Features**:
+
+- Living avatar with mood animations (neutral, happy, thinking, celebrating)
+- Celebration particles on task completion
+- Typing animation for AI messages
+- Stale indicator when insights are older than 24h
+
+**Cache Strategy**:
+
+- Fresh: 0-24 hours (green, current)
+- Stale: 24h-7 days (amber, usable but shows refresh prompt)
+- Expired: 7+ days (regenerate on next visit)
+
+**Migrations**:
+
+- `add_focus_insights.sql`
 
 ---
 
