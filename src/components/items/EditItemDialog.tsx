@@ -14,6 +14,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import {
   useUpdateEventDetails,
   useUpdateItem,
+  useUpdateRecurrenceRule,
   useUpdateReminderDetails,
 } from "@/features/items/useItems";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
@@ -21,9 +22,13 @@ import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNoti
 import { cn } from "@/lib/utils";
 import type { ItemPriority, ItemWithDetails } from "@/types/items";
 import { format, parseISO } from "date-fns";
-import { Bell, MapPin, Tag, User, Users } from "lucide-react";
+import { Bell, MapPin, Repeat, Tag, User, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import {
+  CustomRecurrencePicker,
+  describeRRule,
+} from "./CustomRecurrencePicker";
 import { ResponsibleUserPicker } from "./ResponsibleUserPicker";
 import { SmartAlertPicker, type SmartAlertValue } from "./SmartAlertPicker";
 
@@ -68,6 +73,8 @@ export default function EditItemDialog({
   const [originalResponsibleUserId, setOriginalResponsibleUserId] = useState<
     string | undefined
   >(undefined);
+  const [recurrenceRule, setRecurrenceRule] = useState("");
+  const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
 
   // Category options
   const CATEGORIES = [
@@ -83,6 +90,7 @@ export default function EditItemDialog({
   const updateItem = useUpdateItem();
   const updateReminderDetails = useUpdateReminderDetails();
   const updateEventDetails = useUpdateEventDetails();
+  const updateRecurrenceRule = useUpdateRecurrenceRule();
 
   // Initialize form when item changes
   useEffect(() => {
@@ -138,6 +146,9 @@ export default function EditItemDialog({
       setAllDay(item.event_details?.all_day || false);
       setLocation(item.event_details?.location_text || "");
     }
+
+    // Initialize recurrence rule
+    setRecurrenceRule(item.recurrence_rule?.rrule || "");
   }, [item]);
 
   const handleSave = async () => {
@@ -230,6 +241,25 @@ export default function EditItemDialog({
             end_at: endAtIso,
             all_day: allDay,
             location_text: location.trim() || undefined,
+          });
+        }
+      }
+
+      // Update recurrence rule if changed (for reminders and events)
+      if (item.type === "reminder" || item.type === "event") {
+        const originalRrule = item.recurrence_rule?.rrule || "";
+        if (recurrenceRule !== originalRrule) {
+          const startAnchor =
+            item.type === "event" && startDate && startTime
+              ? new Date(`${startDate}T${startTime}:00`).toISOString()
+              : item.type === "reminder" && startDate && startTime
+                ? new Date(`${startDate}T${startTime}:00`).toISOString()
+                : new Date().toISOString();
+
+          await updateRecurrenceRule.mutateAsync({
+            itemId: item.id,
+            rrule: recurrenceRule || null,
+            start_anchor: startAnchor,
           });
         }
       }
@@ -447,6 +477,88 @@ export default function EditItemDialog({
               eventTime={startTime}
             />
           </div>
+
+          {/* Recurrence - for events and reminders */}
+          {(item.type === "event" || item.type === "reminder") && (
+            <div className="space-y-2">
+              <Label className="text-white/70 flex items-center gap-2">
+                <Repeat className="w-4 h-4" />
+                Repeat
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "Never", value: "" },
+                  { label: "Daily", value: "FREQ=DAILY" },
+                  { label: "Weekly", value: "FREQ=WEEKLY" },
+                  { label: "Monthly", value: "FREQ=MONTHLY" },
+                  { label: "Yearly", value: "FREQ=YEARLY" },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => setRecurrenceRule(preset.value)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                      recurrenceRule === preset.value
+                        ? isPink
+                          ? "bg-pink-500/30 text-pink-300 border border-pink-400/50"
+                          : "bg-cyan-500/30 text-cyan-300 border border-cyan-400/50"
+                        : "bg-white/5 text-white/50 hover:bg-white/10"
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setCustomRecurrenceOpen(true)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                    recurrenceRule &&
+                      ![
+                        "",
+                        "FREQ=DAILY",
+                        "FREQ=WEEKLY",
+                        "FREQ=MONTHLY",
+                        "FREQ=YEARLY",
+                      ].includes(recurrenceRule)
+                      ? isPink
+                        ? "bg-pink-500/30 text-pink-300 border border-pink-400/50"
+                        : "bg-cyan-500/30 text-cyan-300 border border-cyan-400/50"
+                      : "bg-white/5 text-white/50 hover:bg-white/10"
+                  )}
+                >
+                  Custom...
+                </button>
+              </div>
+              {recurrenceRule &&
+                ![
+                  "",
+                  "FREQ=DAILY",
+                  "FREQ=WEEKLY",
+                  "FREQ=MONTHLY",
+                  "FREQ=YEARLY",
+                ].includes(recurrenceRule) && (
+                  <p
+                    className={cn(
+                      "text-xs mt-1",
+                      isPink ? "text-pink-300/80" : "text-cyan-300/80"
+                    )}
+                  >
+                    {describeRRule(recurrenceRule)}
+                  </p>
+                )}
+              <CustomRecurrencePicker
+                open={customRecurrenceOpen}
+                onOpenChange={setCustomRecurrenceOpen}
+                value={recurrenceRule}
+                onChange={setRecurrenceRule}
+                referenceDate={
+                  startDate ? new Date(`${startDate}T12:00:00`) : new Date()
+                }
+              />
+            </div>
+          )}
 
           {/* Priority */}
           <div className="space-y-2">

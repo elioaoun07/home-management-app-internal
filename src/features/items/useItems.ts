@@ -2036,3 +2036,89 @@ export function useUpdateRecurrenceException() {
     },
   });
 }
+
+/** Update or create a recurrence rule for an item */
+export function useUpdateRecurrenceRule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      rrule,
+      start_anchor,
+      end_until,
+      count,
+    }: {
+      itemId: string;
+      rrule: string | null; // null to delete the rule
+      start_anchor?: string;
+      end_until?: string | null;
+      count?: number | null;
+    }) => {
+      const supabase = supabaseBrowser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      if (!rrule) {
+        // Delete existing recurrence rule
+        const { error } = await supabase
+          .from("item_recurrence_rules")
+          .delete()
+          .eq("item_id", itemId);
+
+        if (error) throw error;
+        return null;
+      }
+
+      // Check if a rule already exists
+      const { data: existingRule } = await supabase
+        .from("item_recurrence_rules")
+        .select("id")
+        .eq("item_id", itemId)
+        .maybeSingle();
+
+      if (existingRule) {
+        // Update existing rule
+        const { data, error } = await supabase
+          .from("item_recurrence_rules")
+          .update({
+            rrule,
+            start_anchor: start_anchor || new Date().toISOString(),
+            end_until,
+            count,
+          })
+          .eq("id", existingRule.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
+      } else {
+        // Create new rule
+        const { data, error } = await supabase
+          .from("item_recurrence_rules")
+          .insert({
+            item_id: itemId,
+            rrule,
+            start_anchor: start_anchor || new Date().toISOString(),
+            end_until,
+            count,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+    },
+    onError: (error) => {
+      console.error("Failed to update recurrence rule:", error);
+      toast.error("Failed to update repeat settings");
+    },
+  });
+}

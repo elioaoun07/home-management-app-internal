@@ -37,6 +37,10 @@ import { format } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import {
+  CustomRecurrencePicker,
+  describeRRule,
+} from "./CustomRecurrencePicker";
 import { ResponsibleUserPicker } from "./ResponsibleUserPicker";
 import { SmartAlertPicker, type SmartAlertValue } from "./SmartAlertPicker";
 
@@ -210,6 +214,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
 
   // Recurrence state
   const [recurrenceRule, setRecurrenceRule] = useState("");
+  const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
 
   // Mutations
   const createReminder = useCreateReminder();
@@ -820,10 +825,6 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                         { label: "Weekly", value: "FREQ=WEEKLY" },
                         { label: "Bi-weekly", value: "FREQ=WEEKLY;INTERVAL=2" },
                         { label: "Monthly", value: "FREQ=MONTHLY" },
-                        {
-                          label: "Quarterly",
-                          value: "FREQ=MONTHLY;INTERVAL=3",
-                        },
                         { label: "Yearly", value: "FREQ=YEARLY" },
                       ].map((preset) => (
                         <button
@@ -842,7 +843,65 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                           {preset.label}
                         </button>
                       ))}
+                      {/* Custom button */}
+                      <button
+                        type="button"
+                        onClick={() => setCustomRecurrenceOpen(true)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs transition-all",
+                          recurrenceRule &&
+                            ![
+                              "",
+                              "FREQ=DAILY",
+                              "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+                              "FREQ=WEEKLY",
+                              "FREQ=WEEKLY;INTERVAL=2",
+                              "FREQ=MONTHLY",
+                              "FREQ=YEARLY",
+                            ].includes(recurrenceRule)
+                            ? isPink
+                              ? "bg-pink-500/30 text-pink-300 border border-pink-400/50"
+                              : "bg-cyan-500/30 text-cyan-300 border border-cyan-400/50"
+                            : "bg-white/10 text-white/60 border border-transparent"
+                        )}
+                      >
+                        Custom...
+                      </button>
                     </div>
+                    {/* Show custom rule description if active */}
+                    {recurrenceRule &&
+                      ![
+                        "",
+                        "FREQ=DAILY",
+                        "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+                        "FREQ=WEEKLY",
+                        "FREQ=WEEKLY;INTERVAL=2",
+                        "FREQ=MONTHLY",
+                        "FREQ=YEARLY",
+                      ].includes(recurrenceRule) && (
+                        <p
+                          className={cn(
+                            "text-xs mt-1",
+                            isPink ? "text-pink-300/80" : "text-cyan-300/80"
+                          )}
+                        >
+                          {describeRRule(recurrenceRule)}
+                        </p>
+                      )}
+                    {/* Custom Recurrence Picker Drawer */}
+                    <CustomRecurrencePicker
+                      open={customRecurrenceOpen}
+                      onOpenChange={setCustomRecurrenceOpen}
+                      value={recurrenceRule}
+                      onChange={setRecurrenceRule}
+                      referenceDate={
+                        isReminder && dueDate
+                          ? new Date(`${dueDate}T12:00:00`)
+                          : isEvent && startDate
+                            ? new Date(`${startDate}T12:00:00`)
+                            : new Date()
+                      }
+                    />
                   </div>
                 )}
 

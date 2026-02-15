@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  CustomRecurrencePicker,
+  describeRRule,
+} from "@/components/items/CustomRecurrencePicker";
 import { ResponsibleUserPicker } from "@/components/items/ResponsibleUserPicker";
 import { SmartAlertPicker, type SmartAlertValue } from "@/components/items/SmartAlertPicker";
 import { Button } from "@/components/ui/button";
@@ -186,6 +190,7 @@ export function WebEventFormDialog({
     undefined
   );
   const [recurrenceForever, setRecurrenceForever] = useState(true);
+  const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
 
   // Categories state
   const [selectedCategories, setSelectedCategories] = useState<string[]>([
@@ -946,7 +951,51 @@ export function WebEventFormDialog({
                     {preset.label}
                   </motion.button>
                 ))}
+                {/* Custom recurrence button */}
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setCustomRecurrenceOpen(true)}
+                  className={cn(
+                    "px-4 py-2 rounded-xl border text-sm font-medium transition-all",
+                    recurrenceRule &&
+                      !recurrencePresets.some((p) => p.value === recurrenceRule)
+                      ? isPink
+                        ? "bg-gradient-to-r from-pink-500/30 to-pink-600/20 border-pink-500/50 text-pink-200 shadow-lg shadow-pink-500/20"
+                        : "bg-gradient-to-r from-cyan-500/30 to-cyan-600/20 border-cyan-500/50 text-cyan-200 shadow-lg shadow-cyan-500/20"
+                      : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:border-white/20"
+                  )}
+                >
+                  Custom...
+                </motion.button>
               </div>
+
+              {/* Show description for custom rules */}
+              {recurrenceRule &&
+                !recurrencePresets.some((p) => p.value === recurrenceRule) && (
+                  <p
+                    className={cn(
+                      "text-sm mt-1",
+                      isPink ? "text-pink-300/80" : "text-cyan-300/80"
+                    )}
+                  >
+                    {describeRRule(recurrenceRule)}
+                  </p>
+                )}
+
+              {/* Custom Recurrence Picker */}
+              <CustomRecurrencePicker
+                open={customRecurrenceOpen}
+                onOpenChange={setCustomRecurrenceOpen}
+                value={recurrenceRule}
+                onChange={setRecurrenceRule}
+                referenceDate={
+                  startDate
+                    ? new Date(`${startDate}T12:00:00`)
+                    : initialDate || new Date()
+                }
+              />
 
               {/* Recurrence end options - only show when recurrence is set */}
               {recurrenceRule && (
