@@ -678,7 +678,8 @@ pnpm icons         # Generate PWA icons
 6. **Avoid red colors for items** - use theme colors
 7. **Check ALL component usages** when making changes
 8. **Read relevant \*.md files** for feature-specific documentation
-9. **QR Code / NFC Link Naming Convention**: NEVER hardcode purpose-specific names in QR code URLs (e.g., `/qr-code-oven`, `/welcome-home`). Instead, use **generic reusable identifiers** like `/g/abc123` or `/tag/label-01`. The URL label should be a generic, human-friendly slug (e.g., `front-door`, `kitchen-1`, `living-room-a`) that does NOT reveal the current purpose. The actual purpose/behavior is stored server-side (or in config) and can be changed without regenerating the QR code. This allows laminated QR codes or permanent NFC tags to be **repurposed** — e.g., a QR code originally for the oven can later be reused for balcony flowers by simply changing the label's mapped action/page. The label value remains the same in the QR code; only the destination/config changes.
+9. **Update APP_ROUTES_ICONS.md** when adding new routes or icons - this is the central reference for all app navigation
+10. **QR Code / NFC Link Naming Convention**: NEVER hardcode purpose-specific names in QR code URLs (e.g., `/qr-code-oven`, `/welcome-home`). Instead, use **generic reusable identifiers** like `/g/abc123` or `/tag/label-01`. The URL label should be a generic, human-friendly slug (e.g., `front-door`, `kitchen-1`, `living-room-a`) that does NOT reveal the current purpose. The actual purpose/behavior is stored server-side (or in config) and can be changed without regenerating the QR code. This allows laminated QR codes or permanent NFC tags to be **repurposed** — e.g., a QR code originally for the oven can later be reused for balcony flowers by simply changing the label's mapped action/page. The label value remains the same in the QR code; only the destination/config changes.
 
 ### 13. Welcome Home Guest Portal
 
@@ -692,4 +693,4 @@ pnpm icons         # Generate PWA icons
 
 ---
 
-_Last Updated: February 7, 2026_
+_Last Updated: February 15, 2026_

@@ -1,12 +1,15 @@
 "use client";
 
 /**
- * FocusPage - A clean, user-friendly view of today's tasks, reminders, and events
- * Features:
- * - Quick entry box that redirects to /expense (reminder) when typing
- * - Organized view by Today/Tomorrow/This Week
- * - Full item actions: complete, edit, postpone, delete
- * - Eye-catching UI with smooth animations
+ * FocusPage - Personal AI Assistant Experience
+ *
+ * Key innovations:
+ * - Living avatar that breathes and reacts
+ * - Typing animation for messages (character by character)
+ * - Conversational personality with contextual awareness
+ * - Celebration effects on task completion
+ * - Proactive suggestions
+ * - Ambient life through subtle animations
  */
 
 import EditItemDialog from "@/components/items/EditItemDialog";
@@ -34,21 +37,28 @@ import {
 } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  AlertCircle,
+  AlertTriangle,
+  ArrowRight,
   Bell,
   Calendar,
-  CalendarDays,
   Check,
-  ChevronDown,
   ChevronRight,
   Clock,
+  Eye,
+  EyeOff,
   ListTodo,
   Plus,
   Sparkles,
-  Target,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { RRule } from "rrule";
 
 // ============================================
@@ -58,26 +68,14 @@ interface ExpandedOccurrence {
   item: ItemWithDetails;
   occurrenceDate: Date;
   isCompleted: boolean;
-  isPostponed?: boolean;
-  originalDate?: Date;
 }
 
 type TimeScope = "today" | "week";
-
-// Categories for filtering
-const CATEGORIES = [
-  { id: "personal", label: "Personal", icon: "👤", color: "bg-purple-500" },
-  { id: "home", label: "Home", icon: "🏠", color: "bg-blue-500" },
-  { id: "family", label: "Family", icon: "👨‍👩‍👧", color: "bg-orange-500" },
-  { id: "community", label: "Community", icon: "🏘️", color: "bg-green-500" },
-  { id: "friends", label: "Friends", icon: "👫", color: "bg-pink-500" },
-  { id: "work", label: "Work", icon: "💼", color: "bg-red-500" },
-];
+type AssistantMood = "neutral" | "happy" | "thinking" | "celebrating";
 
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
 function getItemDate(item: ItemWithDetails): Date | null {
   const dateStr =
     item.type === "reminder" || item.type === "task"
@@ -121,33 +119,19 @@ function expandRecurringItems(
           item.recurrence_rule!,
         );
         const rule = RRule.fromString(fullRruleStr);
-
-        // Get exceptions for this item
         const exceptions = new Set(
           (item.recurrence_rule?.exceptions || []).map((e: any) =>
             format(parseISO(e.exception_date), "yyyy-MM-dd"),
           ),
         );
-
-        // Generate occurrences
         const occurrences = rule.between(startDate, endDate, true);
-
         for (const occ of occurrences) {
           const occDateKey = format(occ, "yyyy-MM-dd");
-
-          // Skip if this date is an exception
           if (exceptions.has(occDateKey)) continue;
-
           const completed = isOccurrenceCompleted(item.id, occ, actions);
-
-          result.push({
-            item,
-            occurrenceDate: occ,
-            isCompleted: completed,
-          });
+          result.push({ item, occurrenceDate: occ, isCompleted: completed });
         }
-      } catch (e) {
-        // Fall back to single occurrence
+      } catch {
         if (isWithinInterval(itemDate, { start: startDate, end: endDate })) {
           result.push({
             item,
@@ -157,7 +141,6 @@ function expandRecurringItems(
         }
       }
     } else {
-      // Non-recurring: single occurrence
       if (isWithinInterval(itemDate, { start: startDate, end: endDate })) {
         result.push({
           item,
@@ -168,71 +151,662 @@ function expandRecurringItems(
     }
   }
 
-  // Sort by date/time
   result.sort(
     (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime(),
   );
-
   return result;
 }
 
-function getDateLabel(date: Date): string {
-  if (isToday(date)) return "Today";
-  if (isTomorrow(date)) return "Tomorrow";
-  return format(date, "EEEE, MMM d");
+// ============================================
+// ASSISTANT NAME
+// ============================================
+const ASSISTANT_NAME = "Focus";
+
+// ============================================
+// AI PERSONALITY - Contextual Messages
+// ============================================
+interface Message {
+  text: string;
+  suggestion?: { text: string; action: () => void };
+}
+
+function generateGreeting(): string {
+  const hour = new Date().getHours();
+  const greetings = {
+    earlyMorning: [
+      "Early bird! Let's make today extraordinary.",
+      "Up before the sun? I like your style.",
+      "The quiet hours are perfect for focus.",
+    ],
+    morning: [
+      "Good morning! Ready to conquer the day?",
+      "Rise and shine! Here's your game plan.",
+      "Morning! Let's turn plans into progress.",
+    ],
+    midday: [
+      "Midday check-in! How's the flow going?",
+      "Keeping the momentum strong!",
+      "Perfect time to tackle what matters most.",
+    ],
+    afternoon: [
+      "Afternoon push! You've got this.",
+      "Let's power through the rest of the day.",
+      "Sun's still up, and so are we!",
+    ],
+    evening: [
+      "Evening wrap-up time. Let's review.",
+      "Winding down but staying sharp.",
+      "End the day on a high note!",
+    ],
+    night: [
+      "Night owl mode activated.",
+      "Burning the midnight oil, I see!",
+      "Late night productivity session.",
+    ],
+  };
+
+  let pool: string[];
+  if (hour < 5) pool = greetings.earlyMorning;
+  else if (hour < 9) pool = greetings.morning;
+  else if (hour < 12) pool = greetings.midday;
+  else if (hour < 17) pool = greetings.afternoon;
+  else if (hour < 21) pool = greetings.evening;
+  else pool = greetings.night;
+
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function generateContextualMessage(
+  currentItem: ExpandedOccurrence | null,
+  remaining: number,
+  overdueCount: number,
+  completedCount: number,
+): Message {
+  if (!currentItem && remaining === 0 && overdueCount === 0) {
+    if (completedCount > 0) {
+      const celebrations = [
+        `Amazing work! You've cleared ${completedCount} item${completedCount > 1 ? "s" : ""} today.`,
+        `${completedCount} down, zero to go! You're on fire.`,
+        `A clean slate! ${completedCount} task${completedCount > 1 ? "s" : ""} conquered.`,
+      ];
+      return {
+        text: celebrations[Math.floor(Math.random() * celebrations.length)],
+      };
+    }
+    return {
+      text: "Your canvas is blank. What will you create today?",
+      suggestion: {
+        text: "Add a task",
+        action: () => {},
+      },
+    };
+  }
+
+  if (!currentItem && overdueCount > 0) {
+    return {
+      text: `I noticed ${overdueCount} item${overdueCount > 1 ? "s" : ""} need${overdueCount === 1 ? "s" : ""} your attention from before.`,
+    };
+  }
+
+  if (currentItem) {
+    const typeWords = {
+      reminder: "reminder",
+      task: "task",
+      event: "event",
+    };
+    const type = typeWords[currentItem.item.type] || "item";
+
+    const phrases =
+      remaining > 1
+        ? [
+            `Here's your next ${type}. ${remaining - 1} more waiting in the wings.`,
+            `Focus on this ${type} first. You've got ${remaining - 1} more after.`,
+            `One step at a time. This ${type}, then ${remaining - 1} more.`,
+          ]
+        : [
+            `This is it—your final ${type} for now!`,
+            `Last one on the list. Make it count!`,
+            `Just this ${type} stands between you and freedom.`,
+          ];
+
+    return {
+      text: phrases[Math.floor(Math.random() * phrases.length)],
+    };
+  }
+
+  return { text: "I'm here when you need me." };
 }
 
 // ============================================
-// ICONS
+// TYPING ANIMATION HOOK
 // ============================================
-const typeIcons: Record<string, typeof Calendar> = {
-  reminder: Bell,
-  event: Calendar,
-  task: ListTodo,
-};
+function useTypingAnimation(text: string, speed: number = 30) {
+  const [displayedText, setDisplayedText] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const prevTextRef = useRef("");
+
+  useEffect(() => {
+    if (text === prevTextRef.current) return;
+    prevTextRef.current = text;
+
+    setIsTyping(true);
+    setDisplayedText("");
+
+    let currentIndex = 0;
+    const interval = setInterval(() => {
+      if (currentIndex < text.length) {
+        setDisplayedText(text.slice(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        setIsTyping(false);
+        clearInterval(interval);
+      }
+    }, speed);
+
+    return () => clearInterval(interval);
+  }, [text, speed]);
+
+  return { displayedText, isTyping };
+}
 
 // ============================================
-// TYPES
+// CELEBRATION PARTICLES
 // ============================================
-interface FocusPageProps {
-  standalone?: boolean;
+function CelebrationParticles({ trigger }: { trigger: number }) {
+  const [particles, setParticles] = useState<
+    Array<{ id: number; x: number; y: number; color: string }>
+  >([]);
+
+  useEffect(() => {
+    if (trigger === 0) return;
+
+    const colors = [
+      "var(--primary)",
+      "#10b981",
+      "#f59e0b",
+      "#ec4899",
+      "#8b5cf6",
+    ];
+    const newParticles = Array.from({ length: 20 }, (_, i) => ({
+      id: Date.now() + i,
+      x: 50 + (Math.random() - 0.5) * 30,
+      y: 50,
+      color: colors[Math.floor(Math.random() * colors.length)],
+    }));
+
+    setParticles(newParticles);
+    const timeout = setTimeout(() => setParticles([]), 1000);
+    return () => clearTimeout(timeout);
+  }, [trigger]);
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+      {particles.map((p) => (
+        <motion.div
+          key={p.id}
+          initial={{
+            x: `${p.x}vw`,
+            y: `${p.y}vh`,
+            scale: 1,
+            opacity: 1,
+          }}
+          animate={{
+            x: `${p.x + (Math.random() - 0.5) * 60}vw`,
+            y: `${p.y - 30 - Math.random() * 40}vh`,
+            scale: 0,
+            opacity: 0,
+          }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="absolute w-3 h-3 rounded-full"
+          style={{ backgroundColor: p.color }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ============================================
+// ASSISTANT AVATAR - The Living Core
+// ============================================
+function AssistantAvatar({
+  mood,
+  themeClasses,
+}: {
+  mood: AssistantMood;
+  themeClasses: ReturnType<typeof useThemeClasses>;
+}) {
+  const pulseVariants = {
+    neutral: {
+      scale: [1, 1.05, 1],
+      transition: { duration: 3, repeat: Infinity, ease: "easeInOut" as const },
+    },
+    happy: {
+      scale: [1, 1.1, 1],
+      transition: {
+        duration: 1.5,
+        repeat: Infinity,
+        ease: "easeInOut" as const,
+      },
+    },
+    thinking: {
+      scale: [1, 1.02, 1],
+      rotate: [0, 5, -5, 0],
+      transition: { duration: 1, repeat: Infinity, ease: "easeInOut" as const },
+    },
+    celebrating: {
+      scale: [1, 1.2, 0.9, 1.1, 1],
+      rotate: [0, -10, 10, -5, 0],
+      transition: { duration: 0.6, ease: "easeOut" as const },
+    },
+  };
+
+  const glowVariants = {
+    neutral: {
+      opacity: [0.3, 0.5, 0.3],
+      scale: [1, 1.2, 1],
+      transition: { duration: 3, repeat: Infinity, ease: "easeInOut" as const },
+    },
+    happy: {
+      opacity: [0.5, 0.8, 0.5],
+      scale: [1, 1.3, 1],
+      transition: {
+        duration: 1.5,
+        repeat: Infinity,
+        ease: "easeInOut" as const,
+      },
+    },
+    thinking: {
+      opacity: [0.4, 0.6, 0.4],
+      scale: [1, 1.1, 1],
+      transition: {
+        duration: 0.8,
+        repeat: Infinity,
+        ease: "easeInOut" as const,
+      },
+    },
+    celebrating: {
+      opacity: [0.6, 1, 0.6],
+      scale: [1, 1.5, 1],
+      transition: { duration: 0.5, ease: "easeOut" as const },
+    },
+  };
+
+  return (
+    <div className="relative flex items-center justify-center w-16 h-16">
+      {/* Outer glow */}
+      <motion.div
+        variants={glowVariants}
+        animate={mood}
+        className="absolute inset-0 rounded-full bg-[var(--primary)]/30 blur-xl"
+      />
+
+      {/* Middle ring */}
+      <motion.div
+        variants={pulseVariants}
+        animate={mood}
+        className="absolute inset-1 rounded-full border-2 border-[var(--primary)]/30"
+      />
+
+      {/* Core orb */}
+      <motion.div
+        variants={pulseVariants}
+        animate={mood}
+        className={cn(
+          "relative w-12 h-12 rounded-full flex items-center justify-center",
+          "bg-gradient-to-br from-[var(--primary)] to-[var(--primary)]/60",
+          "shadow-[0_0_30px_var(--primary)]",
+        )}
+      >
+        {/* Inner highlight */}
+        <div className="absolute top-1 left-2 w-4 h-4 rounded-full bg-white/30 blur-sm" />
+
+        {/* Icon based on mood */}
+        <motion.div
+          key={mood}
+          initial={{ scale: 0, rotate: -180 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        >
+          {mood === "celebrating" ? (
+            <Sparkles className="w-5 h-5 text-white" />
+          ) : mood === "thinking" ? (
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+            />
+          ) : (
+            <Sparkles className="w-5 h-5 text-white" />
+          )}
+        </motion.div>
+      </motion.div>
+
+      {/* Orbiting particles when happy/celebrating */}
+      {(mood === "happy" || mood === "celebrating") && (
+        <>
+          {[0, 120, 240].map((angle, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-2 h-2 rounded-full bg-[var(--primary)]"
+              animate={{
+                rotate: [angle, angle + 360],
+              }}
+              transition={{
+                duration: 3,
+                repeat: Infinity,
+                ease: "linear",
+                delay: i * 0.2,
+              }}
+              style={{
+                transformOrigin: "32px 32px",
+              }}
+            />
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// MESSAGE BUBBLE
+// ============================================
+function MessageBubble({
+  message,
+  isTyping,
+  displayedText,
+  themeClasses,
+}: {
+  message: Message;
+  isTyping: boolean;
+  displayedText: string;
+  themeClasses: ReturnType<typeof useThemeClasses>;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "relative p-4 rounded-2xl rounded-tl-sm",
+        "bg-bg-card-custom/80 border",
+        themeClasses.border,
+      )}
+    >
+      <p
+        className={cn(
+          "text-sm leading-relaxed relative z-10",
+          themeClasses.headerText,
+        )}
+      >
+        {displayedText}
+        {isTyping && (
+          <motion.span
+            animate={{ opacity: [1, 0] }}
+            transition={{ duration: 0.5, repeat: Infinity }}
+            className={cn("ml-0.5", themeClasses.text)}
+          >
+            |
+          </motion.span>
+        )}
+      </p>
+
+      {message.suggestion && !isTyping && (
+        <motion.button
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          onClick={message.suggestion.action}
+          className={cn(
+            "mt-3 px-3 py-1.5 rounded-full text-xs font-medium",
+            "bg-[var(--primary)]/10 border border-[var(--primary)]/20",
+            themeClasses.text,
+            "hover:bg-[var(--primary)]/20 transition-colors",
+          )}
+        >
+          {message.suggestion.text}
+        </motion.button>
+      )}
+    </motion.div>
+  );
+}
+
+// ============================================
+// TASK CARD
+// ============================================
+function TaskCard({
+  occ,
+  onComplete,
+  onDetails,
+  themeClasses,
+  isHighlighted = false,
+}: {
+  occ: ExpandedOccurrence;
+  onComplete: () => void;
+  onDetails: () => void;
+  themeClasses: ReturnType<typeof useThemeClasses>;
+  isHighlighted?: boolean;
+}) {
+  const { item, occurrenceDate, isCompleted } = occ;
+  const TypeIcon =
+    item.type === "event" ? Calendar : item.type === "task" ? ListTodo : Bell;
+  const timeStr = format(occurrenceDate, "h:mm a");
+  const dateLabel = isToday(occurrenceDate)
+    ? "Today"
+    : isTomorrow(occurrenceDate)
+      ? "Tomorrow"
+      : format(occurrenceDate, "EEE, MMM d");
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8, y: -20 }}
+      className={cn(
+        "relative rounded-2xl overflow-hidden",
+        isHighlighted
+          ? "bg-bg-card-custom border-2 border-[var(--primary)]/40 shadow-[0_0_30px_-10px_var(--primary)]"
+          : cn("bg-bg-card-custom/50 border", themeClasses.border),
+      )}
+    >
+      {isHighlighted && (
+        <div className="absolute inset-0 bg-gradient-to-br from-[var(--primary)]/10 via-transparent to-transparent pointer-events-none" />
+      )}
+
+      <div className="relative p-5 cursor-pointer" onClick={onDetails}>
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center",
+                isHighlighted ? "bg-[var(--primary)]/20" : "bg-bg-medium",
+              )}
+            >
+              <TypeIcon
+                className={cn(
+                  "w-5 h-5",
+                  isHighlighted ? themeClasses.text : themeClasses.textMuted,
+                )}
+              />
+            </div>
+            <div>
+              <span
+                className={cn(
+                  "text-[10px] font-semibold uppercase tracking-wider",
+                  themeClasses.textMuted,
+                )}
+              >
+                {item.type}
+              </span>
+              <div className="flex items-center gap-1">
+                <Clock className={cn("w-3 h-3", themeClasses.textFaint)} />
+                <span className={cn("text-xs", themeClasses.textMuted)}>
+                  {timeStr}
+                </span>
+              </div>
+            </div>
+          </div>
+          <span className={cn("text-xs", themeClasses.textFaint)}>
+            {dateLabel}
+          </span>
+        </div>
+
+        <h3
+          className={cn(
+            "text-lg font-semibold mb-2",
+            isCompleted && "line-through opacity-50",
+            themeClasses.headerText,
+          )}
+        >
+          {item.title}
+        </h3>
+
+        {item.description && (
+          <p
+            className={cn("text-sm line-clamp-2 mb-4", themeClasses.textMuted)}
+          >
+            {item.description}
+          </p>
+        )}
+
+        <div className="flex gap-3">
+          <motion.button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onComplete();
+            }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-all",
+              isCompleted
+                ? "bg-emerald-500/20 text-emerald-400"
+                : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400",
+            )}
+          >
+            <Check className="w-5 h-5" />
+            <span>{isCompleted ? "Done!" : "Mark Done"}</span>
+          </motion.button>
+
+          <motion.button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDetails();
+            }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={cn(
+              "px-4 py-3 rounded-xl",
+              "bg-bg-medium",
+              themeClasses.textMuted,
+            )}
+          >
+            <ChevronRight className="w-5 h-5" />
+          </motion.button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ============================================
+// MINI TASK ROW
+// ============================================
+function MiniTaskRow({
+  occ,
+  onClick,
+  themeClasses,
+}: {
+  occ: ExpandedOccurrence;
+  onClick: () => void;
+  themeClasses: ReturnType<typeof useThemeClasses>;
+}) {
+  const TypeIcon =
+    occ.item.type === "event"
+      ? Calendar
+      : occ.item.type === "task"
+        ? ListTodo
+        : Bell;
+  const timeStr = format(occ.occurrenceDate, "h:mm a");
+
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      whileHover={{ x: 4 }}
+      className={cn(
+        "w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all",
+        "hover:bg-bg-card-custom/50",
+      )}
+    >
+      <div
+        className={cn(
+          "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+          occ.isCompleted ? "bg-emerald-500/10" : "bg-bg-medium",
+        )}
+      >
+        {occ.isCompleted ? (
+          <Check className="w-4 h-4 text-emerald-400" />
+        ) : (
+          <TypeIcon className={cn("w-4 h-4", themeClasses.textMuted)} />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p
+          className={cn(
+            "text-sm font-medium truncate",
+            occ.isCompleted && "line-through opacity-50",
+            themeClasses.headerText,
+          )}
+        >
+          {occ.item.title}
+        </p>
+        <p className={cn("text-xs", themeClasses.textFaint)}>{timeStr}</p>
+      </div>
+      <ArrowRight
+        className={cn("w-4 h-4 flex-shrink-0", themeClasses.textFaint)}
+      />
+    </motion.button>
+  );
 }
 
 // ============================================
 // MAIN COMPONENT
 // ============================================
+interface FocusPageProps {
+  standalone?: boolean;
+}
+
 export default function FocusPage({ standalone = false }: FocusPageProps) {
   const themeClasses = useThemeClasses();
   const router = useRouter();
 
-  // State
   const [timeScope, setTimeScope] = useState<TimeScope>("today");
-  const [expandedSections, setExpandedSections] = useState<
-    Record<string, boolean>
-  >({
-    overdue: true,
-    today: true,
-    tomorrow: true,
-    upcoming: true,
-    completed: false,
-  });
-  const [selectedCategoryFilters, setSelectedCategoryFilters] = useState<
-    string[]
-  >(CATEGORIES.filter((cat) => cat.id !== "work").map((cat) => cat.id));
-  const [showCategoryFilter, setShowCategoryFilter] = useState(false);
+  const [showOverdue, setShowOverdue] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
     null,
   );
   const [editingItem, setEditingItem] = useState<ItemWithDetails | null>(null);
   const [selectedOccurrenceDate, setSelectedOccurrenceDate] =
     useState<Date | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [assistantMood, setAssistantMood] = useState<AssistantMood>("neutral");
+  const [celebrationTrigger, setCelebrationTrigger] = useState(0);
+  const [greeting] = useState(() => generateGreeting());
 
-  // Data fetching
+  useEffect(() => {
+    setMounted(true);
+    setAssistantMood("happy");
+    const timeout = setTimeout(() => setAssistantMood("neutral"), 2000);
+    return () => clearTimeout(timeout);
+  }, []);
+
   const { data: allItems = [], isLoading } = useItems();
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
   const itemActions = useItemActionsWithToast();
 
-  // Filter active items (not archived)
   const activeItems = useMemo(() => {
     return allItems.filter(
       (item) =>
@@ -242,7 +816,6 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
     );
   }, [allItems]);
 
-  // Calculate date ranges
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -255,16 +828,11 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
   );
   const weekEnd = useMemo(() => endOfWeek(today, { weekStartsOn: 1 }), [today]);
 
-  // Get organized tasks
   const organizedTasks = useMemo(() => {
-    const now = new Date();
     const todayEnd = addDays(today, 1);
     const scopeEnd = timeScope === "today" ? todayEnd : addDays(weekEnd, 1);
-
-    // Get past 30 days for overdue
     const pastStart = addDays(today, -30);
 
-    // Expand all items
     const allExpanded = expandRecurringItems(
       activeItems,
       pastStart,
@@ -272,144 +840,102 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
       occurrenceActions,
     );
 
-    // Filter by categories
-    const filtered = allExpanded.filter((occ) => {
-      const itemCategories = occ.item.categories || [];
-      if (selectedCategoryFilters.length === 0) return true;
-      return selectedCategoryFilters.some((cat) =>
-        itemCategories.includes(cat),
-      );
-    });
-
-    // Organize into sections
     const overdue: ExpandedOccurrence[] = [];
-    const todayTasks: ExpandedOccurrence[] = [];
-    const tomorrowTasks: ExpandedOccurrence[] = [];
-    const upcomingByDate: Map<string, ExpandedOccurrence[]> = new Map();
+    const upcoming: ExpandedOccurrence[] = [];
     const completed: ExpandedOccurrence[] = [];
 
-    for (const occ of filtered) {
+    for (const occ of allExpanded) {
       if (occ.isCompleted) {
-        // Only show completed from this week
-        if (occ.occurrenceDate >= weekStart) {
-          completed.push(occ);
-        }
+        if (occ.occurrenceDate >= weekStart) completed.push(occ);
         continue;
       }
 
-      // Check if overdue
       if (isBefore(occ.occurrenceDate, today)) {
         overdue.push(occ);
-        continue;
-      }
-
-      // Categorize by date
-      if (isToday(occ.occurrenceDate)) {
-        todayTasks.push(occ);
-      } else if (isTomorrow(occ.occurrenceDate)) {
-        tomorrowTasks.push(occ);
-      } else if (timeScope === "week") {
-        const dateKey = format(occ.occurrenceDate, "yyyy-MM-dd");
-        if (!upcomingByDate.has(dateKey)) {
-          upcomingByDate.set(dateKey, []);
-        }
-        upcomingByDate.get(dateKey)!.push(occ);
+      } else if (
+        isToday(occ.occurrenceDate) ||
+        (timeScope === "week" && occ.occurrenceDate <= scopeEnd)
+      ) {
+        upcoming.push(occ);
       }
     }
 
-    // Sort upcoming dates
-    const upcoming: {
-      date: Date;
-      label: string;
-      items: ExpandedOccurrence[];
-    }[] = [];
-    Array.from(upcomingByDate.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .forEach(([dateKey, items]) => {
-        const date = parseISO(dateKey);
-        upcoming.push({
-          date,
-          label: format(date, "EEEE, MMM d"),
-          items,
-        });
-      });
+    return { overdue, upcoming, completed };
+  }, [activeItems, occurrenceActions, today, weekStart, weekEnd, timeScope]);
 
-    return {
-      overdue,
-      today: todayTasks,
-      tomorrow: tomorrowTasks,
-      upcoming,
-      completed,
-    };
-  }, [
-    activeItems,
-    occurrenceActions,
-    selectedCategoryFilters,
-    today,
-    weekStart,
-    weekEnd,
-    timeScope,
-  ]);
+  const currentItem = organizedTasks.upcoming[0] || null;
 
-  // Stats
-  const stats = useMemo(() => {
-    const total =
-      organizedTasks.overdue.length +
-      organizedTasks.today.length +
-      organizedTasks.tomorrow.length +
-      organizedTasks.upcoming.reduce((sum, g) => sum + g.items.length, 0);
-    const completedCount = organizedTasks.completed.length;
-    return { total, completedCount, pending: total };
-  }, [organizedTasks]);
+  const stats = useMemo(
+    () => ({
+      remaining: organizedTasks.upcoming.length,
+      overdueCount: organizedTasks.overdue.length,
+      completedCount: organizedTasks.completed.length,
+    }),
+    [organizedTasks],
+  );
 
-  // Handle quick entry focus - redirect to /expense with reminder tab
-  const handleQuickEntryFocus = useCallback(() => {
-    // Set FAB selection to reminder (updates the FAB indicator)
+  const message = useMemo(
+    () =>
+      generateContextualMessage(
+        currentItem,
+        stats.remaining,
+        stats.overdueCount,
+        stats.completedCount,
+      ),
+    [currentItem, stats],
+  );
+
+  const { displayedText, isTyping } = useTypingAnimation(message.text, 25);
+
+  useEffect(() => {
+    if (isLoading) {
+      setAssistantMood("thinking");
+    } else if (
+      stats.remaining === 0 &&
+      stats.overdueCount === 0 &&
+      stats.completedCount > 0
+    ) {
+      setAssistantMood("happy");
+    } else {
+      setAssistantMood("neutral");
+    }
+  }, [isLoading, stats]);
+
+  const handleQuickEntry = useCallback(() => {
     localStorage.setItem("fab-last-selection", "reminder");
     window.dispatchEvent(new Event("fab-selection-changed"));
-    // Set initial tab to reminder - ExpenseLayout will pick this up
     localStorage.setItem("initial-active-tab", "reminder");
-    // Navigate to /expense (ExpenseLayout will set tab to reminder)
     router.push("/expense");
   }, [router]);
 
-  // Toggle section
-  const toggleSection = useCallback((key: string) => {
-    setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  const handleItemClick = useCallback((item: ItemWithDetails, date: Date) => {
+    setSelectedItem(item);
+    setSelectedOccurrenceDate(date);
   }, []);
 
-  // Handle item click
-  const handleItemClick = useCallback(
-    (item: ItemWithDetails, occurrenceDate: Date) => {
-      setSelectedItem(item);
-      setSelectedOccurrenceDate(occurrenceDate);
-    },
-    [],
-  );
-
-  // Handle complete
   const handleComplete = useCallback(
-    async (item: ItemWithDetails, occurrenceDate: Date) => {
-      await itemActions.handleComplete(item, occurrenceDate.toISOString());
+    async (item: ItemWithDetails, date: Date) => {
+      setAssistantMood("celebrating");
+      setCelebrationTrigger((t) => t + 1);
+      setTimeout(() => setAssistantMood("happy"), 600);
+      setTimeout(() => setAssistantMood("neutral"), 2000);
+
+      await itemActions.handleComplete(item, date.toISOString());
     },
     [itemActions],
   );
 
-  // Handle edit
   const handleEdit = useCallback((item: ItemWithDetails) => {
     setSelectedItem(null);
     setEditingItem(item);
   }, []);
 
-  // Handle delete
   const handleDelete = useCallback(
-    async (item: ItemWithDetails, occurrenceDate?: Date) => {
+    async (item: ItemWithDetails, date?: Date) => {
       const isRecurring = !!item.recurrence_rule?.rrule;
-      if (isRecurring && occurrenceDate) {
-        // For recurring items, cancel this occurrence
-        await itemActions.handleCancel(item, occurrenceDate.toISOString());
+      if (isRecurring && date) {
+        await itemActions.handleCancel(item, date.toISOString());
       } else {
-        // For non-recurring, delete the whole item
         await itemActions.handleDelete(item);
       }
       setSelectedItem(null);
@@ -417,509 +943,352 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
     [itemActions],
   );
 
-  // Get priority color - uses theme's primary color for left border
-  const getPriorityBorder = (priority: string) => {
-    switch (priority) {
-      case "urgent":
-        return "border-l-[var(--primary)]";
-      case "high":
-        return "border-l-[var(--primary)]/70";
-      default:
-        return "border-l-transparent";
-    }
+  const contentStyle: CSSProperties = {
+    paddingBottom: standalone
+      ? "40px"
+      : `${MOBILE_CONTENT_BOTTOM_OFFSET + 40}px`,
   };
 
-  // Get type icon
-  const getTypeIcon = (type: string) => {
-    const Icon = typeIcons[type] || Bell;
-    return Icon;
-  };
+  if (!mounted) return null;
 
-  // Render item card
-  const renderItemCard = (occ: ExpandedOccurrence, index: number) => {
-    const { item, occurrenceDate, isCompleted } = occ;
-    const TypeIcon = getTypeIcon(item.type);
-    const isOverdue =
-      isBefore(occurrenceDate, today) && !isToday(occurrenceDate);
-    const hasTime =
-      item.type === "event"
-        ? item.event_details?.start_at
-        : item.reminder_details?.due_at;
-    const timeStr = hasTime ? format(occurrenceDate, "h:mm a") : null;
+  return (
+    <div className="min-h-screen h-screen flex flex-col bg-bg-dark overflow-hidden">
+      <CelebrationParticles trigger={celebrationTrigger} />
 
-    return (
-      <motion.div
-        key={`${item.id}-${occurrenceDate.toISOString()}`}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, x: -20 }}
-        transition={{ delay: index * 0.03 }}
-        onClick={() => handleItemClick(item, occurrenceDate)}
-        className={cn(
-          "group relative flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all",
-          "border-l-4 border bg-bg-card-custom",
-          getPriorityBorder(item.priority),
-          themeClasses.border,
-          themeClasses.borderHover,
-          isCompleted && "opacity-60",
-        )}
-      >
-        {/* Complete checkbox */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleComplete(item, occurrenceDate);
-          }}
-          className={cn(
-            "flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-            isCompleted
-              ? cn("bg-green-500 border-green-500")
-              : cn(themeClasses.border, "hover:border-opacity-70"),
-          )}
-        >
-          {isCompleted && <Check className="w-3.5 h-3.5 text-white" />}
-        </button>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <TypeIcon
-              className={cn(
-                "w-4 h-4 flex-shrink-0",
-                isCompleted ? themeClasses.textFaint : themeClasses.text,
-              )}
-            />
-            <span
-              className={cn(
-                "font-medium truncate",
-                isCompleted
-                  ? "line-through text-white/40"
-                  : themeClasses.headerText,
-              )}
-            >
-              {item.title}
-            </span>
+      <div className="relative z-10 flex-1 overflow-y-auto">
+        <div className="px-5 pt-16 pb-2">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <p className={cn("text-sm", themeClasses.textMuted)}>
+                {format(new Date(), "EEEE, MMMM d")}
+              </p>
+            </div>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => setTimeScope("today")}
+                className={cn(
+                  "px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+                  timeScope === "today"
+                    ? cn(
+                        "bg-[var(--primary)]/20 border border-[var(--primary)]/40",
+                        themeClasses.text,
+                      )
+                    : cn("bg-bg-card-custom", themeClasses.textMuted),
+                )}
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimeScope("week")}
+                className={cn(
+                  "px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+                  timeScope === "week"
+                    ? cn(
+                        "bg-[var(--primary)]/20 border border-[var(--primary)]/40",
+                        themeClasses.text,
+                      )
+                    : cn("bg-bg-card-custom", themeClasses.textMuted),
+                )}
+              >
+                Week
+              </button>
+            </div>
           </div>
 
-          {/* Time and badges */}
-          <div className="flex items-center gap-2 mt-1">
-            {timeStr && (
-              <span
+          <div className="flex items-start gap-4 mb-6">
+            <AssistantAvatar mood={assistantMood} themeClasses={themeClasses} />
+
+            <div className="flex-1 min-w-0">
+              <p
                 className={cn(
-                  "text-xs flex items-center gap-1",
+                  "text-lg font-semibold mb-2",
+                  themeClasses.headerText,
+                )}
+              >
+                {greeting}
+              </p>
+
+              <MessageBubble
+                message={message}
+                isTyping={isTyping}
+                displayedText={displayedText}
+                themeClasses={themeClasses}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-[var(--primary)]" />
+              <span className={cn("text-xs", themeClasses.textMuted)}>
+                <span className={cn("font-semibold", themeClasses.text)}>
+                  {stats.remaining}
+                </span>{" "}
+                upcoming
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className={cn("text-xs", themeClasses.textMuted)}>
+                <span className={cn("font-semibold", themeClasses.text)}>
+                  {stats.completedCount}
+                </span>{" "}
+                done
+              </span>
+            </div>
+            {stats.overdueCount > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-amber-400" />
+                <span className={cn("text-xs", themeClasses.textMuted)}>
+                  <span className={cn("font-semibold", themeClasses.text)}>
+                    {stats.overdueCount}
+                  </span>{" "}
+                  overdue
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="px-5" style={contentStyle}>
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className={cn(
+                  "w-8 h-8 border-2 rounded-full mb-4",
+                  "border-[var(--primary)]/30 border-t-[var(--primary)]",
+                )}
+              />
+              <p className={cn("text-sm", themeClasses.textMuted)}>
+                Getting your tasks...
+              </p>
+            </div>
+          ) : currentItem ? (
+            <>
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className={cn("w-4 h-4", themeClasses.text)} />
+                  <span
+                    className={cn(
+                      "text-xs font-semibold uppercase tracking-wider",
+                      themeClasses.textMuted,
+                    )}
+                  >
+                    Current Focus
+                  </span>
+                </div>
+                <AnimatePresence mode="wait">
+                  <TaskCard
+                    key={`${currentItem.item.id}-${currentItem.occurrenceDate.toISOString()}`}
+                    occ={currentItem}
+                    onComplete={() =>
+                      handleComplete(
+                        currentItem.item,
+                        currentItem.occurrenceDate,
+                      )
+                    }
+                    onDetails={() =>
+                      handleItemClick(
+                        currentItem.item,
+                        currentItem.occurrenceDate,
+                      )
+                    }
+                    themeClasses={themeClasses}
+                    isHighlighted
+                  />
+                </AnimatePresence>
+              </div>
+
+              {organizedTasks.upcoming.length > 1 && (
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ArrowRight
+                      className={cn("w-4 h-4", themeClasses.textMuted)}
+                    />
+                    <span
+                      className={cn(
+                        "text-xs font-semibold uppercase tracking-wider",
+                        themeClasses.textMuted,
+                      )}
+                    >
+                      Up Next
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded-full",
+                        "bg-bg-card-custom",
+                        themeClasses.textFaint,
+                      )}
+                    >
+                      {organizedTasks.upcoming.length - 1}
+                    </span>
+                  </div>
+                  <div
+                    className={cn("rounded-2xl border", themeClasses.border)}
+                  >
+                    {organizedTasks.upcoming.slice(1, 4).map((occ, idx) => (
+                      <div
+                        key={`${occ.item.id}-${occ.occurrenceDate.toISOString()}`}
+                        className={cn(
+                          idx > 0 && "border-t",
+                          themeClasses.border,
+                        )}
+                      >
+                        <MiniTaskRow
+                          occ={occ}
+                          onClick={() =>
+                            handleItemClick(occ.item, occ.occurrenceDate)
+                          }
+                          themeClasses={themeClasses}
+                        />
+                      </div>
+                    ))}
+                    {organizedTasks.upcoming.length > 4 && (
+                      <div
+                        className={cn(
+                          "p-3 text-center border-t",
+                          themeClasses.border,
+                        )}
+                      >
+                        <span className={cn("text-xs", themeClasses.textFaint)}>
+                          +{organizedTasks.upcoming.length - 4} more
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex flex-col items-center justify-center py-12 text-center"
+            >
+              <motion.div
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 3, repeat: Infinity }}
+                className={cn(
+                  "w-20 h-20 rounded-2xl flex items-center justify-center mb-4",
+                  "bg-[var(--primary)]/10 border border-[var(--primary)]/20",
+                )}
+              >
+                <Check className={cn("w-10 h-10", themeClasses.text)} />
+              </motion.div>
+              <h3
+                className={cn(
+                  "text-lg font-semibold mb-2",
+                  themeClasses.headerText,
+                )}
+              >
+                All Clear!
+              </h3>
+              <p
+                className={cn(
+                  "text-sm max-w-[240px] mb-6",
                   themeClasses.textMuted,
                 )}
               >
-                <Clock className="w-3 h-3" />
-                {timeStr}
-              </span>
-            )}
-            {isOverdue && !isCompleted && (
-              <span
+                {stats.completedCount > 0
+                  ? "You've crushed it today. Time to relax or dream up something new."
+                  : "Nothing on the agenda. Perfect time to plan ahead!"}
+              </p>
+              <motion.button
+                type="button"
+                onClick={handleQuickEntry}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 className={cn(
-                  "text-xs px-1.5 py-0.5 rounded",
-                  themeClasses.bgActive,
+                  "flex items-center gap-2 px-5 py-3 rounded-xl font-medium",
+                  "bg-[var(--primary)]/20 border border-[var(--primary)]/30",
                   themeClasses.text,
                 )}
               >
-                Overdue
-              </span>
-            )}
-            {item.categories?.map((cat) => {
-              const category = CATEGORIES.find((c) => c.id === cat);
-              if (!category) return null;
-              return (
-                <span
-                  key={cat}
-                  className={cn(
-                    "text-[10px] px-1.5 py-0.5 rounded bg-bg-card-custom",
-                    themeClasses.textMuted,
-                  )}
-                >
-                  {category.icon}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Quick action hint */}
-        <ChevronRight
-          className={cn(
-            "w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity",
-            themeClasses.textFaint,
-          )}
-        />
-      </motion.div>
-    );
-  };
-
-  // Render section
-  const renderSection = (
-    key: string,
-    title: string,
-    items: ExpandedOccurrence[],
-    icon: typeof AlertCircle,
-    accentColor?: string,
-  ) => {
-    if (items.length === 0) return null;
-    const Icon = icon;
-    const isExpanded = expandedSections[key];
-
-    return (
-      <div className="mb-4">
-        {/* Section header */}
-        <button
-          type="button"
-          onClick={() => toggleSection(key)}
-          className={cn(
-            "w-full flex items-center justify-between p-3 rounded-lg transition-all",
-            "bg-bg-card-custom border",
-            themeClasses.border,
-            themeClasses.borderHover,
-          )}
-        >
-          <div className="flex items-center gap-2">
-            <Icon className={cn("w-5 h-5", accentColor || themeClasses.text)} />
-            <span className={cn("font-semibold", themeClasses.headerText)}>
-              {title}
-            </span>
-            <span
-              className={cn(
-                "text-sm px-2 py-0.5 rounded-full bg-bg-card-custom",
-                themeClasses.textMuted,
-              )}
-            >
-              {items.length}
-            </span>
-          </div>
-          <motion.div
-            animate={{ rotate: isExpanded ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <ChevronDown className={cn("w-5 h-5", themeClasses.textMuted)} />
-          </motion.div>
-        </button>
-
-        {/* Section content */}
-        <AnimatePresence>
-          {isExpanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
-            >
-              <div className="space-y-2 pt-2 pl-2">
-                {items.map((occ, index) => renderItemCard(occ, index))}
-              </div>
+                <Plus className="w-5 h-5" />
+                <span>Add Something</span>
+              </motion.button>
             </motion.div>
           )}
-        </AnimatePresence>
-      </div>
-    );
-  };
 
-  // Get greeting
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 5) return { emoji: "🌙", text: "Night Owl Mode" };
-    if (hour < 12) return { emoji: "☀️", text: "Good Morning" };
-    if (hour < 17) return { emoji: "🌤️", text: "Good Afternoon" };
-    if (hour < 21) return { emoji: "🌆", text: "Good Evening" };
-    return { emoji: "🌙", text: "Winding Down" };
-  };
+          {stats.overdueCount > 0 && (
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={() => setShowOverdue(!showOverdue)}
+                className={cn(
+                  "w-full flex items-center justify-between p-4 rounded-xl",
+                  "bg-amber-500/10 border border-amber-500/20",
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-400" />
+                  <span className="text-sm font-medium text-amber-400">
+                    {stats.overdueCount} Overdue
+                  </span>
+                </div>
+                {showOverdue ? (
+                  <EyeOff className="w-4 h-4 text-amber-400/70" />
+                ) : (
+                  <Eye className="w-4 h-4 text-amber-400/70" />
+                )}
+              </button>
 
-  const greeting = getGreeting();
-
-  const contentStyle: CSSProperties = {
-    paddingBottom: standalone
-      ? "20px"
-      : `${MOBILE_CONTENT_BOTTOM_OFFSET + 20}px`,
-  };
-
-  return (
-    <div className="min-h-screen bg-bg-dark">
-      {/* Header */}
-      <div
-        className={cn(
-          "sticky top-0 z-20 px-4 pt-4 pb-3 bg-gradient-to-b from-bg-card-custom to-bg-medium backdrop-blur-xl border-b shadow-2xl shadow-black/10",
-          themeClasses.border,
-        )}
-      >
-        {/* Greeting & Stats */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{greeting.emoji}</span>
-              <h1 className={cn("text-xl font-bold", themeClasses.headerText)}>
-                {greeting.text}
-              </h1>
-            </div>
-            <p className={cn("text-sm mt-0.5", themeClasses.textMuted)}>
-              {stats.pending} pending • {stats.completedCount} done
-            </p>
-          </div>
-
-          {/* Filter toggle */}
-          <button
-            type="button"
-            onClick={() => setShowCategoryFilter(!showCategoryFilter)}
-            className={cn(
-              "p-2 rounded-lg transition-all",
-              showCategoryFilter
-                ? cn(themeClasses.bgActive, themeClasses.text)
-                : cn(
-                    "bg-bg-card-custom",
-                    themeClasses.textMuted,
-                    themeClasses.textHover,
-                  ),
-            )}
-          >
-            <Target className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Quick Entry Box */}
-        <div
-          onClick={handleQuickEntryFocus}
-          className={cn(
-            "relative flex items-center gap-3 p-3 rounded-xl cursor-text transition-all",
-            "bg-bg-card-custom border",
-            themeClasses.border,
-            themeClasses.borderHover,
-          )}
-        >
-          <Plus className={cn("w-5 h-5", themeClasses.textFaint)} />
-          <span className={cn("flex-1", themeClasses.textFaint)}>
-            What do you need to remember?
-          </span>
-          <Sparkles className={cn("w-4 h-4", themeClasses.textMuted)} />
-        </div>
-
-        {/* Category Filter */}
-        <AnimatePresence>
-          {showCategoryFilter && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="flex flex-wrap gap-2 mt-3">
-                {CATEGORIES.map((cat) => {
-                  const isSelected = selectedCategoryFilters.includes(cat.id);
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedCategoryFilters((prev) =>
-                          prev.includes(cat.id)
-                            ? prev.filter((c) => c !== cat.id)
-                            : [...prev, cat.id],
-                        );
-                      }}
+              <AnimatePresence>
+                {showOverdue && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="overflow-hidden"
+                  >
+                    <div
                       className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all border",
-                        isSelected
-                          ? cn(
-                              themeClasses.bgActive,
-                              themeClasses.text,
-                              themeClasses.borderActive,
-                            )
-                          : cn(
-                              "bg-bg-card-custom",
-                              themeClasses.textMuted,
-                              themeClasses.border,
-                            ),
+                        "mt-2 rounded-xl border divide-y",
+                        themeClasses.border,
                       )}
                     >
-                      <span>{cat.icon}</span>
-                      <span>{cat.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </motion.div>
+                      {organizedTasks.overdue.map((occ) => (
+                        <MiniTaskRow
+                          key={`${occ.item.id}-${occ.occurrenceDate.toISOString()}`}
+                          occ={occ}
+                          onClick={() =>
+                            handleItemClick(occ.item, occ.occurrenceDate)
+                          }
+                          themeClasses={themeClasses}
+                        />
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           )}
-        </AnimatePresence>
 
-        {/* Time Scope Toggle */}
-        <div className="flex mt-3 p-1 rounded-lg bg-bg-card-custom">
-          <button
-            type="button"
-            onClick={() => setTimeScope("today")}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all",
-              timeScope === "today"
-                ? cn(themeClasses.bgActive, themeClasses.text)
-                : cn(themeClasses.textMuted, themeClasses.textHover),
-            )}
-          >
-            <Sparkles className="w-4 h-4" />
-            Today
-          </button>
-          <button
-            type="button"
-            onClick={() => setTimeScope("week")}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all",
-              timeScope === "week"
-                ? cn(themeClasses.bgActive, themeClasses.text)
-                : cn(themeClasses.textMuted, themeClasses.textHover),
-            )}
-          >
-            <CalendarDays className="w-4 h-4" />
-            This Week
-          </button>
+          {currentItem && (
+            <motion.button
+              type="button"
+              onClick={handleQuickEntry}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              className={cn(
+                "w-full mt-6 flex items-center justify-center gap-2 p-4 rounded-xl",
+                "bg-bg-card-custom/30 border border-dashed",
+                themeClasses.border,
+                themeClasses.textFaint,
+              )}
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-sm">Add something new</span>
+            </motion.button>
+          )}
         </div>
       </div>
 
-      {/* Content */}
-      <div className="px-4 pt-2" style={contentStyle}>
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              className={cn(
-                "w-8 h-8 border-2 border-t-transparent rounded-full",
-                themeClasses.borderActive,
-              )}
-            />
-            <p className={cn("mt-3 text-sm", themeClasses.textMuted)}>
-              Loading your focus...
-            </p>
-          </div>
-        ) : stats.total === 0 && stats.completedCount === 0 ? (
-          // Empty state
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center py-16 text-center"
-          >
-            <div
-              className={cn(
-                "w-20 h-20 rounded-2xl flex items-center justify-center mb-4",
-                themeClasses.bgSurface,
-              )}
-            >
-              <Check className={cn("w-10 h-10", themeClasses.text)} />
-            </div>
-            <h3
-              className={cn(
-                "text-lg font-semibold mb-2",
-                themeClasses.headerText,
-              )}
-            >
-              All Clear!
-            </h3>
-            <p className={cn("text-sm max-w-[200px]", themeClasses.textMuted)}>
-              You have no tasks for{" "}
-              {timeScope === "today" ? "today" : "this week"}. Tap above to add
-              one!
-            </p>
-          </motion.div>
-        ) : (
-          <>
-            {/* Overdue Section */}
-            {renderSection(
-              "overdue",
-              "Overdue",
-              organizedTasks.overdue,
-              AlertCircle,
-              "text-amber-400", // Amber for overdue items - stands out without being stressful
-            )}
-
-            {/* Today Section */}
-            {renderSection("today", "Today", organizedTasks.today, Sparkles)}
-
-            {/* Tomorrow Section */}
-            {renderSection(
-              "tomorrow",
-              "Tomorrow",
-              organizedTasks.tomorrow,
-              CalendarDays,
-            )}
-
-            {/* Upcoming Sections (by date) */}
-            {timeScope === "week" &&
-              organizedTasks.upcoming.map((group) => (
-                <div key={group.label} className="mb-4">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection(group.label)}
-                    className={cn(
-                      "w-full flex items-center justify-between p-3 rounded-lg transition-all",
-                      "bg-bg-card-custom border",
-                      themeClasses.border,
-                      themeClasses.borderHover,
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Calendar className={cn("w-5 h-5", themeClasses.text)} />
-                      <span
-                        className={cn("font-semibold", themeClasses.headerText)}
-                      >
-                        {group.label}
-                      </span>
-                      <span
-                        className={cn(
-                          "text-sm px-2 py-0.5 rounded-full bg-bg-card-custom",
-                          themeClasses.textMuted,
-                        )}
-                      >
-                        {group.items.length}
-                      </span>
-                    </div>
-                    <motion.div
-                      animate={{
-                        rotate: expandedSections[group.label] ? 180 : 0,
-                      }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <ChevronDown
-                        className={cn("w-5 h-5", themeClasses.textMuted)}
-                      />
-                    </motion.div>
-                  </button>
-
-                  <AnimatePresence>
-                    {expandedSections[group.label] !== false && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="space-y-2 pt-2 pl-2">
-                          {group.items.map((occ, index) =>
-                            renderItemCard(occ, index),
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ))}
-
-            {/* Completed Section */}
-            {renderSection(
-              "completed",
-              "Completed",
-              organizedTasks.completed,
-              Check,
-              "text-green-400",
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Item Detail Modal */}
       {selectedItem && (
         <ItemDetailModal
           item={selectedItem}
@@ -935,7 +1304,6 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
         />
       )}
 
-      {/* Edit Dialog */}
       <EditItemDialog
         item={editingItem}
         open={!!editingItem}
