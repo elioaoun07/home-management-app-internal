@@ -367,6 +367,9 @@ export function useCreateReminder() {
           responsible_user_id: input.responsible_user_id || user.id,
           notify_all_household: input.notify_all_household || false,
           categories: input.category_ids || [],
+          // Catalogue template link
+          source_catalogue_item_id: input.source_catalogue_item_id || null,
+          is_template_instance: input.is_template_instance || false,
         })
         .select()
         .single();
@@ -405,18 +408,18 @@ export function useCreateReminder() {
           let computedTriggerAt = a.trigger_at;
           if (a.kind === "relative" && input.due_at) {
             const baseTime = new Date(input.due_at);
-            
+
             // Check if custom_time is set (e.g., "1 day before at 9am")
             if (a.custom_time && a.offset_minutes) {
               // Calculate the day offset (e.g., 1440 minutes = 1 day before)
               const daysOffset = Math.floor((a.offset_minutes || 0) / 1440);
               const alertDate = new Date(baseTime);
               alertDate.setDate(alertDate.getDate() - daysOffset);
-              
+
               // Set the specific time from custom_time (HH:MM format)
               const [hours, minutes] = a.custom_time.split(":").map(Number);
               alertDate.setHours(hours, minutes, 0, 0);
-              
+
               computedTriggerAt = alertDate.toISOString();
             } else if (a.offset_minutes) {
               // Standard offset calculation
@@ -484,6 +487,8 @@ export function useCreateReminder() {
             start_anchor: input.due_at || new Date().toISOString(),
             end_until: input.recurrence_rule.end_until,
             count: input.recurrence_rule.count,
+            is_flexible: input.recurrence_rule.is_flexible || false,
+            flexible_period: input.recurrence_rule.flexible_period || null,
           });
         if (recurrenceError) {
           console.error("Failed to create recurrence rule:", recurrenceError);
@@ -525,6 +530,9 @@ export function useCreateEvent() {
           responsible_user_id: input.responsible_user_id || user.id,
           notify_all_household: input.notify_all_household || false,
           categories: input.category_ids || [],
+          // Catalogue template link
+          source_catalogue_item_id: input.source_catalogue_item_id || null,
+          is_template_instance: input.is_template_instance || false,
         })
         .select()
         .single();
@@ -554,6 +562,8 @@ export function useCreateEvent() {
             start_anchor: input.recurrence_rule.start_anchor,
             end_until: input.recurrence_rule.end_until,
             count: input.recurrence_rule.count,
+            is_flexible: input.recurrence_rule.is_flexible || false,
+            flexible_period: input.recurrence_rule.flexible_period || null,
           });
         if (recurrenceError) throw recurrenceError;
       }
@@ -568,18 +578,18 @@ export function useCreateEvent() {
               a.relative_to === "end" ? input.end_at : input.start_at;
             if (baseTimeStr) {
               const baseTime = new Date(baseTimeStr);
-              
+
               // Check if custom_time is set (e.g., "1 day before at 9am")
               if (a.custom_time && a.offset_minutes) {
                 // Calculate the day offset (e.g., 1440 minutes = 1 day before)
                 const daysOffset = Math.floor((a.offset_minutes || 0) / 1440);
                 const alertDate = new Date(baseTime);
                 alertDate.setDate(alertDate.getDate() - daysOffset);
-                
+
                 // Set the specific time from custom_time (HH:MM format)
                 const [hours, minutes] = a.custom_time.split(":").map(Number);
                 alertDate.setHours(hours, minutes, 0, 0);
-                
+
                 computedTriggerAt = alertDate.toISOString();
               } else if (a.offset_minutes) {
                 // Standard offset calculation
@@ -646,6 +656,9 @@ export function useCreateTask() {
           responsible_user_id: input.responsible_user_id || user.id,
           notify_all_household: input.notify_all_household || false,
           categories: input.category_ids || [],
+          // Catalogue template link
+          source_catalogue_item_id: input.source_catalogue_item_id || null,
+          is_template_instance: input.is_template_instance || false,
         })
         .select()
         .single();
@@ -676,6 +689,8 @@ export function useCreateTask() {
             start_anchor: input.recurrence_rule.start_anchor,
             end_until: input.recurrence_rule.end_until,
             count: input.recurrence_rule.count,
+            is_flexible: input.recurrence_rule.is_flexible || false,
+            flexible_period: input.recurrence_rule.flexible_period || null,
           });
 
         if (recurrenceError) throw recurrenceError;

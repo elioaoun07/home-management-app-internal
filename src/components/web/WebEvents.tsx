@@ -1,5 +1,6 @@
 "use client";
 
+import { PromoteToCatalogueDialog } from "@/components/items/PromoteToCatalogueDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,6 +34,7 @@ import { format, parseISO } from "date-fns";
 import { motion } from "framer-motion";
 import {
   Bell,
+  BookMarked,
   Briefcase,
   Cake,
   Calendar,
@@ -150,6 +152,7 @@ export default function WebEvents() {
     useState<Date | null>(null);
   const [showEditOccurrenceDialog, setShowEditOccurrenceDialog] =
     useState(false);
+  const [showPromoteDialog, setShowPromoteDialog] = useState(false);
 
   // Track if screen is mobile size for modal positioning
   const [isMobileScreen, setIsMobileScreen] = useState(false);
@@ -1107,6 +1110,17 @@ export default function WebEvents() {
                       >
                         <Edit2 className="w-4 h-4 text-white/70" />
                       </button>
+                      {/* Promote to Catalogue - only show if not already from catalogue */}
+                      {!detailItem.source_catalogue_item_id && (
+                        <button
+                          type="button"
+                          onClick={() => setShowPromoteDialog(true)}
+                          className="p-2 rounded-full hover:bg-pink-500/20 transition-colors"
+                          title="Promote to Catalogue"
+                        >
+                          <BookMarked className="w-4 h-4 text-pink-400" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={async () => {
@@ -1499,6 +1513,20 @@ export default function WebEvents() {
                   }}
                 />
               )}
+
+            {/* Promote to Catalogue Dialog */}
+            {showPromoteDialog && detailItem && (
+              <PromoteToCatalogueDialog
+                open={showPromoteDialog}
+                onOpenChange={setShowPromoteDialog}
+                item={detailItem}
+                onSuccess={() => {
+                  setShowPromoteDialog(false);
+                  setDetailItem(null);
+                  setModalPosition(null);
+                }}
+              />
+            )}
           </div>
         </div>
       )}

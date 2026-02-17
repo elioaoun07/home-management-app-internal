@@ -271,6 +271,9 @@ export default function AddToCalendarDialog({
               hasEndDate && endDate
                 ? new Date(`${endDate}T23:59:59`).toISOString()
                 : undefined,
+            // Pass flexible routine settings from catalogue item
+            is_flexible: catalogueItem.is_flexible_routine || false,
+            flexible_period: catalogueItem.flexible_period || null,
           };
         }
       }
@@ -292,6 +295,9 @@ export default function AddToCalendarDialog({
           end_at: endAt,
           location_text: locationText || undefined,
           recurrence_rule: recurrenceRule,
+          // Bi-directional catalogue link
+          source_catalogue_item_id: catalogueItem.id,
+          is_template_instance: true,
         });
         createdItemId = result?.id;
       } else if (itemType === "reminder") {
@@ -308,6 +314,9 @@ export default function AddToCalendarDialog({
           has_checklist: parsedSubtasks.length > 0,
           subtasks: parsedSubtasks,
           recurrence_rule: recurrenceRule,
+          // Bi-directional catalogue link
+          source_catalogue_item_id: catalogueItem.id,
+          is_template_instance: true,
         });
         createdItemId = result?.id;
       } else {
@@ -323,6 +332,9 @@ export default function AddToCalendarDialog({
           is_public: false,
           due_at: startAt,
           recurrence_rule: recurrenceRule,
+          // Bi-directional catalogue link
+          source_catalogue_item_id: catalogueItem.id,
+          is_template_instance: true,
         });
         createdItemId = result?.id;
       }

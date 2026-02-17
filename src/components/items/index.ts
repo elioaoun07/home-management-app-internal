@@ -15,3 +15,8 @@ export {
   type SmartAlertValue,
 } from "./SmartAlertPicker";
 export { default as SwipeableItemCard } from "./SwipeableItemCard";
+
+// Catalogue integration components
+export { CatalogueTemplatePicker } from "./CatalogueTemplatePicker";
+export { EditScopeDialog } from "./EditScopeDialog";
+export { PromoteToCatalogueDialog } from "./PromoteToCatalogueDialog";

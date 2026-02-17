@@ -1,12 +1,15 @@
 "use client";
 
+import { CatalogueTemplatePicker } from "@/components/items/CatalogueTemplatePicker";
 import { MobileDayExpansionModal } from "@/components/items/MobileDayExpansionModal";
+import AddToCalendarDialog from "@/components/web/AddToCalendarDialog";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   isOccurrenceCompleted,
   useAllOccurrenceActions,
 } from "@/features/items/useItemActions";
 import { cn } from "@/lib/utils";
+import type { CatalogueItem } from "@/types/catalogue";
 import type { ItemWithDetails } from "@/types/items";
 import {
   addDays,
@@ -158,6 +161,27 @@ export function CalendarView({
   const [selectedCategoryFilters, setSelectedCategoryFilters] = useState<
     string[]
   >(CATEGORIES.filter((cat) => cat.id !== "work").map((cat) => cat.id));
+
+  // Catalogue picker state
+  const [showCataloguePicker, setShowCataloguePicker] = useState(false);
+  const [selectedDateForCatalogue, setSelectedDateForCatalogue] =
+    useState<Date | null>(null);
+  const [selectedCatalogueTemplate, setSelectedCatalogueTemplate] =
+    useState<CatalogueItem | null>(null);
+  const [showAddToCalendarDialog, setShowAddToCalendarDialog] = useState(false);
+
+  // Handle adding from catalogue
+  const handleAddFromCatalogue = useCallback((date: Date) => {
+    setSelectedDateForCatalogue(date);
+    setShowCataloguePicker(true);
+  }, []);
+
+  // Handle template selection
+  const handleSelectTemplate = useCallback((template: CatalogueItem) => {
+    setSelectedCatalogueTemplate(template);
+    setShowCataloguePicker(false);
+    setShowAddToCalendarDialog(true);
+  }, []);
 
   // Toggle category filter
   const toggleCategoryFilter = (categoryId: string) => {
@@ -807,7 +831,36 @@ export function CalendarView({
           showBirthdays={true}
           anchorRect={modalAnchorRect}
           onItemClick={handleModalItemClick}
+          onAddFromCatalogue={handleAddFromCatalogue}
         />
+
+        {/* Catalogue Template Picker */}
+        <CatalogueTemplatePicker
+          open={showCataloguePicker}
+          onOpenChange={setShowCataloguePicker}
+          selectedDate={selectedDateForCatalogue ?? undefined}
+          onSelectTemplate={handleSelectTemplate}
+        />
+
+        {/* Add To Calendar Dialog - from template */}
+        {selectedCatalogueTemplate && (
+          <AddToCalendarDialog
+            open={showAddToCalendarDialog}
+            onOpenChange={(open) => {
+              setShowAddToCalendarDialog(open);
+              if (!open) {
+                setSelectedCatalogueTemplate(null);
+                setSelectedDateForCatalogue(null);
+              }
+            }}
+            catalogueItem={selectedCatalogueTemplate}
+            onSuccess={() => {
+              setShowAddToCalendarDialog(false);
+              setSelectedCatalogueTemplate(null);
+              setSelectedDateForCatalogue(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );

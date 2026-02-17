@@ -48,6 +48,9 @@ export interface Item {
   categories?: string[]; // Array of category IDs (e.g., ["work", "personal"])
   subtask_kanban_enabled?: boolean; // Whether kanban view is enabled for subtasks
   subtask_kanban_stages?: string[]; // Array of kanban stage names (e.g., ["To Do", "In Progress", "Done"])
+  // Catalogue template link
+  source_catalogue_item_id?: UUID | null; // Reference to the catalogue template this item was created from
+  is_template_instance?: boolean; // True if this item syncs with a catalogue template
 }
 
 /** Item with related data for display */
@@ -137,6 +140,15 @@ export interface ItemSnooze {
   created_at: string;
 }
 
+/** Flexible period for recurring tasks */
+export type FlexiblePeriod = "weekly" | "biweekly" | "monthly";
+
+export const FLEXIBLE_PERIOD_LABELS: Record<FlexiblePeriod, string> = {
+  weekly: "Weekly",
+  biweekly: "Every 2 Weeks",
+  monthly: "Monthly",
+};
+
 /** Recurrence rule for repeating items */
 export interface RecurrenceRule {
   id: UUID;
@@ -146,6 +158,35 @@ export interface RecurrenceRule {
   end_until?: string | null; // ISO timestamp
   count?: number | null;
   exceptions?: RecurrenceException[]; // Exceptions for this rule
+  // Flexible routine fields
+  is_flexible?: boolean; // If true, no fixed day - user schedules within period
+  flexible_period?: FlexiblePeriod | null; // Period within which task must be done
+}
+
+/** Schedule for a flexible routine within a specific period */
+export interface FlexibleSchedule {
+  id: UUID;
+  item_id: UUID;
+  period_start_date: string; // Date string (YYYY-MM-DD)
+  scheduled_for_date: string; // Date string (YYYY-MM-DD)
+  scheduled_for_time?: string | null; // Time string (HH:MM) or null for anytime
+  created_at: string; // ISO timestamp
+  created_by?: UUID | null;
+}
+
+/** Completion pattern analytics for an item */
+export interface CompletionPattern {
+  item_id: UUID;
+  user_id: UUID;
+  title: string;
+  total_completions: number;
+  last_completed_at?: string | null;
+  first_completed_at?: string | null;
+  preferred_day_of_week?: number | null; // 0=Sunday, 6=Saturday
+  preferred_hour_of_day?: number | null; // 0-23
+  day_of_week_histogram: Record<string, number>; // e.g., {"0": 2, "5": 8}
+  hour_of_day_histogram: Record<string, number>; // e.g., {"19": 5, "20": 3}
+  avg_days_between_completions?: number | null;
 }
 
 /** Recurrence exception */
@@ -203,6 +244,9 @@ export interface CreateItemInput {
   is_public?: boolean;
   responsible_user_id?: UUID; // Defaults to current user
   notify_all_household?: boolean; // When true, alerts are sent to ALL household members
+  // Catalogue template link
+  source_catalogue_item_id?: UUID; // Link to catalogue template
+  is_template_instance?: boolean; // True if this is a template instance
 }
 
 /** Input for creating a reminder */
@@ -262,6 +306,8 @@ export interface CreateRecurrenceInput {
   start_anchor: string;
   end_until?: string | null;
   count?: number | null;
+  is_flexible?: boolean;
+  flexible_period?: FlexiblePeriod | null;
 }
 
 /** Input for updating an item */
@@ -429,4 +475,40 @@ export interface LaunchReminderTemplateInput {
   template_id: UUID;
   start_at: string; // ISO timestamp
   duration_minutes?: number; // Override default duration
+}
+
+// ============================================
+// EDIT SCOPE TYPES (for catalogue-linked items)
+// ============================================
+
+/** Scope for editing a template instance */
+export type ItemEditScope =
+  | "this_occurrence" // Edit only this occurrence (creates exception)
+  | "future_only" // Edit this and all future occurrences
+  | "update_template"; // Update the catalogue template (and optionally linked items)
+
+/** Scope for catalogue edits propagating to linked items */
+export type CatalogueEditScope =
+  | "future_only" // Only update future occurrences
+  | "all"; // Update all occurrences including history
+
+/** Scope for disabling a catalogue item's calendar presence */
+export type CatalogueDisableScope =
+  | "pause" // Pause recurrence (keep history)
+  | "delete_future"; // Delete future occurrences (keep history)
+
+/** Input for promoting a calendar item to catalogue */
+export interface PromoteToTemplateInput {
+  item_id: UUID;
+  module_id: UUID;
+  category_id?: UUID;
+  keep_linked?: boolean; // Default: true
+}
+
+/** Result of promoting an item to catalogue */
+export interface PromoteToTemplateResult {
+  success: boolean;
+  catalogue_item_id?: UUID;
+  linked?: boolean;
+  error?: string;
 }

@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateItem, useUpdateItem } from "@/features/catalogue/hooks";
 import { useItemCategories } from "@/features/items/useItems";
@@ -24,6 +25,7 @@ import { cn } from "@/lib/utils";
 import type {
   CatalogueItem,
   CataloguePriority,
+  FlexiblePeriod,
   LocationContext,
   RecurrencePattern,
 } from "@/types/catalogue";
@@ -165,6 +167,11 @@ export default function CatalogueTaskItemDialog({
   const [priority, setPriority] = useState<CataloguePriority>("normal");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  // Flexible routine state
+  const [isFlexibleRoutine, setIsFlexibleRoutine] = useState(false);
+  const [flexiblePeriod, setFlexiblePeriod] = useState<FlexiblePeriod | null>(
+    null,
+  );
   // New fields: categories and visibility
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
@@ -193,6 +200,11 @@ export default function CatalogueTaskItemDialog({
         setTags(editingItem.tags || []);
         setSelectedCategoryIds(editingItem.item_category_ids || []);
         setIsPublic(editingItem.is_public || false);
+        // Flexible routine state
+        setIsFlexibleRoutine(editingItem.is_flexible_routine || false);
+        setFlexiblePeriod(
+          (editingItem.flexible_period as FlexiblePeriod) || null,
+        );
       } else {
         // Reset to defaults
         setName("");
@@ -211,6 +223,9 @@ export default function CatalogueTaskItemDialog({
         setTagInput("");
         setSelectedCategoryIds([]);
         setIsPublic(false);
+        // Reset flexible routine state
+        setIsFlexibleRoutine(false);
+        setFlexiblePeriod(null);
       }
     }
   }, [open, editingItem]);
@@ -264,7 +279,9 @@ export default function CatalogueTaskItemDialog({
           : undefined,
         recurrence_pattern: recurrencePattern || undefined,
         recurrence_days_of_week:
-          recurrenceDays.length > 0 ? recurrenceDays : undefined,
+          recurrenceDays.length > 0 && !isFlexibleRoutine
+            ? recurrenceDays
+            : undefined,
         recurrence_custom_rrule:
           recurrencePattern === "custom" ? customRrule : undefined,
         subtasks_text: subtasksText.trim() || undefined,
@@ -273,6 +290,11 @@ export default function CatalogueTaskItemDialog({
         item_category_ids:
           selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
         is_public: isPublic,
+        // Flexible routine fields
+        is_flexible_routine: isFlexibleRoutine,
+        flexible_period: isFlexibleRoutine
+          ? flexiblePeriod || (recurrencePattern as FlexiblePeriod)
+          : undefined,
       };
 
       let result: CatalogueItem;
@@ -509,48 +531,104 @@ export default function CatalogueTaskItemDialog({
               </SelectContent>
             </Select>
 
-            {/* Days of Week (for weekly/biweekly recurrence) */}
+            {/* Flexible Routine Toggle */}
             {(recurrencePattern === "weekly" ||
-              recurrencePattern === "biweekly") && (
-              <div className="space-y-2">
-                <Label className="text-white/60 text-xs">
-                  {recurrencePattern === "biweekly"
-                    ? "Repeat every other:"
-                    : "Repeat on these days:"}
-                </Label>
-                <div className="flex gap-1">
-                  {DAYS_OF_WEEK.map((day) => {
-                    const isSelected = recurrenceDays.includes(day.value);
-                    return (
-                      <button
-                        key={day.value}
-                        type="button"
-                        onClick={() => toggleDay(day.value)}
-                        className={cn(
-                          "w-9 h-9 rounded-full text-sm font-medium transition-all",
-                          isSelected
-                            ? "bg-emerald-500 text-white"
-                            : "bg-white/5 text-white/60 hover:bg-white/10",
-                        )}
-                      >
-                        {day.short}
-                      </button>
-                    );
-                  })}
-                </div>
-                {recurrencePattern === "biweekly" &&
-                  recurrenceDays.length > 0 && (
-                    <p className="text-xs text-white/40">
-                      Every other{" "}
-                      {DAYS_OF_WEEK.filter((d) =>
-                        recurrenceDays.includes(d.value),
-                      )
-                        .map((d) => d.label)
-                        .join(", ")}
+              recurrencePattern === "biweekly" ||
+              recurrencePattern === "monthly") && (
+              <div
+                className={cn(
+                  "flex items-center justify-between p-3 rounded-lg",
+                  isFlexibleRoutine
+                    ? "bg-amber-500/20 border border-amber-500/30"
+                    : "bg-white/5 border border-white/10",
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <CalendarClock
+                    className={cn(
+                      "w-4 h-4",
+                      isFlexibleRoutine ? "text-amber-400" : "text-white/60",
+                    )}
+                  />
+                  <div>
+                    <p
+                      className={cn(
+                        "text-sm font-medium",
+                        isFlexibleRoutine ? "text-amber-300" : "text-white/80",
+                      )}
+                    >
+                      Flexible Schedule
                     </p>
-                  )}
+                    <p className="text-xs text-white/50">
+                      No fixed day - schedule within each{" "}
+                      {recurrencePattern === "monthly" ? "month" : "period"}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={isFlexibleRoutine}
+                  onCheckedChange={(checked) => {
+                    setIsFlexibleRoutine(checked);
+                    if (checked) {
+                      // Clear specific days when enabling flexible
+                      setRecurrenceDays([]);
+                      // Set flexible period based on recurrence pattern
+                      if (
+                        recurrencePattern === "weekly" ||
+                        recurrencePattern === "biweekly" ||
+                        recurrencePattern === "monthly"
+                      ) {
+                        setFlexiblePeriod(recurrencePattern as FlexiblePeriod);
+                      }
+                    }
+                  }}
+                />
               </div>
             )}
+
+            {/* Days of Week (for weekly/biweekly recurrence, only when NOT flexible) */}
+            {(recurrencePattern === "weekly" ||
+              recurrencePattern === "biweekly") &&
+              !isFlexibleRoutine && (
+                <div className="space-y-2">
+                  <Label className="text-white/60 text-xs">
+                    {recurrencePattern === "biweekly"
+                      ? "Repeat every other:"
+                      : "Repeat on these days:"}
+                  </Label>
+                  <div className="flex gap-1">
+                    {DAYS_OF_WEEK.map((day) => {
+                      const isSelected = recurrenceDays.includes(day.value);
+                      return (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => toggleDay(day.value)}
+                          className={cn(
+                            "w-9 h-9 rounded-full text-sm font-medium transition-all",
+                            isSelected
+                              ? "bg-emerald-500 text-white"
+                              : "bg-white/5 text-white/60 hover:bg-white/10",
+                          )}
+                        >
+                          {day.short}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {recurrencePattern === "biweekly" &&
+                    recurrenceDays.length > 0 && (
+                      <p className="text-xs text-white/40">
+                        Every other{" "}
+                        {DAYS_OF_WEEK.filter((d) =>
+                          recurrenceDays.includes(d.value),
+                        )
+                          .map((d) => d.label)
+                          .join(", ")}
+                      </p>
+                    )}
+                </div>
+              )}
 
             {/* Custom RRULE */}
             {recurrencePattern === "custom" && (

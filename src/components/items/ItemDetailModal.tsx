@@ -19,6 +19,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import ItemActionsSheet from "./ItemActionsSheet";
+import { PromoteToCatalogueDialog } from "./PromoteToCatalogueDialog";
 
 // Icons
 const XIcon = ({ className }: { className?: string }) => (
@@ -44,6 +45,19 @@ const Edit2Icon = ({ className }: { className?: string }) => (
   >
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const BookMarkedIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+    <polyline points="10 2 10 10 13 7 16 10 16 2" />
   </svg>
 );
 
@@ -235,6 +249,10 @@ export default function ItemDetailModal({
   const isPink = theme === "pink";
   const [isClosing, setIsClosing] = useState(false);
   const [showActionsSheet, setShowActionsSheet] = useState(false);
+  const [showPromoteDialog, setShowPromoteDialog] = useState(false);
+
+  // Check if item is already linked to catalogue
+  const isLinkedToCatalogue = !!item.source_catalogue_item_id;
 
   // Item actions hook
   const {
@@ -314,7 +332,7 @@ export default function ItemDetailModal({
       await doComplete(item, getOccurrenceDate(), reason);
       setTimeout(onClose, 200);
     },
-    [doComplete, getOccurrenceDate, item, onClose]
+    [doComplete, getOccurrenceDate, item, onClose],
   );
 
   const handlePostponeAction = useCallback(
@@ -324,7 +342,7 @@ export default function ItemDetailModal({
       await doPostpone(item, getOccurrenceDate(), type, reason);
       setTimeout(onClose, 200);
     },
-    [doPostpone, getOccurrenceDate, item, onClose]
+    [doPostpone, getOccurrenceDate, item, onClose],
   );
 
   const handleCancelAction = useCallback(
@@ -334,7 +352,7 @@ export default function ItemDetailModal({
       await doCancel(item, getOccurrenceDate(), reason);
       setTimeout(onClose, 200);
     },
-    [doCancel, getOccurrenceDate, item, onClose]
+    [doCancel, getOccurrenceDate, item, onClose],
   );
 
   const handleDeleteWithActions = useCallback(async () => {
@@ -357,7 +375,7 @@ export default function ItemDetailModal({
       await doPostpone(item, getOccurrenceDate(), type);
       setTimeout(onClose, 200);
     },
-    [doPostpone, getOccurrenceDate, item, onClose]
+    [doPostpone, getOccurrenceDate, item, onClose],
   );
 
   // Lock body scroll when modal is open
@@ -406,7 +424,7 @@ export default function ItemDetailModal({
           "relative w-full max-w-lg mx-4 rounded-t-2xl md:rounded-2xl",
           "bg-gradient-to-br from-[#1a2942] to-[#0f1d2e]",
           "border border-white/10 shadow-2xl",
-          "max-h-[85vh] overflow-hidden flex flex-col"
+          "max-h-[85vh] overflow-hidden flex flex-col",
         )}
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -424,13 +442,13 @@ export default function ItemDetailModal({
               <div
                 className={cn(
                   "w-10 h-10 rounded-xl flex items-center justify-center",
-                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                 )}
               >
                 <ClockIcon
                   className={cn(
                     "w-5 h-5",
-                    isPink ? "text-pink-400" : "text-cyan-400"
+                    isPink ? "text-pink-400" : "text-cyan-400",
                   )}
                 />
               </div>
@@ -439,13 +457,13 @@ export default function ItemDetailModal({
               <div
                 className={cn(
                   "w-10 h-10 rounded-xl flex items-center justify-center",
-                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                 )}
               >
                 <CalendarIcon
                   className={cn(
                     "w-5 h-5",
-                    isPink ? "text-pink-400" : "text-cyan-400"
+                    isPink ? "text-pink-400" : "text-cyan-400",
                   )}
                 />
               </div>
@@ -460,7 +478,7 @@ export default function ItemDetailModal({
               <span
                 className={cn(
                   "text-xs uppercase font-medium",
-                  isPink ? "text-pink-400" : "text-cyan-400"
+                  isPink ? "text-pink-400" : "text-cyan-400",
                 )}
               >
                 {item.type}
@@ -491,7 +509,7 @@ export default function ItemDetailModal({
               <h2
                 className={cn(
                   "text-xl font-bold text-white flex-1",
-                  isCompleted && "line-through text-white/50"
+                  isCompleted && "line-through text-white/50",
                 )}
               >
                 {item.title}
@@ -501,7 +519,7 @@ export default function ItemDetailModal({
                   className={cn(
                     "px-2 py-1 rounded text-xs font-medium uppercase",
                     priorityColors[item.priority].bg,
-                    priorityColors[item.priority].text
+                    priorityColors[item.priority].text,
                   )}
                 >
                   {item.priority}
@@ -515,7 +533,7 @@ export default function ItemDetailModal({
                 className={cn(
                   "inline-block mt-2 px-2 py-1 rounded text-xs font-medium",
                   statusColors[item.status].bg,
-                  statusColors[item.status].text
+                  statusColors[item.status].text,
                 )}
               >
                 {item.status.replace("_", " ")}
@@ -532,7 +550,7 @@ export default function ItemDetailModal({
                   ? "bg-red-500/10 border border-red-500/30"
                   : isPink
                     ? "bg-pink-500/10 border border-pink-500/30"
-                    : "bg-cyan-500/10 border border-cyan-500/30"
+                    : "bg-cyan-500/10 border border-cyan-500/30",
               )}
             >
               {timeInfo.isOverdue ? (
@@ -541,7 +559,7 @@ export default function ItemDetailModal({
                 <ClockIcon
                   className={cn(
                     "w-5 h-5",
-                    isPink ? "text-pink-400" : "text-cyan-400"
+                    isPink ? "text-pink-400" : "text-cyan-400",
                   )}
                 />
               )}
@@ -552,7 +570,7 @@ export default function ItemDetailModal({
                     ? "text-red-400"
                     : isPink
                       ? "text-pink-400"
-                      : "text-cyan-400"
+                      : "text-cyan-400",
                 )}
               >
                 {timeInfo.text}
@@ -601,7 +619,7 @@ export default function ItemDetailModal({
                   } else {
                     window.open(
                       `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`,
-                      "_blank"
+                      "_blank",
                     );
                   }
                 }
@@ -609,7 +627,7 @@ export default function ItemDetailModal({
               className={cn(
                 "flex items-center gap-2 px-3 py-2 rounded-lg transition-all",
                 "bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30",
-                "active:scale-95"
+                "active:scale-95",
               )}
               title={item.event_details.location_text}
             >
@@ -658,7 +676,7 @@ export default function ItemDetailModal({
                         "w-4 h-4 rounded border flex items-center justify-center",
                         subtask.done_at
                           ? "bg-green-500 border-green-500"
-                          : "border-white/30"
+                          : "border-white/30",
                       )}
                     >
                       {subtask.done_at && (
@@ -670,7 +688,7 @@ export default function ItemDetailModal({
                         "text-sm",
                         subtask.done_at
                           ? "text-white/50 line-through"
-                          : "text-white/80"
+                          : "text-white/80",
                       )}
                     >
                       {subtask.title}
@@ -684,7 +702,7 @@ export default function ItemDetailModal({
                   <div
                     className={cn(
                       "h-full rounded-full",
-                      isPink ? "bg-pink-400" : "bg-cyan-400"
+                      isPink ? "bg-pink-400" : "bg-cyan-400",
                     )}
                     style={{
                       width: `${
@@ -742,12 +760,23 @@ export default function ItemDetailModal({
                     "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-colors",
                     isPink
                       ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
-                      : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30"
+                      : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30",
                   )}
                 >
                   <Edit2Icon className="w-5 h-5" />
                   Edit
                 </button>
+                {/* Promote to Catalogue - only show if not already linked */}
+                {!isLinkedToCatalogue && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPromoteDialog(true)}
+                    className="px-4 py-3 rounded-xl bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                    title="Save as Template"
+                  >
+                    <BookMarkedIcon className="w-5 h-5" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleDeleteWithActions}
@@ -803,6 +832,17 @@ export default function ItemDetailModal({
           onPostpone={handlePostponeAction}
           onCancel={handleCancelAction}
           onDelete={handleDeleteWithActions}
+        />
+
+        {/* Promote to Catalogue Dialog */}
+        <PromoteToCatalogueDialog
+          open={showPromoteDialog}
+          onOpenChange={setShowPromoteDialog}
+          item={item}
+          onSuccess={() => {
+            setShowPromoteDialog(false);
+            handleClose();
+          }}
         />
       </div>
 
@@ -868,6 +908,6 @@ export default function ItemDetailModal({
         }
       `}</style>
     </div>,
-    document.body
+    document.body,
   );
 }

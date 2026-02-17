@@ -114,6 +114,19 @@ const FastForwardIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const BookMarkedIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+    <polyline points="10 2 10 10 13 7 16 10 16 2" />
+  </svg>
+);
+
 interface MobileDayExpansionModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -124,6 +137,7 @@ interface MobileDayExpansionModalProps {
   onItemClick?: (item: ItemWithDetails) => void;
   onBirthdayClick?: (birthday: { name: string; date: Date }) => void;
   onAddEvent?: (date: Date) => void;
+  onAddFromCatalogue?: (date: Date) => void;
   showBirthdays?: boolean;
   anchorRect?: { x: number; y: number; width: number; height: number } | null;
 }
@@ -138,6 +152,7 @@ export function MobileDayExpansionModal({
   onItemClick,
   onBirthdayClick,
   onAddEvent,
+  onAddFromCatalogue,
   showBirthdays = true,
   anchorRect,
 }: MobileDayExpansionModalProps) {
@@ -290,6 +305,23 @@ export function MobileDayExpansionModal({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* Add from Catalogue Button */}
+                    {onAddFromCatalogue && (
+                      <motion.button
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.15 }}
+                        type="button"
+                        onClick={() => {
+                          onAddFromCatalogue(date);
+                        }}
+                        className="p-2.5 rounded-xl transition-all bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+                        title="Add from Catalogue"
+                      >
+                        <BookMarkedIcon className="w-5 h-5" />
+                      </motion.button>
+                    )}
+
                     {/* Add Event Button */}
                     {onAddEvent && (
                       <motion.button
@@ -345,23 +377,36 @@ export function MobileDayExpansionModal({
                       <span className="text-3xl">📅</span>
                     </div>
                     <p className="text-white/50 text-sm">No events scheduled</p>
-                    {onAddEvent && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onAddEvent(date);
-                          onClose();
-                        }}
-                        className={cn(
-                          "mt-4 px-4 py-2 rounded-xl text-sm font-medium transition-all",
-                          isPink
-                            ? "bg-pink-500/20 text-pink-300 hover:bg-pink-500/30"
-                            : "bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30",
-                        )}
-                      >
-                        Add an event
-                      </button>
-                    )}
+                    <div className="flex items-center justify-center gap-2 mt-4">
+                      {onAddFromCatalogue && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onAddFromCatalogue(date);
+                          }}
+                          className="px-4 py-2 rounded-xl text-sm font-medium transition-all bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+                        >
+                          From Catalogue
+                        </button>
+                      )}
+                      {onAddEvent && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onAddEvent(date);
+                            onClose();
+                          }}
+                          className={cn(
+                            "px-4 py-2 rounded-xl text-sm font-medium transition-all",
+                            isPink
+                              ? "bg-pink-500/20 text-pink-300 hover:bg-pink-500/30"
+                              : "bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30",
+                          )}
+                        >
+                          Add new
+                        </button>
+                      )}
+                    </div>
                   </motion.div>
                 ) : (
                   <div className="space-y-4">

@@ -204,6 +204,15 @@ export const RECURRENCE_PATTERN_LABELS: Record<RecurrencePattern, string> = {
   custom: "Custom",
 };
 
+/** Flexible period for recurring tasks */
+export type FlexiblePeriod = "weekly" | "biweekly" | "monthly";
+
+export const FLEXIBLE_PERIOD_LABELS: Record<FlexiblePeriod, string> = {
+  weekly: "Weekly",
+  biweekly: "Every 2 Weeks",
+  monthly: "Monthly",
+};
+
 export interface CatalogueItem {
   id: UUID;
   user_id: UUID;
@@ -248,6 +257,9 @@ export interface CatalogueItem {
   item_category_ids: string[];
   // Visibility: true = public to household, false = private
   is_public: boolean;
+  // Flexible routine fields
+  is_flexible_routine: boolean;
+  flexible_period: FlexiblePeriod | null;
   // Virtual fields
   sub_items?: CatalogueSubItem[];
   category?: CatalogueCategory;
@@ -350,6 +362,9 @@ export interface CreateItemInput {
   item_category_ids?: string[];
   // Visibility: true = public to household, false = private
   is_public?: boolean;
+  // Flexible routine fields
+  is_flexible_routine?: boolean;
+  flexible_period?: FlexiblePeriod;
 }
 
 export interface UpdateItemInput {
@@ -389,6 +404,9 @@ export interface UpdateItemInput {
   item_category_ids?: string[];
   // Visibility: true = public to household, false = private
   is_public?: boolean;
+  // Flexible routine fields
+  is_flexible_routine?: boolean;
+  flexible_period?: FlexiblePeriod;
 }
 
 export interface CreateSubItemInput {
