@@ -1997,7 +1997,20 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
   useEffect(() => {
     const initSession = async () => {
       try {
-        // Generate a simple fingerprint from available browser data
+        // Generate or retrieve a unique device ID for this browser
+        // This ensures each device gets its own session even if fingerprints match
+        const DEVICE_ID_KEY = "guest-portal-device-id";
+        let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+        if (!deviceId) {
+          // Generate a unique ID using crypto API (falls back to random if unavailable)
+          deviceId =
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `dev_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+          localStorage.setItem(DEVICE_ID_KEY, deviceId);
+        }
+
+        // Generate a fingerprint from browser data (used as secondary identifier)
         const ua = navigator.userAgent;
         const lang = navigator.language;
         const screen = `${window.screen.width}x${window.screen.height}`;
@@ -2018,6 +2031,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
           body: JSON.stringify({
             tag_slug: tag,
             fingerprint,
+            device_id: deviceId,
           }),
         });
 
@@ -2047,6 +2061,8 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
       triggerWelcome();
       // Update server
       try {
+        // Retrieve device ID from localStorage
+        const deviceId = localStorage.getItem("guest-portal-device-id");
         await fetch("/api/guest-portal/session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2054,6 +2070,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
             tag_slug: tag,
             guest_name: name,
             fingerprint: session.fingerprint,
+            device_id: deviceId,
           }),
         });
       } catch {

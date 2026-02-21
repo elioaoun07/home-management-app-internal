@@ -13,7 +13,8 @@ function hashValue(val: string): string {
 // POST - Create/resume a guest session
 export async function POST(request: NextRequest) {
   try {
-    const { tag_slug, guest_name, fingerprint } = await request.json();
+    const { tag_slug, guest_name, fingerprint, device_id } =
+      await request.json();
 
     if (!tag_slug) {
       return NextResponse.json(
@@ -46,24 +47,51 @@ export async function POST(request: NextRequest) {
     const ua = request.headers.get("user-agent") || "unknown";
     const fp = fingerprint || hashValue(ua + ipHash);
 
-    // Try to find existing active session by fingerprint
-    const { data: existingSession } = await db
-      .from("guest_sessions")
-      .select("*")
-      .eq("tag_id", tag.id)
-      .eq("fingerprint", fp)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // PRIORITY: Try to find existing active session by device_id first (most unique)
+    // This ensures each browser instance gets its own session
+    let existingSession = null;
+
+    if (device_id) {
+      const { data: sessionByDeviceId } = await db
+        .from("guest_sessions")
+        .select("*")
+        .eq("tag_id", tag.id)
+        .eq("device_id", device_id)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      existingSession = sessionByDeviceId;
+    }
+
+    // FALLBACK: If no device_id match and no device_id provided, try fingerprint
+    // (for backward compatibility with old sessions)
+    if (!existingSession && !device_id) {
+      const { data: sessionByFingerprint } = await db
+        .from("guest_sessions")
+        .select("*")
+        .eq("tag_id", tag.id)
+        .eq("fingerprint", fp)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      existingSession = sessionByFingerprint;
+    }
 
     if (existingSession) {
-      // Update last seen and optionally the name
+      // Update last seen, optionally update name, and set device_id if not set
       const updates: Record<string, unknown> = {
         last_seen_at: new Date().toISOString(),
       };
       if (guest_name && guest_name !== existingSession.guest_name) {
         updates.guest_name = guest_name;
+      }
+      // Migrate old sessions to use device_id
+      if (device_id && !existingSession.device_id) {
+        updates.device_id = device_id;
       }
       await db
         .from("guest_sessions")
@@ -86,13 +114,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Create new session
+    // Create new session with device_id
     const { data: session, error: sessionError } = await db
       .from("guest_sessions")
       .insert({
         tag_id: tag.id,
         guest_name: guest_name || null,
         fingerprint: fp,
+        device_id: device_id || null,
         user_agent: ua,
         ip_hash: ipHash,
       })
