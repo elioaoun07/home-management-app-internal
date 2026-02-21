@@ -195,6 +195,15 @@ function PortalParticles() {
 function EraOrb({ pulsing = true }: { pulsing?: boolean }) {
   return (
     <div className="relative w-28 h-28 mx-auto">
+      {/* Celebration outer glow ring */}
+      <div
+        className="absolute -inset-2 rounded-full opacity-60"
+        style={{
+          background:
+            "conic-gradient(from 0deg, transparent, rgba(251,191,36,0.15), transparent, rgba(244,114,182,0.15), transparent)",
+          animation: "spin 8s linear infinite reverse",
+        }}
+      />
       <div
         className={cn(
           "absolute inset-0 rounded-full bg-gradient-to-br from-[#3b82f6]/20 to-[#06b6d4]/20",
@@ -207,9 +216,19 @@ function EraOrb({ pulsing = true }: { pulsing?: boolean }) {
         style={{ animation: "spin 10s linear infinite" }}
       />
       <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#3b82f6]/30 to-[#14b8a6]/30 blur-sm" />
-      <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#3b82f6] via-[#06b6d4] to-[#14b8a6] flex items-center justify-center shadow-2xl shadow-[#06b6d4]/40">
+      {/* Diagonal sweeping gradient orb with festive colors */}
+      <div
+        className="absolute inset-4 rounded-full flex items-center justify-center shadow-2xl shadow-[#06b6d4]/40"
+        style={{
+          background:
+            "linear-gradient(135deg, #3b82f6 0%, #06b6d4 12%, #14b8a6 24%, #f59e0b 36%, #f97316 48%, #ec4899 60%, #a855f7 72%, #3b82f6 84%, #06b6d4 100%)",
+          backgroundSize: "300% 300%",
+          animation: "diagonalSweep 4s linear infinite",
+        }}
+      >
         <Bot className="w-10 h-10 text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.6)]" />
       </div>
+      {/* Original sparkles */}
       <Sparkles
         className="absolute -top-1 -right-1 w-5 h-5 text-[#22d3ee] animate-pulse"
         style={{ animationDelay: "0ms" }}
@@ -218,6 +237,26 @@ function EraOrb({ pulsing = true }: { pulsing?: boolean }) {
         className="absolute -bottom-1 -left-1 w-4 h-4 text-[#3b82f6] animate-pulse"
         style={{ animationDelay: "600ms" }}
       />
+      {/* Celebration accents */}
+      <div
+        className="absolute -top-3 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shadow-lg shadow-amber-400/50"
+        style={{ animationDelay: "200ms" }}
+      />
+      <div
+        className="absolute top-1/2 -right-3 -translate-y-1/2 w-1 h-1 rounded-full bg-rose-400 animate-pulse shadow-lg shadow-rose-400/50"
+        style={{ animationDelay: "400ms" }}
+      />
+      <div
+        className="absolute top-1/2 -left-3 -translate-y-1/2 w-1 h-1 rounded-full bg-amber-300 animate-pulse shadow-lg shadow-amber-300/50"
+        style={{ animationDelay: "800ms" }}
+      />
+      {/* Keyframes for diagonal sweep */}
+      <style>{`
+        @keyframes diagonalSweep {
+          0% { background-position: 100% 0%; }
+          100% { background-position: 0% 100%; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -827,13 +866,13 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
     setComplaintBlocked(true);
     setBlockPhase(0);
     setTimeout(() => setBlockPhase(1), 400);
-    setTimeout(() => setBlockPhase(2), 1200);
-    setTimeout(() => setBlockPhase(3), 2500);
+    setTimeout(() => setBlockPhase(2), 1400);
+    setTimeout(() => setBlockPhase(3), 3000);
     setTimeout(() => {
       setComplaintBlocked(false);
       setBlockPhase(0);
       setType("suggestion");
-    }, 4500);
+    }, 7000);
   };
 
   return (
@@ -1918,7 +1957,39 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
   const [tagInfo, setTagInfo] = useState<TagInfo | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [portalNotFound, setPortalNotFound] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [welcomePhase, setWelcomePhase] = useState(0);
+  const [hasSeenInvitation, setHasSeenInvitation] = useState(false);
   const [homeNameInput, setHomeNameInput] = useState("");
+
+  // Check localStorage for invitation seen status
+  useEffect(() => {
+    const seen = localStorage.getItem("guest-invitation-seen-2026-02-21");
+    if (seen === "true") {
+      setHasSeenInvitation(true);
+    }
+  }, []);
+
+  // Auto-show invitation for returning guests who haven't seen it
+  useEffect(() => {
+    if (session?.guest_name && !hasSeenInvitation && mounted && !showWelcome) {
+      // Small delay to let the page render first
+      const timer = setTimeout(() => {
+        triggerWelcome();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [session?.guest_name, hasSeenInvitation, mounted, showWelcome]);
+
+  // Trigger welcome animation
+  const triggerWelcome = useCallback(() => {
+    setShowWelcome(true);
+    setWelcomePhase(0);
+    setTimeout(() => setWelcomePhase(1), 300);
+    setTimeout(() => setWelcomePhase(2), 800);
+    setTimeout(() => setWelcomePhase(3), 1400);
+    setTimeout(() => setWelcomePhase(4), 2000);
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -1974,6 +2045,8 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
     async (name: string) => {
       if (!session) return;
       setSession((prev) => (prev ? { ...prev, guest_name: name } : prev));
+      // Show welcome invitation
+      triggerWelcome();
       // Update server
       try {
         await fetch("/api/guest-portal/session", {
@@ -1989,8 +2062,17 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
         /* ignore */
       }
     },
-    [session, tag],
+    [session, tag, triggerWelcome],
   );
+
+  // Dismiss welcome invitation
+  const dismissWelcome = useCallback(() => {
+    setShowWelcome(false);
+    setWelcomePhase(0);
+    // Mark as seen in localStorage
+    localStorage.setItem("guest-invitation-seen-2026-02-21", "true");
+    setHasSeenInvitation(true);
+  }, []);
 
   // Scroll to top button visibility
   useEffect(() => {
@@ -2070,10 +2152,200 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#14b8a6]/5 rounded-full blur-[150px]" />
       </div>
 
+      {/* ══ Welcome Invitation Overlay ══ */}
+      {showWelcome && (
+        <div className="fixed inset-0 z-50 bg-[#0a1628]/98 backdrop-blur-xl flex items-center justify-center p-6">
+          {/* Festive background effects */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-10 left-10 w-32 h-32 bg-amber-400/10 rounded-full blur-[60px] animate-pulse" />
+            <div className="absolute top-20 right-16 w-24 h-24 bg-rose-400/10 rounded-full blur-[50px] animate-pulse delay-300" />
+            <div className="absolute bottom-32 left-20 w-28 h-28 bg-[#06b6d4]/10 rounded-full blur-[55px] animate-pulse delay-500" />
+            <div className="absolute bottom-20 right-10 w-20 h-20 bg-violet-400/10 rounded-full blur-[45px] animate-pulse delay-700" />
+            {/* Sparkle particles */}
+            {[...Array(20)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute w-1 h-1 bg-amber-300 rounded-full animate-ping"
+                style={{
+                  top: `${Math.random() * 100}%`,
+                  left: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 2}s`,
+                  animationDuration: `${1.5 + Math.random()}s`,
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="relative max-w-sm w-full text-center">
+            {/* Elegant border frame */}
+            <div
+              className={cn(
+                "absolute -inset-4 rounded-3xl transition-all duration-1000",
+                welcomePhase >= 1
+                  ? "opacity-100 bg-gradient-to-br from-amber-500/20 via-transparent to-rose-500/20"
+                  : "opacity-0",
+              )}
+            />
+            <div
+              className={cn(
+                "absolute -inset-4 rounded-3xl border transition-all duration-1000",
+                welcomePhase >= 1
+                  ? "opacity-100 border-amber-400/20"
+                  : "opacity-0 border-transparent",
+              )}
+            />
+
+            {/* Content card */}
+            <div className="relative bg-[#0f1d2e]/80 rounded-2xl p-8 border border-amber-400/10 shadow-2xl shadow-amber-500/5">
+              {/* Decorative top flourish */}
+              <div
+                className={cn(
+                  "absolute -top-3 left-1/2 -translate-x-1/2 transition-all duration-700",
+                  welcomePhase >= 1
+                    ? "opacity-100 scale-100"
+                    : "opacity-0 scale-0",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <div className="w-16 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                </div>
+              </div>
+
+              {/* Welcome header */}
+              <div
+                className={cn(
+                  "mb-6 transition-all duration-700 delay-100",
+                  welcomePhase >= 1
+                    ? "opacity-100 translate-y-0"
+                    : "opacity-0 -translate-y-4",
+                )}
+              >
+                <p className="text-xs text-amber-400/70 uppercase tracking-[0.3em] font-medium mb-2">
+                  You are cordially invited
+                </p>
+                <h2 className="text-2xl font-bold text-white">
+                  Welcome, {session?.guest_name}
+                </h2>
+              </div>
+
+              {/* Event 1: Lord's Day */}
+              <div
+                className={cn(
+                  "mb-4 p-4 rounded-xl bg-gradient-to-br from-[#3b82f6]/10 to-[#06b6d4]/5 border border-[#06b6d4]/15 transition-all duration-700",
+                  welcomePhase >= 2
+                    ? "opacity-100 translate-y-0"
+                    : "opacity-0 translate-y-6",
+                )}
+              >
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Heart className="w-4 h-4 text-rose-400" />
+                  <span className="text-[10px] uppercase tracking-wider text-[#06b6d4] font-semibold">
+                    Today&apos;s Celebration
+                  </span>
+                  <Heart className="w-4 h-4 text-rose-400" />
+                </div>
+                <p className="text-lg font-semibold text-white">
+                  The Lord&apos;s Day
+                </p>
+                <p className="text-xs text-[#38bdf8]/60 mt-1">
+                  A time of fellowship, gratitude & joy
+                </p>
+              </div>
+
+              {/* Event 2: Birthday Pre-Celebration */}
+              <div
+                className={cn(
+                  "mb-6 p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-rose-500/5 border border-amber-400/15 transition-all duration-700",
+                  welcomePhase >= 3
+                    ? "opacity-100 translate-y-0"
+                    : "opacity-0 translate-y-6",
+                )}
+              >
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <PartyPopper className="w-4 h-4 text-amber-400" />
+                  <span className="text-[10px] uppercase tracking-wider text-amber-400 font-semibold">
+                    Pre-Birthday Celebration
+                  </span>
+                  <PartyPopper className="w-4 h-4 text-amber-400" />
+                </div>
+                <p className="text-lg font-semibold text-white">
+                  🎂 Birthday Next Week!
+                </p>
+                <p className="text-xs text-[#38bdf8]/60 mt-1">
+                  Early celebrations with loved ones
+                </p>
+              </div>
+
+              {/* Continue button */}
+              <button
+                onClick={dismissWelcome}
+                className={cn(
+                  "w-full py-3 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-white font-semibold text-sm shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300",
+                  welcomePhase >= 4
+                    ? "opacity-100 translate-y-0"
+                    : "opacity-0 translate-y-4",
+                )}
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Enter the Celebration
+                  <ChevronRight className="w-4 h-4" />
+                </span>
+              </button>
+
+              {/* Decorative bottom flourish */}
+              <div
+                className={cn(
+                  "absolute -bottom-3 left-1/2 -translate-x-1/2 transition-all duration-700 delay-300",
+                  welcomePhase >= 1
+                    ? "opacity-100 scale-100"
+                    : "opacity-0 scale-0",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-px bg-gradient-to-r from-transparent to-amber-400/40" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400/60" />
+                  <div className="w-8 h-px bg-gradient-to-l from-transparent to-amber-400/40" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main content */}
       <div className="relative z-10 w-full max-w-lg mx-auto px-4 sm:px-6 pb-8">
         {/* ── HERO SECTION ──────────────────────────── */}
         <section className="pt-10 pb-5 text-center">
+          {/* Festive Celebration Banner (Google Doodle style) */}
+          <div
+            className={cn(
+              "mb-4 transition-all duration-1000",
+              mounted
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 -translate-y-4",
+            )}
+          >
+            <button
+              onClick={triggerWelcome}
+              className="group relative inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-violet-500/10 border border-amber-400/20 hover:border-amber-400/40 hover:from-amber-500/15 hover:via-rose-500/15 hover:to-violet-500/15 transition-all duration-300"
+            >
+              {/* Animated sparkles */}
+              <span className="absolute -top-1 -left-1 w-2 h-2 bg-amber-400 rounded-full animate-ping opacity-50" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-rose-400 rounded-full animate-ping opacity-50 delay-300" />
+
+              <PartyPopper className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+              <span className="text-[10px] font-medium">
+                <span className="text-amber-400">Lord&apos;s Day</span>
+                <span className="text-white/40 mx-1.5">+</span>
+                <span className="text-rose-400">Birthday Week</span>
+              </span>
+              <span className="text-[9px] text-white/30">✨ Tap to view</span>
+            </button>
+          </div>
+
           <div
             className={cn(
               "transition-all duration-1000",
