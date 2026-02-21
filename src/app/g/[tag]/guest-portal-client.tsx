@@ -10,6 +10,7 @@ import {
   Bot,
   CalendarDays,
   Check,
+  ChevronLeft,
   ChevronRight,
   Cigarette,
   ClipboardCopy,
@@ -216,16 +217,8 @@ function EraOrb({ pulsing = true }: { pulsing?: boolean }) {
         style={{ animation: "spin 10s linear infinite" }}
       />
       <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#3b82f6]/30 to-[#14b8a6]/30 blur-sm" />
-      {/* Diagonal sweeping gradient orb with festive colors */}
-      <div
-        className="absolute inset-4 rounded-full flex items-center justify-center shadow-2xl shadow-[#06b6d4]/40"
-        style={{
-          background:
-            "linear-gradient(135deg, #3b82f6 0%, #06b6d4 12%, #14b8a6 24%, #f59e0b 36%, #f97316 48%, #ec4899 60%, #a855f7 72%, #3b82f6 84%, #06b6d4 100%)",
-          backgroundSize: "300% 300%",
-          animation: "diagonalSweep 4s linear infinite",
-        }}
-      >
+      {/* Original blue gradient orb */}
+      <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#3b82f6] via-[#06b6d4] to-[#14b8a6] flex items-center justify-center shadow-2xl shadow-[#06b6d4]/40">
         <Bot className="w-10 h-10 text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.6)]" />
       </div>
       {/* Original sparkles */}
@@ -250,13 +243,6 @@ function EraOrb({ pulsing = true }: { pulsing?: boolean }) {
         className="absolute top-1/2 -left-3 -translate-y-1/2 w-1 h-1 rounded-full bg-amber-300 animate-pulse shadow-lg shadow-amber-300/50"
         style={{ animationDelay: "800ms" }}
       />
-      {/* Keyframes for diagonal sweep */}
-      <style>{`
-        @keyframes diagonalSweep {
-          0% { background-position: 100% 0%; }
-          100% { background-position: 0% 100%; }
-        }
-      `}</style>
     </div>
   );
 }
@@ -1961,6 +1947,18 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
   const [welcomePhase, setWelcomePhase] = useState(0);
   const [hasSeenInvitation, setHasSeenInvitation] = useState(false);
   const [homeNameInput, setHomeNameInput] = useState("");
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+  const navScrollRef = useRef<HTMLDivElement>(null);
+
+  // Handle nav scroll to update chevron visibility
+  const handleNavScroll = useCallback(() => {
+    const el = navScrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 5);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5);
+  }, []);
 
   // Check localStorage for invitation seen status
   useEffect(() => {
@@ -2154,13 +2152,14 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
 
       {/* ══ Welcome Invitation Overlay ══ */}
       {showWelcome && (
-        <div className="fixed inset-0 z-50 bg-[#0a1628]/98 backdrop-blur-xl flex items-center justify-center p-6">
-          {/* Festive background effects */}
+        <div className="fixed inset-0 z-50 bg-gradient-to-br from-[#1e3a5f]/95 via-[#0f2744]/95 to-[#1a365d]/95 backdrop-blur-xl flex items-center justify-center p-6">
+          {/* Festive background effects - brighter */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-10 left-10 w-32 h-32 bg-amber-400/10 rounded-full blur-[60px] animate-pulse" />
-            <div className="absolute top-20 right-16 w-24 h-24 bg-rose-400/10 rounded-full blur-[50px] animate-pulse delay-300" />
-            <div className="absolute bottom-32 left-20 w-28 h-28 bg-[#06b6d4]/10 rounded-full blur-[55px] animate-pulse delay-500" />
-            <div className="absolute bottom-20 right-10 w-20 h-20 bg-violet-400/10 rounded-full blur-[45px] animate-pulse delay-700" />
+            <div className="absolute top-10 left-10 w-40 h-40 bg-amber-400/25 rounded-full blur-[80px] animate-pulse" />
+            <div className="absolute top-20 right-16 w-32 h-32 bg-rose-400/20 rounded-full blur-[60px] animate-pulse delay-300" />
+            <div className="absolute bottom-32 left-20 w-36 h-36 bg-[#06b6d4]/25 rounded-full blur-[70px] animate-pulse delay-500" />
+            <div className="absolute bottom-20 right-10 w-28 h-28 bg-violet-400/20 rounded-full blur-[55px] animate-pulse delay-700" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/5 rounded-full blur-[100px]" />
             {/* Sparkle particles */}
             {[...Array(20)].map((_, i) => (
               <div
@@ -2182,7 +2181,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
               className={cn(
                 "absolute -inset-4 rounded-3xl transition-all duration-1000",
                 welcomePhase >= 1
-                  ? "opacity-100 bg-gradient-to-br from-amber-500/20 via-transparent to-rose-500/20"
+                  ? "opacity-100 bg-gradient-to-br from-amber-500/30 via-transparent to-rose-500/30"
                   : "opacity-0",
               )}
             />
@@ -2190,13 +2189,13 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
               className={cn(
                 "absolute -inset-4 rounded-3xl border transition-all duration-1000",
                 welcomePhase >= 1
-                  ? "opacity-100 border-amber-400/20"
+                  ? "opacity-100 border-amber-400/30"
                   : "opacity-0 border-transparent",
               )}
             />
 
-            {/* Content card */}
-            <div className="relative bg-[#0f1d2e]/80 rounded-2xl p-8 border border-amber-400/10 shadow-2xl shadow-amber-500/5">
+            {/* Content card - brighter */}
+            <div className="relative bg-gradient-to-br from-[#1e3a5f]/90 to-[#0f2744]/90 rounded-2xl p-8 border border-amber-400/20 shadow-2xl shadow-amber-500/10">
               {/* Decorative top flourish */}
               <div
                 className={cn(
@@ -2222,7 +2221,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                     : "opacity-0 -translate-y-4",
                 )}
               >
-                <p className="text-xs text-amber-400/70 uppercase tracking-[0.3em] font-medium mb-2">
+                <p className="text-xs text-amber-400 uppercase tracking-[0.3em] font-medium mb-2">
                   You are cordially invited
                 </p>
                 <h2 className="text-2xl font-bold text-white">
@@ -2233,7 +2232,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
               {/* Event 1: Lord's Day */}
               <div
                 className={cn(
-                  "mb-4 p-4 rounded-xl bg-gradient-to-br from-[#3b82f6]/10 to-[#06b6d4]/5 border border-[#06b6d4]/15 transition-all duration-700",
+                  "mb-4 p-4 rounded-xl bg-gradient-to-br from-[#3b82f6]/20 to-[#06b6d4]/15 border border-[#06b6d4]/25 transition-all duration-700",
                   welcomePhase >= 2
                     ? "opacity-100 translate-y-0"
                     : "opacity-0 translate-y-6",
@@ -2249,7 +2248,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                 <p className="text-lg font-semibold text-white">
                   The Lord&apos;s Day
                 </p>
-                <p className="text-xs text-[#38bdf8]/60 mt-1">
+                <p className="text-xs text-[#38bdf8]/80 mt-1">
                   A time of fellowship, gratitude & joy
                 </p>
               </div>
@@ -2257,7 +2256,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
               {/* Event 2: Birthday Pre-Celebration */}
               <div
                 className={cn(
-                  "mb-6 p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-rose-500/5 border border-amber-400/15 transition-all duration-700",
+                  "mb-6 p-4 rounded-xl bg-gradient-to-br from-amber-500/20 to-rose-500/15 border border-amber-400/25 transition-all duration-700",
                   welcomePhase >= 3
                     ? "opacity-100 translate-y-0"
                     : "opacity-0 translate-y-6",
@@ -2273,7 +2272,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                 <p className="text-lg font-semibold text-white">
                   🎂 Birthday Next Week!
                 </p>
-                <p className="text-xs text-[#38bdf8]/60 mt-1">
+                <p className="text-xs text-[#38bdf8]/80 mt-1">
                   Early celebrations with loved ones
                 </p>
               </div>
@@ -2402,14 +2401,32 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
         >
           <div className="relative">
             {/* Scroll hint - left fade */}
-            <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-[#0a1628] to-transparent z-10 pointer-events-none opacity-0 transition-opacity" />
+            <div
+              className={cn(
+                "absolute left-0 top-0 bottom-0 w-10 bg-gradient-to-r from-[#0a1628] via-[#0a1628]/80 to-transparent z-10 pointer-events-none flex items-center justify-start pl-1 transition-opacity duration-300",
+                canScrollLeft ? "opacity-100" : "opacity-0",
+              )}
+            >
+              <div className="flex items-center gap-0.5 animate-pulse">
+                <ChevronLeft className="w-3.5 h-3.5 text-[#06b6d4]/60" />
+              </div>
+            </div>
             {/* Scroll hint - right fade with chevron */}
-            <div className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-[#0a1628] via-[#0a1628]/80 to-transparent z-10 pointer-events-none flex items-center justify-end pr-1">
+            <div
+              className={cn(
+                "absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-[#0a1628] via-[#0a1628]/80 to-transparent z-10 pointer-events-none flex items-center justify-end pr-1 transition-opacity duration-300",
+                canScrollRight ? "opacity-100" : "opacity-0",
+              )}
+            >
               <div className="flex items-center gap-0.5 animate-pulse">
                 <ChevronRight className="w-3.5 h-3.5 text-[#06b6d4]/60" />
               </div>
             </div>
-            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5">
+            <div
+              ref={navScrollRef}
+              onScroll={handleNavScroll}
+              className="flex gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5"
+            >
               {navItems.map((item) => (
                 <NavPill
                   key={item.id}
