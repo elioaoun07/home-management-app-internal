@@ -1,11 +1,11 @@
-// src/app/api/guest-portal/allergies/route.ts
-// Guest allergy submissions — logged to DB
+// src/app/api/guest-portal/drinks/route.ts
+// Guest drink selections — logged to DB
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// GET - Check if allergy already submitted for this session OR get all for a tag (admin)
+// GET - Get drink selection for a session OR get all drinks for a tag (admin)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -15,23 +15,23 @@ export async function GET(request: NextRequest) {
 
     const db = supabaseAdmin();
 
-    // Admin view - get all allergies for a tag
+    // Admin view - get all drink selections for a tag
     if (all === "true" && tagId) {
-      const { data: allergies, error } = await db
-        .from("guest_allergies")
+      const { data: drinks, error } = await db
+        .from("guest_drinks")
         .select("*")
         .eq("tag_id", tagId)
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("[GuestAllergies] Admin fetch error:", error);
+        console.error("[GuestDrinks] Admin fetch error:", error);
         return NextResponse.json(
-          { error: "Failed to fetch allergies" },
+          { error: "Failed to fetch drinks" },
           { status: 500 },
         );
       }
 
-      return NextResponse.json({ allergies: allergies || [] });
+      return NextResponse.json({ drinks: drinks || [] });
     }
 
     // Single session view
@@ -42,15 +42,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data: allergy } = await db
-      .from("guest_allergies")
+    const { data: drink } = await db
+      .from("guest_drinks")
       .select("*")
       .eq("session_id", sessionId)
       .maybeSingle();
 
-    return NextResponse.json({ allergy: allergy || null });
+    return NextResponse.json({ drink: drink || null });
   } catch (err) {
-    console.error("[GuestAllergies] GET error:", err);
+    console.error("[GuestDrinks] GET error:", err);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
@@ -58,14 +58,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Submit or update allergies
+// POST - Submit or update drink selection
 export async function POST(request: NextRequest) {
   try {
-    const { tag_id, session_id, guest_name, allergies } = await request.json();
+    const { tag_id, session_id, guest_name, drink_selection, other_drink } =
+      await request.json();
 
-    if (!tag_id || !session_id || !allergies) {
+    if (!tag_id || !session_id || !drink_selection) {
       return NextResponse.json(
-        { error: "tag_id, session_id, and allergies required" },
+        { error: "tag_id, session_id, and drink_selection required" },
         { status: 400 },
       );
     }
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     // Check if already submitted
     const { data: existing } = await db
-      .from("guest_allergies")
+      .from("guest_drinks")
       .select("id")
       .eq("session_id", session_id)
       .maybeSingle();
@@ -82,9 +83,10 @@ export async function POST(request: NextRequest) {
     if (existing) {
       // Update
       const { data: updated, error } = await db
-        .from("guest_allergies")
+        .from("guest_drinks")
         .update({
-          allergies,
+          drink_selection,
+          other_drink: other_drink || null,
           guest_name: guest_name || null,
           updated_at: new Date().toISOString(),
         })
@@ -93,37 +95,39 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (error) {
+        console.error("[GuestDrinks] Update error:", error);
         return NextResponse.json(
-          { error: "Failed to update allergies" },
+          { error: "Failed to update drink selection" },
           { status: 500 },
         );
       }
-      return NextResponse.json({ allergy: updated, updated: true });
+      return NextResponse.json({ drink: updated, updated: true });
     }
 
     // Insert new
-    const { data: allergy, error: insertError } = await db
-      .from("guest_allergies")
+    const { data: drink, error: insertError } = await db
+      .from("guest_drinks")
       .insert({
         tag_id,
         session_id,
         guest_name: guest_name || null,
-        allergies,
+        drink_selection,
+        other_drink: other_drink || null,
       })
       .select()
       .single();
 
     if (insertError) {
-      console.error("[GuestAllergies] Insert error:", insertError);
+      console.error("[GuestDrinks] Insert error:", insertError);
       return NextResponse.json(
-        { error: "Failed to submit allergies" },
+        { error: "Failed to submit drink selection" },
         { status: 500 },
       );
     }
 
-    return NextResponse.json({ allergy, updated: false });
+    return NextResponse.json({ drink, created: true });
   } catch (err) {
-    console.error("[GuestAllergies] POST error:", err);
+    console.error("[GuestDrinks] POST error:", err);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

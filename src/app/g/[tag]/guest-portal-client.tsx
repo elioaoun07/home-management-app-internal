@@ -31,6 +31,7 @@ import {
   Sparkles,
   UtensilsCrossed,
   Wifi,
+  Wine,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -73,6 +74,7 @@ type PortalSection =
   | "home"
   | "wifi"
   | "recipes"
+  | "drinks"
   | "rules"
   | "allergies"
   | "feedback"
@@ -344,9 +346,41 @@ function WiFiCard({
       });
       if (res.ok) {
         const { password } = await res.json();
-        await navigator.clipboard.writeText(password);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 3000);
+        // iOS-compatible clipboard copy
+        let copySuccess = false;
+        try {
+          // Try modern Clipboard API first
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(password);
+            copySuccess = true;
+          }
+        } catch {
+          // Clipboard API failed, try fallback
+        }
+        // Fallback for iOS and older browsers
+        if (!copySuccess) {
+          const textArea = document.createElement("textarea");
+          textArea.value = password;
+          textArea.style.position = "fixed";
+          textArea.style.left = "-9999px";
+          textArea.style.top = "0";
+          textArea.setAttribute("readonly", "");
+          document.body.appendChild(textArea);
+          // iOS specific: need to select using setSelectionRange
+          textArea.focus();
+          textArea.setSelectionRange(0, password.length);
+          try {
+            document.execCommand("copy");
+            copySuccess = true;
+          } catch {
+            // execCommand failed
+          }
+          document.body.removeChild(textArea);
+        }
+        if (copySuccess) {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 3000);
+        }
       }
     } catch {
       // Fallback - can't copy
@@ -460,7 +494,7 @@ function RulesCard({ bioData }: { bioData?: Record<string, unknown> }) {
     },
     {
       icon: Heart,
-      text: "You\u2019re here to have fun, not to work. But if you insist, the board\u2019s behind the door \uD83D\uDC54",
+      text: "You\u2019re here to have fun, not to work. But if you insist, the ironing board is behind the door \uD83D\uDC54",
     },
   ];
 
@@ -948,32 +982,118 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
 
 // ─── Recipes Card ──────────────────────────────────────
 function RecipesCard() {
+  const menuSections = [
+    {
+      title: "Salad",
+      emoji: "🥗",
+      items: [
+        { name: "Winter Salad", tags: ["Vegan"], note: "Vegan dressing" },
+      ],
+    },
+    {
+      title: "Starters",
+      emoji: "🍢",
+      items: [
+        { name: "Spinach Fatayer", tags: ["Vegan"] },
+        { name: "Spring Rolls", tags: ["Vegan"], note: "Sweet Chili Sauce" },
+        { name: "Shrimp Avocado Bites", tags: ["Vegetarian"], note: "Mayo" },
+      ],
+    },
+    {
+      title: "Mains",
+      emoji: "🍽️",
+      items: [
+        { name: "Vegetable Noodles Stir Fry", tags: ["Vegan"] },
+        { name: "Fish Burger", tags: [], note: "Tartare Sauce & Cheese" },
+      ],
+    },
+  ];
+
+  const getTagStyle = (tag: string) => {
+    if (tag === "Vegan")
+      return "bg-emerald-500/15 text-emerald-400 border-emerald-500/25";
+    if (tag === "Vegetarian")
+      return "bg-lime-500/15 text-lime-400 border-lime-500/25";
+    return "bg-[#38bdf8]/10 text-[#38bdf8]/70 border-[#38bdf8]/20";
+  };
+
   return (
-    <GlowCard className="p-5" glow="teal">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#14b8a6]/20 to-[#06b6d4]/10 flex items-center justify-center">
-          <CookingPot className="w-6 h-6 text-[#14b8a6] drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold text-white">House Recipes</h3>
-          <p className="text-[10px] text-[#38bdf8]/50">
-            Our favorite dishes for you to try
-          </p>
+    <GlowCard className="p-5 overflow-hidden" glow="teal">
+      {/* Header with decorative background */}
+      <div className="relative mb-5">
+        <div className="absolute -top-5 -right-5 w-24 h-24 bg-gradient-to-br from-[#14b8a6]/10 to-transparent rounded-full blur-2xl" />
+        <div className="flex items-center gap-3 relative">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#14b8a6]/25 to-[#06b6d4]/15 flex items-center justify-center border border-[#14b8a6]/20 shadow-lg shadow-[#14b8a6]/10">
+            <CookingPot className="w-6 h-6 text-[#14b8a6] drop-shadow-[0_0_10px_rgba(20,184,166,0.6)]" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white tracking-tight">
+              Tonight&apos;s Menu
+            </h3>
+            <p className="text-[10px] text-[#38bdf8]/50 flex items-center gap-1">
+              <span className="inline-block w-1 h-1 rounded-full bg-[#14b8a6] animate-pulse" />
+              Celebration dinner
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="flex flex-col items-center justify-center py-10">
-        <div className="w-16 h-16 rounded-full bg-[#14b8a6]/10 flex items-center justify-center mb-4 animate-pulse">
-          <CookingPot className="w-8 h-8 text-[#14b8a6]/50" />
-        </div>
-        <p className="text-sm font-medium text-[#38bdf8]/60 mb-1">
-          Coming Soon
-        </p>
-        <p className="text-[11px] text-[#38bdf8]/30 text-center max-w-[200px]">
-          ERA is compiling the best recipes from this household. Stay tuned!
-        </p>
-        <p className="text-[10px] text-[#06b6d4]/40 mt-2">
-          💡 Ask ERA in the chat for today&apos;s menu or recipe list!
+      {/* Menu sections */}
+      <div className="space-y-4">
+        {menuSections.map((section) => (
+          <div key={section.title}>
+            {/* Section header */}
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm">{section.emoji}</span>
+              <span className="text-[11px] font-semibold text-[#14b8a6] uppercase tracking-wider">
+                {section.title}
+              </span>
+              <div className="flex-1 h-px bg-gradient-to-r from-[#14b8a6]/20 to-transparent" />
+            </div>
+
+            {/* Section items */}
+            <div className="space-y-1.5 pl-1">
+              {section.items.map((item) => (
+                <div
+                  key={item.name}
+                  className="group flex items-center gap-2.5 p-2.5 rounded-xl bg-[#0a1628]/60 border border-[#14b8a6]/8 hover:border-[#14b8a6]/20 hover:bg-[#0a1628]/80 transition-all duration-200"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[13px] font-medium text-white/90">
+                        {item.name}
+                      </span>
+                      {item.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className={cn(
+                            "px-1.5 py-0.5 rounded-md text-[8px] font-semibold border uppercase tracking-wide",
+                            getTagStyle(tag),
+                          )}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    {item.note && (
+                      <p className="text-[10px] text-[#38bdf8]/40 mt-0.5">
+                        {item.note}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div className="mt-4 pt-3 border-t border-[#14b8a6]/10">
+        <p className="text-[10px] text-[#38bdf8]/40 text-center flex items-center justify-center gap-2">
+          <span>🎉</span>
+          <span>Bon appétit! Please inform us of any allergies.</span>
+          <span>🎉</span>
         </p>
       </div>
     </GlowCard>
@@ -1004,6 +1124,265 @@ function DownloadCard() {
           The ERA Home Manager app will be available for download soon.
         </p>
       </div>
+    </GlowCard>
+  );
+}
+
+// ─── Drinks Selection Card ───────────────────────────────
+interface DrinkOption {
+  id: string;
+  label: string;
+  emoji: string;
+  subtext?: string;
+  isOther?: boolean;
+  guilt?: boolean;
+}
+
+function DrinksCard({
+  tagInfo,
+  session,
+}: {
+  tagInfo: TagInfo | null;
+  session: GuestSession | null;
+}) {
+  const [selectedDrink, setSelectedDrink] = useState<string | null>(null);
+  const [otherDrink, setOtherDrink] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showGuilty, setShowGuilty] = useState(false);
+
+  const drinkOptions: DrinkOption[] = [
+    { id: "water", label: "Just Water", emoji: "💧", guilt: true },
+    {
+      id: "diet_pepsi",
+      label: "Diet Pepsi",
+      emoji: "🥤",
+      subtext: "Soft drink",
+    },
+    { id: "diet_7up", label: "Diet 7Up", emoji: "🧃", subtext: "Soft drink" },
+    { id: "red_wine", label: "Red Wine", emoji: "🍷" },
+    { id: "white_wine", label: "White Wine", emoji: "🥂" },
+    {
+      id: "whisky_single",
+      label: "Whisky",
+      emoji: "🥃",
+      subtext: "Single Malt",
+    },
+    { id: "whisky_blended", label: "Whisky", emoji: "🥃", subtext: "Blended" },
+    {
+      id: "other",
+      label: "Other",
+      emoji: "✨",
+      subtext: "Please specify",
+      isOther: true,
+    },
+  ];
+
+  // Load existing selection
+  useEffect(() => {
+    if (!session?.id) {
+      setLoading(false);
+      return;
+    }
+    fetch(`/api/guest-portal/drinks?session_id=${session.id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.drink) {
+          setSelectedDrink(data.drink.drink_selection);
+          setOtherDrink(data.drink.other_drink || "");
+          setSubmitted(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [session?.id]);
+
+  const handleSelect = async (drinkId: string) => {
+    if (drinkId === "water") {
+      setShowGuilty(true);
+      setTimeout(() => setShowGuilty(false), 2500);
+    }
+
+    setSelectedDrink(drinkId);
+
+    // If "other", reset submitted so the input field shows
+    if (drinkId === "other") {
+      setSubmitted(false);
+      return;
+    }
+
+    // For all other drinks, submit immediately
+    await submitDrink(drinkId, "");
+  };
+
+  const submitDrink = async (drink: string, other: string) => {
+    if (!tagInfo?.id || !session?.id) return;
+
+    try {
+      const res = await fetch("/api/guest-portal/drinks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tag_id: tagInfo.id,
+          session_id: session.id,
+          guest_name: session.guest_name,
+          drink_selection: drink,
+          other_drink: other || null,
+        }),
+      });
+      if (res.ok) {
+        setSubmitted(true);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleOtherSubmit = async () => {
+    if (!otherDrink.trim()) return;
+    await submitDrink("other", otherDrink.trim());
+  };
+
+  if (loading) {
+    return (
+      <GlowCard className="p-5" glow="amber">
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-[#f59e0b]" />
+        </div>
+      </GlowCard>
+    );
+  }
+
+  const selectedOption = drinkOptions.find((d) => d.id === selectedDrink);
+
+  return (
+    <GlowCard className="p-5 overflow-hidden relative" glow="amber">
+      {/* Guilty animation overlay */}
+      {showGuilty && (
+        <div className="absolute inset-0 z-20 rounded-2xl bg-[#0a1628]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-300">
+          <div className="text-5xl mb-3 animate-bounce">😔</div>
+          <p className="text-sm font-medium text-[#38bdf8]/80 text-center mb-1">
+            Really? Just water?
+          </p>
+          <p className="text-xs text-[#38bdf8]/50 text-center">
+            We threw a whole party and you&apos;re choosing... hydration?
+          </p>
+          <p className="text-[10px] text-[#f59e0b] mt-3 animate-pulse">
+            Fine. We respect the healthy choice. 💪
+          </p>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="relative mb-5">
+        <div className="absolute -top-5 -right-5 w-24 h-24 bg-gradient-to-br from-[#f59e0b]/10 to-transparent rounded-full blur-2xl" />
+        <div className="flex items-center gap-3 relative">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#f59e0b]/25 to-[#ef4444]/15 flex items-center justify-center border border-[#f59e0b]/20 shadow-lg shadow-[#f59e0b]/10">
+            <Wine className="w-6 h-6 text-[#f59e0b] drop-shadow-[0_0_10px_rgba(245,158,11,0.6)]" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white tracking-tight">
+              Choose Your Drink
+            </h3>
+            <p className="text-[10px] text-[#38bdf8]/50 flex items-center gap-1">
+              <span className="inline-block w-1 h-1 rounded-full bg-[#f59e0b] animate-pulse" />
+              What are you having tonight?
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Drink options */}
+      <div className="grid grid-cols-2 gap-2">
+        {drinkOptions.map((drink) => (
+          <button
+            key={drink.id}
+            onClick={() => handleSelect(drink.id)}
+            className={cn(
+              "relative p-3 rounded-xl border transition-all duration-200 text-left group",
+              selectedDrink === drink.id
+                ? "bg-[#f59e0b]/15 border-[#f59e0b]/40 shadow-lg shadow-[#f59e0b]/10"
+                : "bg-[#0a1628]/60 border-[#f59e0b]/10 hover:border-[#f59e0b]/25 hover:bg-[#0a1628]/80",
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xl group-hover:scale-110 transition-transform duration-200">
+                {drink.emoji}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p
+                  className={cn(
+                    "text-xs font-medium truncate",
+                    selectedDrink === drink.id
+                      ? "text-[#f59e0b]"
+                      : "text-white/80",
+                  )}
+                >
+                  {drink.label}
+                </p>
+                {drink.subtext && (
+                  <p className="text-[9px] text-[#38bdf8]/40 truncate">
+                    {drink.subtext}
+                  </p>
+                )}
+              </div>
+            </div>
+            {selectedDrink === drink.id && (
+              <div className="absolute top-1.5 right-1.5">
+                <Check className="w-3.5 h-3.5 text-[#f59e0b]" />
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Other drink input */}
+      {selectedDrink === "other" && !submitted && (
+        <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex gap-2">
+            <input
+              value={otherDrink}
+              onChange={(e) => setOtherDrink(e.target.value)}
+              placeholder="What would you like?"
+              className="flex-1 px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#f59e0b]/20 text-sm text-white placeholder:text-[#38bdf8]/30 focus:outline-none focus:border-[#f59e0b]/40 focus:ring-1 focus:ring-[#f59e0b]/20 transition-all duration-200"
+              autoFocus
+            />
+            <button
+              onClick={handleOtherSubmit}
+              disabled={!otherDrink.trim()}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#f59e0b] to-[#ef4444] text-sm font-semibold text-white shadow-lg shadow-[#f59e0b]/20 hover:shadow-[#f59e0b]/40 transition-all duration-300 disabled:opacity-40"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation message */}
+      {submitted && selectedOption && (
+        <div className="mt-4 p-3 rounded-xl bg-[#14b8a6]/10 border border-[#14b8a6]/20 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="flex items-center gap-2">
+            <BadgeCheck className="w-4 h-4 text-[#14b8a6] shrink-0" />
+            <p className="text-xs text-[#14b8a6]">
+              <span className="font-medium">Noted!</span>{" "}
+              {selectedDrink === "other" ? (
+                <>You&apos;ll have: {otherDrink}</>
+              ) : (
+                <>
+                  You&apos;re having {selectedOption.emoji}{" "}
+                  {selectedOption.label}
+                  {selectedOption.subtext ? ` (${selectedOption.subtext})` : ""}
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <p className="text-[9px] text-[#38bdf8]/30 text-center mt-4">
+        🍻 Tap to select • Change anytime
+      </p>
     </GlowCard>
   );
 }
@@ -1144,7 +1523,13 @@ function ChatInterface({
         });
         if (res.ok) {
           const data = await res.json();
-          setMessages((prev) => [...prev, data.message]);
+          setMessages((prev) => {
+            // Check if message already exists to avoid duplicates
+            if (prev.some((m) => m.id === data.message.id)) {
+              return prev;
+            }
+            return [...prev, data.message];
+          });
           lastFetchRef.current = data.message.created_at;
         }
       } catch {
@@ -1181,7 +1566,13 @@ function ChatInterface({
             });
             if (botRes.ok) {
               const botData = await botRes.json();
-              setMessages((prev) => [...prev, botData.message]);
+              setMessages((prev) => {
+                // Check if message already exists to avoid duplicates
+                if (prev.some((m) => m.id === botData.message.id)) {
+                  return prev;
+                }
+                return [...prev, botData.message];
+              });
               lastFetchRef.current = botData.message.created_at;
             }
           }
@@ -1620,7 +2011,8 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
       { id: "wifi", icon: Wifi, label: "Wi-Fi" },
       { id: "rules", icon: ShieldCheck, label: "Rules" },
       { id: "allergies", icon: AlertTriangle, label: "Allergies" },
-      { id: "recipes", icon: CookingPot, label: "Recipes" },
+      { id: "recipes", icon: CookingPot, label: "Menu" },
+      { id: "drinks", icon: Wine, label: "Drinks" },
       { id: "feedback", icon: MessageCircle, label: "Feedback" },
       { id: "download", icon: Download, label: "App" },
     ],
@@ -1736,16 +2128,30 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
             mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6",
           )}
         >
-          <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5">
-            {navItems.map((item) => (
-              <NavPill
-                key={item.id}
-                icon={item.icon}
-                label={item.label}
-                active={activeSection === item.id}
-                onClick={() => setActiveSection(item.id)}
-              />
-            ))}
+          <div className="relative">
+            {/* Scroll hint - left fade */}
+            <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-[#0a1628] to-transparent z-10 pointer-events-none opacity-0 transition-opacity" />
+            {/* Scroll hint - right fade with chevron */}
+            <div className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-[#0a1628] via-[#0a1628]/80 to-transparent z-10 pointer-events-none flex items-center justify-end pr-1">
+              <div className="flex items-center gap-0.5 animate-pulse">
+                <ChevronRight className="w-3.5 h-3.5 text-[#06b6d4]/60" />
+              </div>
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5">
+              {navItems.map((item) => (
+                <NavPill
+                  key={item.id}
+                  icon={item.icon}
+                  label={item.label}
+                  active={activeSection === item.id}
+                  onClick={() => setActiveSection(item.id)}
+                />
+              ))}
+            </div>
+            {/* Swipe hint text */}
+            <p className="text-[9px] text-[#38bdf8]/30 text-center mt-1">
+              ← swipe for more →
+            </p>
           </div>
         </nav>
 
@@ -1848,7 +2254,17 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                     >
                       <CookingPot className="w-5 h-5 mx-auto mb-1.5 text-[#14b8a6]" />
                       <p className="text-[10px] font-medium text-[#38bdf8]/70">
-                        Recipes
+                        Menu
+                      </p>
+                    </GlowCard>
+                    <GlowCard
+                      className="p-3 text-center"
+                      glow="amber"
+                      onClick={() => setActiveSection("drinks")}
+                    >
+                      <Wine className="w-5 h-5 mx-auto mb-1.5 text-[#f59e0b]" />
+                      <p className="text-[10px] font-medium text-[#38bdf8]/70">
+                        Drinks
                       </p>
                     </GlowCard>
                     <GlowCard
@@ -1859,16 +2275,6 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                       <MessageCircle className="w-5 h-5 mx-auto mb-1.5 text-[#3b82f6]" />
                       <p className="text-[10px] font-medium text-[#38bdf8]/70">
                         Feedback
-                      </p>
-                    </GlowCard>
-                    <GlowCard
-                      className="p-3 text-center"
-                      glow="blue"
-                      onClick={() => setActiveSection("download")}
-                    >
-                      <Download className="w-5 h-5 mx-auto mb-1.5 text-[#3b82f6]" />
-                      <p className="text-[10px] font-medium text-[#38bdf8]/70">
-                        Get App
                       </p>
                     </GlowCard>
                   </div>
@@ -1919,6 +2325,12 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
           {activeSection === "recipes" && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <RecipesCard />
+            </div>
+          )}
+
+          {activeSection === "drinks" && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <DrinksCard tagInfo={tagInfo} session={session} />
             </div>
           )}
 
