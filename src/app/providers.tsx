@@ -142,6 +142,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   );
 
   // Clear persisted RQ cache on Supabase user switch
+  // IMPORTANT: Use getSession() instead of getUser() — getSession() reads from
+  // localStorage (cached JWT) and works offline. getUser() makes a network call
+  // that fails offline and returns null, causing a false "user switched" detection
+  // that wipes the entire cache.
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -153,13 +157,19 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
       );
 
+      // getSession() reads the cached JWT from localStorage — works offline
       let currentUserId: string | null = null;
-      const { data } = await supabase.auth.getUser();
-      currentUserId = data.user?.id ?? null;
+      const { data } = await supabase.auth.getSession();
+      currentUserId = data.session?.user?.id ?? null;
 
       const { data: sub } = supabase.auth.onAuthStateChange((_evt, sess) => {
         const nextUserId = sess?.user?.id ?? null;
-        if (nextUserId !== currentUserId) {
+        // Only clear cache on genuine user switch (both IDs must be non-null
+        // and different, OR the user explicitly signed out → nextUserId is null)
+        if (
+          currentUserId !== null &&
+          nextUserId !== currentUserId
+        ) {
           try {
             localStorage.removeItem(RQ_PERSIST_KEY);
             localStorage.removeItem("user_preferences");
@@ -169,8 +179,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
               .forEach((key) => localStorage.removeItem(key));
           } catch {}
           queryClient.clear();
-          currentUserId = nextUserId;
         }
+        currentUserId = nextUserId;
       });
 
       cleanup = () => sub.subscription.unsubscribe();
