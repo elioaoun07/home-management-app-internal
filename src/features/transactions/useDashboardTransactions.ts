@@ -1,6 +1,13 @@
 import { sendSplitBillNotification } from "@/lib/notifications/sendSplitBillNotification";
 import { addToQueue } from "@/lib/offlineQueue";
 import { ToastIcons } from "@/lib/toastIcons";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { toast } from "sonner";
 
 /** Detect if an error is a network failure (fetch failed, not an HTTP error) */
 function isNetworkError(err: unknown): boolean {
@@ -9,13 +16,46 @@ function isNetworkError(err: unknown): boolean {
   if (err instanceof Error && /network|failed to fetch|load failed/i.test(err.message)) return true;
   return false;
 }
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { toast } from "sonner";
+
+/** How long to wait for a fetch before treating it as offline (ms) */
+const OFFLINE_FETCH_TIMEOUT = 5000;
+
+/**
+ * Fetch with an automatic timeout.
+ * If the request doesn't complete within OFFLINE_FETCH_TIMEOUT ms the
+ * returned promise rejects with a custom Error whose `.name` is
+ * "TimeoutError" so callers can distinguish it from user-initiated AbortErrors.
+ */
+function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OFFLINE_FETCH_TIMEOUT);
+
+  return fetch(input, { ...init, signal: controller.signal })
+    .then((res) => {
+      clearTimeout(timeoutId);
+      return res;
+    })
+    .catch((err) => {
+      clearTimeout(timeoutId);
+      // Convert our own timeout abort into a recognisable error
+      if (err instanceof DOMException && err.name === "AbortError") {
+        const timeout = new Error("Request timed out — treating as offline");
+        timeout.name = "TimeoutError";
+        throw timeout;
+      }
+      throw err;
+    });
+}
+
+/** Returns true when the error means "no network" (includes our timeout) */
+function isOfflineError(err: unknown): boolean {
+  if (isNetworkError(err)) return true;
+  if (err instanceof Error && err.name === "TimeoutError") return true;
+  return false;
+}
 
 export type Transaction = {
   id: string;
@@ -191,11 +231,12 @@ export function useDeleteTransaction() {
         return transactionId;
       }
 
-      // Try network — fall back to queue on network failure
+      // Try network with timeout — fall back to queue on network failure
       try {
-        const response = await fetch(`/api/transactions/${transactionId}`, {
-          method: "DELETE",
-        });
+        const response = await fetchWithTimeout(
+          `/api/transactions/${transactionId}`,
+          { method: "DELETE" },
+        );
 
         if (!response.ok) {
           throw new Error("Failed to delete transaction");
@@ -203,7 +244,7 @@ export function useDeleteTransaction() {
 
         return transactionId;
       } catch (err) {
-        if (isNetworkError(err)) {
+        if (isOfflineError(err)) {
           await addToQueue({
             feature: "transaction",
             operation: "delete",
@@ -434,9 +475,9 @@ export function useAddTransaction() {
         return queueOfflineCreate();
       }
 
-      // Try network — fall back to queue on network failure
+      // Try network with timeout — fall back to queue on network failure
       try {
-        const response = await fetch("/api/transactions", {
+        const response = await fetchWithTimeout("/api/transactions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(serverTransaction),
@@ -448,7 +489,7 @@ export function useAddTransaction() {
 
         return response.json();
       } catch (err) {
-        if (isNetworkError(err)) {
+        if (isOfflineError(err)) {
           return queueOfflineCreate();
         }
         throw err;
@@ -833,9 +874,9 @@ export function useUpdateTransaction() {
         return queueOfflineUpdate();
       }
 
-      // Try network — fall back to queue on network failure
+      // Try network with timeout — fall back to queue on network failure
       try {
-        const response = await fetch(`/api/transactions/${id}`, {
+        const response = await fetchWithTimeout(`/api/transactions/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -847,7 +888,7 @@ export function useUpdateTransaction() {
 
         return response.json();
       } catch (err) {
-        if (isNetworkError(err)) {
+        if (isOfflineError(err)) {
           return queueOfflineUpdate();
         }
         throw err;
