@@ -98,11 +98,16 @@ export default function AccountBalance({
       return data;
     },
     enabled: !!accountId,
-    retry: 1,
+    retry: (failureCount) => {
+      // Don't retry when offline — use cached/placeholder silently
+      if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+      return failureCount < 1;
+    },
     // OPTIMIZED: Use cached data, refetch when stale
     staleTime: CACHE_TIMES.BALANCE, // 5 minutes
-    refetchOnMount: "always", // Always check on mount
-    refetchOnWindowFocus: true, // Sync across devices when tab gains focus
+    // Only force-refetch on mount when online; offline uses restored cache
+    refetchOnMount: isOffline ? false : "always",
+    refetchOnWindowFocus: !isOffline, // Don't try to sync when offline
     // Use cached balance as placeholder for instant UI
     placeholderData: cachedBalance
       ? {
@@ -114,15 +119,16 @@ export default function AccountBalance({
   });
 
   // Handle errors with useEffect (new React Query pattern)
+  // Suppress error toasts when offline — cached data is shown instead
   useEffect(() => {
-    if (error) {
+    if (error && !isOffline) {
       toast.error(
         error instanceof Error
           ? error.message
           : "Failed to load balance. Please refresh.",
       );
     }
-  }, [error]);
+  }, [error, isOffline]);
 
   // Update balance mutation
   const updateBalanceMutation = useMutation({
