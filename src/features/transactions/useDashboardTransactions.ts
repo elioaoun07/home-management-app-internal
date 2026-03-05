@@ -685,6 +685,15 @@ export function useAddTransaction() {
       }
     },
     onSuccess: (serverTransaction, variables) => {
+      // If this was queued offline, ensure pending count is refreshed.
+      // Belt-and-suspenders: re-fire event so SyncContext also picks it up
+      // (Zustand store was already updated synchronously in addToQueue).
+      if (serverTransaction?._offline) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("offline-queue-changed"));
+        }
+      }
+
       // Replace the optimistic (temp) transaction with the real server data
       // This ensures any cached queries have the correct transaction with real ID
       queryClient.setQueriesData<Transaction[]>(

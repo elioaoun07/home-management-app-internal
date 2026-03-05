@@ -17,6 +17,7 @@ import {
   getCachedBalance,
   setCachedBalance,
 } from "@/lib/queryConfig";
+import { useOfflinePendingStore } from "@/lib/stores/offlinePendingStore";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WifiOff } from "lucide-react";
@@ -54,7 +55,11 @@ export default function AccountBalance({
   const queryClient = useQueryClient();
   const sync = useSyncSafe();
   const isOffline = sync ? !sync.isOnline : false;
-  const offlinePendingCount = sync?.offlinePendingCount ?? 0;
+  // Primary source: Zustand store (synchronous, instant updates)
+  // Fallback: SyncContext (async IDB reads, may lag behind)
+  const zustandCount = useOfflinePendingStore((s) => s.count);
+  const contextCount = sync?.offlinePendingCount ?? 0;
+  const offlinePendingCount = Math.max(zustandCount, contextCount);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [showHistory, setShowHistory] = useState(false);

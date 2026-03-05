@@ -17,6 +17,7 @@ import {
   type OfflineSyncEngine,
   type SyncResult,
 } from "@/lib/offlineSyncEngine";
+import { offlinePendingActions } from "@/lib/stores/offlinePendingStore";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -158,6 +159,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     try {
       const count = await getQueueCount();
       setOfflinePendingCount(count);
+      // Also sync the Zustand store (source-of-truth correction)
+      offlinePendingActions.setCount(count);
       if (count > 0) {
         const ops = await getAllPending();
         setOfflinePendingOps(ops);

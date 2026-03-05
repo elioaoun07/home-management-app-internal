@@ -1,6 +1,8 @@
 // src/lib/offlineQueue.ts
 // IndexedDB wrapper for offline operation queue
 
+import { offlinePendingActions } from "@/lib/stores/offlinePendingStore";
+
 const DB_NAME = "budget-offline";
 const DB_VERSION = 1;
 const STORE_NAME = "pending-ops";
@@ -126,6 +128,7 @@ export async function addToQueue(op: QueueableOperation): Promise<string> {
       throw new Error("Too many pending changes. Please connect to sync.");
     }
     memoryQueue.push(operation);
+    offlinePendingActions.increment();
     notifyQueueChanged();
     return operation.id;
   }
@@ -156,6 +159,7 @@ export async function addToQueue(op: QueueableOperation): Promise<string> {
     });
 
     db.close();
+    offlinePendingActions.increment();
     notifyQueueChanged();
     return operation.id;
   } catch (err) {
@@ -163,6 +167,7 @@ export async function addToQueue(op: QueueableOperation): Promise<string> {
     if (!useMemoryFallback) {
       useMemoryFallback = true;
       memoryQueue.push(operation);
+      offlinePendingActions.increment();
       notifyQueueChanged();
       return operation.id;
     }
@@ -173,6 +178,7 @@ export async function addToQueue(op: QueueableOperation): Promise<string> {
 export async function removeFromQueue(id: string): Promise<void> {
   if (useMemoryFallback) {
     memoryQueue = memoryQueue.filter((op) => op.id !== id);
+    offlinePendingActions.decrement();
     notifyQueueChanged();
     return;
   }
@@ -187,9 +193,11 @@ export async function removeFromQueue(id: string): Promise<void> {
       deleteReq.onerror = () => reject(deleteReq.error);
     });
     db.close();
+    offlinePendingActions.decrement();
     notifyQueueChanged();
   } catch {
     memoryQueue = memoryQueue.filter((op) => op.id !== id);
+    offlinePendingActions.decrement();
     notifyQueueChanged();
   }
 }
@@ -220,6 +228,7 @@ export async function getAllPending(): Promise<OfflineOperation[]> {
 export async function clearQueue(): Promise<void> {
   if (useMemoryFallback) {
     memoryQueue = [];
+    offlinePendingActions.reset();
     notifyQueueChanged();
     return;
   }
@@ -234,9 +243,11 @@ export async function clearQueue(): Promise<void> {
       clearReq.onerror = () => reject(clearReq.error);
     });
     db.close();
+    offlinePendingActions.reset();
     notifyQueueChanged();
   } catch {
     memoryQueue = [];
+    offlinePendingActions.reset();
     notifyQueueChanged();
   }
 }
