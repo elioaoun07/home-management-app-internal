@@ -268,10 +268,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     const handleOnline = () => {
       setIsOnline(true);
       setStatus("reconnecting");
-      // Trigger reconnection — process both legacy and new queues
-      processLegacyPendingOperations();
-      syncEngineRef.current?.processQueue();
-      refreshAll();
+      // Small delay to ensure network is actually available before firing requests
+      setTimeout(() => {
+        if (!navigator.onLine) return;
+        // Trigger reconnection — process both legacy and new queues
+        processLegacyPendingOperations();
+        syncEngineRef.current?.processQueue();
+        refreshAll();
+      }, 500);
     };
 
     const handleOffline = () => {
@@ -559,8 +563,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Refresh all data
+  // Refresh all data — only when truly online
   const refreshAll = useCallback(async () => {
+    // Guard: never invalidate queries when offline — it triggers refetches that fail
+    if (!navigator.onLine) {
+      setStatus("offline");
+      return;
+    }
+
     setStatus("reconnecting");
 
     try {
@@ -572,6 +582,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ["notifications"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["account-balance"] }),
       ]);
 
       setLastSyncTime(new Date());

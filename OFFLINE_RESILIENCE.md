@@ -5,6 +5,75 @@
 
 ---
 
+## Bugfix Changelog (March 2026)
+
+### Issue: API errors crash the app when going offline
+
+**Root causes identified & fixed:**
+
+1. **`refreshAll()` fires queries when offline** — `SyncContext.refreshAll()` called `invalidateQueries()` unconditionally, triggering refetches that fail with `TypeError: Failed to fetch`. Fixed by adding an `if (!navigator.onLine)` guard at the top of `refreshAll()`.
+
+2. **`handleOnline` fires too eagerly** — Network reconnection triggers `processQueue` + `refreshAll` instantly, but the network may not be fully stable yet. Fixed with a 500ms `setTimeout` guard that rechecks `navigator.onLine` before firing.
+
+3. **`useDashboardTransactions` refetches on mount/focus while offline** — Had `refetchOnMount: true` and `refetchOnWindowFocus: true` unconditionally. Fixed by making these offline-aware: `refetchOnMount: !isOffline`, `refetchOnWindowFocus: !isOffline`, and a custom `retry` function that returns `false` when offline.
+
+4. **Balance queryFn throws when offline** — `AccountBalance` fetches from `/api/accounts/:id/balance` which fails offline. Fixed: the `queryFn` now detects offline state and returns localStorage-cached balance directly (no network call). Falls back to `getCachedBalance()` from `queryConfig.ts`.
+
+5. **`prefetchAllTabs` fires when offline** — No guard existed. Added `if (!navigator.onLine) return;` at the top.
+
+6. **Global React Query retry doesn't suppress "Offline" errors** — Added `error.message === "Offline"` check to the global retry function in `providers.tsx`. Also added `throwOnError: false` globally to prevent error boundaries from firing on stale offline errors.
+
+### Issue: Cached data not loading correctly when opening app offline
+
+**Root causes identified & fixed:**
+
+1. **Service worker returns 504 for RSC payloads** — Next.js App Router uses RSC (React Server Components) payloads for client navigation (`/_next/` with `.rsc` or `?_rsc` params). The SW returned an empty 504 response which crashed the app. Fixed: RSC payloads now return `{}` with status 200 when offline, allowing the client app shell to render with persisted React Query cache.
+
+2. **SW version bumped to 3.2.0** — Forces new SW install to pick up caching fixes.
+
+### Issue: Default account step showing despite having a default
+
+**Root causes identified & fixed:**
+
+1. **Init fires before persisted cache restores** — `MobileExpenseForm` initializes when `!accountsLoading` but during `PersistQueryClientProvider` restore phase, accounts can be empty. Fixed: added guard `accounts.length > 0 || navigator.onLine` — when offline, waits for persisted data to actually load.
+
+2. **No re-derivation when default account loads late** — If the persisted cache restores AFTER initial initialization, the step stays on "account" even though a default now exists. Fixed: added a `useEffect` that watches `defaultAccount` and jumps away from the "account" step when a default becomes available.
+
+### Issue: Balance display not visually indicating offline state
+
+**Fixed:**
+
+- Balance text uses a greyed-out gradient (`from-white/30 to-white/20`) when offline instead of the colorful theme gradient
+- Edit and Transfer buttons hidden when offline (network-only actions)
+- "Cached" label shown next to WifiOff icon
+- Pending offline transaction count shown prominently as amber text: "N pending offline transactions"
+- Error state suppressed when offline and cached data exists — shows cached balance instead of "Setup Required"
+
+### Issue: AI button not clearly indicating offline
+
+**Fixed:**
+
+- Reduced opacity from 50% to 35% when offline
+- Background changed from `bg-gray-700/50` to `bg-slate-700/30` for a lighter, more washed-out look
+- WifiOff icon opacity reduced from `text-white/40` to `text-white/20`
+
+---
+
+### Files Changed (Bugfix Round)
+
+| File | Change |
+|------|--------|
+| `src/features/transactions/useDashboardTransactions.ts` | Offline-aware refetch/retry in `useDashboardTransactions` |
+| `src/contexts/SyncContext.tsx` | Guard `refreshAll()` when offline; delay `handleOnline`; also invalidate `account-balance` on reconnect |
+| `src/components/expense/AccountBalance.tsx` | Offline queryFn returns cached balance; grey balance text; hide edit/transfer; prominent pending count; suppress error when cached data exists |
+| `src/features/navigation/prefetchTabs.ts` | Skip all prefetches when offline |
+| `public/sw.js` | v3.2.0; RSC payload fallback returns `{}` instead of 504 |
+| `src/app/providers.tsx` | Global retry skips "Offline" errors; `throwOnError: false` |
+| `src/components/expense/MobileExpenseForm.tsx` | Wait for accounts data before init; re-derive step when default account loads late |
+| `src/components/ai/AIChatAssistant.tsx` | Lighter grey styling when offline (opacity-35, slate-700/30) |
+
+---
+
 ## Architecture Overview
 
 ```

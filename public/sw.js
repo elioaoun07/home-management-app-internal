@@ -1,7 +1,7 @@
 // Service Worker for Push Notifications + Offline Caching
 // Handles push events, displays notifications with alarm-like behavior, and caches app shell
 
-const SW_VERSION = "3.1.0";
+const SW_VERSION = "3.2.0";
 
 // ============================================
 // CACHE CONFIGURATION
@@ -145,7 +145,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Next.js chunks & other JS/CSS — Cache-first for fingerprinted, network-first otherwise
+  // Next.js chunks, RSC payloads & other JS/CSS — Cache with network-first for dynamic, cache-first for static
   if (url.pathname.startsWith("/_next/")) {
     event.respondWith(
       caches.match(request).then((cached) => {
@@ -158,7 +158,18 @@ self.addEventListener("fetch", (event) => {
             }
             return response;
           })
-          .catch(() => cached || new Response("", { status: 504 }));
+          .catch(() => {
+            // Offline: return cached version if available
+            if (cached) return cached;
+            // For RSC payloads, return empty JSON rather than 504 to avoid app crashes
+            if (url.pathname.includes(".rsc") || url.searchParams.has("_rsc")) {
+              return new Response("{}", {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+            return new Response("", { status: 504 });
+          });
       })
     );
     return;

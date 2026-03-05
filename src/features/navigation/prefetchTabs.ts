@@ -87,6 +87,9 @@ export async function prefetchExpenseData(queryClient: QueryClient) {
  * OPTIMIZED: Only prefetch stale/missing data
  */
 export async function prefetchAllTabs(queryClient: QueryClient) {
+  // Don't prefetch when offline — use persisted cache
+  if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);

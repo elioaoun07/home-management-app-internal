@@ -514,7 +514,7 @@ export default function AIChatAssistant() {
               "fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg",
               isOnline
                 ? "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-violet-400/30"
-                : "bg-gray-700/50 border border-white/10 opacity-50 cursor-not-allowed",
+                : "bg-slate-700/30 border border-white/5 opacity-35 cursor-not-allowed",
               "transition-all duration-300",
               isOnline && "hover:scale-110",
               "flex items-center justify-center",
@@ -526,7 +526,7 @@ export default function AIChatAssistant() {
             {isOnline ? (
               <SparklesIcon className="h-6 w-6 text-white" />
             ) : (
-              <WifiOff className="h-5 w-5 text-white/40" />
+              <WifiOff className="h-5 w-5 text-white/20" />
             )}
             <span className="sr-only">{isOnline ? "Open AI Assistant" : "AI unavailable offline"}</span>
           </Button>

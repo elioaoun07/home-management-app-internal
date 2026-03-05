@@ -100,14 +100,19 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             refetchOnWindowFocus: false,
             refetchOnReconnect: true,
             refetchOnMount: false, // Use cache, don't refetch on mount
-            retry: (failureCount) => {
+            retry: (failureCount, error) => {
               // Don't retry when offline — fail silently, use cached data
               if (typeof navigator !== "undefined" && !navigator.onLine)
+                return false;
+              // Don't retry explicit offline errors
+              if (error instanceof Error && error.message === "Offline")
                 return false;
               return failureCount < 2;
             },
             retryDelay: (attemptIndex) =>
               Math.min(1000 * 2 ** attemptIndex, 30000),
+            // Suppress throwing to error boundary when offline — keep showing cached data
+            throwOnError: false,
           },
           mutations: {
             retry: 1,

@@ -100,9 +100,15 @@ export function useDashboardTransactions({
   startDate,
   endDate,
 }: DashboardParams) {
+  const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+
   return useQuery({
     queryKey: ["transactions", "dashboard", startDate, endDate],
     queryFn: async () => {
+      // Guard: don't even try to fetch when offline
+      if (!navigator.onLine) {
+        throw new Error("Offline");
+      }
       const response = await fetch(
         `/api/transactions?start=${startDate}&end=${endDate}`,
       );
@@ -120,10 +126,13 @@ export function useDashboardTransactions({
     // Combined with gcTime, we keep data in cache but always verify freshness
     staleTime: 0,
     gcTime: 1000 * 60 * 60, // Keep in cache for 1 hour (for back navigation)
-    refetchOnMount: true, // Refetch when component mounts
-    refetchOnWindowFocus: true, // Sync across devices
+    refetchOnMount: !isOffline, // Don't refetch on mount when offline
+    refetchOnWindowFocus: !isOffline, // Don't sync when offline
     refetchOnReconnect: true, // Refetch when reconnecting
-    retry: 2,
+    retry: (failureCount) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+      return failureCount < 2;
+    },
     // Keep showing previous data while fetching new data for smooth transitions
     // This prevents the skeleton flash when changing date ranges
     placeholderData: keepPreviousData,

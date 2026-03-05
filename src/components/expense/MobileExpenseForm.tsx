@@ -582,15 +582,38 @@ export default function MobileExpenseForm() {
   const hasInitializedRef = useRef(false);
 
   useEffect(() => {
-    // INSTANT INIT - Wait for accounts to load so we know if there's a default account
-    // This ensures we skip the account step correctly when user has a default account
+    // INSTANT INIT - Wait for accounts to ACTUALLY LOAD (not just "not loading")
+    // This ensures we skip the account step correctly when user has a default account.
+    // When offline, the persisted cache may take a moment to restore —
+    // we wait for real account data to be available, or for the query to settle with empty data online.
     // Only run ONCE after accounts are loaded - use ref to guarantee single execution
-    if (stepFlow.length > 0 && !hasInitializedRef.current && !accountsLoading) {
+    if (
+      stepFlow.length > 0 &&
+      !hasInitializedRef.current &&
+      !accountsLoading &&
+      // Guard: don't initialize with empty accounts if we're still restoring cache
+      // If online, empty accounts is legitimate (new user). If offline, wait for persisted cache.
+      (accounts.length > 0 || navigator.onLine)
+    ) {
       hasInitializedRef.current = true;
       setStep(firstValidStep);
       setIsInitialized(true);
     }
-  }, [stepFlow, firstValidStep, accountsLoading]);
+  }, [stepFlow, firstValidStep, accountsLoading, accounts.length]);
+
+  // Re-derive step if default account becomes available AFTER initialization
+  // (e.g., persisted cache restores late, or account loaded from network)
+  const prevDefaultRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!hasInitializedRef.current) return;
+    if (defaultAccount && prevDefaultRef.current !== defaultAccount.id) {
+      prevDefaultRef.current = defaultAccount.id;
+      // If currently on the account step and we now have a default, skip to next valid step
+      if (step === "account") {
+        setStep(firstValidStep);
+      }
+    }
+  }, [defaultAccount, firstValidStep, step]);
 
   useEffect(() => {
     if (defaultAccount && !selectedAccountId) {

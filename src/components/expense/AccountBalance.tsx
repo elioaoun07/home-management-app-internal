@@ -85,6 +85,19 @@ export default function AccountBalance({
     queryKey: ["account-balance", accountId],
     queryFn: async () => {
       if (!accountId) return null;
+      // Don't fetch when offline — return cached data silently
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const offline = getCachedBalance(accountId);
+        if (offline) {
+          return {
+            account_id: accountId,
+            balance: offline.balance,
+            updated_at: offline.updatedAt,
+            _fromCache: true,
+          } as Balance & { _fromCache?: boolean };
+        }
+        throw new Error("Offline – no cached balance");
+      }
       const res = await fetch(`/api/accounts/${accountId}/balance`);
       if (!res.ok) {
         const errorData = await res
@@ -179,7 +192,8 @@ export default function AccountBalance({
     return null;
   }
 
-  if (error) {
+  if (error && !isOffline && !balance && !cachedBalance) {
+    // Only show error when online AND we have no cached data to display
     return (
       <div
         className={`neo-card ${themeClasses.surfaceBg} border-yellow-500/20 p-4 mb-4`}
@@ -213,6 +227,8 @@ export default function AccountBalance({
   }
 
   const currentBalance = balance?.balance || 0;
+  // When offline, hide actions that require network (edit balance, transfer)
+  const showActions = !isOffline;
 
   return (
     <div
@@ -220,14 +236,15 @@ export default function AccountBalance({
         "neo-card p-2.5 shadow-lg relative",
         themeClasses.cardBg,
         isOffline
-          ? "border border-dashed border-white/20 opacity-70"
+          ? "border border-dashed border-white/15"
           : themeClasses.border,
       )}
     >
-      {/* Offline hint icon */}
+      {/* Offline hint badge */}
       {isOffline && (
         <div className="absolute top-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/5">
-          <WifiOff className="w-3 h-3 text-white/30" />
+          <WifiOff className="w-3 h-3 text-white/25" />
+          <span className="text-[9px] text-white/25 font-medium">Cached</span>
         </div>
       )}
       <div className="flex items-center justify-between">
@@ -235,7 +252,7 @@ export default function AccountBalance({
           <Label
             className={cn(
               "text-[10px] font-medium uppercase tracking-wider",
-              themeClasses.textHighlight,
+              isOffline ? "text-white/30" : themeClasses.textHighlight,
             )}
           >
             {accountName || "Account"} Balance
@@ -286,8 +303,10 @@ export default function AccountBalance({
                   onClick={() => setShowHistory(true)}
                   className={cn(
                     "text-xl font-bold tabular-nums bg-gradient-to-r bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition-opacity",
-                    themeClasses.titleGradient,
-                    themeClasses.glow,
+                    isOffline
+                      ? "from-white/30 to-white/20" // Greyed out gradient when offline
+                      : themeClasses.titleGradient,
+                    !isOffline && themeClasses.glow,
                     isFetching && "opacity-70",
                   )}
                   title="View balance history"
@@ -302,48 +321,52 @@ export default function AccountBalance({
                     <RefreshIcon className="h-3.5 w-3.5" />
                   </div>
                 )}
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className={cn(
-                    "h-7 w-7 rounded-lg active:scale-95 transition-all",
-                    themeClasses.bgActive,
-                    themeClasses.bgHover,
-                    themeClasses.inputBorder,
-                  )}
-                  onClick={handleEdit}
-                >
-                  <Edit2Icon
+                {showActions && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
                     className={cn(
-                      "h-3.5 w-3.5",
-                      themeClasses.textHighlight,
-                      themeClasses.glow,
+                      "h-7 w-7 rounded-lg active:scale-95 transition-all",
+                      themeClasses.bgActive,
+                      themeClasses.bgHover,
+                      themeClasses.inputBorder,
                     )}
-                  />
-                </Button>
-                <TransferDialog
-                  trigger={
-                    <Button
-                      size="icon"
-                      variant="ghost"
+                    onClick={handleEdit}
+                  >
+                    <Edit2Icon
                       className={cn(
-                        "h-7 w-7 rounded-lg active:scale-95 transition-all",
-                        themeClasses.bgActive,
-                        themeClasses.bgHover,
-                        themeClasses.inputBorder,
+                        "h-3.5 w-3.5",
+                        themeClasses.textHighlight,
+                        themeClasses.glow,
                       )}
-                      title="Transfer between accounts"
-                    >
-                      <ArrowRightIcon
+                    />
+                  </Button>
+                )}
+                {showActions && (
+                  <TransferDialog
+                    trigger={
+                      <Button
+                        size="icon"
+                        variant="ghost"
                         className={cn(
-                          "h-3.5 w-3.5",
-                          themeClasses.textHighlight,
-                          themeClasses.glow,
+                          "h-7 w-7 rounded-lg active:scale-95 transition-all",
+                          themeClasses.bgActive,
+                          themeClasses.bgHover,
+                          themeClasses.inputBorder,
                         )}
-                      />
-                    </Button>
-                  }
-                />
+                        title="Transfer between accounts"
+                      >
+                        <ArrowRightIcon
+                          className={cn(
+                            "h-3.5 w-3.5",
+                            themeClasses.textHighlight,
+                            themeClasses.glow,
+                          )}
+                        />
+                      </Button>
+                    }
+                  />
+                )}
               </div>
               <span
                 className={
@@ -358,10 +381,13 @@ export default function AccountBalance({
                   ? ` ($${balance.pending_drafts.toFixed(2)})`
                   : ""}
               </span>
-              {/* Offline pending transactions hint */}
-              {isOffline && offlinePendingCount > 0 && (
-                <span className="text-xs font-medium text-white/40 italic">
-                  {offlinePendingCount} offline change{offlinePendingCount !== 1 ? "s" : ""} pending
+              {/* Offline pending transactions — show prominently */}
+              {offlinePendingCount > 0 && (
+                <span className={cn(
+                  "text-xs font-medium italic",
+                  isOffline ? "text-amber-400/70" : "text-amber-400/50"
+                )}>
+                  {offlinePendingCount} pending offline {offlinePendingCount === 1 ? "transaction" : "transactions"}
                 </span>
               )}
               {/* Future payments info */}
