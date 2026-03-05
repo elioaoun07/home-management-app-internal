@@ -4,7 +4,7 @@
   "short_name": "Budget",
   "description": "Track expenses, manage budgets, and gain insights into spending habits with beautiful analytics.",
   "start_url": "/expense",
-  "scope": "/",
+  "scope": "/expense",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "launch_handler": {
