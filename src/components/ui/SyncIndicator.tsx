@@ -1,17 +1,22 @@
 // src/components/ui/SyncIndicator.tsx
 "use client";
 
+import { MOBILE_NAV_HEIGHT } from "@/constants/layout";
 import { SyncStatus, useSyncSafe } from "@/contexts/SyncContext";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronUp,
+  Clock,
   Loader2,
   RefreshCw,
+  Trash2,
   WifiOff,
+  X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface SyncIndicatorProps {
   className?: string;
@@ -79,6 +84,7 @@ export function SyncIndicator({
 
   // Default to connected if no sync context
   const status = sync?.status ?? "connected";
+  const pendingCount = sync?.offlinePendingCount ?? 0;
   const config = statusConfig[status];
   const Icon = config.icon;
 
@@ -131,10 +137,10 @@ export function SyncIndicator({
           )}
         />
 
-        {/* Pending operations badge */}
-        {sync?.pendingOperations && sync.pendingOperations.length > 0 && (
+        {/* Pending operations badge - show offline queue count */}
+        {pendingCount > 0 && (
           <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 text-[10px] font-bold text-black rounded-full flex items-center justify-center">
-            {sync.pendingOperations.length}
+            {pendingCount}
           </span>
         )}
       </button>
@@ -172,10 +178,10 @@ export function SyncIndicator({
           </span>
         )}
 
-        {/* Pending operations badge */}
-        {sync?.pendingOperations && sync.pendingOperations.length > 0 && (
+        {/* Pending operations badge - show offline queue count */}
+        {pendingCount > 0 && (
           <span className="px-1.5 py-0.5 bg-yellow-500 text-[10px] font-bold text-black rounded-full">
-            {sync.pendingOperations.length} pending
+            {pendingCount} pending
           </span>
         )}
       </button>
@@ -201,9 +207,9 @@ export function SyncIndicator({
               </p>
             )}
 
-            {sync?.pendingOperations && sync.pendingOperations.length > 0 && (
+            {pendingCount > 0 && (
               <p className="text-xs text-yellow-400 mt-2">
-                {sync.pendingOperations.length} operation(s) pending
+                {pendingCount} operation(s) pending
               </p>
             )}
 
@@ -217,10 +223,217 @@ export function SyncIndicator({
   );
 }
 
+/**
+ * Floating pill indicator — sits above the bottom nav bar.
+ * Shows offline status, pending queue count, syncing state.
+ * Tappable to expand and show pending operations list.
+ */
+export function SyncPill({ className }: { className?: string }) {
+  const sync = useSyncSafe();
+  const [expanded, setExpanded] = useState(false);
+  const [showSynced, setShowSynced] = useState(false);
+  const prevCountRef = useRef(0);
+
+  const status = sync?.status ?? "connected";
+  const isOnline = sync?.isOnline ?? true;
+  const isProcessing = sync?.isProcessingQueue ?? false;
+  const pendingCount = sync?.offlinePendingCount ?? 0;
+  const pendingOps = sync?.offlinePendingOps ?? [];
+
+  // Briefly show "All synced" when queue goes from >0 to 0
+  useEffect(() => {
+    if (prevCountRef.current > 0 && pendingCount === 0 && isOnline) {
+      setShowSynced(true);
+      const timer = setTimeout(() => setShowSynced(false), 2000);
+      return () => clearTimeout(timer);
+    }
+    prevCountRef.current = pendingCount;
+  }, [pendingCount, isOnline]);
+
+  // Determine visibility and content
+  const isOffline = !isOnline || status === "offline";
+  const hasError = sync?.lastSyncResult?.failed && sync.lastSyncResult.failed > 0;
+  const shouldShow = isOffline || pendingCount > 0 || isProcessing || showSynced || hasError;
+
+  if (!shouldShow) return null;
+
+  // Determine pill state
+  let pillColor = "bg-gray-800/90 border-gray-600/50";
+  let pillIcon = <WifiOff className="w-3.5 h-3.5 text-gray-400" />;
+  let pillLabel = "Offline";
+
+  if (isProcessing) {
+    pillColor = "bg-blue-950/90 border-blue-500/30";
+    pillIcon = <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />;
+    pillLabel = `Syncing ${pendingCount} change${pendingCount !== 1 ? "s" : ""}…`;
+  } else if (showSynced && !isOffline) {
+    pillColor = "bg-green-950/90 border-green-500/30";
+    pillIcon = <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />;
+    pillLabel = "All changes synced";
+  } else if (hasError && !isOffline) {
+    pillColor = "bg-amber-950/90 border-amber-500/30";
+    pillIcon = <AlertCircle className="w-3.5 h-3.5 text-amber-400" />;
+    pillLabel = "Sync failed · Tap to retry";
+  } else if (isOffline && pendingCount > 0) {
+    pillColor = "bg-amber-950/90 border-amber-500/30";
+    pillIcon = <WifiOff className="w-3.5 h-3.5 text-amber-400" />;
+    pillLabel = `Offline · ${pendingCount} pending`;
+  } else if (isOffline) {
+    pillColor = "bg-gray-800/90 border-gray-600/50";
+    pillIcon = <WifiOff className="w-3.5 h-3.5 text-gray-400" />;
+    pillLabel = "Offline";
+  } else if (pendingCount > 0) {
+    pillColor = "bg-amber-950/90 border-amber-500/30";
+    pillIcon = <Clock className="w-3.5 h-3.5 text-amber-400" />;
+    pillLabel = `${pendingCount} pending change${pendingCount !== 1 ? "s" : ""}`;
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 20, opacity: 0 }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        className={cn(
+          "fixed left-4 right-4 z-40",
+          className
+        )}
+        style={{ bottom: MOBILE_NAV_HEIGHT + 8 }}
+      >
+        {/* Main pill */}
+        <motion.button
+          layout
+          onClick={() => {
+            if (hasError && !isOffline) {
+              sync?.retryOfflineQueue();
+            } else if (pendingCount > 0) {
+              setExpanded(!expanded);
+            }
+          }}
+          className={cn(
+            "w-full flex items-center justify-center gap-2 px-4 py-2 rounded-2xl",
+            "border backdrop-blur-md shadow-lg",
+            "transition-colors duration-200",
+            pillColor
+          )}
+        >
+          {pillIcon}
+          <span className="text-xs font-medium text-white/80">{pillLabel}</span>
+          {pendingCount > 0 && !isProcessing && !showSynced && (
+            <ChevronUp
+              className={cn(
+                "w-3.5 h-3.5 text-white/40 transition-transform duration-200",
+                expanded && "rotate-180"
+              )}
+            />
+          )}
+        </motion.button>
+
+        {/* Expanded operations list */}
+        <AnimatePresence>
+          {expanded && pendingCount > 0 && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-2 p-3 rounded-2xl border border-white/10 bg-gray-900/95 backdrop-blur-md shadow-xl max-h-[200px] overflow-y-auto">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-white/60">
+                    Pending Operations
+                  </span>
+                  <div className="flex gap-1">
+                    {sync?.retryOfflineQueue && isOnline && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sync.retryOfflineQueue();
+                          setExpanded(false);
+                        }}
+                        className="p-1 rounded-lg hover:bg-white/10 transition-colors"
+                        title="Retry now"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+                      </button>
+                    )}
+                    {sync?.clearOfflineQueue && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm("Discard all pending changes?")) {
+                            sync.clearOfflineQueue();
+                            setExpanded(false);
+                          }
+                        }}
+                        className="p-1 rounded-lg hover:bg-white/10 transition-colors"
+                        title="Discard all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpanded(false);
+                      }}
+                      className="p-1 rounded-lg hover:bg-white/10 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5 text-white/40" />
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {pendingOps.map((op) => (
+                    <div
+                      key={op.id}
+                      className="flex items-center gap-2 py-1 px-2 rounded-lg bg-white/5"
+                    >
+                      <span className="text-[10px] text-white/30 font-mono">
+                        {getFeatureIcon(op.feature)}
+                      </span>
+                      <span className="text-xs text-white/70 truncate flex-1">
+                        {op.metadata?.label || `${op.operation} ${op.feature}`}
+                      </span>
+                      <span className="text-[10px] text-white/30 shrink-0">
+                        {formatTimeAgo(new Date(op.createdAt))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+function getFeatureIcon(feature: string): string {
+  switch (feature) {
+    case "transaction":
+      return "💰";
+    case "item":
+      return "📋";
+    case "hub-message":
+      return "💬";
+    case "subtask":
+      return "☑️";
+    case "recurring":
+      return "🔄";
+    default:
+      return "📌";
+  }
+}
+
 // Full-width offline banner
 export function OfflineBanner({ className }: { className?: string }) {
   const sync = useSyncSafe();
   const status = sync?.status ?? "connected";
+  const pendingCount = sync?.offlinePendingCount ?? 0;
 
   if (status !== "offline" && status !== "error") return null;
 
@@ -244,7 +457,7 @@ export function OfflineBanner({ className }: { className?: string }) {
       )}
       <span className="text-sm text-white/80">
         {isOffline
-          ? "You're offline. Changes will sync when connection is restored."
+          ? `You're offline.${pendingCount > 0 ? ` ${pendingCount} change${pendingCount !== 1 ? "s" : ""} will sync when connected.` : " Changes will sync when connection is restored."}`
           : "Connection error. Retrying..."}
       </span>
       {!isOffline && sync?.refreshAll && (

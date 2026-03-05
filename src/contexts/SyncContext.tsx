@@ -1,6 +1,20 @@
 // src/contexts/SyncContext.tsx
 "use client";
 
+import {
+  addToQueue,
+  getAllPending,
+  getQueueCount,
+  clearQueue as clearOfflineQueue,
+  type OfflineOperation,
+  type QueueableOperation,
+} from "@/lib/offlineQueue";
+import {
+  createSyncEngine,
+  FEATURE_QUERY_KEYS,
+  type SyncResult,
+  type OfflineSyncEngine,
+} from "@/lib/offlineSyncEngine";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,8 +35,8 @@ export type SyncStatus =
   | "offline"
   | "error";
 
-// Pending operation for offline queue
-interface PendingOperation {
+// Legacy pending operation for hub shopping list (backward compat)
+interface LegacyPendingOperation {
   id: string;
   type:
     | "toggle_check"
@@ -52,10 +66,10 @@ interface SyncContextValue {
     options?: RetryOptions
   ) => Promise<T>;
 
-  // Pending operations (for offline queue)
-  pendingOperations: PendingOperation[];
+  // Legacy pending operations (for hub shopping list backward compat)
+  pendingOperations: LegacyPendingOperation[];
   addPendingOperation: (
-    op: Omit<PendingOperation, "id" | "retryCount" | "createdAt">
+    op: Omit<LegacyPendingOperation, "id" | "retryCount" | "createdAt">
   ) => string;
   removePendingOperation: (id: string) => void;
 
@@ -65,6 +79,15 @@ interface SyncContextValue {
 
   // Force refetch on next focus
   markStale: (threadId?: string) => void;
+
+  // === NEW: Offline queue (IndexedDB-backed) ===
+  offlinePendingCount: number;
+  offlinePendingOps: OfflineOperation[];
+  queueOperation: (op: QueueableOperation) => Promise<string>;
+  isProcessingQueue: boolean;
+  lastSyncResult: SyncResult | null;
+  clearOfflineQueue: () => Promise<void>;
+  retryOfflineQueue: () => Promise<void>;
 }
 
 interface RetryOptions {
@@ -85,7 +108,7 @@ const DEFAULT_RETRY_OPTIONS: Required<
   maxDelay: 10000,
 };
 
-// Storage key for pending operations
+// Storage key for legacy pending operations
 const PENDING_OPS_KEY = "sync-pending-operations";
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
@@ -94,11 +117,21 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [pendingOperations, setPendingOperations] = useState<
-    PendingOperation[]
+    LegacyPendingOperation[]
   >([]);
   const [threadSubscriptions, setThreadSubscriptions] = useState<
     Map<string, boolean>
   >(new Map());
+
+  // === NEW: Offline queue state ===
+  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
+  const [offlinePendingOps, setOfflinePendingOps] = useState<
+    OfflineOperation[]
+  >([]);
+  const [isProcessingQueue, setIsProcessingQueue] = useState(false);
+  const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(
+    null
+  );
 
   // Track stale threads that need refresh on focus
   const staleThreads = useRef<Set<string>>(new Set());
@@ -109,14 +142,103 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const reconnectAttempt = useRef(0);
   const maxReconnectAttempts = 5;
 
-  // Load pending operations from storage on mount
+  // Sync engine ref
+  const syncEngineRef = useRef<OfflineSyncEngine | null>(null);
+
+  // === Refresh offline queue state from IndexedDB ===
+  const refreshOfflineQueueState = useCallback(async () => {
+    try {
+      const count = await getQueueCount();
+      setOfflinePendingCount(count);
+      if (count > 0) {
+        const ops = await getAllPending();
+        setOfflinePendingOps(ops);
+      } else {
+        setOfflinePendingOps([]);
+      }
+    } catch {
+      // Ignore errors
+    }
+  }, []);
+
+  // === Initialize sync engine ===
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const engine = createSyncEngine({
+      invalidateQueries: (keys: string[][]) => {
+        keys.forEach((key) => {
+          queryClient.invalidateQueries({ queryKey: key });
+        });
+      },
+      onOperationSuccess: (op, serverResponse) => {
+        // Replace temp IDs in cache if applicable
+        if (op.tempId && op.operation === "create") {
+          const realId =
+            (serverResponse as Record<string, unknown>)?.id ||
+            ((serverResponse as Record<string, unknown>)?.item as Record<string, unknown>)?.id ||
+            ((serverResponse as Record<string, unknown>)?.subtask as Record<string, unknown>)?.id;
+
+          if (realId && typeof realId === "string") {
+            // Replace tempId in relevant caches
+            const keys = FEATURE_QUERY_KEYS[op.feature];
+            if (keys) {
+              keys.forEach((key) => {
+                queryClient.setQueriesData({ queryKey: key }, (old: unknown) => {
+                  if (!Array.isArray(old)) return old;
+                  return old.map((item: Record<string, unknown>) =>
+                    item.id === op.tempId ? { ...item, id: realId, _isPending: false } : item
+                  );
+                });
+              });
+            }
+          }
+        }
+      },
+      onOperationFailure: (op, error, permanent) => {
+        if (permanent) {
+          toast.error(`Sync failed: ${op.metadata?.label || op.operation}`, {
+            description: error,
+            duration: 4000,
+          });
+        }
+      },
+      onQueueChange: () => {
+        refreshOfflineQueueState();
+      },
+      onSyncStart: () => {
+        setIsProcessingQueue(true);
+      },
+      onSyncEnd: (result) => {
+        setIsProcessingQueue(false);
+        setLastSyncResult(result);
+        refreshOfflineQueueState();
+
+        if (result.succeeded > 0 && result.remaining === 0) {
+          toast.success("All changes synced", { duration: 2000 });
+        }
+      },
+    });
+
+    syncEngineRef.current = engine;
+
+    // Load initial queue state
+    refreshOfflineQueueState();
+
+    // Process queue if online
+    if (navigator.onLine) {
+      engine.processQueue();
+    }
+  }, [queryClient, refreshOfflineQueueState]);
+
+  // Load legacy pending operations from storage on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     try {
       const stored = localStorage.getItem(PENDING_OPS_KEY);
       if (stored) {
-        const ops = JSON.parse(stored) as PendingOperation[];
+        const ops = JSON.parse(stored) as LegacyPendingOperation[];
         // Filter out stale operations (older than 1 hour)
         const fresh = ops.filter(
           (op) => Date.now() - op.createdAt < 60 * 60 * 1000
@@ -128,7 +250,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Save pending operations to storage when changed
+  // Save legacy pending operations to storage when changed
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -146,8 +268,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     const handleOnline = () => {
       setIsOnline(true);
       setStatus("reconnecting");
-      // Trigger reconnection
-      processPendingOperations();
+      // Trigger reconnection — process both legacy and new queues
+      processLegacyPendingOperations();
+      syncEngineRef.current?.processQueue();
       refreshAll();
     };
 
@@ -197,8 +320,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // Process any pending operations
-        processPendingOperations();
+        // Process both legacy and new queues
+        processLegacyPendingOperations();
+        syncEngineRef.current?.processQueue();
       }
     };
 
@@ -301,8 +425,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  // Process pending operations
-  const processPendingOperations = useCallback(async () => {
+  // Process legacy pending operations (hub shopping list)
+  const processLegacyPendingOperations = useCallback(async () => {
     if (!isOnline || pendingOperations.length === 0) return;
 
     const opsToProcess = [...pendingOperations];
@@ -362,11 +486,11 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isOnline, pendingOperations, queryClient]);
 
-  // Add pending operation
+  // Add legacy pending operation
   const addPendingOperation = useCallback(
-    (op: Omit<PendingOperation, "id" | "retryCount" | "createdAt">): string => {
+    (op: Omit<LegacyPendingOperation, "id" | "retryCount" | "createdAt">): string => {
       const id = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const newOp: PendingOperation = {
+      const newOp: LegacyPendingOperation = {
         ...op,
         id,
         retryCount: 0,
@@ -379,9 +503,35 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  // Remove pending operation
+  // Remove legacy pending operation
   const removePendingOperation = useCallback((id: string) => {
     setPendingOperations((prev) => prev.filter((op) => op.id !== id));
+  }, []);
+
+  // === NEW: Queue an offline operation (IndexedDB) ===
+  const queueOperation = useCallback(
+    async (op: QueueableOperation): Promise<string> => {
+      const id = await addToQueue(op);
+      await refreshOfflineQueueState();
+      return id;
+    },
+    [refreshOfflineQueueState]
+  );
+
+  // === NEW: Clear entire offline queue ===
+  const handleClearOfflineQueue = useCallback(async () => {
+    await clearOfflineQueue();
+    await refreshOfflineQueueState();
+    toast.success("Pending changes cleared");
+  }, [refreshOfflineQueueState]);
+
+  // === NEW: Retry offline queue manually ===
+  const retryOfflineQueue = useCallback(async () => {
+    if (!navigator.onLine) {
+      toast.error("Still offline. Please connect to sync.");
+      return;
+    }
+    await syncEngineRef.current?.processQueue();
   }, []);
 
   // Set thread subscription status
@@ -463,6 +613,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         threadSubscriptions,
         setThreadSubscribed,
         markStale,
+        // New offline queue
+        offlinePendingCount,
+        offlinePendingOps,
+        queueOperation,
+        isProcessingQueue,
+        lastSyncResult,
+        clearOfflineQueue: handleClearOfflineQueue,
+        retryOfflineQueue,
       }}
     >
       {children}

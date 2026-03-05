@@ -8,6 +8,7 @@ import GuestHeader from "@/components/layouts/GuestHeader";
 import MobileNav from "@/components/layouts/MobileNav";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { Toaster } from "@/components/ui/sonner";
+import { SyncPill } from "@/components/ui/SyncIndicator";
 import { SplitBillProvider } from "@/contexts/SplitBillContext";
 import { UserProvider } from "@/contexts/UserContext";
 import { supabaseServerRSC } from "@/lib/supabase/server";
@@ -164,6 +165,7 @@ export default async function RootLayout({
                 <GuestHeader />
               )}
               {children}
+              <SyncPill />
               <MobileNav />
               {user && <AIChatAssistant />}
               {user && <SplitBillHandler />}

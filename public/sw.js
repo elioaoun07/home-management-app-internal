@@ -1,7 +1,22 @@
-// Service Worker for Push Notifications
-// Handles push events and displays notifications with alarm-like behavior
+// Service Worker for Push Notifications + Offline Caching
+// Handles push events, displays notifications with alarm-like behavior, and caches app shell
 
-const SW_VERSION = "2.0.0";
+const SW_VERSION = "3.0.0";
+
+// ============================================
+// CACHE CONFIGURATION
+// ============================================
+
+const CACHE_NAME = "app-shell-v1";
+const STATIC_CACHE = "static-assets-v1";
+
+// App shell assets to pre-cache on install
+const SHELL_ASSETS = [
+  "/offline",
+  "/appicon-192.png",
+  "/appicon-512.png",
+  "/manifest.json",
+];
 
 // ============================================
 // INSTALL & ACTIVATE
@@ -9,12 +24,142 @@ const SW_VERSION = "2.0.0";
 
 self.addEventListener("install", (event) => {
   console.log("[SW] Installing service worker v" + SW_VERSION);
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log("[SW] Pre-caching app shell assets");
+      return cache.addAll(SHELL_ASSETS).catch((err) => {
+        console.warn("[SW] Some shell assets failed to cache:", err);
+        // Don't block install if some assets fail
+      });
+    })
+  );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   console.log("[SW] Activating service worker v" + SW_VERSION);
-  event.waitUntil(clients.claim());
+  event.waitUntil(
+    Promise.all([
+      // Clean up old cache versions
+      caches.keys().then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME && key !== STATIC_CACHE)
+            .map((key) => {
+              console.log("[SW] Removing old cache:", key);
+              return caches.delete(key);
+            })
+        )
+      ),
+      clients.claim(),
+    ])
+  );
+});
+
+// ============================================
+// FETCH HANDLER — Offline Caching Strategy
+// ============================================
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Skip non-GET requests (mutations go through online queue)
+  if (request.method !== "GET") return;
+
+  // Skip API requests — never cache data responses
+  if (url.pathname.startsWith("/api/")) return;
+
+  // Skip Supabase requests
+  if (url.hostname.includes("supabase")) return;
+
+  // Skip cross-origin requests except CDN assets
+  if (url.origin !== self.location.origin) return;
+
+  // Static assets (/_next/static/) — Cache-first (immutable, fingerprinted)
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Images & icons — Stale-while-revalidate
+  if (
+    url.pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/) ||
+    url.pathname.startsWith("/appicon")
+  ) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fetchPromise = fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const clone = response.clone();
+              caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+            }
+            return response;
+          })
+          .catch(() => cached);
+        return cached || fetchPromise;
+      })
+    );
+    return;
+  }
+
+  // Navigation requests (HTML pages) — Network-first with cache fallback
+  if (request.mode === "navigate" || request.headers.get("accept")?.includes("text/html")) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(async () => {
+          // Network failed — try cache
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          // Fallback to cached root (Next.js app shell)
+          const rootCached = await caches.match("/");
+          if (rootCached) return rootCached;
+          // Last resort — offline page
+          const offlineCached = await caches.match("/offline");
+          if (offlineCached) return offlineCached;
+          return new Response("Offline", { status: 503, statusText: "Offline" });
+        })
+    );
+    return;
+  }
+
+  // Next.js chunks & other JS/CSS — Cache-first for fingerprinted, network-first otherwise
+  if (url.pathname.startsWith("/_next/")) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const clone = response.clone();
+              caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+            }
+            return response;
+          })
+          .catch(() => cached || new Response("", { status: 504 }));
+      })
+    );
+    return;
+  }
 });
 
 // ============================================

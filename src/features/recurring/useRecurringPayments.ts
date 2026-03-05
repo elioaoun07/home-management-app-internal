@@ -1,4 +1,5 @@
 import { CACHE_TIMES } from "@/lib/queryConfig";
+import { addToQueue } from "@/lib/offlineQueue";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export type RecurringPayment = {
@@ -150,6 +151,17 @@ export function useConfirmPayment() {
       description?: string;
       date?: string;
     }) => {
+      if (!navigator.onLine) {
+        await addToQueue({
+          feature: "recurring",
+          operation: "confirm",
+          endpoint: `/api/recurring-payments/${id}`,
+          method: "POST",
+          body: { amount, description, date },
+          metadata: { label: `Confirm payment${description ? ` "${description}"` : ''}` },
+        });
+        return { _offline: true };
+      }
       const res = await fetch(`/api/recurring-payments/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

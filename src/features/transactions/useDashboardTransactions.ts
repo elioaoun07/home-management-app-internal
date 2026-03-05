@@ -1,3 +1,4 @@
+import { addToQueue } from "@/lib/offlineQueue";
 import { sendSplitBillNotification } from "@/lib/notifications/sendSplitBillNotification";
 import { ToastIcons } from "@/lib/toastIcons";
 import {
@@ -159,6 +160,20 @@ export function useDeleteTransaction() {
   return useMutation({
     mutationFn: async (input: string | { id: string; _silent?: boolean }) => {
       const transactionId = typeof input === "string" ? input : input.id;
+
+      // Offline: queue the delete operation
+      if (!navigator.onLine) {
+        await addToQueue({
+          feature: "transaction",
+          operation: "delete",
+          endpoint: `/api/transactions/${transactionId}`,
+          method: "DELETE",
+          body: {},
+          metadata: { label: `Delete transaction` },
+        });
+        return transactionId;
+      }
+
       const response = await fetch(`/api/transactions/${transactionId}`, {
         method: "DELETE",
       });
@@ -340,6 +355,31 @@ export function useAddTransaction() {
     mutationFn: async (transaction: TransactionInput) => {
       // Remove _optimistic from the request - it's only for client-side UI
       const { _optimistic, ...serverTransaction } = transaction;
+
+      // Offline: queue the create operation
+      if (!navigator.onLine) {
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await addToQueue({
+          feature: "transaction",
+          operation: "create",
+          endpoint: "/api/transactions",
+          method: "POST",
+          body: serverTransaction,
+          tempId,
+          metadata: {
+            label: `Add ${serverTransaction.description || 'transaction'} $${serverTransaction.amount}`,
+          },
+        });
+        // Return a fake response for optimistic update
+        return {
+          id: tempId,
+          ...serverTransaction,
+          inserted_at: new Date().toISOString(),
+          _isPending: true,
+          _offline: true,
+        };
+      }
+
       const response = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -701,6 +741,22 @@ export function useUpdateTransaction() {
   return useMutation({
     mutationFn: async (update: TransactionUpdateInput) => {
       const { id, ...data } = update;
+
+      // Offline: queue the update operation
+      if (!navigator.onLine) {
+        await addToQueue({
+          feature: "transaction",
+          operation: "update",
+          endpoint: `/api/transactions/${id}`,
+          method: "PATCH",
+          body: data,
+          metadata: {
+            label: `Update transaction${data.amount ? ` $${data.amount}` : ''}`,
+          },
+        });
+        return { id, ...data, _isPending: true, _offline: true };
+      }
+
       const response = await fetch(`/api/transactions/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

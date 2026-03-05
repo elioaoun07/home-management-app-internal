@@ -2,6 +2,7 @@
 "use client";
 
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { addToQueue } from "@/lib/offlineQueue";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -969,6 +970,30 @@ export function useSendMessage() {
       topic_id?: string;
       item_quantity?: string;
     }) => {
+      if (!navigator.onLine) {
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await addToQueue({
+          feature: "hub-message",
+          operation: "create",
+          endpoint: "/api/hub/messages",
+          method: "POST",
+          body: { content, thread_id, topic_id, item_quantity },
+          tempId,
+          metadata: { label: `Send message: "${content.slice(0, 30)}${content.length > 30 ? '...' : ''}"` },
+        });
+        return {
+          message: {
+            id: tempId,
+            content,
+            thread_id,
+            topic_id: topic_id || null,
+            item_quantity: item_quantity || null,
+            created_at: new Date().toISOString(),
+            _isPending: true,
+          },
+          _offline: true,
+        };
+      }
       const res = await fetch("/api/hub/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

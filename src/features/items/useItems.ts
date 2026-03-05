@@ -1,6 +1,7 @@
 // src/features/items/useItems.ts
 // React Query hooks for Items CRUD operations
 
+import { addToQueue } from "@/lib/offlineQueue";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type {
   CreateEventInput,
@@ -346,6 +347,21 @@ export function useCreateReminder() {
 
   return useMutation({
     mutationFn: async (input: CreateReminderInput) => {
+      // Offline: queue via API route
+      if (!navigator.onLine) {
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await addToQueue({
+          feature: "item",
+          operation: "create",
+          endpoint: "/api/items",
+          method: "POST",
+          body: { ...input, type: "reminder" },
+          tempId,
+          metadata: { label: `Add reminder: ${input.title}` },
+        });
+        return { id: tempId, type: "reminder", title: input.title, status: "pending", _offline: true } as unknown as Item;
+      }
+
       const supabase = supabaseBrowser();
       const {
         data: { user },
@@ -509,6 +525,21 @@ export function useCreateEvent() {
 
   return useMutation({
     mutationFn: async (input: CreateEventInput) => {
+      // Offline: queue via API route
+      if (!navigator.onLine) {
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await addToQueue({
+          feature: "item",
+          operation: "create",
+          endpoint: "/api/items",
+          method: "POST",
+          body: { ...input, type: "event" },
+          tempId,
+          metadata: { label: `Add event: ${input.title}` },
+        });
+        return { id: tempId, type: "event", title: input.title, status: "pending", _offline: true } as unknown as Item;
+      }
+
       const supabase = supabaseBrowser();
       const {
         data: { user },
@@ -635,6 +666,21 @@ export function useCreateTask() {
 
   return useMutation({
     mutationFn: async (input: CreateTaskInput) => {
+      // Offline: queue via API route
+      if (!navigator.onLine) {
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await addToQueue({
+          feature: "item",
+          operation: "create",
+          endpoint: "/api/items",
+          method: "POST",
+          body: { ...input, type: "task" },
+          tempId,
+          metadata: { label: `Add task: ${input.title}` },
+        });
+        return { id: tempId, type: "task", title: input.title, status: "pending", _offline: true } as unknown as Item;
+      }
+
       const supabase = supabaseBrowser();
       const {
         data: { user },
@@ -727,6 +773,19 @@ export function useUpdateItem() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: UpdateItemInput & { id: string }) => {
+      // Offline: queue via API route
+      if (!navigator.onLine) {
+        await addToQueue({
+          feature: "item",
+          operation: "update",
+          endpoint: `/api/items/${id}`,
+          method: "PATCH",
+          body: { ...input },
+          metadata: { label: `Update item` },
+        });
+        return { id, ...input, _offline: true } as unknown as Item;
+      }
+
       const supabase = supabaseBrowser();
 
       const { data, error } = await supabase
@@ -897,6 +956,17 @@ export function useDeleteItem() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      if (!navigator.onLine) {
+        await addToQueue({
+          feature: "item",
+          operation: "delete",
+          endpoint: `/api/items/${id}`,
+          method: "DELETE",
+          body: {},
+          metadata: { label: "Delete item" },
+        });
+        return id;
+      }
       const supabase = supabaseBrowser();
       const { error } = await supabase.from("items").delete().eq("id", id);
       if (error) throw error;
@@ -914,6 +984,17 @@ export function useArchiveItem() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      if (!navigator.onLine) {
+        await addToQueue({
+          feature: "item",
+          operation: "delete",
+          endpoint: `/api/items/${id}?archive=true`,
+          method: "DELETE",
+          body: {},
+          metadata: { label: "Archive item" },
+        });
+        return id;
+      }
       const supabase = supabaseBrowser();
       const { error } = await supabase
         .from("items")
@@ -964,6 +1045,17 @@ export function useToggleSubtask() {
 
   return useMutation({
     mutationFn: async ({ id, done }: { id: string; done: boolean }) => {
+      if (!navigator.onLine) {
+        await addToQueue({
+          feature: "subtask",
+          operation: "update",
+          endpoint: "/api/subtasks",
+          method: "PATCH",
+          body: { id, action: "toggle", done },
+          metadata: { label: done ? "Complete subtask" : "Uncomplete subtask" },
+        });
+        return { id, done, cascadedIds: [id] };
+      }
       const supabase = supabaseBrowser();
       const now = new Date().toISOString();
 
@@ -1362,6 +1454,29 @@ export function useAddSubtask() {
       occurrenceDate?: string; // ISO string - for recurring items, which occurrence this subtask belongs to
       orderIndex?: number;
     }) => {
+      if (!navigator.onLine) {
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await addToQueue({
+          feature: "subtask",
+          operation: "create",
+          endpoint: "/api/subtasks",
+          method: "POST",
+          body: { parentItemId, parentSubtaskId, title, occurrenceDate, orderIndex },
+          tempId,
+          metadata: { label: `Add subtask "${title}"` },
+        });
+        return {
+          id: tempId,
+          parent_item_id: parentItemId,
+          parent_subtask_id: parentSubtaskId || null,
+          title,
+          occurrence_date: occurrenceDate || null,
+          done_at: null,
+          order_index: orderIndex ?? 999,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as Subtask;
+      }
       const supabase = supabaseBrowser();
 
       // Get current max order_index if not provided
@@ -1496,6 +1611,17 @@ export function useDeleteSubtask() {
 
   return useMutation({
     mutationFn: async (subtaskId: string) => {
+      if (!navigator.onLine) {
+        await addToQueue({
+          feature: "subtask",
+          operation: "delete",
+          endpoint: `/api/subtasks?id=${subtaskId}`,
+          method: "DELETE",
+          body: {},
+          metadata: { label: "Delete subtask" },
+        });
+        return { subtaskId, deletedSubtask: null };
+      }
       const supabase = supabaseBrowser();
 
       // First, fetch the subtask data so we can restore it on Undo

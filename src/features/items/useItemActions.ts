@@ -2,6 +2,7 @@
 // Comprehensive hook for item actions: complete, postpone, cancel with undo support
 
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { addToQueue } from "@/lib/offlineQueue";
 import type { ItemWithDetails } from "@/types/items";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, addWeeks, parseISO } from "date-fns";
@@ -393,6 +394,17 @@ export function useCompleteItem() {
       isRecurring,
       reason,
     }: CompleteItemInput) => {
+      if (!navigator.onLine) {
+        await addToQueue({
+          feature: "item",
+          operation: "complete",
+          endpoint: `/api/items/${itemId}/actions`,
+          method: "POST",
+          body: { action: "complete", occurrenceDate, isRecurring, reason },
+          metadata: { label: "Complete item" },
+        });
+        return { type: isRecurring ? "occurrence" : "item", itemId, _offline: true };
+      }
       const supabase = supabaseBrowser();
       const {
         data: { user },
@@ -574,6 +586,17 @@ export function usePostponeItem() {
       reason,
       isRecurring,
     }: PostponeItemInput) => {
+      if (!navigator.onLine) {
+        await addToQueue({
+          feature: "item",
+          operation: "postpone",
+          endpoint: `/api/items/${itemId}/actions`,
+          method: "POST",
+          body: { action: "postpone", occurrenceDate, postponeType, postponedTo, reason, isRecurring },
+          metadata: { label: "Postpone item" },
+        });
+        return { action: null, postponedTo, _offline: true };
+      }
       const supabase = supabaseBrowser();
       const {
         data: { user },
@@ -665,6 +688,17 @@ export function useCancelItem() {
       isRecurring,
       reason,
     }: CancelItemInput) => {
+      if (!navigator.onLine) {
+        await addToQueue({
+          feature: "item",
+          operation: "cancel",
+          endpoint: `/api/items/${itemId}/actions`,
+          method: "POST",
+          body: { action: "cancel", occurrenceDate, isRecurring, reason },
+          metadata: { label: "Cancel item" },
+        });
+        return { type: isRecurring ? "occurrence" : "item", itemId, _offline: true };
+      }
       const supabase = supabaseBrowser();
       const {
         data: { user },
