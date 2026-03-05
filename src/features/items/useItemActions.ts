@@ -1,8 +1,8 @@
 // src/features/items/useItemActions.ts
 // Comprehensive hook for item actions: complete, postpone, cancel with undo support
 
-import { supabaseBrowser } from "@/lib/supabase/client";
 import { addToQueue } from "@/lib/offlineQueue";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import type { ItemWithDetails } from "@/types/items";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, addWeeks, parseISO } from "date-fns";
@@ -403,7 +403,11 @@ export function useCompleteItem() {
           body: { action: "complete", occurrenceDate, isRecurring, reason },
           metadata: { label: "Complete item" },
         });
-        return { type: isRecurring ? "occurrence" : "item", itemId, _offline: true };
+        return {
+          type: isRecurring ? "occurrence" : "item",
+          itemId,
+          _offline: true,
+        };
       }
       const supabase = supabaseBrowser();
       const {
@@ -592,7 +596,14 @@ export function usePostponeItem() {
           operation: "postpone",
           endpoint: `/api/items/${itemId}/actions`,
           method: "POST",
-          body: { action: "postpone", occurrenceDate, postponeType, postponedTo, reason, isRecurring },
+          body: {
+            action: "postpone",
+            occurrenceDate,
+            postponeType,
+            postponedTo,
+            reason,
+            isRecurring,
+          },
           metadata: { label: "Postpone item" },
         });
         return { action: null, postponedTo, _offline: true };
@@ -697,7 +708,11 @@ export function useCancelItem() {
           body: { action: "cancel", occurrenceDate, isRecurring, reason },
           metadata: { label: "Cancel item" },
         });
-        return { type: isRecurring ? "occurrence" : "item", itemId, _offline: true };
+        return {
+          type: isRecurring ? "occurrence" : "item",
+          itemId,
+          _offline: true,
+        };
       }
       const supabase = supabaseBrowser();
       const {

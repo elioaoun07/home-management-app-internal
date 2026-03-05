@@ -68,9 +68,9 @@ export default function OfflinePage() {
       {pendingCount !== null && pendingCount > 0 && (
         <div className="mb-6 px-4 py-2 rounded-xl bg-amber-950/50 border border-amber-500/20">
           <p className="text-amber-400 text-sm text-center">
-            <span className="font-semibold">{pendingCount}</span> pending
-            change{pendingCount !== 1 ? "s" : ""} will sync when you&apos;re
-            back online
+            <span className="font-semibold">{pendingCount}</span> pending change
+            {pendingCount !== 1 ? "s" : ""} will sync when you&apos;re back
+            online
           </p>
         </div>
       )}

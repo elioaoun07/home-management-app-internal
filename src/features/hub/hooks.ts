@@ -1,8 +1,8 @@
 // src/features/hub/hooks.ts
 "use client";
 
-import { supabaseBrowser } from "@/lib/supabase/client";
 import { addToQueue } from "@/lib/offlineQueue";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -979,7 +979,9 @@ export function useSendMessage() {
           method: "POST",
           body: { content, thread_id, topic_id, item_quantity },
           tempId,
-          metadata: { label: `Send message: "${content.slice(0, 30)}${content.length > 30 ? '...' : ''}"` },
+          metadata: {
+            label: `Send message: "${content.slice(0, 30)}${content.length > 30 ? "..." : ""}"`,
+          },
         });
         return {
           message: {

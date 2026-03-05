@@ -359,7 +359,13 @@ export function useCreateReminder() {
           tempId,
           metadata: { label: `Add reminder: ${input.title}` },
         });
-        return { id: tempId, type: "reminder", title: input.title, status: "pending", _offline: true } as unknown as Item;
+        return {
+          id: tempId,
+          type: "reminder",
+          title: input.title,
+          status: "pending",
+          _offline: true,
+        } as unknown as Item;
       }
 
       const supabase = supabaseBrowser();
@@ -537,7 +543,13 @@ export function useCreateEvent() {
           tempId,
           metadata: { label: `Add event: ${input.title}` },
         });
-        return { id: tempId, type: "event", title: input.title, status: "pending", _offline: true } as unknown as Item;
+        return {
+          id: tempId,
+          type: "event",
+          title: input.title,
+          status: "pending",
+          _offline: true,
+        } as unknown as Item;
       }
 
       const supabase = supabaseBrowser();
@@ -678,7 +690,13 @@ export function useCreateTask() {
           tempId,
           metadata: { label: `Add task: ${input.title}` },
         });
-        return { id: tempId, type: "task", title: input.title, status: "pending", _offline: true } as unknown as Item;
+        return {
+          id: tempId,
+          type: "task",
+          title: input.title,
+          status: "pending",
+          _offline: true,
+        } as unknown as Item;
       }
 
       const supabase = supabaseBrowser();
@@ -1461,7 +1479,13 @@ export function useAddSubtask() {
           operation: "create",
           endpoint: "/api/subtasks",
           method: "POST",
-          body: { parentItemId, parentSubtaskId, title, occurrenceDate, orderIndex },
+          body: {
+            parentItemId,
+            parentSubtaskId,
+            title,
+            occurrenceDate,
+            orderIndex,
+          },
           tempId,
           metadata: { label: `Add subtask "${title}"` },
         });

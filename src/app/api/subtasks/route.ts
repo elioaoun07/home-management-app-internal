@@ -17,7 +17,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { parent_item_id, parent_subtask_id, title, occurrence_date, order_index } = body;
+    const {
+      parent_item_id,
+      parent_subtask_id,
+      title,
+      occurrence_date,
+      order_index,
+    } = body;
 
     if (!parent_item_id || !title?.trim()) {
       return NextResponse.json(
@@ -110,10 +116,7 @@ export async function PATCH(request: NextRequest) {
           );
 
           if (!descError && descendants?.length) {
-            allIds = [
-              id,
-              ...descendants.map((d: { id: string }) => d.id),
-            ];
+            allIds = [id, ...descendants.map((d: { id: string }) => d.id)];
           }
         } catch {
           // RPC may not exist, just toggle the single subtask

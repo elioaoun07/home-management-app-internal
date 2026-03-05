@@ -27,10 +27,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!body.title?.trim()) {
-      return NextResponse.json(
-        { error: "Title is required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
 
     // Create the base item
@@ -71,7 +68,10 @@ export async function POST(request: NextRequest) {
             has_checklist: body.has_checklist || false,
           });
         if (detailsError) {
-          console.error("[items/route] Failed to create reminder details:", detailsError);
+          console.error(
+            "[items/route] Failed to create reminder details:",
+            detailsError,
+          );
         }
       }
     } else if (type === "event") {
@@ -85,7 +85,10 @@ export async function POST(request: NextRequest) {
           location_text: body.location_text || null,
         });
       if (detailsError) {
-        console.error("[items/route] Failed to create event details:", detailsError);
+        console.error(
+          "[items/route] Failed to create event details:",
+          detailsError,
+        );
       }
     }
 
@@ -102,7 +105,10 @@ export async function POST(request: NextRequest) {
         .from("item_subtasks")
         .insert(subtasks);
       if (subtasksError) {
-        console.error("[items/route] Failed to create subtasks:", subtasksError);
+        console.error(
+          "[items/route] Failed to create subtasks:",
+          subtasksError,
+        );
       }
     }
 
@@ -120,9 +126,7 @@ export async function POST(request: NextRequest) {
         if (a.kind === "relative" && baseTimeStr) {
           const baseTime = new Date(baseTimeStr as string);
           if (a.custom_time && a.offset_minutes) {
-            const daysOffset = Math.floor(
-              (a.offset_minutes as number) / 1440,
-            );
+            const daysOffset = Math.floor((a.offset_minutes as number) / 1440);
             const alertDate = new Date(baseTime);
             alertDate.setDate(alertDate.getDate() - daysOffset);
             const [hours, minutes] = (a.custom_time as string)
@@ -132,8 +136,7 @@ export async function POST(request: NextRequest) {
             computedTriggerAt = alertDate.toISOString();
           } else if (a.offset_minutes) {
             computedTriggerAt = new Date(
-              baseTime.getTime() -
-                (a.offset_minutes as number) * 60 * 1000,
+              baseTime.getTime() - (a.offset_minutes as number) * 60 * 1000,
             ).toISOString();
           }
         }
@@ -186,7 +189,10 @@ export async function POST(request: NextRequest) {
           flexible_period: body.recurrence_rule.flexible_period || null,
         });
       if (recurrenceError) {
-        console.error("[items/route] Failed to create recurrence:", recurrenceError);
+        console.error(
+          "[items/route] Failed to create recurrence:",
+          recurrenceError,
+        );
       }
     }
 

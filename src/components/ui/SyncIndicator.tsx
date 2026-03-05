@@ -122,7 +122,7 @@ export function SyncIndicator({
           "hover:bg-white/5 active:scale-95",
           "disabled:opacity-50 disabled:cursor-not-allowed",
           config.bgColor,
-          className
+          className,
         )}
         title={`${config.label}: ${config.description}. Tap to refresh.`}
       >
@@ -133,7 +133,7 @@ export function SyncIndicator({
             (isRefreshing ||
               status === "reconnecting" ||
               status === "connecting") &&
-              "animate-spin"
+              "animate-spin",
           )}
         />
 
@@ -158,7 +158,7 @@ export function SyncIndicator({
           "flex items-center gap-2 px-3 py-2 rounded-xl transition-all duration-200",
           "hover:bg-white/5 active:scale-95",
           "disabled:opacity-50 disabled:cursor-not-allowed",
-          config.bgColor
+          config.bgColor,
         )}
       >
         <Icon
@@ -168,7 +168,7 @@ export function SyncIndicator({
             (isRefreshing ||
               status === "reconnecting" ||
               status === "connecting") &&
-              "animate-spin"
+              "animate-spin",
           )}
         />
 
@@ -252,8 +252,10 @@ export function SyncPill({ className }: { className?: string }) {
 
   // Determine visibility and content
   const isOffline = !isOnline || status === "offline";
-  const hasError = sync?.lastSyncResult?.failed && sync.lastSyncResult.failed > 0;
-  const shouldShow = isOffline || pendingCount > 0 || isProcessing || showSynced || hasError;
+  const hasError =
+    sync?.lastSyncResult?.failed && sync.lastSyncResult.failed > 0;
+  const shouldShow =
+    isOffline || pendingCount > 0 || isProcessing || showSynced || hasError;
 
   if (!shouldShow) return null;
 
@@ -295,10 +297,7 @@ export function SyncPill({ className }: { className?: string }) {
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 20, opacity: 0 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className={cn(
-          "fixed left-4 right-4 z-40",
-          className
-        )}
+        className={cn("fixed left-4 right-4 z-40", className)}
         style={{ bottom: MOBILE_NAV_HEIGHT + 8 }}
       >
         {/* Main pill */}
@@ -315,7 +314,7 @@ export function SyncPill({ className }: { className?: string }) {
             "w-full flex items-center justify-center gap-2 px-4 py-2 rounded-2xl",
             "border backdrop-blur-md shadow-lg",
             "transition-colors duration-200",
-            pillColor
+            pillColor,
           )}
         >
           {pillIcon}
@@ -324,7 +323,7 @@ export function SyncPill({ className }: { className?: string }) {
             <ChevronUp
               className={cn(
                 "w-3.5 h-3.5 text-white/40 transition-transform duration-200",
-                expanded && "rotate-180"
+                expanded && "rotate-180",
               )}
             />
           )}
@@ -447,7 +446,7 @@ export function OfflineBanner({ className }: { className?: string }) {
       className={cn(
         "flex items-center justify-center gap-2 px-4 py-2",
         isOffline ? "bg-gray-800" : "bg-red-900/50",
-        className
+        className,
       )}
     >
       {isOffline ? (
@@ -503,7 +502,7 @@ export function FloatingRefreshButton({ className }: { className?: string }) {
         "hover:scale-105 active:scale-95",
         "transition-all duration-200",
         "disabled:opacity-50 disabled:cursor-not-allowed",
-        className
+        className,
       )}
     >
       <RefreshCw

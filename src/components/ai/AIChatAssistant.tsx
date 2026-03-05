@@ -509,10 +509,7 @@ export default function AIChatAssistant() {
   return (
     <>
       {/* Floating AI Button */}
-      <Sheet
-        open={isOpen}
-        onOpenChange={setIsOpen}
-      >
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetTrigger asChild>
           <Button
             className={cn(
