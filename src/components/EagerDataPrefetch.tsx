@@ -1,12 +1,13 @@
 "use client";
 
+import { qk } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
 /**
- * Eagerly prefetch critical data on app startup
- * This runs immediately to minimize perceived loading time
- * Data is cached and reused across tabs
+ * Eagerly prefetch critical data on app startup.
+ * Uses the SAME query keys as the hooks so the cache is shared.
+ * Skips entirely when offline — persisted cache is used instead.
  */
 export function EagerDataPrefetch() {
   const queryClient = useQueryClient();
@@ -14,24 +15,23 @@ export function EagerDataPrefetch() {
 
   useEffect(() => {
     if (hasPrefetched.current) return;
+    // Don't prefetch when offline — use persisted cache
+    if (!navigator.onLine) return;
     hasPrefetched.current = true;
 
-    // Prefetch in parallel for faster startup
     const prefetchCriticalData = async () => {
       try {
-        // These are the most critical APIs for the expense form
+        // Critical: use SAME queryKeys as hooks (qk.accounts() etc.)
         const criticalPrefetches = [
-          // Accounts - needed for expense form
           queryClient.prefetchQuery({
-            queryKey: ["accounts"],
+            queryKey: qk.accounts(),
             queryFn: async () => {
               const res = await fetch("/api/accounts");
               if (!res.ok) return [];
               return res.json();
             },
-            staleTime: 1000 * 60 * 5, // 5 minutes
+            staleTime: 1000 * 60 * 5,
           }),
-          // Accounts with hidden - needed for account selection
           queryClient.prefetchQuery({
             queryKey: ["accounts", { own: true, includeHidden: true }],
             queryFn: async () => {
@@ -43,35 +43,31 @@ export function EagerDataPrefetch() {
             },
             staleTime: 1000 * 60 * 5,
           }),
-          // Section order - needed for expense form step flow (from user-preferences API)
           queryClient.prefetchQuery({
-            queryKey: ["section-order"],
+            queryKey: qk.sectionOrder(),
             queryFn: async () => {
               const res = await fetch("/api/user-preferences");
               if (!res.ok) return null;
               const data = await res.json();
               return data?.section_order ?? null;
             },
-            staleTime: 1000 * 60 * 30, // 30 minutes - rarely changes
+            staleTime: 1000 * 60 * 30,
           }),
         ];
 
-        // Execute critical prefetches first
         await Promise.allSettled(criticalPrefetches);
 
-        // Then prefetch secondary data with lower priority
-        const secondaryPrefetches = [
-          // Drafts - for expense tab badge
+        // Secondary prefetches (non-blocking)
+        Promise.allSettled([
           queryClient.prefetchQuery({
-            queryKey: ["drafts"],
+            queryKey: qk.drafts(),
             queryFn: async () => {
               const res = await fetch("/api/drafts");
               if (!res.ok) return [];
               return res.json();
             },
-            staleTime: 1000 * 60 * 2, // 2 minutes
+            staleTime: 1000 * 60 * 2,
           }),
-          // Onboarding - for first-time users
           queryClient.prefetchQuery({
             queryKey: ["onboarding"],
             queryFn: async () => {
@@ -79,22 +75,16 @@ export function EagerDataPrefetch() {
               if (!res.ok) return null;
               return res.json();
             },
-            staleTime: 1000 * 60 * 60, // 1 hour
+            staleTime: 1000 * 60 * 60,
           }),
-        ];
-
-        // Execute secondary prefetches (non-blocking)
-        Promise.allSettled(secondaryPrefetches);
+        ]);
       } catch (error) {
-        // Silent fail - data will be fetched on-demand
         console.debug("[EagerDataPrefetch] Prefetch failed:", error);
       }
     };
 
-    // Start prefetch immediately
     prefetchCriticalData();
   }, [queryClient]);
 
-  // This component renders nothing
   return null;
 }

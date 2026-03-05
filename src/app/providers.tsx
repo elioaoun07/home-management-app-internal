@@ -6,15 +6,16 @@ import { PrivacyBlurProvider } from "@/contexts/PrivacyBlurContext";
 import { SyncProvider } from "@/contexts/SyncContext";
 import { TabProvider } from "@/contexts/TabContext";
 import { ThemeProvider as ColorThemeProvider } from "@/contexts/ThemeContext";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ThemeProvider } from "../components/theme-provider";
 
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import type { PersistedClient, Persister } from "@tanstack/react-query-persist-client";
 
-const RQ_PERSIST_KEY = "hm-rq-cache-v3"; // Bumped version for new caching strategy
+const RQ_PERSIST_KEY = "hm-rq-cache-v3";
 const STABLE_KEYS = new Set([
   "accounts",
   "categories",
@@ -22,25 +23,71 @@ const STABLE_KEYS = new Set([
   "templates",
   "user-categories",
   "subcategories",
-  // OPTIMIZED: Now persisting account-balance for instant UI
-  // Balance is only invalidated after user mutations
   "account-balance",
-  "transactions",
-  "dashboard-stats",
+  // NOTE: "transactions" and "dashboard-stats" intentionally excluded
+  // — they can be large and blow the localStorage 5MB quota,
+  //   which silently destroys ALL persisted cache.
   "user-preferences",
   "onboarding",
   "recurring-payments",
-]); // Enhanced caching for all stable data
+]);
 
-// Create persister at module level (only runs on client)
-const persister =
-  typeof window !== "undefined"
-    ? createSyncStoragePersister({
-        storage: window.localStorage,
-        key: RQ_PERSIST_KEY,
-        throttleTime: 1000,
-      })
-    : undefined;
+/**
+ * Create a safe persister that wraps localStorage with error handling.
+ * If JSON.stringify produces data exceeding the 5MB quota,
+ * the write fails silently instead of corrupting the entire cache.
+ */
+function createSafePersister(): Persister {
+  const inner = createSyncStoragePersister({
+    storage: window.localStorage,
+    key: RQ_PERSIST_KEY,
+    throttleTime: 1000,
+    // Custom serialize with quota-safe handling
+    serialize: (data) => {
+      try {
+        return JSON.stringify(data);
+      } catch {
+        console.warn("[RQ Persist] Failed to serialize cache");
+        return "{}";
+      }
+    },
+  });
+
+  return {
+    persistClient: (client: PersistedClient) => {
+      try {
+        inner.persistClient(client);
+      } catch (e) {
+        // QuotaExceededError — localStorage full
+        console.warn("[RQ Persist] Failed to persist (quota?)", e);
+      }
+    },
+    restoreClient: () => {
+      try {
+        return inner.restoreClient();
+      } catch (e) {
+        console.warn("[RQ Persist] Failed to restore cache", e);
+        // Remove corrupted cache
+        try {
+          localStorage.removeItem(RQ_PERSIST_KEY);
+        } catch {}
+        return undefined as unknown as PersistedClient;
+      }
+    },
+    removeClient: () => {
+      try {
+        inner.removeClient();
+      } catch {}
+    },
+  };
+}
+
+/** No-op persister for SSR (server has no localStorage) */
+const NOOP_PERSISTER: Persister = {
+  persistClient: () => {},
+  restoreClient: () => undefined as unknown as PersistedClient,
+  removeClient: () => {},
+};
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = useMemo(
@@ -48,12 +95,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // OPTIMIZED: Longer staleTime for instant tab switching
-            staleTime: 1000 * 60 * 5, // 5 minutes default (most queries override this)
-            gcTime: 1000 * 60 * 60 * 24, // 24 hours garbage collection
-            refetchOnWindowFocus: false, // Don't refetch on focus for better mobile UX
+            staleTime: 1000 * 60 * 5, // 5 minutes
+            gcTime: 1000 * 60 * 60 * 24, // 24 hours
+            refetchOnWindowFocus: false,
             refetchOnReconnect: true,
-            refetchOnMount: false, // CRITICAL: Don't refetch on mount - use cache
+            refetchOnMount: false, // Use cache, don't refetch on mount
             retry: (failureCount) => {
               // Don't retry when offline — fail silently, use cached data
               if (typeof navigator !== "undefined" && !navigator.onLine)
@@ -65,38 +111,37 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           },
           mutations: {
             retry: 1,
-            // Optimistic updates for better perceived performance
           },
         },
       }),
     [],
   );
 
-  // Persist options for PersistQueryClientProvider
-  // This ensures cache is restored from localStorage BEFORE any queries fire
+  // Create the persister lazily on the client (avoids SSR/client mismatch)
+  const [persister] = useState<Persister>(() => {
+    if (typeof window === "undefined") return NOOP_PERSISTER;
+    return createSafePersister();
+  });
+
   const persistOptions = useMemo(
-    () =>
-      persister
-        ? {
-            persister,
-            maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days for better offline support
-            buster: "hm-v2",
-            dehydrateOptions: {
-              // only persist successful stable keys
-              shouldDehydrateQuery: (q: {
-                state: { status: string };
-                queryKey?: readonly unknown[];
-              }) =>
-                q.state.status === "success" &&
-                typeof q.queryKey?.[0] === "string" &&
-                STABLE_KEYS.has(q.queryKey[0] as string),
-            },
-          }
-        : null,
-    [],
+    () => ({
+      persister,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      buster: "hm-v2",
+      dehydrateOptions: {
+        shouldDehydrateQuery: (q: {
+          state: { status: string };
+          queryKey?: readonly unknown[];
+        }) =>
+          q.state.status === "success" &&
+          typeof q.queryKey?.[0] === "string" &&
+          STABLE_KEYS.has(q.queryKey[0] as string),
+      },
+    }),
+    [persister],
   );
 
-  // Clear ONLY the persisted RQ cache on Supabase user switch
+  // Clear persisted RQ cache on Supabase user switch
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -117,10 +162,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         if (nextUserId !== currentUserId) {
           try {
             localStorage.removeItem(RQ_PERSIST_KEY);
-            // Clear local user preferences and theme on user switch
             localStorage.removeItem("user_preferences");
             localStorage.removeItem("hm-theme");
-            // Clear all balance caches on user switch
             Object.keys(localStorage)
               .filter((key) => key.startsWith("balance_cache_"))
               .forEach((key) => localStorage.removeItem(key));
@@ -136,44 +179,33 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     return () => cleanup?.();
   }, [queryClient]);
 
-  const inner = (
-    <SyncProvider>
-      <ColorThemeProvider>
-        <PrivacyBlurProvider>
-          <AppModeProvider>
-            <TabProvider>
-              {children}
-              <ReactQueryDevtools
-                initialIsOpen={false}
-                buttonPosition="bottom-right"
-              />
-            </TabProvider>
-          </AppModeProvider>
-        </PrivacyBlurProvider>
-      </ColorThemeProvider>
-    </SyncProvider>
-  );
-
-  // PersistQueryClientProvider restores the cache from localStorage
-  // BEFORE any child queries fire — fixes the "empty cache on cold start" bug.
-  // When offline + cold start, queries see the restored cache instead of empty state.
-  if (persistOptions) {
-    return (
-      <ThemeProvider>
-        <PersistQueryClientProvider
-          client={queryClient}
-          persistOptions={persistOptions}
-        >
-          {inner}
-        </PersistQueryClientProvider>
-      </ThemeProvider>
-    );
-  }
-
-  // SSR fallback (persister not available server-side)
+  // ALWAYS render PersistQueryClientProvider — no conditional branching.
+  // This avoids SSR/client hydration mismatch.
+  // On SSR the NOOP_PERSISTER does nothing; on client it restores from localStorage.
+  // PersistQueryClientProvider internally blocks child queries via isRestoring
+  // until the cache is fully rehydrated from localStorage.
   return (
     <ThemeProvider>
-      <QueryClientProvider client={queryClient}>{inner}</QueryClientProvider>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={persistOptions}
+      >
+        <SyncProvider>
+          <ColorThemeProvider>
+            <PrivacyBlurProvider>
+              <AppModeProvider>
+                <TabProvider>
+                  {children}
+                  <ReactQueryDevtools
+                    initialIsOpen={false}
+                    buttonPosition="bottom-right"
+                  />
+                </TabProvider>
+              </AppModeProvider>
+            </PrivacyBlurProvider>
+          </ColorThemeProvider>
+        </SyncProvider>
+      </PersistQueryClientProvider>
     </ThemeProvider>
   );
 }

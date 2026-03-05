@@ -1,7 +1,7 @@
 // Service Worker for Push Notifications + Offline Caching
 // Handles push events, displays notifications with alarm-like behavior, and caches app shell
 
-const SW_VERSION = "3.0.0";
+const SW_VERSION = "3.1.0";
 
 // ============================================
 // CACHE CONFIGURATION
@@ -11,8 +11,11 @@ const CACHE_NAME = "app-shell-v1";
 const STATIC_CACHE = "static-assets-v1";
 
 // App shell assets to pre-cache on install
+// CRITICAL: Include actual app pages so the PWA loads offline after closing/reopening
 const SHELL_ASSETS = [
   "/offline",
+  "/expense",
+  "/",
   "/appicon-192.png",
   "/appicon-512.png",
   "/manifest.json",
