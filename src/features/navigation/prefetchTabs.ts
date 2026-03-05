@@ -88,7 +88,12 @@ export async function prefetchExpenseData(queryClient: QueryClient) {
  */
 export async function prefetchAllTabs(queryClient: QueryClient) {
   // Don't prefetch when offline — use persisted cache
-  if (typeof navigator !== "undefined" && !navigator.onLine) return;
+  try {
+    const { isReallyOnline } = await import("@/lib/connectivityManager");
+    if (!isReallyOnline()) return;
+  } catch {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+  }
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

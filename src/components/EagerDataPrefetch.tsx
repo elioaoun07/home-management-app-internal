@@ -16,7 +16,14 @@ export function EagerDataPrefetch() {
   useEffect(() => {
     if (hasPrefetched.current) return;
     // Don't prefetch when offline — use persisted cache
-    if (!navigator.onLine) return;
+    // Check real connectivity (not just navigator.onLine which can lie)
+    let offline = !navigator.onLine;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { isReallyOnline } = require("@/lib/connectivityManager");
+      offline = !isReallyOnline();
+    } catch { /* fallback to navigator.onLine */ }
+    if (offline) return;
     hasPrefetched.current = true;
 
     const prefetchCriticalData = async () => {

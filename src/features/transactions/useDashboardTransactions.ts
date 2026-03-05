@@ -1,3 +1,4 @@
+import { isReallyOnline, markOffline } from "@/lib/connectivityManager";
 import { sendSplitBillNotification } from "@/lib/notifications/sendSplitBillNotification";
 import { addToQueue } from "@/lib/offlineQueue";
 import { ToastIcons } from "@/lib/toastIcons";
@@ -18,7 +19,7 @@ function isNetworkError(err: unknown): boolean {
 }
 
 /** How long to wait for a fetch before treating it as offline (ms) */
-const OFFLINE_FETCH_TIMEOUT = 5000;
+const OFFLINE_FETCH_TIMEOUT = 3000;
 
 /**
  * Fetch with TWO abort triggers so a hanging request never blocks the UI:
@@ -490,8 +491,8 @@ export function useAddTransaction() {
         };
       };
 
-      // Offline-first: queue if we know we're offline
-      if (!navigator.onLine) {
+      // Offline-first: queue if we know we're offline (real connectivity check)
+      if (!isReallyOnline()) {
         return queueOfflineCreate();
       }
 
@@ -510,6 +511,10 @@ export function useAddTransaction() {
         return response.json();
       } catch (err) {
         if (isOfflineError(err)) {
+          // The fetch timed out or failed — we're actually offline.
+          // Tell the connectivity manager so it transitions SyncContext
+          // to offline status immediately (updates the UI pill, etc.).
+          markOffline();
           return queueOfflineCreate();
         }
         throw err;

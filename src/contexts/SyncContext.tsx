@@ -17,6 +17,13 @@ import {
   type OfflineSyncEngine,
   type SyncResult,
 } from "@/lib/offlineSyncEngine";
+import {
+  isReallyOnline,
+  markOffline as cmMarkOffline,
+  probeNow,
+  startProbing,
+  stopProbing,
+} from "@/lib/connectivityManager";
 import { offlinePendingActions } from "@/lib/stores/offlinePendingStore";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -261,8 +268,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     // Load initial queue state
     refreshOfflineQueueState();
 
-    // Process queue if online
-    if (navigator.onLine) {
+    // Process queue if actually online (use real check, not navigator.onLine)
+    if (isReallyOnline()) {
       engine.processQueue();
     }
   }, [queryClient, refreshOfflineQueueState]);
@@ -297,40 +304,48 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pendingOperations]);
 
-  // Detect online/offline status
+  // ── Active connectivity detection via connectivityManager ──
+  // Instead of trusting navigator.onLine / window online/offline events,
+  // we use a real HEAD-request probe that detects silent WiFi drops.
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const handleOnline = () => {
-      setIsOnline(true);
-      setStatus("reconnecting");
-      // Small delay to ensure network is actually available before firing requests
-      setTimeout(() => {
-        if (!navigator.onLine) return;
-        // Trigger reconnection — process both legacy and new queues
-        processLegacyPendingOperations();
-        syncEngineRef.current?.processQueue();
-        refreshAll();
-      }, 500);
+    // Start the background probing loop
+    startProbing();
+
+    // Listen for verified connectivity changes from the probe
+    const handleConnectivityChanged = (e: Event) => {
+      const online = (e as CustomEvent).detail?.online as boolean;
+      setIsOnline(online);
+
+      if (online) {
+        setStatus("reconnecting");
+        // Small delay then sync
+        setTimeout(() => {
+          if (!isReallyOnline()) return;
+          processLegacyPendingOperations();
+          syncEngineRef.current?.processQueue();
+          refreshAll();
+        }, 500);
+      } else {
+        setStatus("offline");
+      }
     };
 
-    const handleOffline = () => {
-      setIsOnline(false);
-      setStatus("offline");
-    };
-
-    // Initial check
-    setIsOnline(navigator.onLine);
-    if (!navigator.onLine) {
+    // Initial state from connectivity manager
+    setIsOnline(isReallyOnline());
+    if (!isReallyOnline()) {
       setStatus("offline");
     }
 
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
+    window.addEventListener("connectivity-changed", handleConnectivityChanged);
 
     return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
+      stopProbing();
+      window.removeEventListener(
+        "connectivity-changed",
+        handleConnectivityChanged,
+      );
     };
   }, []);
 
@@ -340,29 +355,33 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
     const handleVisibilityChange = () => {
       if (!document.hidden && isOnline) {
-        // User returned to the app - check for updates
-        if (allStale.current) {
-          refreshAll();
-          allStale.current = false;
-        } else if (staleThreads.current.size > 0) {
-          // Refresh only stale threads
-          staleThreads.current.forEach((threadId) => {
-            refreshThread(threadId);
-          });
-          staleThreads.current.clear();
-        } else {
-          // Light refresh - just invalidate active queries
-          const hasAnySubscriptionDown = Array.from(
-            threadSubscriptions.values(),
-          ).some((v) => !v);
-          if (hasAnySubscriptionDown) {
+        // Probe connectivity on return to tab (catches WiFi changes while backgrounded)
+        probeNow().then((actuallyOnline) => {
+          if (!actuallyOnline) return;
+          // User returned to the app - check for updates
+          if (allStale.current) {
             refreshAll();
+            allStale.current = false;
+          } else if (staleThreads.current.size > 0) {
+            // Refresh only stale threads
+            staleThreads.current.forEach((threadId) => {
+              refreshThread(threadId);
+            });
+            staleThreads.current.clear();
+          } else {
+            // Light refresh - just invalidate active queries
+            const hasAnySubscriptionDown = Array.from(
+              threadSubscriptions.values(),
+            ).some((v) => !v);
+            if (hasAnySubscriptionDown) {
+              refreshAll();
+            }
           }
-        }
 
-        // Process both legacy and new queues
-        processLegacyPendingOperations();
-        syncEngineRef.current?.processQueue();
+          // Process both legacy and new queues
+          processLegacyPendingOperations();
+          syncEngineRef.current?.processQueue();
+        });
       }
     };
 
@@ -383,10 +402,17 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   }, [isOnline, threadSubscriptions]);
 
   // Connection health check via Supabase realtime ping
+  // This supplements the connectivity manager with Supabase-specific checks.
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const checkConnection = async () => {
+      // If the connectivity manager already says we're offline, skip channel checks
+      if (!isReallyOnline()) {
+        if (status !== "offline") setStatus("offline");
+        return;
+      }
+
       const supabase = supabaseBrowser();
       const channels = supabase.getChannels();
 
@@ -594,7 +620,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   // === NEW: Retry offline queue manually ===
   const retryOfflineQueue = useCallback(async () => {
-    if (!navigator.onLine) {
+    if (!isReallyOnline()) {
       toast.error("Still offline. Please connect to sync.");
       return;
     }
@@ -629,7 +655,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   // Refresh all data — only when truly online
   const refreshAll = useCallback(async () => {
     // Guard: never invalidate queries when offline — it triggers refetches that fail
-    if (!navigator.onLine) {
+    if (!isReallyOnline()) {
       setStatus("offline");
       return;
     }

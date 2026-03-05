@@ -105,8 +105,15 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             refetchOnMount: false, // Use cache, don't refetch on mount
             retry: (failureCount, error) => {
               // Don't retry when offline — fail silently, use cached data
-              if (typeof navigator !== "undefined" && !navigator.onLine)
-                return false;
+              // Use dynamic import to check real connectivity (not just navigator.onLine)
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const { isReallyOnline } = require("@/lib/connectivityManager");
+                if (!isReallyOnline()) return false;
+              } catch {
+                if (typeof navigator !== "undefined" && !navigator.onLine)
+                  return false;
+              }
               // Don't retry explicit offline errors
               if (error instanceof Error && error.message === "Offline")
                 return false;

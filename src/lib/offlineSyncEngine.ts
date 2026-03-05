@@ -268,6 +268,11 @@ class OfflineSyncEngine {
             !navigator.onLine
           ) {
             // Network is down — stop processing, keep everything in queue
+            // Also tell connectivity manager we detected offline
+            try {
+              const { markOffline } = await import("@/lib/connectivityManager");
+              markOffline();
+            } catch { /* ignore */ }
             break;
           }
 

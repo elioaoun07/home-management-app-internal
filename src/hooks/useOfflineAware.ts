@@ -1,9 +1,11 @@
 // src/hooks/useOfflineAware.ts
 // Shared utility for making mutation hooks offline-aware
-// Checks navigator.onLine and queues operations via SyncContext when offline
+// Checks real connectivity (not just navigator.onLine) and queues operations
+// via SyncContext when offline
 
 "use client";
 
+import { isReallyOnline } from "@/lib/connectivityManager";
 import { useSync } from "@/contexts/SyncContext";
 import type { QueueableOperation } from "@/lib/offlineQueue";
 import { useCallback } from "react";
@@ -37,7 +39,8 @@ export function useOfflineAware() {
       op: QueueableOperation,
       fakeResponse: T,
     ): Promise<{ queued: true; fakeResponse: T; queueId: string } | null> => {
-      if (navigator.onLine) return null;
+      // Use the real connectivity check, not navigator.onLine
+      if (isReallyOnline()) return null;
 
       try {
         const queueId = await queueOperation(op);
@@ -54,5 +57,5 @@ export function useOfflineAware() {
     [queueOperation],
   );
 
-  return { tryOfflineQueue, isOnline: navigator.onLine };
+  return { tryOfflineQueue, isOnline: isReallyOnline() };
 }

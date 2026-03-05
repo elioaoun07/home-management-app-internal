@@ -87,16 +87,23 @@ export default function MobileNav() {
   // Draft transactions count for floating badge
   const draftCount = useDraftCount();
 
-  // Track online/offline status
+  // Track online/offline status via connectivity manager events
   const [isOnline, setIsOnline] = useState(true);
   useEffect(() => {
-    setIsOnline(navigator.onLine);
-    const onOnline = () => setIsOnline(true);
+    let cm: typeof import("@/lib/connectivityManager") | null = null;
+    import("@/lib/connectivityManager").then((mod) => {
+      cm = mod;
+      setIsOnline(mod.isReallyOnline());
+    });
+    const handler = (e: Event) => {
+      setIsOnline((e as CustomEvent).detail?.online ?? true);
+    };
+    // Also listen to legacy events as fallback
     const onOffline = () => setIsOnline(false);
-    window.addEventListener("online", onOnline);
+    window.addEventListener("connectivity-changed", handler);
     window.addEventListener("offline", onOffline);
     return () => {
-      window.removeEventListener("online", onOnline);
+      window.removeEventListener("connectivity-changed", handler);
       window.removeEventListener("offline", onOffline);
     };
   }, []);

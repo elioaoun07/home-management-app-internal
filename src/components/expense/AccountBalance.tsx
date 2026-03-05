@@ -93,7 +93,13 @@ export default function AccountBalance({
     queryFn: async () => {
       if (!accountId) return null;
       // Don't fetch when offline — return cached data silently
-      if (typeof navigator !== "undefined" && !navigator.onLine) {
+      // Use real connectivity check to detect silent WiFi drops
+      let actuallyOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      try {
+        const { isReallyOnline } = await import("@/lib/connectivityManager");
+        actuallyOffline = !isReallyOnline();
+      } catch { /* fallback to navigator.onLine */ }
+      if (actuallyOffline) {
         const offline = getCachedBalance(accountId);
         if (offline) {
           return {
@@ -136,7 +142,13 @@ export default function AccountBalance({
     enabled: !!accountId,
     retry: (failureCount) => {
       // Don't retry when offline — use cached/placeholder silently
-      if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { isReallyOnline } = require("@/lib/connectivityManager");
+        if (!isReallyOnline()) return false;
+      } catch {
+        if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+      }
       return failureCount < 1;
     },
     // OPTIMIZED: Use cached data, refetch when stale

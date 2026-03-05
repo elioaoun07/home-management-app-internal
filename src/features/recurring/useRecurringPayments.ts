@@ -151,7 +151,14 @@ export function useConfirmPayment() {
       description?: string;
       date?: string;
     }) => {
-      if (!navigator.onLine) {
+      // Check real connectivity (not just navigator.onLine which can lie after WiFi toggle)
+      let offline = !navigator.onLine;
+      try {
+        const { isReallyOnline } = await import("@/lib/connectivityManager");
+        offline = !isReallyOnline();
+      } catch { /* fallback to navigator.onLine */ }
+      
+      if (offline) {
         await addToQueue({
           feature: "recurring",
           operation: "confirm",
