@@ -776,7 +776,17 @@ export default function MobileExpenseForm() {
             toast.success("Saved offline!", {
               icon: (
                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 ring-2 ring-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.4)]">
-                  <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0119 12.55M5 12.55a10.94 10.94 0 015.17-2.39M10.71 5.05A16 16 0 0122.56 9M1.42 9a15.91 15.91 0 014.7-2.88M8.53 16.11a6 6 0 016.95 0M12 20h.01" /></svg>
+                  <svg
+                    className="w-3.5 h-3.5 text-amber-400"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0119 12.55M5 12.55a10.94 10.94 0 015.17-2.39M10.71 5.05A16 16 0 0122.56 9M1.42 9a15.91 15.91 0 014.7-2.88M8.53 16.11a6 6 0 016.95 0M12 20h.01" />
+                  </svg>
                 </div>
               ),
               duration: 4000,
@@ -785,12 +795,17 @@ export default function MobileExpenseForm() {
                 label: "Undo",
                 onClick: async () => {
                   try {
-                    const { removeFromQueue } = await import("@/lib/offlineQueue");
+                    const { removeFromQueue } = await import(
+                      "@/lib/offlineQueue"
+                    );
                     await removeFromQueue(newTransaction.id);
                     // Restore cached balance
                     if (transactionData.account_id) {
-                      const { getCachedBalance, setCachedBalance } = await import("@/lib/queryConfig");
-                      const cached = getCachedBalance(transactionData.account_id);
+                      const { getCachedBalance, setCachedBalance } =
+                        await import("@/lib/queryConfig");
+                      const cached = getCachedBalance(
+                        transactionData.account_id,
+                      );
                       if (cached) {
                         setCachedBalance(
                           transactionData.account_id,
@@ -799,8 +814,13 @@ export default function MobileExpenseForm() {
                       }
                     }
                     // Refresh the balance display
-                    queryClient.invalidateQueries({ queryKey: ["account-balance"], refetchType: "none" });
-                    toast.success("Transaction undone", { icon: ToastIcons.delete });
+                    queryClient.invalidateQueries({
+                      queryKey: ["account-balance"],
+                      refetchType: "none",
+                    });
+                    toast.success("Transaction undone", {
+                      icon: ToastIcons.delete,
+                    });
                   } catch {
                     toast.error("Failed to undo", { icon: ToastIcons.error });
                   }

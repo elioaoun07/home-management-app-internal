@@ -9,12 +9,7 @@ const MAX_PAYLOAD_SIZE = 64 * 1024; // 64KB
 
 export interface OfflineOperation {
   id: string;
-  feature:
-    | "transaction"
-    | "item"
-    | "hub-message"
-    | "subtask"
-    | "recurring";
+  feature: "transaction" | "item" | "hub-message" | "subtask" | "recurring";
   operation:
     | "create"
     | "update"
@@ -49,6 +44,13 @@ export type QueueableOperation = Omit<
 let memoryQueue: OfflineOperation[] = [];
 let useMemoryFallback = false;
 
+/** Notify listeners (SyncContext) that the queue changed */
+function notifyQueueChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("offline-queue-changed"));
+  }
+}
+
 function generateId(): string {
   return `op-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -64,7 +66,9 @@ function openDB(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = () => {
-      console.warn("[offlineQueue] IndexedDB open failed, using memory fallback");
+      console.warn(
+        "[offlineQueue] IndexedDB open failed, using memory fallback",
+      );
       useMemoryFallback = true;
       reject(request.error);
     };
@@ -84,9 +88,7 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-export async function addToQueue(
-  op: QueueableOperation,
-): Promise<string> {
+export async function addToQueue(op: QueueableOperation): Promise<string> {
   const operation: OfflineOperation = {
     ...op,
     id: generateId(),
@@ -105,7 +107,11 @@ export async function addToQueue(
   // replace the existing queued operation instead of adding a duplicate
   if (op.operation === "update" && op.endpoint) {
     try {
-      const existing = await findPendingOperation(op.feature, op.operation, op.endpoint);
+      const existing = await findPendingOperation(
+        op.feature,
+        op.operation,
+        op.endpoint,
+      );
       if (existing) {
         // Remove the old one, the new one will be added below with latest data
         await removeFromQueue(existing.id);
@@ -120,6 +126,7 @@ export async function addToQueue(
       throw new Error("Too many pending changes. Please connect to sync.");
     }
     memoryQueue.push(operation);
+    notifyQueueChanged();
     return operation.id;
   }
 
@@ -149,12 +156,14 @@ export async function addToQueue(
     });
 
     db.close();
+    notifyQueueChanged();
     return operation.id;
   } catch (err) {
     // Fall back to memory
     if (!useMemoryFallback) {
       useMemoryFallback = true;
       memoryQueue.push(operation);
+      notifyQueueChanged();
       return operation.id;
     }
     throw err;
@@ -164,6 +173,7 @@ export async function addToQueue(
 export async function removeFromQueue(id: string): Promise<void> {
   if (useMemoryFallback) {
     memoryQueue = memoryQueue.filter((op) => op.id !== id);
+    notifyQueueChanged();
     return;
   }
 
@@ -177,8 +187,10 @@ export async function removeFromQueue(id: string): Promise<void> {
       deleteReq.onerror = () => reject(deleteReq.error);
     });
     db.close();
+    notifyQueueChanged();
   } catch {
     memoryQueue = memoryQueue.filter((op) => op.id !== id);
+    notifyQueueChanged();
   }
 }
 
@@ -194,7 +206,8 @@ export async function getAllPending(): Promise<OfflineOperation[]> {
       const store = tx.objectStore(STORE_NAME);
       const index = store.index("createdAt");
       const getAllReq = index.getAll();
-      getAllReq.onsuccess = () => resolve(getAllReq.result as OfflineOperation[]);
+      getAllReq.onsuccess = () =>
+        resolve(getAllReq.result as OfflineOperation[]);
       getAllReq.onerror = () => reject(getAllReq.error);
     });
     db.close();
@@ -207,6 +220,7 @@ export async function getAllPending(): Promise<OfflineOperation[]> {
 export async function clearQueue(): Promise<void> {
   if (useMemoryFallback) {
     memoryQueue = [];
+    notifyQueueChanged();
     return;
   }
 
@@ -220,8 +234,10 @@ export async function clearQueue(): Promise<void> {
       clearReq.onerror = () => reject(clearReq.error);
     });
     db.close();
+    notifyQueueChanged();
   } catch {
     memoryQueue = [];
+    notifyQueueChanged();
   }
 }
 
@@ -292,13 +308,17 @@ export async function updateRetryCount(
  */
 export async function updateQueuedOperation(
   id: string,
-  updates: { body?: Record<string, unknown>; metadata?: { label: string; icon?: string } },
+  updates: {
+    body?: Record<string, unknown>;
+    metadata?: { label: string; icon?: string };
+  },
 ): Promise<boolean> {
   if (useMemoryFallback) {
     const op = memoryQueue.find((o) => o.id === id);
     if (!op) return false;
     if (updates.body) op.body = { ...op.body, ...updates.body };
     if (updates.metadata) op.metadata = { ...op.metadata, ...updates.metadata };
+    notifyQueueChanged();
     return true;
   }
 
@@ -332,12 +352,14 @@ export async function updateQueuedOperation(
     });
 
     db.close();
+    notifyQueueChanged();
     return true;
   } catch {
     const op = memoryQueue.find((o) => o.id === id);
     if (!op) return false;
     if (updates.body) op.body = { ...op.body, ...updates.body };
     if (updates.metadata) op.metadata = { ...op.metadata, ...updates.metadata };
+    notifyQueueChanged();
     return true;
   }
 }
@@ -372,10 +394,7 @@ export async function findPendingOperation(
     if (op.feature !== feature || op.operation !== operation) return false;
     if (targetId) {
       // Check body.id or tempId
-      return (
-        op.body?.id === targetId ||
-        op.tempId === targetId
-      );
+      return op.body?.id === targetId || op.tempId === targetId;
     }
     return true;
   });

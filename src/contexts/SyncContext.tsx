@@ -92,7 +92,10 @@ interface SyncContextValue {
   removeOfflineOperation: (id: string) => Promise<void>;
   updateOfflineOperation: (
     id: string,
-    updates: { body?: Record<string, unknown>; metadata?: { label: string; icon?: string } },
+    updates: {
+      body?: Record<string, unknown>;
+      metadata?: { label: string; icon?: string };
+    },
   ) => Promise<boolean>;
   retryOfflineQueue: () => Promise<void>;
 }
@@ -165,6 +168,16 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       // Ignore errors
     }
   }, []);
+
+  // === Listen for direct queue mutations (e.g. addToQueue called outside SyncContext) ===
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      refreshOfflineQueueState();
+    };
+    window.addEventListener("offline-queue-changed", handler);
+    return () => window.removeEventListener("offline-queue-changed", handler);
+  }, [refreshOfflineQueueState]);
 
   // === Initialize sync engine ===
   useEffect(() => {
@@ -564,7 +577,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const handleUpdateOfflineOperation = useCallback(
     async (
       id: string,
-      updates: { body?: Record<string, unknown>; metadata?: { label: string; icon?: string } },
+      updates: {
+        body?: Record<string, unknown>;
+        metadata?: { label: string; icon?: string };
+      },
     ): Promise<boolean> => {
       const ok = await updateQueuedOperation(id, updates);
       await refreshOfflineQueueState();

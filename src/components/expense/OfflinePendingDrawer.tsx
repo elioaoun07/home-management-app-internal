@@ -40,7 +40,11 @@ export default function OfflinePendingDrawer({
       if (!sync?.removeOfflineOperation) return;
 
       // If this is a transaction create, restore the cached balance
-      if (op.feature === "transaction" && op.operation === "create" && op.body?.account_id) {
+      if (
+        op.feature === "transaction" &&
+        op.operation === "create" &&
+        op.body?.account_id
+      ) {
         try {
           const { getCachedBalance, setCachedBalance } = await import(
             "@/lib/queryConfig"
@@ -316,11 +320,12 @@ export default function OfflinePendingDrawer({
                             </span>
                           )}
                         </div>
-                        {typeof op.body?.description === "string" && op.body.description && (
-                          <p className="text-xs text-white/30 mt-0.5 truncate">
-                            {op.body.description}
-                          </p>
-                        )}
+                        {typeof op.body?.description === "string" &&
+                          op.body.description && (
+                            <p className="text-xs text-white/30 mt-0.5 truncate">
+                              {op.body.description}
+                            </p>
+                          )}
                       </div>
                       <div className="flex gap-1 shrink-0">
                         {/* Only show edit for transaction creates */}
