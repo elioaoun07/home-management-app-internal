@@ -58,11 +58,18 @@ export async function POST(
         .single();
 
       if (error) {
-        console.error("[item-complete] Failed to complete recurring item:", error);
+        console.error(
+          "[item-complete] Failed to complete recurring item:",
+          error,
+        );
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      return NextResponse.json({ success: true, action: data, type: "occurrence" });
+      return NextResponse.json({
+        success: true,
+        action: data,
+        type: "occurrence",
+      });
     } else {
       // For non-recurring: determine if should be archived
       const occurrenceDateObj = new Date(occurrence_date);
@@ -96,7 +103,10 @@ export async function POST(
       ]);
 
       if (itemResult.error) {
-        console.error("[item-complete] Failed to update item:", itemResult.error);
+        console.error(
+          "[item-complete] Failed to update item:",
+          itemResult.error,
+        );
         return NextResponse.json(
           { error: itemResult.error.message },
           { status: 500 },

@@ -1,8 +1,8 @@
 "use client";
 
 import HubPage from "@/components/hub/HubPage";
-import { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 export default function ChatStandalonePage() {
   const searchParams = useSearchParams();

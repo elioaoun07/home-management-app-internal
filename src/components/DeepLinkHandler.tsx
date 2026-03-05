@@ -118,13 +118,13 @@ export function DeepLinkHandler() {
 
     window.addEventListener(
       "notification-navigate",
-      handleNotificationNavigate
+      handleNotificationNavigate,
     );
 
     return () => {
       window.removeEventListener(
         "notification-navigate",
-        handleNotificationNavigate
+        handleNotificationNavigate,
       );
     };
   }, [tabCtx]);

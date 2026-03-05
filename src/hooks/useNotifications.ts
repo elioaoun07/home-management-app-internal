@@ -536,7 +536,8 @@ export function getActionRoute(notification: Notification): string | null {
     case "chat_message":
     case "chat_mention": {
       // If thread_id is available, go to standalone chat with thread
-      const threadId = (notification.action_data as Record<string, unknown>)?.thread_id;
+      const threadId = (notification.action_data as Record<string, unknown>)
+        ?.thread_id;
       return threadId ? `/chat?thread=${threadId}` : "/chat";
     }
     default:

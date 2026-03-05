@@ -137,7 +137,9 @@ export async function GET(req: NextRequest) {
         const { data: householdLink } = await supabase
           .from("household_links")
           .select("owner_user_id, partner_user_id")
-          .or(`owner_user_id.eq.${item.user_id},partner_user_id.eq.${item.user_id}`)
+          .or(
+            `owner_user_id.eq.${item.user_id},partner_user_id.eq.${item.user_id}`,
+          )
           .eq("active", true)
           .maybeSingle();
 
@@ -199,7 +201,10 @@ export async function GET(req: NextRequest) {
           .single();
 
         if (insertError) {
-          console.error(`Failed to create notification for user ${userId}:`, insertError);
+          console.error(
+            `Failed to create notification for user ${userId}:`,
+            insertError,
+          );
           continue;
         }
 
@@ -237,7 +242,7 @@ export async function GET(req: NextRequest) {
               item_title: item.title,
               alert_id: alert.id,
               occurrence_date: new Date().toISOString().split("T")[0],
-              is_recurring: !!(item.item_recurrence_rules?.length),
+              is_recurring: !!item.item_recurrence_rules?.length,
               url: `/expense?tab=reminder&item=${item.id}`,
             },
           });

@@ -25,7 +25,7 @@ function playBeep(
   frequency: number,
   startTime: number,
   duration: number,
-  volume: number = 0.5
+  volume: number = 0.5,
 ) {
   const oscillator = ctx.createOscillator();
   const gainNode = ctx.createGain();
@@ -153,14 +153,14 @@ export function ServiceWorkerRegistration() {
           // → dispatch custom event so DeepLinkHandler can switch tabs without reload
           const tabRoutes = ["/expense", "/dashboard", "/settings"];
           const isTabRoute = tabRoutes.some(
-            (r) => pathname === r || pathname.startsWith(r + "/")
+            (r) => pathname === r || pathname.startsWith(r + "/"),
           );
 
           if (isTabRoute) {
             window.dispatchEvent(
               new CustomEvent("notification-navigate", {
                 detail: { url },
-              })
+              }),
             );
           } else {
             // Standalone pages (/chat, /recurring, /reminders, /catalogue, etc.)

@@ -96,17 +96,27 @@ self.addEventListener("push", (event) => {
     // Daily / transaction reminder → gentle vibration
     options.vibrate = [200, 100, 200];
     options.actions = [
-      { action: "add_expense", title: "➕ Log Expense", icon: "/appicon-192.png" },
+      {
+        action: "add_expense",
+        title: "➕ Log Expense",
+        icon: "/appicon-192.png",
+      },
       { action: "snooze_1h", title: "⏰ Later", icon: "/appicon-192.png" },
     ];
-  } else if (notifType === "item_reminder" || notifType === "item_due" || notifType === "item_overdue") {
+  } else if (
+    notifType === "item_reminder" ||
+    notifType === "item_due" ||
+    notifType === "item_overdue"
+  ) {
     // Task / reminder / event → alarm vibration
     options.vibrate = [500, 200, 500, 200, 500, 200, 500, 200, 500];
     options.actions = [
       { action: "complete_item", title: "✅ Done", icon: "/appicon-192.png" },
       { action: "snooze", title: "⏰ Snooze", icon: "/appicon-192.png" },
     ];
-    options.timestamp = data.data?.due_at ? new Date(data.data.due_at).getTime() : Date.now();
+    options.timestamp = data.data?.due_at
+      ? new Date(data.data.due_at).getTime()
+      : Date.now();
   } else if (notifType === "chat_message" || notifType === "chat_mention") {
     // Chat message → gentle vibration
     options.vibrate = [200, 100, 200];
@@ -118,14 +128,22 @@ self.addEventListener("push", (event) => {
     // Split bill request → gentle vibration
     options.vibrate = [200, 100, 200, 100, 200];
     options.actions = [
-      { action: "open_split_bill", title: "💰 Add Amount", icon: "/appicon-192.png" },
+      {
+        action: "open_split_bill",
+        title: "💰 Add Amount",
+        icon: "/appicon-192.png",
+      },
       { action: "snooze_1h", title: "⏰ Later", icon: "/appicon-192.png" },
     ];
   } else if (notifType === "bill_due" || notifType === "bill_overdue") {
     // Recurring bill due → medium vibration
     options.vibrate = [300, 150, 300, 150, 300];
     options.actions = [
-      { action: "open_recurring", title: "✅ Confirm", icon: "/appicon-192.png" },
+      {
+        action: "open_recurring",
+        title: "✅ Confirm",
+        icon: "/appicon-192.png",
+      },
       { action: "snooze", title: "⏰ Snooze", icon: "/appicon-192.png" },
     ];
   } else if (notifType === "guest_chat") {
@@ -213,7 +231,12 @@ self.addEventListener("notificationclick", (event) => {
   if (action === "open_thread") {
     // Open standalone chat page with thread
     const threadId = data.thread_id;
-    event.waitUntil(openApp({ ...data, url: threadId ? `/chat?thread=${threadId}` : "/chat" }));
+    event.waitUntil(
+      openApp({
+        ...data,
+        url: threadId ? `/chat?thread=${threadId}` : "/chat",
+      }),
+    );
     return;
   }
   if (action === "open_split_bill") {
@@ -235,7 +258,11 @@ self.addEventListener("notificationclick", (event) => {
   if (notifType === "transaction_reminder" || notifType === "daily_reminder") {
     // Open expense tab (the main entry form)
     event.waitUntil(openApp({ ...data, url: "/expense" }));
-  } else if (notifType === "item_reminder" || notifType === "item_due" || notifType === "item_overdue") {
+  } else if (
+    notifType === "item_reminder" ||
+    notifType === "item_due" ||
+    notifType === "item_overdue"
+  ) {
     // Open reminder tab, optionally highlighting a specific item
     const itemUrl = data.item_id
       ? `/expense?tab=reminder&item=${data.item_id}`
@@ -244,7 +271,12 @@ self.addEventListener("notificationclick", (event) => {
   } else if (notifType === "chat_message" || notifType === "chat_mention") {
     // Open standalone chat page with the thread
     const threadId = data.thread_id;
-    event.waitUntil(openApp({ ...data, url: threadId ? `/chat?thread=${threadId}` : "/chat" }));
+    event.waitUntil(
+      openApp({
+        ...data,
+        url: threadId ? `/chat?thread=${threadId}` : "/chat",
+      }),
+    );
   } else if (notifType === "transaction_pending") {
     // Split bill → open expense with action
     event.waitUntil(openApp({ ...data, url: "/expense?action=split-bill" }));
@@ -254,7 +286,10 @@ self.addEventListener("notificationclick", (event) => {
   } else if (notifType === "guest_chat") {
     // Open hub tab (guest messages show in hub alerts)
     event.waitUntil(openApp({ ...data, url: "/expense?tab=hub&view=alerts" }));
-  } else if (notifType === "budget_warning" || notifType === "budget_exceeded") {
+  } else if (
+    notifType === "budget_warning" ||
+    notifType === "budget_exceeded"
+  ) {
     // Open dashboard tab
     event.waitUntil(openApp({ ...data, url: "/expense?tab=dashboard" }));
   } else if (notifType === "goal_milestone" || notifType === "goal_completed") {
@@ -403,7 +438,8 @@ async function handleCompleteItem(data) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        occurrence_date: data.occurrence_date || new Date().toISOString().split("T")[0],
+        occurrence_date:
+          data.occurrence_date || new Date().toISOString().split("T")[0],
         is_recurring: data.is_recurring || false,
       }),
     });
@@ -419,11 +455,17 @@ async function handleCompleteItem(data) {
     } else {
       console.error("[SW] Failed to complete item:", await response.text());
       // Fall back to opening the app
-      await openApp({ ...data, url: `/expense?tab=reminder&item=${data.item_id}` });
+      await openApp({
+        ...data,
+        url: `/expense?tab=reminder&item=${data.item_id}`,
+      });
     }
   } catch (error) {
     console.error("[SW] Error completing item:", error);
-    await openApp({ ...data, url: `/expense?tab=reminder&item=${data.item_id}` });
+    await openApp({
+      ...data,
+      url: `/expense?tab=reminder&item=${data.item_id}`,
+    });
   }
 }
 

@@ -56,7 +56,7 @@ export async function sendSplitBillNotification({
     if (!response.ok) {
       console.error(
         "[sendSplitBillNotification] API returned error:",
-        response.status
+        response.status,
       );
       return false;
     }
@@ -65,7 +65,7 @@ export async function sendSplitBillNotification({
   } catch (error) {
     console.error(
       "[sendSplitBillNotification] Failed to send notification:",
-      error
+      error,
     );
     return false;
   }

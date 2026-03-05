@@ -157,9 +157,17 @@ interface HubPageProps {
   initialThreadId?: string;
 }
 
-export default function HubPage({ standalone = false, initialThreadId }: HubPageProps) {
+export default function HubPage({
+  standalone = false,
+  initialThreadId,
+}: HubPageProps) {
   const themeClasses = useThemeClasses();
-  const { hubDefaultView, setHubDefaultView, pendingThreadId, setPendingThreadId } = useTab();
+  const {
+    hubDefaultView,
+    setHubDefaultView,
+    pendingThreadId,
+    setPendingThreadId,
+  } = useTab();
 
   // Initialize hub cache from localStorage on mount
   useHubCacheInit();

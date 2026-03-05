@@ -142,10 +142,10 @@ export async function GET(request: NextRequest) {
     // OPTIMIZED: Batch upsert all receipts at once instead of loop
     // Separate new receipts from updates
     const newReceiptIds = unreadMessageIds.filter(
-      (msgId) => !myReceipts[msgId]
+      (msgId) => !myReceipts[msgId],
     );
     const updateReceiptIds = unreadMessageIds.filter(
-      (msgId) => myReceipts[msgId] && myReceipts[msgId] !== "read"
+      (msgId) => myReceipts[msgId] && myReceipts[msgId] !== "read",
     );
 
     // Batch insert new receipts
@@ -251,7 +251,7 @@ export async function POST(request: NextRequest) {
   if (!content?.trim()) {
     return NextResponse.json(
       { error: "Message content required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -316,7 +316,7 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json(
       { error: error.message, details: error },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -411,7 +411,7 @@ export async function POST(request: NextRequest) {
                 endpoint: sub.endpoint,
                 keys: { p256dh: sub.p256dh, auth: sub.auth },
               },
-              payload
+              payload,
             );
             pushSent = true;
           } catch (pushError) {
@@ -532,7 +532,7 @@ export async function DELETE(request: NextRequest) {
     if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
       return NextResponse.json(
         { error: "messageIds array is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -552,14 +552,14 @@ export async function DELETE(request: NextRequest) {
       console.error("Delete error:", deleteError);
       return NextResponse.json(
         { error: "Failed to delete messages" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     if (!deletedMessages || deletedMessages.length === 0) {
       return NextResponse.json(
         { error: "No messages found or unauthorized" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -571,7 +571,7 @@ export async function DELETE(request: NextRequest) {
     console.error("DELETE /api/hub/messages error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -614,7 +614,7 @@ export async function PATCH(request: NextRequest) {
     if (!action) {
       return NextResponse.json(
         { error: "action is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -636,7 +636,7 @@ export async function PATCH(request: NextRequest) {
           if (!message_id) {
             return NextResponse.json(
               { error: "message_id is required" },
-              { status: 400 }
+              { status: 400 },
             );
           }
 
@@ -653,7 +653,7 @@ export async function PATCH(request: NextRequest) {
           if (updateError) {
             return NextResponse.json(
               { error: "Failed to set quantity" },
-              { status: 500 }
+              { status: 500 },
             );
           }
 
@@ -668,7 +668,7 @@ export async function PATCH(request: NextRequest) {
           if (!message_id) {
             return NextResponse.json(
               { error: "message_id is required" },
-              { status: 400 }
+              { status: 400 },
             );
           }
 
@@ -681,7 +681,7 @@ export async function PATCH(request: NextRequest) {
             } catch {
               return NextResponse.json(
                 { error: "Invalid URL format" },
-                { status: 400 }
+                { status: 400 },
               );
             }
           }
@@ -696,7 +696,7 @@ export async function PATCH(request: NextRequest) {
           if (updateError) {
             return NextResponse.json(
               { error: "Failed to set item URL" },
-              { status: 500 }
+              { status: 500 },
             );
           }
 
@@ -711,7 +711,7 @@ export async function PATCH(request: NextRequest) {
           if (!message_id) {
             return NextResponse.json(
               { error: "message_id is required" },
-              { status: 400 }
+              { status: 400 },
             );
           }
 
@@ -724,7 +724,7 @@ export async function PATCH(request: NextRequest) {
           if (fetchError || !message) {
             return NextResponse.json(
               { error: "Message not found" },
-              { status: 404 }
+              { status: 404 },
             );
           }
 
@@ -739,7 +739,7 @@ export async function PATCH(request: NextRequest) {
           if (updateError) {
             return NextResponse.json(
               { error: "Failed to toggle pin" },
-              { status: 500 }
+              { status: 500 },
             );
           }
 
@@ -754,7 +754,7 @@ export async function PATCH(request: NextRequest) {
           if (!message_id) {
             return NextResponse.json(
               { error: "message_id is required" },
-              { status: 400 }
+              { status: 400 },
             );
           }
 
@@ -767,7 +767,7 @@ export async function PATCH(request: NextRequest) {
           if (fetchError || !message) {
             return NextResponse.json(
               { error: "Message not found" },
-              { status: 404 }
+              { status: 404 },
             );
           }
 
@@ -788,7 +788,7 @@ export async function PATCH(request: NextRequest) {
           if (updateError) {
             return NextResponse.json(
               { error: "Failed to toggle check" },
-              { status: 500 }
+              { status: 500 },
             );
           }
 
@@ -821,7 +821,7 @@ export async function PATCH(request: NextRequest) {
           if (!message_id) {
             return NextResponse.json(
               { error: "message_id is required" },
-              { status: 400 }
+              { status: 400 },
             );
           }
 
@@ -830,7 +830,7 @@ export async function PATCH(request: NextRequest) {
             console.error("Invalid content type:", typeof content, content);
             return NextResponse.json(
               { error: "content must be a string" },
-              { status: 400 }
+              { status: 400 },
             );
           }
 
@@ -844,7 +844,7 @@ export async function PATCH(request: NextRequest) {
           if (fetchError || !message) {
             return NextResponse.json(
               { error: "Message not found" },
-              { status: 404 }
+              { status: 404 },
             );
           }
 
@@ -852,7 +852,7 @@ export async function PATCH(request: NextRequest) {
           if (message.sender_user_id !== user.id) {
             return NextResponse.json(
               { error: "Can only edit your own messages" },
-              { status: 403 }
+              { status: 403 },
             );
           }
 
@@ -860,7 +860,7 @@ export async function PATCH(request: NextRequest) {
             "Updating message:",
             message_id,
             "with content:",
-            content
+            content,
           );
 
           // Update content only (don't include edited_at as column may not exist)
@@ -880,7 +880,7 @@ export async function PATCH(request: NextRequest) {
                 error: "Failed to update message",
                 details: updateError.message || String(updateError),
               },
-              { status: 500 }
+              { status: 500 },
             );
           }
 
@@ -895,7 +895,7 @@ export async function PATCH(request: NextRequest) {
           if (!thread_id) {
             return NextResponse.json(
               { error: "thread_id is required" },
-              { status: 400 }
+              { status: 400 },
             );
           }
 
@@ -913,7 +913,7 @@ export async function PATCH(request: NextRequest) {
           if (updateError) {
             return NextResponse.json(
               { error: "Failed to clear items" },
-              { status: 500 }
+              { status: 500 },
             );
           }
 
@@ -928,7 +928,7 @@ export async function PATCH(request: NextRequest) {
           if (ids.length === 0) {
             return NextResponse.json(
               { error: "message_id(s) required" },
-              { status: 400 }
+              { status: 400 },
             );
           }
 
@@ -943,7 +943,7 @@ export async function PATCH(request: NextRequest) {
           if (updateError) {
             return NextResponse.json(
               { error: "Failed to archive" },
-              { status: 500 }
+              { status: 500 },
             );
           }
 
@@ -958,7 +958,7 @@ export async function PATCH(request: NextRequest) {
           if (ids.length === 0) {
             return NextResponse.json(
               { error: "message_id(s) required" },
-              { status: 400 }
+              { status: 400 },
             );
           }
 
@@ -973,7 +973,7 @@ export async function PATCH(request: NextRequest) {
           if (updateError) {
             return NextResponse.json(
               { error: "Failed to unarchive" },
-              { status: 500 }
+              { status: 500 },
             );
           }
 
@@ -989,7 +989,7 @@ export async function PATCH(request: NextRequest) {
     if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
       return NextResponse.json(
         { error: "messageIds array is required for hide/unhide/undo actions" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -1008,14 +1008,14 @@ export async function PATCH(request: NextRequest) {
           id,
           household_id
         )
-      `
+      `,
       )
       .in("id", messageIds);
 
     if (verifyError) {
       return NextResponse.json(
         { error: "Failed to verify messages" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -1046,13 +1046,13 @@ export async function PATCH(request: NextRequest) {
     if (action === "undo") {
       // Only allow users to undo their own deletions
       const unauthorizedMessages = messages.filter(
-        (m: any) => m.sender_user_id !== user.id
+        (m: any) => m.sender_user_id !== user.id,
       );
 
       if (unauthorizedMessages.length > 0) {
         return NextResponse.json(
           { error: "You can only undo your own deletions" },
-          { status: 403 }
+          { status: 403 },
         );
       }
 
@@ -1068,7 +1068,7 @@ export async function PATCH(request: NextRequest) {
       if (undoError) {
         return NextResponse.json(
           { error: "Failed to undo deletion" },
-          { status: 500 }
+          { status: 500 },
         );
       }
 
@@ -1092,7 +1092,7 @@ export async function PATCH(request: NextRequest) {
 
         // Remove user ID from the array
         const updatedHiddenFor = currentHiddenFor.filter(
-          (id: string) => id !== user.id
+          (id: string) => id !== user.id,
         );
 
         const { error: updateError } = await supabase
@@ -1103,7 +1103,7 @@ export async function PATCH(request: NextRequest) {
         if (updateError) {
           return NextResponse.json(
             { error: "Failed to unhide message" },
-            { status: 500 }
+            { status: 500 },
           );
         }
       }
@@ -1139,7 +1139,7 @@ export async function PATCH(request: NextRequest) {
         if (updateError) {
           return NextResponse.json(
             { error: "Failed to hide message" },
-            { status: 500 }
+            { status: 500 },
           );
         }
       }
@@ -1152,7 +1152,7 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
