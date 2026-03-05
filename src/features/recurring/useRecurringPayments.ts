@@ -1,5 +1,5 @@
-import { CACHE_TIMES } from "@/lib/queryConfig";
 import { addToQueue } from "@/lib/offlineQueue";
+import { CACHE_TIMES } from "@/lib/queryConfig";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export type RecurringPayment = {
@@ -156,8 +156,10 @@ export function useConfirmPayment() {
       try {
         const { isReallyOnline } = await import("@/lib/connectivityManager");
         offline = !isReallyOnline();
-      } catch { /* fallback to navigator.onLine */ }
-      
+      } catch {
+        /* fallback to navigator.onLine */
+      }
+
       if (offline) {
         await addToQueue({
           feature: "recurring",
@@ -165,7 +167,9 @@ export function useConfirmPayment() {
           endpoint: `/api/recurring-payments/${id}`,
           method: "POST",
           body: { amount, description, date },
-          metadata: { label: `Confirm payment${description ? ` "${description}"` : ''}` },
+          metadata: {
+            label: `Confirm payment${description ? ` "${description}"` : ""}`,
+          },
         });
         return { _offline: true };
       }

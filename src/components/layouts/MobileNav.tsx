@@ -41,7 +41,7 @@ import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 
 type TabId = "dashboard" | "expense" | "reminder" | "hub";
@@ -228,9 +228,7 @@ export default function MobileNav() {
         style={{ height: `${MOBILE_NAV_HEIGHT}px` }}
       >
         <div className="flex flex-col items-center justify-center -mt-4">
-          <SemiDonutFAB
-            onSelect={handleFABSelect}
-          />
+          <SemiDonutFAB onSelect={handleFABSelect} />
           <span className="text-[10px] font-semibold text-white/40 whitespace-nowrap mt-1">
             Add
           </span>

@@ -2,6 +2,12 @@
 "use client";
 
 import {
+  isReallyOnline,
+  probeNow,
+  startProbing,
+  stopProbing,
+} from "@/lib/connectivityManager";
+import {
   addToQueue,
   clearQueue as clearOfflineQueue,
   getAllPending,
@@ -17,13 +23,6 @@ import {
   type OfflineSyncEngine,
   type SyncResult,
 } from "@/lib/offlineSyncEngine";
-import {
-  isReallyOnline,
-  markOffline as cmMarkOffline,
-  probeNow,
-  startProbing,
-  stopProbing,
-} from "@/lib/connectivityManager";
 import { offlinePendingActions } from "@/lib/stores/offlinePendingStore";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";

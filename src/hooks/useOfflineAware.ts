@@ -5,8 +5,8 @@
 
 "use client";
 
-import { isReallyOnline } from "@/lib/connectivityManager";
 import { useSync } from "@/contexts/SyncContext";
+import { isReallyOnline } from "@/lib/connectivityManager";
 import type { QueueableOperation } from "@/lib/offlineQueue";
 import { useCallback } from "react";
 

@@ -94,11 +94,14 @@ export default function AccountBalance({
       if (!accountId) return null;
       // Don't fetch when offline — return cached data silently
       // Use real connectivity check to detect silent WiFi drops
-      let actuallyOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      let actuallyOffline =
+        typeof navigator !== "undefined" && !navigator.onLine;
       try {
         const { isReallyOnline } = await import("@/lib/connectivityManager");
         actuallyOffline = !isReallyOnline();
-      } catch { /* fallback to navigator.onLine */ }
+      } catch {
+        /* fallback to navigator.onLine */
+      }
       if (actuallyOffline) {
         const offline = getCachedBalance(accountId);
         if (offline) {
@@ -125,7 +128,11 @@ export default function AccountBalance({
         return data;
       } catch (err) {
         // Network failure (connected → lost internet): fall back to cached balance
-        if (err instanceof TypeError || (err instanceof Error && /network|failed to fetch|load failed/i.test(err.message))) {
+        if (
+          err instanceof TypeError ||
+          (err instanceof Error &&
+            /network|failed to fetch|load failed/i.test(err.message))
+        ) {
           const offline = getCachedBalance(accountId);
           if (offline) {
             return {

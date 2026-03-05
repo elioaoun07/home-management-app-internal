@@ -22,7 +22,9 @@ export function EagerDataPrefetch() {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { isReallyOnline } = require("@/lib/connectivityManager");
       offline = !isReallyOnline();
-    } catch { /* fallback to navigator.onLine */ }
+    } catch {
+      /* fallback to navigator.onLine */
+    }
     if (offline) return;
     hasPrefetched.current = true;
 
@@ -43,7 +45,7 @@ export function EagerDataPrefetch() {
             queryKey: ["accounts", { own: true, includeHidden: true }],
             queryFn: async () => {
               const res = await fetch(
-                "/api/accounts?own=true&includeHidden=true"
+                "/api/accounts?own=true&includeHidden=true",
               );
               if (!res.ok) return [];
               return res.json();

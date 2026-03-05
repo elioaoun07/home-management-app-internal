@@ -14,7 +14,11 @@ import { toast } from "sonner";
 function isNetworkError(err: unknown): boolean {
   if (err instanceof TypeError) return true; // "Failed to fetch" / "NetworkError"
   if (err instanceof DOMException && err.name === "AbortError") return false;
-  if (err instanceof Error && /network|failed to fetch|load failed/i.test(err.message)) return true;
+  if (
+    err instanceof Error &&
+    /network|failed to fetch|load failed/i.test(err.message)
+  )
+    return true;
   return false;
 }
 

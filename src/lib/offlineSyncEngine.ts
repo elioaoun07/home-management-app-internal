@@ -3,12 +3,12 @@
 
 import type { OfflineOperation } from "./offlineQueue";
 import {
-  getAllPending,
-  removeFromQueue,
-  updateRetryCount,
-  removeStaleOperations,
   cancelCreateDeletePair,
+  getAllPending,
   getQueueCount,
+  removeFromQueue,
+  removeStaleOperations,
+  updateRetryCount,
 } from "./offlineQueue";
 
 export interface SyncResult {
@@ -226,7 +226,8 @@ class OfflineSyncEngine {
             let errorMessage = `HTTP ${response.status}`;
             try {
               const errorBody = await response.json();
-              errorMessage = errorBody.error || errorBody.message || errorMessage;
+              errorMessage =
+                errorBody.error || errorBody.message || errorMessage;
             } catch {
               // ignore
             }
@@ -272,7 +273,9 @@ class OfflineSyncEngine {
             try {
               const { markOffline } = await import("@/lib/connectivityManager");
               markOffline();
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
             break;
           }
 

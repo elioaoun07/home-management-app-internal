@@ -115,7 +115,9 @@ function notify() {
 
 function restartProbing() {
   if (probeTimer) clearInterval(probeTimer);
-  const interval = state.online ? ONLINE_PROBE_INTERVAL : OFFLINE_PROBE_INTERVAL;
+  const interval = state.online
+    ? ONLINE_PROBE_INTERVAL
+    : OFFLINE_PROBE_INTERVAL;
   probeTimer = setInterval(async () => {
     const result = await doProbe();
     const changed = result !== state.online;
