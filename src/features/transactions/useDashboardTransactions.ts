@@ -21,28 +21,48 @@ function isNetworkError(err: unknown): boolean {
 const OFFLINE_FETCH_TIMEOUT = 5000;
 
 /**
- * Fetch with an automatic timeout.
- * If the request doesn't complete within OFFLINE_FETCH_TIMEOUT ms the
- * returned promise rejects with a custom Error whose `.name` is
- * "TimeoutError" so callers can distinguish it from user-initiated AbortErrors.
+ * Fetch with TWO abort triggers so a hanging request never blocks the UI:
+ *
+ * 1. **`offline` event** — the browser fires this when wifi/network drops.
+ *    We listen for it and abort the in-flight fetch **immediately** (<1 s).
+ *
+ * 2. **Timeout** — safety net for devices/browsers where the `offline` event
+ *    is delayed or never fires. Aborts after OFFLINE_FETCH_TIMEOUT ms.
+ *
+ * Both paths produce a `TimeoutError` so callers can fall back to the
+ * offline queue without special-casing.
  */
 function fetchWithTimeout(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
   const controller = new AbortController();
+
+  // Trigger 1: hard timeout
   const timeoutId = setTimeout(() => controller.abort(), OFFLINE_FETCH_TIMEOUT);
+
+  // Trigger 2: browser offline event (fires almost instantly on wifi toggle)
+  const offlineHandler = () => controller.abort();
+  if (typeof window !== "undefined") {
+    window.addEventListener("offline", offlineHandler, { once: true });
+  }
 
   return fetch(input, { ...init, signal: controller.signal })
     .then((res) => {
       clearTimeout(timeoutId);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("offline", offlineHandler);
+      }
       return res;
     })
     .catch((err) => {
       clearTimeout(timeoutId);
-      // Convert our own timeout abort into a recognisable error
+      if (typeof window !== "undefined") {
+        window.removeEventListener("offline", offlineHandler);
+      }
+      // Convert our own timeout/offline abort into a recognisable error
       if (err instanceof DOMException && err.name === "AbortError") {
-        const timeout = new Error("Request timed out — treating as offline");
+        const timeout = new Error("Request aborted — treating as offline");
         timeout.name = "TimeoutError";
         throw timeout;
       }
