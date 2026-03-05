@@ -61,16 +61,16 @@
 
 ### Files Changed (Bugfix Round)
 
-| File | Change |
-|------|--------|
-| `src/features/transactions/useDashboardTransactions.ts` | Offline-aware refetch/retry in `useDashboardTransactions` |
-| `src/contexts/SyncContext.tsx` | Guard `refreshAll()` when offline; delay `handleOnline`; also invalidate `account-balance` on reconnect |
-| `src/components/expense/AccountBalance.tsx` | Offline queryFn returns cached balance; grey balance text; hide edit/transfer; prominent pending count; suppress error when cached data exists |
-| `src/features/navigation/prefetchTabs.ts` | Skip all prefetches when offline |
-| `public/sw.js` | v3.2.0; RSC payload fallback returns `{}` instead of 504 |
-| `src/app/providers.tsx` | Global retry skips "Offline" errors; `throwOnError: false` |
-| `src/components/expense/MobileExpenseForm.tsx` | Wait for accounts data before init; re-derive step when default account loads late |
-| `src/components/ai/AIChatAssistant.tsx` | Lighter grey styling when offline (opacity-35, slate-700/30) |
+| File                                                    | Change                                                                                                                                         |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/features/transactions/useDashboardTransactions.ts` | Offline-aware refetch/retry in `useDashboardTransactions`                                                                                      |
+| `src/contexts/SyncContext.tsx`                          | Guard `refreshAll()` when offline; delay `handleOnline`; also invalidate `account-balance` on reconnect                                        |
+| `src/components/expense/AccountBalance.tsx`             | Offline queryFn returns cached balance; grey balance text; hide edit/transfer; prominent pending count; suppress error when cached data exists |
+| `src/features/navigation/prefetchTabs.ts`               | Skip all prefetches when offline                                                                                                               |
+| `public/sw.js`                                          | v3.2.0; RSC payload fallback returns `{}` instead of 504                                                                                       |
+| `src/app/providers.tsx`                                 | Global retry skips "Offline" errors; `throwOnError: false`                                                                                     |
+| `src/components/expense/MobileExpenseForm.tsx`          | Wait for accounts data before init; re-derive step when default account loads late                                                             |
+| `src/components/ai/AIChatAssistant.tsx`                 | Lighter grey styling when offline (opacity-35, slate-700/30)                                                                                   |
 
 ---
 

@@ -288,6 +288,61 @@ export async function updateRetryCount(
 }
 
 /**
+ * Update the body/metadata of a queued operation (for editing pending offline transactions)
+ */
+export async function updateQueuedOperation(
+  id: string,
+  updates: { body?: Record<string, unknown>; metadata?: { label: string; icon?: string } },
+): Promise<boolean> {
+  if (useMemoryFallback) {
+    const op = memoryQueue.find((o) => o.id === id);
+    if (!op) return false;
+    if (updates.body) op.body = { ...op.body, ...updates.body };
+    if (updates.metadata) op.metadata = { ...op.metadata, ...updates.metadata };
+    return true;
+  }
+
+  try {
+    const db = await openDB();
+    const op = await new Promise<OfflineOperation | undefined>(
+      (resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readonly");
+        const store = tx.objectStore(STORE_NAME);
+        const getReq = store.get(id);
+        getReq.onsuccess = () =>
+          resolve(getReq.result as OfflineOperation | undefined);
+        getReq.onerror = () => reject(getReq.error);
+      },
+    );
+
+    if (!op) {
+      db.close();
+      return false;
+    }
+
+    if (updates.body) op.body = { ...op.body, ...updates.body };
+    if (updates.metadata) op.metadata = { ...op.metadata, ...updates.metadata };
+
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const putReq = store.put(op);
+      putReq.onsuccess = () => resolve();
+      putReq.onerror = () => reject(putReq.error);
+    });
+
+    db.close();
+    return true;
+  } catch {
+    const op = memoryQueue.find((o) => o.id === id);
+    if (!op) return false;
+    if (updates.body) op.body = { ...op.body, ...updates.body };
+    if (updates.metadata) op.metadata = { ...op.metadata, ...updates.metadata };
+    return true;
+  }
+}
+
+/**
  * Remove stale operations older than maxAge (default 24 hours)
  */
 export async function removeStaleOperations(

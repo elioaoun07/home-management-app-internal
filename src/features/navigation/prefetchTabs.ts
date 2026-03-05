@@ -8,7 +8,7 @@ import { QueryClient } from "@tanstack/react-query";
  */
 function shouldPrefetch(
   queryClient: QueryClient,
-  queryKey: readonly unknown[]
+  queryKey: readonly unknown[],
 ): boolean {
   const state = queryClient.getQueryState(queryKey);
   if (!state) return true; // No data, should fetch
@@ -43,7 +43,7 @@ export async function prefetchAccounts(queryClient: QueryClient) {
  */
 export async function prefetchCategories(
   queryClient: QueryClient,
-  accountId: string
+  accountId: string,
 ) {
   if (!shouldPrefetch(queryClient, qk.categories(accountId))) return;
 
@@ -114,7 +114,7 @@ export async function prefetchAllTabs(queryClient: QueryClient) {
         queryKey: transactionsKey,
         queryFn: async () => {
           const response = await fetch(
-            `/api/transactions?start=${startDate}&end=${endDate}`
+            `/api/transactions?start=${startDate}&end=${endDate}`,
           );
           if (!response.ok) throw new Error("Failed to fetch transactions");
           return response.json();

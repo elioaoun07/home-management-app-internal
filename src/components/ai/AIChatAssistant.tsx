@@ -23,9 +23,9 @@ import {
   Plus,
   RefreshCw,
   Trash2,
+  WifiOff,
   X,
 } from "lucide-react";
-import { WifiOff } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -507,7 +507,10 @@ export default function AIChatAssistant() {
   return (
     <>
       {/* Floating AI Button */}
-      <Sheet open={isOnline ? isOpen : false} onOpenChange={isOnline ? setIsOpen : undefined}>
+      <Sheet
+        open={isOnline ? isOpen : false}
+        onOpenChange={isOnline ? setIsOpen : undefined}
+      >
         <SheetTrigger asChild disabled={!isOnline}>
           <Button
             className={cn(
@@ -528,7 +531,9 @@ export default function AIChatAssistant() {
             ) : (
               <WifiOff className="h-5 w-5 text-white/20" />
             )}
-            <span className="sr-only">{isOnline ? "Open AI Assistant" : "AI unavailable offline"}</span>
+            <span className="sr-only">
+              {isOnline ? "Open AI Assistant" : "AI unavailable offline"}
+            </span>
           </Button>
         </SheetTrigger>
 

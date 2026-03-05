@@ -12,8 +12,11 @@ import { useEffect, useMemo, useState } from "react";
 import { ThemeProvider } from "../components/theme-provider";
 
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
+import type {
+  PersistedClient,
+  Persister,
+} from "@tanstack/react-query-persist-client";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import type { PersistedClient, Persister } from "@tanstack/react-query-persist-client";
 
 const RQ_PERSIST_KEY = "hm-rq-cache-v3";
 const STABLE_KEYS = new Set([
@@ -171,10 +174,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         const nextUserId = sess?.user?.id ?? null;
         // Only clear cache on genuine user switch (both IDs must be non-null
         // and different, OR the user explicitly signed out → nextUserId is null)
-        if (
-          currentUserId !== null &&
-          nextUserId !== currentUserId
-        ) {
+        if (currentUserId !== null && nextUserId !== currentUserId) {
           try {
             localStorage.removeItem(RQ_PERSIST_KEY);
             localStorage.removeItem("user_preferences");

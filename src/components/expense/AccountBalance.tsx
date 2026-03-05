@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import BalanceHistoryDrawer from "./BalanceHistoryDrawer";
 import DebtsDrawer from "./DebtsDrawer";
 import FuturePaymentsDrawer from "./FuturePaymentsDrawer";
+import OfflinePendingDrawer from "./OfflinePendingDrawer";
 import TransferDialog from "./TransferDialog";
 
 interface AccountBalanceProps {
@@ -59,6 +60,7 @@ export default function AccountBalance({
   const [showHistory, setShowHistory] = useState(false);
   const [showDebts, setShowDebts] = useState(false);
   const [showFuturePayments, setShowFuturePayments] = useState(false);
+  const [showOfflinePending, setShowOfflinePending] = useState(false);
 
   // Listen for the custom event dispatched by the due-date toast "View" button
   useEffect(() => {
@@ -381,14 +383,29 @@ export default function AccountBalance({
                   ? ` ($${balance.pending_drafts.toFixed(2)})`
                   : ""}
               </span>
-              {/* Offline pending transactions — show prominently */}
-              {offlinePendingCount > 0 && (
-                <span className={cn(
-                  "text-xs font-medium italic",
-                  isOffline ? "text-amber-400/70" : "text-amber-400/50"
-                )}>
-                  {offlinePendingCount} pending offline {offlinePendingCount === 1 ? "transaction" : "transactions"}
-                </span>
+              {/* Offline pending transactions — always visible like drafts */}
+              {isOffline && (
+                <button
+                  onClick={() => setShowOfflinePending(true)}
+                  className={cn(
+                    "text-xs font-medium text-left transition-colors",
+                    offlinePendingCount > 0
+                      ? "text-amber-400/70 hover:text-amber-400"
+                      : "text-white/25 hover:text-white/40",
+                  )}
+                >
+                  {offlinePendingCount} pending offline{" "}
+                  {offlinePendingCount === 1 ? "transaction" : "transactions"}
+                </button>
+              )}
+              {!isOffline && offlinePendingCount > 0 && (
+                <button
+                  onClick={() => setShowOfflinePending(true)}
+                  className="text-xs font-medium text-amber-400/50 hover:text-amber-400/70 text-left transition-colors"
+                >
+                  {offlinePendingCount} pending offline{" "}
+                  {offlinePendingCount === 1 ? "transaction" : "transactions"}
+                </button>
               )}
               {/* Future payments info */}
               {balance?.future_payment_count &&
@@ -443,6 +460,12 @@ export default function AccountBalance({
         open={showFuturePayments}
         onOpenChange={setShowFuturePayments}
         accountId={accountId}
+      />
+
+      {/* Offline Pending Drawer */}
+      <OfflinePendingDrawer
+        open={showOfflinePending}
+        onOpenChange={setShowOfflinePending}
       />
     </div>
   );

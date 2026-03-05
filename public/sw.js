@@ -34,7 +34,7 @@ self.addEventListener("install", (event) => {
         console.warn("[SW] Some shell assets failed to cache:", err);
         // Don't block install if some assets fail
       });
-    })
+    }),
   );
   self.skipWaiting();
 });
@@ -51,11 +51,11 @@ self.addEventListener("activate", (event) => {
             .map((key) => {
               console.log("[SW] Removing old cache:", key);
               return caches.delete(key);
-            })
-        )
+            }),
+        ),
       ),
       clients.claim(),
-    ])
+    ]),
   );
 });
 
@@ -87,11 +87,13 @@ self.addEventListener("fetch", (event) => {
         return fetch(request).then((response) => {
           if (response.ok) {
             const clone = response.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+            caches
+              .open(STATIC_CACHE)
+              .then((cache) => cache.put(request, clone));
           }
           return response;
         });
-      })
+      }),
     );
     return;
   }
@@ -107,19 +109,24 @@ self.addEventListener("fetch", (event) => {
           .then((response) => {
             if (response.ok) {
               const clone = response.clone();
-              caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+              caches
+                .open(STATIC_CACHE)
+                .then((cache) => cache.put(request, clone));
             }
             return response;
           })
           .catch(() => cached);
         return cached || fetchPromise;
-      })
+      }),
     );
     return;
   }
 
   // Navigation requests (HTML pages) — Network-first with cache fallback
-  if (request.mode === "navigate" || request.headers.get("accept")?.includes("text/html")) {
+  if (
+    request.mode === "navigate" ||
+    request.headers.get("accept")?.includes("text/html")
+  ) {
     event.respondWith(
       fetch(request)
         .then((response) => {
@@ -139,8 +146,11 @@ self.addEventListener("fetch", (event) => {
           // Last resort — offline page
           const offlineCached = await caches.match("/offline");
           if (offlineCached) return offlineCached;
-          return new Response("Offline", { status: 503, statusText: "Offline" });
-        })
+          return new Response("Offline", {
+            status: 503,
+            statusText: "Offline",
+          });
+        }),
     );
     return;
   }
@@ -154,7 +164,9 @@ self.addEventListener("fetch", (event) => {
           .then((response) => {
             if (response.ok) {
               const clone = response.clone();
-              caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+              caches
+                .open(STATIC_CACHE)
+                .then((cache) => cache.put(request, clone));
             }
             return response;
           })
@@ -170,7 +182,7 @@ self.addEventListener("fetch", (event) => {
             }
             return new Response("", { status: 504 });
           });
-      })
+      }),
     );
     return;
   }

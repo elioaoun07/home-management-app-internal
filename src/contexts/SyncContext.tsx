@@ -3,17 +3,19 @@
 
 import {
   addToQueue,
+  clearQueue as clearOfflineQueue,
   getAllPending,
   getQueueCount,
-  clearQueue as clearOfflineQueue,
+  removeFromQueue,
+  updateQueuedOperation,
   type OfflineOperation,
   type QueueableOperation,
 } from "@/lib/offlineQueue";
 import {
   createSyncEngine,
   FEATURE_QUERY_KEYS,
-  type SyncResult,
   type OfflineSyncEngine,
+  type SyncResult,
 } from "@/lib/offlineSyncEngine";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -63,13 +65,13 @@ interface SyncContextValue {
   // Retry mechanism
   retryWithBackoff: <T>(
     operation: () => Promise<T>,
-    options?: RetryOptions
+    options?: RetryOptions,
   ) => Promise<T>;
 
   // Legacy pending operations (for hub shopping list backward compat)
   pendingOperations: LegacyPendingOperation[];
   addPendingOperation: (
-    op: Omit<LegacyPendingOperation, "id" | "retryCount" | "createdAt">
+    op: Omit<LegacyPendingOperation, "id" | "retryCount" | "createdAt">,
   ) => string;
   removePendingOperation: (id: string) => void;
 
@@ -87,6 +89,11 @@ interface SyncContextValue {
   isProcessingQueue: boolean;
   lastSyncResult: SyncResult | null;
   clearOfflineQueue: () => Promise<void>;
+  removeOfflineOperation: (id: string) => Promise<void>;
+  updateOfflineOperation: (
+    id: string,
+    updates: { body?: Record<string, unknown>; metadata?: { label: string; icon?: string } },
+  ) => Promise<boolean>;
   retryOfflineQueue: () => Promise<void>;
 }
 
@@ -129,9 +136,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     OfflineOperation[]
   >([]);
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
-  const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(
-    null
-  );
+  const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
 
   // Track stale threads that need refresh on focus
   const staleThreads = useRef<Set<string>>(new Set());
@@ -176,20 +181,35 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         if (op.tempId && op.operation === "create") {
           const realId =
             (serverResponse as Record<string, unknown>)?.id ||
-            ((serverResponse as Record<string, unknown>)?.item as Record<string, unknown>)?.id ||
-            ((serverResponse as Record<string, unknown>)?.subtask as Record<string, unknown>)?.id;
+            (
+              (serverResponse as Record<string, unknown>)?.item as Record<
+                string,
+                unknown
+              >
+            )?.id ||
+            (
+              (serverResponse as Record<string, unknown>)?.subtask as Record<
+                string,
+                unknown
+              >
+            )?.id;
 
           if (realId && typeof realId === "string") {
             // Replace tempId in relevant caches
             const keys = FEATURE_QUERY_KEYS[op.feature];
             if (keys) {
               keys.forEach((key) => {
-                queryClient.setQueriesData({ queryKey: key }, (old: unknown) => {
-                  if (!Array.isArray(old)) return old;
-                  return old.map((item: Record<string, unknown>) =>
-                    item.id === op.tempId ? { ...item, id: realId, _isPending: false } : item
-                  );
-                });
+                queryClient.setQueriesData(
+                  { queryKey: key },
+                  (old: unknown) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map((item: Record<string, unknown>) =>
+                      item.id === op.tempId
+                        ? { ...item, id: realId, _isPending: false }
+                        : item,
+                    );
+                  },
+                );
               });
             }
           }
@@ -241,7 +261,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         const ops = JSON.parse(stored) as LegacyPendingOperation[];
         // Filter out stale operations (older than 1 hour)
         const fresh = ops.filter(
-          (op) => Date.now() - op.createdAt < 60 * 60 * 1000
+          (op) => Date.now() - op.createdAt < 60 * 60 * 1000,
         );
         setPendingOperations(fresh);
       }
@@ -317,7 +337,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         } else {
           // Light refresh - just invalidate active queries
           const hasAnySubscriptionDown = Array.from(
-            threadSubscriptions.values()
+            threadSubscriptions.values(),
           ).some((v) => !v);
           if (hasAnySubscriptionDown) {
             refreshAll();
@@ -365,7 +385,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
       // Check channel states
       const allSubscribed = channels.every(
-        (ch) => (ch as unknown as { state: string }).state === "joined"
+        (ch) => (ch as unknown as { state: string }).state === "joined",
       );
 
       if (allSubscribed) {
@@ -395,7 +415,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const retryWithBackoff = useCallback(
     async <T,>(
       operation: () => Promise<T>,
-      options?: RetryOptions
+      options?: RetryOptions,
     ): Promise<T> => {
       const opts = { ...DEFAULT_RETRY_OPTIONS, ...options };
       let lastError: Error;
@@ -410,7 +430,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
           if (attempt < opts.maxRetries) {
             const delay = Math.min(
               opts.baseDelay * Math.pow(2, attempt) + Math.random() * 1000,
-              opts.maxDelay
+              opts.maxDelay,
             );
 
             opts.onRetry?.(attempt + 1, lastError);
@@ -426,7 +446,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
       throw lastError!;
     },
-    []
+    [],
   );
 
   // Process legacy pending operations (hub shopping list)
@@ -492,7 +512,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   // Add legacy pending operation
   const addPendingOperation = useCallback(
-    (op: Omit<LegacyPendingOperation, "id" | "retryCount" | "createdAt">): string => {
+    (
+      op: Omit<LegacyPendingOperation, "id" | "retryCount" | "createdAt">,
+    ): string => {
       const id = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const newOp: LegacyPendingOperation = {
         ...op,
@@ -504,7 +526,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       setPendingOperations((prev) => [...prev, newOp]);
       return id;
     },
-    []
+    [],
   );
 
   // Remove legacy pending operation
@@ -519,7 +541,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       await refreshOfflineQueueState();
       return id;
     },
-    [refreshOfflineQueueState]
+    [refreshOfflineQueueState],
   );
 
   // === NEW: Clear entire offline queue ===
@@ -528,6 +550,28 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     await refreshOfflineQueueState();
     toast.success("Pending changes cleared");
   }, [refreshOfflineQueueState]);
+
+  // === NEW: Remove a single offline operation ===
+  const handleRemoveOfflineOperation = useCallback(
+    async (id: string) => {
+      await removeFromQueue(id);
+      await refreshOfflineQueueState();
+    },
+    [refreshOfflineQueueState],
+  );
+
+  // === NEW: Update a queued offline operation ===
+  const handleUpdateOfflineOperation = useCallback(
+    async (
+      id: string,
+      updates: { body?: Record<string, unknown>; metadata?: { label: string; icon?: string } },
+    ): Promise<boolean> => {
+      const ok = await updateQueuedOperation(id, updates);
+      await refreshOfflineQueueState();
+      return ok;
+    },
+    [refreshOfflineQueueState],
+  );
 
   // === NEW: Retry offline queue manually ===
   const retryOfflineQueue = useCallback(async () => {
@@ -551,7 +595,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         setStatus("connected");
       }
     },
-    [status]
+    [status],
   );
 
   // Mark thread as stale (will refresh on next focus)
@@ -606,7 +650,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         console.error(`Failed to refresh thread ${threadId}:`, error);
       }
     },
-    [queryClient]
+    [queryClient],
   );
 
   return (
@@ -631,6 +675,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         isProcessingQueue,
         lastSyncResult,
         clearOfflineQueue: handleClearOfflineQueue,
+        removeOfflineOperation: handleRemoveOfflineOperation,
+        updateOfflineOperation: handleUpdateOfflineOperation,
         retryOfflineQueue,
       }}
     >

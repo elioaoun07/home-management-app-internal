@@ -1,5 +1,5 @@
-import { addToQueue } from "@/lib/offlineQueue";
 import { sendSplitBillNotification } from "@/lib/notifications/sendSplitBillNotification";
+import { addToQueue } from "@/lib/offlineQueue";
 import { ToastIcons } from "@/lib/toastIcons";
 import {
   keepPreviousData,
@@ -376,13 +376,15 @@ export function useAddTransaction() {
           body: serverTransaction,
           tempId,
           metadata: {
-            label: `Add ${serverTransaction.description || 'transaction'} $${serverTransaction.amount}`,
+            label: `Add ${serverTransaction.description || "transaction"} $${serverTransaction.amount}`,
           },
         });
         // Also update the localStorage cached balance for offline display
         if (serverTransaction.account_id) {
           try {
-            const { getCachedBalance, setCachedBalance } = await import("@/lib/queryConfig");
+            const { getCachedBalance, setCachedBalance } = await import(
+              "@/lib/queryConfig"
+            );
             const cached = getCachedBalance(serverTransaction.account_id);
             if (cached) {
               setCachedBalance(
@@ -390,7 +392,9 @@ export function useAddTransaction() {
                 cached.balance - serverTransaction.amount,
               );
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
         // Return a fake response for optimistic update
         return {
@@ -773,7 +777,7 @@ export function useUpdateTransaction() {
           method: "PATCH",
           body: data,
           metadata: {
-            label: `Update transaction${data.amount ? ` $${data.amount}` : ''}`,
+            label: `Update transaction${data.amount ? ` $${data.amount}` : ""}`,
           },
         });
         return { id, ...data, _isPending: true, _offline: true };
