@@ -41,7 +41,7 @@ import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 
 type TabId = "dashboard" | "expense" | "reminder" | "hub";
@@ -86,6 +86,20 @@ export default function MobileNav() {
 
   // Draft transactions count for floating badge
   const draftCount = useDraftCount();
+
+  // Track online/offline status
+  const [isOnline, setIsOnline] = useState(true);
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
 
   // Standalone routes list (checked after hooks)
   const standaloneRoutes = [
@@ -197,6 +211,25 @@ export default function MobileNav() {
   // Hide nav on guest portal and standalone PWA routes
   if (standaloneRoutes.some((route) => pathname?.startsWith(route))) {
     return null;
+  }
+
+  // Offline: show only the centered FAB — no nav bar, just the + button
+  if (!isOnline) {
+    return (
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center pb-safe"
+        style={{ height: `${MOBILE_NAV_HEIGHT}px` }}
+      >
+        <div className="flex flex-col items-center justify-center -mt-4">
+          <SemiDonutFAB
+            onSelect={handleFABSelect}
+          />
+          <span className="text-[10px] font-semibold text-white/40 whitespace-nowrap mt-1">
+            Add
+          </span>
+        </div>
+      </div>
+    );
   }
 
   return (

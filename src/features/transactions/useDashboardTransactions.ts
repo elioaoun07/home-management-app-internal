@@ -370,6 +370,19 @@ export function useAddTransaction() {
             label: `Add ${serverTransaction.description || 'transaction'} $${serverTransaction.amount}`,
           },
         });
+        // Also update the localStorage cached balance for offline display
+        if (serverTransaction.account_id) {
+          try {
+            const { getCachedBalance, setCachedBalance } = await import("@/lib/queryConfig");
+            const cached = getCachedBalance(serverTransaction.account_id);
+            if (cached) {
+              setCachedBalance(
+                serverTransaction.account_id,
+                cached.balance - serverTransaction.amount,
+              );
+            }
+          } catch { /* ignore */ }
+        }
         // Return a fake response for optimistic update
         return {
           id: tempId,

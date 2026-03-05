@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useSyncSafe } from "@/contexts/SyncContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import {
   CACHE_TIMES,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/queryConfig";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import BalanceHistoryDrawer from "./BalanceHistoryDrawer";
@@ -49,6 +51,9 @@ export default function AccountBalance({
 }: AccountBalanceProps) {
   const themeClasses = useThemeClasses();
   const queryClient = useQueryClient();
+  const sync = useSyncSafe();
+  const isOffline = sync ? !sync.isOnline : false;
+  const offlinePendingCount = sync?.offlinePendingCount ?? 0;
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [showHistory, setShowHistory] = useState(false);
@@ -206,11 +211,19 @@ export default function AccountBalance({
   return (
     <div
       className={cn(
-        "neo-card p-2.5 shadow-lg",
+        "neo-card p-2.5 shadow-lg relative",
         themeClasses.cardBg,
-        themeClasses.border,
+        isOffline
+          ? "border border-dashed border-white/20 opacity-70"
+          : themeClasses.border,
       )}
     >
+      {/* Offline hint icon */}
+      {isOffline && (
+        <div className="absolute top-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/5">
+          <WifiOff className="w-3 h-3 text-white/30" />
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <Label
@@ -339,6 +352,12 @@ export default function AccountBalance({
                   ? ` ($${balance.pending_drafts.toFixed(2)})`
                   : ""}
               </span>
+              {/* Offline pending transactions hint */}
+              {isOffline && offlinePendingCount > 0 && (
+                <span className="text-xs font-medium text-white/40 italic">
+                  {offlinePendingCount} offline change{offlinePendingCount !== 1 ? "s" : ""} pending
+                </span>
+              )}
               {/* Future payments info */}
               {balance?.future_payment_count &&
               balance.future_payment_count > 0 ? (

@@ -25,6 +25,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { WifiOff } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -107,6 +108,20 @@ export default function AIChatAssistant() {
   const [isExiting, setIsExiting] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Track online/offline state
+  const [isOnline, setIsOnline] = useState(true);
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
 
   // Handle exit/enter animation when switching tabs or navigating to /chat
   useEffect(() => {
@@ -492,21 +507,28 @@ export default function AIChatAssistant() {
   return (
     <>
       {/* Floating AI Button */}
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetTrigger asChild>
+      <Sheet open={isOnline ? isOpen : false} onOpenChange={isOnline ? setIsOpen : undefined}>
+        <SheetTrigger asChild disabled={!isOnline}>
           <Button
             className={cn(
               "fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg",
-              "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500",
-              "border border-violet-400/30",
-              "transition-all duration-300 hover:scale-110",
+              isOnline
+                ? "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-violet-400/30"
+                : "bg-gray-700/50 border border-white/10 opacity-50 cursor-not-allowed",
+              "transition-all duration-300",
+              isOnline && "hover:scale-110",
               "flex items-center justify-center",
               isExiting ? "ai-chat-button-exit" : "ai-chat-button",
             )}
             size="icon"
+            disabled={!isOnline}
           >
-            <SparklesIcon className="h-6 w-6 text-white" />
-            <span className="sr-only">Open AI Assistant</span>
+            {isOnline ? (
+              <SparklesIcon className="h-6 w-6 text-white" />
+            ) : (
+              <WifiOff className="h-5 w-5 text-white/40" />
+            )}
+            <span className="sr-only">{isOnline ? "Open AI Assistant" : "AI unavailable offline"}</span>
           </Button>
         </SheetTrigger>
 
