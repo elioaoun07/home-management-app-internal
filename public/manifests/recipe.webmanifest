@@ -4,7 +4,7 @@
   "short_name": "Recipes",
   "description": "Plan meals, collect recipes, cook with step-by-step guidance, and get AI suggestions.",
   "start_url": "/recipe",
-  "scope": "/",
+  "scope": "/recipe",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0a1628",

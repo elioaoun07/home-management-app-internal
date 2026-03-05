@@ -4,7 +4,7 @@
   "short_name": "Hub Chat",
   "description": "Chat with your household, share shopping lists, and coordinate together",
   "start_url": "/chat",
-  "scope": "/",
+  "scope": "/chat",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0a1628",

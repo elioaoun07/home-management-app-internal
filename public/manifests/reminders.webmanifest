@@ -4,7 +4,7 @@
   "short_name": "Reminders",
   "description": "Track your tasks, reminders, and stay organized with your household",
   "start_url": "/reminders",
-  "scope": "/",
+  "scope": "/reminders",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0a1628",
