@@ -1,6 +1,14 @@
 import { sendSplitBillNotification } from "@/lib/notifications/sendSplitBillNotification";
 import { addToQueue } from "@/lib/offlineQueue";
 import { ToastIcons } from "@/lib/toastIcons";
+
+/** Detect if an error is a network failure (fetch failed, not an HTTP error) */
+function isNetworkError(err: unknown): boolean {
+  if (err instanceof TypeError) return true; // "Failed to fetch" / "NetworkError"
+  if (err instanceof DOMException && err.name === "AbortError") return false;
+  if (err instanceof Error && /network|failed to fetch|load failed/i.test(err.message)) return true;
+  return false;
+}
 import {
   keepPreviousData,
   useMutation,
@@ -170,7 +178,7 @@ export function useDeleteTransaction() {
     mutationFn: async (input: string | { id: string; _silent?: boolean }) => {
       const transactionId = typeof input === "string" ? input : input.id;
 
-      // Offline: queue the delete operation
+      // Offline-first: queue if we know we're offline
       if (!navigator.onLine) {
         await addToQueue({
           feature: "transaction",
@@ -183,15 +191,31 @@ export function useDeleteTransaction() {
         return transactionId;
       }
 
-      const response = await fetch(`/api/transactions/${transactionId}`, {
-        method: "DELETE",
-      });
+      // Try network — fall back to queue on network failure
+      try {
+        const response = await fetch(`/api/transactions/${transactionId}`, {
+          method: "DELETE",
+        });
 
-      if (!response.ok) {
-        throw new Error("Failed to delete transaction");
+        if (!response.ok) {
+          throw new Error("Failed to delete transaction");
+        }
+
+        return transactionId;
+      } catch (err) {
+        if (isNetworkError(err)) {
+          await addToQueue({
+            feature: "transaction",
+            operation: "delete",
+            endpoint: `/api/transactions/${transactionId}`,
+            method: "DELETE",
+            body: {},
+            metadata: { label: `Delete transaction` },
+          });
+          return transactionId;
+        }
+        throw err;
       }
-
-      return transactionId;
     },
     onMutate: async (input) => {
       const transactionId = typeof input === "string" ? input : input.id;
@@ -365,8 +389,8 @@ export function useAddTransaction() {
       // Remove _optimistic from the request - it's only for client-side UI
       const { _optimistic, ...serverTransaction } = transaction;
 
-      // Offline: queue the create operation
-      if (!navigator.onLine) {
+      // Helper to queue offline and return fake response
+      const queueOfflineCreate = async () => {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         await addToQueue({
           feature: "transaction",
@@ -396,7 +420,6 @@ export function useAddTransaction() {
             /* ignore */
           }
         }
-        // Return a fake response for optimistic update
         return {
           id: tempId,
           ...serverTransaction,
@@ -404,19 +427,32 @@ export function useAddTransaction() {
           _isPending: true,
           _offline: true,
         };
+      };
+
+      // Offline-first: queue if we know we're offline
+      if (!navigator.onLine) {
+        return queueOfflineCreate();
       }
 
-      const response = await fetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(serverTransaction),
-      });
+      // Try network — fall back to queue on network failure
+      try {
+        const response = await fetch("/api/transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(serverTransaction),
+        });
 
-      if (!response.ok) {
-        throw new Error("Failed to create transaction");
+        if (!response.ok) {
+          throw new Error("Failed to create transaction");
+        }
+
+        return response.json();
+      } catch (err) {
+        if (isNetworkError(err)) {
+          return queueOfflineCreate();
+        }
+        throw err;
       }
-
-      return response.json();
     },
     onMutate: async (newTransaction) => {
       // Cancel outgoing refetches for ALL transaction queries
@@ -768,8 +804,8 @@ export function useUpdateTransaction() {
     mutationFn: async (update: TransactionUpdateInput) => {
       const { id, ...data } = update;
 
-      // Offline: queue the update operation
-      if (!navigator.onLine) {
+      // Helper to queue offline
+      const queueOfflineUpdate = async () => {
         await addToQueue({
           feature: "transaction",
           operation: "update",
@@ -781,19 +817,32 @@ export function useUpdateTransaction() {
           },
         });
         return { id, ...data, _isPending: true, _offline: true };
+      };
+
+      // Offline-first: queue if we know we're offline
+      if (!navigator.onLine) {
+        return queueOfflineUpdate();
       }
 
-      const response = await fetch(`/api/transactions/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      // Try network — fall back to queue on network failure
+      try {
+        const response = await fetch(`/api/transactions/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
 
-      if (!response.ok) {
-        throw new Error("Failed to update transaction");
+        if (!response.ok) {
+          throw new Error("Failed to update transaction");
+        }
+
+        return response.json();
+      } catch (err) {
+        if (isNetworkError(err)) {
+          return queueOfflineUpdate();
+        }
+        throw err;
       }
-
-      return response.json();
     },
     onMutate: async (update) => {
       // Cancel outgoing refetches for ALL transaction queries

@@ -999,33 +999,40 @@ body.theme-loaded {
     }
   }
 
-  /* Smooth exit animation - shrink with flash */
+  /* Smooth exit animation - power-down with desaturate + shrink + flash */
   @keyframes ai-button-leave {
     0% {
-      transform: scale(1);
+      transform: scale(1) rotate(0deg);
       opacity: 1;
+      filter: brightness(1) saturate(1);
       box-shadow:
         0 4px 15px rgba(139, 92, 246, 0.4),
         0 0 20px rgba(167, 139, 250, 0.3);
     }
-    20% {
-      transform: scale(1.15);
+    15% {
+      transform: scale(1.1) rotate(5deg);
       opacity: 1;
+      filter: brightness(1.4) saturate(1.2);
       box-shadow:
-        0 0 30px rgba(255, 255, 255, 0.8),
-        0 0 50px rgba(139, 92, 246, 0.6);
+        0 0 25px rgba(255, 255, 255, 0.6),
+        0 0 40px rgba(139, 92, 246, 0.5);
+    }
+    40% {
+      transform: scale(0.9) rotate(-3deg);
+      filter: brightness(0.8) saturate(0.3);
+      opacity: 0.8;
+      box-shadow: 0 0 15px rgba(100, 100, 120, 0.3);
     }
     100% {
-      transform: scale(0);
+      transform: scale(0) rotate(-15deg);
       opacity: 0;
-      box-shadow:
-        0 0 60px rgba(255, 255, 255, 0.9),
-        0 0 80px rgba(139, 92, 246, 0.7);
+      filter: brightness(0.4) saturate(0) blur(2px);
+      box-shadow: none;
     }
   }
 
   .ai-chat-button-exit {
-    animation: ai-button-leave 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+    animation: ai-button-leave 0.6s cubic-bezier(0.4, 0, 0.7, 0.2) forwards !important;
     pointer-events: none;
   }
 

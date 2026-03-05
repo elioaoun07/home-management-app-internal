@@ -100,17 +100,33 @@ export default function AccountBalance({
         }
         throw new Error("Offline – no cached balance");
       }
-      const res = await fetch(`/api/accounts/${accountId}/balance`);
-      if (!res.ok) {
-        const errorData = await res
-          .json()
-          .catch(() => ({ error: "Failed to fetch balance" }));
-        throw new Error(errorData.error || "Failed to fetch balance");
+      try {
+        const res = await fetch(`/api/accounts/${accountId}/balance`);
+        if (!res.ok) {
+          const errorData = await res
+            .json()
+            .catch(() => ({ error: "Failed to fetch balance" }));
+          throw new Error(errorData.error || "Failed to fetch balance");
+        }
+        const data = await res.json();
+        // Cache to localStorage for instant next load
+        setCachedBalance(accountId, data.balance);
+        return data;
+      } catch (err) {
+        // Network failure (connected → lost internet): fall back to cached balance
+        if (err instanceof TypeError || (err instanceof Error && /network|failed to fetch|load failed/i.test(err.message))) {
+          const offline = getCachedBalance(accountId);
+          if (offline) {
+            return {
+              account_id: accountId,
+              balance: offline.balance,
+              updated_at: offline.updatedAt,
+              _fromCache: true,
+            } as Balance & { _fromCache?: boolean };
+          }
+        }
+        throw err;
       }
-      const data = await res.json();
-      // Cache to localStorage for instant next load
-      setCachedBalance(accountId, data.balance);
-      return data;
     },
     enabled: !!accountId,
     retry: (failureCount) => {

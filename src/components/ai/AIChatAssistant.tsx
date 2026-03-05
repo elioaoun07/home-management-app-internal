@@ -23,7 +23,6 @@ import {
   Plus,
   RefreshCw,
   Trash2,
-  WifiOff,
   X,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -123,7 +122,10 @@ export default function AIChatAssistant() {
     };
   }, []);
 
-  // Handle exit/enter animation when switching tabs or navigating to /chat
+  // Unified: hide button when on Hub/chat OR when offline
+  const shouldHide = shouldHideButton || !isOnline;
+
+  // Handle exit/enter animation when switching tabs, navigating to /chat, or going offline
   useEffect(() => {
     // Clear any pending timer
     if (exitTimerRef.current) {
@@ -131,16 +133,16 @@ export default function AIChatAssistant() {
       exitTimerRef.current = null;
     }
 
-    if (shouldHideButton) {
-      // Going to Hub or /chat - start exit animation
+    if (shouldHide) {
+      // Trigger power-down exit animation
       setIsExiting(true);
       setShouldRender(true); // Keep rendered during animation
       exitTimerRef.current = setTimeout(() => {
         setShouldRender(false);
         setIsExiting(false);
-      }, 500);
+      }, 600); // Slightly longer for offline power-down feel
     } else {
-      // Leaving Hub/chat - show button immediately
+      // Back online or leaving Hub/chat - pop back in
       setIsExiting(false);
       setShouldRender(true);
     }
@@ -150,7 +152,7 @@ export default function AIChatAssistant() {
         clearTimeout(exitTimerRef.current);
       }
     };
-  }, [shouldHideButton]);
+  }, [shouldHide]);
 
   // Fetch initial usage stats when opening
   useEffect(() => {
@@ -508,32 +510,23 @@ export default function AIChatAssistant() {
     <>
       {/* Floating AI Button */}
       <Sheet
-        open={isOnline ? isOpen : false}
-        onOpenChange={isOnline ? setIsOpen : undefined}
+        open={isOpen}
+        onOpenChange={setIsOpen}
       >
-        <SheetTrigger asChild disabled={!isOnline}>
+        <SheetTrigger asChild>
           <Button
             className={cn(
               "fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg",
-              isOnline
-                ? "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-violet-400/30"
-                : "bg-slate-700/30 border border-white/5 opacity-35 cursor-not-allowed",
+              "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-violet-400/30",
               "transition-all duration-300",
-              isOnline && "hover:scale-110",
+              "hover:scale-110",
               "flex items-center justify-center",
               isExiting ? "ai-chat-button-exit" : "ai-chat-button",
             )}
             size="icon"
-            disabled={!isOnline}
           >
-            {isOnline ? (
-              <SparklesIcon className="h-6 w-6 text-white" />
-            ) : (
-              <WifiOff className="h-5 w-5 text-white/20" />
-            )}
-            <span className="sr-only">
-              {isOnline ? "Open AI Assistant" : "AI unavailable offline"}
-            </span>
+            <SparklesIcon className="h-6 w-6 text-white" />
+            <span className="sr-only">Open AI Assistant</span>
           </Button>
         </SheetTrigger>
 
