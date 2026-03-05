@@ -319,12 +319,14 @@ export async function POST(request: NextRequest) {
         const payload = JSON.stringify({
           title,
           body: message || "",
-          icon: "/icons/icon-192x192.png",
-          badge: "/icons/badge-72x72.png",
+          icon: "/appicon-192.png",
+          badge: "/appicon-192.png",
           tag: notification.id,
           data: {
-            url: action_url || "/",
-            notificationId: notification.id,
+            type: notification_type || "general",
+            notification_id: notification.id,
+            url: action_url || "/expense",
+            ...(action_data || {}),
           },
         });
 

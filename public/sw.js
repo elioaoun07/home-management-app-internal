@@ -1,7 +1,7 @@
 // Service Worker for Push Notifications
 // Handles push events and displays notifications with alarm-like behavior
 
-const SW_VERSION = "1.0.3";
+const SW_VERSION = "2.0.0";
 
 // ============================================
 // INSTALL & ACTIVATE
@@ -74,9 +74,7 @@ self.addEventListener("push", (event) => {
     }
   }
 
-  // Determine notification type and set appropriate actions
-  const isTransactionReminder = data.data?.type === "transaction_reminder";
-  const isDailyReminder = data.data?.type === "daily_reminder";
+  const notifType = data.data?.type;
 
   // Create notification options based on type
   const options = {
@@ -91,48 +89,76 @@ self.addEventListener("push", (event) => {
     timestamp: Date.now(),
   };
 
-  if (isTransactionReminder || isDailyReminder) {
-    // Transaction/Daily reminder - Log/Snooze/Settings actions
-    options.vibrate = [200, 100, 200]; // Gentle vibration
+  // ── Per-type actions & vibration ──
+  // iOS ignores actions automatically; Android displays them as quick-action buttons.
+
+  if (notifType === "transaction_reminder" || notifType === "daily_reminder") {
+    // Daily / transaction reminder → gentle vibration
+    options.vibrate = [200, 100, 200];
     options.actions = [
-      {
-        action: "add_expense",
-        title: "➕ Log Expense",
-        icon: "/appicon-192.png",
-      },
-      {
-        action: "snooze_1h",
-        title: "⏰ Snooze 1h",
-        icon: "/appicon-192.png",
-      },
+      { action: "add_expense", title: "➕ Log Expense", icon: "/appicon-192.png" },
+      { action: "snooze_1h", title: "⏰ Later", icon: "/appicon-192.png" },
     ];
-  } else {
-    // Regular reminder - Snooze/Dismiss actions
+  } else if (notifType === "item_reminder" || notifType === "item_due" || notifType === "item_overdue") {
+    // Task / reminder / event → alarm vibration
     options.vibrate = [500, 200, 500, 200, 500, 200, 500, 200, 500];
     options.actions = [
-      {
-        action: "snooze",
-        title: "⏰ Snooze 5min",
-        icon: "/appicon-192.png",
-      },
-      {
-        action: "dismiss",
-        title: "✓ Dismiss",
-        icon: "/appicon-192.png",
-      },
+      { action: "complete_item", title: "✅ Done", icon: "/appicon-192.png" },
+      { action: "snooze", title: "⏰ Snooze", icon: "/appicon-192.png" },
     ];
-    options.timestamp = data.data?.due_at
-      ? new Date(data.data.due_at).getTime()
-      : Date.now();
+    options.timestamp = data.data?.due_at ? new Date(data.data.due_at).getTime() : Date.now();
+  } else if (notifType === "chat_message" || notifType === "chat_mention") {
+    // Chat message → gentle vibration
+    options.vibrate = [200, 100, 200];
+    options.actions = [
+      { action: "open_thread", title: "💬 Open", icon: "/appicon-192.png" },
+      { action: "snooze", title: "⏰ Snooze", icon: "/appicon-192.png" },
+    ];
+  } else if (notifType === "transaction_pending") {
+    // Split bill request → gentle vibration
+    options.vibrate = [200, 100, 200, 100, 200];
+    options.actions = [
+      { action: "open_split_bill", title: "💰 Add Amount", icon: "/appicon-192.png" },
+      { action: "snooze_1h", title: "⏰ Later", icon: "/appicon-192.png" },
+    ];
+  } else if (notifType === "bill_due" || notifType === "bill_overdue") {
+    // Recurring bill due → medium vibration
+    options.vibrate = [300, 150, 300, 150, 300];
+    options.actions = [
+      { action: "open_recurring", title: "✅ Confirm", icon: "/appicon-192.png" },
+      { action: "snooze", title: "⏰ Snooze", icon: "/appicon-192.png" },
+    ];
+  } else if (notifType === "guest_chat") {
+    // Guest portal chat → gentle vibration
+    options.vibrate = [200, 100, 200];
+    options.actions = [
+      { action: "snooze", title: "⏰ Snooze", icon: "/appicon-192.png" },
+      { action: "dismiss", title: "✓ Dismiss", icon: "/appicon-192.png" },
+    ];
+  } else if (notifType === "test") {
+    // Test notification → gentle, no actions
+    options.vibrate = [200, 100, 200];
+    options.actions = [];
+    options.requireInteraction = false;
+  } else {
+    // Unknown type → default snooze/dismiss
+    options.vibrate = [300, 150, 300];
+    options.actions = [
+      { action: "snooze", title: "⏰ Snooze 5min", icon: "/appicon-192.png" },
+      { action: "dismiss", title: "✓ Dismiss", icon: "/appicon-192.png" },
+    ];
   }
 
-  // Show the notification (and play sound for regular reminders)
+  // Determine if we should play alarm sound (only for item reminders)
+  const shouldPlayAlarm =
+    notifType === "item_reminder" ||
+    notifType === "item_due" ||
+    notifType === "item_overdue";
+
   event.waitUntil(
     Promise.all([
       self.registration.showNotification(data.title, options),
-      isTransactionReminder
-        ? Promise.resolve()
-        : notifyClientsToPlaySound(data),
+      shouldPlayAlarm ? notifyClientsToPlaySound(data) : Promise.resolve(),
     ]),
   );
 });
@@ -147,42 +173,99 @@ self.addEventListener("notificationclick", (event) => {
   const notification = event.notification;
   const action = event.action;
   const data = notification.data || {};
+  const notifType = data.type;
 
   // Close the notification
   notification.close();
 
+  // ── Action button clicks (Android quick actions) ──
+
   if (action === "snooze") {
-    // Snooze for 5 minutes - send to server to reschedule
     event.waitUntil(handleSnooze(data, 5));
-  } else if (action === "snooze_1h") {
-    // Snooze for 1 hour
+    return;
+  }
+  if (action === "snooze_1h") {
     event.waitUntil(handleSnooze(data, 60));
-  } else if (action === "snooze_3h") {
-    // Snooze for 3 hours
+    return;
+  }
+  if (action === "snooze_3h") {
     event.waitUntil(handleSnooze(data, 180));
-  } else if (action === "dismiss") {
-    // Mark as dismissed - send to server
+    return;
+  }
+  if (action === "dismiss") {
     event.waitUntil(handleDismiss(data));
-  } else if (action === "confirm_transactions") {
-    // User confirmed they added all transactions
+    return;
+  }
+  if (action === "confirm_transactions") {
     event.waitUntil(handleConfirmTransactions(data));
-  } else if (action === "add_expense") {
-    // User needs to add expenses - open add expense form
-    event.waitUntil(openAddExpense(data));
-  } else if (action === "settings") {
-    // Open notification settings
-    event.waitUntil(openApp({ ...data, url: "/settings/notifications" }));
+    return;
+  }
+  if (action === "add_expense") {
+    // Open expense tab
+    event.waitUntil(openApp({ ...data, url: "/expense?action=add-expense" }));
+    return;
+  }
+  if (action === "complete_item") {
+    // Complete item via API, then show confirmation
+    event.waitUntil(handleCompleteItem(data));
+    return;
+  }
+  if (action === "open_thread") {
+    // Open standalone chat page with thread
+    const threadId = data.thread_id;
+    event.waitUntil(openApp({ ...data, url: threadId ? `/chat?thread=${threadId}` : "/chat" }));
+    return;
+  }
+  if (action === "open_split_bill") {
+    event.waitUntil(openApp({ ...data, url: "/expense?action=split-bill" }));
+    return;
+  }
+  if (action === "open_recurring") {
+    event.waitUntil(openApp({ ...data, url: "/recurring" }));
+    return;
+  }
+  if (action === "settings") {
+    event.waitUntil(openApp({ ...data, url: "/settings" }));
+    return;
+  }
+
+  // ── Default body click (no action button) ──
+  // Route based on notification type to the correct page/tab
+
+  if (notifType === "transaction_reminder" || notifType === "daily_reminder") {
+    // Open expense tab (the main entry form)
+    event.waitUntil(openApp({ ...data, url: "/expense" }));
+  } else if (notifType === "item_reminder" || notifType === "item_due" || notifType === "item_overdue") {
+    // Open reminder tab, optionally highlighting a specific item
+    const itemUrl = data.item_id
+      ? `/expense?tab=reminder&item=${data.item_id}`
+      : "/expense?tab=reminder";
+    event.waitUntil(openApp({ ...data, url: itemUrl }));
+  } else if (notifType === "chat_message" || notifType === "chat_mention") {
+    // Open standalone chat page with the thread
+    const threadId = data.thread_id;
+    event.waitUntil(openApp({ ...data, url: threadId ? `/chat?thread=${threadId}` : "/chat" }));
+  } else if (notifType === "transaction_pending") {
+    // Split bill → open expense with action
+    event.waitUntil(openApp({ ...data, url: "/expense?action=split-bill" }));
+  } else if (notifType === "bill_due" || notifType === "bill_overdue") {
+    // Open recurring payments page
+    event.waitUntil(openApp({ ...data, url: "/recurring" }));
+  } else if (notifType === "guest_chat") {
+    // Open hub tab (guest messages show in hub alerts)
+    event.waitUntil(openApp({ ...data, url: "/expense?tab=hub&view=alerts" }));
+  } else if (notifType === "budget_warning" || notifType === "budget_exceeded") {
+    // Open dashboard tab
+    event.waitUntil(openApp({ ...data, url: "/expense?tab=dashboard" }));
+  } else if (notifType === "goal_milestone" || notifType === "goal_completed") {
+    // Open hub tab
+    event.waitUntil(openApp({ ...data, url: "/expense?tab=hub" }));
+  } else if (notifType === "test") {
+    // Test notification → just open the app
+    event.waitUntil(openApp({ ...data, url: "/expense" }));
   } else {
-    // Default click - open the app based on notification type
-    if (
-      data.type === "transaction_reminder" ||
-      data.type === "daily_reminder"
-    ) {
-      // Open Hub Alerts view
-      event.waitUntil(openApp({ ...data, url: "/hub?view=alerts" }));
-    } else {
-      event.waitUntil(openApp(data));
-    }
+    // Unknown type → open app at whatever URL was provided, or default to /expense
+    event.waitUntil(openApp(data));
   }
 });
 
@@ -303,43 +386,52 @@ async function handleConfirmTransactions(data) {
 // Handle "Not yet" action - open add expense form
 async function openAddExpense(data) {
   console.log("[SW] Opening add expense:", data);
+  await openApp({ ...data, url: "/expense?action=add-expense" });
+}
 
-  const url = "/dashboard?action=add-expense";
+// Handle "Complete Item" action from notification quick action (Android)
+async function handleCompleteItem(data) {
+  console.log("[SW] Completing item from notification:", data);
 
-  // Try to focus existing window or open new one
-  const clients = await self.clients.matchAll({
-    type: "window",
-    includeUncontrolled: true,
-  });
-
-  // Check if app is already open
-  for (const client of clients) {
-    if (client.url.includes(self.location.origin)) {
-      await client.focus();
-      client.postMessage({
-        type: "NAVIGATE",
-        url: url,
-      });
-      return;
-    }
+  if (!data.item_id) {
+    console.error("[SW] No item_id in notification data");
+    return;
   }
 
-  // Open new window to add expense
-  await self.clients.openWindow(url);
+  try {
+    const response = await fetch(`/api/items/${data.item_id}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        occurrence_date: data.occurrence_date || new Date().toISOString().split("T")[0],
+        is_recurring: data.is_recurring || false,
+      }),
+    });
+
+    if (response.ok) {
+      await self.registration.showNotification("✅ Completed!", {
+        body: data.item_title || "Task marked as done",
+        icon: "/appicon-192.png",
+        tag: "complete-confirm",
+        requireInteraction: false,
+        silent: true,
+      });
+    } else {
+      console.error("[SW] Failed to complete item:", await response.text());
+      // Fall back to opening the app
+      await openApp({ ...data, url: `/expense?tab=reminder&item=${data.item_id}` });
+    }
+  } catch (error) {
+    console.error("[SW] Error completing item:", error);
+    await openApp({ ...data, url: `/expense?tab=reminder&item=${data.item_id}` });
+  }
 }
 
 async function openApp(data) {
   console.log("[SW] Opening app:", data);
 
-  // Determine URL to open
-  let url = "/";
-
-  // Check for custom URL (e.g., from transaction reminder)
-  if (data.url) {
-    url = data.url;
-  } else if (data.item_id) {
-    url = `/dashboard?item=${data.item_id}`;
-  }
+  // Determine URL to open - default to /expense (the main app page)
+  let url = data.url || "/expense";
 
   // Try to focus existing window or open new one
   const clients = await self.clients.matchAll({
@@ -351,13 +443,11 @@ async function openApp(data) {
   for (const client of clients) {
     if (client.url.includes(self.location.origin)) {
       await client.focus();
-      // Navigate if we have a specific URL
-      if (url !== "/") {
-        client.postMessage({
-          type: "NAVIGATE",
-          url: url,
-        });
-      }
+      // Always send NAVIGATE so DeepLinkHandler can process params
+      client.postMessage({
+        type: "NAVIGATE",
+        url: url,
+      });
       return;
     }
   }

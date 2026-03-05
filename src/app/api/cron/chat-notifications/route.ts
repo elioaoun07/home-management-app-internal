@@ -370,7 +370,7 @@ export async function GET(req: NextRequest) {
             type: "chat_message",
             notification_id: notification.id,
             thread_id: threadId,
-            action_url: null, // Hub is tab-based
+            url: `/chat?thread=${threadId}`,
             unread_count: unreadCount,
           },
         });

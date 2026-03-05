@@ -472,6 +472,11 @@ const VALID_PAGE_ROUTES = [
   "/recurring",
   "/settings",
   "/quick-expense",
+  "/chat",
+  "/reminders",
+  "/focus",
+  "/catalogue",
+  "/recipe",
 ];
 
 // Helper to get action route
@@ -492,6 +497,11 @@ export function getActionRoute(notification: Notification): string | null {
       return url;
     }
 
+    // Also allow tab-based routes with query params (e.g., /expense?action=split-bill)
+    if (url.startsWith("/expense?") || url.startsWith("/dashboard?")) {
+      return url;
+    }
+
     // Invalid action_url - fall through to type-based routing
   }
 
@@ -505,27 +515,30 @@ export function getActionRoute(notification: Notification): string | null {
     }
   }
 
-  // Map notification types to tab navigation routes
-  // These are handled specially in the notification click handler
+  // Map notification types to routes
   switch (notification.notification_type) {
     case "daily_reminder":
     case "transaction_pending":
       return "/expense"; // Tab: expense
     case "budget_warning":
     case "budget_exceeded":
-      return "/budget"; // Tab: dashboard
+      return "/expense?tab=dashboard"; // Tab: dashboard (via deep link)
     case "bill_due":
     case "bill_overdue":
-      return "/recurring"; // Page route (valid)
+      return "/recurring"; // Standalone page
     case "item_reminder":
     case "item_due":
     case "item_overdue":
-      return "/reminder"; // Tab: reminder
+      return "/expense?tab=reminder"; // Tab: reminder (via deep link)
     case "goal_milestone":
     case "goal_completed":
+      return "/expense?tab=hub"; // Tab: hub (via deep link)
     case "chat_message":
-    case "chat_mention":
-      return "/hub"; // Tab: hub
+    case "chat_mention": {
+      // If thread_id is available, go to standalone chat with thread
+      const threadId = (notification.action_data as Record<string, unknown>)?.thread_id;
+      return threadId ? `/chat?thread=${threadId}` : "/chat";
+    }
     default:
       return null;
   }

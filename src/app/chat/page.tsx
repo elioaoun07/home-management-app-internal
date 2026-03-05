@@ -1,15 +1,26 @@
 "use client";
 
 import HubPage from "@/components/hub/HubPage";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 
 export default function ChatStandalonePage() {
+  const searchParams = useSearchParams();
+  const threadParam = useMemo(() => searchParams.get("thread"), [searchParams]);
+
   // Prevent hydration mismatch by only rendering HubPage after mount
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Clean URL params after reading (they've been captured above)
+  useEffect(() => {
+    if (mounted && threadParam) {
+      window.history.replaceState({}, "", "/chat");
+    }
+  }, [mounted, threadParam]);
 
   if (!mounted) {
     // Return a loading skeleton that matches the server render
@@ -36,7 +47,7 @@ export default function ChatStandalonePage() {
 
   return (
     <main className="h-screen bg-background pt-14 overflow-hidden">
-      <HubPage standalone />
+      <HubPage standalone initialThreadId={threadParam || undefined} />
     </main>
   );
 }

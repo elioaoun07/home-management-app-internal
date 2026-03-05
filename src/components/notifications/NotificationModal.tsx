@@ -111,16 +111,36 @@ export default function NotificationModal({
     if (route) {
       onOpenChange(false);
 
-      // Handle tab navigation
-      if (route === "/expense") {
-        setActiveTab("expense");
-      } else if (route === "/budget") {
-        setActiveTab("dashboard");
-      } else if (route === "/reminder") {
-        setActiveTab("reminder");
-      } else if (route.startsWith("/hub")) {
-        setActiveTab("hub");
-      } else {
+      // Parse route to check for tab-based navigation via deep link params
+      try {
+        const url = new URL(route, window.location.origin);
+        const tab = url.searchParams.get("tab");
+        const action = url.searchParams.get("action");
+
+        if (tab === "dashboard") {
+          setActiveTab("dashboard");
+        } else if (tab === "reminder") {
+          setActiveTab("reminder");
+        } else if (tab === "hub") {
+          setActiveTab("hub");
+        } else if (route === "/expense" || action === "add-expense") {
+          setActiveTab("expense");
+        } else if (action === "split-bill") {
+          setActiveTab("expense");
+          // SplitBillHandler will pick up pending splits
+        } else if (
+          route.startsWith("/chat") ||
+          route.startsWith("/recurring") ||
+          route.startsWith("/reminders") ||
+          route.startsWith("/focus") ||
+          route.startsWith("/catalogue")
+        ) {
+          // Standalone pages → real navigation
+          router.push(route);
+        } else {
+          router.push(route);
+        }
+      } catch {
         router.push(route);
       }
     }

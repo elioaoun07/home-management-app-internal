@@ -1,4 +1,5 @@
 import AIChatAssistant from "@/components/ai/AIChatAssistant";
+import { DeepLinkHandler } from "@/components/DeepLinkHandler";
 import { EagerDataPrefetch } from "@/components/EagerDataPrefetch";
 import { ErrorLogger } from "@/components/ErrorLogger";
 import SplitBillHandler from "@/components/expense/SplitBillHandler";
@@ -150,6 +151,7 @@ export default async function RootLayout({
               {/* Eager prefetch critical data immediately on app load */}
               {user && <EagerDataPrefetch />}
               <ServiceWorkerRegistration />
+              <DeepLinkHandler />
               <ErrorLogger />
               {/* Conditional header - show user menu when logged in, login button when logged out */}
               {user ? (

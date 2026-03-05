@@ -392,14 +392,14 @@ export async function POST(request: NextRequest) {
         const payload = JSON.stringify({
           title: thread?.title || "New Message",
           body: `${senderName}: ${content.trim().substring(0, 100)}${content.length > 100 ? "..." : ""}`,
-          icon: "/icons/icon-192x192.png",
-          badge: "/icons/badge-72x72.png",
+          icon: "/appicon-192.png",
+          badge: "/appicon-192.png",
           tag: `chat-${thread_id}`,
           data: {
             type: "chat_message",
             thread_id,
             message_id: message.id,
-            url: `/hub/chat/${thread_id}`,
+            url: `/chat?thread=${thread_id}`,
           },
         });
 

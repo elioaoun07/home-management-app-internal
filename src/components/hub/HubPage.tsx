@@ -154,11 +154,12 @@ const viewOptions: Array<{
 
 interface HubPageProps {
   standalone?: boolean;
+  initialThreadId?: string;
 }
 
-export default function HubPage({ standalone = false }: HubPageProps) {
+export default function HubPage({ standalone = false, initialThreadId }: HubPageProps) {
   const themeClasses = useThemeClasses();
-  const { hubDefaultView, setHubDefaultView } = useTab();
+  const { hubDefaultView, setHubDefaultView, pendingThreadId, setPendingThreadId } = useTab();
 
   // Initialize hub cache from localStorage on mount
   useHubCacheInit();
@@ -166,6 +167,23 @@ export default function HubPage({ standalone = false }: HubPageProps) {
   // Use persistent state for Hub UI
   const { activeView, setActiveView, activeThreadId, setActiveThreadId } =
     useHubState();
+
+  // Handle initialThreadId prop (from /chat?thread=ID)
+  useEffect(() => {
+    if (initialThreadId) {
+      setActiveView("chat");
+      setActiveThreadId(initialThreadId);
+    }
+  }, [initialThreadId, setActiveView, setActiveThreadId]);
+
+  // Handle pendingThreadId from TabContext (from notification deep links)
+  useEffect(() => {
+    if (pendingThreadId) {
+      setActiveView("chat");
+      setActiveThreadId(pendingThreadId);
+      setPendingThreadId(null);
+    }
+  }, [pendingThreadId, setPendingThreadId, setActiveView, setActiveThreadId]);
 
   // Check for default view from notification modal (via context)
   useEffect(() => {

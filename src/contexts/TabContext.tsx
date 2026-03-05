@@ -20,6 +20,13 @@ interface TabContextType {
   hubDefaultView: HubView | null;
   setHubDefaultView: (view: HubView | null) => void;
   isHydrated: boolean;
+  // Deep link state - consumed once by target components then cleared
+  pendingItemId: string | null;
+  setPendingItemId: (id: string | null) => void;
+  pendingAction: string | null;
+  setPendingAction: (action: string | null) => void;
+  pendingThreadId: string | null;
+  setPendingThreadId: (id: string | null) => void;
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
@@ -29,6 +36,10 @@ export function TabProvider({ children }: { children: ReactNode }) {
   const [activeTab, setActiveTab] = useState<Tab>("expense");
   const [hubDefaultView, setHubDefaultView] = useState<HubView | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  // Deep link state for notification routing
+  const [pendingItemId, setPendingItemId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [pendingThreadId, setPendingThreadId] = useState<string | null>(null);
 
   // After hydration, check localStorage and update tab if needed
   // useLayoutEffect runs after hydration but BEFORE browser paint
@@ -48,6 +59,12 @@ export function TabProvider({ children }: { children: ReactNode }) {
         hubDefaultView,
         setHubDefaultView,
         isHydrated,
+        pendingItemId,
+        setPendingItemId,
+        pendingAction,
+        setPendingAction,
+        pendingThreadId,
+        setPendingThreadId,
       }}
     >
       {children}

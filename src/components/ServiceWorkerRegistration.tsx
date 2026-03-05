@@ -144,8 +144,33 @@ export function ServiceWorkerRegistration() {
       const { type, url } = event.data || {};
 
       if (type === "NAVIGATE" && url) {
-        // Navigate to URL requested by service worker
-        window.location.href = url;
+        // Parse the URL to decide: smooth in-app switch or hard navigation
+        try {
+          const navUrl = new URL(url, window.location.origin);
+          const pathname = navUrl.pathname;
+
+          // Tab-based routes (rendered by TabContainer inside /expense or /dashboard)
+          // → dispatch custom event so DeepLinkHandler can switch tabs without reload
+          const tabRoutes = ["/expense", "/dashboard", "/settings"];
+          const isTabRoute = tabRoutes.some(
+            (r) => pathname === r || pathname.startsWith(r + "/")
+          );
+
+          if (isTabRoute) {
+            window.dispatchEvent(
+              new CustomEvent("notification-navigate", {
+                detail: { url },
+              })
+            );
+          } else {
+            // Standalone pages (/chat, /recurring, /reminders, /catalogue, etc.)
+            // → hard navigate
+            window.location.href = url;
+          }
+        } catch {
+          // Fallback to hard navigation
+          window.location.href = url;
+        }
       } else if (type === "PLAY_ALARM_SOUND") {
         // Stop any existing alarm
         if (alarmRef.current) {

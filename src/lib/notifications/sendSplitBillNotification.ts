@@ -40,7 +40,7 @@ export async function sendSplitBillNotification({
         source: "transaction",
         priority: "high",
         action_type: "log_transaction",
-        action_url: "/dashboard",
+        action_url: "/expense?action=split-bill",
         transaction_id: transactionId,
         action_data: {
           transaction_id: transactionId,

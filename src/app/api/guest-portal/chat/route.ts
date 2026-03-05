@@ -147,14 +147,14 @@ export async function POST(request: NextRequest) {
             const payload = JSON.stringify({
               title: `🏠 Guest: ${guest_name || "Anonymous"}`,
               body: message.substring(0, 100),
-              icon: "/icons/icon-192x192.png",
-              badge: "/icons/badge-72x72.png",
+              icon: "/appicon-192.png",
+              badge: "/appicon-192.png",
               tag: `guest-chat-${session_id}`,
               data: {
                 type: "guest_chat",
                 tag_id,
                 session_id,
-                url: "/settings",
+                url: "/expense?tab=hub&view=alerts",
               },
             });
 

@@ -79,7 +79,8 @@ export async function GET(req: NextRequest) {
           title,
           description,
           type,
-          priority
+          priority,
+          item_recurrence_rules (id)
         )
       `,
       )
@@ -118,6 +119,7 @@ export async function GET(req: NextRequest) {
         description: string | null;
         type: string;
         priority: string;
+        item_recurrence_rules: { id: string }[] | null;
       } | null;
 
       if (!item) {
@@ -229,11 +231,14 @@ export async function GET(req: NextRequest) {
             badge: "/appicon-192.png",
             tag: `item-${item.id}-${userId}`,
             data: {
-              type: "item_reminder",
+              type: notificationType,
               notification_id: notification?.id,
               item_id: item.id,
+              item_title: item.title,
               alert_id: alert.id,
-              action_url: null, // Items are viewed via reminder tab, not direct URL
+              occurrence_date: new Date().toISOString().split("T")[0],
+              is_recurring: !!(item.item_recurrence_rules?.length),
+              url: `/expense?tab=reminder&item=${item.id}`,
             },
           });
 
