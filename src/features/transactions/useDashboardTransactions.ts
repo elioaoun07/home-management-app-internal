@@ -221,7 +221,10 @@ export function useDeleteTransaction() {
         );
 
         if (!response.ok) {
-          throw new Error("Failed to delete transaction");
+          if (response.status === 401 || response.status === 403) {
+            throw new Error("Session expired — please sign in again");
+          }
+          throw new Error(`Failed to delete transaction (${response.status})`);
         }
 
         return transactionId;
@@ -483,7 +486,11 @@ export function useAddTransaction() {
         });
 
         if (!response.ok) {
-          throw new Error("Failed to create transaction");
+          // Distinguish auth errors from server errors
+          if (response.status === 401 || response.status === 403) {
+            throw new Error("Session expired — please sign in again");
+          }
+          throw new Error(`Failed to create transaction (${response.status})`);
         }
 
         return response.json();
@@ -896,7 +903,10 @@ export function useUpdateTransaction() {
         });
 
         if (!response.ok) {
-          throw new Error("Failed to update transaction");
+          if (response.status === 401 || response.status === 403) {
+            throw new Error("Session expired — please sign in again");
+          }
+          throw new Error(`Failed to update transaction (${response.status})`);
         }
 
         return response.json();

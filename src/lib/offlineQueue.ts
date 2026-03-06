@@ -133,6 +133,11 @@ export async function addToQueue(op: QueueableOperation): Promise<string> {
     return operation.id;
   }
 
+  // Increment the UI count BEFORE the async IDB write so the
+  // pending badge updates instantly, even if IndexedDB is slow.
+  offlinePendingActions.increment();
+  notifyQueueChanged();
+
   try {
     const db = await openDB();
 
@@ -147,6 +152,8 @@ export async function addToQueue(op: QueueableOperation): Promise<string> {
 
     if (count >= MAX_QUEUE_SIZE) {
       db.close();
+      // Undo the optimistic increment
+      offlinePendingActions.decrement();
       throw new Error("Too many pending changes. Please connect to sync.");
     }
 
@@ -159,18 +166,17 @@ export async function addToQueue(op: QueueableOperation): Promise<string> {
     });
 
     db.close();
-    offlinePendingActions.increment();
-    notifyQueueChanged();
     return operation.id;
   } catch (err) {
-    // Fall back to memory
+    // Fall back to memory — the increment already happened above
     if (!useMemoryFallback) {
       useMemoryFallback = true;
       memoryQueue.push(operation);
-      offlinePendingActions.increment();
-      notifyQueueChanged();
+      // Count was already incremented optimistically — no double-increment
       return operation.id;
     }
+    // If memory fallback already active and this still failed, undo increment
+    offlinePendingActions.decrement();
     throw err;
   }
 }

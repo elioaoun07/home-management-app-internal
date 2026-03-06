@@ -10,7 +10,7 @@
 import { isReallyOnline, markOffline } from "@/lib/connectivityManager";
 
 /** Default timeout for mutation requests (POST/PATCH/DELETE) */
-const DEFAULT_TIMEOUT_MS = 5_000;
+const DEFAULT_TIMEOUT_MS = 3_000;
 
 /**
  * Custom error thrown when a fetch is aborted due to:
