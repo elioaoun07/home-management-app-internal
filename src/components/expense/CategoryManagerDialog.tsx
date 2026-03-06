@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
@@ -71,8 +71,8 @@ export default function CategoryManagerDialog({
   onChange,
 }: Props) {
   const themeClasses = useThemeClasses();
-  // Accounts for dropdown + default marker
-  const { data: accounts = [] } = useAccounts();
+  // Accounts for dropdown + default marker (own accounts only)
+  const { data: accounts = [] } = useMyAccounts();
   const [selectedAccountId, setSelectedAccountId] = useState<string>(accountId);
   useEffect(() => setSelectedAccountId(accountId), [accountId]);
 

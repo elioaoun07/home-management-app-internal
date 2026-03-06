@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
   useConfirmDraft,
@@ -38,7 +38,7 @@ export default function DraftsPage() {
     date: "",
     account_id: "",
   });
-  const { data: accounts = [] } = useAccounts();
+  const { data: accounts = [] } = useMyAccounts();
   const { data: categories = [] } = useCategories(editForm.account_id);
 
   const startEditing = (draft: (typeof drafts)[0]) => {

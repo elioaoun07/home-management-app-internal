@@ -9,7 +9,7 @@ import BlurredAmount from "@/components/ui/BlurredAmount";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
   useDeleteTransaction,
@@ -137,7 +137,7 @@ export default function TransactionDetailModal({
   };
 
   // Load accounts and categories
-  const { data: accounts } = useAccounts();
+  const { data: accounts } = useMyAccounts();
   const { data: categories } = useCategories(selectedAccount ?? undefined);
 
   // Build category lists (support DB-flat and default nested shapes)

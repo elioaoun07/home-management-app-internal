@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
   useConfirmDraft,
@@ -66,7 +66,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
     date: "",
     account_id: "",
   });
-  const { data: accounts = [] } = useAccounts();
+  const { data: accounts = [] } = useMyAccounts();
   const { data: categories = [] } = useCategories(editForm.account_id);
 
   const startEditing = (draft: DraftTransaction) => {

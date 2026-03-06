@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAccounts, useCreateAccount } from "@/features/accounts/hooks";
+import { useMyAccounts, useCreateAccount } from "@/features/accounts/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { AccountType } from "@/types/domain";
@@ -40,7 +40,7 @@ export default function AccountSelect({ value, onChange }: Props) {
     isError,
     error,
     refetch,
-  } = useAccounts();
+  } = useMyAccounts();
   const createAccount = useCreateAccount();
 
   const [internal, setInternal] = useState<string | undefined>(value);

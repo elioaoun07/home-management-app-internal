@@ -14,7 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
   useAddTransaction,
@@ -50,8 +50,8 @@ export default function ExpenseForm() {
   const [pendingSentence, setPendingSentence] = useState<string | null>(null);
   const [date, setDate] = useState<Date>(new Date());
 
-  // Get accounts for balance display
-  const { data: accounts = [] } = useAccounts();
+  // Get only current user's accounts for balance display and default selection
+  const { data: accounts = [] } = useMyAccounts();
   const selectedAccount = accounts.find((a: any) => a.id === selectedAccountId);
   const defaultAccount = accounts.find((a: any) => a.is_default);
 

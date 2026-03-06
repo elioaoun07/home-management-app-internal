@@ -68,8 +68,23 @@ export async function prefetchExpenseData(queryClient: QueryClient) {
     // First prefetch accounts if needed
     await prefetchAccounts(queryClient);
 
-    // Get cached accounts to find default
-    const accounts = queryClient.getQueryData(qk.accounts()) as any[];
+    // Prefetch own accounts for default selection
+    const ownKey = [...qk.accounts(), "own"];
+    if (shouldPrefetch(queryClient, ownKey)) {
+      await queryClient.prefetchQuery({
+        queryKey: ownKey,
+        queryFn: async () => {
+          const res = await fetch("/api/accounts?own=true");
+          if (!res.ok) throw new Error("Failed to fetch own accounts");
+          return res.json();
+        },
+        staleTime: CACHE_TIMES.ACCOUNTS,
+      });
+    }
+
+    // Get cached OWN accounts to find default (don't pick partner's)
+    const ownAccounts = queryClient.getQueryData(ownKey) as any[];
+    const accounts = ownAccounts || (queryClient.getQueryData(qk.accounts()) as any[]);
     if (accounts && accounts.length > 0) {
       const defaultAccount = accounts.find((a: any) => a.is_default);
       if (defaultAccount) {

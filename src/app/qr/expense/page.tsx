@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
 import { ToastIcons } from "@/lib/toastIcons";
@@ -44,8 +44,8 @@ export default function QRExpensePage() {
     undefined,
   );
 
-  // Fetch accounts
-  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
+  // Fetch current user's accounts only
+  const { data: accounts = [], isLoading: accountsLoading } = useMyAccounts();
 
   // Resolve account ID from name
   useEffect(() => {

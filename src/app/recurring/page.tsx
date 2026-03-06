@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
   type RecurringPayment,
@@ -38,7 +38,7 @@ import { toast } from "sonner";
 export default function RecurringPage() {
   const themeClasses = useThemeClasses();
   const { data: recurringPayments = [], isLoading } = useRecurringPayments();
-  const { data: accounts = [] } = useAccounts();
+  const { data: accounts = [] } = useMyAccounts();
   const defaultAccount = accounts.find((a) => a.is_default) || accounts[0];
   const { data: categories = [] } = useCategories(defaultAccount?.id);
 

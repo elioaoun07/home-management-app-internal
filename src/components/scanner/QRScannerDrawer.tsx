@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
@@ -65,8 +65,8 @@ export default function QRScannerDrawer({
   );
   const [displayTitle, setDisplayTitle] = useState("");
 
-  // Fetch accounts
-  const { data: accounts = [] } = useAccounts();
+  // Fetch current user's accounts only
+  const { data: accounts = [] } = useMyAccounts();
 
   // Fetch categories for the resolved account
   const { data: categories = [] } = useCategories(accountId);

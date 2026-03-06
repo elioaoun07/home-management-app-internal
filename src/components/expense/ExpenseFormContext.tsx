@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccounts } from "@/features/accounts/hooks";
+import { useMyAccounts } from "@/features/accounts/hooks";
 import {
   createContext,
   MutableRefObject,
@@ -58,8 +58,8 @@ export function ExpenseFormProvider({ children }: { children: ReactNode }) {
   const [isEditMode, setIsEditMode] = useState(false);
   const exitEditModeRef = useRef<(() => void) | null>(null);
 
-  // Get accounts to auto-select default
-  const { data: accounts = [] } = useAccounts();
+  // Get only current user's accounts to auto-select default
+  const { data: accounts = [] } = useMyAccounts();
   const defaultAccount = accounts.find((a: any) => a.is_default);
 
   // Auto-select default account when available
