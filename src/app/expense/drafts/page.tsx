@@ -80,7 +80,7 @@ export default function DraftsPage() {
         onError: () => {
           toast.error("Failed to confirm transaction");
         },
-      }
+      },
     );
   };
 
@@ -196,7 +196,7 @@ export default function DraftsPage() {
                 `rounded-2xl p-5 space-y-4 ${themeClasses.surfaceBg} border transition-all`,
                 isEditing
                   ? `${themeClasses.borderActive} shadow-lg ${themeClasses.glow}`
-                  : `${themeClasses.border} ${themeClasses.borderHover}`
+                  : `${themeClasses.border} ${themeClasses.borderHover}`,
               )}
             >
               {/* Voice transcript */}
@@ -298,7 +298,7 @@ export default function DraftsPage() {
                       <option value="">Select category...</option>
                       {categories
                         .filter(
-                          (cat) => !("parent_id" in cat) || !cat.parent_id
+                          (cat) => !("parent_id" in cat) || !cat.parent_id,
                         )
                         .map((cat) => (
                           <option key={cat.id} value={cat.id}>
@@ -330,7 +330,7 @@ export default function DraftsPage() {
                           .filter(
                             (cat) =>
                               "parent_id" in cat &&
-                              cat.parent_id === editForm.category_id
+                              cat.parent_id === editForm.category_id,
                           )
                           .map((cat) => (
                             <option key={cat.id} value={cat.id}>

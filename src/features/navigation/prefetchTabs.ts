@@ -84,7 +84,8 @@ export async function prefetchExpenseData(queryClient: QueryClient) {
 
     // Get cached OWN accounts to find default (don't pick partner's)
     const ownAccounts = queryClient.getQueryData(ownKey) as any[];
-    const accounts = ownAccounts || (queryClient.getQueryData(qk.accounts()) as any[]);
+    const accounts =
+      ownAccounts || (queryClient.getQueryData(qk.accounts()) as any[]);
     if (accounts && accounts.length > 0) {
       const defaultAccount = accounts.find((a: any) => a.is_default);
       if (defaultAccount) {

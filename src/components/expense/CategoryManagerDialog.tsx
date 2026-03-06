@@ -103,7 +103,7 @@ export default function CategoryManagerDialog({
             position: c.position ?? null,
           }))
         : [],
-    [categories, isDbCategories]
+    [categories, isDbCategories],
   );
 
   const roots = useMemo(
@@ -113,9 +113,9 @@ export default function CategoryManagerDialog({
         .sort(
           (a, b) =>
             (a.position ?? 1e9) - (b.position ?? 1e9) ||
-            a.name.localeCompare(b.name)
+            a.name.localeCompare(b.name),
         ),
-    [all]
+    [all],
   );
 
   const getSubs = (parentId: string) =>
@@ -124,7 +124,7 @@ export default function CategoryManagerDialog({
       .sort(
         (a, b) =>
           (a.position ?? 1e9) - (b.position ?? 1e9) ||
-          a.name.localeCompare(b.name)
+          a.name.localeCompare(b.name),
       );
 
   // UI state
@@ -144,10 +144,10 @@ export default function CategoryManagerDialog({
   const [editingSubId, setEditingSubId] = useState<string | null>(null);
   const [editingSubName, setEditingSubName] = useState<string>("");
   const [confirmCatDeleteId, setConfirmCatDeleteId] = useState<string | null>(
-    null
+    null,
   );
   const [confirmSubDeleteId, setConfirmSubDeleteId] = useState<string | null>(
-    null
+    null,
   );
 
   // Ordering state and click-to-edit position control
@@ -244,14 +244,14 @@ export default function CategoryManagerDialog({
 
   const displayRoots = useMemo(() => {
     return [...roots].sort(
-      (a, b) => (positions[a.id] ?? 1e9) - (positions[b.id] ?? 1e9)
+      (a, b) => (positions[a.id] ?? 1e9) - (positions[b.id] ?? 1e9),
     );
   }, [roots, positions]);
 
   const getDisplaySubs = (parentId: string) => {
     const subs = getSubs(parentId);
     return [...subs].sort(
-      (a, b) => (positions[a.id] ?? 1e9) - (positions[b.id] ?? 1e9)
+      (a, b) => (positions[a.id] ?? 1e9) - (positions[b.id] ?? 1e9),
     );
   };
 
@@ -485,7 +485,7 @@ export default function CategoryManagerDialog({
   // persist order
   function normalizeSequential(ids: string[]) {
     const sorted = [...ids].sort(
-      (a, b) => (positions[a] ?? 1e9) - (positions[b] ?? 1e9)
+      (a, b) => (positions[a] ?? 1e9) - (positions[b] ?? 1e9),
     );
     const out: Record<string, number> = {};
     sorted.forEach((id, i) => (out[id] = i + 1));
@@ -792,7 +792,7 @@ export default function CategoryManagerDialog({
                                       )}
                                       {(() => {
                                         const CatIcon = getCategoryIcon(
-                                          cat.name
+                                          cat.name,
                                         );
                                         return (
                                           <span
@@ -836,7 +836,7 @@ export default function CategoryManagerDialog({
                                                   value={editingSubName}
                                                   onChange={(e) =>
                                                     setEditingSubName(
-                                                      e.target.value
+                                                      e.target.value,
                                                     )
                                                   }
                                                   onClick={(e) => {
@@ -863,7 +863,7 @@ export default function CategoryManagerDialog({
                                                     onChange={(e) =>
                                                       setPos(
                                                         sub.id,
-                                                        e.target.value
+                                                        e.target.value,
                                                       )
                                                     }
                                                     onClick={(e) => {
@@ -909,7 +909,7 @@ export default function CategoryManagerDialog({
                                                       if (!nn) return;
                                                       void patchSubcategoryName(
                                                         sub.id,
-                                                        nn
+                                                        nn,
                                                       );
                                                       setEditingSubId(null);
                                                     }}
@@ -942,7 +942,7 @@ export default function CategoryManagerDialog({
                                                       e.stopPropagation();
                                                       setEditingSubId(sub.id);
                                                       setEditingSubName(
-                                                        sub.name ?? ""
+                                                        sub.name ?? "",
                                                       );
                                                     }}
                                                     aria-label="Rename"
@@ -960,7 +960,7 @@ export default function CategoryManagerDialog({
                                                           e.preventDefault();
                                                           e.stopPropagation();
                                                           void deleteSubcategory(
-                                                            sub.id
+                                                            sub.id,
                                                           );
                                                         }}
                                                         disabled={
@@ -976,7 +976,7 @@ export default function CategoryManagerDialog({
                                                           e.preventDefault();
                                                           e.stopPropagation();
                                                           setConfirmSubDeleteId(
-                                                            null
+                                                            null,
                                                           );
                                                         }}
                                                       >
@@ -991,7 +991,7 @@ export default function CategoryManagerDialog({
                                                         e.preventDefault();
                                                         e.stopPropagation();
                                                         setConfirmSubDeleteId(
-                                                          sub.id
+                                                          sub.id,
                                                         );
                                                       }}
                                                       aria-label="Delete"

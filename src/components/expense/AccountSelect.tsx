@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useMyAccounts, useCreateAccount } from "@/features/accounts/hooks";
+import { useCreateAccount, useMyAccounts } from "@/features/accounts/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { AccountType } from "@/types/domain";

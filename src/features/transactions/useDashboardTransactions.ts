@@ -2,6 +2,7 @@ import { getBalanceDelta, type AccountType } from "@/lib/balance-utils";
 import { isReallyOnline, markOffline } from "@/lib/connectivityManager";
 import { sendSplitBillNotification } from "@/lib/notifications/sendSplitBillNotification";
 import { addToQueue } from "@/lib/offlineQueue";
+import { safeFetch, isOfflineError } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import {
   keepPreviousData,
@@ -32,77 +33,11 @@ function getAccountTypeFromCache(
   return "expense"; // safe default
 }
 
-/** Detect if an error is a network failure (fetch failed, not an HTTP error) */
-function isNetworkError(err: unknown): boolean {
-  if (err instanceof TypeError) return true; // "Failed to fetch" / "NetworkError"
-  if (err instanceof DOMException && err.name === "AbortError") return false;
-  if (
-    err instanceof Error &&
-    /network|failed to fetch|load failed/i.test(err.message)
-  )
-    return true;
-  return false;
-}
-
-/** How long to wait for a fetch before treating it as offline (ms) */
-const OFFLINE_FETCH_TIMEOUT = 3000;
-
-/**
- * Fetch with TWO abort triggers so a hanging request never blocks the UI:
- *
- * 1. **`offline` event** — the browser fires this when wifi/network drops.
- *    We listen for it and abort the in-flight fetch **immediately** (<1 s).
- *
- * 2. **Timeout** — safety net for devices/browsers where the `offline` event
- *    is delayed or never fires. Aborts after OFFLINE_FETCH_TIMEOUT ms.
- *
- * Both paths produce a `TimeoutError` so callers can fall back to the
- * offline queue without special-casing.
- */
-function fetchWithTimeout(
-  input: RequestInfo | URL,
-  init?: RequestInit,
-): Promise<Response> {
-  const controller = new AbortController();
-
-  // Trigger 1: hard timeout
-  const timeoutId = setTimeout(() => controller.abort(), OFFLINE_FETCH_TIMEOUT);
-
-  // Trigger 2: browser offline event (fires almost instantly on wifi toggle)
-  const offlineHandler = () => controller.abort();
-  if (typeof window !== "undefined") {
-    window.addEventListener("offline", offlineHandler, { once: true });
-  }
-
-  return fetch(input, { ...init, signal: controller.signal })
-    .then((res) => {
-      clearTimeout(timeoutId);
-      if (typeof window !== "undefined") {
-        window.removeEventListener("offline", offlineHandler);
-      }
-      return res;
-    })
-    .catch((err) => {
-      clearTimeout(timeoutId);
-      if (typeof window !== "undefined") {
-        window.removeEventListener("offline", offlineHandler);
-      }
-      // Convert our own timeout/offline abort into a recognisable error
-      if (err instanceof DOMException && err.name === "AbortError") {
-        const timeout = new Error("Request aborted — treating as offline");
-        timeout.name = "TimeoutError";
-        throw timeout;
-      }
-      throw err;
-    });
-}
-
-/** Returns true when the error means "no network" (includes our timeout) */
-function isOfflineError(err: unknown): boolean {
-  if (isNetworkError(err)) return true;
-  if (err instanceof Error && err.name === "TimeoutError") return true;
-  return false;
-}
+// fetchWithTimeout / isNetworkError / isOfflineError removed —
+// replaced by the centralized safeFetch module (src/lib/safeFetch.ts)
+// which provides a 5-second AbortController timeout, browser offline
+// event listener, pre-flight connectivity check, and automatic
+// markOffline() on failure.
 
 export type Transaction = {
   id: string;
@@ -265,8 +200,8 @@ export function useDeleteTransaction() {
     mutationFn: async (input: string | { id: string; _silent?: boolean }) => {
       const transactionId = typeof input === "string" ? input : input.id;
 
-      // Offline-first: queue if we know we're offline
-      if (!navigator.onLine) {
+      // Offline-first: queue if we know we're offline (real connectivity check)
+      if (!isReallyOnline()) {
         await addToQueue({
           feature: "transaction",
           operation: "delete",
@@ -280,7 +215,7 @@ export function useDeleteTransaction() {
 
       // Try network with timeout — fall back to queue on network failure
       try {
-        const response = await fetchWithTimeout(
+        const response = await safeFetch(
           `/api/transactions/${transactionId}`,
           { method: "DELETE" },
         );
@@ -292,6 +227,7 @@ export function useDeleteTransaction() {
         return transactionId;
       } catch (err) {
         if (isOfflineError(err)) {
+          markOffline();
           await addToQueue({
             feature: "transaction",
             operation: "delete",
@@ -540,7 +476,7 @@ export function useAddTransaction() {
 
       // Try network with timeout — fall back to queue on network failure
       try {
-        const response = await fetchWithTimeout("/api/transactions", {
+        const response = await safeFetch("/api/transactions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(serverTransaction),
@@ -946,14 +882,14 @@ export function useUpdateTransaction() {
         return { id, ...data, _isPending: true, _offline: true };
       };
 
-      // Offline-first: queue if we know we're offline
-      if (!navigator.onLine) {
+      // Offline-first: queue if we know we're offline (real connectivity check)
+      if (!isReallyOnline()) {
         return queueOfflineUpdate();
       }
 
       // Try network with timeout — fall back to queue on network failure
       try {
-        const response = await fetchWithTimeout(`/api/transactions/${id}`, {
+        const response = await safeFetch(`/api/transactions/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -966,6 +902,7 @@ export function useUpdateTransaction() {
         return response.json();
       } catch (err) {
         if (isOfflineError(err)) {
+          markOffline();
           return queueOfflineUpdate();
         }
         throw err;

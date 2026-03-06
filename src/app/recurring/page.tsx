@@ -44,7 +44,7 @@ export default function RecurringPage() {
 
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [editingPayment, setEditingPayment] = useState<RecurringPayment | null>(
-    null
+    null,
   );
   const [confirmingPayment, setConfirmingPayment] =
     useState<RecurringPayment | null>(null);
@@ -227,7 +227,7 @@ export default function RecurringPage() {
       <div
         className={cn(
           "min-h-screen flex items-center justify-center",
-          themeClasses.bgPage
+          themeClasses.bgPage,
         )}
       >
         <div className={themeClasses.text}>Loading...</div>
@@ -243,7 +243,7 @@ export default function RecurringPage() {
           className={cn(
             "sticky top-14 z-30 pb-4 mb-2 -mx-4 px-4 pt-4 border-b",
             themeClasses.bgPage,
-            themeClasses.border
+            themeClasses.border,
           )}
         >
           <div className="flex items-center justify-between mb-2">
@@ -310,8 +310,8 @@ export default function RecurringPage() {
                       cn(
                         "neo-glow",
                         themeClasses.borderActive,
-                        themeClasses.bgActive
-                      )
+                        themeClasses.bgActive,
+                      ),
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -321,7 +321,7 @@ export default function RecurringPage() {
                           "w-10 h-10 rounded-lg flex items-center justify-center",
                           dueDateInfo.isDue
                             ? themeClasses.bgActive
-                            : themeClasses.bgSurface
+                            : themeClasses.bgSurface,
                         )}
                       >
                         <IconComponent
@@ -329,7 +329,7 @@ export default function RecurringPage() {
                             "w-5 h-5",
                             dueDateInfo.isDue
                               ? themeClasses.textHighlight
-                              : themeClasses.text
+                              : themeClasses.text,
                           )}
                         />
                       </div>
@@ -341,7 +341,7 @@ export default function RecurringPage() {
                         <p
                           className={cn(
                             "text-2xl font-bold mb-2",
-                            themeClasses.textHighlight
+                            themeClasses.textHighlight,
                           )}
                         >
                           ${payment.amount.toFixed(2)}
@@ -354,9 +354,9 @@ export default function RecurringPage() {
                               dueDateInfo.isDue
                                 ? cn(
                                     themeClasses.bgActive,
-                                    themeClasses.textHighlight
+                                    themeClasses.textHighlight,
                                   )
-                                : cn(themeClasses.bgSurface, themeClasses.text)
+                                : cn(themeClasses.bgSurface, themeClasses.text),
                             )}
                           >
                             {dueDateInfo.formatted}
@@ -380,13 +380,13 @@ export default function RecurringPage() {
                           className={cn(
                             "p-2 rounded-lg active:scale-95 transition-all",
                             themeClasses.bgActive,
-                            themeClasses.bgHover
+                            themeClasses.bgHover,
                           )}
                         >
                           <CheckIcon
                             className={cn(
                               "w-4 h-4",
-                              themeClasses.textHighlight
+                              themeClasses.textHighlight,
                             )}
                           />
                         </button>
@@ -396,7 +396,7 @@ export default function RecurringPage() {
                         className={cn(
                           "p-2 rounded-lg active:scale-95 transition-all",
                           themeClasses.bgSurface,
-                          themeClasses.bgHover
+                          themeClasses.bgHover,
                         )}
                       >
                         <Edit2Icon

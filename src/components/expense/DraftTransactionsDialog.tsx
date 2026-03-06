@@ -108,7 +108,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
         onError: () => {
           toast.error("Failed to confirm transaction");
         },
-      }
+      },
     );
   };
 
@@ -178,7 +178,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
                   key={draft.id}
                   className={cn(
                     "border rounded-lg p-4 space-y-3",
-                    isEditing && "border-primary bg-primary/5"
+                    isEditing && "border-primary bg-primary/5",
                   )}
                 >
                   {/* Voice transcript if available */}
@@ -265,7 +265,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
                           <option value="">Select category...</option>
                           {categories
                             .filter(
-                              (cat) => !("parent_id" in cat) || !cat.parent_id
+                              (cat) => !("parent_id" in cat) || !cat.parent_id,
                             )
                             .map((cat) => (
                               <option key={cat.id} value={cat.id}>
@@ -295,7 +295,7 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
                             .filter(
                               (cat) =>
                                 "parent_id" in cat &&
-                                cat.parent_id === editForm.category_id
+                                cat.parent_id === editForm.category_id,
                             )
                             .map((cat) => (
                               <option key={cat.id} value={cat.id}>

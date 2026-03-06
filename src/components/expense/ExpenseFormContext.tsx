@@ -44,7 +44,7 @@ interface ExpenseFormContextType {
 }
 
 const ExpenseFormContext = createContext<ExpenseFormContextType | undefined>(
-  undefined
+  undefined,
 );
 
 export function ExpenseFormProvider({ children }: { children: ReactNode }) {
