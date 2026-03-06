@@ -1,6 +1,7 @@
 // src/features/debts/useDebts.ts
 "use client";
 
+import { isReallyOnline } from "@/lib/connectivityManager";
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -15,6 +16,7 @@ export const debtKeys = {
 
 // Fetch debts
 async function fetchDebts(status?: DebtStatus): Promise<Debt[]> {
+  if (!isReallyOnline()) throw new Error("Offline");
   const params = status ? `?status=${status}` : "";
   const res = await fetch(`/api/debts${params}`);
   if (!res.ok) throw new Error("Failed to fetch debts");
@@ -32,6 +34,10 @@ export function useDebts(status?: DebtStatus) {
     staleTime: CACHE_TIMES.BALANCE, // 5 minutes
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
+    retry: (failureCount, error) => {
+      if (error?.message === "Offline") return false;
+      return failureCount < 2;
+    },
   });
 }
 

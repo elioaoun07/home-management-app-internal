@@ -1,6 +1,7 @@
 // src/lib/offlineSyncEngine.ts
 // Core sync processor that replays the IndexedDB queue when back online
 
+import { isReallyOnline, markOffline } from "@/lib/connectivityManager";
 import type { OfflineOperation } from "./offlineQueue";
 import {
   cancelCreateDeletePair,
@@ -108,6 +109,9 @@ class OfflineSyncEngine {
   async processQueue(): Promise<SyncResult> {
     // Prevent concurrent processing
     if (this.isSyncing) {
+      console.log(
+        "[OFFLINE] syncEngine.processQueue(): already syncing, skipping",
+      );
       return {
         processed: 0,
         succeeded: 0,
@@ -117,6 +121,7 @@ class OfflineSyncEngine {
       };
     }
 
+    console.log("[OFFLINE] syncEngine.processQueue(): starting...");
     this.isSyncing = true;
     this.options.onSyncStart?.();
     this.notifyListeners();
@@ -164,6 +169,9 @@ class OfflineSyncEngine {
       }
 
       const operations = await getAllPending();
+      console.log(
+        `[OFFLINE] syncEngine: ${operations.length} operations to process`,
+      );
       if (operations.length === 0) {
         result.remaining = 0;
         return result;
@@ -191,13 +199,22 @@ class OfflineSyncEngine {
         }
 
         try {
+          // Use AbortController with timeout to prevent hanging requests
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 10_000); // 10s timeout
+
+          console.log(
+            `[OFFLINE] syncEngine: replaying ${op.feature}/${op.operation} => ${op.method} ${op.endpoint}`,
+          );
           const response = await fetch(op.endpoint, {
             method: op.method,
             headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
             ...(op.method !== "DELETE" || Object.keys(op.body).length > 0
               ? { body: JSON.stringify(op.body) }
               : {}),
           });
+          clearTimeout(timeout);
 
           if (response.ok) {
             // Success
@@ -210,6 +227,9 @@ class OfflineSyncEngine {
 
             await removeFromQueue(op.id);
             result.succeeded++;
+            console.log(
+              `[OFFLINE] syncEngine: SUCCESS ${op.feature}/${op.operation} (${op.id})`,
+            );
 
             // Notify for post-sync reconciliation
             this.options.onOperationSuccess?.(op, serverResponse);
@@ -266,16 +286,10 @@ class OfflineSyncEngine {
             errorMessage.includes("network") ||
             errorMessage.includes("Failed to fetch") ||
             errorMessage.includes("NetworkError") ||
-            !navigator.onLine
+            !isReallyOnline()
           ) {
             // Network is down — stop processing, keep everything in queue
-            // Also tell connectivity manager we detected offline
-            try {
-              const { markOffline } = await import("@/lib/connectivityManager");
-              markOffline();
-            } catch {
-              /* ignore */
-            }
+            markOffline();
             break;
           }
 

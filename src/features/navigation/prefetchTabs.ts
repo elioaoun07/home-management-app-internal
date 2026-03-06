@@ -1,3 +1,4 @@
+import { isReallyOnline } from "@/lib/connectivityManager";
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
 import { QueryClient } from "@tanstack/react-query";
@@ -104,12 +105,7 @@ export async function prefetchExpenseData(queryClient: QueryClient) {
  */
 export async function prefetchAllTabs(queryClient: QueryClient) {
   // Don't prefetch when offline — use persisted cache
-  try {
-    const { isReallyOnline } = await import("@/lib/connectivityManager");
-    if (!isReallyOnline()) return;
-  } catch {
-    if (typeof navigator !== "undefined" && !navigator.onLine) return;
-  }
+  if (!isReallyOnline()) return;
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

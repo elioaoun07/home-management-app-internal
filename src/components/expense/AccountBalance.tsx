@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSyncSafe } from "@/contexts/SyncContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { isReallyOnline } from "@/lib/connectivityManager";
 import {
   CACHE_TIMES,
   getCachedBalance,
@@ -94,14 +95,7 @@ export default function AccountBalance({
       if (!accountId) return null;
       // Don't fetch when offline — return cached data silently
       // Use real connectivity check to detect silent WiFi drops
-      let actuallyOffline =
-        typeof navigator !== "undefined" && !navigator.onLine;
-      try {
-        const { isReallyOnline } = await import("@/lib/connectivityManager");
-        actuallyOffline = !isReallyOnline();
-      } catch {
-        /* fallback to navigator.onLine */
-      }
+      const actuallyOffline = !isReallyOnline();
       if (actuallyOffline) {
         const offline = getCachedBalance(accountId);
         if (offline) {
@@ -149,13 +143,7 @@ export default function AccountBalance({
     enabled: !!accountId,
     retry: (failureCount) => {
       // Don't retry when offline — use cached/placeholder silently
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { isReallyOnline } = require("@/lib/connectivityManager");
-        if (!isReallyOnline()) return false;
-      } catch {
-        if (typeof navigator !== "undefined" && !navigator.onLine) return false;
-      }
+      if (!isReallyOnline()) return false;
       return failureCount < 1;
     },
     // OPTIMIZED: Use cached data, refetch when stale

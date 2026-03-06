@@ -292,7 +292,15 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
       return sortOrder === "asc" ? comparison : -comparison;
     });
 
-    return filtered;
+    // Deduplicate by ID (safety net for concurrent optimistic updates)
+    const seen = new Set<string>();
+    const deduped = filtered.filter((t) => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+
+    return deduped;
   }, [
     typeFilteredTransactions,
     filterCategory,

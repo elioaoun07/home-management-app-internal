@@ -1,5 +1,6 @@
 "use client";
 
+import { isReallyOnline } from "@/lib/connectivityManager";
 import { qk } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
@@ -16,16 +17,7 @@ export function EagerDataPrefetch() {
   useEffect(() => {
     if (hasPrefetched.current) return;
     // Don't prefetch when offline — use persisted cache
-    // Check real connectivity (not just navigator.onLine which can lie)
-    let offline = !navigator.onLine;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { isReallyOnline } = require("@/lib/connectivityManager");
-      offline = !isReallyOnline();
-    } catch {
-      /* fallback to navigator.onLine */
-    }
-    if (offline) return;
+    if (!isReallyOnline()) return;
     hasPrefetched.current = true;
 
     const prefetchCriticalData = async () => {

@@ -50,6 +50,7 @@ import {
   useDeleteTransaction,
 } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { isReallyOnline } from "@/lib/connectivityManager";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
@@ -130,6 +131,14 @@ function useLongPress(callback: () => void, threshold = 500) {
 }
 
 export default function MobileExpenseForm() {
+  // ── Diagnostic: verify this module loaded (not stale SW cache) ──
+  if (typeof window !== "undefined" && !(window as any).__expenseFormLogged) {
+    (window as any).__expenseFormLogged = true;
+    console.log(
+      "[OFFLINE] MobileExpenseForm MODULE LOADED (code version: 2026-03-06)",
+    );
+  }
+
   const {
     step,
     setStep,
@@ -593,11 +602,18 @@ export default function MobileExpenseForm() {
       !accountsLoading &&
       // Guard: don't initialize with empty accounts if we're still restoring cache
       // If online, empty accounts is legitimate (new user). If offline, wait for persisted cache.
-      (accounts.length > 0 || navigator.onLine)
+      (accounts.length > 0 || isReallyOnline())
     ) {
       hasInitializedRef.current = true;
+      console.log(
+        `[OFFLINE] Form INITIALIZED: step=${firstValidStep}, accounts=${accounts.length}, categories will load for accountId=${accounts.find((a: any) => a.is_default)?.id || "none"}`,
+      );
       setStep(firstValidStep);
       setIsInitialized(true);
+    } else if (!hasInitializedRef.current) {
+      console.log(
+        `[OFFLINE] Form init BLOCKED: stepFlow=${stepFlow.length}, accountsLoading=${accountsLoading}, accounts=${accounts.length}, online=${isReallyOnline()}`,
+      );
     }
   }, [stepFlow, firstValidStep, accountsLoading, accounts.length]);
 
@@ -651,7 +667,13 @@ export default function MobileExpenseForm() {
     isAmountStep && (!amount || Number.parseFloat(amount) <= 0);
 
   const handleSubmit = async () => {
-    if (!canSubmit || addTransactionMutation.isPending) return;
+    console.log(
+      `[OFFLINE] handleSubmit: canSubmit=${!!canSubmit}, isPending=${addTransactionMutation.isPending}, status=${addTransactionMutation.status}`,
+    );
+    if (!canSubmit || addTransactionMutation.isPending) {
+      console.log("[OFFLINE] handleSubmit: BLOCKED by guard");
+      return;
+    }
 
     // Parse LBP change if provided (stored in thousands)
     const parsedLbpChange = lbpChangeInput ? parseFloat(lbpChangeInput) : null;
@@ -769,8 +791,14 @@ export default function MobileExpenseForm() {
         },
       );
     } else {
+      console.log(
+        "[OFFLINE] handleSubmit: calling addTransactionMutation.mutate()",
+      );
       addTransactionMutation.mutate(transactionData, {
         onSuccess: (newTransaction) => {
+          console.log(
+            `[OFFLINE] mutate.onSuccess callback: _offline=${newTransaction?._offline}, id=${newTransaction?.id}`,
+          );
           // Offline path: show special toast with "Saved offline" and undo that removes from queue
           if (newTransaction?._offline) {
             toast.success("Saved offline!", {
@@ -899,6 +927,9 @@ export default function MobileExpenseForm() {
       if (nextStep === "account" && defaultAccount) continue;
       return nextStep;
     }
+    console.log(
+      `[OFFLINE] getNextStep(): no more steps after "${step}" → will call handleSubmit`,
+    );
     return null;
   };
 
@@ -1121,6 +1152,9 @@ export default function MobileExpenseForm() {
                 onClick={() => {
                   if (navigator.vibrate) navigator.vibrate(10);
                   const next = getNextStep();
+                  console.log(
+                    `[OFFLINE] Next button clicked: currentStep="${step}", nextStep="${next}", amount=${amount}, accountId=${selectedAccountId}`,
+                  );
                   if (next) {
                     setStep(next);
                   } else {
@@ -1778,6 +1812,9 @@ export default function MobileExpenseForm() {
                               >
                                 <button
                                   onClick={() => {
+                                    console.log(
+                                      `[OFFLINE] Category clicked: "${category.name}" (id=${category.id}), mutation.isPending=${addTransactionMutation.isPending}, mutation.status=${addTransactionMutation.status}`,
+                                    );
                                     setSelectedCategoryId(category.id);
                                     const hasSubcategories =
                                       categories.some(

@@ -47,9 +47,13 @@ export function isReallyOnline(): boolean {
  * Immediately transitions to offline state without waiting for a probe.
  */
 export function markOffline(): void {
+  console.log(
+    `[OFFLINE] markOffline() called. Already offline: ${!state.online}`,
+  );
   if (!state.online) return; // already offline
   state.online = false;
   state.lastOffline = Date.now();
+  console.log("[OFFLINE] >>> State transitioned to OFFLINE");
   notify();
   // Switch to faster polling to detect recovery
   restartProbing();
@@ -69,6 +73,9 @@ export async function probeNow(): Promise<boolean> {
     state.lastOffline = Date.now();
   }
   if (changed) {
+    console.log(
+      `[OFFLINE] probeNow(): state changed to ${result ? "ONLINE" : "OFFLINE"}`,
+    );
     notify();
     restartProbing();
   }
@@ -144,6 +151,7 @@ function restartProbing() {
 async function doProbe(): Promise<boolean> {
   // Quick check: if browser says offline, trust it (it's never wrong in that direction)
   if (typeof navigator !== "undefined" && !navigator.onLine) {
+    console.log("[OFFLINE] doProbe(): navigator.onLine=false, returning false");
     return false;
   }
 
@@ -158,9 +166,13 @@ async function doProbe(): Promise<boolean> {
       cache: "no-store",
     });
     clearTimeout(timeout);
+    console.log(
+      `[OFFLINE] doProbe(): /api/health responded ${res.status}, ok=${res.ok}`,
+    );
     return res.ok;
-  } catch {
+  } catch (err) {
     clearTimeout(timeout);
+    console.log(`[OFFLINE] doProbe(): fetch failed:`, (err as Error)?.message);
     return false;
   }
 }

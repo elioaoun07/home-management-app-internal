@@ -315,6 +315,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     // Listen for verified connectivity changes from the probe
     const handleConnectivityChanged = (e: Event) => {
       const online = (e as CustomEvent).detail?.online as boolean;
+      console.log(
+        `[OFFLINE] SyncContext: connectivity-changed event, online=${online}`,
+      );
       setIsOnline(online);
 
       if (online) {
@@ -322,11 +325,15 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         // Small delay then sync
         setTimeout(() => {
           if (!isReallyOnline()) return;
+          console.log(
+            "[OFFLINE] SyncContext: back online, processing queues...",
+          );
           processLegacyPendingOperations();
           syncEngineRef.current?.processQueue();
           refreshAll();
         }, 500);
       } else {
+        console.log("[OFFLINE] SyncContext: status set to OFFLINE");
         setStatus("offline");
       }
     };

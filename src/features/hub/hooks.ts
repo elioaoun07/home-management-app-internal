@@ -1,6 +1,7 @@
 // src/features/hub/hooks.ts
 "use client";
 
+import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -881,6 +882,15 @@ export function useHouseholdRealtimeMessages(householdId: string | null) {
       return;
     }
 
+    // Don't subscribe to realtime channels when offline — avoids WebSocket errors
+    if (typeof navigator !== "undefined" && !isReallyOnline()) {
+      setIsSubscribed(false);
+      // Re-subscribe when back online
+      const goOnline = () => setIsSubscribed(false); // triggers re-render via state
+      window.addEventListener("online", goOnline, { once: true });
+      return () => window.removeEventListener("online", goOnline);
+    }
+
     const supabase = supabaseBrowser();
     const channelName = `household-${householdId}`;
 
@@ -929,8 +939,10 @@ export function useHouseholdRealtimeMessages(householdId: string | null) {
         ) {
           console.warn(`Household channel ${channelName} error:`, status, err);
           setIsSubscribed(false);
-          // For household channel, just invalidate to trigger refetch
-          queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
+          // Only invalidate when online — avoids cascading failed fetches
+          if (isReallyOnline()) {
+            queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
+          }
         }
       });
 
@@ -970,7 +982,7 @@ export function useSendMessage() {
       topic_id?: string;
       item_quantity?: string;
     }) => {
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         await addToQueue({
           feature: "hub-message",

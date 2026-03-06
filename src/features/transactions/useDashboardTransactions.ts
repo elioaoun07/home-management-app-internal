@@ -130,13 +130,13 @@ export function useDashboardTransactions({
   startDate,
   endDate,
 }: DashboardParams) {
-  const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+  const isOffline = typeof navigator !== "undefined" && !isReallyOnline();
 
   return useQuery({
     queryKey: ["transactions", "dashboard", startDate, endDate],
     queryFn: async () => {
       // Guard: don't even try to fetch when offline
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         throw new Error("Offline");
       }
       const response = await fetch(
@@ -160,7 +160,7 @@ export function useDashboardTransactions({
     refetchOnWindowFocus: !isOffline, // Don't sync when offline
     refetchOnReconnect: true, // Refetch when reconnecting
     retry: (failureCount) => {
-      if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+      if (!isReallyOnline()) return false;
       return failureCount < 2;
     },
     // Keep showing previous data while fetching new data for smooth transitions
@@ -424,6 +424,9 @@ export function useAddTransaction() {
       // Helper to queue offline and return fake response
       const queueOfflineCreate = async () => {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        console.log(
+          `[OFFLINE] mutationFn: queueOfflineCreate() tempId=${tempId}`,
+        );
         await addToQueue({
           feature: "transaction",
           operation: "create",
@@ -472,7 +475,14 @@ export function useAddTransaction() {
       };
 
       // Offline-first: queue if we know we're offline (real connectivity check)
-      if (!isReallyOnline()) {
+      const onlineCheck = isReallyOnline();
+      console.log(
+        `[OFFLINE] mutationFn: isReallyOnline()=${onlineCheck}, navigator.onLine=${typeof navigator !== "undefined" ? navigator.onLine : "N/A"}`,
+      );
+      if (!onlineCheck) {
+        console.log(
+          "[OFFLINE] mutationFn: PRE-FLIGHT OFFLINE -> queueing immediately",
+        );
         return queueOfflineCreate();
       }
 
@@ -494,17 +504,26 @@ export function useAddTransaction() {
 
         return response.json();
       } catch (err) {
+        console.log(
+          `[OFFLINE] mutationFn: CATCH ${(err as Error)?.name}: ${(err as Error)?.message}`,
+        );
+        console.log(
+          `[OFFLINE] mutationFn: isOfflineError=${isOfflineError(err)}`,
+        );
         if (isOfflineError(err)) {
-          // The fetch timed out or failed — we're actually offline.
-          // Tell the connectivity manager so it transitions SyncContext
-          // to offline status immediately (updates the UI pill, etc.).
           markOffline();
+          console.log(
+            "[OFFLINE] mutationFn: falling back to queueOfflineCreate()",
+          );
           return queueOfflineCreate();
         }
         throw err;
       }
     },
     onMutate: async (newTransaction) => {
+      console.log(
+        `[OFFLINE] onMutate: starting optimistic update for $${newTransaction.amount}`,
+      );
       // Cancel outgoing refetches for ALL transaction queries
       await queryClient.cancelQueries({
         queryKey: ["transactions"],
@@ -708,9 +727,11 @@ export function useAddTransaction() {
         accountId: newTransaction.account_id,
         dashboardKey,
         previousDashboardData,
+        optimisticId: optimisticTransaction.id,
       };
     },
     onError: (err, newTransaction, context) => {
+      console.log(`[OFFLINE] onError: ${(err as Error)?.message}`);
       // Rollback transactions on error
       toast.error("Failed to add transaction", { icon: ToastIcons.error });
       if (context?.previousTransactions) {
@@ -744,7 +765,10 @@ export function useAddTransaction() {
         );
       }
     },
-    onSuccess: (serverTransaction, variables) => {
+    onSuccess: (serverTransaction, variables, context) => {
+      console.log(
+        `[OFFLINE] onSuccess: id=${serverTransaction?.id}, _offline=${serverTransaction?._offline}, _isPending=${serverTransaction?._isPending}`,
+      );
       // If this was queued offline, ensure pending count is refreshed.
       // Belt-and-suspenders: re-fire event so SyncContext also picks it up
       // (Zustand store was already updated synchronously in addToQueue).
@@ -756,18 +780,19 @@ export function useAddTransaction() {
 
       // Replace the optimistic (temp) transaction with the real server data
       // This ensures any cached queries have the correct transaction with real ID
+      // IMPORTANT: Only replace the SPECIFIC optimistic entry from this mutation,
+      // not all temp-* entries (which may belong to other in-flight mutations)
+      const optimisticId = context?.optimisticId;
       queryClient.setQueriesData<Transaction[]>(
         { queryKey: ["transactions"] },
         (old) => {
           if (!old) return [serverTransaction];
-          // Replace temp transaction with server data
-          const hasTemp = old.some((t) => t.id.startsWith("temp-"));
-          if (hasTemp) {
+          if (optimisticId && old.some((t) => t.id === optimisticId)) {
             return old.map((t) =>
-              t.id.startsWith("temp-") ? serverTransaction : t,
+              t.id === optimisticId ? serverTransaction : t,
             );
           }
-          // If no temp found, add the server transaction (avoid duplicates)
+          // If no matching optimistic found, add the server transaction (avoid duplicates)
           return [
             serverTransaction,
             ...old.filter((t) => t.id !== serverTransaction.id),
@@ -793,13 +818,12 @@ export function useAddTransaction() {
         const dashboardKey = ["transactions", "dashboard", startStr, endStr];
 
         // Update the dashboard cache - it should exist from onMutate
-        // Replace temp transaction with real server data
+        // Replace the specific optimistic entry with real server data
         queryClient.setQueryData<Transaction[]>(dashboardKey, (old) => {
           if (!old) return [serverTransaction];
-          const hasTemp = old.some((t) => t.id.startsWith("temp-"));
-          if (hasTemp) {
+          if (optimisticId && old.some((t) => t.id === optimisticId)) {
             return old.map((t) =>
-              t.id.startsWith("temp-") ? serverTransaction : t,
+              t.id === optimisticId ? serverTransaction : t,
             );
           }
           // Avoid duplicates
@@ -815,10 +839,9 @@ export function useAddTransaction() {
           { queryKey: ["transactions-today"] },
           (old) => {
             if (!old) return [serverTransaction];
-            const hasTemp = old.some((t: any) => t.id?.startsWith("temp-"));
-            if (hasTemp) {
+            if (optimisticId && old.some((t: any) => t.id === optimisticId)) {
               return old.map((t: any) =>
-                t.id?.startsWith("temp-") ? serverTransaction : t,
+                t.id === optimisticId ? serverTransaction : t,
               );
             }
             return [

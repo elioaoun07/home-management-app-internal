@@ -6,6 +6,7 @@ import { PrivacyBlurProvider } from "@/contexts/PrivacyBlurContext";
 import { SyncProvider } from "@/contexts/SyncContext";
 import { TabProvider } from "@/contexts/TabContext";
 import { ThemeProvider as ColorThemeProvider } from "@/contexts/ThemeContext";
+import { isReallyOnline } from "@/lib/connectivityManager";
 import { QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useEffect, useMemo, useState } from "react";
@@ -100,20 +101,14 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           queries: {
             staleTime: 1000 * 60 * 5, // 5 minutes
             gcTime: 1000 * 60 * 60 * 24, // 24 hours
+            // networkMode defaults to 'online' — queries pause when offline (good: avoids flood of ERR_INTERNET_DISCONNECTED).
+            // Only mutations use 'always' so our offline queue works.
             refetchOnWindowFocus: false,
             refetchOnReconnect: true,
             refetchOnMount: false, // Use cache, don't refetch on mount
             retry: (failureCount, error) => {
               // Don't retry when offline — fail silently, use cached data
-              // Use dynamic import to check real connectivity (not just navigator.onLine)
-              try {
-                // eslint-disable-next-line @typescript-eslint/no-require-imports
-                const { isReallyOnline } = require("@/lib/connectivityManager");
-                if (!isReallyOnline()) return false;
-              } catch {
-                if (typeof navigator !== "undefined" && !navigator.onLine)
-                  return false;
-              }
+              if (!isReallyOnline()) return false;
               // Don't retry explicit offline errors
               if (error instanceof Error && error.message === "Offline")
                 return false;
@@ -125,6 +120,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             throwOnError: false,
           },
           mutations: {
+            networkMode: "always", // We handle offline ourselves via safeFetch + offlineQueue
             retry: 1,
           },
         },

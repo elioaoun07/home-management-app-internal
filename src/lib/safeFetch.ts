@@ -77,8 +77,15 @@ export async function safeFetch(
 
   // ── Pre-flight: skip the network call entirely if we know we're offline ──
   if (!isReallyOnline()) {
+    console.log(
+      `[OFFLINE] safeFetch: pre-flight OFFLINE for ${typeof input === "string" ? input : "Request"}`,
+    );
     throw new OfflineError("Pre-flight: connectivity manager reports offline");
   }
+
+  console.log(
+    `[OFFLINE] safeFetch: attempting ${fetchInit.method || "GET"} ${typeof input === "string" ? input : "Request"} (timeout: ${timeoutMs}ms)`,
+  );
 
   const controller = new AbortController();
 
@@ -120,6 +127,9 @@ export async function safeFetch(
       window.removeEventListener("offline", offlineHandler);
     }
 
+    console.log(
+      `[OFFLINE] safeFetch: got response ${response.status} for ${typeof input === "string" ? input : "Request"}`,
+    );
     return response;
   } catch (err) {
     // Clean up listeners
@@ -134,11 +144,17 @@ export async function safeFetch(
       (err instanceof DOMException && err.name === "AbortError") ||
       (err instanceof Error && err.name === "AbortError")
     ) {
+      console.log(
+        `[OFFLINE] safeFetch: ABORTED (timeout/offline event) for ${typeof input === "string" ? input : "Request"}`,
+      );
       markOffline();
       throw new OfflineError("Request aborted — treating as offline");
     }
 
     if (err instanceof TypeError) {
+      console.log(
+        `[OFFLINE] safeFetch: TypeError "${err.message}" for ${typeof input === "string" ? input : "Request"}`,
+      );
       // "Failed to fetch", "NetworkError when attempting to fetch resource"
       markOffline();
       throw new OfflineError(`Network error: ${err.message}`);

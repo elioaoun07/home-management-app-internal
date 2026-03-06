@@ -1,3 +1,4 @@
+import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -152,13 +153,7 @@ export function useConfirmPayment() {
       date?: string;
     }) => {
       // Check real connectivity (not just navigator.onLine which can lie after WiFi toggle)
-      let offline = !navigator.onLine;
-      try {
-        const { isReallyOnline } = await import("@/lib/connectivityManager");
-        offline = !isReallyOnline();
-      } catch {
-        /* fallback to navigator.onLine */
-      }
+      const offline = !isReallyOnline();
 
       if (offline) {
         await addToQueue({

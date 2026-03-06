@@ -99,6 +99,10 @@ export async function addToQueue(op: QueueableOperation): Promise<string> {
     maxRetries: op.maxRetries ?? 5,
   };
 
+  console.log(
+    `[OFFLINE] addToQueue: ${op.feature}/${op.operation} => ${operation.id} (tempId=${op.tempId || "none"})`,
+  );
+
   // Check payload size
   const bodySize = new Blob([JSON.stringify(operation.body)]).size;
   if (bodySize > MAX_PAYLOAD_SIZE) {
@@ -136,6 +140,9 @@ export async function addToQueue(op: QueueableOperation): Promise<string> {
   // Increment the UI count BEFORE the async IDB write so the
   // pending badge updates instantly, even if IndexedDB is slow.
   offlinePendingActions.increment();
+  console.log(
+    `[OFFLINE] addToQueue: incremented pending count to ${offlinePendingActions.getCount()}`,
+  );
   notifyQueueChanged();
 
   try {

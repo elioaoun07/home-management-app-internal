@@ -1,6 +1,7 @@
 // src/features/items/useItemActions.ts
 // Comprehensive hook for item actions: complete, postpone, cancel with undo support
 
+import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { ItemWithDetails } from "@/types/items";
@@ -394,7 +395,7 @@ export function useCompleteItem() {
       isRecurring,
       reason,
     }: CompleteItemInput) => {
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         await addToQueue({
           feature: "item",
           operation: "complete",
@@ -590,7 +591,7 @@ export function usePostponeItem() {
       reason,
       isRecurring,
     }: PostponeItemInput) => {
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         await addToQueue({
           feature: "item",
           operation: "postpone",
@@ -699,7 +700,7 @@ export function useCancelItem() {
       isRecurring,
       reason,
     }: CancelItemInput) => {
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         await addToQueue({
           feature: "item",
           operation: "cancel",

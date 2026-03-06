@@ -1,6 +1,7 @@
 // src/features/items/useItems.ts
 // React Query hooks for Items CRUD operations
 
+import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type {
@@ -348,7 +349,7 @@ export function useCreateReminder() {
   return useMutation({
     mutationFn: async (input: CreateReminderInput) => {
       // Offline: queue via API route
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         await addToQueue({
           feature: "item",
@@ -532,7 +533,7 @@ export function useCreateEvent() {
   return useMutation({
     mutationFn: async (input: CreateEventInput) => {
       // Offline: queue via API route
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         await addToQueue({
           feature: "item",
@@ -679,7 +680,7 @@ export function useCreateTask() {
   return useMutation({
     mutationFn: async (input: CreateTaskInput) => {
       // Offline: queue via API route
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         await addToQueue({
           feature: "item",
@@ -792,7 +793,7 @@ export function useUpdateItem() {
   return useMutation({
     mutationFn: async ({ id, ...input }: UpdateItemInput & { id: string }) => {
       // Offline: queue via API route
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         await addToQueue({
           feature: "item",
           operation: "update",
@@ -974,7 +975,7 @@ export function useDeleteItem() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         await addToQueue({
           feature: "item",
           operation: "delete",
@@ -1002,7 +1003,7 @@ export function useArchiveItem() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         await addToQueue({
           feature: "item",
           operation: "delete",
@@ -1063,7 +1064,7 @@ export function useToggleSubtask() {
 
   return useMutation({
     mutationFn: async ({ id, done }: { id: string; done: boolean }) => {
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         await addToQueue({
           feature: "subtask",
           operation: "update",
@@ -1472,7 +1473,7 @@ export function useAddSubtask() {
       occurrenceDate?: string; // ISO string - for recurring items, which occurrence this subtask belongs to
       orderIndex?: number;
     }) => {
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         await addToQueue({
           feature: "subtask",
@@ -1635,7 +1636,7 @@ export function useDeleteSubtask() {
 
   return useMutation({
     mutationFn: async (subtaskId: string) => {
-      if (!navigator.onLine) {
+      if (!isReallyOnline()) {
         await addToQueue({
           feature: "subtask",
           operation: "delete",
