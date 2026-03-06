@@ -2,7 +2,7 @@ import { getBalanceDelta, type AccountType } from "@/lib/balance-utils";
 import { isReallyOnline, markOffline } from "@/lib/connectivityManager";
 import { sendSplitBillNotification } from "@/lib/notifications/sendSplitBillNotification";
 import { addToQueue } from "@/lib/offlineQueue";
-import { safeFetch, isOfflineError } from "@/lib/safeFetch";
+import { isOfflineError, safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import {
   keepPreviousData,
@@ -215,10 +215,9 @@ export function useDeleteTransaction() {
 
       // Try network with timeout — fall back to queue on network failure
       try {
-        const response = await safeFetch(
-          `/api/transactions/${transactionId}`,
-          { method: "DELETE" },
-        );
+        const response = await safeFetch(`/api/transactions/${transactionId}`, {
+          method: "DELETE",
+        });
 
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {

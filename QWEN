@@ -1,0 +1,134 @@
+You're absolutely right. I over-engineered the analysis when the code is already correct on paper.
+
+**The problem is NOT the code structure. The problem is execution flow.**
+
+Let me cut straight to what needs to be tested:
+
+---
+
+## 🔴 The ONE Question That Matters
+
+**When you cut WiFi and add a transaction in Scenario 1, does `onError` fire or not?**
+
+If `onError` fires → `isOfflineError()` is returning FALSE (error not classified as offline)
+If `onError` does NOT fire → The error is being swallowed somewhere before reaching the mutation
+
+---
+
+## ⚡ Add These 3 Logs ONLY (Temporary)
+
+```typescript
+// 1. In safeFetch.ts catch block (~line 125-138)
+catch (error) {
+  console.log('🔴 safeFetch CATCH:', error.constructor.name, error.name, error.message);
+  markOffline();
+  throw new OfflineError(`Network error: ${error.message}`);
+}
+
+// 2. In useAddTransaction mutationFn catch (~line 277-283)
+catch (err) {
+  console.log('🟠 mutationFn CATCH:', err.constructor.name, err.name);
+  console.log('🟠 isOfflineError?', isOfflineError(err));
+  if (isOfflineError(err)) {
+    console.log('🟠 QUEUING offline...');
+    markOffline();
+    return queueOfflineCreate();
+  }
+  console.log('🟠 THROWING to onError (will rollback!)');
+  throw err;
+}
+
+// 3. In useAddTransaction onError callback (~line 350)
+onError: (err, newTransaction, context) => {
+  console.log('🔴 onError FIRED! Rollback happening!', err.message);
+  // ... rest of existing code
+},
+```
+
+**Run Scenario 1 and tell me which logs appear:**
+
+| Logs You See         | What It Means                                | Fix                         |
+| -------------------- | -------------------------------------------- | --------------------------- |
+| 🔴 + 🟠 + "QUEUING"  | Flow is correct, Zustand not re-rendering    | Store subscription issue    |
+| 🔴 + 🟠 + "THROWING" | `isOfflineError()` returning FALSE           | Error classification bug    |
+| 🔴 only              | Error not reaching mutationFn catch          | Something swallowing it     |
+| 🔴 + 🔴 onError      | `isOfflineError()` FALSE, rollback happening | Balance should rollback too |
+
+---
+
+## 🎯 My Best Guess (After Reading Your Code)
+
+**The `safeFetch()` catch block might not be executing at all.**
+
+Here's why: When you cut WiFi, the fetch might be hanging **without timing out** because:
+
+1. AbortController timeout is set, BUT
+2. Some browsers (especially Safari/iOS) don't fire the abort properly
+3. The fetch hangs indefinitely, never resolving, never rejecting
+4. The mutation appears to "work" but actually never completes
+
+**Check this in safeFetch.ts:**
+
+```typescript
+// Is this pattern correct?
+const controller = new AbortController();
+const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+try {
+  const response = await fetch(input, {
+    ...fetchInit,
+    signal: controller.signal,
+  });
+  clearTimeout(timeoutId); // ← Is this being called?
+  return response;
+} catch (error) {
+  clearTimeout(timeoutId); // ← Is this being called?
+  // ...
+}
+```
+
+If `clearTimeout` isn't called and the fetch hangs, the mutation never resolves either way.
+
+---
+
+## 🎯 Alternative: The Error IS Classified Wrong
+
+Look at your `isOfflineError()` implementation. Even with 4 fallback checks, there's one edge case:
+
+```typescript
+// What if error is NOT an Error instance at all?
+// Some browsers throw plain objects or strings
+export function isOfflineError(err: unknown): err is OfflineError {
+  if (!err) return false;
+  if (err instanceof OfflineError) return true;
+  if (err instanceof TypeError) return true; // "Failed to fetch"
+  if (err instanceof DOMException && err.name === "AbortError") return true;
+  if (
+    err instanceof Error &&
+    /network|failed to fetch|load failed/i.test(err.message)
+  )
+    return true;
+  return false; // ← What if err is {name: "TypeError", message: "..."} ?
+}
+```
+
+**Add this fallback:**
+
+```typescript
+// Add before final return
+const anyErr = err as any;
+if (anyErr?.name === "AbortError" || anyErr?.message?.includes("fetch"))
+  return true;
+```
+
+---
+
+## 🎯 What I Need From You
+
+**Run the 3 logs above and tell me:**
+
+1. Which logs appear (🔴, 🟠, or both)?
+2. What browser/device are you testing on?
+3. Does the balance rollback or stay updated?
+
+That's it. Three answers, and I'll give you the exact fix. No more theory. 🎯

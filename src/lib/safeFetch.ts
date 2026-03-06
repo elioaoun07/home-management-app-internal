@@ -40,6 +40,9 @@ export function isOfflineError(err: unknown): boolean {
       /network|failed to fetch|load failed/i.test(err.message))
   )
     return true;
+  // Duck-type fallback for non-Error objects (e.g. cross-realm or serialized errors)
+  const any = err as Record<string, unknown>;
+  if (any?.name === "AbortError" || any?.name === "OfflineError") return true;
   return false;
 }
 
