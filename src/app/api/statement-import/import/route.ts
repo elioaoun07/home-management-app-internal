@@ -1,6 +1,9 @@
 // src/app/api/statement-import/import/route.ts
 // Import parsed transactions into the database
 
+import { adjustAccountBalance } from "@/lib/balance";
+import type { AccountType } from "@/lib/balance-utils";
+import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -90,26 +93,33 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Update account balances for all affected accounts
+    // Fetch account types for all affected accounts
+    const affectedAccountIds = Object.keys(accountDeductions);
+    const { data: affectedAccounts } = await supabase
+      .from("accounts")
+      .select("id, type")
+      .in("id", affectedAccountIds);
+
+    const accountTypeMap: Record<string, AccountType> = {};
+    for (const acc of affectedAccounts || []) {
+      accountTypeMap[acc.id] = acc.type as AccountType;
+    }
+
+    // Update balances using proper delta calculation per account type
     for (const [accountId, totalDeduction] of Object.entries(
       accountDeductions,
     )) {
-      const { data: currentBalance } = await supabase
-        .from("account_balances")
-        .select("balance")
-        .eq("account_id", accountId)
-        .single();
-
-      if (currentBalance) {
-        const newBalance = Number(currentBalance.balance) - totalDeduction;
-        await supabase
-          .from("account_balances")
-          .update({
-            balance: newBalance,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("account_id", accountId);
-      }
+      const accountType = accountTypeMap[accountId] || "expense";
+      const delta = getBalanceDelta(
+        totalDeduction,
+        accountType,
+        false,
+        "create",
+      );
+      await adjustAccountBalance(accountId, delta, "statement_import", {
+        userId: user.id,
+        reason: `Statement import: ${file_name || "Unknown"}`,
+      });
     }
 
     // Save new merchant mappings (upsert to handle duplicates)

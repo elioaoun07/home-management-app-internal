@@ -1,3 +1,5 @@
+import { adjustAccountBalance } from "@/lib/balance";
+import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -55,35 +57,28 @@ export async function POST(
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    // Update account balance (subtract from stored balance since it's an expense)
-    const { data: currentBalance } = await supabase
-      .from("account_balances")
-      .select("balance")
-      .eq("account_id", draft.account_id)
+    // Get account type for correct delta calculation
+    const { data: account } = await supabase
+      .from("accounts")
+      .select("type")
+      .eq("id", draft.account_id)
       .single();
 
-    if (currentBalance) {
-      const newBalance = currentBalance.balance - draft.amount;
-      await supabase
-        .from("account_balances")
-        .update({
-          balance: newBalance,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("account_id", draft.account_id);
-
-      // Log balance history
-      await supabase.from("account_balance_history").insert({
-        account_id: draft.account_id,
-        user_id: user.id,
-        previous_balance: currentBalance.balance,
-        new_balance: newBalance,
-        change_amount: -draft.amount,
-        change_type: "expense",
-        transaction_id: id,
-        reason: `Future payment confirmed: ${draft.description || "Scheduled payment"}`,
-      });
-    }
+    const accountType = (account?.type || "expense") as
+      | "expense"
+      | "income"
+      | "saving";
+    const delta = getBalanceDelta(
+      Number(draft.amount),
+      accountType,
+      false,
+      "create",
+    );
+    await adjustAccountBalance(draft.account_id, delta, "future_payment", {
+      userId: user.id,
+      transactionId: id,
+      reason: `Future payment confirmed: ${draft.description || "Scheduled payment"}`,
+    });
 
     return NextResponse.json(confirmed);
   } catch (error: any) {

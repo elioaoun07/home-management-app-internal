@@ -1,3 +1,5 @@
+import { adjustAccountBalance } from "@/lib/balance";
+import { getTransferDeltas } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -100,7 +102,9 @@ export async function DELETE(
   // Only the creator (sender) can delete
   const { data: transfer, error: fetchError } = await supabase
     .from("transfers")
-    .select("id")
+    .select(
+      "id, from_account_id, to_account_id, amount, returned_amount, transfer_type",
+    )
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -124,9 +128,29 @@ export async function DELETE(
     );
   }
 
-  // Balance is formula-based — no manual balance reversal needed.
-  // Deleting the transfer automatically removes it from the formula calculation.
-  // The balance will be recomputed on next GET /api/accounts/[id]/balance.
+  // Reverse the balance effects of the deleted transfer
+  const { fromDelta, toDelta } = getTransferDeltas(
+    Number(transfer.amount),
+    Number(transfer.returned_amount || 0),
+    (transfer.transfer_type || "self") as "self" | "household",
+  );
+  // Reverse: negate the original deltas
+  await adjustAccountBalance(
+    transfer.from_account_id,
+    -fromDelta,
+    "transfer_deleted",
+    {
+      userId: user.id,
+    },
+  );
+  await adjustAccountBalance(
+    transfer.to_account_id,
+    -toDelta,
+    "transfer_deleted",
+    {
+      userId: user.id,
+    },
+  );
 
   return NextResponse.json({ success: true });
 }
@@ -152,7 +176,9 @@ export async function PATCH(
   // Only the creator can update
   const { data: currentTransfer, error: fetchError } = await supabase
     .from("transfers")
-    .select("id, amount, fee_amount, returned_amount")
+    .select(
+      "id, amount, fee_amount, returned_amount, from_account_id, to_account_id, transfer_type",
+    )
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -234,8 +260,35 @@ export async function PATCH(
 
   updateFields.updated_at = new Date().toISOString();
 
-  // Balance is formula-based — no manual balance adjustments needed.
-  // The balance will be recomputed on next GET /api/accounts/[id]/balance.
+  // Adjust balances for the amount/returned_amount change
+  const oldAmount = Number(currentTransfer.amount);
+  const oldReturned = Number(currentTransfer.returned_amount || 0);
+  const transferType = (currentTransfer.transfer_type || "self") as
+    | "self"
+    | "household";
+
+  const oldDeltas = getTransferDeltas(oldAmount, oldReturned, transferType);
+  const newDeltas = getTransferDeltas(newAmount, newReturned, transferType);
+
+  const fromDiff = newDeltas.fromDelta - oldDeltas.fromDelta;
+  const toDiff = newDeltas.toDelta - oldDeltas.toDelta;
+
+  if (fromDiff !== 0) {
+    await adjustAccountBalance(
+      currentTransfer.from_account_id,
+      fromDiff,
+      "transfer_updated",
+      { userId: user.id },
+    );
+  }
+  if (toDiff !== 0) {
+    await adjustAccountBalance(
+      currentTransfer.to_account_id,
+      toDiff,
+      "transfer_updated",
+      { userId: user.id },
+    );
+  }
 
   const { data: updated, error: updateError } = await supabase
     .from("transfers")

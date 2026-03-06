@@ -651,6 +651,35 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // ── Auto-reconcile balances on mount ──
+  // Fires once when the app loads (online only), compares stored balances
+  // against a first-principles formula and silently corrects any drift.
+  const reconciliationDone = useRef(false);
+  useEffect(() => {
+    if (reconciliationDone.current) return;
+    if (typeof window === "undefined") return;
+    if (!isReallyOnline()) return;
+
+    reconciliationDone.current = true;
+    // Delay to avoid contending with initial data fetches
+    const timer = setTimeout(() => {
+      fetch("/api/accounts/reconcile", { method: "POST" })
+        .then(async (res) => {
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.corrections > 0) {
+            // Balance was corrected — refetch so UI picks up the fix
+            queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+          }
+        })
+        .catch(() => {
+          /* best-effort */
+        });
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [queryClient]);
+
   // Refresh all data — only when truly online
   const refreshAll = useCallback(async () => {
     // Guard: never invalidate queries when offline — it triggers refetches that fail

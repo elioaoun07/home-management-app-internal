@@ -1,3 +1,6 @@
+import { adjustAccountBalance } from "@/lib/balance";
+import type { AccountType } from "@/lib/balance-utils";
+import { getBalanceDelta } from "@/lib/balance-utils";
 import { SupabaseClient } from "@supabase/supabase-js";
 
 export interface TransactionFilters {
@@ -477,8 +480,22 @@ export class SupabaseTransactionService implements TransactionService {
       });
     }
 
-    // Balance is formula-based - no imperative deduction needed.
-    // The balance will be recomputed on next GET /api/accounts/[id]/balance.
+    // Adjust balance for the new transaction
+    if (account_id && created) {
+      const { data: accountData2 } = await this.supabase
+        .from("accounts")
+        .select("type")
+        .eq("id", account_id)
+        .single();
+
+      const accountType = (accountData2?.type || "expense") as AccountType;
+      const delta = getBalanceDelta(amount, accountType, false, "create");
+      await adjustAccountBalance(account_id, delta, "transaction", {
+        userId,
+        transactionId: created.id,
+        reason: description || undefined,
+      });
+    }
 
     // Fetch the category and subcategory names to return a complete transaction object
     // This is needed for optimistic UI to work correctly
@@ -621,8 +638,8 @@ export class SupabaseTransactionService implements TransactionService {
       throw new Error("Failed to update transaction");
     }
 
-    // Balance is formula-based - no touch/update needed.
-    // The balance will be recomputed on next GET /api/accounts/[id]/balance.
+    // Balance adjustment for updates is handled by the PATCH route handler
+    // (it has access to the old transaction data needed to compute the delta)
 
     return updated;
   }

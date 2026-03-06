@@ -1,3 +1,5 @@
+import { adjustAccountBalance } from "@/lib/balance";
+import { getTransferDeltas } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -346,6 +348,21 @@ export async function POST(req: NextRequest) {
       // The balance will be recomputed on next GET /api/accounts/[id]/balance
       // via computeAccountBalance() which includes transfer impact.
 
+      // Adjust balances for both accounts
+      const { fromDelta, toDelta } = getTransferDeltas(
+        Number(amount),
+        Number(returned_amount),
+        "household",
+      );
+      await adjustAccountBalance(from_account_id, fromDelta, "transfer_out", {
+        userId: user.id,
+        reason: `Household transfer to ${toAccount?.name || "partner"}`,
+      });
+      await adjustAccountBalance(to_account_id, toDelta, "transfer_in", {
+        userId: user.id,
+        reason: `Household transfer from ${fromAccount?.name || "user"}`,
+      });
+
       return NextResponse.json({
         ...transfer,
         from_account_name: fromAccount?.name || "Unknown",
@@ -402,6 +419,17 @@ export async function POST(req: NextRequest) {
       // Balance is formula-based — no manual balance updates needed.
       // The balance will be recomputed on next GET /api/accounts/[id]/balance
       // via computeAccountBalance() which includes transfer impact.
+
+      // Adjust balances for both accounts
+      const { fromDelta, toDelta } = getTransferDeltas(Number(amount));
+      await adjustAccountBalance(from_account_id, fromDelta, "transfer_out", {
+        userId: user.id,
+        reason: `Self transfer to ${toAccount?.name || "account"}`,
+      });
+      await adjustAccountBalance(to_account_id, toDelta, "transfer_in", {
+        userId: user.id,
+        reason: `Self transfer from ${fromAccount?.name || "account"}`,
+      });
 
       // Return the complete transfer with account info
       return NextResponse.json({

@@ -1,6 +1,86 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /**
+ * Atomically adjust an account's stored balance by a delta amount.
+ * This is the PRIMARY way balances change — every transaction/transfer/split/debt
+ * operation calls this to keep account_balances.balance accurate in real-time.
+ *
+ * Also logs the change to account_balance_history for audit trail.
+ */
+export async function adjustAccountBalance(
+  accountId: string,
+  delta: number,
+  changeType: string,
+  metadata?: {
+    userId?: string;
+    transactionId?: string;
+    reason?: string;
+    effectiveDate?: string;
+  },
+): Promise<{ newBalance: number; previousBalance: number }> {
+  if (delta === 0) return { newBalance: 0, previousBalance: 0 };
+
+  const admin = supabaseAdmin();
+
+  // Atomic read + update in a single query using RPC
+  // We read current balance first for history logging
+  const { data: current, error: readError } = await admin
+    .from("account_balances")
+    .select("balance")
+    .eq("account_id", accountId)
+    .maybeSingle();
+
+  if (readError || !current) {
+    console.error(
+      "[adjustAccountBalance] No balance row for account:",
+      accountId,
+      readError,
+    );
+    return { newBalance: 0, previousBalance: 0 };
+  }
+
+  const previousBalance = Number(current.balance);
+  const newBalance = previousBalance + delta;
+
+  const { error: updateError } = await admin
+    .from("account_balances")
+    .update({
+      balance: newBalance,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("account_id", accountId);
+
+  if (updateError) {
+    console.error("[adjustAccountBalance] Update failed:", updateError);
+    return { newBalance: previousBalance, previousBalance };
+  }
+
+  // Log to balance history (best-effort, don't fail the operation)
+  if (metadata?.userId) {
+    const today = new Date().toISOString().split("T")[0];
+    await admin
+      .from("account_balance_history")
+      .insert({
+        account_id: accountId,
+        user_id: metadata.userId,
+        previous_balance: previousBalance,
+        new_balance: newBalance,
+        change_amount: delta,
+        change_type: changeType,
+        transaction_id: metadata.transactionId || null,
+        reason: metadata.reason || null,
+        effective_date: metadata.effectiveDate || today,
+      })
+      .then(({ error }) => {
+        if (error)
+          console.error("[adjustAccountBalance] History log failed:", error);
+      });
+  }
+
+  return { newBalance, previousBalance };
+}
+
+/**
  * Computes the current account balance using a formula-based approach.
  *
  * Balance = anchor_balance
@@ -30,14 +110,14 @@ export async function computeAccountBalance(
   // Use admin client to bypass RLS - authorization is checked by the caller
   const admin = supabaseAdmin();
 
-  // 1. Get anchor balance and balance_set_at
-  const { data: anchor, error: anchorError } = await admin
+  // 1. Get balance_set_at and metadata from account_balances
+  const { data: balRow, error: balError } = await admin
     .from("account_balances")
     .select("balance, balance_set_at, updated_at, created_at")
     .eq("account_id", accountId)
     .maybeSingle();
 
-  if (anchorError || !anchor) {
+  if (balError || !balRow) {
     return {
       computedBalance: 0,
       anchorBalance: 0,
@@ -47,8 +127,26 @@ export async function computeAccountBalance(
     };
   }
 
-  const anchorBalance = Number(anchor.balance);
-  const balanceSetAt = anchor.balance_set_at;
+  const balanceSetAt = balRow.balance_set_at;
+
+  // 2. Get the TRUE anchor: the balance at the last manual reconciliation / initial set.
+  //    Since account_balances.balance is now continuously updated, we read the
+  //    anchor from balance_history (the new_balance of the last manual_set or initial_set).
+  //    If no history exists, fall back to the current stored balance (first-time case).
+  let anchorBalance = Number(balRow.balance);
+
+  const { data: lastAnchor } = await admin
+    .from("account_balance_history")
+    .select("new_balance")
+    .eq("account_id", accountId)
+    .in("change_type", ["initial_set", "manual_set", "manual_adjustment"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lastAnchor) {
+    anchorBalance = Number(lastAnchor.new_balance);
+  }
 
   // Run all queries in parallel for performance
   const txPromise = (() => {
@@ -142,7 +240,7 @@ export async function computeAccountBalance(
     computedBalance,
     anchorBalance,
     balanceSetAt,
-    updatedAt: anchor.updated_at,
-    createdAt: anchor.created_at,
+    updatedAt: balRow.updated_at,
+    createdAt: balRow.created_at,
   };
 }

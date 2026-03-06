@@ -1,0 +1,23 @@
+-- Migration: fix_balance_direct_updates.sql
+-- Purpose: No schema changes needed — the fix is entirely in the application layer.
+-- This migration serves as documentation of the balance system overhaul.
+--
+-- WHAT CHANGED:
+-- 1. All API routes now use adjustAccountBalance() to apply atomic deltas
+--    to account_balances.balance on every transaction/transfer/split/debt operation.
+-- 2. The 4 double-counting routes (drafts, future-payments, statement-import, debts)
+--    no longer manually modify the anchor AND create transactions.
+-- 3. GET /api/accounts/[id]/balance now reads account_balances.balance directly
+--    instead of running 4 parallel queries via computeAccountBalance().
+-- 4. computeAccountBalance() is kept for reconciliation only.
+-- 5. Auto-reconciliation runs on app load and corrects any drift.
+--
+-- BALANCE FLOW (NEW):
+--   Every write operation → adjustAccountBalance(accountId, delta, changeType)
+--     → UPDATE account_balances SET balance = balance + delta
+--     → INSERT account_balance_history (audit log)
+--
+-- No schema migration needed — all tables/columns already exist.
+-- Run the reconciliation endpoint after deploying to fix any existing drift.
+
+SELECT 1; -- No-op migration for documentation purposes

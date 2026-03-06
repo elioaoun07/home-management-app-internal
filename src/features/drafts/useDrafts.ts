@@ -1,5 +1,6 @@
 "use client";
 
+import { getBalanceDelta, type AccountType } from "@/lib/balance-utils";
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -86,7 +87,7 @@ export function useDeleteDraft() {
 
       // Snapshot the previous value
       const previousDrafts = queryClient.getQueryData<DraftTransaction[]>(
-        qk.drafts()
+        qk.drafts(),
       );
 
       // Find the draft to get its amount for balance update
@@ -131,7 +132,7 @@ export function useDeleteDraft() {
       if (context?.previousBalance && context?.accountId) {
         queryClient.setQueryData(
           ["account-balance", context.accountId],
-          context.previousBalance
+          context.previousBalance,
         );
       }
     },
@@ -214,7 +215,7 @@ export function useConfirmDraft() {
 
       // Snapshot previous values
       const previousDrafts = queryClient.getQueryData<DraftTransaction[]>(
-        qk.drafts()
+        qk.drafts(),
       );
       const previousTransactions = queryClient.getQueriesData<any[]>({
         queryKey: ["transactions"],
@@ -254,19 +255,36 @@ export function useConfirmDraft() {
         (old) => {
           if (!old) return [optimisticTransaction];
           return [optimisticTransaction, ...old];
-        }
+        },
       );
 
       // Optimistically update balance
       if (previousBalance) {
         const amount = parseFloat(input.amount);
         const draftAmount = confirmedDraft?.amount || amount;
+
+        // Look up account type from cache
+        const allCachedAccounts = queryClient.getQueriesData<
+          Array<{ id: string; type: AccountType }>
+        >({ queryKey: ["accounts"] });
+        let accountType: AccountType = "expense";
+        for (const [, accounts] of allCachedAccounts) {
+          if (accounts && accounts.length > 0) {
+            const acc = accounts.find((a) => a.id === input.account_id);
+            if (acc?.type) {
+              accountType = acc.type;
+              break;
+            }
+          }
+        }
+
+        const delta = getBalanceDelta(amount, accountType, false, "create");
         queryClient.setQueryData(["account-balance", input.account_id], {
           ...previousBalance,
-          balance: previousBalance.balance - amount,
+          balance: previousBalance.balance + delta,
           pending_drafts: Math.max(
             0,
-            (previousBalance.pending_drafts || 0) - draftAmount
+            (previousBalance.pending_drafts || 0) - draftAmount,
           ),
           draft_count: Math.max(0, (previousBalance.draft_count || 1) - 1),
         });
@@ -292,7 +310,7 @@ export function useConfirmDraft() {
       if (context?.previousBalance && context?.accountId) {
         queryClient.setQueryData(
           ["account-balance", context.accountId],
-          context.previousBalance
+          context.previousBalance,
         );
       }
     },

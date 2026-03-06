@@ -1,3 +1,4 @@
+import { getBalanceDelta, type AccountType } from "@/lib/balance-utils";
 import { isReallyOnline, markOffline } from "@/lib/connectivityManager";
 import { sendSplitBillNotification } from "@/lib/notifications/sendSplitBillNotification";
 import { addToQueue } from "@/lib/offlineQueue";
@@ -9,6 +10,27 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
+
+/**
+ * Look up an account's type from the React Query cache.
+ * Falls back to "expense" so optimistic updates never crash.
+ */
+function getAccountTypeFromCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  accountId: string,
+): AccountType {
+  const allCachedAccounts = queryClient.getQueriesData<
+    Array<{ id: string; type: AccountType }>
+  >({ queryKey: ["accounts"] });
+
+  for (const [, accounts] of allCachedAccounts) {
+    if (accounts && accounts.length > 0) {
+      const acc = accounts.find((a) => a.id === accountId);
+      if (acc?.type) return acc.type;
+    }
+  }
+  return "expense"; // safe default
+}
 
 /** Detect if an error is a network failure (fetch failed, not an HTTP error) */
 function isNetworkError(err: unknown): boolean {
@@ -343,11 +365,18 @@ export function useDeleteTransaction() {
         },
       );
 
-      // CRITICAL: Optimistically update the balance (add back the deleted expense)
+      // CRITICAL: Optimistically update the balance (reverse the deleted transaction)
       if (deletedTransaction && previousBalance && accountId) {
+        const accountType = getAccountTypeFromCache(queryClient, accountId);
+        const delta = getBalanceDelta(
+          deletedTransaction.amount,
+          accountType,
+          !!deletedTransaction.is_debt_return,
+          "delete",
+        );
         queryClient.setQueryData(["account-balance", accountId], {
           ...previousBalance,
-          balance: previousBalance.balance + deletedTransaction.amount,
+          balance: previousBalance.balance + delta,
         });
       }
 
@@ -381,9 +410,7 @@ export function useDeleteTransaction() {
       }
     },
     onSettled: () => {
-      // Mark all transaction queries as stale - they will refetch when next accessed
-      // CRITICAL: Use refetchType: "none" to prevent immediate refetch which causes
-      // the deleted item to briefly reappear (race condition with server)
+      // Mark transaction queries as stale (refetch lazily to avoid deleted item flashing back)
       queryClient.invalidateQueries({
         queryKey: ["transactions"],
         refetchType: "none",
@@ -392,9 +419,10 @@ export function useDeleteTransaction() {
         queryKey: ["transactions-today"],
         refetchType: "none",
       });
+      // Refetch balance from server to confirm optimistic update
       queryClient.invalidateQueries({
         queryKey: ["account-balance"],
-        refetchType: "none",
+        refetchType: "active",
       });
     },
     onSuccess: (_, input, context) => {
@@ -475,11 +503,21 @@ export function useAddTransaction() {
             const { getCachedBalance, setCachedBalance } = await import(
               "@/lib/queryConfig"
             );
+            const { getBalanceDelta: getDelta } = await import(
+              "@/lib/balance-utils"
+            );
             const cached = getCachedBalance(serverTransaction.account_id);
             if (cached) {
+              // We don't have cache access here, default to expense for offline
+              const delta = getDelta(
+                serverTransaction.amount,
+                "expense",
+                false,
+                "create",
+              );
               setCachedBalance(
                 serverTransaction.account_id,
-                cached.balance - serverTransaction.amount,
+                cached.balance + delta,
               );
             }
           } catch {
@@ -700,13 +738,23 @@ export function useAddTransaction() {
         );
       }
 
-      // Optimistically update balance (subtract the expense amount)
+      // Optimistically update balance using account-type-aware delta
       if (previousBalance) {
+        const accountType = getAccountTypeFromCache(
+          queryClient,
+          newTransaction.account_id,
+        );
+        const delta = getBalanceDelta(
+          newTransaction.amount,
+          accountType,
+          false,
+          "create",
+        );
         queryClient.setQueryData(
           ["account-balance", newTransaction.account_id],
           {
             ...previousBalance,
-            balance: previousBalance.balance - newTransaction.amount,
+            balance: previousBalance.balance + delta,
           },
         );
       }
@@ -854,8 +902,7 @@ export function useAddTransaction() {
       }
     },
     onSettled: () => {
-      // Mark all transaction queries as stale - they will refetch when next accessed
-      // Use refetchType: "none" to prevent immediate refetch - cache is already updated in onSuccess
+      // Transaction cache is already updated in onSuccess, mark stale for lazy refetch
       queryClient.invalidateQueries({
         queryKey: ["transactions"],
         refetchType: "none",
@@ -864,9 +911,10 @@ export function useAddTransaction() {
         queryKey: ["transactions-today"],
         refetchType: "none",
       });
+      // Refetch balance from server to confirm optimistic update
       queryClient.invalidateQueries({
         queryKey: ["account-balance"],
-        refetchType: "none",
+        refetchType: "active",
       });
     },
   });
@@ -998,12 +1046,28 @@ export function useUpdateTransaction() {
 
       // Optimistically update balance if amount changed
       if (previousBalance && oldTransaction && update.amount !== undefined) {
-        const amountDiff = update.amount - oldTransaction.amount;
+        const accountType = getAccountTypeFromCache(
+          queryClient,
+          oldTransaction.account_id,
+        );
+        // Reverse old amount, apply new amount
+        const oldDelta = getBalanceDelta(
+          oldTransaction.amount,
+          accountType,
+          !!oldTransaction.is_debt_return,
+          "delete",
+        );
+        const newDelta = getBalanceDelta(
+          update.amount,
+          accountType,
+          !!oldTransaction.is_debt_return,
+          "create",
+        );
         queryClient.setQueryData(
           ["account-balance", oldTransaction.account_id],
           {
             ...previousBalance,
-            balance: previousBalance.balance - amountDiff,
+            balance: previousBalance.balance + oldDelta + newDelta,
           },
         );
       }
@@ -1102,8 +1166,7 @@ export function useUpdateTransaction() {
       });
     },
     onSettled: () => {
-      // Mark all transaction queries as stale - they will refetch when next accessed
-      // Use refetchType: "none" to prevent immediate refetch which could cause flickering
+      // Transaction cache updated in onSuccess, mark stale for lazy refetch
       queryClient.invalidateQueries({
         queryKey: ["transactions"],
         refetchType: "none",
@@ -1112,9 +1175,10 @@ export function useUpdateTransaction() {
         queryKey: ["transactions-today"],
         refetchType: "none",
       });
+      // Refetch balance from server to confirm optimistic update
       queryClient.invalidateQueries({
         queryKey: ["account-balance"],
-        refetchType: "none",
+        refetchType: "active",
       });
     },
   });

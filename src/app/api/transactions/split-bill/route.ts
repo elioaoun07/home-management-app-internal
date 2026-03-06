@@ -1,3 +1,6 @@
+import { adjustAccountBalance } from "@/lib/balance";
+import type { AccountType } from "@/lib/balance-utils";
+import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -192,9 +195,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Balance is formula-based — no manual balance deduction needed.
-    // The balance will be recomputed on next GET /api/accounts/[id]/balance
-    // via computeAccountBalance() which includes split bill impact.
+    // Adjust the collaborator's account balance
+    const { data: collabAccount } = await supabase
+      .from("accounts")
+      .select("type")
+      .eq("id", account_id)
+      .single();
+
+    const collabType = (collabAccount?.type || "expense") as AccountType;
+    const delta = getBalanceDelta(amount, collabType, false, "create");
+    await adjustAccountBalance(account_id, delta, "split_bill", {
+      userId: user.id,
+      transactionId: transaction_id,
+      reason: `Split bill contribution`,
+    });
 
     // Send notification to the original owner
     await supabase.from("notifications").insert({

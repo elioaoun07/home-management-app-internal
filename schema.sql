@@ -31,7 +31,7 @@ CREATE TABLE public.account_balance_history (
   previous_balance numeric NOT NULL DEFAULT 0,
   new_balance numeric NOT NULL,
   change_amount numeric NOT NULL,
-  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['initial_set'::text, 'manual_set'::text, 'manual_adjustment'::text, 'transfer_in'::text, 'transfer_out'::text, 'transaction_expense'::text, 'transaction_income'::text, 'transaction_deleted'::text, 'split_bill_paid'::text, 'split_bill_received'::text, 'draft_confirmed'::text, 'correction'::text])),
+  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['initial_set'::text, 'manual_set'::text, 'manual_adjustment'::text, 'transfer_in'::text, 'transfer_out'::text, 'transaction_expense'::text, 'transaction_income'::text, 'transaction_deleted'::text, 'split_bill_paid'::text, 'split_bill_received'::text, 'draft_confirmed'::text, 'correction'::text, 'transaction'::text, 'transfer'::text, 'split_bill'::text, 'future_payment'::text, 'debt_settled'::text, 'auto_reconciliation'::text])),
   transaction_id uuid,
   transfer_id uuid,
   reason text,

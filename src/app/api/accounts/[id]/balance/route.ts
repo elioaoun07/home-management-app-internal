@@ -1,4 +1,3 @@
-import { computeAccountBalance } from "@/lib/balance";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -60,12 +59,17 @@ export async function GET(
   // The account owner (could be current user or partner)
   const accountOwnerId = account.user_id;
 
-  // Compute balance using formula (source of truth)
-  const { computedBalance, anchorBalance, balanceSetAt, updatedAt, createdAt } =
-    await computeAccountBalance(
-      accountId,
-      account.type as "expense" | "income" | "saving",
-    );
+  // Read balance directly from account_balances (source of truth, updated atomically by all write operations)
+  const { data: balanceRow, error: balanceError } = await supabase
+    .from("account_balances")
+    .select("balance, balance_set_at, updated_at, created_at")
+    .eq("account_id", accountId)
+    .maybeSingle();
+
+  const storedBalance = balanceRow ? Number(balanceRow.balance) : 0;
+  const balanceSetAt = balanceRow?.balance_set_at || null;
+  const updatedAt = balanceRow?.updated_at || null;
+  const createdAt = balanceRow?.created_at || null;
 
   // Get pending draft transactions (always count all drafts)
   // Separate regular drafts from future payments (drafts with scheduled_date)
@@ -95,9 +99,9 @@ export async function GET(
     0,
   );
 
-  // Current balance = computed formula balance - all pending drafts (regular + future)
+  // Current balance = stored balance - all pending drafts (regular + future)
   const allDraftsTotal = totalDrafts + totalFuturePayments;
-  const currentBalance = computedBalance - allDraftsTotal;
+  const currentBalance = storedBalance - allDraftsTotal;
 
   // Also fetch open debt count for display
   const { data: openDebts } = await supabase
@@ -127,8 +131,7 @@ export async function GET(
     updated_at: updatedAt || new Date().toISOString(),
     _debug: {
       user_id: user.id,
-      anchor_balance: anchorBalance,
-      computed_balance: computedBalance,
+      stored_balance: storedBalance,
       drafts_count: regularDrafts.length,
       drafts_total: totalDrafts,
       future_count: futurePayments.length,
@@ -174,11 +177,14 @@ export async function POST(
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
 
-  // Get current computed balance for history tracking
-  const { computedBalance: previousBalance } = await computeAccountBalance(
-    accountId,
-    account.type as "expense" | "income" | "saving",
-  );
+  // Get current stored balance for history tracking
+  const { data: currentRow } = await supabase
+    .from("account_balances")
+    .select("balance")
+    .eq("account_id", accountId)
+    .maybeSingle();
+
+  const previousBalance = currentRow ? Number(currentRow.balance) : 0;
 
   const isInitialSet = previousBalance === 0;
   const changeAmount = balance - previousBalance;

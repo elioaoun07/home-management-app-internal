@@ -1,3 +1,6 @@
+import { adjustAccountBalance } from "@/lib/balance";
+import type { AccountType } from "@/lib/balance-utils";
+import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
@@ -145,6 +148,14 @@ export async function PATCH(
       );
     }
 
+    // Fetch old transaction BEFORE update for balance delta calculation
+    const { data: oldTx } = await supabase
+      .from("transactions")
+      .select("amount, account_id, is_draft, is_debt_return")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+
     // Update the transaction
     const { data: updated, error } = await supabase
       .from("transactions")
@@ -211,8 +222,87 @@ export async function PATCH(
       }
     }
 
-    // Balance is formula-based - no update needed here.
-    // The balance will be recomputed on next GET /api/accounts/[id]/balance.
+    // Adjust balance for the update (only for confirmed, non-draft transactions)
+    if (oldTx && !oldTx.is_draft && !updated.is_draft) {
+      const oldAccountId = oldTx.account_id;
+      const newAccountId = updated.account_id;
+      const oldAmount = Number(oldTx.amount);
+      const newAmount = Number(updated.amount);
+      const isDebtReturn = oldTx.is_debt_return || false;
+
+      if (oldAccountId !== newAccountId) {
+        // Account changed: reverse from old account, apply to new account
+        const { data: oldAcc } = await supabase
+          .from("accounts")
+          .select("type")
+          .eq("id", oldAccountId)
+          .single();
+        const { data: newAcc } = await supabase
+          .from("accounts")
+          .select("type")
+          .eq("id", newAccountId)
+          .single();
+        const oldType = (oldAcc?.type || "expense") as AccountType;
+        const newType = (newAcc?.type || "expense") as AccountType;
+
+        // Reverse the old transaction from old account
+        const reverseDelta = getBalanceDelta(
+          oldAmount,
+          oldType,
+          isDebtReturn,
+          "delete",
+        );
+        await adjustAccountBalance(
+          oldAccountId,
+          reverseDelta,
+          "transaction_moved",
+          { userId: user.id, transactionId: id },
+        );
+
+        // Apply the new transaction to new account
+        const applyDelta = getBalanceDelta(
+          newAmount,
+          newType,
+          isDebtReturn,
+          "create",
+        );
+        await adjustAccountBalance(
+          newAccountId,
+          applyDelta,
+          "transaction_moved",
+          { userId: user.id, transactionId: id },
+        );
+      } else if (oldAmount !== newAmount) {
+        // Same account, amount changed: apply the difference
+        const { data: acc } = await supabase
+          .from("accounts")
+          .select("type")
+          .eq("id", newAccountId)
+          .single();
+        const accType = (acc?.type || "expense") as AccountType;
+        const oldDelta = getBalanceDelta(
+          oldAmount,
+          accType,
+          isDebtReturn,
+          "create",
+        );
+        const newDelta = getBalanceDelta(
+          newAmount,
+          accType,
+          isDebtReturn,
+          "create",
+        );
+        const diff = newDelta - oldDelta;
+        if (diff !== 0) {
+          await adjustAccountBalance(
+            newAccountId,
+            diff,
+            "transaction_updated",
+            { userId: user.id, transactionId: id },
+          );
+        }
+      }
+    }
 
     // Return complete transaction object (icon derived from category name via getCategoryIcon)
     return NextResponse.json({
@@ -253,7 +343,7 @@ export async function DELETE(
     const { data: transaction, error: fetchError } = await supabase
       .from("transactions")
       .select(
-        "account_id, amount, is_draft, split_requested, split_completed_at, collaborator_amount, collaborator_account_id",
+        "account_id, amount, is_draft, split_requested, split_completed_at, collaborator_amount, collaborator_account_id, is_debt_return",
       )
       .eq("id", id)
       .eq("user_id", user.id)
@@ -265,6 +355,14 @@ export async function DELETE(
         { status: 404 },
       );
     }
+
+    // Get account type for balance delta
+    const { data: txAccount } = await supabase
+      .from("accounts")
+      .select("type")
+      .eq("id", transaction.account_id)
+      .single();
+    const txAccountType = (txAccount?.type || "expense") as AccountType;
 
     // Use admin client to bypass RLS for cleaning up related records
     const adminClient = supabaseAdmin();
@@ -354,6 +452,54 @@ export async function DELETE(
     // Balance is formula-based - no restoration needed.
     // Deleting the transaction automatically removes it from the formula calculation.
     // The balance will be recomputed on next GET /api/accounts/[id]/balance.
+
+    // Reverse the balance effect of the deleted transaction
+    if (!transaction.is_draft) {
+      const reverseDelta = getBalanceDelta(
+        Number(transaction.amount),
+        txAccountType,
+        transaction.is_debt_return || false,
+        "delete",
+      );
+      await adjustAccountBalance(
+        transaction.account_id,
+        reverseDelta,
+        "transaction_deleted",
+        {
+          userId: user.id,
+          transactionId: id,
+        },
+      );
+
+      // If this was a completed split bill, also reverse the collaborator's balance
+      if (
+        transaction.split_completed_at &&
+        transaction.collaborator_account_id &&
+        transaction.collaborator_amount
+      ) {
+        const { data: collabAccount } = await supabase
+          .from("accounts")
+          .select("type")
+          .eq("id", transaction.collaborator_account_id)
+          .single();
+        const collabType = (collabAccount?.type || "expense") as AccountType;
+        const collabReverse = getBalanceDelta(
+          Number(transaction.collaborator_amount),
+          collabType,
+          false,
+          "delete",
+        );
+        await adjustAccountBalance(
+          transaction.collaborator_account_id,
+          collabReverse,
+          "split_deleted",
+          {
+            userId: user.id,
+            transactionId: id,
+          },
+        );
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

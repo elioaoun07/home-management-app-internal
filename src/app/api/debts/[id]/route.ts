@@ -1,3 +1,5 @@
+import { adjustAccountBalance } from "@/lib/balance";
+import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -173,38 +175,14 @@ export async function PATCH(
       );
     }
 
-    // 2. Add the returned amount back to the account balance
-    const { data: currentBalance } = await supabase
-      .from("account_balances")
-      .select("balance")
-      .eq("account_id", accountId)
-      .single();
-
-    if (currentBalance) {
-      const previousBalance = Number(currentBalance.balance);
-      const newBalance = previousBalance + amount_returned;
-
-      await supabase
-        .from("account_balances")
-        .update({
-          balance: newBalance,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("account_id", accountId);
-
-      // 3. Log balance history as debt_settled
-      await supabase.from("account_balance_history").insert({
-        account_id: accountId,
-        user_id: user.id,
-        previous_balance: previousBalance,
-        new_balance: newBalance,
-        change_amount: amount_returned,
-        change_type: "debt_settled",
-        transaction_id: returnTx?.id || null,
-        reason: `Debt settled by ${debt.debtor_name}: $${amount_returned}${isFullyClosed ? " (fully closed)" : ""}`,
-        effective_date: txDate,
-      });
-    }
+    // 2. Adjust balance — debt return always adds money back (+amount)
+    const delta = getBalanceDelta(amount_returned, "expense", true, "create");
+    await adjustAccountBalance(accountId, delta, "debt_settled", {
+      userId: user.id,
+      transactionId: returnTx?.id || undefined,
+      reason: `Debt settled by ${debt.debtor_name}: $${amount_returned}${isFullyClosed ? " (fully closed)" : ""}`,
+      effectiveDate: txDate,
+    });
   }
 
   // 4. Update the debt record

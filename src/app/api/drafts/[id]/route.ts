@@ -1,3 +1,5 @@
+import { adjustAccountBalance } from "@/lib/balance";
+import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -63,23 +65,23 @@ export async function PATCH(
 
     if (error) throw error;
 
-    // Deduct the amount from account balance (this was the bug - we only updated updated_at before)
-    const { data: currentBalance } = await supabase
-      .from("account_balances")
-      .select("balance")
-      .eq("account_id", account_id)
+    // Get account type for correct delta calculation
+    const { data: account } = await supabase
+      .from("accounts")
+      .select("type")
+      .eq("id", account_id)
       .single();
 
-    if (currentBalance) {
-      const newBalance = Number(currentBalance.balance) - parsedAmount;
-      await supabase
-        .from("account_balances")
-        .update({
-          balance: newBalance,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("account_id", account_id);
-    }
+    const accountType = (account?.type || "expense") as
+      | "expense"
+      | "income"
+      | "saving";
+    const delta = getBalanceDelta(parsedAmount, accountType, false, "create");
+    await adjustAccountBalance(account_id, delta, "draft_confirmed", {
+      userId: user.id,
+      transactionId: id,
+      reason: `Draft confirmed: ${transaction.description || "draft"}`,
+    });
 
     return NextResponse.json({ transaction });
   } catch (error: any) {
