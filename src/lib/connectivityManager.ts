@@ -88,6 +88,9 @@ export function startProbing(): void {
 
   // Start interval
   restartProbing();
+
+  // Do an immediate probe on startup so the state is accurate from the start
+  probeNow();
 }
 
 /** Stop probing (cleanup). */

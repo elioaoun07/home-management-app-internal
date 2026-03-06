@@ -3,6 +3,7 @@
 
 import { MOBILE_NAV_HEIGHT } from "@/constants/layout";
 import { SyncStatus, useSyncSafe } from "@/contexts/SyncContext";
+import { useOfflinePendingStore } from "@/lib/stores/offlinePendingStore";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -84,7 +85,11 @@ export function SyncIndicator({
 
   // Default to connected if no sync context
   const status = sync?.status ?? "connected";
-  const pendingCount = sync?.offlinePendingCount ?? 0;
+  // Use BOTH Zustand store (synchronous, instant) and SyncContext (async IDB)
+  // Take the max to ensure we never miss an increment
+  const zustandCount = useOfflinePendingStore((s) => s.count);
+  const contextCount = sync?.offlinePendingCount ?? 0;
+  const pendingCount = Math.max(zustandCount, contextCount);
   const config = statusConfig[status];
   const Icon = config.icon;
 
@@ -237,7 +242,10 @@ export function SyncPill({ className }: { className?: string }) {
   const status = sync?.status ?? "connected";
   const isOnline = sync?.isOnline ?? true;
   const isProcessing = sync?.isProcessingQueue ?? false;
-  const pendingCount = sync?.offlinePendingCount ?? 0;
+  // Use BOTH Zustand store (synchronous, instant) and SyncContext (async IDB)
+  const zustandCount = useOfflinePendingStore((s) => s.count);
+  const contextCount = sync?.offlinePendingCount ?? 0;
+  const pendingCount = Math.max(zustandCount, contextCount);
   const pendingOps = sync?.offlinePendingOps ?? [];
 
   // Briefly show "All synced" when queue goes from >0 to 0
