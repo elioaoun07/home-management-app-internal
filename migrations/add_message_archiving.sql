@@ -81,17 +81,18 @@ BEGIN
     AND m.created_at < DATE_TRUNC('month', NOW())
     AND m.archived_at IS NULL;
 
-  -- Archive reminder messages where reminder date has passed
+  -- Archive reminder messages where the linked item's due date has passed
   UPDATE hub_messages m
   SET 
     archived_at = NOW(),
     archived_reason = 'reminder_completed'
   FROM hub_chat_threads t
   JOIN hub_message_actions a ON a.message_id = m.id
+  JOIN items i ON i.id = (a.metadata->>'item_id')::uuid
   WHERE m.thread_id = t.id
     AND t.purpose = 'reminder'
     AND a.action_type = 'reminder'
-    AND a.created_at < NOW() - INTERVAL '7 days'
+    AND COALESCE(i.due_at, i.start_at) < NOW()
     AND m.archived_at IS NULL;
 END;
 $$ LANGUAGE plpgsql;

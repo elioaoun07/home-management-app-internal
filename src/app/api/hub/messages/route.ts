@@ -79,15 +79,145 @@ export async function GET(request: NextRequest) {
     query = query.is("archived_at", null);
   }
 
-  const { data: messages, error } = await query;
+  const { data: rawMessages, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  let messages = rawMessages || [];
+
+  // ── Auto-archive stale messages for budget / reminder threads ──
+  // Runs lazily on each GET so no cron job is required.
+  // We do this BEFORE building the response so newly-archived messages
+  // are excluded when includeArchived is false (the default).
+  if (
+    (thread.purpose === "budget" || thread.purpose === "reminder") &&
+    !includeArchived
+  ) {
+    const activeMessages = messages.filter((m) => !m.archived_at);
+    const activeIds = activeMessages.map((m) => m.id);
+
+    if (activeIds.length > 0) {
+      // Fetch actions for the active messages in this thread
+      const { data: actions } = await supabase
+        .from("hub_message_actions")
+        .select("message_id, action_type, transaction_id, metadata, created_at")
+        .in("message_id", activeIds);
+
+      const idsToArchive: string[] = [];
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      if (thread.purpose === "budget" && actions) {
+        // Budget: archive messages that have a transaction action AND were
+        // created before the start of the current month
+        const txMsgIds = new Set(
+          actions
+            .filter((a) => a.action_type === "transaction")
+            .map((a) => a.message_id),
+        );
+        for (const msg of activeMessages) {
+          if (txMsgIds.has(msg.id) && new Date(msg.created_at) < startOfMonth) {
+            idsToArchive.push(msg.id);
+          }
+        }
+      }
+
+      if (thread.purpose === "reminder" && actions) {
+        // Reminder: archive messages that have a reminder action AND the
+        // linked item's due_at has passed.
+        // Fallback: if item_id is missing in metadata, check the message's
+        // own alert_id / item_id fields, or fall back to the action's
+        // created_at as best-effort.
+        const allReminderActions = actions.filter(
+          (a) => a.action_type === "reminder",
+        );
+
+        if (allReminderActions.length > 0) {
+          // Split into actions WITH and WITHOUT item_id
+          const withItemId = allReminderActions.filter(
+            (a) => a.metadata?.item_id,
+          );
+          const withoutItemId = allReminderActions.filter(
+            (a) => !a.metadata?.item_id,
+          );
+
+          // --- Path A: actions that have item_id → check item's due_at ---
+          if (withItemId.length > 0) {
+            const itemIds = withItemId.map((a) => a.metadata.item_id);
+            const { data: items } = await supabase
+              .from("items")
+              .select("id, due_at, start_at")
+              .in("id", itemIds);
+
+            const pastItemIds = new Set(
+              (items || [])
+                .filter((item) => {
+                  const dateStr = item.due_at || item.start_at;
+                  return dateStr && new Date(dateStr) < now;
+                })
+                .map((item) => item.id),
+            );
+
+            // Also treat "item deleted" as past (item no longer exists)
+            const foundIds = new Set((items || []).map((i) => i.id));
+            for (const id of itemIds) {
+              if (!foundIds.has(id)) pastItemIds.add(id);
+            }
+
+            for (const a of withItemId) {
+              if (pastItemIds.has(a.metadata.item_id)) {
+                idsToArchive.push(a.message_id);
+              }
+            }
+          }
+
+          // --- Path B: actions WITHOUT item_id → fallback to action created_at ---
+          // If the action was created before start of current month, archive.
+          for (const a of withoutItemId) {
+            if (new Date(a.created_at) < startOfMonth) {
+              idsToArchive.push(a.message_id);
+            }
+          }
+        }
+      }
+
+      // Batch-archive in the background (fire-and-forget)
+      if (idsToArchive.length > 0) {
+        const reason =
+          thread.purpose === "budget"
+            ? "transaction_created"
+            : "reminder_completed";
+
+        supabase
+          .from("hub_messages")
+          .update({
+            archived_at: new Date().toISOString(),
+            archived_reason: reason,
+          })
+          .in("id", idsToArchive)
+          .is("archived_at", null) // guard against double-archive
+          .then(({ error: archiveError }) => {
+            if (archiveError) {
+              console.error("[Auto-archive] Error:", archiveError);
+            } else {
+              console.log(
+                `[Auto-archive] Archived ${idsToArchive.length} ${thread.purpose} messages`,
+              );
+            }
+          });
+
+        // Remove newly-archived messages from this response
+        const archiveSet = new Set(idsToArchive);
+        messages = messages.filter((m) => !archiveSet.has(m.id));
+      }
+    }
+  }
+
   // CHANGED: Don't filter out hidden messages - include them so we can show undo button
   // Mark each message as hidden or visible for the current user
-  const visibleMessages = (messages || []).map((msg) => {
+  const visibleMessages = messages.map((msg) => {
     const hiddenFor = msg.hidden_for || [];
     return {
       ...msg,
@@ -246,7 +376,8 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { content, thread_id, topic_id, item_quantity } = body;
+  const { content, thread_id, topic_id, item_quantity, shopping_group_id } =
+    body;
 
   if (!content?.trim()) {
     return NextResponse.json(
@@ -305,6 +436,11 @@ export async function POST(request: NextRequest) {
   // Add item_quantity if provided (for shopping lists)
   if (item_quantity) {
     insertData.item_quantity = item_quantity;
+  }
+
+  // Add shopping_group_id if provided (for shopping list grouping)
+  if (shopping_group_id) {
+    insertData.shopping_group_id = shopping_group_id;
   }
 
   const { data: message, error } = await supabase
@@ -629,6 +765,7 @@ export async function PATCH(request: NextRequest) {
         "set_item_url",
         "set_quantity",
         "update_content",
+        "assign_item",
       ].includes(action)
     ) {
       switch (action) {
@@ -888,6 +1025,36 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({
             success: true,
             message_id,
+          });
+        }
+
+        case "assign_item": {
+          if (!message_id) {
+            return NextResponse.json(
+              { error: "message_id is required" },
+              { status: 400 },
+            );
+          }
+
+          const { assigned_to } = body;
+
+          // assigned_to can be a user UUID or null (to unassign)
+          const { error: assignError } = await supabase
+            .from("hub_messages")
+            .update({ assigned_to: assigned_to || null })
+            .eq("id", message_id);
+
+          if (assignError) {
+            return NextResponse.json(
+              { error: "Failed to assign item" },
+              { status: 500 },
+            );
+          }
+
+          return NextResponse.json({
+            success: true,
+            message_id,
+            assigned_to: assigned_to || null,
           });
         }
 

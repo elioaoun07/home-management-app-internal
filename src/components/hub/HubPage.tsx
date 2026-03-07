@@ -1954,7 +1954,12 @@ function ThreadConversation({
 
   // Shopping list handlers
   const handleAddShoppingItem = useCallback(
-    (content: string, quantityOrTopicId?: string, topicId?: string) => {
+    (
+      content: string,
+      quantityOrTopicId?: string,
+      topicId?: string,
+      shoppingGroupId?: string,
+    ) => {
       // Handle both old signature (content, topicId) and new (content, quantity, topicId)
       // If called from notes, quantityOrTopicId is topicId
       // If called from shopping, quantityOrTopicId is quantity
@@ -1967,6 +1972,7 @@ function ThreadConversation({
         thread_id: threadId,
         topic_id: actualTopicId,
         item_quantity: quantity,
+        shopping_group_id: shoppingGroupId,
       });
     },
     [sendMessage, threadId, thread?.purpose],

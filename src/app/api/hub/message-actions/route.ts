@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     if (!messageId || !actionType) {
       return NextResponse.json(
         { error: "messageId and actionType are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     if (messageError || !message) {
       return NextResponse.json(
         { error: "Message not found or access denied" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -58,13 +58,13 @@ export async function POST(req: NextRequest) {
       if (error.code === "23505") {
         return NextResponse.json(
           { error: "Action already exists for this message" },
-          { status: 409 }
+          { status: 409 },
         );
       }
 
       return NextResponse.json(
         { error: "Failed to create message action", details: error.message },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -79,10 +79,10 @@ export async function POST(req: NextRequest) {
         .from("hub_messages")
         .update({ goal_id: metadata.goalId })
         .eq("id", messageId);
-    } else if (metadata?.alertId && actionType === "reminder") {
+    } else if (metadata?.item_id && actionType === "reminder") {
       await supabase
         .from("hub_messages")
-        .update({ alert_id: metadata.alertId })
+        .update({ alert_id: metadata.item_id })
         .eq("id", messageId);
     }
 
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
     if (!messageIdsParam) {
       return NextResponse.json(
         { error: "messageIds parameter is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
     if (error) {
       return NextResponse.json(
         { error: "Failed to fetch message actions" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -139,7 +139,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

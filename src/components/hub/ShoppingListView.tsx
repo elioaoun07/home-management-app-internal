@@ -2,6 +2,7 @@
 "use client";
 
 import { HubChatThread, HubMessage } from "@/features/hub/hooks";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { cn } from "@/lib/utils";
 import type { MealPlanWithRecipe } from "@/types/recipe";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,38 +11,62 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   ExternalLink,
+  FolderOpen,
+  FolderPlus,
   Layers,
   Link as LinkIcon,
+  List,
+  MoreHorizontal,
+  Pencil,
   Plus,
   Trash2,
+  User,
+  UserCheck,
   UtensilsCrossed,
   X,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ProductComparisonSheet } from "./ProductComparisonSheet";
+
+// Types
+interface ShoppingGroup {
+  id: string;
+  thread_id: string;
+  household_id: string;
+  name: string;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+}
 
 interface ShoppingItem {
   id: string;
   content: string;
-  quantity: string | null; // Quantity for the item (e.g., "2 bags", "1 lb")
+  quantity: string | null;
   checked: boolean;
   checkedAt: string | null;
   checkedBy: string | null;
   createdAt: string;
   senderId: string;
-  itemUrl: string | null; // URL for where to get the item
-  hasLinks: boolean; // Whether item has multiple links for comparison
-  source: "user" | "inventory" | "system" | "ai"; // Origin of the item
-  sourceItemId: string | null; // Reference to catalogue item if from inventory
-  mealPlanId: string | null; // Reference to meal plan if from recipe
+  itemUrl: string | null;
+  hasLinks: boolean;
+  source: "user" | "inventory" | "system" | "ai";
+  sourceItemId: string | null;
+  mealPlanId: string | null;
+  shoppingGroupId: string | null;
+  assignedTo: string | null;
 }
 
-// Group items by meal plan for collapsible sections
-interface MealPlanGroup {
-  mealPlanId: string | null; // null = manual items
-  recipeName: string | null;
+interface ItemGroup {
+  key: string; // group id, meal plan id, or "ungrouped"
+  type: "custom" | "meal-plan" | "ungrouped";
+  name: string;
+  groupId: string | null; // shopping_group_id for custom groups
+  mealPlanId: string | null;
   plannedDate: string | null;
   items: ShoppingItem[];
   isCollapsed: boolean;
@@ -52,9 +77,272 @@ interface ShoppingListViewProps {
   currentUserId: string;
   threadId: string;
   thread?: HubChatThread | null;
-  onAddItem: (content: string, quantity?: string) => void;
+  onAddItem: (
+    content: string,
+    quantity?: string,
+    topicId?: string,
+    shoppingGroupId?: string,
+  ) => void;
   onDeleteItem: (messageId: string) => void;
   isLoading?: boolean;
+}
+
+// ── SwipeToAssign: horizontal swipe wrapper for shopping items ──
+// Left swipe = assign to me, Right swipe = assign to partner
+// Uses a two-stage threshold: dead zone (0-20px), preview zone (20-70px), confirm zone (70px+)
+// Vertical motion > horizontal locks into scroll mode to prevent accidental triggers
+interface SwipeToAssignProps {
+  itemId: string;
+  currentUserId: string;
+  partnerId: string | null;
+  partnerName: string;
+  assignedTo: string | null;
+  onAssign: (itemId: string, userId: string | null) => void;
+  children: React.ReactNode;
+}
+
+function SwipeToAssign({
+  itemId,
+  currentUserId,
+  partnerId,
+  partnerName,
+  assignedTo,
+  onAssign,
+  children,
+}: SwipeToAssignProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [offsetX, setOffsetX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const touchStateRef = useRef<{
+    startX: number;
+    startY: number;
+    direction: "horizontal" | "vertical" | null;
+    dragging: boolean;
+  } | null>(null);
+
+  const DEAD_ZONE = 20; // px before any visual feedback
+  const CONFIRM_ZONE = 70; // px to confirm assignment
+  const MAX_DRAG = 100; // px max visual translation
+
+  // Use refs to always have latest values in touch handlers (avoids stale closures)
+  const assignedToRef = useRef(assignedTo);
+  assignedToRef.current = assignedTo;
+  const onAssignRef = useRef(onAssign);
+  onAssignRef.current = onAssign;
+  const partnerIdRef = useRef(partnerId);
+  partnerIdRef.current = partnerId;
+
+  // Use native touch listeners so we can set { passive: false } for preventDefault
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      touchStateRef.current = {
+        startX: touch.clientX,
+        startY: touch.clientY,
+        direction: null,
+        dragging: false,
+      };
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const state = touchStateRef.current;
+      if (!state) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - state.startX;
+      const dy = touch.clientY - state.startY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      // Lock direction on first significant movement
+      if (!state.direction) {
+        if (absDx < 8 && absDy < 8) return;
+        state.direction = absDx > absDy ? "horizontal" : "vertical";
+      }
+
+      // Vertical scroll — do nothing
+      if (state.direction === "vertical") return;
+
+      // No partner → block swipe right
+      if (!partnerId && dx > 0) return;
+
+      // Prevent page scroll while swiping horizontally
+      e.preventDefault();
+
+      if (!state.dragging && absDx > DEAD_ZONE) {
+        state.dragging = true;
+        setIsDragging(true);
+      }
+
+      if (absDx <= DEAD_ZONE) {
+        setOffsetX(0);
+        return;
+      }
+
+      // Resistance past confirm zone gives piano-key snap feel
+      const sign = dx > 0 ? 1 : -1;
+      const activeDist = absDx - DEAD_ZONE;
+      const confirmDist = CONFIRM_ZONE - DEAD_ZONE;
+      let mapped: number;
+      if (activeDist <= confirmDist) {
+        mapped = activeDist;
+      } else {
+        mapped = confirmDist + (activeDist - confirmDist) * 0.3;
+      }
+      setOffsetX(sign * Math.min(mapped, MAX_DRAG));
+    };
+
+    const onTouchEnd = () => {
+      const state = touchStateRef.current;
+      if (!state) return;
+
+      // Read current offset from the latest state
+      setOffsetX((currentOffset) => {
+        const absOff = Math.abs(currentOffset);
+        const confirmDist = CONFIRM_ZONE - DEAD_ZONE;
+
+        if (absOff >= confirmDist) {
+          if (currentOffset < 0) {
+            // Swiped LEFT → assign to me (or unassign if already mine)
+            onAssign(
+              itemId,
+              assignedTo === currentUserId ? null : currentUserId,
+            );
+          } else if (currentOffset > 0 && partnerId) {
+            // Swiped RIGHT → assign to partner (or unassign if already theirs)
+            onAssign(itemId, assignedTo === partnerId ? null : partnerId);
+          }
+        }
+        return 0; // Always reset
+      });
+
+      setIsDragging(false);
+      touchStateRef.current = null;
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [partnerId, assignedTo, currentUserId, itemId, onAssign]);
+
+  const absOffset = Math.abs(offsetX);
+  const confirmedThreshold = CONFIRM_ZONE - DEAD_ZONE;
+  const isConfirmed = absOffset >= confirmedThreshold;
+  const previewOpacity = isDragging
+    ? Math.min(absOffset / confirmedThreshold, 1)
+    : 0;
+
+  // Determine what the swipe will do (assign or unassign)
+  const swipeLeftAction =
+    assignedTo === currentUserId ? "unassign" : "assign-me";
+  const swipeRightAction =
+    assignedTo === partnerId ? "unassign" : "assign-partner";
+  const currentAction = offsetX < 0 ? swipeLeftAction : swipeRightAction;
+
+  return (
+    <div ref={containerRef} className="relative overflow-hidden rounded-xl">
+      {/* Left reveal (assign to me) - shown when swiping left */}
+      {isDragging && offsetX < 0 && (
+        <div
+          className={cn(
+            "absolute inset-y-0 right-0 flex items-center justify-end px-4 rounded-xl transition-colors z-0",
+            isConfirmed
+              ? currentAction === "unassign"
+                ? "bg-white/10"
+                : "bg-blue-500/30"
+              : "bg-blue-500/10",
+          )}
+          style={{ width: `${absOffset + 16}px`, opacity: previewOpacity }}
+        >
+          <div className="flex items-center gap-1.5">
+            <User
+              className={cn(
+                "w-4 h-4",
+                isConfirmed
+                  ? currentAction === "unassign"
+                    ? "text-white/60"
+                    : "text-blue-300"
+                  : "text-blue-400/60",
+              )}
+            />
+            <span
+              className={cn(
+                "text-xs font-medium whitespace-nowrap",
+                isConfirmed
+                  ? currentAction === "unassign"
+                    ? "text-white/60"
+                    : "text-blue-300"
+                  : "text-blue-400/60",
+              )}
+            >
+              {currentAction === "unassign" ? "Unassign" : "Me"}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Right reveal (assign to partner) - shown when swiping right */}
+      {isDragging && offsetX > 0 && partnerId && (
+        <div
+          className={cn(
+            "absolute inset-y-0 left-0 flex items-center justify-start px-4 rounded-xl transition-colors z-0",
+            isConfirmed
+              ? currentAction === "unassign"
+                ? "bg-white/10"
+                : "bg-pink-500/30"
+              : "bg-pink-500/10",
+          )}
+          style={{ width: `${absOffset + 16}px`, opacity: previewOpacity }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "text-xs font-medium whitespace-nowrap",
+                isConfirmed
+                  ? currentAction === "unassign"
+                    ? "text-white/60"
+                    : "text-pink-300"
+                  : "text-pink-400/60",
+              )}
+            >
+              {currentAction === "unassign" ? "Unassign" : partnerName}
+            </span>
+            <UserCheck
+              className={cn(
+                "w-4 h-4",
+                isConfirmed
+                  ? currentAction === "unassign"
+                    ? "text-white/60"
+                    : "text-pink-300"
+                  : "text-pink-400/60",
+              )}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* The actual item content - slides horizontally */}
+      <div
+        ref={contentRef}
+        className="relative z-10"
+        style={{
+          transform: isDragging ? `translateX(${offsetX}px)` : "translateX(0)",
+          transition: isDragging ? "none" : "transform 0.25s ease-out",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export function ShoppingListView({
@@ -86,10 +374,47 @@ export function ShoppingListView({
     name: string;
   } | null>(null);
 
+  // Group management state
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    new Set(),
+  );
+  const [newGroupName, setNewGroupName] = useState("");
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState("");
+  const [groupMenuOpen, setGroupMenuOpen] = useState<string | null>(null);
+  const [movingItemId, setMovingItemId] = useState<string | null>(null);
+  const groupMenuRef = useRef<HTMLDivElement>(null);
+
   const enableItemUrls = thread?.enable_item_urls ?? false;
 
+  // Household members for swipe-to-assign
+  const { data: householdData } = useHouseholdMembers();
+  const partnerId = useMemo(() => {
+    if (!householdData?.members) return null;
+    const partner = householdData.members.find((m) => !m.isCurrentUser);
+    return partner?.id ?? null;
+  }, [householdData]);
+  const partnerName = useMemo(() => {
+    if (!householdData?.members) return "Partner";
+    const partner = householdData.members.find((m) => !m.isCurrentUser);
+    return partner?.displayName ?? "Partner";
+  }, [householdData]);
+
+  // Fetch shopping groups for this thread
+  const { data: shoppingGroupsData } = useQuery<{ groups: ShoppingGroup[] }>({
+    queryKey: ["shopping-groups", threadId],
+    queryFn: async () => {
+      const res = await fetch(`/api/hub/shopping-groups?thread_id=${threadId}`);
+      if (!res.ok) return { groups: [] };
+      return res.json();
+    },
+    staleTime: 30 * 1000,
+  });
+
+  const shoppingGroups = shoppingGroupsData?.groups || [];
+
   // Parse messages into shopping items
-  // Now using checked_at from database instead of localStorage
   const items: ShoppingItem[] = messages
     .filter(
       (msg) =>
@@ -108,33 +433,28 @@ export function ShoppingListView({
       createdAt: msg.created_at,
       senderId: msg.sender_user_id,
       itemUrl: msg.item_url || null,
-      hasLinks: !!(msg as any).has_links, // From database flag
+      hasLinks: !!(msg as any).has_links,
       source: msg.source || "user",
       sourceItemId: msg.source_item_id || null,
       mealPlanId: msg.meal_plan_id || null,
+      shoppingGroupId: msg.shopping_group_id || null,
+      assignedTo: msg.assigned_to || null,
     }))
     .sort((a, b) => {
-      // Unchecked items first, then by creation date
       if (a.checked !== b.checked) {
         return a.checked ? 1 : -1;
       }
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
 
-  // Separate checked and unchecked items
   const uncheckedItems = items.filter((item) => !item.checked);
   const checkedItemsList = items.filter((item) => item.checked);
-
-  // Collapsed state for meal plan sections
-  const [collapsedMealPlans, setCollapsedMealPlans] = useState<Set<string>>(
-    new Set(),
-  );
 
   // Get unique meal plan IDs from items
   const mealPlanIds = useMemo(() => {
     const ids = new Set<string>();
     items.forEach((item) => {
-      if (item.mealPlanId) ids.add(item.mealPlanId);
+      if (item.mealPlanId && !item.shoppingGroupId) ids.add(item.mealPlanId);
     });
     return Array.from(ids);
   }, [items]);
@@ -151,75 +471,342 @@ export function ShoppingListView({
       return res.json();
     },
     enabled: mealPlanIds.length > 0,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Create a map of meal plan ID to meal plan details
   const mealPlanMap = useMemo(() => {
     const map = new Map<string, MealPlanWithRecipe>();
     mealPlans.forEach((mp) => map.set(mp.id, mp));
     return map;
   }, [mealPlans]);
 
-  // Group unchecked items by meal plan
+  // Group unchecked items: custom groups > meal plan groups > ungrouped
   const uncheckedGrouped = useMemo(() => {
-    const groups: MealPlanGroup[] = [];
-    const byMealPlan = new Map<string | null, ShoppingItem[]>();
+    const groups: ItemGroup[] = [];
+    const byCustomGroup = new Map<string, ShoppingItem[]>();
+    const byMealPlan = new Map<string, ShoppingItem[]>();
+    const ungrouped: ShoppingItem[] = [];
 
     uncheckedItems.forEach((item) => {
-      const key = item.mealPlanId;
-      if (!byMealPlan.has(key)) {
-        byMealPlan.set(key, []);
+      if (item.shoppingGroupId) {
+        if (!byCustomGroup.has(item.shoppingGroupId)) {
+          byCustomGroup.set(item.shoppingGroupId, []);
+        }
+        byCustomGroup.get(item.shoppingGroupId)!.push(item);
+      } else if (item.mealPlanId) {
+        if (!byMealPlan.has(item.mealPlanId)) {
+          byMealPlan.set(item.mealPlanId, []);
+        }
+        byMealPlan.get(item.mealPlanId)!.push(item);
+      } else {
+        ungrouped.push(item);
       }
-      byMealPlan.get(key)!.push(item);
     });
 
-    // Manual items first (null meal plan)
-    if (byMealPlan.has(null)) {
+    // Custom groups first (in sort_order)
+    shoppingGroups.forEach((sg) => {
       groups.push({
+        key: sg.id,
+        type: "custom",
+        name: sg.name,
+        groupId: sg.id,
         mealPlanId: null,
-        recipeName: null,
         plannedDate: null,
-        items: byMealPlan.get(null)!,
-        isCollapsed: collapsedMealPlans.has("manual"),
+        items: byCustomGroup.get(sg.id) || [],
+        isCollapsed: collapsedGroups.has(sg.id),
       });
-    }
+    });
 
     // Then meal plan groups
     byMealPlan.forEach((groupItems, mealPlanId) => {
-      if (mealPlanId !== null) {
-        const mp = mealPlanMap.get(mealPlanId);
-        groups.push({
-          mealPlanId,
-          recipeName: mp?.recipe?.name || "Unknown Recipe",
-          plannedDate: mp?.planned_date || null,
-          items: groupItems,
-          isCollapsed: collapsedMealPlans.has(mealPlanId),
-        });
-      }
+      const mp = mealPlanMap.get(mealPlanId);
+      groups.push({
+        key: `mp-${mealPlanId}`,
+        type: "meal-plan",
+        name: mp?.recipe?.name || "Unknown Recipe",
+        groupId: null,
+        mealPlanId,
+        plannedDate: mp?.planned_date || null,
+        items: groupItems,
+        isCollapsed: collapsedGroups.has(`mp-${mealPlanId}`),
+      });
     });
 
-    return groups;
-  }, [uncheckedItems, mealPlanMap, collapsedMealPlans]);
+    // Ungrouped items last
+    if (ungrouped.length > 0) {
+      groups.push({
+        key: "ungrouped",
+        type: "ungrouped",
+        name: "General",
+        groupId: null,
+        mealPlanId: null,
+        plannedDate: null,
+        items: ungrouped,
+        isCollapsed: collapsedGroups.has("ungrouped"),
+      });
+    }
 
-  // Toggle collapse state for a meal plan section
-  const toggleMealPlanCollapse = useCallback((mealPlanId: string | null) => {
-    const key = mealPlanId ?? "manual";
-    setCollapsedMealPlans((prev) => {
+    return groups;
+  }, [uncheckedItems, shoppingGroups, mealPlanMap, collapsedGroups]);
+
+  // Close group menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        groupMenuRef.current &&
+        !groupMenuRef.current.contains(e.target as Node)
+      ) {
+        setGroupMenuOpen(null);
+      }
+    };
+    if (groupMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [groupMenuOpen]);
+
+  // Toggle collapse for a group
+  const toggleGroupCollapse = useCallback((groupKey: string) => {
+    setCollapsedGroups((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
       } else {
-        next.add(key);
+        next.add(groupKey);
       }
       return next;
     });
   }, []);
 
+  // Collapse all / Expand all
+  const collapseAll = useCallback(() => {
+    const allKeys = uncheckedGrouped.map((g) => g.key);
+    setCollapsedGroups(new Set(allKeys));
+  }, [uncheckedGrouped]);
+
+  const expandAll = useCallback(() => {
+    setCollapsedGroups(new Set());
+  }, []);
+
+  const allCollapsed =
+    uncheckedGrouped.length > 0 &&
+    uncheckedGrouped.every((g) => collapsedGroups.has(g.key));
+
+  // Create a custom group
+  const createGroup = useCallback(
+    async (name: string) => {
+      if (!name.trim()) return;
+
+      try {
+        const res = await fetch("/api/hub/shopping-groups", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ thread_id: threadId, name: name.trim() }),
+        });
+
+        if (!res.ok) throw new Error("Failed to create group");
+
+        const data = await res.json();
+        queryClient.invalidateQueries({
+          queryKey: ["shopping-groups", threadId],
+        });
+        toast.success(`Group "${name.trim()}" created`, {
+          duration: 4000,
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              if (data?.group?.id) {
+                await fetch("/api/hub/shopping-groups", {
+                  method: "DELETE",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ group_id: data.group.id }),
+                });
+                queryClient.invalidateQueries({
+                  queryKey: ["shopping-groups", threadId],
+                });
+              }
+            },
+          },
+        });
+      } catch {
+        toast.error("Failed to create group");
+      }
+    },
+    [threadId, queryClient],
+  );
+
+  // Rename a group
+  const renameGroup = useCallback(
+    async (groupId: string, newName: string) => {
+      if (!newName.trim()) return;
+
+      // Optimistic update
+      queryClient.setQueryData<{ groups: ShoppingGroup[] }>(
+        ["shopping-groups", threadId],
+        (old) => {
+          if (!old) return old;
+          return {
+            groups: old.groups.map((g) =>
+              g.id === groupId ? { ...g, name: newName.trim() } : g,
+            ),
+          };
+        },
+      );
+
+      try {
+        const res = await fetch("/api/hub/shopping-groups", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "rename",
+            group_id: groupId,
+            name: newName.trim(),
+          }),
+        });
+
+        if (!res.ok) throw new Error("Failed to rename group");
+        toast.success("Group renamed");
+      } catch {
+        toast.error("Failed to rename group");
+        queryClient.invalidateQueries({
+          queryKey: ["shopping-groups", threadId],
+        });
+      }
+
+      setEditingGroupId(null);
+      setEditingGroupName("");
+    },
+    [threadId, queryClient],
+  );
+
+  // Delete a group (items become ungrouped)
+  const deleteGroup = useCallback(
+    async (groupId: string) => {
+      const group = shoppingGroups.find((g) => g.id === groupId);
+      const previousGroups = shoppingGroupsData;
+
+      // Optimistic: remove group and ungroup items
+      queryClient.setQueryData<{ groups: ShoppingGroup[] }>(
+        ["shopping-groups", threadId],
+        (old) => {
+          if (!old) return old;
+          return { groups: old.groups.filter((g) => g.id !== groupId) };
+        },
+      );
+      queryClient.setQueryData<{ messages: HubMessage[] }>(
+        ["hub", "messages", threadId],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            messages: old.messages.map((msg) =>
+              msg.shopping_group_id === groupId
+                ? { ...msg, shopping_group_id: null }
+                : msg,
+            ),
+          };
+        },
+      );
+
+      try {
+        const res = await fetch("/api/hub/shopping-groups", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ group_id: groupId }),
+        });
+
+        if (!res.ok) throw new Error("Failed to delete group");
+
+        toast.success(`Group "${group?.name}" deleted`, {
+          duration: 4000,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              // Rollback
+              queryClient.setQueryData(
+                ["shopping-groups", threadId],
+                previousGroups,
+              );
+              queryClient.invalidateQueries({
+                queryKey: ["shopping-groups", threadId],
+              });
+              queryClient.invalidateQueries({
+                queryKey: ["hub", "messages", threadId],
+              });
+            },
+          },
+        });
+      } catch {
+        toast.error("Failed to delete group");
+        queryClient.invalidateQueries({
+          queryKey: ["shopping-groups", threadId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["hub", "messages", threadId],
+        });
+      }
+    },
+    [shoppingGroups, shoppingGroupsData, threadId, queryClient],
+  );
+
+  // Move an item to a different group
+  const moveItemToGroup = useCallback(
+    async (messageId: string, groupId: string | null) => {
+      const queryKey = ["hub", "messages", threadId];
+
+      // Optimistic update
+      queryClient.setQueryData<{ messages: HubMessage[] }>(queryKey, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          messages: old.messages.map((msg) =>
+            msg.id === messageId ? { ...msg, shopping_group_id: groupId } : msg,
+          ),
+        };
+      });
+
+      setMovingItemId(null);
+
+      try {
+        const res = await fetch("/api/hub/shopping-groups", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "move_item",
+            message_id: messageId,
+            group_id: groupId,
+          }),
+        });
+
+        if (!res.ok) throw new Error("Failed to move item");
+
+        const targetName = groupId
+          ? shoppingGroups.find((g) => g.id === groupId)?.name || "group"
+          : "General";
+        toast.success(`Moved to ${targetName}`, {
+          duration: 4000,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              queryClient.invalidateQueries({ queryKey });
+            },
+          },
+        });
+      } catch {
+        toast.error("Failed to move item");
+        queryClient.invalidateQueries({ queryKey });
+      }
+    },
+    [threadId, queryClient, shoppingGroups],
+  );
+
+  // Currently active group for adding items (null = ungrouped)
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+
   const handleAddItem = () => {
     if (!newItem.trim()) return;
 
-    // Smart quantity parsing from input
     const input = newItem.trim();
     let content = input;
     let quantity: string | undefined = undefined;
@@ -244,7 +831,7 @@ export function ShoppingListView({
       }
     }
 
-    onAddItem(content, quantity);
+    onAddItem(content, quantity, undefined, activeGroupId || undefined);
     setNewItem("");
   };
 
@@ -397,7 +984,7 @@ export function ShoppingListView({
       // Add each item to the shopping list
       if (items.length > 0) {
         items.forEach(({ content, quantity }) => {
-          onAddItem(content, quantity);
+          onAddItem(content, quantity, undefined, activeGroupId || undefined);
         });
 
         // Clear the input
@@ -635,6 +1222,62 @@ export function ShoppingListView({
     [queryClient, threadId],
   );
 
+  // Assign item to a household member via swipe
+  const assignItem = useCallback(
+    async (itemId: string, userId: string | null) => {
+      const queryKey = ["hub", "messages", threadId];
+
+      // Get previous state for undo
+      const previousData = queryClient.getQueryData<{ messages: HubMessage[] }>(
+        queryKey,
+      );
+      const previousMsg = previousData?.messages.find((m) => m.id === itemId);
+      const previousAssignedTo = previousMsg?.assigned_to ?? null;
+
+      // Skip if already assigned to same user
+      if (previousAssignedTo === userId) return;
+
+      // Optimistic update
+      queryClient.setQueryData<{ messages: HubMessage[] }>(queryKey, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          messages: old.messages.map((msg) =>
+            msg.id === itemId ? { ...msg, assigned_to: userId } : msg,
+          ),
+        };
+      });
+
+      const assigneeName = userId === currentUserId ? "you" : partnerName;
+      toast.success(userId ? `Assigned to ${assigneeName}` : "Unassigned", {
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => assignItem(itemId, previousAssignedTo),
+        },
+      });
+
+      try {
+        const res = await fetch("/api/hub/messages", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "assign_item",
+            message_id: itemId,
+            assigned_to: userId,
+          }),
+        });
+
+        if (!res.ok) throw new Error("Failed to assign item");
+      } catch (error) {
+        console.error("Error assigning item:", error);
+        toast.error("Failed to assign item");
+        queryClient.setQueryData(queryKey, previousData);
+      }
+    },
+    [queryClient, threadId, currentUserId, partnerName],
+  );
+
   const handleStartEditUrl = (itemId: string, currentUrl: string | null) => {
     setEditingUrlFor(itemId);
     setUrlInputValue(currentUrl || "");
@@ -691,167 +1334,411 @@ export function ShoppingListView({
     }
   }, [checkedItemsList.length, isClearing, queryClient, threadId]);
 
-  // Helper to render a single shopping item
-  const renderShoppingItem = (item: ShoppingItem) => (
-    <div
-      key={item.id}
-      className={cn(
-        "group neo-card bg-bg-card-custom rounded-xl overflow-hidden transition-all",
-        item.source === "inventory"
-          ? "border-2 border-orange-500/40 ring-1 ring-orange-500/20"
-          : "border border-white/5 hover:border-white/10",
-      )}
-    >
-      <div className="flex items-center gap-3 p-3">
-        {item.source === "inventory" && (
-          <div className="absolute top-0 right-0 px-1.5 py-0.5 bg-orange-500/20 rounded-bl-lg">
-            <span className="text-[10px] text-orange-400 font-medium">
-              📦 Auto
-            </span>
-          </div>
-        )}
+  // Helper to render a single shopping item with swipe-to-assign
+  const renderShoppingItem = (item: ShoppingItem) => {
+    const isAssignedToMe = item.assignedTo === currentUserId;
+    const isAssignedToPartner = item.assignedTo === partnerId;
 
-        <button
-          onClick={() => toggleCheck(item.id)}
-          className="w-6 h-6 rounded-md border-2 border-white/30 hover:border-white/50 flex items-center justify-center transition-all flex-shrink-0"
-        />
+    // Border color based on assignment
+    const assignmentBorderClass = isAssignedToMe
+      ? "border-2 border-blue-400/60 ring-1 ring-blue-400/20"
+      : isAssignedToPartner
+        ? "border-2 border-pink-400/60 ring-1 ring-pink-400/20"
+        : "";
 
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-white text-sm">{item.content}</span>
+    return (
+      <SwipeToAssign
+        key={item.id}
+        itemId={item.id}
+        currentUserId={currentUserId}
+        partnerId={partnerId}
+        partnerName={partnerName}
+        assignedTo={item.assignedTo}
+        onAssign={assignItem}
+      >
+        <div
+          className={cn(
+            "group relative neo-card bg-bg-card-custom rounded-xl overflow-hidden transition-all",
+            movingItemId === item.id
+              ? "border-2 border-purple-500/50 ring-1 ring-purple-500/20"
+              : assignmentBorderClass
+                ? assignmentBorderClass
+                : item.source === "inventory"
+                  ? "border-2 border-orange-500/40 ring-1 ring-orange-500/20"
+                  : "border border-white/5 hover:border-white/10",
+          )}
+        >
+          <div className="flex items-center gap-3 p-3">
+            {item.source === "inventory" && (
+              <div className="absolute top-0 right-0 px-1.5 py-0.5 bg-orange-500/20 rounded-bl-lg">
+                <span className="text-[10px] text-orange-400 font-medium">
+                  📦 Auto
+                </span>
+              </div>
+            )}
 
-            {editingQuantityFor === item.id ? (
-              <input
-                type="text"
-                value={quantityInputValue}
-                onChange={(e) => setQuantityInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    const trimmedQuantity = quantityInputValue.trim();
-                    setItemQuantity(item.id, trimmedQuantity || null);
-                    setEditingQuantityFor(null);
-                    setQuantityInputValue("");
-                  } else if (e.key === "Escape") {
-                    setEditingQuantityFor(null);
-                    setQuantityInputValue("");
+            <button
+              onClick={() => toggleCheck(item.id)}
+              className={cn(
+                "w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0",
+                isAssignedToMe
+                  ? "border-blue-400/60 hover:border-blue-400"
+                  : isAssignedToPartner
+                    ? "border-pink-400/60 hover:border-pink-400"
+                    : "border-white/30 hover:border-white/50",
+              )}
+            />
+
+            {/* Assignment badge */}
+            {item.assignedTo && (
+              <div
+                className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold",
+                  isAssignedToMe
+                    ? "bg-blue-500/20 text-blue-400"
+                    : "bg-pink-500/20 text-pink-400",
+                )}
+                title={
+                  isAssignedToMe
+                    ? "Assigned to you"
+                    : `Assigned to ${partnerName}`
+                }
+              >
+                {isAssignedToMe ? (
+                  <User className="w-3 h-3" />
+                ) : (
+                  <UserCheck className="w-3 h-3" />
+                )}
+              </div>
+            )}
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-white text-sm truncate">
+                  {item.content}
+                </span>
+
+                {editingQuantityFor === item.id ? (
+                  <input
+                    type="text"
+                    value={quantityInputValue}
+                    onChange={(e) => setQuantityInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const trimmedQuantity = quantityInputValue.trim();
+                        setItemQuantity(item.id, trimmedQuantity || null);
+                        setEditingQuantityFor(null);
+                        setQuantityInputValue("");
+                      } else if (e.key === "Escape") {
+                        setEditingQuantityFor(null);
+                        setQuantityInputValue("");
+                      }
+                    }}
+                    onBlur={() => {
+                      const trimmedQuantity = quantityInputValue.trim();
+                      setItemQuantity(item.id, trimmedQuantity || null);
+                      setEditingQuantityFor(null);
+                      setQuantityInputValue("");
+                    }}
+                    placeholder="e.g., 2 bags"
+                    className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium border border-blue-400/50 focus:outline-none focus:border-blue-400 w-24 flex-shrink-0"
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingQuantityFor(item.id);
+                      setQuantityInputValue(item.quantity || "");
+                    }}
+                    className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium hover:bg-blue-500/30 transition-all flex-shrink-0"
+                    title="Click to edit quantity"
+                  >
+                    {item.quantity || "+ qty"}
+                  </button>
+                )}
+
+                {enableItemUrls &&
+                  item.itemUrl &&
+                  editingUrlFor !== item.id && (
+                    <a
+                      href={item.itemUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1 rounded hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-all"
+                      onClick={(e) => e.stopPropagation()}
+                      title={item.itemUrl}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              {enableItemUrls && (
+                <button
+                  onClick={() => openComparisonSheet(item.id, item.content)}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all",
+                    item.hasLinks
+                      ? "text-purple-400 hover:bg-purple-500/20"
+                      : "text-white/40 hover:bg-white/10 hover:text-white",
+                  )}
+                  title={item.hasLinks ? "Compare stores" : "Add store links"}
+                >
+                  <Layers className="w-4 h-4" />
+                </button>
+              )}
+
+              {enableItemUrls && (
+                <button
+                  onClick={() => handleStartEditUrl(item.id, item.itemUrl)}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all",
+                    item.itemUrl
+                      ? "text-blue-400 hover:bg-blue-500/20"
+                      : "text-white/40 hover:bg-white/10 hover:text-white",
+                  )}
+                  title={item.itemUrl ? "Edit quick link" : "Add quick link"}
+                >
+                  <LinkIcon className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* Move to group button - only show when custom groups exist */}
+              {shoppingGroups.length > 0 && (
+                <button
+                  onClick={() =>
+                    setMovingItemId(movingItemId === item.id ? null : item.id)
                   }
-                }}
-                onBlur={() => {
-                  const trimmedQuantity = quantityInputValue.trim();
-                  setItemQuantity(item.id, trimmedQuantity || null);
-                  setEditingQuantityFor(null);
-                  setQuantityInputValue("");
-                }}
-                placeholder="e.g., 2 bags"
-                className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium border border-blue-400/50 focus:outline-none focus:border-blue-400 w-24"
-                autoFocus
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all",
+                    movingItemId === item.id
+                      ? "text-purple-400 bg-purple-500/20"
+                      : "text-white/30 hover:bg-white/10 hover:text-white/60",
+                  )}
+                  title="Move to group"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                </button>
+              )}
+
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditingQuantityFor(item.id);
-                  setQuantityInputValue(item.quantity || "");
-                }}
-                className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium hover:bg-blue-500/30 transition-all"
-                title="Click to edit quantity"
+                onClick={() => onDeleteItem(item.id)}
+                className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400/60 hover:text-red-400 transition-all"
               >
-                {item.quantity || "+ qty"}
+                <Trash2 className="w-4 h-4" />
               </button>
-            )}
-
-            {enableItemUrls && item.itemUrl && editingUrlFor !== item.id && (
-              <a
-                href={item.itemUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1 rounded hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-all"
-                onClick={(e) => e.stopPropagation()}
-                title={item.itemUrl}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            )}
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-1">
-          {enableItemUrls && (
-            <button
-              onClick={() => openComparisonSheet(item.id, item.content)}
-              className={cn(
-                "p-1.5 rounded-lg transition-all",
-                item.hasLinks
-                  ? "text-purple-400 hover:bg-purple-500/20"
-                  : "text-white/40 hover:bg-white/10 hover:text-white",
-              )}
-              title={item.hasLinks ? "Compare stores" : "Add store links"}
-            >
-              <Layers className="w-4 h-4" />
-            </button>
+          {/* Move to group selector */}
+          {movingItemId === item.id && (
+            <div className="px-3 pb-3 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => moveItemToGroup(item.id, null)}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg text-xs font-medium transition-all",
+                  !item.shoppingGroupId
+                    ? "bg-white/20 text-white"
+                    : "bg-white/5 text-white/60 hover:bg-white/10",
+                )}
+              >
+                General
+              </button>
+              {shoppingGroups.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => moveItemToGroup(item.id, g.id)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-xs font-medium transition-all",
+                    item.shoppingGroupId === g.id
+                      ? "bg-purple-500/30 text-purple-300"
+                      : "bg-white/5 text-white/60 hover:bg-purple-500/20 hover:text-purple-300",
+                  )}
+                >
+                  {g.name}
+                </button>
+              ))}
+            </div>
           )}
 
-          {enableItemUrls && (
-            <button
-              onClick={() => handleStartEditUrl(item.id, item.itemUrl)}
-              className={cn(
-                "p-1.5 rounded-lg transition-all",
-                item.itemUrl
-                  ? "text-blue-400 hover:bg-blue-500/20"
-                  : "text-white/40 hover:bg-white/10 hover:text-white",
-              )}
-              title={item.itemUrl ? "Edit quick link" : "Add quick link"}
-            >
-              <LinkIcon className="w-4 h-4" />
-            </button>
+          {editingUrlFor === item.id && (
+            <div className="px-3 pb-3 pt-0">
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={urlInputValue}
+                  onChange={(e) => setUrlInputValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSaveUrl(item.id);
+                    } else if (e.key === "Escape") {
+                      handleCancelEditUrl();
+                    }
+                  }}
+                  placeholder="https://..."
+                  className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
+                  autoFocus
+                />
+                <button
+                  onClick={() => handleSaveUrl(item.id)}
+                  className="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 text-sm"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleCancelEditUrl}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 text-white/50 hover:bg-white/10 text-sm"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </SwipeToAssign>
+    );
+  };
+
+  // Render a group header with inline actions
+  const renderGroupHeader = (group: ItemGroup) => {
+    const isEditing =
+      group.groupId !== null && editingGroupId === group.groupId;
+
+    return (
+      <div className="flex items-center gap-1">
+        {/* Collapse toggle + header */}
+        <button
+          onClick={() => toggleGroupCollapse(group.key)}
+          className={cn(
+            "flex-1 flex items-center gap-2 px-3 py-2 rounded-lg transition-all",
+            group.type === "custom"
+              ? "bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20"
+              : group.type === "meal-plan"
+                ? "bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20"
+                : "bg-white/5 hover:bg-white/10 border border-white/10",
+          )}
+        >
+          {group.isCollapsed ? (
+            <ChevronRight className="w-4 h-4 text-white/50 flex-shrink-0" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-white/50 flex-shrink-0" />
+          )}
+          {group.type === "meal-plan" ? (
+            <UtensilsCrossed className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          ) : group.type === "custom" ? (
+            <FolderOpen className="w-4 h-4 text-purple-400 flex-shrink-0" />
+          ) : (
+            <List className="w-4 h-4 text-white/50 flex-shrink-0" />
           )}
 
-          <button
-            onClick={() => onDeleteItem(item.id)}
-            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-all"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {editingUrlFor === item.id && (
-        <div className="px-3 pb-3 pt-0">
-          <div className="flex gap-2">
+          {isEditing ? (
             <input
-              type="url"
-              value={urlInputValue}
-              onChange={(e) => setUrlInputValue(e.target.value)}
+              type="text"
+              value={editingGroupName}
+              onChange={(e) => setEditingGroupName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleSaveUrl(item.id);
+                e.stopPropagation();
+                if (e.key === "Enter" && group.groupId) {
+                  renameGroup(group.groupId, editingGroupName);
                 } else if (e.key === "Escape") {
-                  handleCancelEditUrl();
+                  setEditingGroupId(null);
+                  setEditingGroupName("");
                 }
               }}
-              placeholder="https://..."
-              className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500/50"
+              onBlur={() => {
+                if (group.groupId && editingGroupName.trim()) {
+                  renameGroup(group.groupId, editingGroupName);
+                } else {
+                  setEditingGroupId(null);
+                  setEditingGroupName("");
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 px-1.5 py-0.5 text-sm font-medium bg-white/10 border border-white/20 rounded text-white focus:outline-none focus:border-purple-400"
               autoFocus
             />
-            <button
-              onClick={() => handleSaveUrl(item.id)}
-              className="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 text-sm"
+          ) : (
+            <span
+              className={cn(
+                "text-sm font-medium flex-1 text-left truncate",
+                group.type === "custom"
+                  ? "text-purple-300"
+                  : group.type === "meal-plan"
+                    ? "text-emerald-300"
+                    : "text-white/70",
+              )}
             >
-              Save
-            </button>
+              {group.name}
+            </span>
+          )}
+
+          {group.plannedDate && (
+            <span className="text-xs text-white/40 flex-shrink-0">
+              {new Date(group.plannedDate).toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              })}
+            </span>
+          )}
+          <span className="text-xs text-white/40 bg-white/10 px-2 py-0.5 rounded-full flex-shrink-0">
+            {group.items.length}
+          </span>
+        </button>
+
+        {/* Group actions - only for custom groups */}
+        {group.type === "custom" && group.groupId && !isEditing && (
+          <div
+            className="relative"
+            ref={groupMenuOpen === group.groupId ? groupMenuRef : undefined}
+          >
             <button
-              onClick={handleCancelEditUrl}
-              className="px-3 py-1.5 rounded-lg bg-white/5 text-white/50 hover:bg-white/10 text-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setGroupMenuOpen(
+                  groupMenuOpen === group.groupId ? null : group.groupId,
+                );
+              }}
+              className="p-2 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/70 transition-all"
             >
-              <X className="w-4 h-4" />
+              <MoreHorizontal className="w-4 h-4" />
             </button>
+
+            {groupMenuOpen === group.groupId && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-gray-900 border border-white/10 rounded-lg shadow-xl overflow-hidden min-w-[140px]">
+                <button
+                  onClick={() => {
+                    setEditingGroupId(group.groupId);
+                    setEditingGroupName(group.name);
+                    setGroupMenuOpen(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-all"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  Rename
+                </button>
+                <button
+                  onClick={() => {
+                    setGroupMenuOpen(null);
+                    if (group.groupId) deleteGroup(group.groupId);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -872,7 +1759,6 @@ export function ShoppingListView({
               maxHeight: "120px",
             }}
             onInput={(e) => {
-              // Auto-resize textarea
               const target = e.target as HTMLTextAreaElement;
               target.style.height = "42px";
               target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
@@ -887,11 +1773,44 @@ export function ShoppingListView({
             <Plus className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Active group indicator + group selector */}
+        {shoppingGroups.length > 0 && (
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            <span className="text-[10px] text-white/30 uppercase tracking-wider">
+              Add to:
+            </span>
+            <button
+              onClick={() => setActiveGroupId(null)}
+              className={cn(
+                "px-2 py-0.5 rounded-md text-xs transition-all",
+                activeGroupId === null
+                  ? "bg-white/15 text-white font-medium"
+                  : "bg-white/5 text-white/50 hover:bg-white/10",
+              )}
+            >
+              General
+            </button>
+            {shoppingGroups.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => setActiveGroupId(g.id)}
+                className={cn(
+                  "px-2 py-0.5 rounded-md text-xs transition-all",
+                  activeGroupId === g.id
+                    ? "bg-purple-500/30 text-purple-300 font-medium"
+                    : "bg-white/5 text-white/50 hover:bg-purple-500/10",
+                )}
+              >
+                {g.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Shopping List - Scrollable */}
       <div className="flex-1 overflow-y-auto px-4 pb-24">
-        {/* Loading skeleton */}
         {isLoading ? (
           <div className="py-4 space-y-3">
             {[1, 2, 3, 4].map((i) => (
@@ -914,9 +1833,91 @@ export function ShoppingListView({
           </div>
         ) : (
           <>
-            {/* Unchecked Items - Grouped by Meal Plan */}
-            <div className="py-4 space-y-4">
-              {uncheckedItems.length === 0 && checkedItemsList.length === 0 ? (
+            {/* Toolbar: Collapse All/Expand All + Add Group */}
+            {(uncheckedGrouped.length > 1 ||
+              shoppingGroups.length > 0 ||
+              uncheckedItems.length > 0) && (
+              <div className="flex items-center justify-between pt-3 pb-1">
+                <div className="flex items-center gap-2">
+                  {uncheckedGrouped.length > 1 && (
+                    <button
+                      onClick={allCollapsed ? expandAll : collapseAll}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-all"
+                    >
+                      {allCollapsed ? (
+                        <>
+                          <ChevronsUpDown className="w-3.5 h-3.5" />
+                          Expand all
+                        </>
+                      ) : (
+                        <>
+                          <ChevronsDownUp className="w-3.5 h-3.5" />
+                          Collapse all
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {/* Create group inline */}
+                {isCreatingGroup ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          createGroup(newGroupName);
+                          setNewGroupName("");
+                          setIsCreatingGroup(false);
+                        } else if (e.key === "Escape") {
+                          setIsCreatingGroup(false);
+                          setNewGroupName("");
+                        }
+                      }}
+                      placeholder="Group name..."
+                      className="px-2.5 py-1 text-xs rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-purple-500/50 w-32"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => {
+                        createGroup(newGroupName);
+                        setNewGroupName("");
+                        setIsCreatingGroup(false);
+                      }}
+                      disabled={!newGroupName.trim()}
+                      className="p-1 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 disabled:opacity-30 transition-all"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsCreatingGroup(false);
+                        setNewGroupName("");
+                      }}
+                      className="p-1 rounded-lg hover:bg-white/10 text-white/40 transition-all"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsCreatingGroup(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-purple-400 hover:bg-purple-500/10 transition-all"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5" />
+                    New group
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Unchecked Items - Grouped */}
+            <div className="py-2 space-y-4">
+              {uncheckedItems.length === 0 &&
+              checkedItemsList.length === 0 &&
+              shoppingGroups.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <span className="text-5xl mb-3">🛒</span>
                   <p className="text-sm text-white/50">
@@ -926,68 +1927,38 @@ export function ShoppingListView({
                     Add items above to get started
                   </p>
                 </div>
-              ) : uncheckedItems.length === 0 ? (
+              ) : uncheckedItems.length === 0 && shoppingGroups.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 text-center">
                   <span className="text-4xl mb-2">✅</span>
                   <p className="text-sm text-white/50">All items checked!</p>
                   <p className="text-xs text-white/30 mt-1">
-                    Tap "Clear completed" when done shopping
+                    Tap &quot;Clear completed&quot; when done shopping
                   </p>
                 </div>
               ) : (
                 uncheckedGrouped.map((group) => (
-                  <div key={group.mealPlanId ?? "manual"} className="space-y-2">
-                    {/* Group Header - Collapsible */}
-                    <button
-                      onClick={() => toggleMealPlanCollapse(group.mealPlanId)}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all",
-                        group.mealPlanId
-                          ? "bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20"
-                          : "bg-white/5 hover:bg-white/10 border border-white/10",
-                      )}
-                    >
-                      {group.isCollapsed ? (
-                        <ChevronRight className="w-4 h-4 text-white/50" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4 text-white/50" />
-                      )}
-                      {group.mealPlanId ? (
-                        <UtensilsCrossed className="w-4 h-4 text-emerald-400" />
-                      ) : (
-                        <span className="text-base">📝</span>
-                      )}
-                      <span
-                        className={cn(
-                          "text-sm font-medium flex-1 text-left",
-                          group.mealPlanId
-                            ? "text-emerald-300"
-                            : "text-white/70",
-                        )}
-                      >
-                        {group.recipeName ?? "Manual Items"}
-                      </span>
-                      {group.plannedDate && (
-                        <span className="text-xs text-white/40">
-                          {new Date(group.plannedDate).toLocaleDateString(
-                            "en-US",
-                            {
-                              weekday: "short",
-                              month: "short",
-                              day: "numeric",
-                            },
-                          )}
-                        </span>
-                      )}
-                      <span className="text-xs text-white/40 bg-white/10 px-2 py-0.5 rounded-full">
-                        {group.items.length}
-                      </span>
-                    </button>
+                  <div key={group.key} className="space-y-2">
+                    {/* Only show group header if there are multiple groups or items in this group */}
+                    {(uncheckedGrouped.length > 1 || group.type === "custom") &&
+                      renderGroupHeader(group)}
 
                     {/* Group Items */}
                     {!group.isCollapsed && (
-                      <div className="space-y-2 ml-2">
+                      <div
+                        className={cn(
+                          "space-y-2",
+                          (uncheckedGrouped.length > 1 ||
+                            group.type === "custom") &&
+                            "ml-2",
+                        )}
+                      >
                         {group.items.map((item) => renderShoppingItem(item))}
+                        {group.type === "custom" &&
+                          group.items.length === 0 && (
+                            <p className="text-xs text-white/25 text-center py-3 italic">
+                              No items in this group
+                            </p>
+                          )}
                       </div>
                     )}
                   </div>
@@ -1024,37 +1995,63 @@ export function ShoppingListView({
                 </div>
 
                 <div className="space-y-2">
-                  {checkedItemsList.map((item) => (
-                    <div
-                      key={item.id}
-                      className="group flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 opacity-60"
-                    >
-                      {/* Checked Checkbox */}
-                      <button
-                        onClick={() => toggleCheck(item.id)}
-                        className="w-6 h-6 rounded-md bg-emerald-500 border-2 border-emerald-500 flex items-center justify-center transition-all flex-shrink-0"
+                  {checkedItemsList.map((item) => {
+                    const checkedAssignedToMe =
+                      item.assignedTo === currentUserId;
+                    const checkedAssignedToPartner =
+                      item.assignedTo === partnerId;
+                    return (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "group flex items-center gap-3 p-3 rounded-xl bg-white/5 opacity-60",
+                          checkedAssignedToMe
+                            ? "border-2 border-blue-400/30"
+                            : checkedAssignedToPartner
+                              ? "border-2 border-pink-400/30"
+                              : "border border-white/5",
+                        )}
                       >
-                        <Check className="w-4 h-4 text-white" />
-                      </button>
+                        {/* Checked Checkbox */}
+                        <button
+                          onClick={() => toggleCheck(item.id)}
+                          className="w-6 h-6 rounded-md bg-emerald-500 border-2 border-emerald-500 flex items-center justify-center transition-all flex-shrink-0"
+                        >
+                          <Check className="w-4 h-4 text-white" />
+                        </button>
 
-                      {/* Content - Strikethrough */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-white/50 text-sm line-through">
-                            {item.content}
-                          </span>
+                        {/* Content - Strikethrough */}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-white/50 text-sm line-through">
+                              {item.content}
+                            </span>
 
-                          {/* Quantity - editable even when checked */}
-                          {editingQuantityFor === item.id ? (
-                            <input
-                              type="text"
-                              value={quantityInputValue}
-                              onChange={(e) =>
-                                setQuantityInputValue(e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
+                            {/* Quantity - editable even when checked */}
+                            {editingQuantityFor === item.id ? (
+                              <input
+                                type="text"
+                                value={quantityInputValue}
+                                onChange={(e) =>
+                                  setQuantityInputValue(e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    const trimmedQuantity =
+                                      quantityInputValue.trim();
+                                    setItemQuantity(
+                                      item.id,
+                                      trimmedQuantity || null,
+                                    );
+                                    setEditingQuantityFor(null);
+                                    setQuantityInputValue("");
+                                  } else if (e.key === "Escape") {
+                                    setEditingQuantityFor(null);
+                                    setQuantityInputValue("");
+                                  }
+                                }}
+                                onBlur={() => {
                                   const trimmedQuantity =
                                     quantityInputValue.trim();
                                   setItemQuantity(
@@ -1063,75 +2060,62 @@ export function ShoppingListView({
                                   );
                                   setEditingQuantityFor(null);
                                   setQuantityInputValue("");
-                                } else if (e.key === "Escape") {
-                                  setEditingQuantityFor(null);
+                                }}
+                                placeholder="e.g., 2 bags"
+                                className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium border border-blue-400/50 focus:outline-none focus:border-blue-400 w-24"
+                                autoFocus
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : item.quantity ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingQuantityFor(item.id);
+                                  setQuantityInputValue(item.quantity || "");
+                                }}
+                                className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300/50 text-xs font-medium line-through hover:bg-blue-500/20 transition-all"
+                                title="Click to edit quantity"
+                              >
+                                {item.quantity}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingQuantityFor(item.id);
                                   setQuantityInputValue("");
-                                }
-                              }}
-                              onBlur={() => {
-                                const trimmedQuantity =
-                                  quantityInputValue.trim();
-                                setItemQuantity(
-                                  item.id,
-                                  trimmedQuantity || null,
-                                );
-                                setEditingQuantityFor(null);
-                                setQuantityInputValue("");
-                              }}
-                              placeholder="e.g., 2 bags"
-                              className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium border border-blue-400/50 focus:outline-none focus:border-blue-400 w-24"
-                              autoFocus
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          ) : item.quantity ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingQuantityFor(item.id);
-                                setQuantityInputValue(item.quantity || "");
-                              }}
-                              className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300/50 text-xs font-medium line-through hover:bg-blue-500/20 transition-all"
-                              title="Click to edit quantity"
-                            >
-                              {item.quantity}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingQuantityFor(item.id);
-                                setQuantityInputValue("");
-                              }}
-                              className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300/40 text-xs font-medium hover:bg-blue-500/20 transition-all opacity-0 group-hover:opacity-100"
-                              title="Click to add quantity"
-                            >
-                              + qty
-                            </button>
-                          )}
-                          {enableItemUrls && item.itemUrl && (
-                            <a
-                              href={item.itemUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1 rounded hover:bg-blue-500/20 text-blue-400/60 hover:text-blue-400 transition-all"
-                              onClick={(e) => e.stopPropagation()}
-                              title={item.itemUrl}
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                          )}
+                                }}
+                                className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300/40 text-xs font-medium hover:bg-blue-500/20 transition-all"
+                                title="Click to add quantity"
+                              >
+                                + qty
+                              </button>
+                            )}
+                            {enableItemUrls && item.itemUrl && (
+                              <a
+                                href={item.itemUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 rounded hover:bg-blue-500/20 text-blue-400/60 hover:text-blue-400 transition-all"
+                                onClick={(e) => e.stopPropagation()}
+                                title={item.itemUrl}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Delete Button */}
-                      <button
-                        onClick={() => onDeleteItem(item.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-all"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
+                        {/* Delete Button */}
+                        <button
+                          onClick={() => onDeleteItem(item.id)}
+                          className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400/60 hover:text-red-400 transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

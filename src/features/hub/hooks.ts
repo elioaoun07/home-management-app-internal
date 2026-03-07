@@ -98,6 +98,7 @@ export type HubMessage = {
   checked_by?: string | null;
   item_url?: string | null; // Hyperlink for shopping items
   item_quantity?: string | null; // Quantity for shopping items (e.g., "2 bags", "1 lb")
+  assigned_to?: string | null; // User ID of the person assigned to get this item
   topic_id?: string | null; // Topic/section within notes thread
   has_links?: boolean; // Whether item has multiple comparison links
   // Inventory integration fields
@@ -109,6 +110,8 @@ export type HubMessage = {
   voice_duration?: number | null; // Duration in seconds
   // Meal plan integration fields
   meal_plan_id?: string | null; // Reference to meal plan if from recipe
+  // Shopping group fields
+  shopping_group_id?: string | null; // Reference to custom shopping group
 };
 
 export type HubFeedItem = {
@@ -976,11 +979,13 @@ export function useSendMessage() {
       thread_id,
       topic_id,
       item_quantity,
+      shopping_group_id,
     }: {
       content: string;
       thread_id: string;
       topic_id?: string;
       item_quantity?: string;
+      shopping_group_id?: string;
     }) => {
       if (!isReallyOnline()) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -989,7 +994,13 @@ export function useSendMessage() {
           operation: "create",
           endpoint: "/api/hub/messages",
           method: "POST",
-          body: { content, thread_id, topic_id, item_quantity },
+          body: {
+            content,
+            thread_id,
+            topic_id,
+            item_quantity,
+            shopping_group_id,
+          },
           tempId,
           metadata: {
             label: `Send message: "${content.slice(0, 30)}${content.length > 30 ? "..." : ""}"`,
@@ -1011,7 +1022,13 @@ export function useSendMessage() {
       const res = await fetch("/api/hub/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, thread_id, topic_id, item_quantity }),
+        body: JSON.stringify({
+          content,
+          thread_id,
+          topic_id,
+          item_quantity,
+          shopping_group_id,
+        }),
       });
       if (!res.ok) throw new Error("Failed to send message");
       const data = await res.json();
