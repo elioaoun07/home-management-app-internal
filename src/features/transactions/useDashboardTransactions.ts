@@ -117,14 +117,59 @@ type DashboardParams = {
   endDate: string;
 };
 
+// --------------- sessionStorage transaction cache ---------------
+// Provides instant rendering on cold start (page refresh / new tab).
+// Optimistic updates ONLY touch React Query's in-memory cache — never
+// sessionStorage — so the two systems can't conflict.
+const TX_CACHE_PREFIX = "tx-cache-";
+const TX_CACHE_MAX_AGE = 30 * 60 * 1000; // 30 minutes
+
+function getTxCacheKey(start: string, end: string) {
+  return `${TX_CACHE_PREFIX}${start}_${end}`;
+}
+
+function readTxCache(
+  start: string,
+  end: string,
+): { data: Transaction[]; ts: number } | undefined {
+  try {
+    const raw = sessionStorage.getItem(getTxCacheKey(start, end));
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.ts > TX_CACHE_MAX_AGE) {
+      sessionStorage.removeItem(getTxCacheKey(start, end));
+      return undefined;
+    }
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeTxCache(start: string, end: string, data: Transaction[]) {
+  try {
+    // Cap at 300 entries to stay well within sessionStorage quota
+    const trimmed = data.slice(0, 300);
+    sessionStorage.setItem(
+      getTxCacheKey(start, end),
+      JSON.stringify({ data: trimmed, ts: Date.now() }),
+    );
+  } catch {
+    /* quota exceeded — ignore */
+  }
+}
+
 /**
  * Fetch transactions for dashboard with aggressive caching
  * Uses stale-while-revalidate pattern for instant UI
  *
- * OPTIMIZED:
- * - 2 minute staleTime (was 0) - reduces unnecessary refetches
- * - Cache for 24 hours in memory
- * - Only refetch on reconnect or explicit invalidation
+ * CACHING STRATEGY:
+ * 1. In-memory: React Query cache (gcTime: 1h) for within-session navigation
+ * 2. Persistent: sessionStorage for cold-start instant rendering
+ *    - Written on every successful fetch
+ *    - Read as `initialData` only when RQ cache is empty
+ *    - Optimistic updates never touch sessionStorage (avoids conflicts)
+ * 3. Staleness: staleTime 0 → always background-refetch on mount to verify freshness
  */
 export function useDashboardTransactions({
   startDate,
@@ -147,9 +192,25 @@ export function useDashboardTransactions({
         throw new Error("Failed to fetch transactions");
       }
 
-      const data = await response.json();
-      return data as Transaction[];
+      const data = (await response.json()) as Transaction[];
+
+      // Persist to sessionStorage for instant cold-start rendering
+      writeTxCache(startDate, endDate, data);
+
+      return data;
     },
+
+    // Seed from sessionStorage so the user never sees a skeleton on page refresh.
+    // Once React Query's own cache has data, initialData is ignored.
+    initialData: () => {
+      if (typeof window === "undefined") return undefined;
+      return readTxCache(startDate, endDate)?.data;
+    },
+    initialDataUpdatedAt: () => {
+      if (typeof window === "undefined") return undefined;
+      return readTxCache(startDate, endDate)?.ts;
+    },
+
     // FRESH DATA STRATEGY:
     // staleTime: 0 means data is immediately stale after fetch
     // This ensures we always refetch on mount to get latest data

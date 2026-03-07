@@ -241,8 +241,8 @@ export default function RecurringPage() {
         {/* Sticky Header with Add Button */}
         <div
           className={cn(
-            "sticky top-14 z-30 pb-4 mb-2 -mx-4 px-4 pt-4 border-b",
-            themeClasses.bgPage,
+            "sticky top-14 z-30 pb-3 mb-3 -mx-4 px-4 pt-3 border-b backdrop-blur-md",
+            "bg-[hsl(var(--header-bg)/0.95)]",
             themeClasses.border,
           )}
         >

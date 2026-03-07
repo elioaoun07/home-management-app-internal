@@ -628,6 +628,17 @@ async function getOrRegisterServiceWorker(): Promise<SWRegistrationWithPush | nu
     let registration = await navigator.serviceWorker.getRegistration("/");
     if (registration) return registration as SWRegistrationWithPush;
 
+    // Only register a NEW service worker in production (or when explicitly enabled).
+    // In development, a stale SW can serve cached HTML/JS causing hydration mismatches.
+    const shouldRegister =
+      process.env.NODE_ENV === "production" ||
+      process.env.NEXT_PUBLIC_ENABLE_SW === "true";
+
+    if (!shouldRegister) {
+      console.log("[Push] Skipping SW registration in development");
+      return null;
+    }
+
     // Register new service worker
     console.log("[Push] Registering service worker...");
     registration = await navigator.serviceWorker.register("/sw.js", {

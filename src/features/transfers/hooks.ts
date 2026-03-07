@@ -167,53 +167,97 @@ export function useCreateTransfer() {
 }
 
 /**
- * Hook to update a transfer
+ * Hook to update a transfer with optimistic UI
  */
 export function useUpdateTransfer() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: updateTransfer,
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: transferKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: ["account-balance", data.from_account_id],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["account-balance", data.to_account_id],
+    onMutate: async (variables) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: transferKeys.all });
+
+      // Snapshot all transfer list queries
+      const previousQueries = queryClient.getQueriesData<Transfer[]>({
+        queryKey: transferKeys.all,
       });
 
-      toast.success("Transfer updated");
+      // Optimistically update all matching transfer lists
+      queryClient.setQueriesData<Transfer[]>(
+        { queryKey: transferKeys.all },
+        (old) => {
+          if (!old) return old;
+          return old.map((t) =>
+            t.id === variables.id ? { ...t, ...variables } : t,
+          );
+        },
+      );
+
+      return { previousQueries };
     },
-    onError: (error) => {
+    onError: (error, _variables, context) => {
+      // Rollback on error
+      if (context?.previousQueries) {
+        for (const [key, data] of context.previousQueries) {
+          queryClient.setQueryData(key, data);
+        }
+      }
       toast.error(
         error instanceof Error ? error.message : "Failed to update transfer",
       );
+    },
+    onSettled: (_data, _error, variables) => {
+      queryClient.invalidateQueries({ queryKey: transferKeys.all });
+      queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === "account-balance",
+      });
     },
   });
 }
 
 /**
- * Hook to delete a transfer
+ * Hook to delete a transfer with optimistic UI
  */
 export function useDeleteTransfer() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: deleteTransfer,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: transferKeys.all });
-      // Also invalidate all account balances since we don't know which ones were affected
-      queryClient.invalidateQueries({
-        predicate: (query) => query.queryKey[0] === "account-balance",
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: transferKeys.all });
+
+      const previousQueries = queryClient.getQueriesData<Transfer[]>({
+        queryKey: transferKeys.all,
       });
 
-      toast.success("Transfer deleted");
+      // Optimistically remove the transfer from all lists
+      queryClient.setQueriesData<Transfer[]>(
+        { queryKey: transferKeys.all },
+        (old) => {
+          if (!old) return old;
+          return old.filter((t) => t.id !== id);
+        },
+      );
+
+      return { previousQueries };
     },
-    onError: (error) => {
+    onError: (error, _id, context) => {
+      // Rollback
+      if (context?.previousQueries) {
+        for (const [key, data] of context.previousQueries) {
+          queryClient.setQueryData(key, data);
+        }
+      }
       toast.error(
         error instanceof Error ? error.message : "Failed to delete transfer",
       );
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: transferKeys.all });
+      queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === "account-balance",
+      });
     },
   });
 }

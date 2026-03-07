@@ -1,6 +1,7 @@
 "use client";
 
 import { useTabSafe } from "@/contexts/TabContext";
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 /**
@@ -20,6 +21,7 @@ import { useEffect } from "react";
  */
 export function DeepLinkHandler() {
   const tabCtx = useTabSafe();
+  const router = useRouter();
 
   useEffect(() => {
     if (!tabCtx) return;
@@ -45,10 +47,14 @@ export function DeepLinkHandler() {
       if (
         tab === "reminder" ||
         tab === "dashboard" ||
-        tab === "hub" ||
+        tab === "recurring" ||
         tab === "expense"
       ) {
         setActiveTab(tab);
+        handled = true;
+      } else if (tab === "hub") {
+        // Legacy: hub tab → route to alerts page
+        router.push("/alerts");
         handled = true;
       }
 
@@ -69,23 +75,19 @@ export function DeepLinkHandler() {
         handled = true;
       }
 
-      // Hub view deep link
-      if (
-        view === "alerts" ||
-        view === "chat" ||
-        view === "feed" ||
-        view === "score"
-      ) {
-        setActiveTab("hub");
-        setHubDefaultView(view);
+      // Hub view deep link → route to standalone /alerts page
+      if (view === "alerts" || view === "feed") {
+        router.push("/alerts");
+        handled = true;
+      } else if (view === "chat" || view === "score") {
+        // Chat and Score still go via hub context (for /chat standalone page)
+        router.push("/chat");
         handled = true;
       }
 
-      // Thread deep link → hub tab, chat view, specific thread
+      // Thread deep link → chat standalone page
       if (thread) {
-        setActiveTab("hub");
-        setHubDefaultView("chat");
-        setPendingThreadId(thread);
+        router.push(`/chat?thread=${thread}`);
         handled = true;
       }
 

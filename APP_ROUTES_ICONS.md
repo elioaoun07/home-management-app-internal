@@ -11,7 +11,7 @@
 | `/expense`   | `expense`   | `ExpenseIcon` (Dollar Sign) | `SemiDonutFAB` custom |
 | `/dashboard` | `dashboard` | `BarChart3Icon`             | `FuturisticIcons.tsx` |
 | `/reminder`  | `reminder`  | `ReminderIcon` (Bell)       | `SemiDonutFAB` custom |
-| `/hub`       | `hub`       | `HubIcon`                   | `FuturisticIcons.tsx` |
+| `/recurring` | `recurring` | `CalendarClockIcon`         | `FuturisticIcons.tsx` |
 
 ---
 
@@ -23,6 +23,7 @@
 | `/catalogue` | Catalogue          | `BookOpen` (lucide)        | `from-emerald-400 to-emerald-600` |
 | `/recipe`    | Recipes            | `UtensilsCrossed` (lucide) | `from-orange-400 to-orange-600`   |
 | `/chat`      | Hub Chat           | `HubIcon` / `MessageIcon`  | `from-cyan-400 to-cyan-600`       |
+| `/alerts`    | Notifications      | `AlertBellIcon`            | Theme-based                       |
 | `/reminders` | Reminders          | `CalendarClockIcon`        | `from-amber-400 to-amber-600`     |
 | `/recurring` | Recurring Payments | `CalendarClockIcon`        | Theme-based                       |
 

@@ -128,6 +128,23 @@ export function ServiceWorkerRegistration() {
 
     if (!shouldRegister) {
       console.log("[SW] Skipping service worker registration in development");
+      // Actively clean up any leftover service workers and caches from
+      // previous production testing or the usePushNotifications registration
+      // path. Stale SWs serve old cached HTML/JS causing hydration mismatches.
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          regs.forEach((r) => {
+            console.log("[SW] Unregistering leftover SW:", r.scope);
+            r.unregister();
+          });
+        });
+        caches.keys().then((keys) => {
+          keys.forEach((k) => {
+            console.log("[SW] Clearing leftover cache:", k);
+            caches.delete(k);
+          });
+        });
+      }
       return;
     }
 

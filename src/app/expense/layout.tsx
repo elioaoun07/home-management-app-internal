@@ -24,10 +24,12 @@ export default function ExpenseLayout({
     const initialTab = localStorage.getItem(INITIAL_TAB_KEY);
     if (
       initialTab &&
-      ["dashboard", "expense", "reminder", "hub"].includes(initialTab)
+      ["dashboard", "expense", "reminder", "recurring"].includes(initialTab)
     ) {
       localStorage.removeItem(INITIAL_TAB_KEY);
-      setActiveTab(initialTab as "dashboard" | "expense" | "reminder" | "hub");
+      setActiveTab(
+        initialTab as "dashboard" | "expense" | "reminder" | "recurring",
+      );
     }
   }, [setActiveTab]);
 

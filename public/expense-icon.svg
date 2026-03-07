@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Expense Tracker App Icon">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#162033"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="coin" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#059669" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#0a1628" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="iconGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feFlood flood-color="#059669" flood-opacity="0.4"/>
+      <feComposite in2="b" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="coinGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feFlood flood-color="#fbbf24" flood-opacity="0.4"/>
+      <feComposite in2="b" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+
+  <!-- Subtle border -->
+  <rect x="10" y="10" width="492" height="492" rx="104" fill="none" stroke="url(#accent)" stroke-width="1.5" opacity="0.18"/>
+
+  <!-- Main icon group -->
+  <g filter="url(#iconGlow)" transform="translate(256,250)">
+
+    <!-- Wallet body -->
+    <rect x="-100" y="-55" width="200" height="120" rx="22" fill="#0f1d2e" stroke="url(#accent)" stroke-width="3.5"/>
+
+    <!-- Wallet flap -->
+    <path d="M-100,-55 L-100,-72 C-100,-85 -88,-95 -75,-95 L60,-95 C68,-95 75,-88 75,-80 L75,-55" 
+          fill="#0f1d2e" stroke="url(#accent)" stroke-width="3.5"/>
+    
+    <!-- Card slot line -->
+    <line x1="-80" y1="-55" x2="80" y2="-55" stroke="url(#accent)" stroke-width="1.5" opacity="0.3"/>
+
+    <!-- Receipt lines -->
+    <rect x="-75" y="-35" width="65" height="5" rx="2.5" fill="url(#accent)" opacity="0.4"/>
+    <rect x="-75" y="-22" width="45" height="4" rx="2" fill="url(#accent)" opacity="0.25"/>
+    <rect x="-75" y="-10" width="55" height="4" rx="2" fill="url(#accent)" opacity="0.3"/>
+
+    <!-- Amount display -->
+    <rect x="-75" y="10" width="90" height="30" rx="8" fill="url(#accent)" opacity="0.12"/>
+    <text x="-30" y="31" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="url(#accent)" opacity="0.8">$24.50</text>
+
+    <!-- Plus button right side -->
+    <circle cx="70" cy="15" r="24" fill="#0f1d2e" stroke="url(#accent)" stroke-width="2.5"/>
+    <line x1="60" y1="15" x2="80" y2="15" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+    <line x1="70" y1="5" x2="70" y2="25" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- Floating coin top-right -->
+  <g filter="url(#coinGlow)" transform="translate(355,140)">
+    <circle cx="0" cy="0" r="28" fill="#1a1a2e" stroke="url(#coin)" stroke-width="3"/>
+    <text x="0" y="9" text-anchor="middle" font-family="system-ui, sans-serif" font-size="28" font-weight="700" fill="url(#coin)">$</text>
+  </g>
+
+  <!-- Decorative corner dots -->
+  <circle cx="90" cy="90" r="4" fill="#059669" opacity="0.25"/>
+  <circle cx="422" cy="422" r="4" fill="#059669" opacity="0.25"/>
+</svg>

@@ -165,7 +165,7 @@ export default function DashboardClientPage() {
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 pt-14">
+    <div className="pt-14">
       {/* App Mode Toggle Header - positioned below main app header */}
       <div
         className={cn(

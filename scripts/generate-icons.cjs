@@ -44,6 +44,22 @@ const remindersOutputs = [
   { size: 512, file: "reminders-maskable-512.png" },
 ];
 
+// Dashboard app icon outputs
+const dashboardOutputs = [
+  { size: 180, file: "dashboard-180.png" },
+  { size: 192, file: "dashboard-192.png" },
+  { size: 512, file: "dashboard-512.png" },
+  { size: 512, file: "dashboard-maskable-512.png" },
+];
+
+// Expense app icon outputs
+const expenseOutputs = [
+  { size: 180, file: "expense-180.png" },
+  { size: 192, file: "expense-192.png" },
+  { size: 512, file: "expense-512.png" },
+  { size: 512, file: "expense-maskable-512.png" },
+];
+
 async function generateIcons(srcSvgPath, outputs, label) {
   if (!fs.existsSync(srcSvgPath)) {
     console.log(
@@ -117,6 +133,20 @@ async function main() {
     path.join(publicDir, "reminders-icon.svg"),
     remindersOutputs,
     "Reminders App",
+  );
+
+  // Generate dashboard app icons (if SVG exists)
+  await generateIcons(
+    path.join(publicDir, "dashboard-icon.svg"),
+    dashboardOutputs,
+    "Dashboard App",
+  );
+
+  // Generate expense app icons (if SVG exists)
+  await generateIcons(
+    path.join(publicDir, "expense-icon.svg"),
+    expenseOutputs,
+    "Expense App",
   );
 
   console.log("\nIcon generation complete.");

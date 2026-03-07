@@ -9,8 +9,8 @@ import DraftsDrawer from "@/components/expense/DraftsDrawer";
 import type { Template } from "@/components/expense/TemplateDrawer";
 import TemplateDrawer from "@/components/expense/TemplateDrawer";
 import {
-  BarChart3Icon,
-  HubIcon,
+  CalendarClockIcon,
+  ListIcon,
   MicIcon,
 } from "@/components/icons/FuturisticIcons";
 import SemiDonutFAB, {
@@ -28,7 +28,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MOBILE_NAV_HEIGHT } from "@/constants/layout";
 import { useTab } from "@/contexts/TabContext";
-import { prefetchDashboardData } from "@/features/dashboard/prefetchDashboard";
 import { useDraftCount } from "@/features/drafts/useDrafts";
 import {
   prefetchAllTabs,
@@ -40,14 +39,14 @@ import { useViewMode } from "@/hooks/useViewMode";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 
-type TabId = "dashboard" | "expense" | "reminder" | "hub";
+type TabId = "dashboard" | "expense" | "reminder" | "recurring";
 
 // Nav items without the primary FAB (now handled by SemiDonutFAB)
-// Left side: Dashboard | Right side: Hub
+// Left side: Dashboard | Right side: Recurring
 const navItems: Array<{
   id: TabId;
   icon: any;
@@ -56,16 +55,22 @@ const navItems: Array<{
 }> = [
   {
     id: "dashboard",
-    icon: BarChart3Icon,
-    label: "Dashboard",
+    icon: ListIcon,
+    label: "Activity",
     position: "left",
   },
-  { id: "hub", icon: HubIcon, label: "Hub", position: "right" },
+  {
+    id: "recurring",
+    icon: CalendarClockIcon,
+    label: "Recurring",
+    position: "right",
+  },
 ];
 
 export default function MobileNav() {
   const themeClasses = useThemeClasses();
   const { activeTab, setActiveTab } = useTab();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const addTransactionMutation = useAddTransaction();
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
@@ -83,6 +88,11 @@ export default function MobileNav() {
     expense: false,
     all: false,
   });
+
+  // Defer route/viewMode-dependent rendering until after hydration to prevent
+  // SSR/client mismatch when PWA service worker serves cached HTML from a different route.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Draft transactions count for floating badge
   const draftCount = useDraftCount();
@@ -116,6 +126,7 @@ export default function MobileNav() {
     "/chat",
     "/reminders",
     "/focus",
+    "/alerts",
   ];
 
   // Prefetch all tabs on initial mount for instant switching
@@ -129,14 +140,6 @@ export default function MobileNav() {
     }
   }, [queryClient]);
 
-  // Prefetch dashboard data on hover/touch for instant navigation
-  const handleDashboardPrefetch = () => {
-    if (!prefetchedRef.current.dashboard) {
-      prefetchedRef.current.dashboard = true;
-      prefetchDashboardData(queryClient);
-    }
-  };
-
   // Prefetch expense data on hover/touch for instant navigation
   const handleExpensePrefetch = () => {
     if (!prefetchedRef.current.expense) {
@@ -145,14 +148,14 @@ export default function MobileNav() {
     }
   };
 
-  // Handle FAB menu selection - navigate to the appropriate tab
+  // Handle FAB menu selection - navigate to the appropriate route
   const handleFABSelect = (mode: FABSelection) => {
     if (mode === "expense") {
-      // Navigate to expense tab for adding expense
       setActiveTab("expense");
+      router.push("/expense");
     } else if (mode === "reminder") {
-      // Navigate to reminder tab for adding reminder
       setActiveTab("reminder");
+      router.push("/expense");
     }
   };
 
@@ -210,18 +213,21 @@ export default function MobileNav() {
     height: `${MOBILE_NAV_HEIGHT}px`,
   };
 
-  // Hide nav in watch/web mode - after all hooks are called
-  if (viewMode === "watch" || viewMode === "web") {
+  // Evaluate hide conditions only after mount to avoid hydration mismatch.
+  // Before mount, always render the full nav tree (matches any server/cached HTML).
+  // After mount, React handles show/hide as a normal update (not hydration).
+  const shouldHide =
+    mounted &&
+    (viewMode === "watch" ||
+      viewMode === "web" ||
+      standaloneRoutes.some((route) => pathname?.startsWith(route)));
+
+  if (shouldHide) {
     return null;
   }
 
-  // Hide nav on guest portal and standalone PWA routes
-  if (standaloneRoutes.some((route) => pathname?.startsWith(route))) {
-    return null;
-  }
-
-  // Offline: show only the centered FAB — no nav bar, just the + button
-  if (!isOnline) {
+  // Offline: show only the centered FAB (only evaluated after mount)
+  if (mounted && !isOnline) {
     return (
       <div
         className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center pb-safe"
@@ -239,24 +245,11 @@ export default function MobileNav() {
 
   return (
     <>
-      {/* Floating QR Scanner Button */}
-      {/* <button
-        type="button"
-        onClick={() => setShowQRScanner(true)}
-        className="fixed bottom-24 left-4 z-50 flex items-center justify-center w-12 h-12 rounded-full bg-cyan-500/90 text-white shadow-lg hover:bg-cyan-600 active:scale-95 transition-all"
-        style={{
-          boxShadow: "0 4px 20px rgba(6, 182, 212, 0.4)",
-        }}
-        aria-label="Scan QR Code"
-      >
-        <ScanIcon className="w-5 h-5" />
-      </button> */}
-
       {/* QR Scanner Drawer */}
       <QRScannerDrawer open={showQRScanner} onOpenChange={setShowQRScanner} />
 
       {/* Floating Draft Transactions Badge */}
-      {draftCount > 0 && (
+      {mounted && draftCount > 0 && (
         <button
           type="button"
           onClick={() => setShowDraftsDrawer(true)}
@@ -285,35 +278,33 @@ export default function MobileNav() {
           ...navSurfaceStyles,
           boxShadow: themeClasses.navShadow,
         }}
+        suppressHydrationWarning
       >
         <div className="flex items-center justify-around gap-1 px-2 h-full">
-          {/* Dashboard Tab */}
+          {/* Activity Tab */}
           <button
             type="button"
             onClick={() => {
               if (navigator.vibrate) navigator.vibrate(10);
               setActiveTab("dashboard");
-
-              // Set dashboard mode based on FAB selection
-              const fabSelection = localStorage.getItem("fab-last-selection");
-              // This will be picked up by DashboardClientPage on mount
+              if (pathname !== "/expense") router.push("/expense");
             }}
-            onMouseEnter={handleDashboardPrefetch}
-            onTouchStart={handleDashboardPrefetch}
+            onMouseEnter={handleExpensePrefetch}
+            onTouchStart={handleExpensePrefetch}
             suppressHydrationWarning
             className={cn(
               "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-2xl transition-all min-w-[52px] hover:scale-105",
               "active:scale-95",
-              activeTab === "dashboard"
+              activeTab === "dashboard" && pathname === "/expense"
                 ? "neo-card neo-glow-sm text-[hsl(var(--nav-icon-active))] bg-[hsl(var(--header-bg))]"
                 : "text-[hsl(var(--nav-text-secondary)/0.75)] hover:text-[hsl(var(--nav-text-secondary))]",
             )}
           >
             <div className="relative">
-              <BarChart3Icon className="w-5 h-5" />
+              <ListIcon className="w-5 h-5" />
             </div>
             <span className="text-[9px] font-medium whitespace-nowrap">
-              Dashboard
+              Activity
             </span>
           </button>
 
@@ -328,27 +319,28 @@ export default function MobileNav() {
             </span>
           </div>
 
-          {/* Hub Tab */}
+          {/* Recurring Tab */}
           <button
             type="button"
             onClick={() => {
               if (navigator.vibrate) navigator.vibrate(10);
-              setActiveTab("hub");
+              setActiveTab("recurring");
+              if (pathname !== "/expense") router.push("/expense");
             }}
             suppressHydrationWarning
             className={cn(
               "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-2xl transition-all min-w-[52px] hover:scale-105",
               "active:scale-95",
-              activeTab === "hub"
+              activeTab === "recurring" && pathname === "/expense"
                 ? "neo-card neo-glow-sm text-[hsl(var(--nav-icon-active))] bg-[hsl(var(--header-bg))]"
                 : "text-[hsl(var(--nav-text-secondary)/0.75)] hover:text-[hsl(var(--nav-text-secondary))]",
             )}
           >
             <div className="relative">
-              <HubIcon className="w-5 h-5" />
+              <CalendarClockIcon className="w-5 h-5" />
             </div>
             <span className="text-[9px] font-medium whitespace-nowrap">
-              Hub
+              Recurring
             </span>
           </button>
         </div>

@@ -5,18 +5,23 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function GuestHeader() {
   const { viewMode } = useViewMode();
   const themeClasses = useThemeClasses();
   const pathname = usePathname();
 
-  // Hide on guest portal and in watch/web mode
-  if (
-    pathname?.startsWith("/g/") ||
-    viewMode === "watch" ||
-    viewMode === "web"
-  ) {
+  // Defer route/viewMode-dependent rendering until after hydration.
+  // Before mount, always render the header (matches server/cached HTML).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const shouldHide =
+    mounted &&
+    (pathname?.startsWith("/g/") || viewMode === "watch" || viewMode === "web");
+
+  if (shouldHide) {
     return null;
   }
 

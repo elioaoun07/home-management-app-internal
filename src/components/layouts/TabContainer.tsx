@@ -7,15 +7,15 @@ import dynamic from "next/dynamic";
 
 // Lazy load non-default tabs for faster initial load
 // MobileExpenseForm is the default start page, so it's loaded eagerly
-const DashboardClientPage = dynamic(
-  () => import("@/app/dashboard/DashboardClientPage"),
+const ActivityView = dynamic(
+  () => import("@/components/activity/ActivityView"),
   { ssr: false },
 );
 const MobileReminderForm = dynamic(
   () => import("@/components/reminder/MobileReminderForm"),
   { ssr: false },
 );
-const HubPage = dynamic(() => import("@/components/hub/HubPage"), {
+const RecurringPage = dynamic(() => import("@/app/recurring/page"), {
   ssr: false,
 });
 
@@ -65,7 +65,7 @@ export default function TabContainer() {
   return (
     <div style={{ visibility: isHydrated ? "visible" : "hidden" }}>
       <div className={activeTab === "dashboard" ? "block" : "hidden"}>
-        <DashboardClientPage />
+        <ActivityView />
       </div>
       <div className={activeTab === "expense" ? "block" : "hidden"}>
         <main className="h-screen">
@@ -77,8 +77,8 @@ export default function TabContainer() {
           <MobileReminderForm />
         </main>
       </div>
-      <div className={activeTab === "hub" ? "block pt-14" : "hidden"}>
-        <HubPage />
+      <div className={activeTab === "recurring" ? "block pt-14" : "hidden"}>
+        <RecurringPage />
       </div>
     </div>
   );

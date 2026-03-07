@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-type Tab = "dashboard" | "expense" | "reminder" | "hub";
+type Tab = "dashboard" | "expense" | "reminder" | "recurring";
 type HubView = "chat" | "feed" | "score" | "alerts";
 
 // Key for FAB selection (source of truth for which form to show)
@@ -34,6 +34,10 @@ const TabContext = createContext<TabContextType | undefined>(undefined);
 export function TabProvider({ children }: { children: ReactNode }) {
   // Always start with "expense" to match server render and avoid hydration mismatch
   const [activeTab, setActiveTab] = useState<Tab>("expense");
+  // Legacy support: convert "hub" to "recurring" for any old deep links
+  const setActiveTabSafe = (tab: Tab | "hub") => {
+    setActiveTab(tab === ("hub" as any) ? "recurring" : (tab as Tab));
+  };
   const [hubDefaultView, setHubDefaultView] = useState<HubView | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   // Deep link state for notification routing
@@ -55,7 +59,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
     <TabContext.Provider
       value={{
         activeTab,
-        setActiveTab,
+        setActiveTab: setActiveTabSafe as (tab: Tab) => void,
         hubDefaultView,
         setHubDefaultView,
         isHydrated,

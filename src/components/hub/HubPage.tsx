@@ -155,11 +155,20 @@ const viewOptions: Array<{
 interface HubPageProps {
   standalone?: boolean;
   initialThreadId?: string;
+  /** Restrict which views are shown in the view switcher */
+  allowedViews?: HubView[];
+  /** Override the initial view (used by standalone alerts page) */
+  initialView?: HubView;
+  /** Hide the DailyPulse header */
+  hideHeader?: boolean;
 }
 
 export default function HubPage({
   standalone = false,
   initialThreadId,
+  allowedViews,
+  initialView,
+  hideHeader = false,
 }: HubPageProps) {
   const themeClasses = useThemeClasses();
   const {
@@ -175,6 +184,18 @@ export default function HubPage({
   // Use persistent state for Hub UI
   const { activeView, setActiveView, activeThreadId, setActiveThreadId } =
     useHubState();
+
+  // Compute filtered view options
+  const filteredViewOptions = allowedViews
+    ? viewOptions.filter((v) => allowedViews.includes(v.id))
+    : viewOptions;
+
+  // Handle initialView prop (from standalone alerts page)
+  useEffect(() => {
+    if (initialView) {
+      setActiveView(initialView);
+    }
+  }, [initialView, setActiveView]);
 
   // Handle initialThreadId prop (from /chat?thread=ID)
   useEffect(() => {
@@ -215,18 +236,18 @@ export default function HubPage({
       {/* Offline/Error Banner - Shows when connectivity issues */}
       <OfflineBanner />
 
-      {/* Daily Pulse Header - Hide when inside a thread or in standalone mode */}
-      {!activeThreadId && !standalone && (
+      {/* Daily Pulse Header - Hide when inside a thread, in standalone mode, or when hideHeader is set */}
+      {!activeThreadId && !standalone && !hideHeader && (
         <div className="px-4 py-3">
           <DailyPulse />
         </div>
       )}
 
-      {/* View Switcher - Hide when inside a thread or in standalone mode */}
-      {!activeThreadId && !standalone && (
+      {/* View Switcher - Hide when inside a thread; show filtered options when allowedViews is set */}
+      {!activeThreadId && (!standalone || allowedViews) && (
         <div className="px-4 mb-4">
           <div className="flex gap-1 p-1 rounded-2xl neo-card bg-bg-card-custom border border-white/5">
-            {viewOptions.map((option) => {
+            {filteredViewOptions.map((option) => {
               const Icon = option.icon;
               const isActive = activeView === option.id;
               return (
@@ -253,7 +274,7 @@ export default function HubPage({
       <div
         className={cn(!activeThreadId && "px-4", activeThreadId && "h-full")}
       >
-        {(activeView === "chat" || standalone) && (
+        {(activeView === "chat" || (standalone && !allowedViews)) && (
           <ChatView
             activeThreadId={activeThreadId}
             setActiveThreadId={setActiveThreadId}

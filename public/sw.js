@@ -1,7 +1,7 @@
 // Service Worker for Push Notifications + Offline Caching
 // Handles push events, displays notifications with alarm-like behavior, and caches app shell
 
-const SW_VERSION = "3.2.0";
+const SW_VERSION = "3.3.0";
 
 // ============================================
 // CACHE CONFIGURATION
@@ -155,11 +155,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Next.js chunks, RSC payloads & other JS/CSS — Cache with network-first for dynamic, cache-first for static
+  // Next.js chunks, RSC payloads & other JS/CSS — Network-first with cache fallback
+  // Using network-first prevents stale JS chunks from causing hydration mismatches
   if (url.pathname.startsWith("/_next/")) {
     event.respondWith(
       caches.match(request).then((cached) => {
-        if (cached) return cached;
         return fetch(request)
           .then((response) => {
             if (response.ok) {

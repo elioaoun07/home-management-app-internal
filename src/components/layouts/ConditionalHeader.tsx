@@ -8,6 +8,7 @@ import { useViewMode } from "@/hooks/useViewMode";
 import { ChevronLeft, Home } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 // Standalone app configuration
 const STANDALONE_APPS: Record<
@@ -25,6 +26,7 @@ const STANDALONE_APPS: Record<
     hideNavigation: true,
   },
   "/reminders": { title: "Reminders", color: "from-amber-400 to-amber-600" },
+  "/alerts": { title: "Notifications", color: "from-blue-400 to-purple-500" },
 };
 
 type Props = {
@@ -43,21 +45,30 @@ export default function ConditionalHeader({
   const themeClasses = useThemeClasses();
   const pathname = usePathname();
 
-  // Hide header on guest portal and in watch/web mode
-  if (
-    pathname?.startsWith("/g/") ||
-    viewMode === "watch" ||
-    viewMode === "web"
-  ) {
+  // Defer route-dependent rendering until after hydration to prevent
+  // SSR/client mismatch when PWA service worker serves cached HTML
+  // from a different route.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // Evaluate hide/standalone conditions only after mount to avoid hydration
+  // mismatch. Before mount, always falls through to the default header
+  // (matches any server-rendered or SW-cached HTML).
+  const shouldHide =
+    mounted &&
+    (pathname?.startsWith("/g/") || viewMode === "watch" || viewMode === "web");
+
+  if (shouldHide) {
     return null;
   }
 
-  // Check if this is a standalone app route
-  const standaloneApp = Object.entries(STANDALONE_APPS).find(([route]) =>
-    pathname?.startsWith(route),
-  );
+  const standaloneApp = mounted
+    ? Object.entries(STANDALONE_APPS).find(([route]) =>
+        pathname?.startsWith(route),
+      )
+    : null;
 
-  // Render standalone header for standalone apps
+  // Render standalone header for standalone apps (only after mount)
   if (standaloneApp) {
     const [, config] = standaloneApp;
     return (
@@ -99,7 +110,7 @@ export default function ConditionalHeader({
     );
   }
 
-  // Always show header with UserMenu on all tabs
+  // Default header (also used as initial SSR render for all routes)
   return (
     <header className="fixed top-0 left-0 right-0 h-14 bg-[hsl(var(--header-bg)/0.98)] backdrop-blur-xl border-b border-[hsl(var(--header-border)/0.3)] flex items-center justify-between px-4 z-50 shadow-lg shadow-black/5">
       <div className="flex items-center gap-2">

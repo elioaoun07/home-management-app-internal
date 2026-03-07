@@ -122,7 +122,7 @@ export default function NotificationModal({
         } else if (tab === "reminder") {
           setActiveTab("reminder");
         } else if (tab === "hub") {
-          setActiveTab("hub");
+          router.push("/alerts");
         } else if (route === "/expense" || action === "add-expense") {
           setActiveTab("expense");
         } else if (action === "split-bill") {
@@ -171,7 +171,7 @@ export default function NotificationModal({
       } else if (route === "/reminder") {
         setActiveTab("reminder");
       } else if (route.startsWith("/hub")) {
-        setActiveTab("hub");
+        router.push("/alerts");
       } else {
         router.push(route);
       }
@@ -191,9 +191,7 @@ export default function NotificationModal({
 
   const handleViewAll = () => {
     onOpenChange(false);
-    // Set the hub default view before navigating
-    setHubDefaultView("alerts");
-    setActiveTab("hub");
+    router.push("/alerts");
   };
 
   const handleMarkAllRead = () => {
@@ -472,7 +470,7 @@ export default function NotificationModal({
             variant="outline"
             className="w-full border-white/20 text-white/70 hover:text-white hover:bg-white/10"
           >
-            View All in Hub
+            View All Alerts
             <ExternalLink className="w-4 h-4 ml-2" />
           </Button>
         </SheetFooter>

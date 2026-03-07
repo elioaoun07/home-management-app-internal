@@ -100,10 +100,13 @@ export default function AIChatAssistant() {
   const themeClasses = useThemeClasses();
   const pathname = usePathname();
 
-  // Hide AI chat button on Hub tab (Hub has its own AI chat) and standalone /chat page
-  const isHubTab = tabContext?.activeTab === "hub";
-  const isChatPage = pathname?.startsWith("/chat");
-  const shouldHideButton = isHubTab || isChatPage;
+  // Defer pathname check until after hydration to prevent SSR/client mismatch
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // Hide AI chat button on standalone /chat page (only after mount)
+  const isChatPage = mounted && pathname?.startsWith("/chat");
+  const shouldHideButton = isChatPage;
   const [isExiting, setIsExiting] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
