@@ -281,13 +281,13 @@ export default function HubPage({
             standalone={standalone}
           />
         )}
-        {activeView === "feed" && !activeThreadId && !standalone && (
+        {activeView === "feed" && !activeThreadId && (!standalone || allowedViews?.includes("feed")) && (
           <FeedView />
         )}
         {activeView === "score" && !activeThreadId && !standalone && (
           <ScoreboardView />
         )}
-        {activeView === "alerts" && !activeThreadId && !standalone && (
+        {activeView === "alerts" && !activeThreadId && (!standalone || allowedViews?.includes("alerts")) && (
           <AlertsView />
         )}
       </div>
