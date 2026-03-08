@@ -121,6 +121,7 @@ export default function MobileNav() {
   // Standalone routes list (checked after hooks)
   const standaloneRoutes = [
     "/g/",
+    "/temp",
     "/catalogue",
     "/recipe",
     "/chat",

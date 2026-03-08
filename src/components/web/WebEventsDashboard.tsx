@@ -48,7 +48,7 @@ function getItemDate(item: ItemWithDetails): Date | null {
 // Check if item is overdue (considers occurrence actions for recurring items)
 function isOverdueWithActions(
   item: ItemWithDetails,
-  actions: ItemOccurrenceAction[]
+  actions: ItemOccurrenceAction[],
 ): boolean {
   const date = getItemDate(item);
   if (!date) return false;
@@ -118,7 +118,7 @@ function StatsCard({
   title: string;
   value: number | string;
   subtitle?: string;
-  icon: React.ElementType;
+  icon: React.ComponentType<{ className?: string }>;
   color: string;
   trend?: "up" | "down" | "neutral";
 }) {
@@ -249,7 +249,7 @@ function StatsCard({
           : isFrost
             ? "bg-white shadow-sm"
             : "bg-gradient-to-br from-[#1a2942]/80 to-[#0f1d2e]/80",
-        border
+        border,
       )}
     >
       <div className="flex items-center gap-2">
@@ -265,7 +265,7 @@ function StatsCard({
                 ? "text-stone-400"
                 : isFrost
                   ? "text-slate-600"
-                  : "text-white/70"
+                  : "text-white/70",
             )}
           >
             {title}
@@ -293,7 +293,7 @@ function StreakDisplay({ streak, label }: { streak: number; label: string }) {
           ? "bg-gradient-to-br from-amber-900/20 to-orange-900/20 border-amber-700/30"
           : isFrost
             ? "bg-orange-50 border-orange-200"
-            : "bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/30"
+            : "bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/30",
       )}
     >
       <div
@@ -303,7 +303,7 @@ function StreakDisplay({ streak, label }: { streak: number; label: string }) {
             ? "bg-amber-900/30"
             : isFrost
               ? "bg-orange-100"
-              : "bg-orange-500/20"
+              : "bg-orange-500/20",
         )}
       >
         <Flame
@@ -313,7 +313,7 @@ function StreakDisplay({ streak, label }: { streak: number; label: string }) {
               ? "text-amber-400"
               : isFrost
                 ? "text-orange-600"
-                : "text-orange-400"
+                : "text-orange-400",
           )}
         />
       </div>
@@ -325,7 +325,7 @@ function StreakDisplay({ streak, label }: { streak: number; label: string }) {
               ? "text-amber-400"
               : isFrost
                 ? "text-orange-600"
-                : "text-orange-400"
+                : "text-orange-400",
           )}
         >
           {streak}
@@ -337,7 +337,7 @@ function StreakDisplay({ streak, label }: { streak: number; label: string }) {
               ? "text-stone-500"
               : isFrost
                 ? "text-slate-500"
-                : "text-white/50"
+                : "text-white/50",
           )}
         >
           {label}
@@ -373,13 +373,13 @@ function UpcomingItemsList({
             ? "text-stone-500"
             : isFrost
               ? "text-slate-400"
-              : "text-white/40"
+              : "text-white/40",
         )}
       >
         <Calendar
           className={cn(
             "w-8 h-8 mx-auto mb-2",
-            isCalm ? "opacity-50" : isFrost ? "opacity-60" : "opacity-50"
+            isCalm ? "opacity-50" : isFrost ? "opacity-60" : "opacity-50",
           )}
         />
         <p className="text-sm">{emptyMessage}</p>
@@ -396,7 +396,7 @@ function UpcomingItemsList({
             ? "text-stone-400"
             : isFrost
               ? "text-slate-600"
-              : "text-white/70"
+              : "text-white/70",
         )}
       >
         {title}
@@ -416,7 +416,7 @@ function UpcomingItemsList({
                 ? "bg-stone-800/50 border border-stone-700/50 hover:bg-stone-700/50"
                 : isFrost
                   ? "bg-slate-50 border border-slate-200 hover:bg-slate-100"
-                  : "bg-white/5 border border-white/10 hover:bg-white/10"
+                  : "bg-white/5 border border-white/10 hover:bg-white/10",
             )}
           >
             {/* Type Icon */}
@@ -439,7 +439,7 @@ function UpcomingItemsList({
                       ? "bg-stone-700"
                       : isFrost
                         ? "bg-violet-100"
-                        : "bg-purple-500/20"
+                        : "bg-purple-500/20",
               )}
             >
               {item.type === "event" ? (
@@ -450,7 +450,7 @@ function UpcomingItemsList({
                       ? "text-stone-300"
                       : isFrost
                         ? "text-pink-600"
-                        : "text-pink-400"
+                        : "text-pink-400",
                   )}
                 />
               ) : item.type === "reminder" ? (
@@ -461,7 +461,7 @@ function UpcomingItemsList({
                       ? "text-emerald-400"
                       : isFrost
                         ? "text-indigo-600"
-                        : "text-cyan-400"
+                        : "text-cyan-400",
                   )}
                 />
               ) : (
@@ -472,7 +472,7 @@ function UpcomingItemsList({
                       ? "text-stone-300"
                       : isFrost
                         ? "text-violet-600"
-                        : "text-purple-400"
+                        : "text-purple-400",
                   )}
                 />
               )}
@@ -487,7 +487,7 @@ function UpcomingItemsList({
                     ? "text-stone-200"
                     : isFrost
                       ? "text-slate-900"
-                      : "text-white"
+                      : "text-white",
                 )}
               >
                 {item.title}
@@ -502,7 +502,7 @@ function UpcomingItemsList({
                         ? "text-stone-500"
                         : isFrost
                           ? "text-slate-500"
-                          : "text-white/50"
+                          : "text-white/50",
                   )}
                 >
                   {isToday(date)
@@ -523,7 +523,7 @@ function UpcomingItemsList({
                     ? "bg-red-900/40 text-red-400"
                     : isFrost
                       ? "bg-red-100 text-red-600"
-                      : "bg-red-500/20 text-red-400"
+                      : "bg-red-500/20 text-red-400",
                 )}
               >
                 Overdue
@@ -555,17 +555,17 @@ export default function WebEventsDashboard() {
 
     // Filter out archived items
     const activeItems = allItems.filter(
-      (i) => i.status !== "archived" && !i.archived_at
+      (i) => i.status !== "archived" && !i.archived_at,
     );
 
     // Items by status
     const completed = activeItems.filter((i) => i.status === "completed");
     const pending = activeItems.filter(
-      (i) => i.status === "pending" || i.status === "in_progress"
+      (i) => i.status === "pending" || i.status === "in_progress",
     );
     // Use isOverdueWithActions to check occurrence completions
     const overdue = pending.filter((i) =>
-      isOverdueWithActions(i, occurrenceActions)
+      isOverdueWithActions(i, occurrenceActions),
     );
 
     // Items today
@@ -651,7 +651,7 @@ export default function WebEventsDashboard() {
 
     // Postponed count from occurrence actions
     const postponedCount = occurrenceActions.filter(
-      (a) => a.action_type === "postponed"
+      (a) => a.action_type === "postponed",
     ).length;
 
     return {
@@ -681,7 +681,7 @@ export default function WebEventsDashboard() {
                   "h-20 rounded-lg animate-pulse",
                   isCalm
                     ? "bg-gradient-to-br from-[#292524] to-[#1c1917]"
-                    : "bg-gradient-to-br from-[#1a2942] to-[#0f1d2e]"
+                    : "bg-gradient-to-br from-[#1a2942] to-[#0f1d2e]",
                 )}
               />
             ))}
@@ -706,7 +706,7 @@ export default function WebEventsDashboard() {
                     ? "bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500"
                     : isPink
                       ? "bg-gradient-to-r from-pink-300 via-pink-400 to-purple-400"
-                      : "bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400"
+                      : "bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400",
               )}
             >
               Dashboard
@@ -759,7 +759,7 @@ export default function WebEventsDashboard() {
                 ? "bg-gradient-to-br from-[#292524]/90 to-[#1c1917]/90 border-stone-700/50"
                 : isFrost
                   ? "bg-white border-indigo-200 shadow-sm"
-                  : "bg-gradient-to-br from-[#1a2942]/80 to-[#0f1d2e]/80 border-white/10"
+                  : "bg-gradient-to-br from-[#1a2942]/80 to-[#0f1d2e]/80 border-white/10",
             )}
           >
             <h3
@@ -769,7 +769,7 @@ export default function WebEventsDashboard() {
                   ? "text-stone-400"
                   : isFrost
                     ? "text-slate-600"
-                    : "text-white/70"
+                    : "text-white/70",
               )}
             >
               Weekly Progress
@@ -783,7 +783,7 @@ export default function WebEventsDashboard() {
                       ? "bg-stone-700"
                       : isFrost
                         ? "bg-slate-200"
-                        : "bg-white/10"
+                        : "bg-white/10",
                   )}
                 >
                   <motion.div
@@ -798,7 +798,7 @@ export default function WebEventsDashboard() {
                           ? "bg-gradient-to-r from-indigo-500 to-violet-500"
                           : isPink
                             ? "bg-gradient-to-r from-pink-500 to-purple-500"
-                            : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                            : "bg-gradient-to-r from-cyan-500 to-blue-500",
                     )}
                   />
                 </div>
@@ -810,7 +810,7 @@ export default function WebEventsDashboard() {
                     ? "text-stone-200"
                     : isFrost
                       ? "text-slate-900"
-                      : "text-white"
+                      : "text-white",
                 )}
               >
                 {stats.completionRate}%
@@ -823,7 +823,7 @@ export default function WebEventsDashboard() {
                   ? "text-stone-500"
                   : isFrost
                     ? "text-slate-400"
-                    : "text-white/40"
+                    : "text-white/40",
               )}
             >
               Based on items from the last 7 days
@@ -851,8 +851,8 @@ export default function WebEventsDashboard() {
                       "bg-gradient-to-br from-[#1a2942]/80 to-[#0f1d2e]/80",
                       stats.overdue > 0
                         ? "border-red-500/30"
-                        : "border-white/10"
-                    )
+                        : "border-white/10",
+                    ),
             )}
           >
             <div className="flex items-center justify-between mb-4">
@@ -870,7 +870,7 @@ export default function WebEventsDashboard() {
                         ? "text-stone-500"
                         : isFrost
                           ? "text-slate-400"
-                          : "text-white/40"
+                          : "text-white/40",
                   )}
                 />
                 <h3
@@ -880,7 +880,7 @@ export default function WebEventsDashboard() {
                       ? "text-stone-200"
                       : isFrost
                         ? "text-slate-900"
-                        : "text-white"
+                        : "text-white",
                   )}
                 >
                   Overdue
@@ -894,7 +894,7 @@ export default function WebEventsDashboard() {
                       ? "bg-red-900/40 text-red-400"
                       : isFrost
                         ? "bg-red-100 text-red-600"
-                        : "bg-red-500/20 text-red-400"
+                        : "bg-red-500/20 text-red-400",
                   )}
                 >
                   {stats.overdue} items
@@ -920,7 +920,7 @@ export default function WebEventsDashboard() {
                 ? "bg-gradient-to-br from-[#292524]/90 to-[#1c1917]/90 border-stone-700/50"
                 : isFrost
                   ? "bg-white border-indigo-200 shadow-sm"
-                  : "bg-gradient-to-br from-[#1a2942]/80 to-[#0f1d2e]/80 border-white/10"
+                  : "bg-gradient-to-br from-[#1a2942]/80 to-[#0f1d2e]/80 border-white/10",
             )}
           >
             <div className="flex items-center justify-between mb-4">
@@ -934,7 +934,7 @@ export default function WebEventsDashboard() {
                         ? "text-indigo-500"
                         : isPink
                           ? "text-pink-400"
-                          : "text-cyan-400"
+                          : "text-cyan-400",
                   )}
                 />
                 <h3
@@ -944,7 +944,7 @@ export default function WebEventsDashboard() {
                       ? "text-stone-200"
                       : isFrost
                         ? "text-slate-900"
-                        : "text-white"
+                        : "text-white",
                   )}
                 >
                   Upcoming
@@ -959,7 +959,7 @@ export default function WebEventsDashboard() {
                       ? "bg-indigo-100 text-indigo-600"
                       : isPink
                         ? "bg-pink-500/20 text-pink-400"
-                        : "bg-cyan-500/20 text-cyan-400"
+                        : "bg-cyan-500/20 text-cyan-400",
                 )}
               >
                 Next 7 days
@@ -985,7 +985,7 @@ export default function WebEventsDashboard() {
               ? "bg-gradient-to-br from-[#292524]/90 to-[#1c1917]/90 border-stone-700/50"
               : isFrost
                 ? "bg-white border-indigo-200 shadow-sm"
-                : "bg-gradient-to-br from-[#1a2942]/80 to-[#0f1d2e]/80 border-white/10"
+                : "bg-gradient-to-br from-[#1a2942]/80 to-[#0f1d2e]/80 border-white/10",
           )}
         >
           <h3
@@ -995,7 +995,7 @@ export default function WebEventsDashboard() {
                 ? "text-stone-200"
                 : isFrost
                   ? "text-slate-900"
-                  : "text-white"
+                  : "text-white",
             )}
           >
             Quick Stats
@@ -1009,7 +1009,7 @@ export default function WebEventsDashboard() {
                     ? "text-stone-200"
                     : isFrost
                       ? "text-slate-900"
-                      : "text-white"
+                      : "text-white",
                 )}
               >
                 {stats.total}
@@ -1021,7 +1021,7 @@ export default function WebEventsDashboard() {
                     ? "text-stone-500"
                     : isFrost
                       ? "text-slate-500"
-                      : "text-white/50"
+                      : "text-white/50",
                 )}
               >
                 Total Items
@@ -1035,7 +1035,7 @@ export default function WebEventsDashboard() {
                     ? "text-emerald-400"
                     : isFrost
                       ? "text-green-600"
-                      : "text-green-400"
+                      : "text-green-400",
                 )}
               >
                 {stats.completed}
@@ -1047,7 +1047,7 @@ export default function WebEventsDashboard() {
                     ? "text-stone-500"
                     : isFrost
                       ? "text-slate-500"
-                      : "text-white/50"
+                      : "text-white/50",
                 )}
               >
                 Completed
@@ -1061,7 +1061,7 @@ export default function WebEventsDashboard() {
                     ? "text-amber-400"
                     : isFrost
                       ? "text-amber-600"
-                      : "text-amber-400"
+                      : "text-amber-400",
                 )}
               >
                 {stats.pending}
@@ -1073,7 +1073,7 @@ export default function WebEventsDashboard() {
                     ? "text-stone-500"
                     : isFrost
                       ? "text-slate-500"
-                      : "text-white/50"
+                      : "text-white/50",
                 )}
               >
                 Pending
@@ -1087,7 +1087,7 @@ export default function WebEventsDashboard() {
                     ? "text-red-400"
                     : isFrost
                       ? "text-red-600"
-                      : "text-red-400"
+                      : "text-red-400",
                 )}
               >
                 {stats.overdue}
@@ -1099,7 +1099,7 @@ export default function WebEventsDashboard() {
                     ? "text-stone-500"
                     : isFrost
                       ? "text-slate-500"
-                      : "text-white/50"
+                      : "text-white/50",
                 )}
               >
                 Overdue

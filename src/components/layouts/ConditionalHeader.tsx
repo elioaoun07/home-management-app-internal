@@ -56,7 +56,10 @@ export default function ConditionalHeader({
   // (matches any server-rendered or SW-cached HTML).
   const shouldHide =
     mounted &&
-    (pathname?.startsWith("/g/") || viewMode === "watch" || viewMode === "web");
+    (pathname?.startsWith("/g/") ||
+      pathname?.startsWith("/temp") ||
+      viewMode === "watch" ||
+      viewMode === "web");
 
   if (shouldHide) {
     return null;

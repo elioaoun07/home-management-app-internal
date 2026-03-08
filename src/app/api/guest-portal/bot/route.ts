@@ -69,107 +69,24 @@ export async function POST(request: NextRequest) {
       }
 
       case "menu": {
-        // Return tonight's hardcoded celebration menu
-        botResponse = `🍽️ **Tonight's Celebration Menu:**
+        // Tonight we're ordering from Toters
+        botResponse = `🍕 **Tonight's Food Situation:**
 
-🥗 **Salad**
-• Winter Salad (Vegan, Vegan dressing)
+The kitchen is off-duty tonight — but we've got an inside man at **Toters** who's been cooking all day! 🛵
 
-🍢 **Starters**
-• Spinach Fatayer (Vegan)
-• Spring Rolls with Sweet Chili Sauce (Vegan)
-• Shrimp Avocado Bites with Mayo (Vegetarian)
+👉 **Order here:** https://dlct3.app.link/
 
-🍳 **Mains**
-• Vegetable Noodles Stir Fry (Vegan)
-• Fish Burger with Tartare Sauce & Cheese
-
-🎉 Bon appétit! Let me know if you have any dietary concerns or allergies!`;
+Pick whatever you're craving. Got allergies? No problem — you can customize your order right in the Toters app. Full control is yours! 🤝`;
         break;
       }
 
       case "allergy_check": {
-        // Check against the hardcoded celebration menu
-        const ingredient = (query || "").toLowerCase().trim();
-        if (!ingredient) {
-          botResponse = `⚠️ Please specify an ingredient to check, e.g. "Does the food contain peanuts?"`;
-          break;
-        }
+        // Redirect to Toters where they can customize their order
+        botResponse = `⚠️ Good thinking! Tonight we're ordering from **Toters**, so you have full control over what you eat.
 
-        // Hardcoded menu with key ingredients
-        const menuItems = [
-          {
-            name: "Winter Salad",
-            ingredients: [
-              "lettuce",
-              "vegetables",
-              "salad",
-              "greens",
-              "vegan dressing",
-            ],
-          },
-          {
-            name: "Spinach Fatayer",
-            ingredients: ["spinach", "pastry", "dough", "flour", "onion"],
-          },
-          {
-            name: "Spring Rolls",
-            ingredients: [
-              "vegetables",
-              "wrapper",
-              "rice paper",
-              "sweet chili sauce",
-              "chili",
-            ],
-          },
-          {
-            name: "Shrimp Avocado Bites",
-            ingredients: [
-              "shrimp",
-              "avocado",
-              "mayo",
-              "mayonnaise",
-              "seafood",
-              "egg",
-            ],
-          },
-          {
-            name: "Vegetable Noodles Stir Fry",
-            ingredients: [
-              "noodles",
-              "vegetables",
-              "soy sauce",
-              "garlic",
-              "ginger",
-            ],
-          },
-          {
-            name: "Fish Burger",
-            ingredients: [
-              "fish",
-              "bread",
-              "bun",
-              "tartare sauce",
-              "cheese",
-              "mayo",
-              "seafood",
-              "egg",
-              "dairy",
-            ],
-          },
-        ];
+👉 **Order here:** https://dlct3.app.link/
 
-        const found = menuItems.filter((item) =>
-          item.ingredients.some(
-            (ing) => ing.includes(ingredient) || ingredient.includes(ing),
-          ),
-        );
-
-        if (found.length > 0) {
-          botResponse = `⚠️ **Allergy Alert!** "${ingredient}" may be found in:\n\n${found.map((item) => `• **${item.name}**`).join("\n")}\n\n🚨 Please inform your host immediately so they can help you with alternatives!`;
-        } else {
-          botResponse = `✅ Great news! Based on tonight's menu, none of the dishes should contain "${ingredient}". However, always double-check with your host to be 100% sure! 😊`;
-        }
+You can customize your order, add special instructions, and avoid any ingredients you're allergic to. If you need help, just ask your host! 🤝`;
         break;
       }
 
@@ -189,22 +106,14 @@ export async function POST(request: NextRequest) {
       }
 
       case "recipes_list": {
-        // Return the hardcoded celebration menu (same as "menu" intent)
-        botResponse = `📖 **Tonight's Menu:**
+        // Toters ordering tonight
+        botResponse = `🛵 **Tonight's Food:**
 
-🥗 **Salad**
-• Winter Salad — Vegan with Vegan dressing
+We're ordering from **Toters** tonight — the kitchen is taking a well-deserved break! 😄
 
-🍢 **Starters**
-• Spinach Fatayer — Vegan
-• Spring Rolls — Vegan, served with Sweet Chili Sauce
-• Shrimp Avocado Bites — Vegetarian, with Mayo
+👉 **Order here:** https://dlct3.app.link/
 
-🍳 **Mains**
-• Vegetable Noodles Stir Fry — Vegan
-• Fish Burger — with Tartare Sauce & Cheese
-
-Check the **Menu** tab for more details! 🎉`;
+Pick whatever you like. Got dietary needs? Customize your order right in the app!`;
         break;
       }
 
@@ -214,8 +123,8 @@ Check the **Menu** tab for more details! 🎉`;
         features.push("• 🛏️ What time we sleep & wake");
         features.push("• 📶 WiFi help");
         features.push("• 📋 House rules");
-        features.push("• 🍽️ Tonight's menu");
-        features.push("• ⚠️ Check food for allergens");
+        features.push("• 🍽️ Tonight's food (ordering from Toters)");
+        features.push("• ⚠️ Dietary needs? Customize your Toters order");
         features.push("• 🍷 Choose your drink");
 
         features.push(

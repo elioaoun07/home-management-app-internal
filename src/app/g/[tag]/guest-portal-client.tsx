@@ -34,7 +34,13 @@ import {
   Wifi,
   Wine,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const DeceptionBoxScene = dynamic(
+  () => import("@/components/guest/DeceptionBoxScene"),
+  { ssr: false },
+);
 
 // ─── Types ─────────────────────────────────────────────
 interface ChatMessage {
@@ -112,7 +118,7 @@ function PortalParticles() {
       o: number;
       c: string;
     }[] = [];
-    const colors = ["#3b82f6", "#06b6d4", "#14b8a6", "#22d3ee"];
+    const colors = ["#dc2626", "#991b1b", "#b91c1c", "#7f1d1d", "#fbbf24"];
     const count = Math.min(
       60,
       Math.floor((canvas.width * canvas.height) / 20000),
@@ -160,7 +166,7 @@ function PortalParticles() {
             ctx.beginPath();
             ctx.moveTo(particles[i].x, particles[i].y);
             ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.strokeStyle = `rgba(6,182,212,${0.1 * (1 - dist / 100)})`;
+            ctx.strokeStyle = `rgba(220,38,38,${0.08 * (1 - dist / 100)})`;
             ctx.lineWidth = 0.4;
             ctx.stroke();
           }
@@ -196,51 +202,51 @@ function PortalParticles() {
 function EraOrb({ pulsing = true }: { pulsing?: boolean }) {
   return (
     <div className="relative w-28 h-28 mx-auto">
-      {/* Celebration outer glow ring */}
+      {/* Noir outer glow ring */}
       <div
         className="absolute -inset-2 rounded-full opacity-60"
         style={{
           background:
-            "conic-gradient(from 0deg, transparent, rgba(251,191,36,0.15), transparent, rgba(244,114,182,0.15), transparent)",
+            "conic-gradient(from 0deg, transparent, rgba(220,38,38,0.15), transparent, rgba(251,191,36,0.12), transparent)",
           animation: "spin 8s linear infinite reverse",
         }}
       />
       <div
         className={cn(
-          "absolute inset-0 rounded-full bg-gradient-to-br from-[#3b82f6]/20 to-[#06b6d4]/20",
+          "absolute inset-0 rounded-full bg-gradient-to-br from-[#dc2626]/20 to-[#991b1b]/20",
           pulsing && "animate-ping",
         )}
         style={{ animationDuration: "3s" }}
       />
       <div
-        className="absolute inset-2 rounded-full border-2 border-dashed border-[#06b6d4]/30"
+        className="absolute inset-2 rounded-full border-2 border-dashed border-[#dc2626]/25"
         style={{ animation: "spin 10s linear infinite" }}
       />
-      <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#3b82f6]/30 to-[#14b8a6]/30 blur-sm" />
-      {/* Original blue gradient orb */}
-      <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#3b82f6] via-[#06b6d4] to-[#14b8a6] flex items-center justify-center shadow-2xl shadow-[#06b6d4]/40">
-        <Bot className="w-10 h-10 text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.6)]" />
+      <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#991b1b]/30 to-[#7f1d1d]/30 blur-sm" />
+      {/* Detective noir gradient orb */}
+      <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#991b1b] via-[#dc2626] to-[#7f1d1d] flex items-center justify-center shadow-2xl shadow-[#dc2626]/40">
+        <Search className="w-10 h-10 text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.6)]" />
       </div>
-      {/* Original sparkles */}
+      {/* Noir sparkles */}
       <Sparkles
-        className="absolute -top-1 -right-1 w-5 h-5 text-[#22d3ee] animate-pulse"
+        className="absolute -top-1 -right-1 w-5 h-5 text-[#fbbf24] animate-pulse"
         style={{ animationDelay: "0ms" }}
       />
       <Sparkles
-        className="absolute -bottom-1 -left-1 w-4 h-4 text-[#3b82f6] animate-pulse"
+        className="absolute -bottom-1 -left-1 w-4 h-4 text-[#dc2626] animate-pulse"
         style={{ animationDelay: "600ms" }}
       />
-      {/* Celebration accents */}
+      {/* Detective accents */}
       <div
-        className="absolute -top-3 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shadow-lg shadow-amber-400/50"
+        className="absolute -top-3 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#fbbf24] animate-pulse shadow-lg shadow-[#fbbf24]/50"
         style={{ animationDelay: "200ms" }}
       />
       <div
-        className="absolute top-1/2 -right-3 -translate-y-1/2 w-1 h-1 rounded-full bg-rose-400 animate-pulse shadow-lg shadow-rose-400/50"
+        className="absolute top-1/2 -right-3 -translate-y-1/2 w-1 h-1 rounded-full bg-[#dc2626] animate-pulse shadow-lg shadow-[#dc2626]/50"
         style={{ animationDelay: "400ms" }}
       />
       <div
-        className="absolute top-1/2 -left-3 -translate-y-1/2 w-1 h-1 rounded-full bg-amber-300 animate-pulse shadow-lg shadow-amber-300/50"
+        className="absolute top-1/2 -left-3 -translate-y-1/2 w-1 h-1 rounded-full bg-[#fbbf24] animate-pulse shadow-lg shadow-[#fbbf24]/50"
         style={{ animationDelay: "800ms" }}
       />
     </div>
@@ -257,7 +263,7 @@ function GlowCard({
   children: React.ReactNode;
   className?: string;
   onClick?: () => void;
-  glow?: "cyan" | "blue" | "teal" | "amber";
+  glow?: "cyan" | "blue" | "teal" | "amber" | "crimson";
 }) {
   const glowColors = {
     cyan: "hover:border-[#06b6d4]/40 hover:shadow-[0_0_30px_rgba(6,182,212,0.12)]",
@@ -265,13 +271,15 @@ function GlowCard({
     teal: "hover:border-[#14b8a6]/40 hover:shadow-[0_0_30px_rgba(20,184,166,0.12)]",
     amber:
       "hover:border-[#f59e0b]/40 hover:shadow-[0_0_30px_rgba(245,158,11,0.12)]",
+    crimson:
+      "hover:border-[#dc2626]/40 hover:shadow-[0_0_30px_rgba(220,38,38,0.12)]",
   };
 
   return (
     <div
       onClick={onClick}
       className={cn(
-        "rounded-2xl bg-[#0f1d2e]/70 backdrop-blur-xl border border-[#3b82f6]/15 transition-all duration-300",
+        "rounded-2xl bg-[#0f1d2e]/70 backdrop-blur-xl border border-[#dc2626]/15 transition-all duration-300",
         glowColors[glow],
         onClick && "cursor-pointer active:scale-[0.98]",
         className,
@@ -302,28 +310,28 @@ function NavPill({
       className={cn(
         "relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-300 min-w-[64px] shrink-0",
         active
-          ? "bg-gradient-to-br from-[#3b82f6]/20 to-[#06b6d4]/20 border border-[#06b6d4]/30 shadow-lg shadow-[#06b6d4]/10"
-          : "bg-[#0f1d2e]/40 border border-transparent hover:bg-[#0f1d2e]/70 hover:border-[#3b82f6]/10",
+          ? "bg-gradient-to-br from-[#dc2626]/15 to-[#991b1b]/15 border border-[#dc2626]/30 shadow-lg shadow-[#dc2626]/10"
+          : "bg-[#0f1d2e]/40 border border-transparent hover:bg-[#0f1d2e]/70 hover:border-[#dc2626]/10",
       )}
     >
       <Icon
         className={cn(
           "w-5 h-5 transition-colors duration-300",
           active
-            ? "text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]"
-            : "text-[#38bdf8]/50",
+            ? "text-[#dc2626] drop-shadow-[0_0_8px_rgba(220,38,38,0.5)]"
+            : "text-[#fbbf24]/50",
         )}
       />
       <span
         className={cn(
           "text-[10px] font-medium transition-colors duration-300",
-          active ? "text-[#06b6d4]" : "text-[#38bdf8]/40",
+          active ? "text-[#dc2626]" : "text-[#fbbf24]/40",
         )}
       >
         {label}
       </span>
       {badge && (
-        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] text-[8px] font-bold flex items-center justify-center text-white">
+        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gradient-to-r from-[#dc2626] to-[#991b1b] text-[8px] font-bold flex items-center justify-center text-white">
           {badge}
         </span>
       )}
@@ -338,7 +346,7 @@ function TypingAnimation() {
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="w-1.5 h-1.5 rounded-full bg-[#06b6d4] animate-bounce"
+          className="w-1.5 h-1.5 rounded-full bg-[#dc2626] animate-bounce"
           style={{ animationDelay: `${i * 150}ms`, animationDuration: "0.8s" }}
         />
       ))}
@@ -416,17 +424,17 @@ function WiFiCard({
 
   if (!ssid) {
     return (
-      <GlowCard className="p-5" glow="blue">
+      <GlowCard className="p-5" glow="crimson">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#3b82f6]/20 to-[#06b6d4]/10 flex items-center justify-center">
-            <Wifi className="w-6 h-6 text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#dc2626]/20 to-[#991b1b]/10 flex items-center justify-center">
+            <Wifi className="w-6 h-6 text-[#dc2626] drop-shadow-[0_0_8px_rgba(220,38,38,0.5)]" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">Wi-Fi Access</h3>
-            <p className="text-[10px] text-[#38bdf8]/50">Not configured yet</p>
+            <p className="text-[10px] text-[#fbbf24]/50">Not configured yet</p>
           </div>
         </div>
-        <p className="text-xs text-[#38bdf8]/40 text-center py-4">
+        <p className="text-xs text-[#fbbf24]/40 text-center py-4">
           Ask your host for the WiFi credentials.
         </p>
       </GlowCard>
@@ -434,35 +442,35 @@ function WiFiCard({
   }
 
   return (
-    <GlowCard className="p-5" glow="blue">
+    <GlowCard className="p-5" glow="crimson">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#3b82f6]/20 to-[#06b6d4]/10 flex items-center justify-center">
-          <Wifi className="w-6 h-6 text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#dc2626]/20 to-[#991b1b]/10 flex items-center justify-center">
+          <Wifi className="w-6 h-6 text-[#dc2626] drop-shadow-[0_0_8px_rgba(220,38,38,0.5)]" />
         </div>
         <div>
           <h3 className="text-sm font-semibold text-white">Wi-Fi Access</h3>
-          <p className="text-[10px] text-[#38bdf8]/50">
+          <p className="text-[10px] text-[#fbbf24]/50">
             Connect to the home network
           </p>
         </div>
       </div>
 
       {/* SSID */}
-      <div className="mb-3 p-3 rounded-xl bg-[#0a1628]/60 border border-[#3b82f6]/10">
-        <div className="text-[10px] uppercase tracking-wider text-[#38bdf8]/40 mb-1">
+      <div className="mb-3 p-3 rounded-xl bg-[#0a1628]/60 border border-[#dc2626]/10">
+        <div className="text-[10px] uppercase tracking-wider text-[#fbbf24]/40 mb-1">
           Network Name
         </div>
-        <div className="text-sm font-mono text-[#06b6d4]">{ssid}</div>
+        <div className="text-sm font-mono text-[#dc2626]">{ssid}</div>
       </div>
 
       {/* Password — hidden, copy-only */}
       {hasPassword && (
-        <div className="mb-4 p-3 rounded-xl bg-[#0a1628]/60 border border-[#3b82f6]/10">
-          <div className="text-[10px] uppercase tracking-wider text-[#38bdf8]/40 mb-1">
+        <div className="mb-4 p-3 rounded-xl bg-[#0a1628]/60 border border-[#dc2626]/10">
+          <div className="text-[10px] uppercase tracking-wider text-[#fbbf24]/40 mb-1">
             Password
           </div>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-[#38bdf8]/50">
+            <div className="flex items-center gap-2 text-sm text-[#fbbf24]/50">
               <Lock className="w-3.5 h-3.5" />
               <span className="font-mono tracking-widest">••••••••••</span>
             </div>
@@ -478,8 +486,8 @@ function WiFiCard({
           className={cn(
             "w-full py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2",
             copied
-              ? "bg-[#14b8a6]/20 text-[#14b8a6] border border-[#14b8a6]/30"
-              : "bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] text-white shadow-lg shadow-[#06b6d4]/20 hover:shadow-[#06b6d4]/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60",
+              ? "bg-[#dc2626]/20 text-[#dc2626] border border-[#dc2626]/30"
+              : "bg-gradient-to-r from-[#dc2626] to-[#991b1b] text-white shadow-lg shadow-[#dc2626]/20 hover:shadow-[#dc2626]/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60",
           )}
         >
           {loading ? (
@@ -498,7 +506,7 @@ function WiFiCard({
         </button>
       )}
 
-      <p className="text-[9px] text-[#38bdf8]/30 text-center mt-2">
+      <p className="text-[9px] text-[#fbbf24]/30 text-center mt-2">
         Open your phone&apos;s WiFi settings, select &quot;{ssid}&quot;, and
         paste the password.
       </p>
@@ -538,30 +546,30 @@ function RulesCard({ bioData }: { bioData?: Record<string, unknown> }) {
   ];
 
   return (
-    <GlowCard className="p-5" glow="teal">
+    <GlowCard className="p-5" glow="crimson">
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#14b8a6]/20 to-[#06b6d4]/10 flex items-center justify-center">
-          <ShieldCheck className="w-6 h-6 text-[#14b8a6] drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#dc2626]/20 to-[#991b1b]/10 flex items-center justify-center">
+          <ShieldCheck className="w-6 h-6 text-[#dc2626] drop-shadow-[0_0_8px_rgba(220,38,38,0.5)]" />
         </div>
         <div>
           <h3 className="text-sm font-semibold text-white">House Guidelines</h3>
-          <p className="text-[10px] text-[#38bdf8]/50">A few friendly notes</p>
+          <p className="text-[10px] text-[#fbbf24]/50">A few friendly notes</p>
         </div>
       </div>
 
       {/* Do's */}
       <div className="mb-4">
-        <div className="text-[10px] uppercase tracking-wider text-[#14b8a6] font-semibold mb-2 flex items-center gap-1.5">
+        <div className="text-[10px] uppercase tracking-wider text-[#dc2626] font-semibold mb-2 flex items-center gap-1.5">
           <Check className="w-3 h-3" /> Please Do
         </div>
         <div className="space-y-2">
           {dos.map((item, i) => (
             <div
               key={i}
-              className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#14b8a6]/5 border border-[#14b8a6]/10"
+              className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#dc2626]/5 border border-[#dc2626]/10"
             >
-              <item.icon className="w-4 h-4 text-[#14b8a6] mt-0.5 shrink-0" />
-              <span className="text-xs text-[#38bdf8]/80 leading-relaxed">
+              <item.icon className="w-4 h-4 text-[#dc2626] mt-0.5 shrink-0" />
+              <span className="text-xs text-white/70 leading-relaxed">
                 {item.text}
               </span>
             </div>
@@ -581,7 +589,7 @@ function RulesCard({ bioData }: { bioData?: Record<string, unknown> }) {
               className="flex items-start gap-2.5 p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/10"
             >
               <item.icon className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-              <span className="text-xs text-[#38bdf8]/80 leading-relaxed">
+              <span className="text-xs text-white/70 leading-relaxed">
                 {item.text}
               </span>
             </div>
@@ -602,7 +610,7 @@ function RulesCard({ bioData }: { bioData?: Record<string, unknown> }) {
                 className="flex items-start gap-2.5 p-2.5 rounded-xl bg-violet-500/5 border border-violet-500/10"
               >
                 <item.icon className="w-4 h-4 text-violet-400 mt-0.5 shrink-0" />
-                <span className="text-xs text-[#38bdf8]/80 leading-relaxed">
+                <span className="text-xs text-white/70 leading-relaxed">
                   {item.text}
                 </span>
               </div>
@@ -703,38 +711,38 @@ function AllergiesCard({
       <GlowCard className="p-5" glow="amber">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 flex items-center justify-center">
-            <BadgeCheck className="w-6 h-6 text-[#14b8a6] drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
+            <BadgeCheck className="w-6 h-6 text-[#fbbf24] drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
           </div>
           <div className="flex-1">
             <h3 className="text-sm font-semibold text-white">
               Allergies Submitted
             </h3>
-            <p className="text-[10px] text-[#14b8a6]">
+            <p className="text-[10px] text-[#fbbf24]">
               Your host has been notified
             </p>
           </div>
           <button
             onClick={() => setEditing(true)}
-            className="p-2 rounded-lg bg-[#3b82f6]/10 border border-[#3b82f6]/20 hover:bg-[#3b82f6]/20 transition-all"
+            className="p-2 rounded-lg bg-[#dc2626]/10 border border-[#dc2626]/20 hover:bg-[#dc2626]/20 transition-all"
           >
-            <Pencil className="w-3.5 h-3.5 text-[#38bdf8]/60" />
+            <Pencil className="w-3.5 h-3.5 text-[#fbbf24]/60" />
           </button>
         </div>
 
-        <div className="p-3 rounded-xl bg-[#0a1628]/60 border border-[#14b8a6]/15">
+        <div className="p-3 rounded-xl bg-[#0a1628]/60 border border-[#fbbf24]/15">
           {existing.guest_name && (
-            <p className="text-[10px] text-[#38bdf8]/40 mb-1">
+            <p className="text-[10px] text-[#fbbf24]/40 mb-1">
               {existing.guest_name}
             </p>
           )}
-          <div className="text-sm text-[#38bdf8]/80 space-y-1.5">
+          <div className="text-sm text-white/70 space-y-1.5">
             {existing.allergies.includes("\n") ? (
               existing.allergies
                 .split("\n")
                 .filter((l: string) => l.trim())
                 .map((line: string, i: number) => (
                   <div key={i} className="flex items-start gap-2">
-                    <span className="text-[#06b6d4] mt-0.5 shrink-0">•</span>
+                    <span className="text-[#dc2626] mt-0.5 shrink-0">•</span>
                     <span>{line.trim()}</span>
                   </div>
                 ))
@@ -758,7 +766,7 @@ function AllergiesCard({
           <h3 className="text-sm font-semibold text-white">
             Allergies & Dietary
           </h3>
-          <p className="text-[10px] text-[#38bdf8]/50">
+          <p className="text-[10px] text-[#fbbf24]/50">
             Let us know so we can take care of you
           </p>
         </div>
@@ -769,7 +777,7 @@ function AllergiesCard({
           value={guestName}
           onChange={(e) => setGuestName(e.target.value)}
           placeholder="Your name (optional)"
-          className="w-full px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#3b82f6]/10 text-sm text-white placeholder:text-[#38bdf8]/30 focus:outline-none focus:border-[#06b6d4]/40 focus:ring-1 focus:ring-[#06b6d4]/20 transition-all duration-200"
+          className="w-full px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#dc2626]/10 text-sm text-white placeholder:text-[#fbbf24]/30 focus:outline-none focus:border-[#dc2626]/40 focus:ring-1 focus:ring-[#dc2626]/20 transition-all duration-200"
         />
       </div>
 
@@ -778,7 +786,7 @@ function AllergiesCard({
         onChange={(e) => setAllergies(e.target.value)}
         placeholder="e.g. Peanuts, Lactose, Gluten-free..."
         rows={3}
-        className="w-full px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#3b82f6]/10 text-sm text-white placeholder:text-[#38bdf8]/30 focus:outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-all duration-200 resize-none mb-3"
+        className="w-full px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#dc2626]/10 text-sm text-white placeholder:text-[#fbbf24]/30 focus:outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-all duration-200 resize-none mb-3"
       />
 
       <div className="flex gap-2">
@@ -788,7 +796,7 @@ function AllergiesCard({
               setEditing(false);
               setAllergies(existing?.allergies || "");
             }}
-            className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#0a1628]/60 border border-[#3b82f6]/10 text-[#38bdf8]/50 hover:bg-[#0a1628]/80 transition-all"
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#0a1628]/60 border border-[#dc2626]/10 text-[#fbbf24]/50 hover:bg-[#0a1628]/80 transition-all"
           >
             Cancel
           </button>
@@ -799,7 +807,7 @@ function AllergiesCard({
           className={cn(
             "flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2",
             submitted
-              ? "bg-[#14b8a6]/20 text-[#14b8a6] border border-[#14b8a6]/30"
+              ? "bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/30"
               : "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40",
           )}
         >
@@ -862,7 +870,7 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
   };
 
   return (
-    <GlowCard className="p-5 relative overflow-hidden" glow="blue">
+    <GlowCard className="p-5 relative overflow-hidden" glow="crimson">
       {/* Complaint Blocked Animation */}
       {complaintBlocked && (
         <div className="absolute inset-0 z-10 rounded-2xl bg-[#0a1628]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-300">
@@ -901,13 +909,13 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
                 : "opacity-0 translate-y-4",
             )}
           >
-            <p className="text-xs text-[#38bdf8]/60 mb-1">
+            <p className="text-xs text-[#fbbf24]/60 mb-1">
               Your complaint has been securely forwarded to
             </p>
-            <p className="text-sm font-mono text-[#06b6d4]">
+            <p className="text-sm font-mono text-[#dc2626]">
               /household/police
             </p>
-            <p className="text-[10px] text-[#38bdf8]/30 mt-2">
+            <p className="text-[10px] text-[#fbbf24]/30 mt-2">
               Clearance Level Required: Above Your Pay Grade 😎
             </p>
           </div>
@@ -917,7 +925,7 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
               blockPhase >= 3 ? "opacity-100" : "opacity-0",
             )}
           >
-            <p className="text-[10px] text-[#14b8a6] animate-pulse">
+            <p className="text-[10px] text-[#fbbf24] animate-pulse">
               Redirecting to Suggestions… because that&apos;s what you really
               meant 💡
             </p>
@@ -925,23 +933,23 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
         </div>
       )}
       <div className="flex items-center gap-3 mb-3">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#3b82f6]/20 to-violet-500/10 flex items-center justify-center">
-          <MessageCircle className="w-6 h-6 text-[#3b82f6] drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#dc2626]/20 to-[#991b1b]/10 flex items-center justify-center">
+          <MessageCircle className="w-6 h-6 text-[#dc2626] drop-shadow-[0_0_8px_rgba(220,38,38,0.5)]" />
         </div>
         <div>
           <h3 className="text-sm font-semibold text-white">
             Suggestions & Feedback
           </h3>
-          <p className="text-[10px] text-[#38bdf8]/50">
+          <p className="text-[10px] text-[#fbbf24]/50">
             Your opinion matters to us
           </p>
         </div>
       </div>
 
       {/* Anonymous badge */}
-      <div className="mb-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14b8a6]/5 border border-[#14b8a6]/10 w-fit">
-        <ShieldAlert className="w-3 h-3 text-[#14b8a6]" />
-        <span className="text-[10px] text-[#14b8a6] font-medium">
+      <div className="mb-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#fbbf24]/5 border border-[#fbbf24]/10 w-fit">
+        <ShieldAlert className="w-3 h-3 text-[#fbbf24]" />
+        <span className="text-[10px] text-[#fbbf24] font-medium">
           🔒 100% Anonymous — your identity is never attached 😉
         </span>
       </div>
@@ -958,9 +966,9 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
               "flex-1 py-2 rounded-xl text-xs font-medium transition-all duration-200 border",
               type === t
                 ? t === "suggestion"
-                  ? "bg-[#3b82f6]/15 border-[#3b82f6]/30 text-[#3b82f6]"
+                  ? "bg-[#dc2626]/15 border-[#dc2626]/30 text-[#dc2626]"
                   : "bg-amber-500/15 border-amber-500/30 text-amber-400"
-                : "bg-[#0a1628]/40 border-transparent text-[#38bdf8]/40 hover:bg-[#0a1628]/60",
+                : "bg-[#0a1628]/40 border-transparent text-[#fbbf24]/40 hover:bg-[#0a1628]/60",
             )}
           >
             {t === "suggestion" ? "💡 Suggestion" : "📝 Complaint"}
@@ -977,7 +985,7 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
             : "Let us know what went wrong — we'll fix it!"
         }
         rows={3}
-        className="w-full px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#3b82f6]/10 text-sm text-white placeholder:text-[#38bdf8]/30 focus:outline-none focus:border-[#3b82f6]/40 focus:ring-1 focus:ring-[#3b82f6]/20 transition-all duration-200 resize-none mb-3"
+        className="w-full px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#dc2626]/10 text-sm text-white placeholder:text-[#fbbf24]/30 focus:outline-none focus:border-[#dc2626]/40 focus:ring-1 focus:ring-[#dc2626]/20 transition-all duration-200 resize-none mb-3"
       />
 
       <button
@@ -986,8 +994,8 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
         className={cn(
           "w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2",
           submitted
-            ? "bg-[#14b8a6]/20 text-[#14b8a6] border border-[#14b8a6]/30"
-            : "bg-gradient-to-r from-[#3b82f6] to-violet-500 text-white shadow-lg shadow-[#3b82f6]/20 hover:shadow-[#3b82f6]/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40",
+            ? "bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/30"
+            : "bg-gradient-to-r from-[#dc2626] to-[#991b1b] text-white shadow-lg shadow-[#dc2626]/20 hover:shadow-[#dc2626]/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40",
         )}
       >
         {submitted ? (
@@ -1005,120 +1013,61 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
   );
 }
 
-// ─── Recipes Card ──────────────────────────────────────
+// ─── Food / Toters Card ────────────────────────────────
 function RecipesCard() {
-  const menuSections = [
-    {
-      title: "Salad",
-      emoji: "🥗",
-      items: [
-        { name: "Winter Salad", tags: ["Vegan"], note: "Vegan dressing" },
-      ],
-    },
-    {
-      title: "Starters",
-      emoji: "🍢",
-      items: [
-        { name: "Spinach Fatayer", tags: ["Vegan"] },
-        { name: "Spring Rolls", tags: ["Vegan"], note: "Sweet Chili Sauce" },
-        { name: "Shrimp Avocado Bites", tags: ["Vegetarian"], note: "Mayo" },
-      ],
-    },
-    {
-      title: "Mains",
-      emoji: "🍽️",
-      items: [
-        { name: "Vegetable Noodles Stir Fry", tags: ["Vegan"] },
-        { name: "Fish Burger", tags: [], note: "Tartare Sauce & Cheese" },
-      ],
-    },
-  ];
-
-  const getTagStyle = (tag: string) => {
-    if (tag === "Vegan")
-      return "bg-emerald-500/15 text-emerald-400 border-emerald-500/25";
-    if (tag === "Vegetarian")
-      return "bg-lime-500/15 text-lime-400 border-lime-500/25";
-    return "bg-[#38bdf8]/10 text-[#38bdf8]/70 border-[#38bdf8]/20";
-  };
-
   return (
-    <GlowCard className="p-5 overflow-hidden" glow="teal">
-      {/* Header with decorative background */}
+    <GlowCard className="p-5 overflow-hidden" glow="crimson">
+      {/* Header */}
       <div className="relative mb-5">
-        <div className="absolute -top-5 -right-5 w-24 h-24 bg-gradient-to-br from-[#14b8a6]/10 to-transparent rounded-full blur-2xl" />
+        <div className="absolute -top-5 -right-5 w-24 h-24 bg-gradient-to-br from-[#dc2626]/10 to-transparent rounded-full blur-2xl" />
         <div className="flex items-center gap-3 relative">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#14b8a6]/25 to-[#06b6d4]/15 flex items-center justify-center border border-[#14b8a6]/20 shadow-lg shadow-[#14b8a6]/10">
-            <CookingPot className="w-6 h-6 text-[#14b8a6] drop-shadow-[0_0_10px_rgba(20,184,166,0.6)]" />
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#dc2626]/20 to-[#991b1b]/15 flex items-center justify-center border border-[#dc2626]/20 shadow-lg shadow-[#dc2626]/10">
+            <UtensilsCrossed className="w-6 h-6 text-[#dc2626] drop-shadow-[0_0_10px_rgba(220,38,38,0.6)]" />
           </div>
           <div>
             <h3 className="text-base font-bold text-white tracking-tight">
-              Tonight&apos;s Menu
+              Tonight&apos;s Food
             </h3>
-            <p className="text-[10px] text-[#38bdf8]/50 flex items-center gap-1">
-              <span className="inline-block w-1 h-1 rounded-full bg-[#14b8a6] animate-pulse" />
-              Celebration dinner
+            <p className="text-[10px] text-white/40 flex items-center gap-1">
+              <span className="inline-block w-1 h-1 rounded-full bg-[#dc2626] animate-pulse" />
+              Delivery night
             </p>
           </div>
         </div>
       </div>
 
-      {/* Menu sections */}
-      <div className="space-y-4">
-        {menuSections.map((section) => (
-          <div key={section.title}>
-            {/* Section header */}
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-sm">{section.emoji}</span>
-              <span className="text-[11px] font-semibold text-[#14b8a6] uppercase tracking-wider">
-                {section.title}
-              </span>
-              <div className="flex-1 h-px bg-gradient-to-r from-[#14b8a6]/20 to-transparent" />
-            </div>
+      {/* Message */}
+      <div className="text-center py-4">
+        <div className="text-4xl mb-4">🍕</div>
+        <p className="text-sm text-white/80 leading-relaxed max-w-[280px] mx-auto mb-2">
+          Tonight the kitchen is off-duty &mdash; but don&apos;t worry,
+          we&apos;ve got an{" "}
+          <span className="text-[#fbbf24] font-semibold">
+            inside man at Toters
+          </span>{" "}
+          who&apos;s been cooking all day.
+        </p>
+        <p className="text-[11px] text-white/40 mb-5">
+          Pick whatever you&apos;re craving. Our treat. 🤝
+        </p>
 
-            {/* Section items */}
-            <div className="space-y-1.5 pl-1">
-              {section.items.map((item) => (
-                <div
-                  key={item.name}
-                  className="group flex items-center gap-2.5 p-2.5 rounded-xl bg-[#0a1628]/60 border border-[#14b8a6]/8 hover:border-[#14b8a6]/20 hover:bg-[#0a1628]/80 transition-all duration-200"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[13px] font-medium text-white/90">
-                        {item.name}
-                      </span>
-                      {item.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className={cn(
-                            "px-1.5 py-0.5 rounded-md text-[8px] font-semibold border uppercase tracking-wide",
-                            getTagStyle(tag),
-                          )}
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                    {item.note && (
-                      <p className="text-[10px] text-[#38bdf8]/40 mt-0.5">
-                        {item.note}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+        <a
+          href="https://dlct3.app.link/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[#dc2626] to-[#991b1b] text-white font-semibold text-sm shadow-lg shadow-[#dc2626]/20 hover:shadow-[#dc2626]/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+        >
+          <span>🛵</span>
+          Order on Toters
+          <ChevronRight className="w-4 h-4" />
+        </a>
       </div>
 
       {/* Footer */}
-      <div className="mt-4 pt-3 border-t border-[#14b8a6]/10">
-        <p className="text-[10px] text-[#38bdf8]/40 text-center flex items-center justify-center gap-2">
-          <span>🎉</span>
-          <span>Bon appétit! Please inform us of any allergies.</span>
-          <span>🎉</span>
+      <div className="mt-4 pt-3 border-t border-[#dc2626]/10">
+        <p className="text-[10px] text-white/30 text-center">
+          Got allergies? Customize your order directly in the app — full control
+          is yours.
         </p>
       </div>
     </GlowCard>
@@ -1128,24 +1077,22 @@ function RecipesCard() {
 // ─── Download App Card ─────────────────────────────────
 function DownloadCard() {
   return (
-    <GlowCard className="p-5" glow="blue">
+    <GlowCard className="p-5" glow="crimson">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#3b82f6]/20 to-[#06b6d4]/10 flex items-center justify-center">
-          <Download className="w-6 h-6 text-[#3b82f6] drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#dc2626]/20 to-[#991b1b]/10 flex items-center justify-center">
+          <Download className="w-6 h-6 text-[#dc2626] drop-shadow-[0_0_8px_rgba(220,38,38,0.5)]" />
         </div>
         <div>
           <h3 className="text-sm font-semibold text-white">Download Our App</h3>
-          <p className="text-[10px] text-[#38bdf8]/50">Join the ecosystem</p>
+          <p className="text-[10px] text-white/40">Join the ecosystem</p>
         </div>
       </div>
       <div className="flex flex-col items-center justify-center py-8">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#3b82f6]/10 to-[#06b6d4]/10 flex items-center justify-center mb-4 border border-[#3b82f6]/10">
-          <Download className="w-8 h-8 text-[#3b82f6]/40" />
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#dc2626]/10 to-[#991b1b]/10 flex items-center justify-center mb-4 border border-[#dc2626]/10">
+          <Download className="w-8 h-8 text-[#dc2626]/40" />
         </div>
-        <p className="text-sm font-medium text-[#38bdf8]/60 mb-1">
-          Coming Soon
-        </p>
-        <p className="text-[11px] text-[#38bdf8]/30 text-center max-w-[200px]">
+        <p className="text-sm font-medium text-white/50 mb-1">Coming Soon</p>
+        <p className="text-[11px] text-white/30 text-center max-w-[200px]">
           The ERA Home Manager app will be available for download soon.
         </p>
       </div>
@@ -1286,10 +1233,10 @@ function DrinksCard({
       {showGuilty && (
         <div className="absolute inset-0 z-20 rounded-2xl bg-[#0a1628]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-300">
           <div className="text-5xl mb-3 animate-bounce">😔</div>
-          <p className="text-sm font-medium text-[#38bdf8]/80 text-center mb-1">
+          <p className="text-sm font-medium text-white/80 text-center mb-1">
             Really? Just water?
           </p>
-          <p className="text-xs text-[#38bdf8]/50 text-center">
+          <p className="text-xs text-white/50 text-center">
             We threw a whole party and you&apos;re choosing... hydration?
           </p>
           <p className="text-[10px] text-[#f59e0b] mt-3 animate-pulse">
@@ -1309,7 +1256,7 @@ function DrinksCard({
             <h3 className="text-base font-bold text-white tracking-tight">
               Choose Your Drink
             </h3>
-            <p className="text-[10px] text-[#38bdf8]/50 flex items-center gap-1">
+            <p className="text-[10px] text-[#fbbf24]/50 flex items-center gap-1">
               <span className="inline-block w-1 h-1 rounded-full bg-[#f59e0b] animate-pulse" />
               What are you having tonight?
             </p>
@@ -1346,7 +1293,7 @@ function DrinksCard({
                   {drink.label}
                 </p>
                 {drink.subtext && (
-                  <p className="text-[9px] text-[#38bdf8]/40 truncate">
+                  <p className="text-[9px] text-[#fbbf24]/40 truncate">
                     {drink.subtext}
                   </p>
                 )}
@@ -1369,7 +1316,7 @@ function DrinksCard({
               value={otherDrink}
               onChange={(e) => setOtherDrink(e.target.value)}
               placeholder="What would you like?"
-              className="flex-1 px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#f59e0b]/20 text-sm text-white placeholder:text-[#38bdf8]/30 focus:outline-none focus:border-[#f59e0b]/40 focus:ring-1 focus:ring-[#f59e0b]/20 transition-all duration-200"
+              className="flex-1 px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#f59e0b]/20 text-sm text-white placeholder:text-[#fbbf24]/30 focus:outline-none focus:border-[#f59e0b]/40 focus:ring-1 focus:ring-[#f59e0b]/20 transition-all duration-200"
               autoFocus
             />
             <button
@@ -1385,10 +1332,10 @@ function DrinksCard({
 
       {/* Confirmation message */}
       {submitted && selectedOption && (
-        <div className="mt-4 p-3 rounded-xl bg-[#14b8a6]/10 border border-[#14b8a6]/20 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="mt-4 p-3 rounded-xl bg-[#fbbf24]/10 border border-[#fbbf24]/20 animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="flex items-center gap-2">
-            <BadgeCheck className="w-4 h-4 text-[#14b8a6] shrink-0" />
-            <p className="text-xs text-[#14b8a6]">
+            <BadgeCheck className="w-4 h-4 text-[#fbbf24] shrink-0" />
+            <p className="text-xs text-[#fbbf24]">
               <span className="font-medium">Noted!</span>{" "}
               {selectedDrink === "other" ? (
                 <>You&apos;ll have: {otherDrink}</>
@@ -1405,7 +1352,7 @@ function DrinksCard({
       )}
 
       {/* Footer */}
-      <p className="text-[9px] text-[#38bdf8]/30 text-center mt-4">
+      <p className="text-[9px] text-[#fbbf24]/30 text-center mt-4">
         🍻 Tap to select • Change anytime
       </p>
     </GlowCard>
@@ -1716,25 +1663,25 @@ function ChatInterface({
 
   if (!nameSet) {
     return (
-      <GlowCard className="p-5" glow="cyan">
+      <GlowCard className="p-5" glow="crimson">
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#06b6d4]/20 to-[#3b82f6]/10 flex items-center justify-center">
-            <Bot className="w-6 h-6 text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]" />
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#dc2626]/20 to-[#991b1b]/10 flex items-center justify-center">
+            <Bot className="w-6 h-6 text-[#dc2626] drop-shadow-[0_0_8px_rgba(220,38,38,0.5)]" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">ERA Assistant</h3>
-            <p className="text-[10px] text-[#38bdf8]/50">
+            <p className="text-[10px] text-[#fbbf24]/50">
               Chat with your host&apos;s AI concierge
             </p>
           </div>
         </div>
 
         <div className="text-center py-6">
-          <Bot className="w-12 h-12 mx-auto mb-3 text-[#06b6d4] drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]" />
+          <Bot className="w-12 h-12 mx-auto mb-3 text-[#dc2626] drop-shadow-[0_0_15px_rgba(220,38,38,0.4)]" />
           <p className="text-sm text-white font-medium mb-1">
             Welcome. I&apos;m ERA.
           </p>
-          <p className="text-xs text-[#38bdf8]/50 mb-4">
+          <p className="text-xs text-[#fbbf24]/50 mb-4">
             Your host&apos;s AI concierge — at your service. How shall I address
             you?
           </p>
@@ -1744,13 +1691,13 @@ function ChatInterface({
               onChange={(e) => setGuestName(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Enter your name"
-              className="flex-1 px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#3b82f6]/10 text-sm text-white placeholder:text-[#38bdf8]/30 focus:outline-none focus:border-[#06b6d4]/40 focus:ring-1 focus:ring-[#06b6d4]/20 transition-all duration-200"
+              className="flex-1 px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#dc2626]/10 text-sm text-white placeholder:text-[#fbbf24]/30 focus:outline-none focus:border-[#dc2626]/40 focus:ring-1 focus:ring-[#dc2626]/20 transition-all duration-200"
               autoFocus
             />
             <button
               onClick={setName}
               disabled={!guestName.trim()}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] text-sm font-semibold text-white shadow-lg shadow-[#06b6d4]/20 hover:shadow-[#06b6d4]/40 transition-all duration-300 disabled:opacity-40"
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#dc2626] to-[#991b1b] text-sm font-semibold text-white shadow-lg shadow-[#dc2626]/20 hover:shadow-[#dc2626]/40 transition-all duration-300 disabled:opacity-40"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -1761,21 +1708,21 @@ function ChatInterface({
   }
 
   return (
-    <GlowCard className="flex flex-col" glow="cyan">
+    <GlowCard className="flex flex-col" glow="crimson">
       {/* Header */}
-      <div className="p-4 border-b border-[#3b82f6]/10 flex items-center gap-3">
+      <div className="p-4 border-b border-[#dc2626]/10 flex items-center gap-3">
         <div className="relative">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#3b82f6] to-[#06b6d4] flex items-center justify-center">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#dc2626] to-[#991b1b] flex items-center justify-center">
             <Bot className="w-5 h-5 text-white" />
           </div>
-          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#14b8a6] border-2 border-[#0f1d2e]" />
+          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#fbbf24] border-2 border-[#0f1d2e]" />
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-white truncate">
             ERA Home Chat
           </h3>
-          <div className="flex items-center gap-1 text-[10px] text-[#14b8a6]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#14b8a6] animate-pulse" />
+          <div className="flex items-center gap-1 text-[10px] text-[#fbbf24]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#fbbf24] animate-pulse" />
             Online — Chatting as {guestName || session?.guest_name}
           </div>
         </div>
@@ -1789,8 +1736,8 @@ function ChatInterface({
         {/* Show quick actions prompt when no messages yet */}
         {messages.length === 0 && (
           <div className="flex justify-start">
-            <div className="max-w-[85%] px-3.5 py-2 rounded-2xl rounded-bl-md bg-[#0f1d2e] border border-[#06b6d4]/15 text-sm leading-relaxed text-[#38bdf8]/90">
-              <p className="text-[9px] font-semibold mb-0.5 text-[#06b6d4]/60">
+            <div className="max-w-[85%] px-3.5 py-2 rounded-2xl rounded-bl-md bg-[#0f1d2e] border border-[#dc2626]/15 text-sm leading-relaxed text-white/80">
+              <p className="text-[9px] font-semibold mb-0.5 text-[#dc2626]/60">
                 🤖 ERA
               </p>
               <div className="whitespace-pre-wrap">
@@ -1803,7 +1750,7 @@ function ChatInterface({
                     key={action.intent}
                     onClick={() => handleQuickAction(action)}
                     disabled={botTyping}
-                    className="px-2.5 py-1 rounded-lg bg-[#06b6d4]/10 border border-[#06b6d4]/20 text-[10px] font-medium text-[#06b6d4] hover:bg-[#06b6d4]/20 hover:border-[#06b6d4]/30 transition-all duration-200 disabled:opacity-30"
+                    className="px-2.5 py-1 rounded-lg bg-[#dc2626]/10 border border-[#dc2626]/20 text-[10px] font-medium text-[#dc2626] hover:bg-[#dc2626]/20 hover:border-[#dc2626]/30 transition-all duration-200 disabled:opacity-30"
                   >
                     {action.label}
                   </button>
@@ -1831,14 +1778,14 @@ function ChatInterface({
                 className={cn(
                   "max-w-[85%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed",
                   msg.sender === "guest"
-                    ? "bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] text-white rounded-br-md"
+                    ? "bg-gradient-to-r from-[#dc2626] to-[#991b1b] text-white rounded-br-md"
                     : msg.sender === "bot"
-                      ? "bg-[#0f1d2e] border border-[#06b6d4]/15 text-[#38bdf8]/90 rounded-bl-md"
-                      : "bg-[#0f1d2e] border border-[#3b82f6]/15 text-[#38bdf8]/90 rounded-bl-md",
+                      ? "bg-[#0f1d2e] border border-[#dc2626]/15 text-white/80 rounded-bl-md"
+                      : "bg-[#0f1d2e] border border-[#dc2626]/15 text-white/80 rounded-bl-md",
                 )}
               >
                 {msg.sender !== "guest" && (
-                  <p className="text-[9px] font-semibold mb-0.5 text-[#06b6d4]/60">
+                  <p className="text-[9px] font-semibold mb-0.5 text-[#dc2626]/60">
                     {msg.sender === "bot" ? "🤖 ERA" : "🏠 Host"}
                   </p>
                 )}
@@ -1859,8 +1806,8 @@ function ChatInterface({
                 </div>
                 {/* Quick actions — always on the last bot message */}
                 {isLastBotMsg && (
-                  <div className="mt-2.5 pt-2 border-t border-[#06b6d4]/10">
-                    <p className="text-[9px] text-[#38bdf8]/40 mb-1.5">
+                  <div className="mt-2.5 pt-2 border-t border-[#dc2626]/10">
+                    <p className="text-[9px] text-[#fbbf24]/40 mb-1.5">
                       Ask me about:
                     </p>
                     <div className="flex flex-wrap gap-1.5">
@@ -1869,7 +1816,7 @@ function ChatInterface({
                           key={action.intent}
                           onClick={() => handleQuickAction(action)}
                           disabled={botTyping}
-                          className="px-2.5 py-1.5 rounded-lg bg-[#06b6d4]/8 border border-[#06b6d4]/15 text-[10px] font-medium text-[#06b6d4]/80 hover:bg-[#06b6d4]/20 hover:border-[#06b6d4]/30 hover:text-[#06b6d4] active:scale-95 transition-all duration-200 disabled:opacity-30"
+                          className="px-2.5 py-1.5 rounded-lg bg-[#dc2626]/8 border border-[#dc2626]/15 text-[10px] font-medium text-[#dc2626]/80 hover:bg-[#dc2626]/20 hover:border-[#dc2626]/30 hover:text-[#dc2626] active:scale-95 transition-all duration-200 disabled:opacity-30"
                         >
                           {action.label}
                         </button>
@@ -1882,7 +1829,7 @@ function ChatInterface({
                     "text-[9px] mt-1",
                     msg.sender === "guest"
                       ? "text-white/50 text-right"
-                      : "text-[#38bdf8]/30",
+                      : "text-[#fbbf24]/30",
                   )}
                 >
                   {formatTime(msg.created_at)}
@@ -1895,8 +1842,8 @@ function ChatInterface({
         {/* Bot typing indicator */}
         {botTyping && (
           <div className="flex justify-start">
-            <div className="px-3.5 py-2 rounded-2xl rounded-bl-md bg-[#0f1d2e] border border-[#06b6d4]/15">
-              <p className="text-[9px] font-semibold mb-0.5 text-[#06b6d4]/60">
+            <div className="px-3.5 py-2 rounded-2xl rounded-bl-md bg-[#0f1d2e] border border-[#dc2626]/15">
+              <p className="text-[9px] font-semibold mb-0.5 text-[#dc2626]/60">
                 🤖 ERA
               </p>
               <TypingAnimation />
@@ -1906,7 +1853,7 @@ function ChatInterface({
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-[#3b82f6]/10">
+      <div className="p-3 border-t border-[#dc2626]/10">
         <div className="flex gap-2">
           <input
             ref={inputRef}
@@ -1916,13 +1863,13 @@ function ChatInterface({
             }}
             onKeyDown={handleKeyDown}
             placeholder="Ask ERA or message your host..."
-            className="flex-1 px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#3b82f6]/10 text-sm text-white placeholder:text-[#38bdf8]/30 focus:outline-none focus:border-[#06b6d4]/30 transition-all duration-200"
+            className="flex-1 px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#dc2626]/10 text-sm text-white placeholder:text-[#fbbf24]/30 focus:outline-none focus:border-[#dc2626]/30 transition-all duration-200"
             readOnly={!!typingText}
           />
           <button
             onClick={sendMessage}
             disabled={!input.trim() || botTyping || !!typingText}
-            className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] text-white shadow-lg shadow-[#06b6d4]/20 hover:shadow-[#06b6d4]/40 transition-all duration-300 disabled:opacity-30 disabled:shadow-none"
+            className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-[#dc2626] to-[#991b1b] text-white shadow-lg shadow-[#dc2626]/20 hover:shadow-[#dc2626]/40 transition-all duration-300 disabled:opacity-30 disabled:shadow-none"
           >
             <Send className="w-4 h-4" />
           </button>
@@ -1946,6 +1893,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomePhase, setWelcomePhase] = useState(0);
   const [hasSeenInvitation, setHasSeenInvitation] = useState(false);
+  const [isReturningGuest, setIsReturningGuest] = useState(false);
   const [homeNameInput, setHomeNameInput] = useState("");
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -1962,7 +1910,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
 
   // Check localStorage for invitation seen status
   useEffect(() => {
-    const seen = localStorage.getItem("guest-invitation-seen-2026-02-21");
+    const seen = localStorage.getItem("guest-invitation-seen-2026-03-08");
     if (seen === "true") {
       setHasSeenInvitation(true);
     }
@@ -2039,6 +1987,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
           const data = await res.json();
           setSession(data.session);
           setTagInfo(data.tag);
+          if (data.resumed) setIsReturningGuest(true);
         } else if (res.status === 404) {
           setPortalNotFound(true);
         }
@@ -2085,7 +2034,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
     setShowWelcome(false);
     setWelcomePhase(0);
     // Mark as seen in localStorage
-    localStorage.setItem("guest-invitation-seen-2026-02-21", "true");
+    localStorage.setItem("guest-invitation-seen-2026-03-08", "true");
     setHasSeenInvitation(true);
   }, []);
 
@@ -2128,11 +2077,11 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
     return (
       <div className="min-h-[100dvh] bg-[#0a1628] flex items-center justify-center px-4">
         <div className="text-center">
-          <Bot className="w-16 h-16 mx-auto mb-4 text-[#3b82f6]/30" />
+          <Bot className="w-16 h-16 mx-auto mb-4 text-[#dc2626]/30" />
           <h1 className="text-xl font-bold text-white mb-2">
             Portal Not Found
           </h1>
-          <p className="text-sm text-[#38bdf8]/40">
+          <p className="text-sm text-[#fbbf24]/40">
             This tag hasn&apos;t been configured yet. Ask your host to set it
             up.
           </p>
@@ -2147,7 +2096,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
       <div className="min-h-[100dvh] bg-[#0a1628] flex items-center justify-center">
         <div className="text-center">
           <EraOrb pulsing />
-          <p className="mt-6 text-sm text-[#38bdf8]/50 animate-pulse">
+          <p className="mt-6 text-sm text-[#fbbf24]/50 animate-pulse">
             Initializing ERA…
           </p>
         </div>
@@ -2160,174 +2109,17 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
       {/* Particles */}
       {mounted && <PortalParticles />}
 
-      {/* Gradient blobs */}
+      {/* Gradient blobs - noir */}
       <div className="fixed inset-0 pointer-events-none z-[1]">
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[#3b82f6]/8 rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-[#06b6d4]/8 rounded-full blur-[100px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#14b8a6]/5 rounded-full blur-[150px]" />
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[#dc2626]/6 rounded-full blur-[120px]" />
+        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-[#991b1b]/6 rounded-full blur-[100px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#fbbf24]/3 rounded-full blur-[150px]" />
       </div>
 
-      {/* ══ Welcome Invitation Overlay ══ */}
+      {/* ══ Welcome Invitation Overlay — Deception: Murder in Hong Kong (3D) ══ */}
       {showWelcome && (
-        <div className="fixed inset-0 z-50 bg-gradient-to-br from-[#1e3a5f]/95 via-[#0f2744]/95 to-[#1a365d]/95 backdrop-blur-xl flex items-center justify-center p-6">
-          {/* Festive background effects - brighter */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-10 left-10 w-40 h-40 bg-amber-400/25 rounded-full blur-[80px] animate-pulse" />
-            <div className="absolute top-20 right-16 w-32 h-32 bg-rose-400/20 rounded-full blur-[60px] animate-pulse delay-300" />
-            <div className="absolute bottom-32 left-20 w-36 h-36 bg-[#06b6d4]/25 rounded-full blur-[70px] animate-pulse delay-500" />
-            <div className="absolute bottom-20 right-10 w-28 h-28 bg-violet-400/20 rounded-full blur-[55px] animate-pulse delay-700" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/5 rounded-full blur-[100px]" />
-            {/* Sparkle particles */}
-            {[...Array(20)].map((_, i) => (
-              <div
-                key={i}
-                className="absolute w-1 h-1 bg-amber-300 rounded-full animate-ping"
-                style={{
-                  top: `${Math.random() * 100}%`,
-                  left: `${Math.random() * 100}%`,
-                  animationDelay: `${Math.random() * 2}s`,
-                  animationDuration: `${1.5 + Math.random()}s`,
-                }}
-              />
-            ))}
-          </div>
-
-          <div className="relative max-w-sm w-full text-center">
-            {/* Elegant border frame */}
-            <div
-              className={cn(
-                "absolute -inset-4 rounded-3xl transition-all duration-1000",
-                welcomePhase >= 1
-                  ? "opacity-100 bg-gradient-to-br from-amber-500/30 via-transparent to-rose-500/30"
-                  : "opacity-0",
-              )}
-            />
-            <div
-              className={cn(
-                "absolute -inset-4 rounded-3xl border transition-all duration-1000",
-                welcomePhase >= 1
-                  ? "opacity-100 border-amber-400/30"
-                  : "opacity-0 border-transparent",
-              )}
-            />
-
-            {/* Content card - brighter */}
-            <div className="relative bg-gradient-to-br from-[#1e3a5f]/90 to-[#0f2744]/90 rounded-2xl p-8 border border-amber-400/20 shadow-2xl shadow-amber-500/10">
-              {/* Decorative top flourish */}
-              <div
-                className={cn(
-                  "absolute -top-3 left-1/2 -translate-x-1/2 transition-all duration-700",
-                  welcomePhase >= 1
-                    ? "opacity-100 scale-100"
-                    : "opacity-0 scale-0",
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-400" />
-                  <div className="w-16 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
-                  <Sparkles className="w-4 h-4 text-amber-400" />
-                </div>
-              </div>
-
-              {/* Welcome header */}
-              <div
-                className={cn(
-                  "mb-6 transition-all duration-700 delay-100",
-                  welcomePhase >= 1
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 -translate-y-4",
-                )}
-              >
-                <p className="text-xs text-amber-400 uppercase tracking-[0.3em] font-medium mb-2">
-                  You are cordially invited
-                </p>
-                <h2 className="text-2xl font-bold text-white">
-                  Welcome, {session?.guest_name}
-                </h2>
-              </div>
-
-              {/* Event 1: Lord's Day */}
-              <div
-                className={cn(
-                  "mb-4 p-4 rounded-xl bg-gradient-to-br from-[#3b82f6]/20 to-[#06b6d4]/15 border border-[#06b6d4]/25 transition-all duration-700",
-                  welcomePhase >= 2
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-6",
-                )}
-              >
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <Heart className="w-4 h-4 text-rose-400" />
-                  <span className="text-[10px] uppercase tracking-wider text-[#06b6d4] font-semibold">
-                    Today&apos;s Celebration
-                  </span>
-                  <Heart className="w-4 h-4 text-rose-400" />
-                </div>
-                <p className="text-lg font-semibold text-white">
-                  The Lord&apos;s Day
-                </p>
-                <p className="text-xs text-[#38bdf8]/80 mt-1">
-                  A time of fellowship, gratitude & joy
-                </p>
-              </div>
-
-              {/* Event 2: Birthday Pre-Celebration */}
-              <div
-                className={cn(
-                  "mb-6 p-4 rounded-xl bg-gradient-to-br from-amber-500/20 to-rose-500/15 border border-amber-400/25 transition-all duration-700",
-                  welcomePhase >= 3
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-6",
-                )}
-              >
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <PartyPopper className="w-4 h-4 text-amber-400" />
-                  <span className="text-[10px] uppercase tracking-wider text-amber-400 font-semibold">
-                    Pre-Birthday Celebration
-                  </span>
-                  <PartyPopper className="w-4 h-4 text-amber-400" />
-                </div>
-                <p className="text-lg font-semibold text-white">
-                  🎂 Birthday Next Week!
-                </p>
-                <p className="text-xs text-[#38bdf8]/80 mt-1">
-                  Early celebrations with loved ones
-                </p>
-              </div>
-
-              {/* Continue button */}
-              <button
-                onClick={dismissWelcome}
-                className={cn(
-                  "w-full py-3 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-white font-semibold text-sm shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300",
-                  welcomePhase >= 4
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-4",
-                )}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <Sparkles className="w-4 h-4" />
-                  Enter the Celebration
-                  <ChevronRight className="w-4 h-4" />
-                </span>
-              </button>
-
-              {/* Decorative bottom flourish */}
-              <div
-                className={cn(
-                  "absolute -bottom-3 left-1/2 -translate-x-1/2 transition-all duration-700 delay-300",
-                  welcomePhase >= 1
-                    ? "opacity-100 scale-100"
-                    : "opacity-0 scale-0",
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-px bg-gradient-to-r from-transparent to-amber-400/40" />
-                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400/60" />
-                  <div className="w-8 h-px bg-gradient-to-l from-transparent to-amber-400/40" />
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="fixed inset-0 z-50">
+          <DeceptionBoxScene onBeginInvestigation={dismissWelcome} />
         </div>
       )}
 
@@ -2335,7 +2127,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
       <div className="relative z-10 w-full max-w-lg mx-auto px-4 sm:px-6 pb-8">
         {/* ── HERO SECTION ──────────────────────────── */}
         <section className="pt-10 pb-5 text-center">
-          {/* Festive Celebration Banner (Google Doodle style) */}
+          {/* Mystery Board Game Night Banner */}
           <div
             className={cn(
               "mb-4 transition-all duration-1000",
@@ -2346,19 +2138,19 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
           >
             <button
               onClick={triggerWelcome}
-              className="group relative inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-violet-500/10 border border-amber-400/20 hover:border-amber-400/40 hover:from-amber-500/15 hover:via-rose-500/15 hover:to-violet-500/15 transition-all duration-300"
+              className="group relative inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-[#dc2626]/10 via-[#991b1b]/10 to-[#fbbf24]/10 border border-[#dc2626]/20 hover:border-[#dc2626]/40 hover:from-[#dc2626]/15 hover:via-[#991b1b]/15 hover:to-[#fbbf24]/15 transition-all duration-300"
             >
-              {/* Animated sparkles */}
-              <span className="absolute -top-1 -left-1 w-2 h-2 bg-amber-400 rounded-full animate-ping opacity-50" />
-              <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-rose-400 rounded-full animate-ping opacity-50 delay-300" />
+              {/* Animated particles */}
+              <span className="absolute -top-1 -left-1 w-2 h-2 bg-[#dc2626] rounded-full animate-ping opacity-40" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-[#fbbf24] rounded-full animate-ping opacity-40 delay-300" />
 
-              <PartyPopper className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+              <Search className="w-4 h-4 text-[#dc2626] group-hover:scale-110 transition-transform" />
               <span className="text-[10px] font-medium">
-                <span className="text-amber-400">Lord&apos;s Day</span>
-                <span className="text-white/40 mx-1.5">+</span>
-                <span className="text-rose-400">Birthday Week</span>
+                <span className="text-[#dc2626]">Board Game Night</span>
+                <span className="text-white/40 mx-1.5">—</span>
+                <span className="text-[#fbbf24]">Deception</span>
               </span>
-              <span className="text-[9px] text-white/30">✨ Tap to view</span>
+              <span className="text-[9px] text-white/30">🔍 Tap to view</span>
             </button>
           </div>
 
@@ -2381,12 +2173,14 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
           >
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1.5">
               <span className="text-white">{greetingText()},</span>{" "}
-              <span className="bg-gradient-to-r from-[#3b82f6] via-[#06b6d4] to-[#14b8a6] bg-clip-text text-transparent">
-                {session?.guest_name || "Welcome Home"}
+              <span className="bg-gradient-to-r from-[#dc2626] via-[#fbbf24] to-[#dc2626] bg-clip-text text-transparent">
+                {session?.guest_name || "Detective"}
               </span>
             </h1>
-            <p className="text-[#38bdf8]/45 text-xs max-w-[260px] mx-auto leading-relaxed">
-              Make yourself comfortable — ERA is here to assist.
+            <p className="text-white/35 text-xs max-w-[260px] mx-auto leading-relaxed">
+              {isReturningGuest
+                ? "The case isn\u2019t closed yet. Let\u2019s pick up where we left off."
+                : "A murder has been committed... trust no one."}
             </p>
           </div>
 
@@ -2395,17 +2189,17 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
             className={cn(
               "mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur border transition-all duration-1000 delay-400 active:scale-95",
               activeSection === "chat"
-                ? "bg-[#06b6d4]/15 border-[#06b6d4]/30 shadow-lg shadow-[#06b6d4]/10"
-                : "bg-[#0f1d2e]/80 border-[#3b82f6]/15 hover:border-[#06b6d4]/30 hover:bg-[#0f1d2e]",
+                ? "bg-[#dc2626]/10 border-[#dc2626]/25 shadow-lg shadow-[#dc2626]/10"
+                : "bg-[#0f1d2e]/80 border-[#dc2626]/10 hover:border-[#dc2626]/25 hover:bg-[#0f1d2e]",
               mounted ? "opacity-100" : "opacity-0",
             )}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-[#14b8a6] animate-pulse" />
-            <span className="text-[10px] text-[#38bdf8]/60 font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#dc2626] animate-pulse" />
+            <span className="text-[10px] text-white/50 font-medium">
               ERA is online
             </span>
-            <span className="text-[10px] text-[#06b6d4]">— tap to chat</span>
-            <Bot className="w-3.5 h-3.5 text-[#06b6d4]" />
+            <span className="text-[10px] text-[#dc2626]">— tap to chat</span>
+            <Bot className="w-3.5 h-3.5 text-[#dc2626]" />
           </button>
         </section>
 
@@ -2425,7 +2219,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
               )}
             >
               <div className="flex items-center gap-0.5 animate-pulse">
-                <ChevronLeft className="w-3.5 h-3.5 text-[#06b6d4]/60" />
+                <ChevronLeft className="w-3.5 h-3.5 text-[#dc2626]/60" />
               </div>
             </div>
             {/* Scroll hint - right fade with chevron */}
@@ -2436,7 +2230,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
               )}
             >
               <div className="flex items-center gap-0.5 animate-pulse">
-                <ChevronRight className="w-3.5 h-3.5 text-[#06b6d4]/60" />
+                <ChevronRight className="w-3.5 h-3.5 text-[#dc2626]/60" />
               </div>
             </div>
             <div
@@ -2455,7 +2249,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
               ))}
             </div>
             {/* Swipe hint text */}
-            <p className="text-[9px] text-[#38bdf8]/30 text-center mt-1">
+            <p className="text-[9px] text-[#fbbf24]/30 text-center mt-1">
               ← swipe for more →
             </p>
           </div>
@@ -2471,12 +2265,12 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
           {activeSection === "home" && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {!session?.guest_name ? (
-                <GlowCard className="p-6 text-center" glow="cyan">
+                <GlowCard className="p-6 text-center" glow="crimson">
                   <EraOrb />
                   <div className="mt-5 mb-2">
-                    <p className="text-sm text-[#38bdf8]/70 leading-relaxed">
+                    <p className="text-sm text-white/70 leading-relaxed">
                       Welcome. I am{" "}
-                      <span className="text-[#06b6d4] font-semibold">ERA</span>,
+                      <span className="text-[#dc2626] font-semibold">ERA</span>,
                       your host&apos;s AI concierge.
                     </p>
                     <p className="text-sm text-white font-medium mt-2">
@@ -2493,7 +2287,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                         }
                       }}
                       placeholder="Your name"
-                      className="flex-1 px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#3b82f6]/10 text-sm text-white text-center placeholder:text-[#38bdf8]/30 focus:outline-none focus:border-[#06b6d4]/40 focus:ring-1 focus:ring-[#06b6d4]/20 transition-all duration-200"
+                      className="flex-1 px-3 py-2.5 rounded-xl bg-[#0a1628]/60 border border-[#dc2626]/10 text-sm text-white text-center placeholder:text-[#fbbf24]/30 focus:outline-none focus:border-[#dc2626]/40 focus:ring-1 focus:ring-[#dc2626]/20 transition-all duration-200"
                       autoFocus
                     />
                     <button
@@ -2502,7 +2296,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                         handleNameSet(homeNameInput.trim())
                       }
                       disabled={!homeNameInput.trim()}
-                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] text-sm font-semibold text-white shadow-lg shadow-[#06b6d4]/20 hover:shadow-[#06b6d4]/40 transition-all duration-300 disabled:opacity-40"
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#dc2626] to-[#991b1b] text-sm font-semibold text-white shadow-lg shadow-[#dc2626]/20 hover:shadow-[#dc2626]/40 transition-all duration-300 disabled:opacity-40"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
@@ -2513,26 +2307,26 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                   <div className="grid grid-cols-3 gap-3">
                     <GlowCard
                       className="p-4 text-center"
-                      glow="blue"
+                      glow="crimson"
                       onClick={() => setActiveSection("wifi")}
                     >
-                      <Wifi className="w-6 h-6 mx-auto mb-2 text-[#06b6d4] drop-shadow-[0_0_10px_rgba(6,182,212,0.4)]" />
+                      <Wifi className="w-6 h-6 mx-auto mb-2 text-[#fbbf24] drop-shadow-[0_0_10px_rgba(251,191,36,0.4)]" />
                       <p className="text-[11px] font-medium text-white">WiFi</p>
-                      <p className="text-[9px] text-[#38bdf8]/40 mt-0.5">
+                      <p className="text-[9px] text-white/35 mt-0.5">
                         Copy password
                       </p>
                     </GlowCard>
 
                     <GlowCard
                       className="p-4 text-center"
-                      glow="teal"
+                      glow="crimson"
                       onClick={() => setActiveSection("rules")}
                     >
-                      <ShieldCheck className="w-6 h-6 mx-auto mb-2 text-[#14b8a6] drop-shadow-[0_0_10px_rgba(20,184,166,0.4)]" />
+                      <ShieldCheck className="w-6 h-6 mx-auto mb-2 text-[#dc2626] drop-shadow-[0_0_10px_rgba(220,38,38,0.4)]" />
                       <p className="text-[11px] font-medium text-white">
                         Rules
                       </p>
-                      <p className="text-[9px] text-[#38bdf8]/40 mt-0.5">
+                      <p className="text-[9px] text-white/35 mt-0.5">
                         Dos & Don&apos;ts
                       </p>
                     </GlowCard>
@@ -2542,11 +2336,11 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                       glow="amber"
                       onClick={() => setActiveSection("allergies")}
                     >
-                      <AlertTriangle className="w-6 h-6 mx-auto mb-2 text-amber-400 drop-shadow-[0_0_10px_rgba(245,158,11,0.4)]" />
+                      <AlertTriangle className="w-6 h-6 mx-auto mb-2 text-[#fbbf24] drop-shadow-[0_0_10px_rgba(251,191,36,0.4)]" />
                       <p className="text-[11px] font-medium text-white">
                         Allergies
                       </p>
-                      <p className="text-[9px] text-[#38bdf8]/40 mt-0.5">
+                      <p className="text-[9px] text-white/35 mt-0.5">
                         Tell us yours
                       </p>
                     </GlowCard>
@@ -2555,12 +2349,12 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                   <div className="grid grid-cols-3 gap-2">
                     <GlowCard
                       className="p-3 text-center"
-                      glow="teal"
+                      glow="crimson"
                       onClick={() => setActiveSection("recipes")}
                     >
-                      <CookingPot className="w-5 h-5 mx-auto mb-1.5 text-[#14b8a6]" />
-                      <p className="text-[10px] font-medium text-[#38bdf8]/70">
-                        Menu
+                      <CookingPot className="w-5 h-5 mx-auto mb-1.5 text-[#dc2626]" />
+                      <p className="text-[10px] font-medium text-white/60">
+                        Food
                       </p>
                     </GlowCard>
                     <GlowCard
@@ -2568,33 +2362,33 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
                       glow="amber"
                       onClick={() => setActiveSection("drinks")}
                     >
-                      <Wine className="w-5 h-5 mx-auto mb-1.5 text-[#f59e0b]" />
-                      <p className="text-[10px] font-medium text-[#38bdf8]/70">
+                      <Wine className="w-5 h-5 mx-auto mb-1.5 text-[#fbbf24]" />
+                      <p className="text-[10px] font-medium text-white/60">
                         Drinks
                       </p>
                     </GlowCard>
                     <GlowCard
                       className="p-3 text-center"
-                      glow="blue"
+                      glow="crimson"
                       onClick={() => setActiveSection("feedback")}
                     >
-                      <MessageCircle className="w-5 h-5 mx-auto mb-1.5 text-[#3b82f6]" />
-                      <p className="text-[10px] font-medium text-[#38bdf8]/70">
+                      <MessageCircle className="w-5 h-5 mx-auto mb-1.5 text-[#dc2626]" />
+                      <p className="text-[10px] font-medium text-white/60">
                         Feedback
                       </p>
                     </GlowCard>
                   </div>
 
-                  <GlowCard className="p-4" glow="cyan">
+                  <GlowCard className="p-4" glow="crimson">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3b82f6] to-[#06b6d4] flex items-center justify-center shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#dc2626] to-[#991b1b] flex items-center justify-center shrink-0">
                         <Sparkles className="w-5 h-5 text-white" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-white">
                           Powered by ERA AI
                         </p>
-                        <p className="text-[10px] text-[#38bdf8]/40 leading-relaxed">
+                        <p className="text-[10px] text-white/35 leading-relaxed">
                           Your host&apos;s personal ecosystem — intelligent home
                           management, automation, and beyond.
                         </p>
@@ -2669,7 +2463,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
       {showScrollTop && (
         <button
           onClick={scrollToTop}
-          className="fixed bottom-6 right-6 z-50 w-10 h-10 rounded-full bg-gradient-to-r from-[#3b82f6] to-[#06b6d4] flex items-center justify-center shadow-lg shadow-[#06b6d4]/30 hover:shadow-[#06b6d4]/50 transition-all duration-300 hover:scale-110 animate-in fade-in zoom-in duration-300"
+          className="fixed bottom-6 right-6 z-50 w-10 h-10 rounded-full bg-gradient-to-r from-[#dc2626] to-[#991b1b] flex items-center justify-center shadow-lg shadow-[#dc2626]/30 hover:shadow-[#dc2626]/50 transition-all duration-300 hover:scale-110 animate-in fade-in zoom-in duration-300"
         >
           <ArrowUp className="w-4 h-4 text-white" />
         </button>
@@ -2743,6 +2537,57 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
         .scrollbar-hide {
           -ms-overflow-style: none;
           scrollbar-width: none;
+        }
+        @keyframes rotate3d {
+          0% {
+            transform: rotateY(0deg) rotateX(2deg);
+          }
+          25% {
+            transform: rotateY(8deg) rotateX(-2deg);
+          }
+          50% {
+            transform: rotateY(180deg) rotateX(2deg);
+          }
+          75% {
+            transform: rotateY(188deg) rotateX(-2deg);
+          }
+          100% {
+            transform: rotateY(360deg) rotateX(2deg);
+          }
+        }
+        @keyframes drip {
+          0%,
+          100% {
+            opacity: 0;
+            transform: scaleY(0.3) translateY(-10px);
+          }
+          20% {
+            opacity: 1;
+            transform: scaleY(1) translateY(0);
+          }
+          80% {
+            opacity: 0.6;
+            transform: scaleY(1.2) translateY(5px);
+          }
+        }
+        @keyframes float-evidence {
+          0%,
+          100% {
+            transform: translateY(0) rotate(0deg);
+            opacity: 0.15;
+          }
+          25% {
+            transform: translateY(-20px) rotate(5deg);
+            opacity: 0.25;
+          }
+          50% {
+            transform: translateY(-10px) rotate(-3deg);
+            opacity: 0.1;
+          }
+          75% {
+            transform: translateY(-25px) rotate(8deg);
+            opacity: 0.2;
+          }
         }
       `}</style>
     </div>

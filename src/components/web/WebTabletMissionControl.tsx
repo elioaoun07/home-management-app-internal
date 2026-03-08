@@ -1444,7 +1444,7 @@ function StatBadge({
 }: {
   value: number | string;
   label: string;
-  icon: React.ElementType;
+  icon: React.ComponentType<{ className?: string }>;
   color: string;
 }) {
   const colorClasses: Record<string, { bg: string; text: string }> = {

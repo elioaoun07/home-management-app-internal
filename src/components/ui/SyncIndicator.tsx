@@ -29,7 +29,7 @@ interface SyncIndicatorProps {
 const statusConfig: Record<
   SyncStatus,
   {
-    icon: React.ElementType;
+    icon: React.ComponentType<{ className?: string }>;
     color: string;
     bgColor: string;
     label: string;
