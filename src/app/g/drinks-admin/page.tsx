@@ -31,6 +31,10 @@ const drinkLabels: Record<string, { label: string; emoji: string }> = {
   white_wine: { label: "White Wine", emoji: "🥂" },
   whisky_single: { label: "Whisky (Single Malt)", emoji: "🥃" },
   whisky_blended: { label: "Whisky (Blended)", emoji: "🥃" },
+  meskalina: {
+    label: "Meskalina pina titto lattatina kwervo sita tato vita panpaniyara",
+    emoji: "🍓",
+  },
   other: { label: "Other", emoji: "✨" },
 };
 

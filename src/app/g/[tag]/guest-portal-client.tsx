@@ -1142,6 +1142,12 @@ function DrinksCard({
     },
     { id: "whisky_blended", label: "Whisky", emoji: "🥃", subtext: "Blended" },
     {
+      id: "Meskalina",
+      label: "Meskalina pina titto lattatina kwervo sita tato vita panpaniyara",
+      emoji: "🍓",
+      subtext: "3a Fraise",
+    },
+    {
       id: "other",
       label: "Other",
       emoji: "✨",
