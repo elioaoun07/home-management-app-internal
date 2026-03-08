@@ -54,6 +54,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { Link as LinkIcon, RefreshCw, Settings } from "lucide-react";
 import dynamic from "next/dynamic";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -3690,6 +3691,12 @@ function ThreadSettingsModal({
 }) {
   const queryClient = useQueryClient();
   const themeClasses = useThemeClasses();
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(onClose, 280);
+  }, [onClose]);
   const [icon, setIcon] = useState(thread.icon);
   const [color, setColor] = useState<string>(
     thread.color || PURPOSE_CONFIG[thread.purpose]?.defaultColor || "#6366f1",
@@ -3845,10 +3852,22 @@ function ThreadSettingsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pb-[72px] sm:pb-0">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
+        className={cn(
+          "absolute inset-0 bg-black/60 transition-opacity duration-250",
+          isClosing ? "opacity-0" : "opacity-100",
+        )}
+        onClick={handleClose}
       />
-      <div className="relative w-full sm:max-w-md mx-auto bg-bg-dark border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl animate-slide-up max-h-[calc(100vh-88px)] sm:max-h-[90vh] overflow-hidden flex flex-col">
+      <motion.div
+        className="relative w-full sm:max-w-md mx-auto bg-bg-dark border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl max-h-[calc(100dvh-120px)] sm:max-h-[90vh] overflow-hidden flex flex-col"
+        initial={{ y: "100%", opacity: 0 }}
+        animate={
+          isClosing
+            ? { y: "100%", opacity: 0, scale: 0.95 }
+            : { y: 0, opacity: 1, scale: 1 }
+        }
+        transition={{ type: "spring", damping: 28, stiffness: 320, mass: 0.8 }}
+      >
         <div className="px-6 pt-6 pb-2 border-b border-slate-800/50">
           <div className="flex items-center justify-between mb-2">
             <h2
@@ -3857,10 +3876,14 @@ function ThreadSettingsModal({
               Chat Appearance
             </h2>
             <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-white/5 text-white/50 hover:text-white transition-colors"
+              onClick={handleClose}
+              className="group relative p-2.5 rounded-xl bg-gradient-to-br from-amber-700/50 to-yellow-600/40 border border-amber-400/40 hover:border-amber-300/70 hover:from-amber-600/60 hover:to-yellow-500/50 shadow-lg shadow-amber-900/30 transition-all duration-200 active:scale-90"
+              title="Close"
             >
-              <XIcon className="w-5 h-5" />
+              <XIcon
+                size={18}
+                className="text-amber-300 group-hover:text-amber-200 drop-shadow-[0_0_4px_rgba(251,191,36,0.5)] transition-colors"
+              />
             </button>
           </div>
           <p className="text-slate-400 text-sm">{thread.title}</p>
@@ -4060,7 +4083,7 @@ function ThreadSettingsModal({
 
         <div className="px-6 py-4 border-t border-slate-800/50 bg-slate-900/30 flex gap-3">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className={cn(
               "flex-1 px-4 py-3 rounded-xl font-medium transition-all",
               "bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 hover:text-white",
@@ -4083,7 +4106,7 @@ function ThreadSettingsModal({
             {isSaving ? "Saving..." : "Save Changes"}
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -4099,6 +4122,12 @@ function CreateThreadModal({
 }) {
   const createThread = useCreateThread();
   const themeClasses = useThemeClasses();
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(onClose, 280);
+  }, [onClose]);
   const [title, setTitle] = useState("");
   const [icon, setIcon] = useState("💬");
   const [purpose, setPurpose] = useState<ThreadPurpose>("general");
@@ -4164,12 +4193,24 @@ function CreateThreadModal({
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pb-[72px] sm:pb-0">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
+        className={cn(
+          "absolute inset-0 bg-black/60 transition-opacity duration-250",
+          isClosing ? "opacity-0" : "opacity-100",
+        )}
+        onClick={handleClose}
       />
 
       {/* Modal - Drawer style */}
-      <div className="relative w-full sm:max-w-md mx-auto bg-bg-dark border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl animate-slide-up max-h-[calc(100vh-88px)] sm:max-h-[90vh] overflow-hidden flex flex-col">
+      <motion.div
+        className="relative w-full sm:max-w-md mx-auto bg-bg-dark border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl max-h-[calc(100dvh-120px)] sm:max-h-[90vh] overflow-hidden flex flex-col"
+        initial={{ y: "100%", opacity: 0 }}
+        animate={
+          isClosing
+            ? { y: "100%", opacity: 0, scale: 0.95 }
+            : { y: 0, opacity: 1, scale: 1 }
+        }
+        transition={{ type: "spring", damping: 28, stiffness: 320, mass: 0.8 }}
+      >
         {/* Header */}
         <div className="px-6 pt-6 pb-2 border-b border-slate-800/50">
           <div className="flex items-center justify-between mb-2">
@@ -4179,10 +4220,14 @@ function CreateThreadModal({
               New Conversation
             </h2>
             <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-white/5 text-white/50 hover:text-white transition-colors"
+              onClick={handleClose}
+              className="group relative p-2.5 rounded-xl bg-gradient-to-br from-amber-700/50 to-yellow-600/40 border border-amber-400/40 hover:border-amber-300/70 hover:from-amber-600/60 hover:to-yellow-500/50 shadow-lg shadow-amber-900/30 transition-all duration-200 active:scale-90"
+              title="Close"
             >
-              <XIcon className="w-5 h-5" />
+              <XIcon
+                size={18}
+                className="text-amber-300 group-hover:text-amber-200 drop-shadow-[0_0_4px_rgba(251,191,36,0.5)] transition-colors"
+              />
             </button>
           </div>
           <p className="text-slate-400 text-sm">
@@ -4395,7 +4440,7 @@ function CreateThreadModal({
         {/* Footer Actions */}
         <div className="px-6 py-4 border-t border-slate-800/50 bg-slate-900/30 flex gap-3">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className={cn(
               "flex-1 px-4 py-3 rounded-xl font-medium transition-all",
               "bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 hover:text-white",
@@ -4418,7 +4463,7 @@ function CreateThreadModal({
             {createThread.isPending ? "Creating..." : "Create Chat"}
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

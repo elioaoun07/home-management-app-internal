@@ -966,6 +966,37 @@ function CardOverlay({
             }}
           />
 
+          {/* Gold engraved X close button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="absolute top-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 hover:scale-110 active:scale-90"
+            style={{
+              background: "linear-gradient(145deg, #b8860b, #8b6914)",
+              border: "1px solid rgba(251, 191, 36, 0.5)",
+              boxShadow:
+                "0 0 10px rgba(251, 191, 36, 0.2), inset 0 1px 1px rgba(255,255,255,0.15), inset 0 -1px 1px rgba(0,0,0,0.3)",
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#1a0a0a"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                filter: "drop-shadow(0 0 1px rgba(251,191,36,0.6))",
+              }}
+            >
+              <path d="M18 6L6 18M6 6L18 18" />
+            </svg>
+          </button>
+
           <div className="relative p-6">
             {/* Header */}
             <div className="mb-5 text-center">
@@ -1141,12 +1172,22 @@ export default function DeceptionBoxScene({
     setShowOverlay(true);
   }, []);
 
-  // Close overlay (user tapped outside card area) → close everything
+  // Close overlay (user tapped outside card area) → sequenced close:
+  // 1. Fade out HTML overlay, 2. Card descends into box, 3. Lid closes
   const closeOverlay = useCallback(() => {
+    // Step 1: Hide the static HTML card overlay
     setShowOverlay(false);
-    setCardTapped(false);
-    setIsOpen(false);
     setShowCardHint(false);
+
+    // Step 2: After overlay fades (~500ms), put the 3D card back in the box
+    setTimeout(() => {
+      setCardTapped(false);
+
+      // Step 3: After card settles back (~800ms), close the lid
+      setTimeout(() => {
+        setIsOpen(false);
+      }, 800);
+    }, 500);
   }, []);
 
   useEffect(() => {
