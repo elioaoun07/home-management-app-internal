@@ -1,8 +1,12 @@
 // src/features/transfers/hooks.ts
 "use client";
 
-import { CACHE_TIMES } from "@/lib/queryConfig";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 
 export interface Transfer {
@@ -58,6 +62,48 @@ export const transferKeys = {
     [...transferKeys.all, "list", filters] as const,
   detail: (id: string) => [...transferKeys.all, "detail", id] as const,
 };
+
+// --------------- localStorage transfer cache ---------------
+const TR_CACHE_PREFIX = "tr-cache-";
+const TR_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+function getTrCacheKey(start?: string, end?: string) {
+  return `${TR_CACHE_PREFIX}${start || "all"}_${end || "all"}`;
+}
+
+function readTrCache(
+  start?: string,
+  end?: string,
+): { data: Transfer[]; ts: number } | undefined {
+  try {
+    const raw = localStorage.getItem(getTrCacheKey(start, end));
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.ts > TR_CACHE_MAX_AGE) {
+      localStorage.removeItem(getTrCacheKey(start, end));
+      return undefined;
+    }
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeTrCache(
+  start: string | undefined,
+  end: string | undefined,
+  data: Transfer[],
+) {
+  try {
+    const trimmed = data.slice(0, 300);
+    localStorage.setItem(
+      getTrCacheKey(start, end),
+      JSON.stringify({ data: trimmed, ts: Date.now() }),
+    );
+  } catch {
+    /* quota exceeded — ignore */
+  }
+}
 
 // Fetch transfers
 async function fetchTransfers(
@@ -125,14 +171,30 @@ async function deleteTransfer(id: string): Promise<void> {
 }
 
 /**
- * Hook to fetch transfers
+ * Hook to fetch transfers with persistent caching
  */
 export function useTransfers(filters?: { start?: string; end?: string }) {
   return useQuery({
     queryKey: transferKeys.list(filters),
-    queryFn: () => fetchTransfers(filters?.start, filters?.end),
-    staleTime: CACHE_TIMES.BALANCE, // 5 minutes
-    refetchOnMount: true,
+    queryFn: async () => {
+      const data = await fetchTransfers(filters?.start, filters?.end);
+      writeTrCache(filters?.start, filters?.end, data);
+      return data;
+    },
+    initialData: () => {
+      if (typeof window === "undefined") return undefined;
+      return readTrCache(filters?.start, filters?.end)?.data;
+    },
+    initialDataUpdatedAt: () => {
+      if (typeof window === "undefined") return undefined;
+      return readTrCache(filters?.start, filters?.end)?.ts;
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutes — history rarely changes
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -1,8 +1,7 @@
 // src/features/balance/hooks.ts
 "use client";
 
-import { CACHE_TIMES } from "@/lib/queryConfig";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 // Types for balance history
 export type BalanceChangeType =
@@ -120,6 +119,48 @@ async function fetchBalanceHistory(
   return res.json();
 }
 
+// --------------- localStorage balance history cache ---------------
+const BH_HIST_PREFIX = "bh-hist-";
+const BH_HIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+function getBhHistCacheKey(
+  accountId: string,
+  opts?: {
+    limit?: number;
+    offset?: number;
+    start?: string;
+    end?: string;
+    excludeTransactions?: boolean;
+  },
+) {
+  return `${BH_HIST_PREFIX}${accountId}_${opts?.start || "all"}_${opts?.end || "all"}_${opts?.excludeTransactions ?? true}`;
+}
+
+function readBhHistCache(
+  key: string,
+): { data: BalanceHistoryResponse; ts: number } | undefined {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.ts > BH_HIST_MAX_AGE) {
+      localStorage.removeItem(key);
+      return undefined;
+    }
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeBhHistCache(key: string, data: BalanceHistoryResponse) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+  } catch {
+    /* quota exceeded — ignore */
+  }
+}
+
 /**
  * Hook to fetch balance history for an account
  * By default, excludes individual transaction entries (shown via daily summaries)
@@ -135,12 +176,30 @@ export function useBalanceHistory(
     excludeTransactions?: boolean;
   },
 ) {
+  const cacheKey = accountId ? getBhHistCacheKey(accountId, options) : "";
+
   return useQuery({
     queryKey: balanceHistoryKeys.accountWithFilters(accountId || "", options),
-    queryFn: () => fetchBalanceHistory(accountId!, options),
+    queryFn: async () => {
+      const data = await fetchBalanceHistory(accountId!, options);
+      writeBhHistCache(cacheKey, data);
+      return data;
+    },
     enabled: !!accountId,
-    staleTime: CACHE_TIMES.BALANCE,
-    refetchOnMount: true,
+    initialData: () => {
+      if (typeof window === "undefined" || !cacheKey) return undefined;
+      return readBhHistCache(cacheKey)?.data;
+    },
+    initialDataUpdatedAt: () => {
+      if (typeof window === "undefined" || !cacheKey) return undefined;
+      return readBhHistCache(cacheKey)?.ts;
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutes
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -87,15 +87,23 @@ export default function ActivityView() {
     end: todayStr,
   });
 
-  // Track if transactions are currently fetching (for refresh indicator)
+  // Track if transactions/transfers are currently fetching (for refresh indicator)
   const isFetchingTx = useIsFetching({
     queryKey: ["transactions", "dashboard", dateRange.start, dateRange.end],
   });
+  const isFetchingTr = useIsFetching({
+    queryKey: ["transfers"],
+  });
+  const isFetching = isFetchingTx > 0 || isFetchingTr > 0;
 
   const handleRefresh = () => {
     if (navigator.vibrate) navigator.vibrate(5);
+    // Invalidate both transactions and transfers for the current date range
     queryClient.invalidateQueries({
       queryKey: ["transactions", "dashboard", dateRange.start, dateRange.end],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["transfers"],
     });
   };
 
@@ -142,16 +150,16 @@ export default function ActivityView() {
           <div className="flex items-center gap-1.5">
             <button
               onClick={handleRefresh}
-              disabled={isFetchingTx > 0}
+              disabled={isFetching}
               className={cn(
                 "p-1.5 rounded-lg transition-all",
                 `neo-card ${themeClasses.text} hover:bg-white/5`,
-                isFetchingTx > 0 && "opacity-60",
+                isFetching && "opacity-60",
               )}
               title="Refresh data"
             >
               <RefreshIcon
-                className={cn("w-4 h-4", isFetchingTx > 0 && "animate-spin")}
+                className={cn("w-4 h-4", isFetching && "animate-spin")}
               />
             </button>
 

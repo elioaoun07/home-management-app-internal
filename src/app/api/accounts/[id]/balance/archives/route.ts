@@ -65,43 +65,36 @@ export async function GET(
 
   const currentBalance = Number(balanceData?.balance ?? 0);
 
-  // Get archived daily summaries grouped by month
-  const { data: archivedDays, error } = await supabase
-    .from("account_daily_summaries")
-    .select("*")
+  // Calculate the 6-month window: from 5 months ago to current month
+  const now = new Date();
+  const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const sixMonthsAgoStr = `${sixMonthsAgo.getFullYear()}-${String(sixMonthsAgo.getMonth() + 1).padStart(2, "0")}-01`;
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  // Get all transactions for the 6-month window (both archived and current)
+  const { data: transactions } = await supabase
+    .from("transactions")
+    .select("date, amount")
     .eq("account_id", accountId)
-    .eq("is_archived", true)
-    .order("summary_date", { ascending: false });
+    .eq("is_draft", false)
+    .gte("date", sixMonthsAgoStr)
+    .lte("date", todayStr);
 
-  if (error) {
-    console.error("Error fetching archived summaries:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch archives" },
-      { status: 500 },
-    );
-  }
-
-  if (!archivedDays || archivedDays.length === 0) {
-    return NextResponse.json([]);
-  }
-
-  // Also get transfers for archived months
-  const oldestDate = archivedDays[archivedDays.length - 1].summary_date;
-  const newestDate = archivedDays[0].summary_date;
-
+  // Get transfers for the 6-month window
   const { data: transfersIn } = await supabase
     .from("transfers")
     .select("date, amount")
     .eq("to_account_id", accountId)
-    .gte("date", oldestDate)
-    .lte("date", newestDate);
+    .gte("date", sixMonthsAgoStr)
+    .lte("date", todayStr);
 
   const { data: transfersOut } = await supabase
     .from("transfers")
     .select("date, amount")
     .eq("from_account_id", accountId)
-    .gte("date", oldestDate)
-    .lte("date", newestDate);
+    .gte("date", sixMonthsAgoStr)
+    .lte("date", todayStr);
 
   // Group by month
   const monthMap: Record<
@@ -112,12 +105,10 @@ export async function GET(
       total_expenses: number;
       transfers_in: number;
       transfers_out: number;
-      days: any[];
     }
   > = {};
 
-  for (const day of archivedDays) {
-    const yearMonth = day.summary_date.substring(0, 7); // "2025-12"
+  const ensureMonth = (yearMonth: string) => {
     if (!monthMap[yearMonth]) {
       monthMap[yearMonth] = {
         year_month: yearMonth,
@@ -125,80 +116,49 @@ export async function GET(
         total_expenses: 0,
         transfers_in: 0,
         transfers_out: 0,
-        days: [],
       };
     }
-    monthMap[yearMonth].transaction_count += day.transaction_count || 0;
-    monthMap[yearMonth].total_expenses += Number(day.total_expenses) || 0;
-    monthMap[yearMonth].days.push(day);
+  };
+
+  // Add transactions
+  for (const txn of transactions || []) {
+    const yearMonth = txn.date.substring(0, 7);
+    ensureMonth(yearMonth);
+    monthMap[yearMonth].transaction_count++;
+    monthMap[yearMonth].total_expenses += Number(txn.amount);
   }
 
-  // Add transfers to months
+  // Add transfers
   for (const tr of transfersIn || []) {
     const yearMonth = tr.date.substring(0, 7);
-    if (monthMap[yearMonth]) {
-      monthMap[yearMonth].transfers_in += Number(tr.amount);
-    }
+    ensureMonth(yearMonth);
+    monthMap[yearMonth].transfers_in += Number(tr.amount);
   }
 
   for (const tr of transfersOut || []) {
     const yearMonth = tr.date.substring(0, 7);
-    if (monthMap[yearMonth]) {
-      monthMap[yearMonth].transfers_out += Number(tr.amount);
-    }
+    ensureMonth(yearMonth);
+    monthMap[yearMonth].transfers_out += Number(tr.amount);
   }
 
-  // Convert to array and calculate balances
-  const months = Object.values(monthMap).sort((a, b) =>
-    b.year_month.localeCompare(a.year_month),
-  );
+  // Ensure current month always appears (even if empty)
+  ensureMonth(currentYearMonth);
 
-  // Calculate running balances for each month (work backwards from current)
-  // First, get all non-archived (current month) totals
-  const { data: currentMonthDays } = await supabase
-    .from("account_daily_summaries")
-    .select("total_expenses")
-    .eq("account_id", accountId)
-    .eq("is_archived", false);
+  // Sort months descending and limit to 6
+  const months = Object.values(monthMap)
+    .sort((a, b) => b.year_month.localeCompare(a.year_month))
+    .slice(0, 6);
 
-  const { data: currentTransfersIn } = await supabase
-    .from("transfers")
-    .select("amount")
-    .eq("to_account_id", accountId)
-    .gt("date", newestDate);
-
-  const { data: currentTransfersOut } = await supabase
-    .from("transfers")
-    .select("amount")
-    .eq("from_account_id", accountId)
-    .gt("date", newestDate);
-
-  // Current month net change
-  const currentMonthExpenses = (currentMonthDays || []).reduce(
-    (s, d) => s + Number(d.total_expenses),
-    0,
-  );
-  const currentMonthTrIn = (currentTransfersIn || []).reduce(
-    (s, t) => s + Number(t.amount),
-    0,
-  );
-  const currentMonthTrOut = (currentTransfersOut || []).reduce(
-    (s, t) => s + Number(t.amount),
-    0,
-  );
-
-  // Balance at end of last archived month = current - current month changes
-  let runningBalance =
-    currentBalance -
-    (currentMonthTrIn - currentMonthTrOut - currentMonthExpenses);
+  // Calculate running balances backwards from current balance
+  // Start with current balance, work backwards month by month
+  let runningBalance = currentBalance;
 
   const result = months.map((m) => {
     const netChange = m.transfers_in - m.transfers_out - m.total_expenses;
     const closingBalance = runningBalance;
     const openingBalance = runningBalance - netChange;
-    runningBalance = openingBalance; // Move back for next month
+    runningBalance = openingBalance;
 
-    // Format month name
     const [year, month] = m.year_month.split("-");
     const monthDate = new Date(parseInt(year), parseInt(month) - 1, 1);
     const monthName = monthDate.toLocaleDateString("en-US", {
@@ -215,10 +175,10 @@ export async function GET(
       net_change: netChange,
       total_transaction_count: m.transaction_count,
       total_expenses: m.total_expenses,
-      total_income: 0, // All transactions are expenses in this app
+      total_income: 0,
       total_transfers_in: m.transfers_in,
       total_transfers_out: m.transfers_out,
-      transfer_count: 0, // Could calculate if needed
+      transfer_count: 0,
     };
   });
 

@@ -39,7 +39,10 @@ import {
   useCategories,
   useCategoriesWithHidden,
 } from "@/features/categories/useCategoriesQuery";
-import { useCreateDebt } from "@/features/debts/useDebts";
+import {
+  useCreateDebt,
+  useCreateStandaloneDebt,
+} from "@/features/debts/useDebts";
 import { useLbpSettings } from "@/features/preferences/useLbpSettings";
 import {
   useSectionOrder,
@@ -248,6 +251,7 @@ export default function MobileExpenseForm() {
     useCategoriesWithHidden(selectedAccountId);
   const addTransactionMutation = useAddTransaction();
   const createDebtMutation = useCreateDebt();
+  const createStandaloneDebtMutation = useCreateStandaloneDebt();
   const deleteTransactionMutation = useDeleteTransaction();
   const queryClient = useQueryClient();
   const deleteAccountMutation = useDeleteAccount();
@@ -1327,30 +1331,60 @@ export default function MobileExpenseForm() {
 
                 {/* Debt inputs - expands below when active */}
                 {isDebt && (
-                  <div className="flex items-center justify-center gap-2 w-full max-w-xs">
-                    <input
-                      type="text"
-                      value={debtorName}
-                      onChange={(e) => setDebtorName(e.target.value)}
-                      placeholder="Who owes you?"
-                      className="flex-1 min-w-0 h-9 px-3 rounded-lg text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/30 focus:outline-none focus:border-orange-400/60 transition-all"
-                      autoFocus
-                    />
-                    <div className="relative shrink-0">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-orange-400/60 text-xs font-bold">
-                        $
-                      </span>
+                  <div className="flex flex-col items-center gap-2 w-full max-w-xs">
+                    <div className="flex items-center gap-2 w-full">
                       <input
-                        type="number"
-                        value={debtAmount}
-                        onChange={(e) => setDebtAmount(e.target.value)}
-                        placeholder={amount || "All"}
-                        className="w-20 h-9 pl-6 pr-2 rounded-lg text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/30 focus:outline-none focus:border-orange-400/60 transition-all text-right"
-                        min="0.01"
-                        step="0.01"
-                        max={amount ? parseFloat(amount) : undefined}
+                        type="text"
+                        value={debtorName}
+                        onChange={(e) => setDebtorName(e.target.value)}
+                        placeholder="Who owes you?"
+                        className="flex-1 min-w-0 h-9 px-3 rounded-lg text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/30 focus:outline-none focus:border-orange-400/60 transition-all"
+                        autoFocus
                       />
+                      <div className="relative shrink-0">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-orange-400/60 text-xs font-bold">
+                          $
+                        </span>
+                        <input
+                          type="number"
+                          value={debtAmount}
+                          onChange={(e) => setDebtAmount(e.target.value)}
+                          placeholder={amount || "0.00"}
+                          className="w-20 h-9 pl-6 pr-2 rounded-lg text-sm bg-orange-500/10 border border-orange-400/30 text-orange-200 placeholder:text-orange-400/30 focus:outline-none focus:border-orange-400/60 transition-all text-right"
+                          min="0.01"
+                          step="0.01"
+                        />
+                      </div>
                     </div>
+                    {/* Log Debt directly (standalone — no transaction) */}
+                    {debtorName.trim() &&
+                      (debtAmount
+                        ? parseFloat(debtAmount) > 0
+                        : amount && parseFloat(amount) > 0) && (
+                        <button
+                          onClick={() => {
+                            if (navigator.vibrate) navigator.vibrate(10);
+                            const name = debtorName.trim();
+                            const amt = debtAmount
+                              ? parseFloat(debtAmount)
+                              : parseFloat(amount);
+                            setDebtorName("");
+                            setDebtAmount("");
+                            setIsDebt(false);
+                            createStandaloneDebtMutation.mutate({
+                              debtor_name: name,
+                              amount: amt,
+                              date: format(date, "yyyy-MM-dd"),
+                            });
+                          }}
+                          disabled={createStandaloneDebtMutation.isPending}
+                          className="w-full h-8 rounded-lg text-[11px] font-medium transition-all active:scale-95 bg-orange-500/15 text-orange-300 border border-orange-400/30 hover:bg-orange-500/25"
+                        >
+                          {createStandaloneDebtMutation.isPending
+                            ? "Saving…"
+                            : "Log Debt Only (no transaction)"}
+                        </button>
+                      )}
                   </div>
                 )}
               </div>

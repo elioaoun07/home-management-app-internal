@@ -16,6 +16,7 @@ import {
   useDailySummaries,
   type BalanceArchive,
   type DailySummary,
+  type DayManualChange,
 } from "@/features/balance/archiveHooks";
 import {
   getChangeTypeInfo,
@@ -35,6 +36,7 @@ import {
   History,
   Loader2,
   Minus,
+  Settings,
   ShoppingCart,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -73,7 +75,8 @@ function DayCard({
   const hasActivity =
     day.transaction_count > 0 ||
     day.transfer_in_count > 0 ||
-    day.transfer_out_count > 0;
+    day.transfer_out_count > 0 ||
+    (day.manual_change_count ?? 0) > 0;
 
   if (!hasActivity) return null;
 
@@ -126,6 +129,11 @@ function DayCard({
               {day.transfer_out_count > 0 && (
                 <span className="text-orange-400/70">
                   −{day.transfer_out_count} out
+                </span>
+              )}
+              {(day.manual_change_count ?? 0) > 0 && (
+                <span className="text-amber-400/70">
+                  {day.manual_change_count} adj
                 </span>
               )}
             </div>
@@ -226,6 +234,45 @@ function DayCard({
               </p>
             </div>
           ))}
+
+          {/* Manual balance changes */}
+          {(day.manual_changes ?? []).map((mc: DayManualChange) => {
+            const isPositive = mc.change_amount >= 0;
+            const label =
+              mc.change_type === "initial_set"
+                ? "Initial Balance Set"
+                : mc.change_type === "manual_set"
+                  ? "Balance Adjusted"
+                  : "Manual Adjustment";
+            return (
+              <div
+                key={mc.id}
+                className="py-2 flex items-center gap-3 border-l-2 border-amber-500/50 ml-4 pl-4"
+              >
+                <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center">
+                  <Settings className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={cn("text-sm", themeClasses.text)}>
+                    {mc.reason || label}
+                  </p>
+                  <p className={cn("text-xs", themeClasses.textFaint)}>
+                    {formatCurrency(mc.previous_balance)} →{" "}
+                    {formatCurrency(mc.new_balance)}
+                  </p>
+                </div>
+                <p
+                  className={cn(
+                    "text-sm font-medium",
+                    isPositive ? "text-green-400" : "text-red-400",
+                  )}
+                >
+                  {isPositive ? "+" : "−"}
+                  {formatCurrency(mc.change_amount)}
+                </p>
+              </div>
+            );
+          })}
 
           {/* Closing balance */}
           <div className="py-3 mt-2 flex items-center gap-3 border-t border-white/5">

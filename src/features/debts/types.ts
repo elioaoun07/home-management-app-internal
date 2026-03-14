@@ -5,7 +5,7 @@ export type DebtStatus = "open" | "archived" | "closed";
 export interface Debt {
   id: string;
   user_id: string;
-  transaction_id: string;
+  transaction_id: string | null;
   debtor_name: string;
   original_amount: number;
   returned_amount: number;
@@ -15,7 +15,7 @@ export interface Debt {
   closed_at: string | null;
   created_at: string;
   updated_at: string;
-  // Joined from transaction
+  // Joined from transaction (null for standalone debts)
   transaction?: {
     date: string;
     description: string | null;
@@ -24,7 +24,7 @@ export interface Debt {
     is_private: boolean;
     account_name?: string;
     category_name?: string;
-  };
+  } | null;
 }
 
 export interface CreateDebtDTO {
@@ -39,6 +39,14 @@ export interface CreateDebtDTO {
   is_private?: boolean;
   debtor_name: string;
   notes?: string;
+}
+
+/** Standalone debt — no transaction, just "someone owes me X" */
+export interface CreateStandaloneDebtDTO {
+  debtor_name: string;
+  amount: number;
+  notes?: string;
+  date?: string;
 }
 
 export interface SettleDebtDTO {

@@ -117,12 +117,13 @@ type DashboardParams = {
   endDate: string;
 };
 
-// --------------- sessionStorage transaction cache ---------------
+// --------------- localStorage transaction cache ---------------
 // Provides instant rendering on cold start (page refresh / new tab).
 // Optimistic updates ONLY touch React Query's in-memory cache — never
-// sessionStorage — so the two systems can't conflict.
+// localStorage — so the two systems can't conflict.
+// Uses localStorage (persistent) so history data survives across sessions.
 const TX_CACHE_PREFIX = "tx-cache-";
-const TX_CACHE_MAX_AGE = 30 * 60 * 1000; // 30 minutes
+const TX_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
 
 function getTxCacheKey(start: string, end: string) {
   return `${TX_CACHE_PREFIX}${start}_${end}`;
@@ -133,11 +134,11 @@ function readTxCache(
   end: string,
 ): { data: Transaction[]; ts: number } | undefined {
   try {
-    const raw = sessionStorage.getItem(getTxCacheKey(start, end));
+    const raw = localStorage.getItem(getTxCacheKey(start, end));
     if (!raw) return undefined;
     const parsed = JSON.parse(raw);
     if (Date.now() - parsed.ts > TX_CACHE_MAX_AGE) {
-      sessionStorage.removeItem(getTxCacheKey(start, end));
+      localStorage.removeItem(getTxCacheKey(start, end));
       return undefined;
     }
     return parsed;
@@ -148,9 +149,9 @@ function readTxCache(
 
 function writeTxCache(start: string, end: string, data: Transaction[]) {
   try {
-    // Cap at 300 entries to stay well within sessionStorage quota
+    // Cap at 300 entries to stay well within localStorage quota
     const trimmed = data.slice(0, 300);
-    sessionStorage.setItem(
+    localStorage.setItem(
       getTxCacheKey(start, end),
       JSON.stringify({ data: trimmed, ts: Date.now() }),
     );
@@ -160,16 +161,17 @@ function writeTxCache(start: string, end: string, data: Transaction[]) {
 }
 
 /**
- * Fetch transactions for dashboard with aggressive caching
+ * Fetch transactions for dashboard with persistent caching
  * Uses stale-while-revalidate pattern for instant UI
  *
  * CACHING STRATEGY:
- * 1. In-memory: React Query cache (gcTime: 1h) for within-session navigation
- * 2. Persistent: sessionStorage for cold-start instant rendering
+ * 1. In-memory: React Query cache (gcTime: 24h) for within-session navigation
+ * 2. Persistent: localStorage for cold-start instant rendering (survives across sessions)
  *    - Written on every successful fetch
  *    - Read as `initialData` only when RQ cache is empty
- *    - Optimistic updates never touch sessionStorage (avoids conflicts)
- * 3. Staleness: staleTime 0 → always background-refetch on mount to verify freshness
+ *    - Optimistic updates never touch localStorage (avoids conflicts)
+ * 3. Staleness: staleTime 10min → shows cached data instantly, only refreshes via
+ *    manual refresh button or when adding new transactions
  */
 export function useDashboardTransactions({
   startDate,
@@ -194,13 +196,13 @@ export function useDashboardTransactions({
 
       const data = (await response.json()) as Transaction[];
 
-      // Persist to sessionStorage for instant cold-start rendering
+      // Persist to localStorage for instant cold-start rendering
       writeTxCache(startDate, endDate, data);
 
       return data;
     },
 
-    // Seed from sessionStorage so the user never sees a skeleton on page refresh.
+    // Seed from localStorage so the user never sees a skeleton on page refresh.
     // Once React Query's own cache has data, initialData is ignored.
     initialData: () => {
       if (typeof window === "undefined") return undefined;
@@ -211,14 +213,14 @@ export function useDashboardTransactions({
       return readTxCache(startDate, endDate)?.ts;
     },
 
-    // FRESH DATA STRATEGY:
-    // staleTime: 0 means data is immediately stale after fetch
-    // This ensures we always refetch on mount to get latest data
-    // Combined with gcTime, we keep data in cache but always verify freshness
-    staleTime: 0,
-    gcTime: 1000 * 60 * 60, // Keep in cache for 1 hour (for back navigation)
-    refetchOnMount: !isOffline, // Don't refetch on mount when offline
-    refetchOnWindowFocus: !isOffline, // Don't sync when offline
+    // PERSISTENT DATA STRATEGY:
+    // staleTime: 10 min → cached data shown instantly, no refetch on every visit
+    // User taps refresh icon to pull latest data, or it auto-refreshes after 10 min
+    // Mutations (add/delete transaction) invalidate the cache immediately
+    staleTime: 1000 * 60 * 10, // 10 minutes — history rarely changes
+    gcTime: 1000 * 60 * 60 * 24, // Keep in cache for 24 hours
+    refetchOnMount: false, // Don't refetch on every mount — use cached data
+    refetchOnWindowFocus: false, // Don't refetch on tab focus
     refetchOnReconnect: true, // Refetch when reconnecting
     retry: (failureCount) => {
       if (!isReallyOnline()) return false;

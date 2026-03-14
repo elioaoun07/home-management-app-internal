@@ -1,8 +1,12 @@
 // src/features/balance/archiveHooks.ts
 "use client";
 
-import { CACHE_TIMES } from "@/lib/queryConfig";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 // Types for balance archives (aggregated from archived daily summaries)
 export interface BalanceArchive {
@@ -31,9 +35,11 @@ export interface DailySummary {
   transaction_count: number;
   transfer_in_count: number;
   transfer_out_count: number;
+  manual_change_count: number;
   transactions: DayTransaction[];
   transfers_in: DayTransferIn[];
   transfers_out: DayTransferOut[];
+  manual_changes: DayManualChange[];
 }
 
 export interface DayTransaction {
@@ -56,6 +62,16 @@ export interface DayTransferOut {
   amount: number;
   description: string;
   to_account: string;
+}
+
+export interface DayManualChange {
+  id: string;
+  change_amount: number;
+  change_type: string;
+  reason: string | null;
+  previous_balance: number;
+  new_balance: number;
+  created_at: string;
 }
 
 export interface DailyResponse {
@@ -85,6 +101,42 @@ export const dailySummaryKeys = {
   accountRange: (accountId: string, start?: string, end?: string) =>
     [...dailySummaryKeys.account(accountId), { start, end }] as const,
 };
+
+// --------------- localStorage balance cache ---------------
+const BH_DAILY_PREFIX = "bh-daily-";
+const BH_ARCHIVE_PREFIX = "bh-archive-";
+const BH_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+function getDailyCacheKey(accountId: string, start?: string, end?: string) {
+  return `${BH_DAILY_PREFIX}${accountId}_${start || "all"}_${end || "all"}`;
+}
+
+function getArchiveCacheKey(accountId: string, year?: number) {
+  return `${BH_ARCHIVE_PREFIX}${accountId}_${year || "all"}`;
+}
+
+function readBhCache<T>(key: string): { data: T; ts: number } | undefined {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.ts > BH_CACHE_MAX_AGE) {
+      localStorage.removeItem(key);
+      return undefined;
+    }
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeBhCache<T>(key: string, data: T) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+  } catch {
+    /* quota exceeded — ignore */
+  }
+}
 
 // Fetch monthly archives
 async function fetchBalanceArchives(
@@ -149,14 +201,33 @@ export function useBalanceArchives(
   accountId: string | undefined,
   year?: number,
 ) {
+  const cacheKey = accountId ? getArchiveCacheKey(accountId, year) : "";
+
   return useQuery({
     queryKey: balanceArchiveKeys.accountYear(
       accountId || "",
       year || new Date().getFullYear(),
     ),
-    queryFn: () => fetchBalanceArchives(accountId!, year),
+    queryFn: async () => {
+      const data = await fetchBalanceArchives(accountId!, year);
+      writeBhCache(cacheKey, data);
+      return data;
+    },
     enabled: !!accountId,
-    staleTime: CACHE_TIMES.BALANCE,
+    initialData: () => {
+      if (typeof window === "undefined" || !cacheKey) return undefined;
+      return readBhCache<BalanceArchive[]>(cacheKey)?.data;
+    },
+    initialDataUpdatedAt: () => {
+      if (typeof window === "undefined" || !cacheKey) return undefined;
+      return readBhCache<BalanceArchive[]>(cacheKey)?.ts;
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutes
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -167,15 +238,36 @@ export function useDailySummaries(
   accountId: string | undefined,
   options?: { start?: string; end?: string; limit?: number },
 ) {
+  const cacheKey = accountId
+    ? getDailyCacheKey(accountId, options?.start, options?.end)
+    : "";
+
   return useQuery({
     queryKey: dailySummaryKeys.accountRange(
       accountId || "",
       options?.start,
       options?.end,
     ),
-    queryFn: () => fetchDailySummaries(accountId!, options),
+    queryFn: async () => {
+      const data = await fetchDailySummaries(accountId!, options);
+      writeBhCache(cacheKey, data);
+      return data;
+    },
     enabled: !!accountId,
-    staleTime: CACHE_TIMES.BALANCE,
+    initialData: () => {
+      if (typeof window === "undefined" || !cacheKey) return undefined;
+      return readBhCache<DailyResponse>(cacheKey)?.data;
+    },
+    initialDataUpdatedAt: () => {
+      if (typeof window === "undefined" || !cacheKey) return undefined;
+      return readBhCache<DailyResponse>(cacheKey)?.ts;
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutes
+    gcTime: 1000 * 60 * 60 * 24, // 24 hours
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    placeholderData: keepPreviousData,
   });
 }
 

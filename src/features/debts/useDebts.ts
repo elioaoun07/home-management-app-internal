@@ -5,7 +5,13 @@ import { isReallyOnline } from "@/lib/connectivityManager";
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { CreateDebtDTO, Debt, DebtStatus, SettleDebtDTO } from "./types";
+import type {
+  CreateDebtDTO,
+  CreateStandaloneDebtDTO,
+  Debt,
+  DebtStatus,
+  SettleDebtDTO,
+} from "./types";
 
 // Query keys
 export const debtKeys = {
@@ -237,6 +243,41 @@ export function useDeleteDebt() {
     },
     onSuccess: () => {
       toast.success("Debt deleted");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: debtKeys.all });
+    },
+  });
+}
+
+/**
+ * Create a standalone debt — no transaction, just "someone owes me X"
+ */
+export function useCreateStandaloneDebt() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: CreateStandaloneDebtDTO) => {
+      const res = await fetch("/api/debts/standalone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to create debt");
+      }
+
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast.success(
+        `Debt logged: ${data.debt.debtor_name} owes $${Number(data.debt.original_amount).toFixed(2)}`,
+      );
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to create debt");
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: debtKeys.all });

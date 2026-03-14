@@ -47,11 +47,23 @@ interface Transfer {
   to_account: { name: string } | { name: string }[] | null;
 }
 
+interface ManualChange {
+  id: string;
+  effective_date: string;
+  change_amount: number;
+  change_type: string;
+  reason: string | null;
+  previous_balance: number;
+  new_balance: number;
+  created_at: string;
+}
+
 interface DayEntry {
   date: string;
   transactions: Transaction[];
   transfers_in: Transfer[];
   transfers_out: Transfer[];
+  manual_changes: ManualChange[];
 }
 
 // GET /api/accounts/[id]/balance/daily - Get daily transaction/transfer summaries
@@ -157,6 +169,18 @@ export async function GET(
     .gte("date", currentMonthStart)
     .lte("date", endDate);
 
+  // Get manual balance changes (manual_set, manual_adjustment, initial_set)
+  const { data: manualChanges } = await supabase
+    .from("account_balance_history")
+    .select(
+      "id, effective_date, change_amount, change_type, reason, previous_balance, new_balance, created_at",
+    )
+    .eq("account_id", accountId)
+    .in("change_type", ["manual_set", "manual_adjustment", "initial_set"])
+    .gte("effective_date", currentMonthStart)
+    .lte("effective_date", endDate)
+    .order("created_at", { ascending: false });
+
   // Group everything by date
   const dayMap: Record<string, DayEntry> = {};
 
@@ -167,6 +191,7 @@ export async function GET(
         transactions: [],
         transfers_in: [],
         transfers_out: [],
+        manual_changes: [],
       };
     }
   };
@@ -187,6 +212,12 @@ export async function GET(
   for (const tr of (transfersOut || []) as Transfer[]) {
     ensureDay(tr.date);
     dayMap[tr.date].transfers_out.push(tr);
+  }
+
+  // Add manual balance changes
+  for (const mc of (manualChanges || []) as ManualChange[]) {
+    ensureDay(mc.effective_date);
+    dayMap[mc.effective_date].manual_changes.push(mc);
   }
 
   // Sort days by date descending
@@ -217,7 +248,14 @@ export async function GET(
       0,
     );
 
-    const netChange = totalTransfersIn - totalTransfersOut - totalExpenses;
+    // Net manual balance changes (manual_set replaces balance entirely, so we use the delta)
+    const totalManualChange = day.manual_changes.reduce(
+      (sum, mc) => sum + Number(mc.change_amount),
+      0,
+    );
+
+    const netChange =
+      totalTransfersIn - totalTransfersOut - totalExpenses + totalManualChange;
 
     // This day's closing balance is the running balance
     const closingBalance = runningBalance;
@@ -257,6 +295,7 @@ export async function GET(
       transaction_count: day.transactions.length,
       transfer_in_count: day.transfers_in.length,
       transfer_out_count: day.transfers_out.length,
+      manual_change_count: day.manual_changes.length,
       transactions: day.transactions.map((t) => ({
         id: t.id,
         amount: Number(t.amount),
@@ -275,6 +314,15 @@ export async function GET(
         amount: Number(t.amount),
         description: t.description || "",
         to_account: getAccountName(t.to_account),
+      })),
+      manual_changes: day.manual_changes.map((mc) => ({
+        id: mc.id,
+        change_amount: Number(mc.change_amount),
+        change_type: mc.change_type,
+        reason: mc.reason,
+        previous_balance: Number(mc.previous_balance),
+        new_balance: Number(mc.new_balance),
+        created_at: mc.created_at,
       })),
     };
   });
