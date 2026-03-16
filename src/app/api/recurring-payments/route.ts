@@ -12,6 +12,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Fetch own + household partner's recurring payments (RLS handles access)
     const { data, error } = await supabase
       .from("recurring_payments")
       .select(
@@ -20,9 +21,8 @@ export async function GET(request: Request) {
         account:accounts(id, name, type),
         category:user_categories!recurring_payments_category_id_fkey(id, name, slug, color),
         subcategory:user_categories!recurring_payments_subcategory_id_fkey(id, name, slug)
-      `
+      `,
       )
-      .eq("user_id", user.id)
       .eq("is_active", true)
       .order("next_due_date", { ascending: true });
 
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
       console.error("Error fetching recurring payments:", error);
       return NextResponse.json(
         { error: "Failed to fetch recurring payments" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     console.error("Unexpected error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -66,23 +66,29 @@ export async function POST(request: Request) {
       recurrence_type,
       recurrence_day,
       next_due_date,
+      payment_method,
     } = body;
 
     // Validation
     if (!account_id || !name || !amount || !recurrence_type || !next_due_date) {
       return NextResponse.json(
         { error: "Missing required fields" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!["daily", "weekly", "monthly", "yearly"].includes(recurrence_type)) {
       return NextResponse.json(
         { error: "Invalid recurrence_type" },
-        { status: 400 }
+        { status: 400 },
       );
     }
-
+    if (payment_method && !["manual", "auto"].includes(payment_method)) {
+      return NextResponse.json(
+        { error: "Invalid payment_method" },
+        { status: 400 },
+      );
+    }
     const { data, error } = await supabase
       .from("recurring_payments")
       .insert({
@@ -96,6 +102,7 @@ export async function POST(request: Request) {
         recurrence_type,
         recurrence_day: recurrence_day || null,
         next_due_date,
+        payment_method: payment_method || "manual",
         is_active: true,
       })
       .select()
@@ -105,7 +112,7 @@ export async function POST(request: Request) {
       console.error("Error creating recurring payment:", error);
       return NextResponse.json(
         { error: "Failed to create recurring payment" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -114,7 +121,7 @@ export async function POST(request: Request) {
     console.error("Unexpected error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

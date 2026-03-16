@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 export async function PATCH(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await supabaseServer();
@@ -29,6 +29,7 @@ export async function PATCH(
       "recurrence_day",
       "next_due_date",
       "is_active",
+      "payment_method",
     ];
 
     const updates: any = {};
@@ -41,7 +42,7 @@ export async function PATCH(
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
         { error: "No valid fields to update" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -57,14 +58,14 @@ export async function PATCH(
       console.error("Error updating recurring payment:", error);
       return NextResponse.json(
         { error: "Failed to update recurring payment" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     if (!data) {
       return NextResponse.json(
         { error: "Recurring payment not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -73,14 +74,14 @@ export async function PATCH(
     console.error("Unexpected error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await supabaseServer();
@@ -104,7 +105,7 @@ export async function DELETE(
       console.error("Error deleting recurring payment:", error);
       return NextResponse.json(
         { error: "Failed to delete recurring payment" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -113,7 +114,7 @@ export async function DELETE(
     console.error("Unexpected error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -121,7 +122,7 @@ export async function DELETE(
 // POST endpoint to confirm a due payment - creates transaction and updates next_due_date
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await supabaseServer();
@@ -136,34 +137,42 @@ export async function POST(
     const { id } = await params;
     const body = await request.json();
 
-    // Get the recurring payment
+    // Get the recurring payment (RLS allows household partner access)
     const { data: recurringPayment, error: fetchError } = await supabase
       .from("recurring_payments")
       .select("*")
       .eq("id", id)
-      .eq("user_id", user.id)
       .single();
 
     if (fetchError || !recurringPayment) {
       return NextResponse.json(
         { error: "Recurring payment not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // Allow editing amount/description before confirming
+    // Allow overriding amount, description, account, category, subcategory at confirm time
     const finalAmount = body.amount ?? recurringPayment.amount;
     const finalDescription = body.description ?? recurringPayment.description;
     const finalDate = body.date ?? recurringPayment.next_due_date;
+    const finalAccountId = body.account_id ?? recurringPayment.account_id;
+    const finalCategoryId =
+      body.category_id !== undefined
+        ? body.category_id
+        : recurringPayment.category_id;
+    const finalSubcategoryId =
+      body.subcategory_id !== undefined
+        ? body.subcategory_id
+        : recurringPayment.subcategory_id;
 
-    // Create the transaction
+    // Create the transaction under the CURRENT user (whoever confirms it)
     const { data: transaction, error: transactionError } = await supabase
       .from("transactions")
       .insert({
         user_id: user.id,
-        account_id: recurringPayment.account_id,
-        category_id: recurringPayment.category_id,
-        subcategory_id: recurringPayment.subcategory_id,
+        account_id: finalAccountId,
+        category_id: finalCategoryId,
+        subcategory_id: finalSubcategoryId,
         amount: finalAmount,
         description: finalDescription || recurringPayment.name,
         date: finalDate,
@@ -175,7 +184,7 @@ export async function POST(
       console.error("Error creating transaction:", transactionError);
       return NextResponse.json(
         { error: "Failed to create transaction" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -186,7 +195,7 @@ export async function POST(
         current_due_date: recurringPayment.next_due_date,
         recurrence_type: recurringPayment.recurrence_type,
         recurrence_day: recurringPayment.recurrence_day,
-      }
+      },
     );
 
     // Update the recurring payment with new due date
@@ -212,7 +221,7 @@ export async function POST(
     console.error("Unexpected error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -4,6 +4,7 @@ import {
   CalendarClockIcon,
   CheckIcon,
   Edit2Icon,
+  ListIcon,
   PlusIcon,
   Trash2Icon,
   XIcon,
@@ -32,8 +33,22 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format, formatDistanceToNow, isPast, isToday } from "date-fns";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+
+function getOrdinalSuffix(day: number) {
+  if (day >= 11 && day <= 13) return "th";
+  switch (day % 10) {
+    case 1:
+      return "st";
+    case 2:
+      return "nd";
+    case 3:
+      return "rd";
+    default:
+      return "th";
+  }
+}
 
 export default function RecurringPage() {
   const themeClasses = useThemeClasses();
@@ -48,6 +63,7 @@ export default function RecurringPage() {
   );
   const [confirmingPayment, setConfirmingPayment] =
     useState<RecurringPayment | null>(null);
+  const [viewMode, setViewMode] = useState<"comfort" | "compact">("comfort");
 
   const createMutation = useCreateRecurringPayment();
   const updateMutation = useUpdateRecurringPayment();
@@ -65,6 +81,7 @@ export default function RecurringPage() {
     recurrence_type: "monthly" as "daily" | "weekly" | "monthly" | "yearly",
     recurrence_day: "",
     next_due_date: "",
+    payment_method: "manual" as "manual" | "auto",
   });
 
   // Confirm payment form state
@@ -72,7 +89,30 @@ export default function RecurringPage() {
     amount: "",
     description: "",
     date: "",
+    account_id: "",
+    category_id: "",
+    subcategory_id: "",
   });
+
+  // Sort by recurrence_day (day of month) for chronological monthly order
+  const sortedPayments = useMemo(() => {
+    return [...recurringPayments].sort((a, b) => {
+      const dayA = a.recurrence_day ?? new Date(a.next_due_date).getDate();
+      const dayB = b.recurrence_day ?? new Date(b.next_due_date).getDate();
+      return dayA - dayB;
+    });
+  }, [recurringPayments]);
+
+  // Monthly total
+  const monthlyTotal = useMemo(() => {
+    return recurringPayments.reduce((sum, p) => {
+      if (p.recurrence_type === "monthly") return sum + p.amount;
+      if (p.recurrence_type === "weekly") return sum + p.amount * 4.33;
+      if (p.recurrence_type === "daily") return sum + p.amount * 30;
+      if (p.recurrence_type === "yearly") return sum + p.amount / 12;
+      return sum;
+    }, 0);
+  }, [recurringPayments]);
 
   useEffect(() => {
     if (defaultAccount) {
@@ -92,6 +132,7 @@ export default function RecurringPage() {
         recurrence_type: editingPayment.recurrence_type,
         recurrence_day: editingPayment.recurrence_day?.toString() || "",
         next_due_date: editingPayment.next_due_date,
+        payment_method: editingPayment.payment_method || "manual",
       });
       setShowAddDrawer(true);
     }
@@ -103,9 +144,27 @@ export default function RecurringPage() {
         amount: confirmingPayment.amount.toString(),
         description: confirmingPayment.description || confirmingPayment.name,
         date: new Date().toISOString().split("T")[0],
+        account_id: confirmingPayment.account_id,
+        category_id: confirmingPayment.category_id || "",
+        subcategory_id: confirmingPayment.subcategory_id || "",
       });
     }
   }, [confirmingPayment]);
+
+  const resetForm = () => {
+    setFormData({
+      account_id: defaultAccount?.id || "",
+      category_id: "",
+      subcategory_id: "",
+      name: "",
+      amount: "",
+      description: "",
+      recurrence_type: "monthly",
+      recurrence_day: "",
+      next_due_date: "",
+      payment_method: "manual",
+    });
+  };
 
   const handleSubmit = async () => {
     if (
@@ -132,6 +191,7 @@ export default function RecurringPage() {
             ? parseInt(formData.recurrence_day)
             : null,
           next_due_date: formData.next_due_date,
+          payment_method: formData.payment_method,
         });
         toast.success("Recurring payment updated");
       } else {
@@ -147,22 +207,12 @@ export default function RecurringPage() {
             ? parseInt(formData.recurrence_day)
             : null,
           next_due_date: formData.next_due_date,
+          payment_method: formData.payment_method,
         });
         toast.success("Recurring payment created");
       }
 
-      // Reset form
-      setFormData({
-        account_id: defaultAccount?.id || "",
-        category_id: "",
-        subcategory_id: "",
-        name: "",
-        amount: "",
-        description: "",
-        recurrence_type: "monthly",
-        recurrence_day: "",
-        next_due_date: "",
-      });
+      resetForm();
       setShowAddDrawer(false);
       setEditingPayment(null);
     } catch (error) {
@@ -190,6 +240,9 @@ export default function RecurringPage() {
         amount: parseFloat(confirmFormData.amount),
         description: confirmFormData.description,
         date: confirmFormData.date,
+        account_id: confirmFormData.account_id || undefined,
+        category_id: confirmFormData.category_id || null,
+        subcategory_id: confirmFormData.subcategory_id || null,
       });
 
       toast.success("Payment confirmed!", {
@@ -222,6 +275,10 @@ export default function RecurringPage() {
     ? categories.filter((c: any) => c.parent_id === formData.category_id)
     : [];
 
+  const confirmSubcategories = confirmFormData.category_id
+    ? categories.filter((c: any) => c.parent_id === confirmFormData.category_id)
+    : [];
+
   if (isLoading) {
     return (
       <div
@@ -238,7 +295,7 @@ export default function RecurringPage() {
   return (
     <div className={cn("min-h-screen pb-32", themeClasses.bgPage)}>
       <div className="max-w-2xl mx-auto p-4">
-        {/* Sticky Header with Add Button */}
+        {/* Sticky Header */}
         <div
           className={cn(
             "sticky top-14 z-30 pb-3 mb-3 -mx-4 px-4 pt-3 border-b backdrop-blur-md",
@@ -252,36 +309,53 @@ export default function RecurringPage() {
                 Recurring Payments
               </h1>
               <p className={cn("text-sm", themeClasses.textMuted)}>
-                {recurringPayments.length} active{" "}
-                {recurringPayments.length === 1 ? "payment" : "payments"}
+                {recurringPayments.length} active &middot; $
+                {monthlyTotal.toFixed(0)}/mo
               </p>
             </div>
-            <button
-              onClick={() => {
-                setEditingPayment(null);
-                setFormData({
-                  account_id: defaultAccount?.id || "",
-                  category_id: "",
-                  subcategory_id: "",
-                  name: "",
-                  amount: "",
-                  description: "",
-                  recurrence_type: "monthly",
-                  recurrence_day: "",
-                  next_due_date: "",
-                });
-                setShowAddDrawer(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 rounded-full neo-gradient text-white neo-glow hover:scale-105 active:scale-95 transition-all shadow-lg"
-            >
-              <PlusIcon className="w-4 h-4" />
-              <span className="text-sm font-semibold">Add</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {/* View toggle */}
+              <button
+                onClick={() =>
+                  setViewMode((v) => (v === "comfort" ? "compact" : "comfort"))
+                }
+                className={cn(
+                  "p-2 rounded-lg active:scale-95 transition-all",
+                  themeClasses.bgSurface,
+                  themeClasses.bgHover,
+                )}
+                title={
+                  viewMode === "comfort"
+                    ? "Switch to compact view"
+                    : "Switch to comfort view"
+                }
+              >
+                <ListIcon
+                  className={cn(
+                    "w-4 h-4",
+                    viewMode === "compact"
+                      ? themeClasses.textHighlight
+                      : themeClasses.text,
+                  )}
+                />
+              </button>
+              <button
+                onClick={() => {
+                  setEditingPayment(null);
+                  resetForm();
+                  setShowAddDrawer(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-full neo-gradient text-white neo-glow hover:scale-105 active:scale-95 transition-all shadow-lg"
+              >
+                <PlusIcon className="w-4 h-4" />
+                <span className="text-sm font-semibold">Add</span>
+              </button>
+            </div>
           </div>
         </div>
 
         {/* List */}
-        {recurringPayments.length === 0 ? (
+        {sortedPayments.length === 0 ? (
           <div className="neo-card p-8 text-center">
             <CalendarClockIcon
               className={cn("w-16 h-16 mx-auto mb-4", themeClasses.textFaint)}
@@ -293,13 +367,152 @@ export default function RecurringPage() {
               Tap the + button to add your first recurring payment
             </p>
           </div>
+        ) : viewMode === "compact" ? (
+          /* ── Compact List View ── */
+          <div className="space-y-0.5">
+            {/* Column header */}
+            <div className="flex items-center gap-3 px-3 py-2 text-[10px] uppercase tracking-wider text-white/30">
+              <span className="w-8 text-center">Day</span>
+              <span className="flex-1">Name</span>
+              <span className="w-16 text-right">Amount</span>
+              <span className="w-12 text-center">Type</span>
+              <span className="w-8" />
+            </div>
+            {sortedPayments.map((payment) => {
+              const dueDateInfo = getDueDateInfo(payment);
+              const day =
+                payment.recurrence_day ??
+                new Date(payment.next_due_date).getDate();
+              const isManual =
+                (payment.payment_method ?? "manual") === "manual";
+
+              return (
+                <div
+                  key={payment.id}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
+                    dueDateInfo.isDue
+                      ? cn(themeClasses.bgActive, "neo-glow")
+                      : "hover:bg-white/5",
+                  )}
+                >
+                  {/* Day */}
+                  <span
+                    className={cn(
+                      "w-8 text-center text-sm font-bold tabular-nums",
+                      dueDateInfo.isDue
+                        ? themeClasses.textHighlight
+                        : "text-white/60",
+                    )}
+                  >
+                    {day}
+                  </span>
+
+                  {/* Name + category */}
+                  <div
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() =>
+                      isManual
+                        ? setConfirmingPayment(payment)
+                        : setEditingPayment(payment)
+                    }
+                  >
+                    <p className="text-sm font-medium text-white truncate">
+                      {payment.name}
+                    </p>
+                    {payment.category && (
+                      <p className="text-[10px] text-white/30 truncate">
+                        {payment.category.name}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Amount */}
+                  <span
+                    className={cn(
+                      "w-16 text-right text-sm font-semibold tabular-nums",
+                      themeClasses.textHighlight,
+                    )}
+                  >
+                    ${payment.amount.toFixed(0)}
+                  </span>
+
+                  {/* Method badge */}
+                  <span
+                    className={cn(
+                      "w-12 text-center text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                      isManual
+                        ? "bg-amber-500/15 text-amber-400"
+                        : "bg-blue-500/15 text-blue-400",
+                    )}
+                  >
+                    {isManual ? "Cash" : "Auto"}
+                  </span>
+
+                  {/* Log transaction button (manual payments always) */}
+                  <div className="w-8 flex justify-center">
+                    {isManual ? (
+                      <button
+                        onClick={() => setConfirmingPayment(payment)}
+                        className={cn(
+                          "p-1.5 rounded-md active:scale-95 transition-all",
+                          dueDateInfo.isDue
+                            ? themeClasses.bgActive
+                            : themeClasses.bgSurface,
+                        )}
+                      >
+                        <CheckIcon
+                          className={cn(
+                            "w-3.5 h-3.5",
+                            dueDateInfo.isDue
+                              ? themeClasses.textHighlight
+                              : themeClasses.text,
+                          )}
+                        />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Compact total row */}
+            <div
+              className={cn(
+                "flex items-center gap-3 px-3 py-3 mt-2 rounded-lg border",
+                themeClasses.border,
+                themeClasses.bgSurface,
+              )}
+            >
+              <span className="w-8" />
+              <span className="flex-1 text-sm font-semibold text-white/60">
+                Monthly Total
+              </span>
+              <span
+                className={cn(
+                  "w-16 text-right text-sm font-bold tabular-nums",
+                  themeClasses.textHighlight,
+                )}
+              >
+                ${monthlyTotal.toFixed(0)}
+              </span>
+              <span className="w-12" />
+              <span className="w-8" />
+            </div>
+          </div>
         ) : (
+          /* ── Comfort Card View ── */
           <div className="space-y-3">
-            {recurringPayments.map((payment) => {
+            {sortedPayments.map((payment) => {
               const dueDateInfo = getDueDateInfo(payment);
               const IconComponent = payment.category
                 ? getCategoryIcon(payment.category.name, payment.category.slug)
                 : CalendarClockIcon;
+              const isManual =
+                (payment.payment_method ?? "manual") === "manual";
+              const day =
+                payment.recurrence_day ??
+                new Date(payment.next_due_date).getDate();
 
               return (
                 <div
@@ -335,9 +548,21 @@ export default function RecurringPage() {
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-white mb-1">
-                          {payment.name}
-                        </h3>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-white">
+                            {payment.name}
+                          </h3>
+                          <span
+                            className={cn(
+                              "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                              isManual
+                                ? "bg-amber-500/15 text-amber-400"
+                                : "bg-blue-500/15 text-blue-400",
+                            )}
+                          >
+                            {isManual ? "Cash" : "Auto"}
+                          </span>
+                        </div>
                         <p
                           className={cn(
                             "text-2xl font-bold mb-2",
@@ -362,7 +587,8 @@ export default function RecurringPage() {
                             {dueDateInfo.formatted}
                           </span>
                           <span className={themeClasses.textMuted}>
-                            {payment.recurrence_type}
+                            {day}
+                            {getOrdinalSuffix(day)} of each month
                           </span>
                           {payment.category && (
                             <span className={themeClasses.textMuted}>
@@ -374,19 +600,24 @@ export default function RecurringPage() {
                     </div>
 
                     <div className="flex gap-1">
-                      {dueDateInfo.isDue && (
+                      {/* Log transaction (manual payments always) */}
+                      {isManual && (
                         <button
                           onClick={() => setConfirmingPayment(payment)}
                           className={cn(
                             "p-2 rounded-lg active:scale-95 transition-all",
-                            themeClasses.bgActive,
+                            dueDateInfo.isDue
+                              ? themeClasses.bgActive
+                              : themeClasses.bgSurface,
                             themeClasses.bgHover,
                           )}
                         >
                           <CheckIcon
                             className={cn(
                               "w-4 h-4",
-                              themeClasses.textHighlight,
+                              dueDateInfo.isDue
+                                ? themeClasses.textHighlight
+                                : themeClasses.text,
                             )}
                           />
                         </button>
@@ -475,6 +706,59 @@ export default function RecurringPage() {
                       }
                       className={`${themeClasses.formControlBg} text-white`}
                     />
+                  </div>
+
+                  {/* Payment Method Toggle */}
+                  <div>
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
+                      Payment Method
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, payment_method: "manual" })
+                        }
+                        className={cn(
+                          "px-4 py-3 rounded-xl text-sm font-medium transition-all border",
+                          formData.payment_method === "manual"
+                            ? "bg-amber-500/20 border-amber-500/50 text-amber-400"
+                            : cn(
+                                "border-white/10 text-white/50",
+                                themeClasses.bgSurface,
+                              ),
+                        )}
+                      >
+                        <div className="text-base mb-0.5">💵</div>
+                        <div>Cash / Manual</div>
+                        <div className="text-[10px] text-white/30 mt-0.5">
+                          Log via confirm
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({ ...formData, payment_method: "auto" })
+                        }
+                        className={cn(
+                          "px-4 py-3 rounded-xl text-sm font-medium transition-all border",
+                          formData.payment_method === "auto"
+                            ? "bg-blue-500/20 border-blue-500/50 text-blue-400"
+                            : cn(
+                                "border-white/10 text-white/50",
+                                themeClasses.bgSurface,
+                              ),
+                        )}
+                      >
+                        <div className="text-base mb-0.5">🏦</div>
+                        <div>Auto / Online</div>
+                        <div className="text-[10px] text-white/30 mt-0.5">
+                          Info only (via statement)
+                        </div>
+                      </button>
+                    </div>
                   </div>
 
                   <div>
@@ -704,16 +988,26 @@ export default function RecurringPage() {
           </div>
         )}
 
-        {/* Confirm Payment Dialog */}
+        {/* Confirm Payment — Log as Transaction */}
         {confirmingPayment && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end">
             <div
-              className={`${themeClasses.surfaceBg} rounded-2xl p-6 max-w-md w-full`}
+              className={`w-full ${themeClasses.surfaceBg} rounded-t-3xl h-[85vh] flex flex-col`}
             >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className={`text-xl font-bold ${themeClasses.headerText}`}>
-                  Confirm Payment
-                </h2>
+              {/* Fixed Header */}
+              <div
+                className={`flex items-center justify-between p-6 pb-4 border-b ${themeClasses.border} flex-shrink-0`}
+              >
+                <div>
+                  <h2
+                    className={`text-xl font-bold ${themeClasses.headerText}`}
+                  >
+                    Log Transaction
+                  </h2>
+                  <p className={`text-sm ${themeClasses.headerTextMuted}`}>
+                    {confirmingPayment.name}
+                  </p>
+                </div>
                 <button
                   onClick={() => setConfirmingPayment(null)}
                   className={`p-2 rounded-lg ${themeClasses.bgSurface} ${themeClasses.bgHover}`}
@@ -722,88 +1016,185 @@ export default function RecurringPage() {
                 </button>
               </div>
 
-              <div className="mb-6">
-                <h3 className="font-semibold text-white text-lg mb-2">
-                  {confirmingPayment.name}
-                </h3>
-                <p className={`text-sm ${themeClasses.headerTextMuted}`}>
-                  This will create a transaction and schedule the next payment.
-                </p>
-              </div>
+              {/* Scrollable Content */}
+              <div className="overflow-y-auto flex-1 p-6 pt-4">
+                <div className="space-y-4 pb-32">
+                  {/* Amount */}
+                  <div>
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
+                      Amount
+                    </Label>
+                    <Input
+                      type="number"
+                      value={confirmFormData.amount}
+                      onChange={(e) =>
+                        setConfirmFormData({
+                          ...confirmFormData,
+                          amount: e.target.value,
+                        })
+                      }
+                      className={`${themeClasses.formControlBg} text-white`}
+                    />
+                  </div>
 
-              <div className="space-y-4 mb-6">
-                <div>
-                  <Label
-                    className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                  >
-                    Amount
-                  </Label>
-                  <Input
-                    type="number"
-                    value={confirmFormData.amount}
-                    onChange={(e) =>
-                      setConfirmFormData({
-                        ...confirmFormData,
-                        amount: e.target.value,
-                      })
-                    }
-                    className={`${themeClasses.formControlBg} text-white`}
-                  />
+                  {/* Account */}
+                  <div>
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
+                      Account
+                    </Label>
+                    <Select
+                      value={confirmFormData.account_id}
+                      onValueChange={(value) =>
+                        setConfirmFormData({
+                          ...confirmFormData,
+                          account_id: value,
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        className={`${themeClasses.formControlBg} text-white`}
+                      >
+                        <SelectValue placeholder="Select account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
+                      Category
+                    </Label>
+                    <Select
+                      value={confirmFormData.category_id}
+                      onValueChange={(value) =>
+                        setConfirmFormData({
+                          ...confirmFormData,
+                          category_id: value,
+                          subcategory_id: "",
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        className={`${themeClasses.formControlBg} text-white`}
+                      >
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories
+                          .filter((c: any) => !c.parent_id)
+                          .map((category: any) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Subcategory */}
+                  {confirmSubcategories.length > 0 && (
+                    <div>
+                      <Label
+                        className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                      >
+                        Subcategory
+                      </Label>
+                      <Select
+                        value={confirmFormData.subcategory_id}
+                        onValueChange={(value) =>
+                          setConfirmFormData({
+                            ...confirmFormData,
+                            subcategory_id: value,
+                          })
+                        }
+                      >
+                        <SelectTrigger
+                          className={`${themeClasses.formControlBg} text-white`}
+                        >
+                          <SelectValue placeholder="Select subcategory" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {confirmSubcategories.map((sub: any) => (
+                            <SelectItem key={sub.id} value={sub.id}>
+                              {sub.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  <div>
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
+                      Description
+                    </Label>
+                    <Input
+                      value={confirmFormData.description}
+                      onChange={(e) =>
+                        setConfirmFormData({
+                          ...confirmFormData,
+                          description: e.target.value,
+                        })
+                      }
+                      className={`${themeClasses.formControlBg} text-white`}
+                    />
+                  </div>
+
+                  {/* Date */}
+                  <div>
+                    <Label
+                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
+                    >
+                      Date
+                    </Label>
+                    <Input
+                      type="date"
+                      value={confirmFormData.date}
+                      onChange={(e) =>
+                        setConfirmFormData({
+                          ...confirmFormData,
+                          date: e.target.value,
+                        })
+                      }
+                      className={`${themeClasses.formControlBg} text-white`}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={() => setConfirmingPayment(null)}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleConfirmPayment}
+                      disabled={confirmMutation.isPending}
+                      className="flex-1 neo-gradient text-white"
+                    >
+                      {confirmMutation.isPending
+                        ? "Logging..."
+                        : "Log Transaction"}
+                    </Button>
+                  </div>
                 </div>
-
-                <div>
-                  <Label
-                    className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                  >
-                    Description
-                  </Label>
-                  <Input
-                    value={confirmFormData.description}
-                    onChange={(e) =>
-                      setConfirmFormData({
-                        ...confirmFormData,
-                        description: e.target.value,
-                      })
-                    }
-                    className={`${themeClasses.formControlBg} text-white`}
-                  />
-                </div>
-
-                <div>
-                  <Label
-                    className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                  >
-                    Date
-                  </Label>
-                  <Input
-                    type="date"
-                    value={confirmFormData.date}
-                    onChange={(e) =>
-                      setConfirmFormData({
-                        ...confirmFormData,
-                        date: e.target.value,
-                      })
-                    }
-                    className={`${themeClasses.formControlBg} text-white`}
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <Button
-                  onClick={() => setConfirmingPayment(null)}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleConfirmPayment}
-                  disabled={confirmMutation.isPending}
-                  className="flex-1 neo-gradient text-white"
-                >
-                  {confirmMutation.isPending ? "Confirming..." : "Confirm"}
-                </Button>
               </div>
             </div>
           </div>

@@ -1,15 +1,14 @@
-# In Mobile View - Expense Feature:
+# I want to enhance my WebView - Budget - Dashboard:
 
-1. In Activity Tab:
-   a. I want to have everything cached. Since in history, nothing usually changes.
-   b. If i click the refresh icon, it refreshes all transactions/transfers that changed (either updated, or logged now and still not displaying)
+1. Keep the current dashboard as is, just add a v2 to it so i can test and the merge
 
-In summary: I don't want to have to wait every time i want to see a previous transaction. Same this for Transfers.
-It should be persistent. Make the solution very clear, simple as it sounds, easy, straightforward.
+2. I want to have a simple straightforward widgets that would provide me the below info:
+   a. Same top toggles: Me | Both | Partner - Expense | all | Income
+   b. Filters by Date, By category, By Account
+   c. Widgets:
+   i. Graph showing expnese/saving/income across a period of time
+   ii. Graph showing Expense vs income by category over a period of time
+   iii. Forecasting: projection for future based on analytics from previous data
+   iv. Show split of income by Needs/Wants/Savings. It should follow the rule of 50/30/20. I want a dashboard to show me by type of split, my status
 
-2. In add expense Tab:
-   a. Debt feature: I should be able to add a debt without adding a transaction: Sometimes i payed for example in a restaurant on behalf of someone and this is a clear debt; it is his part of the transaction (this is working perfectly, no need to change it). But, in case i got money from someone and this is waiting no transactions...i should be able to set a debt regardless of any transaction. It should be logged without Category/Subcategory. I just add 'Who owes you?' and the amount.
-
-3. Enhance the Balance History:
-   a. Log the manual changes done by the User. You can have it in the 'By Day' section.
-   b. Monthly is now showing up to December. It should show till this current month. 6 months back as a limit could be fine.
+The filters should affect all widgets in the dashboard if applicable

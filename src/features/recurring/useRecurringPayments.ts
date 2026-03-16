@@ -16,6 +16,7 @@ export type RecurringPayment = {
   recurrence_day: number | null;
   next_due_date: string;
   last_processed_date: string | null;
+  payment_method: "manual" | "auto";
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -72,6 +73,7 @@ export function useCreateRecurringPayment() {
       recurrence_type: "daily" | "weekly" | "monthly" | "yearly";
       recurrence_day?: number | null;
       next_due_date: string;
+      payment_method?: "manual" | "auto";
     }) => {
       const res = await fetch("/api/recurring-payments", {
         method: "POST",
@@ -105,6 +107,7 @@ export function useUpdateRecurringPayment() {
       recurrence_day?: number | null;
       next_due_date?: string;
       is_active?: boolean;
+      payment_method?: "manual" | "auto";
     }) => {
       const res = await fetch(`/api/recurring-payments/${id}`, {
         method: "PATCH",
@@ -146,11 +149,17 @@ export function useConfirmPayment() {
       amount,
       description,
       date,
+      account_id,
+      category_id,
+      subcategory_id,
     }: {
       id: string;
       amount?: number;
       description?: string;
       date?: string;
+      account_id?: string;
+      category_id?: string | null;
+      subcategory_id?: string | null;
     }) => {
       // Check real connectivity (not just navigator.onLine which can lie after WiFi toggle)
       const offline = !isReallyOnline();
@@ -161,7 +170,14 @@ export function useConfirmPayment() {
           operation: "confirm",
           endpoint: `/api/recurring-payments/${id}`,
           method: "POST",
-          body: { amount, description, date },
+          body: {
+            amount,
+            description,
+            date,
+            account_id,
+            category_id,
+            subcategory_id,
+          },
           metadata: {
             label: `Confirm payment${description ? ` "${description}"` : ""}`,
           },
@@ -171,7 +187,14 @@ export function useConfirmPayment() {
       const res = await fetch(`/api/recurring-payments/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount, description, date }),
+        body: JSON.stringify({
+          amount,
+          description,
+          date,
+          account_id,
+          category_id,
+          subcategory_id,
+        }),
       });
       if (!res.ok) throw new Error("Failed to confirm payment");
       return res.json();

@@ -1,5 +1,6 @@
 "use client";
 
+import AnalyticsDashboard from "@/components/dashboard-v2/AnalyticsDashboard";
 import CategoryDetailView from "@/components/dashboard/CategoryDetailView";
 import SwipeableTransactionItem from "@/components/dashboard/SwipeableTransactionItem";
 import TransactionDetailModal from "@/components/dashboard/TransactionDetailModal";
@@ -15,6 +16,7 @@ import {
   ListIcon,
   RefreshIcon,
   StarIcon,
+  TrendingUpIcon,
 } from "@/components/icons/FuturisticIcons";
 import BlurredAmount from "@/components/ui/BlurredAmount";
 import { Card } from "@/components/ui/card";
@@ -144,7 +146,7 @@ type Props = {
   onDateRangeChange?: (start: string, end: string) => void;
 };
 
-type ViewMode = "widgets" | "list";
+type ViewMode = "widgets" | "analytics" | "list";
 type SortField = "recent" | "date" | "amount" | "category";
 type SortOrder = "asc" | "desc";
 type OwnershipFilter = "all" | "mine" | "partner";
@@ -542,6 +544,22 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
             >
               <BarChart3Icon className="w-3.5 h-3.5 inline-block mr-1" />
               Overview
+            </button>
+            <button
+              onClick={() => {
+                if (navigator.vibrate) navigator.vibrate(5);
+                setViewMode("analytics");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={cn(
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                viewMode === "analytics"
+                  ? "neo-gradient text-white shadow-sm"
+                  : `${themeClasses.text} hover:bg-white/5`,
+              )}
+            >
+              <TrendingUpIcon className="w-3.5 h-3.5 inline-block mr-1" />
+              Analytics
             </button>
             <button
               onClick={() => {
@@ -1147,6 +1165,16 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               </div>
             </Card>
           </div>
+        )}
+
+        {viewMode === "analytics" && (
+          <AnalyticsDashboard
+            ownershipFilter={ownershipFilter}
+            accountTypeFilter={accountTypeFilter}
+            startDate={startDate}
+            endDate={endDate}
+            transactions={filteredTransactions}
+          />
         )}
 
         {viewMode === "list" && (
