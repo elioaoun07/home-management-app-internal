@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs head:*)",
+      "Read(//c/Users/aoune/WebApp/src/lib/**)",
+      "Bash(grep \"—$\")",
+      "Bash(grep -rh 'from @/features/' /c/Users/aoune/WebApp/budget-app/src/features/hub --include=*.ts --include=*.tsx)",
+      "Bash(grep -rh 'from @/features/' /c/Users/aoune/WebApp/budget-app/src/features/blink --include=*.ts --include=*.tsx)",
+      "Bash(grep -r \"from.*queryKeys\\\\|import.*qk\" /c/Users/aoune/WebApp/budget-app/src --include=*.ts --include=*.tsx)",
+      "Bash(done)",
+      "Bash(grep -r \"inline\\\\|inlin key\\\\|queryKey.*\\\\[\" /c/Users/aoune/WebApp/budget-app/src --include=*.tsx --include=*.ts)",
+      "Bash(find /c/Users/aoune/WebApp/budget-app/src -name *.schemas.ts -o -name *schema*.ts)",
+      "Bash(grep -r \"z\\\\.object\\\\|z\\\\.infer\\\\|safeParse\" /c/Users/aoune/WebApp/budget-app/src/app/api --include=*.ts)",
+      "Bash(xargs ls:*)",
+      "Bash(grep -r \"interface.*Props|type.*Props\" /c/Users/aoune/WebApp/budget-app/src/components --include=*.tsx)",
+      "Bash(find /c/Users/aoune/WebApp/budget-app/src/app -name \"page.tsx\" -exec dirname {})",
+      "Bash(find /c/Users/aoune/WebApp/budget-app/docs/features -type f -name *.md)"
+    ]
+  }
+}

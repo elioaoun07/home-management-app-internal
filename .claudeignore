@@ -1,0 +1,42 @@
+# Dependencies
+
+node_modules/
+
+# Build output
+
+.next/
+
+# Version control internals
+
+.git/
+
+# Lock files (large, not useful for understanding code)
+
+pnpm-lock.yaml
+
+# TypeScript build cache
+
+tsconfig.tsbuildinfo
+
+# Environment variables (sensitive credentials)
+
+.env
+.env.local
+.env.\*.local
+
+# Binary files
+
+supabase.exe
+temp_icon.txt
+
+# Public binary assets (PNG/ICO images — not useful for Claude to read)
+
+public/_.png
+public/_.ico
+public/\*.svg
+
+# Personal files
+
+AI_Assistant_later.md
+Claudev2.md
+testingStrat.md
