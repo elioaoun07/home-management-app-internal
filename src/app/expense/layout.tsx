@@ -1,7 +1,6 @@
 "use client";
 
 import { ExpenseFormProvider } from "@/components/expense/ExpenseFormContext";
-import ExpenseTagsBarWrapper from "@/components/expense/ExpenseTagsBarWrapper";
 import ExpenseShell from "@/components/layouts/ExpenseShell";
 import { useTab } from "@/contexts/TabContext";
 import { useViewMode } from "@/hooks/useViewMode";
@@ -15,7 +14,7 @@ export default function ExpenseLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { activeTab, setActiveTab } = useTab();
+  const { setActiveTab } = useTab();
   const { viewMode } = useViewMode();
 
   // Check for explicit tab override (e.g., from /focus navigation)
@@ -33,10 +32,6 @@ export default function ExpenseLayout({
     }
   }, [setActiveTab]);
 
-  // Only show tags bar when actively on the expense tab (not dashboard or drafts)
-  // and only in mobile view mode (not web or watch)
-  const showTagsBar = activeTab === "expense" && viewMode === "mobile";
-
   // No loading state - render immediately
   // viewMode is loaded synchronously from localStorage
 
@@ -49,7 +44,6 @@ export default function ExpenseLayout({
   return (
     <ExpenseFormProvider>
       <ExpenseShell>{children}</ExpenseShell>
-      {showTagsBar && <ExpenseTagsBarWrapper />}
     </ExpenseFormProvider>
   );
 }

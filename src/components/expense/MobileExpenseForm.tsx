@@ -5,12 +5,19 @@
 "use client";
 
 import {
+  CalendarIcon,
   CalculatorIcon,
   CheckIcon,
   ChevronLeftIcon,
   PlusIcon,
   XIcon,
 } from "@/components/icons/FuturisticIcons";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
@@ -23,7 +30,7 @@ import {
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MOBILE_CONTENT_BOTTOM_OFFSET } from "@/constants/layout";
+import { MOBILE_NAV_HEIGHT } from "@/constants/layout";
 import {
   useDeleteAccount,
   useMyAccountsWithHidden,
@@ -58,9 +65,9 @@ import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { AnimatePresence, Reorder, motion } from "framer-motion";
-import { Eye, EyeOff, GripVertical, MinusCircle, X } from "lucide-react";
+import { Check, Eye, EyeOff, GripVertical, MinusCircle, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -955,7 +962,7 @@ export default function MobileExpenseForm() {
   };
 
   const contentAreaStyles: CSSProperties = {
-    bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_CONTENT_BOTTOM_OFFSET}px)`,
+    bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT}px)`,
   };
 
   // NO SKELETON - Form renders instantly with cached data
@@ -1025,6 +1032,102 @@ export default function MobileExpenseForm() {
               style={{ width: `${progressWidth}%` }}
             />
           </div>
+          {/* Inline Tags Row — shows current selections, tap to jump to step */}
+          <div className="mt-2 -mx-1 overflow-x-auto scrollbar-none">
+            <div className="flex items-center gap-1.5 px-1 min-w-max">
+              {selectedAccount && (
+                <button
+                  onClick={() => setStep("account")}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150 shrink-0`}
+                >
+                  <span className={`text-[9px] ${themeClasses.textFaint}`}>Acct</span>
+                  <span className={`font-semibold text-[11px] ${themeClasses.text}`}>
+                    {selectedAccount.name}
+                  </span>
+                </button>
+              )}
+
+              {amount && (
+                <button
+                  onClick={() => setStep("amount")}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150 shrink-0`}
+                >
+                  <span className="font-bold text-[11px] text-emerald-400">
+                    ${amount}
+                  </span>
+                </button>
+              )}
+
+              {selectedCategory &&
+                (() => {
+                  const TagCategoryIcon = getCategoryIcon(selectedCategory.name);
+                  return (
+                    <button
+                      onClick={() => setStep("category")}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150 shrink-0`}
+                    >
+                      <TagCategoryIcon className="w-3 h-3 text-amber-400" />
+                      <span className={`font-semibold text-[11px] ${themeClasses.textHighlight}`}>
+                        {selectedCategory.name}
+                      </span>
+                    </button>
+                  );
+                })()}
+
+              {selectedSubcategory &&
+                (() => {
+                  const TagSubIcon = getCategoryIcon(selectedSubcategory.name);
+                  return (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${themeClasses.pillBg} shrink-0`}>
+                      <TagSubIcon className={`w-2.5 h-2.5 ${themeClasses.textFaint}`} />
+                      <span className={`text-[10px] ${themeClasses.textMuted}`}>
+                        {selectedSubcategory.name}
+                      </span>
+                    </span>
+                  );
+                })()}
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    suppressHydrationWarning
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-500/20 hover:bg-purple-500/30 active:scale-95 transition-all duration-150 shrink-0"
+                  >
+                    <CalendarIcon className="w-3 h-3 text-purple-400" />
+                    <span className="font-semibold text-[11px] text-purple-300">
+                      {format(date, "MMM d")}
+                    </span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className={`w-auto p-0 ${themeClasses.modalBg} ${themeClasses.modalBorder}`}
+                  align="start"
+                >
+                  <div className={`p-2 space-y-1.5 border-b ${themeClasses.border}`}>
+                    <button
+                      onClick={() => setDate(new Date())}
+                      className={`w-full px-2.5 py-1.5 text-xs rounded-lg ${themeClasses.bgSurface} ${themeClasses.textMuted} ${themeClasses.hoverBgSubtle} transition-all`}
+                    >
+                      Today
+                    </button>
+                    <button
+                      onClick={() => setDate(subDays(new Date(), 1))}
+                      className={`w-full px-2.5 py-1.5 text-xs rounded-lg ${themeClasses.bgSurface} ${themeClasses.textMuted} ${themeClasses.hoverBgSubtle} transition-all`}
+                    >
+                      Yesterday
+                    </button>
+                  </div>
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={(newDate) => newDate && setDate(newDate)}
+                    className="rounded-md border-0"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
           {selectedAccountId && step === "amount" && (
             <div className="mt-2">
               <AccountBalance
@@ -2476,7 +2579,24 @@ export default function MobileExpenseForm() {
           )}
         </AnimatePresence>
 
-        {/* Floating Done Button is now rendered at layout level (ExpenseTagsBarWrapper) to fix z-index stacking */}
+        {/* Floating Done Button for edit mode */}
+        <AnimatePresence>
+          {isAnyEditMode && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 20 }}
+              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+              onClick={exitAllEditModes}
+              style={{
+                bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT + 16}px)`,
+              }}
+              className="fixed right-4 z-[999] w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30 flex items-center justify-center active:scale-95 transition-transform"
+            >
+              <Check className="w-7 h-7" strokeWidth={3} />
+            </motion.button>
+          )}
+        </AnimatePresence>
       </>
     </div>
   );

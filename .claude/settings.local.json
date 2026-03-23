@@ -16,7 +16,8 @@
       "Bash(find /c/Users/aoune/WebApp/budget-app/src/app -name \"page.tsx\" -exec dirname {})",
       "Bash(find /c/Users/aoune/WebApp/budget-app/docs/features -type f -name *.md)",
       "Bash(pnpm typecheck:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }
