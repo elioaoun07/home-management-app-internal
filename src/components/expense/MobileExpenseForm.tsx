@@ -60,7 +60,7 @@ import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { AnimatePresence, Reorder, motion } from "framer-motion";
-import { Eye, EyeOff, GripVertical, X } from "lucide-react";
+import { Eye, EyeOff, GripVertical, MinusCircle, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -243,6 +243,10 @@ export default function MobileExpenseForm() {
   const lastSavedCategoriesRef = useRef<string | null>(null);
   const lastSavedSubcategoriesRef = useRef<string | null>(null);
   const lastSavedAccountsRef = useRef<string | null>(null);
+
+  // Dynamic header height measurement (replaces hardcoded top-[205px]/top-[80px])
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(80);
 
   const { data: categories = [], refetch: refetchCategories } =
     useCategories(selectedAccountId);
@@ -641,6 +645,19 @@ export default function MobileExpenseForm() {
     }
   }, [accounts, selectedAccountId, defaultAccount]);
 
+  // Measure header height dynamically so content never overlaps
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry) setHeaderHeight(entry.contentRect.height + entry.target.getBoundingClientRect().top);
+    });
+    // Set initial height
+    setHeaderHeight(el.getBoundingClientRect().bottom);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const subcategories = selectedCategoryId
     ? categories.filter((c: any) => c.parent_id === selectedCategoryId)
     : [];
@@ -954,6 +971,7 @@ export default function MobileExpenseForm() {
       <>
         {/* HEADER - TOP DELIMITER - Must be above all other UI elements */}
         <div
+          ref={headerRef}
           className={`fixed top-0 left-0 right-0 z-[100] bg-gradient-to-b from-bg-card-custom to-bg-medium border-b ${themeClasses.border} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top`}
         >
           <div className="flex items-center justify-between mb-2 pt-16">
@@ -973,7 +991,7 @@ export default function MobileExpenseForm() {
               <div className="w-8" />
             )}
             <h1
-              className={`text-sm font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`}
+              className={`text-base font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`}
             >
               New {getTransactionLabel(selectedAccount?.type)}
             </h1>
@@ -1001,7 +1019,7 @@ export default function MobileExpenseForm() {
               <XIcon className={`w-5 h-5 ${themeClasses.text}`} />
             </button>
           </div>
-          <div className="h-0.5 bg-bg-card-custom rounded-full overflow-hidden relative">
+          <div className="h-1 bg-bg-card-custom/60 rounded-full overflow-hidden relative">
             <div
               className={`h-full bg-gradient-to-r ${themeClasses.activeItemGradient} transition-all duration-500 ease-out neo-glow-sm glow-pulse-primary`}
               style={{ width: `${progressWidth}%` }}
@@ -1018,13 +1036,8 @@ export default function MobileExpenseForm() {
         </div>
 
         <div
-          className={cn(
-            "fixed left-0 right-0 overflow-y-auto px-3 py-3 bg-bg-dark z-[45]",
-            selectedAccountId && step === "amount"
-              ? "top-[205px]"
-              : "top-[80px]",
-          )}
-          style={contentAreaStyles}
+          className="fixed left-0 right-0 overflow-y-auto px-3 py-3 bg-bg-dark z-[45]"
+          style={{ ...contentAreaStyles, top: `${headerHeight}px` }}
           onClick={(e) => {
             // If in edit mode and clicked on empty space (not a widget), exit edit mode
             if (isAnyEditMode && e.target === e.currentTarget) {
@@ -1035,9 +1048,9 @@ export default function MobileExpenseForm() {
           {step === "amount" && (
             <div key="amount-step" className="space-y-4 step-slide-in">
               {/* ── Hero Amount Card ── */}
-              <div className="relative rounded-2xl bg-gradient-to-b from-slate-800/60 via-slate-900/40 to-transparent border border-slate-700/40 p-5 space-y-4 overflow-hidden">
+              <div className={`relative rounded-2xl bg-gradient-to-b ${themeClasses.heroCardBg} border ${themeClasses.heroCardBorder} p-5 space-y-4 overflow-hidden`}>
                 {/* Subtle corner accent */}
-                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-cyan-500/5 to-transparent rounded-bl-full pointer-events-none" />
+                <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${themeClasses.heroCardAccent} to-transparent rounded-bl-full pointer-events-none`} />
 
                 {/* Amount input */}
                 <div className="relative flex items-center">
@@ -1051,7 +1064,7 @@ export default function MobileExpenseForm() {
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     suppressHydrationWarning
-                    className={`text-2xl font-bold h-14 pl-10 pr-24 border text-center bg-bg-dark/60 ${themeClasses.border} text-white placeholder:text-[hsl(var(--input-placeholder)/0.25)] ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all duration-200 rounded-xl`}
+                    className={`text-2xl font-bold h-14 pl-10 pr-24 border text-center bg-bg-dark/60 ${themeClasses.border} ${themeClasses.textHighlight} placeholder:text-[hsl(var(--input-placeholder)/0.25)] ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all duration-200 rounded-xl`}
                     autoFocus
                   />
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
@@ -1110,7 +1123,7 @@ export default function MobileExpenseForm() {
                   parseFloat(lbpChangeInput) > 0 &&
                   amount &&
                   parseFloat(amount) > 0 && (
-                    <span className="text-[11px] text-slate-500">
+                    <span className={`text-[11px] ${themeClasses.textFaint}`}>
                       actual{" "}
                       <span className={`font-semibold ${themeClasses.text}`}>
                         $
@@ -1122,11 +1135,11 @@ export default function MobileExpenseForm() {
                     </span>
                   )}
                 <div
-                  className={`relative flex items-center h-7 w-28 px-2 rounded-md border border-dashed bg-transparent ${themeClasses.border} focus-within:border-cyan-500/40 transition-all duration-200 ${
+                  className={`relative flex items-center h-7 w-28 px-2 rounded-md border border-dashed bg-transparent ${themeClasses.border} ${themeClasses.focusWithinBorder} transition-all duration-200 ${
                     !lbpRate ? "opacity-40 cursor-not-allowed" : ""
                   }`}
                 >
-                  <span className="text-[10px] text-slate-600 pointer-events-none mr-1 shrink-0">
+                  <span className={`text-[10px] ${themeClasses.textFaint} pointer-events-none mr-1 shrink-0`}>
                     LBP
                   </span>
                   <input
@@ -1137,10 +1150,10 @@ export default function MobileExpenseForm() {
                     onChange={(e) => setLbpChangeInput(e.target.value)}
                     disabled={!isInitialized ? true : !lbpRate}
                     suppressHydrationWarning
-                    className="flex-1 bg-transparent border-none outline-none text-right text-[11px] text-slate-400 placeholder:text-slate-700 disabled:cursor-not-allowed p-0 w-full"
+                    className={`flex-1 bg-transparent border-none outline-none text-right text-[11px] ${themeClasses.textMuted} placeholder:text-[hsl(var(--input-placeholder)/0.25)] disabled:cursor-not-allowed p-0 w-full`}
                   />
                   <span
-                    className={`text-[10px] text-slate-600 pointer-events-none ml-0.5 transition-opacity duration-200 ${
+                    className={`text-[10px] ${themeClasses.textFaint} pointer-events-none ml-0.5 transition-opacity duration-200 ${
                       lbpChangeInput ? "opacity-100" : "opacity-0"
                     }`}
                   >
@@ -1394,13 +1407,15 @@ export default function MobileExpenseForm() {
           {step === "account" && (
             <div key="account-step" className="space-y-3 step-slide-in">
               <div className="flex items-center justify-between">
-                <Label className="text-base font-semibold text-secondary">
+                <Label
+                  className={`text-base font-semibold ${themeClasses.text}`}
+                >
                   Which account?
                 </Label>
                 {editModeAccount && (
                   <button
                     onClick={exitEditModeAccount}
-                    className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors animate-in fade-in"
+                    className={`flex items-center gap-1 text-xs ${themeClasses.textMuted} ${themeClasses.textHover} transition-colors animate-in fade-in`}
                   >
                     <X className="w-4 h-4" />
                     Done
@@ -1409,7 +1424,7 @@ export default function MobileExpenseForm() {
               </div>
 
               {editModeAccount && (
-                <p className="text-xs text-cyan-400 animate-in fade-in slide-in-from-top-2">
+                <p className={`text-xs ${themeClasses.textAccent} animate-in fade-in slide-in-from-top-2`}>
                   Drag to reorder • Tap{" "}
                   <span className="inline-flex items-center justify-center w-4 h-4 bg-amber-500 rounded-full mx-0.5">
                     <EyeOff className="w-2.5 h-2.5 text-white" />
@@ -1475,18 +1490,18 @@ export default function MobileExpenseForm() {
 
                               <div
                                 className={cn(
-                                  "w-full p-2.5 rounded-lg border text-left transition-all flex items-center gap-2",
+                                  "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-2",
                                   selectedAccountId === account.id
                                     ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
                                     : `neo-card ${themeClasses.border} bg-bg-card-custom`,
                                 )}
                               >
                                 {/* Drag handle */}
-                                <div className="text-slate-500 cursor-grab active:cursor-grabbing">
+                                <div className={`${themeClasses.textFaint} cursor-grab active:cursor-grabbing`}>
                                   <GripVertical className="w-5 h-5" />
                                 </div>
                                 <div className="flex-1">
-                                  <div className="font-semibold text-base text-white">
+                                  <div className={`font-semibold text-base ${themeClasses.textHighlight}`}>
                                     {account.name}
                                   </div>
                                   <div className="text-xs text-accent/70 capitalize mt-0.5">
@@ -1502,8 +1517,8 @@ export default function MobileExpenseForm() {
                     {/* Hidden accounts section */}
                     {orderedAccounts.filter((a: any) => a.visible === false)
                       .length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-slate-700/50">
-                        <p className="text-xs text-slate-500 mb-2 flex items-center gap-1.5">
+                      <div className={`mt-4 pt-4 border-t ${themeClasses.border}`}>
+                        <p className={`text-xs ${themeClasses.textFaint} mb-2 flex items-center gap-1.5`}>
                           <EyeOff className="w-3.5 h-3.5" />
                           Hidden accounts
                         </p>
@@ -1540,15 +1555,15 @@ export default function MobileExpenseForm() {
 
                                 <div
                                   className={cn(
-                                    "w-full p-2.5 rounded-lg border text-left transition-all flex items-center gap-2 opacity-50",
-                                    `neo-card border-slate-700/50 bg-slate-800/30`,
+                                    "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-2 opacity-50",
+                                    `neo-card ${themeClasses.border} bg-bg-card-custom`,
                                   )}
                                 >
                                   <div className="flex-1">
-                                    <div className="font-semibold text-base text-slate-400">
+                                    <div className={`font-semibold text-base ${themeClasses.textMuted}`}>
                                       {account.name}
                                     </div>
-                                    <div className="text-xs text-slate-500 capitalize mt-0.5">
+                                    <div className={`text-xs ${themeClasses.textFaint} capitalize mt-0.5`}>
                                       {account.type}
                                     </div>
                                   </div>
@@ -1582,7 +1597,7 @@ export default function MobileExpenseForm() {
                             }
                           }}
                           className={cn(
-                            "w-full p-2.5 rounded-lg border text-left transition-all active:scale-[0.98]",
+                            "w-full p-3 rounded-lg border text-left transition-all active:scale-[0.98]",
                             selectedAccountId === account.id
                               ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow-sm`
                               : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`,
@@ -1590,7 +1605,7 @@ export default function MobileExpenseForm() {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
-                              <div className="font-semibold text-base text-white">
+                              <div className={`font-semibold text-base ${themeClasses.textHighlight}`}>
                                 {account.name}
                               </div>
                               <div className="text-xs text-accent/70 capitalize mt-0.5">
@@ -1612,9 +1627,9 @@ export default function MobileExpenseForm() {
                   <button
                     onClick={() => setShowNewAccountDrawer(true)}
                     style={{ animationDelay: `${accounts.length * 40}ms` }}
-                    className="w-full p-2.5 rounded-lg border-2 border-dashed border-slate-600 hover:border-cyan-500/50 text-center transition-all active:scale-[0.98] category-appear bg-transparent hover:bg-cyan-500/5"
+                    className={`w-full p-3 rounded-lg border-2 border-dashed ${themeClasses.dashedBorder} ${themeClasses.dashedBorderHover} text-center transition-all active:scale-[0.98] category-appear bg-transparent ${themeClasses.dashedBgHover}`}
                   >
-                    <div className="flex items-center justify-center gap-2 text-slate-400 hover:text-cyan-400">
+                    <div className={`flex items-center justify-center gap-2 ${themeClasses.textMuted} ${themeClasses.textHover}`}>
                       <PlusIcon className="w-5 h-5" />
                       <span className="font-medium">New Account</span>
                     </div>
@@ -1623,7 +1638,7 @@ export default function MobileExpenseForm() {
               </div>
 
               {!editModeAccount && accounts.length > 0 && (
-                <p className="text-[10px] text-slate-600 text-center">
+                <p className={`text-[10px] ${themeClasses.textFaint} text-center`}>
                   Hold to edit accounts
                 </p>
               )}
@@ -1641,7 +1656,7 @@ export default function MobileExpenseForm() {
                 {editModeCategory && (
                   <button
                     onClick={exitEditModeCategory}
-                    className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors animate-in fade-in"
+                    className={`flex items-center gap-1 text-xs ${themeClasses.textMuted} ${themeClasses.textHover} transition-colors animate-in fade-in`}
                   >
                     <X className="w-4 h-4" />
                     Done
@@ -1650,7 +1665,7 @@ export default function MobileExpenseForm() {
               </div>
 
               {editModeCategory && (
-                <p className="text-xs text-cyan-400 animate-in fade-in slide-in-from-top-2">
+                <p className={`text-xs ${themeClasses.textAccent} animate-in fade-in slide-in-from-top-2`}>
                   Drag to reorder • Tap{" "}
                   <span className="inline-flex items-center justify-center w-4 h-4 bg-amber-500 rounded-full mx-0.5">
                     <EyeOff className="w-2.5 h-2.5 text-white" />
@@ -1729,7 +1744,7 @@ export default function MobileExpenseForm() {
                                   )}
                                 >
                                   {/* Drag handle */}
-                                  <div className="text-slate-500 cursor-grab active:cursor-grabbing">
+                                  <div className={`${themeClasses.textFaint} cursor-grab active:cursor-grabbing`}>
                                     <GripVertical className="w-5 h-5" />
                                   </div>
                                   <div
@@ -1740,7 +1755,7 @@ export default function MobileExpenseForm() {
                                   >
                                     <IconComponent className="w-6 h-6" />
                                   </div>
-                                  <span className="font-semibold text-sm text-white flex-1">
+                                  <span className={`font-semibold text-sm ${themeClasses.textHighlight} flex-1`}>
                                     {category.name}
                                   </span>
                                 </div>
@@ -1753,8 +1768,8 @@ export default function MobileExpenseForm() {
                     {/* Hidden categories section */}
                     {orderedCategories.filter((c: any) => c.visible === false)
                       .length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-slate-700/50">
-                        <p className="text-xs text-slate-500 mb-2 flex items-center gap-1.5">
+                      <div className={`mt-4 pt-4 border-t ${themeClasses.border}`}>
+                        <p className={`text-xs ${themeClasses.textFaint} mb-2 flex items-center gap-1.5`}>
                           <EyeOff className="w-3.5 h-3.5" />
                           Hidden categories
                         </p>
@@ -1799,13 +1814,13 @@ export default function MobileExpenseForm() {
                                   <div
                                     className={cn(
                                       "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3 opacity-50",
-                                      `neo-card border-slate-700/50 bg-slate-800/30`,
+                                      `neo-card ${themeClasses.border} bg-bg-card-custom`,
                                     )}
                                   >
                                     <div style={{ color: `${color}60` }}>
                                       <IconComponent className="w-6 h-6" />
                                     </div>
-                                    <span className="font-semibold text-sm text-slate-400 flex-1">
+                                    <span className={`font-semibold text-sm ${themeClasses.textMuted} flex-1`}>
                                       {category.name}
                                     </span>
                                   </div>
@@ -1820,7 +1835,7 @@ export default function MobileExpenseForm() {
                   <div className="grid grid-cols-2 gap-2 pb-4">
                     {orderedCategories.length === 0 ? (
                       <div className="col-span-2 text-center py-4">
-                        <p className="text-xs text-slate-500 mb-3">
+                        <p className={`text-xs ${themeClasses.textFaint} mb-3`}>
                           No categories yet
                         </p>
                       </div>
@@ -1887,7 +1902,7 @@ export default function MobileExpenseForm() {
                                       : undefined,
                                   }}
                                   className={cn(
-                                    "w-full p-2.5 rounded-lg border text-left transition-all min-h-[65px] active:scale-95",
+                                    "w-full p-3 rounded-lg border text-left transition-all min-h-[65px] active:scale-95",
                                     active
                                       ? "neo-card neo-glow-sm"
                                       : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} hover:bg-primary/5`,
@@ -1913,10 +1928,8 @@ export default function MobileExpenseForm() {
                                       );
                                     })()}
                                     <span
-                                      className="font-semibold text-center text-xs"
-                                      style={{
-                                        color: active ? color : "white",
-                                      }}
+                                      className={cn("font-semibold text-center text-xs", !active && themeClasses.textHighlight)}
+                                      style={active ? { color } : undefined}
                                     >
                                       {category.name}
                                     </span>
@@ -1931,17 +1944,17 @@ export default function MobileExpenseForm() {
                     {/* Add New Category Button - at bottom */}
                     <button
                       onClick={() => setShowNewCategoryDrawer(true)}
-                      className="p-2.5 rounded-lg border-2 border-dashed border-slate-600 hover:border-cyan-500/50 text-center transition-all active:scale-95 min-h-[65px] bg-transparent hover:bg-cyan-500/5 flex flex-col items-center justify-center gap-1 category-appear"
+                      className={`p-3 rounded-lg border-2 border-dashed ${themeClasses.dashedBorder} ${themeClasses.dashedBorderHover} text-center transition-all active:scale-95 min-h-[65px] bg-transparent ${themeClasses.dashedBgHover} flex flex-col items-center justify-center gap-1 category-appear`}
                     >
-                      <PlusIcon className="w-6 h-6 text-slate-400" />
-                      <span className="text-xs text-slate-400">New</span>
+                      <PlusIcon className={`w-6 h-6 ${themeClasses.textMuted}`} />
+                      <span className={`text-xs ${themeClasses.textMuted}`}>New</span>
                     </button>
                   </div>
                 )}
               </div>
 
               {!editModeCategory && orderedCategories.length > 0 && (
-                <p className="text-[10px] text-slate-600 text-center -mt-2">
+                <p className={`text-[10px] ${themeClasses.textFaint} text-center -mt-2`}>
                   Hold to edit categories
                 </p>
               )}
@@ -1964,7 +1977,7 @@ export default function MobileExpenseForm() {
                     {editModeSubcategory && (
                       <button
                         onClick={exitEditModeSubcategory}
-                        className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors animate-in fade-in"
+                        className={`flex items-center gap-1 text-xs ${themeClasses.textMuted} ${themeClasses.textHover} transition-colors animate-in fade-in`}
                       >
                         <X className="w-4 h-4" />
                         Done
@@ -1973,7 +1986,7 @@ export default function MobileExpenseForm() {
                   </div>
 
                   {editModeSubcategory && (
-                    <p className="text-xs text-cyan-400 animate-in fade-in slide-in-from-top-2">
+                    <p className={`text-xs ${themeClasses.textAccent} animate-in fade-in slide-in-from-top-2`}>
                       Drag to reorder • Tap{" "}
                       <span className="inline-flex items-center justify-center w-4 h-4 bg-amber-500 rounded-full mx-0.5">
                         <EyeOff className="w-2.5 h-2.5 text-white" />
@@ -2049,7 +2062,7 @@ export default function MobileExpenseForm() {
                                       )}
                                     >
                                       {/* Drag handle */}
-                                      <div className="text-slate-500 cursor-grab active:cursor-grabbing">
+                                      <div className={`${themeClasses.textFaint} cursor-grab active:cursor-grabbing`}>
                                         <GripVertical className="w-5 h-5" />
                                       </div>
                                       <div
@@ -2060,7 +2073,7 @@ export default function MobileExpenseForm() {
                                       >
                                         <IconComponent className="w-5 h-5" />
                                       </div>
-                                      <span className="font-semibold text-sm text-white flex-1">
+                                      <span className={`font-semibold text-sm ${themeClasses.textHighlight} flex-1`}>
                                         {sub.name}
                                       </span>
                                     </div>
@@ -2074,8 +2087,8 @@ export default function MobileExpenseForm() {
                         {orderedSubcategories.filter(
                           (s: any) => s.visible === false,
                         ).length > 0 && (
-                          <div className="mt-4 pt-4 border-t border-slate-700/50">
-                            <p className="text-xs text-slate-500 mb-2 flex items-center gap-1.5">
+                          <div className={`mt-4 pt-4 border-t ${themeClasses.border}`}>
+                            <p className={`text-xs ${themeClasses.textFaint} mb-2 flex items-center gap-1.5`}>
                               <EyeOff className="w-3.5 h-3.5" />
                               Hidden subcategories
                             </p>
@@ -2121,13 +2134,13 @@ export default function MobileExpenseForm() {
                                       <div
                                         className={cn(
                                           "w-full p-3 rounded-lg border text-left transition-all flex items-center gap-3 opacity-50",
-                                          `neo-card border-slate-700/50 bg-slate-800/30`,
+                                          `neo-card ${themeClasses.border} bg-bg-card-custom`,
                                         )}
                                       >
                                         <div style={{ color: `${color}60` }}>
                                           <IconComponent className="w-5 h-5" />
                                         </div>
-                                        <span className="font-semibold text-sm text-slate-400 flex-1">
+                                        <span className={`font-semibold text-sm ${themeClasses.textMuted} flex-1`}>
                                           {sub.name}
                                         </span>
                                       </div>
@@ -2143,18 +2156,19 @@ export default function MobileExpenseForm() {
                         <button
                           onClick={() => setSelectedSubcategoryId(undefined)}
                           className={cn(
-                            "p-2.5 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex items-center justify-center category-appear",
+                            "p-3 rounded-lg border text-center transition-all active:scale-95 min-h-[55px] flex flex-col items-center justify-center gap-1 category-appear",
                             !selectedSubcategoryId
                               ? `neo-card ${themeClasses.borderActive} ${themeClasses.bgActive} neo-glow shadow-lg`
                               : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`,
                           )}
                         >
+                          <MinusCircle className={cn("w-5 h-5", !selectedSubcategoryId ? themeClasses.text : themeClasses.textMuted)} />
                           <span
                             className={cn(
                               "font-semibold text-xs",
                               !selectedSubcategoryId
                                 ? themeClasses.text
-                                : "text-white",
+                                : themeClasses.textHighlight,
                             )}
                           >
                             None
@@ -2192,7 +2206,7 @@ export default function MobileExpenseForm() {
                                         : undefined,
                                     }}
                                     className={cn(
-                                      "w-full p-2.5 rounded-lg border text-center transition-all min-h-[55px] flex flex-col items-center justify-center gap-1 active:scale-95",
+                                      "w-full p-3 rounded-lg border text-center transition-all min-h-[55px] flex flex-col items-center justify-center gap-1 active:scale-95",
                                       active
                                         ? "neo-card neo-glow shadow-lg"
                                         : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`,
@@ -2214,10 +2228,8 @@ export default function MobileExpenseForm() {
                                       );
                                     })()}
                                     <span
-                                      className="font-semibold text-xs"
-                                      style={{
-                                        color: active ? color : "white",
-                                      }}
+                                      className={cn("font-semibold text-xs", !active && themeClasses.textHighlight)}
+                                      style={active ? { color } : undefined}
                                     >
                                       {sub.name}
                                     </span>
@@ -2230,17 +2242,17 @@ export default function MobileExpenseForm() {
                         {/* Add New Subcategory Button */}
                         <button
                           onClick={() => setShowNewSubcategoryDrawer(true)}
-                          className="p-2.5 rounded-lg border-2 border-dashed border-slate-600 hover:border-cyan-500/50 text-center transition-all active:scale-95 min-h-[55px] bg-transparent hover:bg-cyan-500/5 flex flex-col items-center justify-center gap-1 category-appear"
+                          className={`p-3 rounded-lg border-2 border-dashed ${themeClasses.dashedBorder} ${themeClasses.dashedBorderHover} text-center transition-all active:scale-95 min-h-[55px] bg-transparent ${themeClasses.dashedBgHover} flex flex-col items-center justify-center gap-1 category-appear`}
                         >
-                          <PlusIcon className="w-5 h-5 text-slate-400" />
-                          <span className="text-xs text-slate-400">New</span>
+                          <PlusIcon className={`w-5 h-5 ${themeClasses.textMuted}`} />
+                          <span className={`text-xs ${themeClasses.textMuted}`}>New</span>
                         </button>
                       </div>
                     )}
                   </div>
 
                   {!editModeSubcategory && orderedSubcategories.length > 0 && (
-                    <p className="text-[10px] text-slate-600 text-center">
+                    <p className={`text-[10px] ${themeClasses.textFaint} text-center`}>
                       Hold to edit subcategories
                     </p>
                   )}
@@ -2257,13 +2269,13 @@ export default function MobileExpenseForm() {
                   </Label>
                   <button
                     onClick={() => setShowNewSubcategoryDrawer(true)}
-                    className="w-full p-4 rounded-lg border-2 border-dashed border-slate-600 hover:border-cyan-500/50 text-center transition-all active:scale-95 bg-transparent hover:bg-cyan-500/5 flex flex-col items-center justify-center gap-2"
+                    className={`w-full p-4 rounded-lg border-2 border-dashed ${themeClasses.dashedBorder} ${themeClasses.dashedBorderHover} text-center transition-all active:scale-95 bg-transparent ${themeClasses.dashedBgHover} flex flex-col items-center justify-center gap-2`}
                   >
-                    <PlusIcon className="w-6 h-6 text-slate-400" />
-                    <span className="text-sm text-slate-400">
+                    <PlusIcon className={`w-6 h-6 ${themeClasses.textMuted}`} />
+                    <span className={`text-sm ${themeClasses.textMuted}`}>
                       Add subcategory
                     </span>
-                    <span className="text-xs text-slate-500">
+                    <span className={`text-xs ${themeClasses.textFaint}`}>
                       Optional - for more detailed tracking
                     </span>
                   </button>
@@ -2278,7 +2290,7 @@ export default function MobileExpenseForm() {
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className={`!bg-bg-card-custom ${themeClasses.border} text-white placeholder:text-slate-500 ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} h-11`}
+                  className={`!bg-bg-card-custom ${themeClasses.border} ${themeClasses.textHighlight} ${themeClasses.placeholder} ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} h-11`}
                 />
               </div>
 
@@ -2364,7 +2376,7 @@ export default function MobileExpenseForm() {
           open={deleteConfirm !== null}
           onOpenChange={(open) => !open && setDeleteConfirm(null)}
         >
-          <DrawerContent className="bg-bg-dark border-t border-slate-800">
+          <DrawerContent className={`bg-bg-dark border-t ${themeClasses.border}`}>
             <DrawerHeader className="text-center pb-2">
               <div className="mx-auto w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center mb-2">
                 <EyeOff className="w-6 h-6 text-amber-500" />
@@ -2381,7 +2393,7 @@ export default function MobileExpenseForm() {
                   ? `Hide ${deleteConfirm?.type === "account" ? "Account" : deleteConfirm?.type === "category" ? "Category" : "Subcategory"}?`
                   : "Confirm hiding?"}
               </DrawerTitle>
-              <DrawerDescription className="text-slate-400 text-sm">
+              <DrawerDescription className={`${themeClasses.textMuted} text-sm`}>
                 {deleteConfirm?.step === "first" ? (
                   <>
                     You're about to hide{" "}
@@ -2403,7 +2415,7 @@ export default function MobileExpenseForm() {
                     </span>{" "}
                     will be hidden from selection.
                     {deleteConfirm?.type === "category" && (
-                      <span className="block mt-1 text-slate-500">
+                      <span className={`block mt-1 ${themeClasses.textFaint}`}>
                         Subcategories will also be hidden.
                       </span>
                     )}
@@ -2459,9 +2471,7 @@ export default function MobileExpenseForm() {
               transition={{ duration: 0.15 }}
               onClick={exitAllEditModes}
               className="fixed inset-0 z-[44] bg-black/20"
-              style={{
-                top: selectedAccountId && step === "amount" ? "205px" : "80px",
-              }} // Dynamic: below header
+              style={{ top: `${headerHeight}px` }}
             />
           )}
         </AnimatePresence>

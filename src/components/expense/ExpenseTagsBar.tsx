@@ -12,6 +12,7 @@ import {
   TAGS_BAR_GAP,
   TAGS_BAR_HEIGHT,
 } from "@/constants/layout";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format, subDays } from "date-fns";
 import { type CSSProperties } from "react";
@@ -41,6 +42,8 @@ export default function ExpenseTagsBar({
   onCategoryClick,
   onDateChange,
 }: ExpenseTagsBarProps) {
+  const themeClasses = useThemeClasses();
+
   const wrapperStyles: CSSProperties = {
     bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT + TAGS_BAR_GAP}px)`,
   };
@@ -55,17 +58,17 @@ export default function ExpenseTagsBar({
       style={wrapperStyles}
     >
       <div
-        className="mx-auto max-w-[520px] pointer-events-auto rounded-full bg-slate-900/90 px-4 py-2 shadow-lg backdrop-blur-md border border-slate-700/50"
+        className={`mx-auto max-w-[520px] pointer-events-auto rounded-full ${themeClasses.pillBg} px-4 py-2 shadow-lg backdrop-blur-md border ${themeClasses.border}`}
         style={barStyles}
       >
         <div className="flex items-center justify-center gap-2 flex-wrap">
           {selectedAccount && (
             <button
               onClick={onAccountClick}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700/80 active:scale-95 transition-all duration-150"
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150`}
             >
-              <span className="text-[10px] text-slate-400">Account</span>
-              <span className="font-semibold text-xs text-cyan-400">
+              <span className={`text-[10px] ${themeClasses.textFaint}`}>Account</span>
+              <span className={`font-semibold text-xs ${themeClasses.text}`}>
                 {selectedAccount.name}
               </span>
             </button>
@@ -74,9 +77,9 @@ export default function ExpenseTagsBar({
           {amount && (
             <button
               onClick={onAmountClick}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700/80 active:scale-95 transition-all duration-150"
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150`}
             >
-              <span className="text-[10px] text-slate-400">Amount</span>
+              <span className={`text-[10px] ${themeClasses.textFaint}`}>Amount</span>
               <span className="font-bold text-xs text-emerald-400">
                 ${amount}
               </span>
@@ -89,10 +92,10 @@ export default function ExpenseTagsBar({
               return (
                 <button
                   onClick={onCategoryClick}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700/80 active:scale-95 transition-all duration-150"
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150`}
                 >
                   <CategoryIcon className="w-3 h-3 text-amber-400" />
-                  <span className="font-semibold text-xs text-white">
+                  <span className={`font-semibold text-xs ${themeClasses.textHighlight}`}>
                     {selectedCategory.name}
                   </span>
                 </button>
@@ -103,9 +106,9 @@ export default function ExpenseTagsBar({
             (() => {
               const SubcategoryIcon = getCategoryIcon(selectedSubcategory.name);
               return (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/50">
-                  <SubcategoryIcon className="w-2.5 h-2.5 text-slate-400" />
-                  <span className="text-[10px] text-slate-300">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${themeClasses.pillBg}`}>
+                  <SubcategoryIcon className={`w-2.5 h-2.5 ${themeClasses.textFaint}`} />
+                  <span className={`text-[10px] ${themeClasses.textMuted}`}>
                     {selectedSubcategory.name}
                   </span>
                 </span>
@@ -126,16 +129,16 @@ export default function ExpenseTagsBar({
               </button>
             </PopoverTrigger>
             <PopoverContent
-              className="w-auto p-0 bg-slate-900 border-slate-700"
+              className={`w-auto p-0 ${themeClasses.modalBg} ${themeClasses.modalBorder}`}
               align="start"
             >
-              <div className="p-2 space-y-1.5 border-b border-slate-700/50">
+              <div className={`p-2 space-y-1.5 border-b ${themeClasses.border}`}>
                 <button
                   onClick={() => {
                     const today = new Date();
                     onDateChange(today);
                   }}
-                  className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all"
+                  className={`w-full px-2.5 py-1.5 text-xs rounded-lg ${themeClasses.bgSurface} ${themeClasses.textMuted} ${themeClasses.hoverBgSubtle} transition-all`}
                 >
                   Today
                 </button>
@@ -144,7 +147,7 @@ export default function ExpenseTagsBar({
                     const yesterday = subDays(new Date(), 1);
                     onDateChange(yesterday);
                   }}
-                  className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all"
+                  className={`w-full px-2.5 py-1.5 text-xs rounded-lg ${themeClasses.bgSurface} ${themeClasses.textMuted} ${themeClasses.hoverBgSubtle} transition-all`}
                 >
                   Yesterday
                 </button>

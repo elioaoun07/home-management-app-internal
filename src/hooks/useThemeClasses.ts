@@ -160,6 +160,13 @@ export function useThemeClasses() {
         : isPink
           ? "focus:border-pink-400"
           : "focus:border-cyan-400",
+    focusWithinBorder: isCalm
+      ? "focus-within:border-stone-400"
+      : isFrost
+        ? "focus-within:border-indigo-500"
+        : isPink
+          ? "focus-within:border-pink-400"
+          : "focus-within:border-cyan-400",
 
     // Input Specific - Calm uses very subtle borders, no harsh glows
     inputBorder: isCalm
@@ -838,6 +845,64 @@ export function useThemeClasses() {
         : isPink
           ? "bg-[#1a0a14] border-pink-500/30"
           : "bg-[#0a1628] border-[#3b82f6]/30",
+
+    // Form Polish — Hero cards, dashed "add new" buttons, pill chips
+    heroCardBg: isCalm
+      ? "from-stone-800/60 via-stone-900/40 to-transparent"
+      : isFrost
+        ? "from-indigo-50/80 via-slate-50/40 to-transparent"
+        : isPink
+          ? "from-pink-900/40 via-slate-900/40 to-transparent"
+          : "from-slate-800/60 via-slate-900/40 to-transparent",
+    heroCardAccent: isCalm
+      ? "from-emerald-500/5"
+      : isFrost
+        ? "from-indigo-500/5"
+        : isPink
+          ? "from-pink-500/5"
+          : "from-cyan-500/5",
+    heroCardBorder: isCalm
+      ? "border-stone-700/40"
+      : isFrost
+        ? "border-indigo-200/60"
+        : isPink
+          ? "border-pink-500/20"
+          : "border-slate-700/40",
+    dashedBorder: isCalm
+      ? "border-stone-600"
+      : isFrost
+        ? "border-indigo-300"
+        : isPink
+          ? "border-pink-400/30"
+          : "border-slate-600",
+    dashedBorderHover: isCalm
+      ? "hover:border-stone-400"
+      : isFrost
+        ? "hover:border-indigo-500"
+        : isPink
+          ? "hover:border-pink-400/50"
+          : "hover:border-cyan-500/50",
+    dashedBgHover: isCalm
+      ? "hover:bg-stone-800/50"
+      : isFrost
+        ? "hover:bg-indigo-50"
+        : isPink
+          ? "hover:bg-pink-500/5"
+          : "hover:bg-cyan-500/5",
+    pillBg: isCalm
+      ? "bg-stone-800/80"
+      : isFrost
+        ? "bg-slate-100/80"
+        : isPink
+          ? "bg-pink-950/60"
+          : "bg-slate-800/80",
+    pillBgHover: isCalm
+      ? "hover:bg-stone-700/80"
+      : isFrost
+        ? "hover:bg-slate-200/80"
+        : isPink
+          ? "hover:bg-pink-900/60"
+          : "hover:bg-slate-700/80",
 
     // Theme booleans for conditional logic
     isPink,
