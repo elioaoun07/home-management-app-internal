@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Obsidian vault — session notes & patterns are personal (hybrid tracking)
+ERA Notes/.obsidian/workspace.json
+ERA Notes/.obsidian/workspace-mobile.json
+ERA Notes/08 - Sessions/
+ERA Notes/09 - Patterns & Lessons/

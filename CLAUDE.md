@@ -7,10 +7,10 @@
 ## Before You Code — Mandatory Checklist
 
 1. **Identify the module type** (Standalone or Junction — see Module Model below) before scoping work
-2. **Check the Feature Index** for the relevant doc path
+2. **Check the Feature Index** for the relevant vault path in `ERA Notes/`
 3. **Read that doc first** — it contains architecture, DB tables, and gotchas
 4. **Read `migrations/schema.sql`** before any DB work — it is the authoritative schema source
-5. **Read `docs/architecture/COMMON_PATTERNS.md`** if touching state, mutations, or modals
+5. **Read `ERA Notes/01 - Architecture/Common Patterns.md`** if touching state, mutations, or modals
 6. After any change, run `pnpm typecheck` before considering work complete
 
 ---
@@ -48,21 +48,21 @@ Self-contained features with their own UI, hooks, API routes, and DB tables. Eac
 Shared code belongs in `src/components/`, `src/lib/`, or `src/types/` — available to all modules.
 **AI scope:** when modifying a Standalone, changes are fully contained — other standalones are unaffected.
 
-| Module | Feature directory |
-| ------ | ----------------- |
+| Module                                                 | Feature directory                                                                                                                                              |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Budget (Accounts, Transactions, Categories, Recurring) | `src/features/accounts/`, `src/features/transactions/`, `src/features/categories/`, `src/features/recurring/`, `src/features/balance/`, `src/features/budget/` |
-| Reminders / Items / Tasks | `src/features/items/` |
-| Recipes | `src/features/recipes/` |
-| Catalogue | `src/features/catalogue/` |
-| Inventory | `src/features/inventory/` |
-| Debts | `src/features/debts/` |
-| Future Purchases | `src/features/future-purchases/` |
-| Analytics | `src/features/analytics/` |
-| Preferences (LBP, theme, settings) | `src/features/preferences/` |
-| Statement Import | `src/features/statement-import/` |
-| Transfers | `src/features/transfers/` |
-| Watch UI | `src/components/watch/` |
-| Guest Portal | `src/app/g/[tag]/` |
+| Reminders / Items / Tasks                              | `src/features/items/`                                                                                                                                          |
+| Recipes                                                | `src/features/recipes/`                                                                                                                                        |
+| Catalogue                                              | `src/features/catalogue/`                                                                                                                                      |
+| Inventory                                              | `src/features/inventory/`                                                                                                                                      |
+| Debts                                                  | `src/features/debts/`                                                                                                                                          |
+| Future Purchases                                       | `src/features/future-purchases/`                                                                                                                               |
+| Analytics                                              | `src/features/analytics/`                                                                                                                                      |
+| Preferences (LBP, theme, settings)                     | `src/features/preferences/`                                                                                                                                    |
+| Statement Import                                       | `src/features/statement-import/`                                                                                                                               |
+| Transfers                                              | `src/features/transfers/`                                                                                                                                      |
+| Watch UI                                               | `src/components/watch/`                                                                                                                                        |
+| Guest Portal                                           | `src/app/g/[tag]/`                                                                                                                                             |
 
 ### Junction Modules
 
@@ -71,22 +71,22 @@ Bridge between Standalone modules. May import from any standalone feature direct
 **Rule:** changes here can cascade across multiple standalones — always trace all connected modules before modifying.
 **AI scope:** when modifying a Junction, read the docs of every connected Standalone first.
 
-| Junction | Connects |
-| -------- | -------- |
-| Hub Chat | Budget (message actions → transactions), Reminders (create from chat), Shopping List |
-| Shopping List | Hub Chat, Recipes (ingredients → list), Inventory |
-| Meal Planning | Recipes, Reminders/Calendar, Shopping List |
-| AI Assistant | Transactions + Items (context injection), Dashboard briefing, Focus insights |
-| Notifications | Items (alerts), Recurring (payment reminders), Budget (spending alerts) |
-| Household Sharing | ALL modules — shared data layer via `household_links` + `profiles` |
-| Sync & Offline | ALL modules — IndexedDB queue + `OfflineSyncEngine` |
+| Junction          | Connects                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| Hub Chat          | Budget (message actions → transactions), Reminders (create from chat), Shopping List |
+| Shopping List     | Hub Chat, Recipes (ingredients → list), Inventory                                    |
+| Meal Planning     | Recipes, Reminders/Calendar, Shopping List                                           |
+| AI Assistant      | Transactions + Items (context injection), Dashboard briefing, Focus insights         |
+| Notifications     | Items (alerts), Recurring (payment reminders), Budget (spending alerts)              |
+| Household Sharing | ALL modules — shared data layer via `household_links` + `profiles`                   |
+| Sync & Offline    | ALL modules — IndexedDB queue + `OfflineSyncEngine`                                  |
 
 ---
 
 ## Architecture References
 
-- **Data flow, optimistic mutations, ID-only state, Framer Motion + HTML5 drag conflicts**: `docs/architecture/COMMON_PATTERNS.md`
-- **Offline queue, sync engine, IndexedDB vs legacy localStorage queue**: `docs/architecture/SYNC_AND_OFFLINE.md`
+- **Data flow, optimistic mutations, ID-only state, Framer Motion + HTML5 drag conflicts**: `ERA Notes/01 - Architecture/Common Patterns.md`
+- **Offline queue, sync engine, IndexedDB vs legacy localStorage queue**: `ERA Notes/01 - Architecture/Sync and Offline.md`
 - **API route pattern** (auth check → zod parse → DB op → error handling): follow `src/app/api/accounts/route.ts`
 - **Query cache time constants** (`BALANCE=5min`, `TRANSACTIONS=2min`, `ACCOUNTS/CATEGORIES=1h`, `RECURRING=30min`): `src/lib/queryConfig.ts`
 - **Supabase clients**: `lib/supabase/client.ts` (browser singleton, required for realtime) · `server.ts` (API routes/RSC) · `admin.ts` (cron/batch ops, service role) — never mix
@@ -101,15 +101,15 @@ Bridge between Standalone modules. May import from any standalone feature direct
 
 Located in `src/contexts/`. Always use the `Safe` variant in components that may render outside the provider.
 
-| Context | Purpose | Safe variant |
-| ------- | ------- | ------------ |
-| `SyncContext` | Offline queue, connectivity state, retry logic | `useSyncSafe()` |
-| `AppModeContext` | "budget" vs "items" mode, FAB target | `useAppModeSafe()` |
-| `TabContext` | Active tab + notification deep-link routing (`pendingItemId`, `pendingThreadId`) | `useTabSafe()` |
-| `ThemeContext` | Theme switching (blue/pink/frost/calm), invalidates all queries on change | — |
-| `UserContext` | Current user name, email, avatar | — |
-| `PrivacyBlurContext` | Privacy mode blur toggle | — |
-| `SplitBillContext` | Split bill calculation state | — |
+| Context              | Purpose                                                                          | Safe variant       |
+| -------------------- | -------------------------------------------------------------------------------- | ------------------ |
+| `SyncContext`        | Offline queue, connectivity state, retry logic                                   | `useSyncSafe()`    |
+| `AppModeContext`     | "budget" vs "items" mode, FAB target                                             | `useAppModeSafe()` |
+| `TabContext`         | Active tab + notification deep-link routing (`pendingItemId`, `pendingThreadId`) | `useTabSafe()`     |
+| `ThemeContext`       | Theme switching (blue/pink/frost/calm), invalidates all queries on change        | —                  |
+| `UserContext`        | Current user name, email, avatar                                                 | —                  |
+| `PrivacyBlurContext` | Privacy mode blur toggle                                                         | —                  |
+| `SplitBillContext`   | Split bill calculation state                                                     | —                  |
 
 ---
 
@@ -121,13 +121,13 @@ DB changes = SQL run manually in Supabase SQL Editor. New tables must include RL
 
 Unique constraint violations: Supabase returns `error.code === "23505"` → respond with `409 Conflict`.
 
-| Domain | Tables |
-| ------ | ------ |
-| Finance | `accounts`, `account_balances`, `account_balance_history`, `transactions`, `transfers`, `user_categories`, `recurring_payments` |
-| Hub | `hub_chat_threads`, `hub_messages`, `hub_message_actions` |
-| Items | `items`, `item_alerts`, `item_recurrence_exceptions`, `catalogue_items` |
-| Notifications | `notifications`, `push_subscriptions`, `notification_preferences` |
-| Household | `household_links`, `profiles` |
+| Domain        | Tables                                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Finance       | `accounts`, `account_balances`, `account_balance_history`, `transactions`, `transfers`, `user_categories`, `recurring_payments` |
+| Hub           | `hub_chat_threads`, `hub_messages`, `hub_message_actions`                                                                       |
+| Items         | `items`, `item_alerts`, `item_recurrence_exceptions`, `catalogue_items`                                                         |
+| Notifications | `notifications`, `push_subscriptions`, `notification_preferences`                                                               |
+| Household     | `household_links`, `profiles`                                                                                                   |
 
 Account types (`expense`/`income`/`saving`) affect balance direction — see `migrations/schema.sql` CHECK constraints and `src/lib/balance-utils.ts`.
 
@@ -144,54 +144,120 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 
 ## Feature Index
 
-| Feature | Src paths | Doc | Type |
-| ------- | --------- | --- | ---- |
-| Accounts & Balance | `src/features/accounts/`, `src/features/balance/` | `docs/features/accounts/BALANCE_SYSTEM.md` | Standalone |
-| Transactions | `src/app/expense/`, `src/features/transactions/` | `docs/features/transactions/` | Standalone |
-| Categories | `src/features/categories/` | `docs/features/categories/CATEGORY_CUSTOMIZATION_FEATURE.md` | Standalone |
-| Recurring Payments | `src/app/recurring/`, `src/features/recurring/` | `docs/features/recurring/` | Standalone |
-| Recipes | `src/features/recipes/`, `src/app/recipe/` | `docs/features/recipes/` | Standalone |
-| Meal Planning | `src/app/api/meal-plans/` | — | Junction |
-| Inventory | `src/features/inventory/`, `src/app/inventory/` | — | Standalone |
-| Debts | `src/features/debts/` | — | Standalone |
-| Catalogue | `src/app/catalogue/`, `src/features/catalogue/` | `docs/features/catalogue/` | Standalone |
-| Future Purchases | `src/features/future-purchases/` | `docs/features/future-purchases/` | Standalone |
-| Budget Allocation | `src/features/budget/` | — | Standalone |
-| Preferences (LBP, theme) | `src/features/preferences/` | — | Standalone |
-| Statement Import | `src/features/statement-import/` | `docs/features/transactions/STATEMENT_IMPORT.md` | Standalone |
-| Transfers | `src/features/transfers/` | — | Standalone |
-| Hub Chat | `src/app/hub/`, `src/features/hub/`, `src/components/hub/` | `docs/features/hub/` | Junction |
-| Shopping List | `src/components/hub/ShoppingListView.tsx` | `docs/features/hub/SHOPPING_LIST.md` | Junction |
-| Message Actions | `src/features/hub/messageActions.ts` | `docs/features/hub/MESSAGE_ACTIONS.md` | Junction |
-| Items / Reminders | `src/app/items/`, `src/features/items/` | `docs/features/items/` | Standalone |
-| AI Assistant | `src/app/api/ai-chat/`, `src/lib/ai/` | `docs/features/ai/` | Junction |
-| Notifications | `src/app/api/notifications/`, `src/app/api/cron/` | `docs/features/notifications/NOTIFICATIONS.md` | Junction |
-| Household Sharing | `src/features/hub/` | `docs/features/household/` | Junction |
-| Analytics | `src/features/analytics/` | `docs/performance/PERFORMANCE_OPTIMIZATIONS.md` | Standalone |
-| Drafts | `src/features/drafts/` | — | Standalone |
-| Watch UI | `src/components/watch/` | `docs/ui/watch/WATCH_UI.md` | Standalone |
-| Guest Portal | `src/app/g/[tag]/`, `src/components/guest/` | — | Standalone |
-| Sync & Offline | `src/contexts/SyncContext.tsx`, `src/lib/offlineQueue.ts` | `docs/architecture/SYNC_AND_OFFLINE.md` | Junction |
-| Error Logs | `src/app/error-logs/`, `src/app/api/error-logs/` | `docs/architecture/ERROR_LOGGING_SYSTEM.md` | Standalone |
+| Feature                  | Src paths                                                  | Vault doc                                               | Type       |
+| ------------------------ | ---------------------------------------------------------- | ------------------------------------------------------- | ---------- |
+| Accounts & Balance       | `src/features/accounts/`, `src/features/balance/`          | `ERA Notes/02 - Standalone Modules/Accounts & Balance/` | Standalone |
+| Transactions             | `src/app/expense/`, `src/features/transactions/`           | `ERA Notes/02 - Standalone Modules/Transactions/`       | Standalone |
+| Categories               | `src/features/categories/`                                 | `ERA Notes/02 - Standalone Modules/Categories/`         | Standalone |
+| Recurring Payments       | `src/app/recurring/`, `src/features/recurring/`            | `ERA Notes/02 - Standalone Modules/Recurring Payments/` | Standalone |
+| Recipes                  | `src/features/recipes/`, `src/app/recipe/`                 | `ERA Notes/02 - Standalone Modules/Recipes/`            | Standalone |
+| Meal Planning            | `src/app/api/meal-plans/`                                  | `ERA Notes/03 - Junction Modules/Meal Planning/`        | Junction   |
+| Inventory                | `src/features/inventory/`, `src/app/inventory/`            | `ERA Notes/02 - Standalone Modules/Inventory/`          | Standalone |
+| Debts                    | `src/features/debts/`                                      | `ERA Notes/02 - Standalone Modules/Debts/`              | Standalone |
+| Catalogue                | `src/app/catalogue/`, `src/features/catalogue/`            | `ERA Notes/02 - Standalone Modules/Catalogue/`          | Standalone |
+| Future Purchases         | `src/features/future-purchases/`                           | `ERA Notes/02 - Standalone Modules/Future Purchases/`   | Standalone |
+| Budget Allocation        | `src/features/budget/`                                     | `ERA Notes/02 - Standalone Modules/Budget Allocation/`  | Standalone |
+| Preferences (LBP, theme) | `src/features/preferences/`                                | `ERA Notes/02 - Standalone Modules/Preferences/`        | Standalone |
+| Statement Import         | `src/features/statement-import/`                           | `ERA Notes/02 - Standalone Modules/Statement Import/`   | Standalone |
+| Transfers                | `src/features/transfers/`                                  | `ERA Notes/02 - Standalone Modules/Transfers/`          | Standalone |
+| Hub Chat                 | `src/app/hub/`, `src/features/hub/`, `src/components/hub/` | `ERA Notes/03 - Junction Modules/Hub Chat/`             | Junction   |
+| Shopping List            | `src/components/hub/ShoppingListView.tsx`                  | `ERA Notes/03 - Junction Modules/Shopping List/`        | Junction   |
+| Message Actions          | `src/features/hub/messageActions.ts`                       | `ERA Notes/03 - Junction Modules/Message Actions/`      | Junction   |
+| Items / Reminders        | `src/app/items/`, `src/features/items/`                    | `ERA Notes/02 - Standalone Modules/Items & Reminders/`  | Standalone |
+| AI Assistant             | `src/app/api/ai-chat/`, `src/lib/ai/`                      | `ERA Notes/03 - Junction Modules/AI Assistant/`         | Junction   |
+| Notifications            | `src/app/api/notifications/`, `src/app/api/cron/`          | `ERA Notes/03 - Junction Modules/Notifications/`        | Junction   |
+| Household Sharing        | `src/features/hub/`                                        | `ERA Notes/03 - Junction Modules/Household Sharing/`    | Junction   |
+| Analytics                | `src/features/analytics/`                                  | `ERA Notes/02 - Standalone Modules/Analytics/`          | Standalone |
+| Drafts                   | `src/features/drafts/`                                     | `ERA Notes/02 - Standalone Modules/Drafts/`             | Standalone |
+| Watch UI                 | `src/components/watch/`                                    | `ERA Notes/02 - Standalone Modules/Watch UI/`           | Standalone |
+| Guest Portal             | `src/app/g/[tag]/`, `src/components/guest/`                | `ERA Notes/02 - Standalone Modules/Guest Portal/`       | Standalone |
+| Sync & Offline           | `src/contexts/SyncContext.tsx`, `src/lib/offlineQueue.ts`  | `ERA Notes/03 - Junction Modules/Sync & Offline/`       | Junction   |
+| Error Logs               | `src/app/error-logs/`, `src/app/api/error-logs/`           | `ERA Notes/02 - Standalone Modules/Error Logs/`         | Standalone |
 
 ---
 
 ## Documentation Rules
 
-- **Read before code** — check Feature Index for an existing doc first
+- **Read before code** — check Feature Index for an existing doc in the vault first
 - **Update after implementing** — add new behavior, DB changes, and gotchas to the feature doc
 - **Never duplicate** — augment the existing doc, don't create a parallel one
-- Update `docs/ui/APP_ROUTES_ICONS.md` when adding routes or icons
-- New feature doc template: `docs/TEMPLATE.md`
+- Update `ERA Notes/04 - UI & Design/App Routes and Icons.md` when adding routes or icons
+- New feature doc template: `ERA Notes/Templates/Feature Doc.md`
 
-| Content type | Location |
-| ------------ | -------- |
-| Feature doc | `docs/features/[feature-name]/` |
-| Cross-cutting/system | `docs/architecture/` |
-| UI/visual | `docs/ui/` |
-| Setup/env | `docs/setup/` |
-| Ideas/pending | `docs/backlog/` |
-| Root-level only | `CLAUDE.md`, `README.md` |
+| Content type                 | Vault location                                              |
+| ---------------------------- | ----------------------------------------------------------- |
+| Feature doc (Standalone)     | `ERA Notes/02 - Standalone Modules/[module-name]/`          |
+| Feature doc (Junction)       | `ERA Notes/03 - Junction Modules/[module-name]/`            |
+| Cross-cutting/system         | `ERA Notes/01 - Architecture/`                              |
+| UI/visual                    | `ERA Notes/04 - UI & Design/`                               |
+| Performance                  | `ERA Notes/05 - Performance/`                               |
+| Setup/env                    | `ERA Notes/06 - Setup & Onboarding/`                        |
+| Ideas/pending                | `ERA Notes/07 - Backlog & Ideas/`                           |
+| Session notes (personal)     | `ERA Notes/08 - Sessions/{Features\|Bug Fixes\|Refactors}/` |
+| Reusable patterns (personal) | `ERA Notes/09 - Patterns & Lessons/`                        |
+| Root-level only              | `CLAUDE.md`, `README.md`                                    |
+
+---
+
+## Obsidian Vault
+
+All project documentation lives in the **`ERA Notes/`** Obsidian vault at the project root. The vault mirrors the Standalone/Junction module model.
+
+### Vault Structure
+
+```
+ERA Notes/
+├── 00 - Home/          ← Dashboard MOC + Module Index (Dataview)
+├── 01 - Architecture/  ← cross-cutting system docs
+├── 02 - Standalone Modules/  ← one folder per standalone module
+├── 03 - Junction Modules/    ← one folder per junction module
+├── 04 - UI & Design/
+├── 05 - Performance/
+├── 06 - Setup & Onboarding/
+├── 07 - Backlog & Ideas/
+├── 08 - Sessions/      ← per-work-block notes (gitignored)
+│   ├── Features/
+│   ├── Bug Fixes/
+│   └── Refactors/
+├── 09 - Patterns & Lessons/  ← reusable patterns (gitignored)
+└── Templates/          ← Obsidian templates for new notes
+```
+
+### Session Workflow
+
+1. Before starting a work block, create a new note from the appropriate template:
+   - Feature work → `Templates/Session - Feature.md`
+   - Bug fix → `Templates/Session - Bug Fix.md`
+   - Refactor → `Templates/Session - Refactor.md`
+2. File it in `08 - Sessions/{Features|Bug Fixes|Refactors}/`
+3. Set the `module` frontmatter to the module slug (e.g., `accounts`, `hub-chat`)
+4. Tag with `session/<type>` + `module/<name>`
+5. Link to the module's Overview page with `[[Overview]]`
+
+### Tagging Conventions
+
+| Tag prefix | Purpose             | Examples                                                 |
+| ---------- | ------------------- | -------------------------------------------------------- |
+| `module/`  | Which module        | `module/accounts`, `module/hub-chat`                     |
+| `type/`    | Doc type            | `type/feature-doc`, `type/architecture`, `type/ui`       |
+| `session/` | Session type        | `session/feature`, `session/bug-fix`, `session/refactor` |
+| `scope/`   | Cross-cutting scope | `scope/cross-cutting`, `scope/auth`, `scope/pwa`         |
+| `pattern/` | Code pattern        | `pattern/react-hook`, `pattern/zustand-store`            |
+| `status/`  | Work status         | `status/active`, `status/completed`, `status/archived`   |
+
+### Git Tracking (Hybrid)
+
+- **Tracked**: `01–07` folders (feature docs, architecture, etc.) — shared project knowledge
+- **Gitignored**: `08 - Sessions/`, `09 - Patterns & Lessons/` — personal working notes
+- **Gitignored**: `.obsidian/workspace.json` — personal layout state
+
+### Recommended Plugins
+
+Install via Obsidian → Settings → Community plugins:
+
+- **Dataview** — query notes as database tables (powers Module Index)
+- **Templater** — auto-populate `{{date}}`, `{{title}}` in templates
+- **Calendar** — visualize sessions on a calendar sidebar
 
 ---
 
