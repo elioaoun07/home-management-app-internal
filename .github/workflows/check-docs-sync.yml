@@ -1,0 +1,35 @@
+name: Check docs sync
+
+on:
+  pull_request:
+    paths:
+      - CLAUDE.md
+      - .github/copilot-instructions.md
+
+jobs:
+  check-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify CLAUDE.md and copilot-instructions.md are in sync
+        run: |
+          # Generate what copilot-instructions.md SHOULD look like
+          {
+            echo '<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->'
+            echo ''
+            cat CLAUDE.md
+          } > /tmp/expected.md
+
+          # Compare
+          if ! diff -q .github/copilot-instructions.md /tmp/expected.md > /dev/null 2>&1; then
+            echo "::error::.github/copilot-instructions.md is out of sync with CLAUDE.md"
+            echo ""
+            echo "To fix: copy CLAUDE.md contents into .github/copilot-instructions.md"
+            echo "with the auto-generated header prepended."
+            echo ""
+            diff --unified .github/copilot-instructions.md /tmp/expected.md || true
+            exit 1
+          fi
+
+          echo "✓ CLAUDE.md and .github/copilot-instructions.md are in sync"

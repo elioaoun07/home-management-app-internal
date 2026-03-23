@@ -41,3 +41,9 @@ AI_Assistant_later.md
 Claudev2.md
 testingStrat.md
 notes.md
+
+# Auto-generated Copilot mirror of CLAUDE.md (avoid duplicate context)
+.github/copilot-instructions.md
+
+# CI workflows (not relevant to coding tasks)
+.github/workflows/
