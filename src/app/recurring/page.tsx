@@ -30,6 +30,8 @@ import {
   useUpdateRecurringPayment,
 } from "@/features/recurring/useRecurringPayments";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { safeFetch } from "@/lib/safeFetch";
+import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format, formatDistanceToNow, isPast, isToday } from "date-fns";
@@ -193,7 +195,7 @@ export default function RecurringPage() {
           next_due_date: formData.next_due_date,
           payment_method: formData.payment_method,
         });
-        toast.success("Recurring payment updated");
+        // Toast with undo shown by hook
       } else {
         await createMutation.mutateAsync({
           account_id: formData.account_id,
@@ -209,25 +211,23 @@ export default function RecurringPage() {
           next_due_date: formData.next_due_date,
           payment_method: formData.payment_method,
         });
-        toast.success("Recurring payment created");
+        // Toast with undo shown by hook
       }
 
       resetForm();
       setShowAddDrawer(false);
       setEditingPayment(null);
-    } catch (error) {
-      toast.error("Failed to save recurring payment");
+    } catch {
+      // Error toast shown by hook
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this recurring payment?")) {
-      try {
-        await deleteMutation.mutateAsync(id);
-        toast.success("Recurring payment deleted");
-      } catch (error) {
-        toast.error("Failed to delete recurring payment");
-      }
+    try {
+      await deleteMutation.mutateAsync(id);
+      // Toast with undo shown by hook
+    } catch {
+      // Error toast shown by hook
     }
   };
 
@@ -245,13 +245,37 @@ export default function RecurringPage() {
         subcategory_id: confirmFormData.subcategory_id || null,
       });
 
+      const transactionId: string | undefined =
+        result?.transaction?.id ?? result?.id;
+
       toast.success("Payment confirmed!", {
-        description: `Next payment due: ${format(new Date(result.next_due_date), "MMM d, yyyy")}`,
+        icon: ToastIcons.success,
+        description: result?.next_due_date
+          ? `Next payment due: ${format(new Date(result.next_due_date), "MMM d, yyyy")}`
+          : undefined,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            if (!transactionId) {
+              toast.error("Cannot undo — transaction ID unavailable");
+              return;
+            }
+            try {
+              await safeFetch(`/api/transactions/${transactionId}`, {
+                method: "DELETE",
+              });
+              toast.success("Transaction removed", { icon: ToastIcons.delete });
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
       });
 
       setConfirmingPayment(null);
-    } catch (error) {
-      toast.error("Failed to confirm payment");
+    } catch {
+      // Error toast shown by hook
     }
   };
 

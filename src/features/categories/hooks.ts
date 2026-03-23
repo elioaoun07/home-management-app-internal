@@ -2,6 +2,7 @@
 "use client";
 
 import { qk } from "@/lib/queryKeys";
+import { safeFetch } from "@/lib/safeFetch";
 import type { Category } from "@/types/domain";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -39,7 +40,7 @@ export function useCreateCategory(accountId?: string) {
   >({
     mutationFn: async (input) => {
       if (!accountId) throw new Error("accountId is required");
-      const res = await fetch("/api/user-categories", {
+      const res = await safeFetch("/api/user-categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...input, account_id: accountId }),
@@ -105,7 +106,7 @@ export function useRenameCategory(accountId?: string) {
     { prev?: Category[] } // TContext
   >({
     mutationFn: async ({ id, name }) => {
-      const res = await fetch(`/api/categories/${id}`, {
+      const res = await safeFetch(`/api/categories/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
@@ -147,7 +148,7 @@ export function useDeleteCategory(accountId?: string) {
     { prev?: Category[] } // TContext
   >({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/categories/${id}`, { method: "DELETE" });
+      const res = await safeFetch(`/api/categories/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       return id;
     },
@@ -186,7 +187,7 @@ export function useReorderCategories(accountId?: string) {
     { prev?: Category[] } // TContext
   >({
     mutationFn: async (updates) => {
-      const res = await fetch("/api/user-categories/reorder", {
+      const res = await safeFetch("/api/user-categories/reorder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ updates }),
@@ -234,7 +235,7 @@ export function useUnhideCategory(accountId?: string) {
     void // TContext
   >({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/categories/${id}`, {
+      const res = await safeFetch(`/api/categories/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ visible: true }),

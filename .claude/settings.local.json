@@ -14,7 +14,8 @@
       "Bash(xargs ls:*)",
       "Bash(grep -r \"interface.*Props|type.*Props\" /c/Users/aoune/WebApp/budget-app/src/components --include=*.tsx)",
       "Bash(find /c/Users/aoune/WebApp/budget-app/src/app -name \"page.tsx\" -exec dirname {})",
-      "Bash(find /c/Users/aoune/WebApp/budget-app/docs/features -type f -name *.md)"
+      "Bash(find /c/Users/aoune/WebApp/budget-app/docs/features -type f -name *.md)",
+      "Bash(pnpm typecheck:*)"
     ]
   }
 }

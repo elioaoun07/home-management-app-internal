@@ -126,21 +126,12 @@ export function useAnalytics(params: {
       if (accountId) sp.set("accountId", accountId);
       sp.set("ownership", ownership);
 
-      console.log(
-        "[useAnalytics] fetching:",
-        `/api/analytics?${sp.toString()}`,
-      );
       const res = await fetch(`/api/analytics?${sp.toString()}`);
       if (!res.ok) {
         const body = await res.text();
-        console.error("[useAnalytics] API error:", res.status, body);
         throw new Error(`Analytics API ${res.status}: ${body}`);
       }
       const data: AnalyticsResponse = await res.json();
-      console.log("[useAnalytics] received:", {
-        monthsCount: data.months?.length,
-        hasPartner: data.hasPartner,
-      });
       writeCache(cacheKey, data);
       return data;
     },

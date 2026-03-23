@@ -1,5 +1,7 @@
 "use client";
 
+import { safeFetch } from "@/lib/safeFetch";
+import { ToastIcons } from "@/lib/toastIcons";
 import type {
   BudgetAllocation,
   BudgetSummary,
@@ -7,6 +9,7 @@ import type {
 } from "@/types/budgetAllocation";
 import type { Account } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface BudgetResponse {
   summary: BudgetSummary;
@@ -33,7 +36,7 @@ async function fetchBudgetAllocations(
 async function saveBudgetAllocation(
   input: CreateBudgetAllocationInput
 ): Promise<BudgetAllocation> {
-  const res = await fetch("/api/budget-allocations", {
+  const res = await safeFetch("/api/budget-allocations", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -46,7 +49,7 @@ async function saveBudgetAllocation(
 }
 
 async function deleteBudgetAllocation(id: string): Promise<void> {
-  const res = await fetch(`/api/budget-allocations?id=${id}`, {
+  const res = await safeFetch(`/api/budget-allocations?id=${id}`, {
     method: "DELETE",
   });
   if (!res.ok) {
@@ -75,9 +78,27 @@ export function useSaveBudgetAllocation() {
 
   return useMutation({
     mutationFn: saveBudgetAllocation,
-    onSuccess: () => {
-      // Invalidate budget queries to refetch
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["budget-allocations"] });
+      toast.success("Budget saved", {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await safeFetch(`/api/budget-allocations?id=${data.id}`, { method: "DELETE" });
+              queryClient.invalidateQueries({ queryKey: ["budget-allocations"] });
+              toast.success("Budget allocation removed", { icon: ToastIcons.delete });
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
+    },
+    onError: () => {
+      toast.error("Failed to save budget allocation", { icon: ToastIcons.error });
     },
   });
 }
@@ -90,8 +111,21 @@ export function useDeleteBudgetAllocation() {
 
   return useMutation({
     mutationFn: deleteBudgetAllocation,
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["budget-allocations"] });
+      toast.success("Budget allocation removed", {
+        icon: ToastIcons.delete,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            toast.error("Cannot restore — please re-add the budget allocation");
+          },
+        },
+      });
+    },
+    onError: () => {
+      toast.error("Failed to delete budget allocation", { icon: ToastIcons.error });
     },
   });
 }

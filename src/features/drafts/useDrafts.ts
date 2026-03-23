@@ -3,6 +3,8 @@
 import { getBalanceDelta, type AccountType } from "@/lib/balance-utils";
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
+import { safeFetch } from "@/lib/safeFetch";
+import { ToastIcons } from "@/lib/toastIcons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -70,7 +72,7 @@ export function useDeleteDraft() {
 
   return useMutation({
     mutationFn: async (draftId: string) => {
-      const res = await fetch(`/api/drafts/${draftId}`, {
+      const res = await safeFetch(`/api/drafts/${draftId}`, {
         method: "DELETE",
       });
 
@@ -146,7 +148,7 @@ export function useDeleteDraft() {
             try {
               if (deleted) {
                 // Recreate the draft
-                const res = await fetch("/api/drafts", {
+                const res = await safeFetch("/api/drafts", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
@@ -191,7 +193,7 @@ export function useConfirmDraft() {
   return useMutation({
     mutationFn: async (input: DraftConfirmInput) => {
       const { id, ...data } = input;
-      const res = await fetch(`/api/drafts/${id}`, {
+      const res = await safeFetch(`/api/drafts/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -297,6 +299,31 @@ export function useConfirmDraft() {
         accountId: input.account_id,
       };
     },
+    onSuccess: (result, input, context) => {
+      const transactionId: string | undefined = result?.transaction?.id ?? result?.id;
+      toast.success("Draft confirmed!", {
+        icon: ToastIcons.success,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            if (!transactionId) {
+              toast.error("Cannot undo — transaction ID unavailable");
+              return;
+            }
+            try {
+              await safeFetch(`/api/transactions/${transactionId}`, { method: "DELETE" });
+              queryClient.invalidateQueries({ queryKey: qk.drafts() });
+              queryClient.invalidateQueries({ queryKey: ["transactions"] });
+              queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+              toast.success("Transaction removed", { icon: ToastIcons.delete });
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
+    },
     onError: (err, input, context) => {
       // Rollback on error
       if (context?.previousDrafts) {
@@ -313,6 +340,7 @@ export function useConfirmDraft() {
           context.previousBalance,
         );
       }
+      toast.error("Failed to confirm draft", { icon: ToastIcons.error });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.drafts() });

@@ -1,6 +1,8 @@
 // src/features/transfers/hooks.ts
 "use client";
 
+import { safeFetch } from "@/lib/safeFetch";
+import { ToastIcons } from "@/lib/toastIcons";
 import {
   keepPreviousData,
   useMutation,
@@ -115,7 +117,7 @@ async function fetchTransfers(
   if (end) params.set("end", end);
 
   const url = `/api/transfers${params.toString() ? `?${params.toString()}` : ""}`;
-  const res = await fetch(url);
+  const res = await fetch(url); // GET — regular fetch is fine
 
   if (!res.ok) {
     const text = await res.text();
@@ -127,7 +129,7 @@ async function fetchTransfers(
 
 // Create transfer
 async function createTransfer(input: CreateTransferInput): Promise<Transfer> {
-  const res = await fetch("/api/transfers", {
+  const res = await safeFetch("/api/transfers", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -144,7 +146,7 @@ async function createTransfer(input: CreateTransferInput): Promise<Transfer> {
 // Update transfer
 async function updateTransfer(input: UpdateTransferInput): Promise<Transfer> {
   const { id, ...data } = input;
-  const res = await fetch(`/api/transfers/${id}`, {
+  const res = await safeFetch(`/api/transfers/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -160,7 +162,7 @@ async function updateTransfer(input: UpdateTransferInput): Promise<Transfer> {
 
 // Delete transfer
 async function deleteTransfer(id: string): Promise<void> {
-  const res = await fetch(`/api/transfers/${id}`, {
+  const res = await safeFetch(`/api/transfers/${id}`, {
     method: "DELETE",
   });
 
@@ -207,10 +209,7 @@ export function useCreateTransfer() {
   return useMutation({
     mutationFn: createTransfer,
     onSuccess: (data) => {
-      // Invalidate transfers list
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
-
-      // Invalidate both account balances
       queryClient.invalidateQueries({
         queryKey: ["account-balance", data.from_account_id],
       });
@@ -219,11 +218,28 @@ export function useCreateTransfer() {
       });
 
       toast.success("Transfer completed!", {
+        icon: ToastIcons.create,
         description: `$${data.amount.toFixed(2)} transferred`,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await deleteTransfer(data.id);
+              queryClient.invalidateQueries({ queryKey: transferKeys.all });
+              queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+              toast.success("Transfer reversed", { icon: ToastIcons.delete });
+            } catch {
+              toast.error("Failed to undo transfer");
+            }
+          },
+        },
       });
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Transfer failed");
+      toast.error(error instanceof Error ? error.message : "Transfer failed", {
+        icon: ToastIcons.error,
+      });
     },
   });
 }
@@ -237,15 +253,19 @@ export function useUpdateTransfer() {
   return useMutation({
     mutationFn: updateTransfer,
     onMutate: async (variables) => {
-      // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: transferKeys.all });
 
-      // Snapshot all transfer list queries
       const previousQueries = queryClient.getQueriesData<Transfer[]>({
         queryKey: transferKeys.all,
       });
 
-      // Optimistically update all matching transfer lists
+      // Find the previous state of this transfer for undo
+      let previousTransfer: Transfer | undefined;
+      for (const [, data] of previousQueries) {
+        previousTransfer = data?.find((t) => t.id === variables.id);
+        if (previousTransfer) break;
+      }
+
       queryClient.setQueriesData<Transfer[]>(
         { queryKey: transferKeys.all },
         (old) => {
@@ -256,10 +276,36 @@ export function useUpdateTransfer() {
         },
       );
 
-      return { previousQueries };
+      return { previousQueries, previousTransfer };
+    },
+    onSuccess: (_, variables, context) => {
+      const prev = context?.previousTransfer;
+      toast.success("Transfer updated", {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            if (!prev) return;
+            try {
+              await updateTransfer({
+                id: variables.id,
+                amount: prev.amount,
+                description: prev.description,
+                date: prev.date,
+                fee_amount: prev.fee_amount,
+                returned_amount: prev.returned_amount,
+              });
+              queryClient.invalidateQueries({ queryKey: transferKeys.all });
+              toast.success("Transfer reverted", { icon: ToastIcons.update });
+            } catch {
+              toast.error("Failed to undo transfer update");
+            }
+          },
+        },
+      });
     },
     onError: (error, _variables, context) => {
-      // Rollback on error
       if (context?.previousQueries) {
         for (const [key, data] of context.previousQueries) {
           queryClient.setQueryData(key, data);
@@ -267,6 +313,7 @@ export function useUpdateTransfer() {
       }
       toast.error(
         error instanceof Error ? error.message : "Failed to update transfer",
+        { icon: ToastIcons.error },
       );
     },
     onSettled: (_data, _error, variables) => {
@@ -293,6 +340,13 @@ export function useDeleteTransfer() {
         queryKey: transferKeys.all,
       });
 
+      // Find the transfer being deleted before removing it
+      let deletedTransfer: Transfer | undefined;
+      for (const [, data] of previousQueries) {
+        deletedTransfer = data?.find((t) => t.id === id);
+        if (deletedTransfer) break;
+      }
+
       // Optimistically remove the transfer from all lists
       queryClient.setQueriesData<Transfer[]>(
         { queryKey: transferKeys.all },
@@ -302,7 +356,38 @@ export function useDeleteTransfer() {
         },
       );
 
-      return { previousQueries };
+      return { previousQueries, deletedTransfer };
+    },
+    onSuccess: (_, __, context) => {
+      const deleted = context?.deletedTransfer;
+      toast.success("Transfer deleted", {
+        icon: ToastIcons.delete,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            if (!deleted) return;
+            try {
+              await createTransfer({
+                from_account_id: deleted.from_account_id,
+                to_account_id: deleted.to_account_id,
+                amount: deleted.amount,
+                description: deleted.description,
+                date: deleted.date,
+                transfer_type: deleted.transfer_type,
+                recipient_user_id: deleted.recipient_user_id ?? undefined,
+                fee_amount: deleted.fee_amount,
+                returned_amount: deleted.returned_amount,
+              });
+              queryClient.invalidateQueries({ queryKey: transferKeys.all });
+              queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+              toast.success("Transfer restored", { icon: ToastIcons.create });
+            } catch {
+              toast.error("Failed to undo transfer deletion");
+            }
+          },
+        },
+      });
     },
     onError: (error, _id, context) => {
       // Rollback
@@ -313,6 +398,7 @@ export function useDeleteTransfer() {
       }
       toast.error(
         error instanceof Error ? error.message : "Failed to delete transfer",
+        { icon: ToastIcons.error },
       );
     },
     onSettled: () => {
