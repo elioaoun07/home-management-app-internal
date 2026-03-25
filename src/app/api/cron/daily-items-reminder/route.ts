@@ -1,0 +1,435 @@
+/**
+ * Daily Items Reminder - Cron Endpoint
+ *
+ * Sends two daily summaries for items (tasks, reminders, events):
+ * - Morning slot: summarizes items due today (skipped if none)
+ * - Evening slot: summarizes overdue items (skipped if none)
+ *
+ * Uses the same preferred_times / last_sent_slots deduplication pattern
+ * as the daily-transaction-reminder cron.
+ *
+ * Example metadata:
+ * {
+ *   "preferred_times": ["07:00:00", "18:00:00"],
+ *   "last_sent_slots": { "2026-03-25": ["07:00:00"] }
+ * }
+ *
+ * Cron schedule: every 5 minutes
+ * Endpoint: GET /api/cron/daily-items-reminder
+ */
+
+import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
+import webpush from "web-push";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+const CRON_SECRET = process.env.CRON_SECRET;
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
+function isTimeMatch(
+  currentTotalMinutes: number,
+  targetHour: number,
+  targetMinute: number,
+): boolean {
+  const targetTotalMinutes = targetHour * 60 + targetMinute;
+  const diff = currentTotalMinutes - targetTotalMinutes;
+  const isMatch = diff >= 0 && diff < 5;
+  const diffWrapped = currentTotalMinutes + 1440 - targetTotalMinutes;
+  const isMatchWrapped =
+    diffWrapped >= 0 && diffWrapped < 5 && targetTotalMinutes > 1435;
+  return isMatch || isMatchWrapped;
+}
+
+function parseTime(timeStr: string): [number, number] {
+  const [hour, minute] = timeStr.split(":").map(Number);
+  return [hour, minute];
+}
+
+function buildItemsSummaryMessage(titles: string[], total: number): string {
+  const preview = titles.slice(0, 3).map((t) => `• ${t}`).join("\n");
+  const remaining = total - 3;
+  return remaining > 0
+    ? `${preview}\nand ${remaining} more`
+    : preview;
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    console.log("[Daily Items Reminder] Starting execution");
+
+    const authHeader = req.headers.get("authorization");
+    if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey =
+      process.env.NEXT_SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json(
+        { error: "Server configuration error: Missing Supabase credentials" },
+        { status: 500 },
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const now = new Date();
+    const todayUTC = now.toISOString().split("T")[0];
+    const currentHour = now.getUTCHours();
+    const currentMinute = now.getUTCMinutes();
+    const currentTotalMinutes = currentHour * 60 + currentMinute;
+
+    console.log(
+      `[Daily Items Reminder] Running at ${currentHour}:${String(currentMinute).padStart(2, "0")} UTC`,
+    );
+
+    const { data: preferences, error: prefError } = await supabase
+      .from("notification_preferences")
+      .select("id, user_id, timezone, metadata, last_sent_at")
+      .eq("preference_key", "daily_items_reminder")
+      .eq("enabled", true);
+
+    if (prefError) {
+      console.error("[Daily Items Reminder] Error fetching preferences:", prefError);
+      return NextResponse.json({ error: prefError.message }, { status: 500 });
+    }
+
+    if (!preferences || preferences.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: "No users with daily items reminder enabled",
+        checked_at_utc: `${currentHour}:${currentMinute}`,
+      });
+    }
+
+    const eligibleUsers: Array<{
+      pref: (typeof preferences)[0];
+      matchedSlot: string;
+    }> = [];
+    let alreadySentForSlot = 0;
+
+    for (const pref of preferences) {
+      const metadata =
+        typeof pref.metadata === "string"
+          ? JSON.parse(pref.metadata)
+          : pref.metadata || {};
+
+      const preferredTimes: string[] = metadata.preferred_times || ["07:00:00", "18:00:00"];
+      const lastSentSlots: Record<string, string[]> = metadata.last_sent_slots || {};
+      const todaySentSlots: string[] = lastSentSlots[todayUTC] || [];
+
+      for (const timeSlot of preferredTimes) {
+        const [prefHour, prefMinute] = parseTime(timeSlot);
+        if (isTimeMatch(currentTotalMinutes, prefHour, prefMinute)) {
+          if (todaySentSlots.includes(timeSlot)) {
+            alreadySentForSlot++;
+            console.log(
+              `[Daily Items Reminder] User ${pref.user_id}: Already sent for slot ${timeSlot} today`,
+            );
+            continue;
+          }
+          eligibleUsers.push({ pref, matchedSlot: timeSlot });
+          break;
+        }
+      }
+    }
+
+    if (eligibleUsers.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: "No users due for items reminder at this time",
+        checked_at_utc: `${currentHour}:${String(currentMinute).padStart(2, "0")}`,
+        total_enabled: preferences.length,
+        already_sent_for_slot: alreadySentForSlot,
+      });
+    }
+
+    let notificationsSent = 0;
+    let pushSent = 0;
+    let pushFailed = 0;
+    let skippedNoItems = 0;
+
+    for (const { pref, matchedSlot } of eligibleUsers) {
+      const userId = pref.user_id;
+      const prefId = pref.id;
+      const [slotHour] = parseTime(matchedSlot);
+      const isMorning = slotHour < 12;
+
+      let title: string;
+      let message: string;
+      let icon: string;
+      let severity: string;
+
+      if (isMorning) {
+        // Query items due today for this user
+        const { data: todayItems } = await supabase
+          .from("items")
+          .select(
+            `id, type, title, status, reminder_details(due_at), event_details(start_at)`,
+          )
+          .eq("responsible_user_id", userId)
+          .is("archived_at", null)
+          .neq("status", "done");
+
+        // Filter in JS: tasks/reminders with due_at today, events with start_at today
+        const dueToday = (todayItems || []).filter((item) => {
+          if (item.type === "task" || item.type === "reminder") {
+            const rd = Array.isArray(item.reminder_details)
+              ? item.reminder_details[0]
+              : item.reminder_details;
+            if (!rd?.due_at) return false;
+            return rd.due_at.startsWith(todayUTC);
+          }
+          if (item.type === "event") {
+            const ed = Array.isArray(item.event_details)
+              ? item.event_details[0]
+              : item.event_details;
+            if (!ed?.start_at) return false;
+            return ed.start_at.startsWith(todayUTC);
+          }
+          return false;
+        });
+
+        if (dueToday.length === 0) {
+          skippedNoItems++;
+          console.log(
+            `[Daily Items Reminder] User ${userId.substring(0, 8)}: No items today, skipping morning`,
+          );
+          continue;
+        }
+
+        const count = dueToday.length;
+        title = `You have ${count} item${count === 1 ? "" : "s"} today 📋`;
+        message = buildItemsSummaryMessage(
+          dueToday.map((i) => i.title),
+          count,
+        );
+        icon = "📋";
+        severity = "info";
+      } else {
+        // Query overdue items for this user
+        const { data: allActiveItems } = await supabase
+          .from("items")
+          .select(
+            `id, type, title, status, reminder_details(due_at), event_details(end_at)`,
+          )
+          .eq("responsible_user_id", userId)
+          .is("archived_at", null)
+          .neq("status", "done");
+
+        const nowISO = now.toISOString();
+        const overdueItems = (allActiveItems || []).filter((item) => {
+          if (item.type === "task" || item.type === "reminder") {
+            const rd = Array.isArray(item.reminder_details)
+              ? item.reminder_details[0]
+              : item.reminder_details;
+            if (!rd?.due_at) return false;
+            return rd.due_at < nowISO;
+          }
+          if (item.type === "event") {
+            const ed = Array.isArray(item.event_details)
+              ? item.event_details[0]
+              : item.event_details;
+            if (!ed?.end_at) return false;
+            return ed.end_at < nowISO;
+          }
+          return false;
+        });
+
+        if (overdueItems.length === 0) {
+          skippedNoItems++;
+          console.log(
+            `[Daily Items Reminder] User ${userId.substring(0, 8)}: No overdue items, skipping evening`,
+          );
+          continue;
+        }
+
+        const count = overdueItems.length;
+        title = `${count} overdue item${count === 1 ? "" : "s"} need attention ⚠️`;
+        message = buildItemsSummaryMessage(
+          overdueItems.map((i) => i.title),
+          count,
+        );
+        icon = "⚠️";
+        severity = "warning";
+      }
+
+      // Create in-app notification
+      const { data: notification, error: insertError } = await supabase
+        .from("notifications")
+        .insert({
+          user_id: userId,
+          notification_type: "daily_reminder",
+          title,
+          message,
+          icon,
+          severity,
+          source: "system",
+          priority: isMorning ? "normal" : "high",
+          action_type: "confirm",
+          action_url: "/items",
+          expires_at: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+          push_status: "pending",
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error(
+          `[Daily Items Reminder] Failed to create notification for ${userId}:`,
+          insertError,
+        );
+        continue;
+      }
+
+      // Update deduplication metadata
+      const currentMetadata =
+        typeof pref.metadata === "string"
+          ? JSON.parse(pref.metadata)
+          : pref.metadata || {};
+
+      const lastSentSlots: Record<string, string[]> =
+        currentMetadata.last_sent_slots || {};
+
+      if (!lastSentSlots[todayUTC]) {
+        lastSentSlots[todayUTC] = [];
+      }
+      lastSentSlots[todayUTC].push(matchedSlot);
+
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0];
+      for (const date of Object.keys(lastSentSlots)) {
+        if (date < sevenDaysAgo) {
+          delete lastSentSlots[date];
+        }
+      }
+
+      await supabase
+        .from("notification_preferences")
+        .update({
+          last_sent_at: now.toISOString(),
+          metadata: { ...currentMetadata, last_sent_slots: lastSentSlots },
+        })
+        .eq("id", prefId);
+
+      notificationsSent++;
+
+      // Send push notification
+      if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+        const { data: subscriptions } = await supabase
+          .from("push_subscriptions")
+          .select("id, endpoint, p256dh, auth, device_name, last_used_at")
+          .eq("user_id", userId)
+          .eq("is_active", true)
+          .order("last_used_at", { ascending: false });
+
+        if (subscriptions && subscriptions.length > 0) {
+          const primarySub = subscriptions[0];
+
+          const payload = JSON.stringify({
+            title,
+            body: message,
+            icon: "/appicon-192.png",
+            badge: "/appicon-192.png",
+            tag: `daily-items-reminder-${todayUTC}-${matchedSlot.replace(/:/g, "")}`,
+            data: {
+              type: "daily_reminder",
+              notification_id: notification.id,
+              action_url: "/items",
+            },
+          });
+
+          try {
+            await webpush.sendNotification(
+              {
+                endpoint: primarySub.endpoint,
+                keys: { p256dh: primarySub.p256dh, auth: primarySub.auth },
+              },
+              payload,
+            );
+
+            pushSent++;
+            console.log(
+              `[Daily Items Reminder] ✓ Push sent to ${primarySub.device_name}`,
+            );
+
+            await supabase
+              .from("notifications")
+              .update({ push_status: "sent", push_sent_at: new Date().toISOString() })
+              .eq("id", notification.id);
+
+            await supabase
+              .from("push_subscriptions")
+              .update({ last_used_at: new Date().toISOString() })
+              .eq("id", primarySub.id);
+          } catch (error: unknown) {
+            pushFailed++;
+            console.error(
+              `[Daily Items Reminder] ✗ Push failed for ${primarySub.device_name}:`,
+              error,
+            );
+
+            const statusCode =
+              error && typeof error === "object" && "statusCode" in error
+                ? (error as { statusCode: number }).statusCode
+                : null;
+
+            if (statusCode === 404 || statusCode === 410) {
+              await supabase
+                .from("push_subscriptions")
+                .update({ is_active: false })
+                .eq("id", primarySub.id);
+            }
+
+            await supabase
+              .from("notifications")
+              .update({
+                push_status: "failed",
+                push_error: error instanceof Error ? error.message : "Unknown",
+              })
+              .eq("id", notification.id);
+          }
+        } else {
+          console.log(
+            `[Daily Items Reminder] User ${userId.substring(0, 8)}: No active push subscriptions`,
+          );
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      notifications_sent: notificationsSent,
+      push_sent: pushSent,
+      push_failed: pushFailed,
+      skipped_no_items: skippedNoItems,
+      checked_at_utc: `${currentHour}:${String(currentMinute).padStart(2, "0")}`,
+      date: todayUTC,
+    });
+  } catch (error) {
+    console.error("[Daily Items Reminder] Cron error:", error);
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(req: NextRequest) {
+  return GET(req);
+}

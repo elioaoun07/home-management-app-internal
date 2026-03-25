@@ -23,7 +23,8 @@
       "Read(//tmp/**)",
       "Bash(find)",
       "Bash(find /c/Users/aoune/WebApp/budget-app/src/components/items -type f -name *.ts)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
     ]
   }
 }
