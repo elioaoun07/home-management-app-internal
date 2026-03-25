@@ -55,33 +55,46 @@ function groupByTimeOfDay(
 }
 
 // ─── Component ──────────────────────────────────────────────────────
+type UserFilter = "all" | "mine" | "partner";
+
 type Props = {
   startDate: string;
   endDate: string;
   currentUserId?: string;
+  userFilter?: UserFilter;
 };
 
 export default function TransactionListView({
   startDate,
   endDate,
   currentUserId,
+  userFilter = "all",
 }: Props) {
   const themeClasses = useThemeClasses();
   const { theme: currentUserTheme } = useTheme();
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<TimeOfDay>>(new Set());
 
-  const { data: transactions = [], isLoading } = useDashboardTransactions({
+  const { data: rawTransactions = [], isLoading } = useDashboardTransactions({
     startDate,
     endDate,
   });
+
+  const transactions = useMemo(() => {
+    if (userFilter === "all" || !currentUserId) return rawTransactions;
+    return rawTransactions.filter((tx) => {
+      const isOwner =
+        tx.is_owner ?? (tx.user_id ? tx.user_id === currentUserId : true);
+      return userFilter === "mine" ? isOwner : !isOwner;
+    });
+  }, [rawTransactions, userFilter, currentUserId]);
 
   const deleteMutation = useDeleteTransaction();
 
   const selectedTx = useMemo(() => {
     if (!selectedTxId) return null;
-    return transactions.find((t) => t.id === selectedTxId) || null;
-  }, [selectedTxId, transactions]);
+    return rawTransactions.find((t) => t.id === selectedTxId) || null;
+  }, [selectedTxId, rawTransactions]);
 
   const timeGroups = useMemo(
     () => groupByTimeOfDay(transactions),

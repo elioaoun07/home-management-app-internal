@@ -12,33 +12,44 @@ import { toast } from "sonner";
 import SwipeableItem from "./SwipeableItem";
 import TransferDetailModal from "./TransferDetailModal";
 
+type UserFilter = "all" | "mine" | "partner";
+
 type Props = {
   startDate: string;
   endDate: string;
   currentUserId?: string;
+  userFilter?: UserFilter;
 };
 
 export default function TransferListView({
   startDate,
   endDate,
   currentUserId,
+  userFilter = "all",
 }: Props) {
   const themeClasses = useThemeClasses();
   const [selectedTransferId, setSelectedTransferId] = useState<string | null>(
     null,
   );
 
-  const { data: transfers = [], isLoading } = useTransfers({
+  const { data: rawTransfers = [], isLoading } = useTransfers({
     start: startDate,
     end: endDate,
   });
+
+  const transfers = useMemo(() => {
+    if (userFilter === "all") return rawTransfers;
+    return rawTransfers.filter((t) =>
+      userFilter === "mine" ? t.is_owner : !t.is_owner,
+    );
+  }, [rawTransfers, userFilter]);
 
   const deleteMutation = useDeleteTransfer();
 
   const selectedTransfer = useMemo(() => {
     if (!selectedTransferId) return null;
-    return transfers.find((t) => t.id === selectedTransferId) || null;
-  }, [selectedTransferId, transfers]);
+    return rawTransfers.find((t) => t.id === selectedTransferId) || null;
+  }, [selectedTransferId, rawTransfers]);
 
   const handleDelete = (id: string) => {
     deleteMutation.mutate(id, {
