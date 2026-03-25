@@ -138,6 +138,28 @@ function writeBhCache<T>(key: string, data: T) {
   }
 }
 
+export function clearDailyBhCache(accountId: string) {
+  try {
+    const prefix = `${BH_DAILY_PREFIX}${accountId}`;
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(prefix))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearArchiveBhCache(accountId: string) {
+  try {
+    const prefix = `${BH_ARCHIVE_PREFIX}${accountId}`;
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(prefix))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* ignore */
+  }
+}
+
 // Fetch monthly archives
 async function fetchBalanceArchives(
   accountId: string,
@@ -224,7 +246,7 @@ export function useBalanceArchives(
     },
     staleTime: 1000 * 60 * 10, // 10 minutes
     gcTime: 1000 * 60 * 60 * 24, // 24 hours
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
     placeholderData: keepPreviousData,
@@ -264,7 +286,7 @@ export function useDailySummaries(
     },
     staleTime: 1000 * 60 * 10, // 10 minutes
     gcTime: 1000 * 60 * 60 * 24, // 24 hours
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
     placeholderData: keepPreviousData,

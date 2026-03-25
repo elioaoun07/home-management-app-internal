@@ -10,6 +10,8 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import {
+  clearArchiveBhCache,
+  clearDailyBhCache,
   formatYearMonth,
   getNetChangeColor,
   useBalanceArchives,
@@ -19,6 +21,7 @@ import {
   type DayManualChange,
 } from "@/features/balance/archiveHooks";
 import {
+  clearHistBhCache,
   getChangeTypeInfo,
   useBalanceHistory,
   type BalanceHistoryEntry,
@@ -26,6 +29,7 @@ import {
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Archive,
@@ -43,6 +47,7 @@ import {
   Minus,
   Pencil,
   Plus,
+  RotateCcw,
   Settings,
   ShoppingCart,
   Star,
@@ -517,20 +522,33 @@ export default function BalanceHistoryDrawer({
   onOpenChange,
 }: BalanceHistoryDrawerProps) {
   const themeClasses = useThemeClasses();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>("daily");
 
   // Fetch data
-  const { data: historyData, isLoading: historyLoading } = useBalanceHistory(
+  const {
+    data: historyData,
+    isLoading: historyLoading,
+    isFetching: historyFetching,
+  } = useBalanceHistory(
     open && activeTab === "activity" ? accountId : undefined,
     { limit: 100 },
   );
 
-  const { data: dailyData, isLoading: dailyLoading } = useDailySummaries(
+  const {
+    data: dailyData,
+    isLoading: dailyLoading,
+    isFetching: dailyFetching,
+  } = useDailySummaries(
     open && activeTab === "daily" ? accountId : undefined,
     { limit: 30 },
   );
 
-  const { data: archivesData, isLoading: archivesLoading } = useBalanceArchives(
+  const {
+    data: archivesData,
+    isLoading: archivesLoading,
+    isFetching: archivesFetching,
+  } = useBalanceArchives(
     open && activeTab === "archives" ? accountId : undefined,
   );
 
@@ -556,6 +574,31 @@ export default function BalanceHistoryDrawer({
     (activeTab === "daily" && dailyLoading) ||
     (activeTab === "activity" && historyLoading) ||
     (activeTab === "archives" && archivesLoading);
+
+  const isRefreshing = dailyFetching || historyFetching || archivesFetching;
+
+  const handleRefresh = () => {
+    if (!accountId) return;
+    clearDailyBhCache(accountId);
+    clearArchiveBhCache(accountId);
+    clearHistBhCache(accountId);
+    queryClient.invalidateQueries({
+      queryKey: ["daily-summaries", accountId],
+      refetchType: "active",
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["balance-history", accountId],
+      refetchType: "active",
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["balance-archives", accountId],
+      refetchType: "active",
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["account-balance", accountId],
+      refetchType: "active",
+    });
+  };
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: "daily", label: "By Day", icon: <Calendar className="w-4 h-4" /> },
@@ -593,11 +636,29 @@ export default function BalanceHistoryDrawer({
                 </span>
               )}
             </DrawerTitle>
-            <DrawerClose asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <XIcon className="w-4 h-4" />
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                title="Refresh data"
+              >
+                <RotateCcw
+                  className={cn(
+                    "w-4 h-4",
+                    themeClasses.textFaint,
+                    isRefreshing && "animate-spin",
+                  )}
+                />
               </Button>
-            </DrawerClose>
+              <DrawerClose asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <XIcon className="w-4 h-4" />
+                </Button>
+              </DrawerClose>
+            </div>
           </div>
 
           {/* Current balance */}

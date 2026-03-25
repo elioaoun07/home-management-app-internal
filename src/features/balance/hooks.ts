@@ -161,6 +161,17 @@ function writeBhHistCache(key: string, data: BalanceHistoryResponse) {
   }
 }
 
+export function clearHistBhCache(accountId: string) {
+  try {
+    const prefix = `${BH_HIST_PREFIX}${accountId}`;
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(prefix))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Hook to fetch balance history for an account
  * By default, excludes individual transaction entries (shown via daily summaries)
@@ -196,7 +207,7 @@ export function useBalanceHistory(
     },
     staleTime: 1000 * 60 * 10, // 10 minutes
     gcTime: 1000 * 60 * 60 * 24, // 24 hours
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
     placeholderData: keepPreviousData,

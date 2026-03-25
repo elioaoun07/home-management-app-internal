@@ -489,6 +489,15 @@ export function useDeleteTransaction() {
         queryKey: ["account-balance"],
         refetchType: "active",
       });
+      // Mark balance history & daily summaries stale so drawer refreshes on next open
+      queryClient.invalidateQueries({
+        queryKey: ["daily-summaries"],
+        refetchType: "none",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["balance-history"],
+        refetchType: "none",
+      });
     },
     onSuccess: (_, input, context) => {
       const isSilent = typeof input === "object" && input._silent;
@@ -1010,6 +1019,15 @@ export function useAddTransaction() {
         queryKey: ["account-balance"],
         refetchType: "active",
       });
+      // Mark balance history & daily summaries stale so drawer refreshes on next open
+      queryClient.invalidateQueries({
+        queryKey: ["daily-summaries"],
+        refetchType: "none",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["balance-history"],
+        refetchType: "none",
+      });
     },
   });
 }
@@ -1279,6 +1297,15 @@ export function useUpdateTransaction() {
       queryClient.invalidateQueries({
         queryKey: ["account-balance"],
         refetchType: "active",
+      });
+      // Mark balance history & daily summaries stale so drawer refreshes on next open
+      queryClient.invalidateQueries({
+        queryKey: ["daily-summaries"],
+        refetchType: "none",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["balance-history"],
+        refetchType: "none",
       });
     },
   });

@@ -189,6 +189,14 @@ export default function AccountBalance({
       queryClient.invalidateQueries({
         queryKey: ["account-balance", accountId],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["daily-summaries"],
+        refetchType: "none",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["balance-history"],
+        refetchType: "none",
+      });
       toast.success("Balance updated successfully");
       setIsEditing(false);
     },
