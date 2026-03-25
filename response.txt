@@ -1,0 +1,1 @@
+{"success":true,"message":"No users due for items reminder at this time","checked_at_utc":"17:02","total_enabled":2,"already_sent_for_slot":0}

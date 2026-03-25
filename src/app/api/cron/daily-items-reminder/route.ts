@@ -180,7 +180,7 @@ export async function GET(req: NextRequest) {
           )
           .eq("responsible_user_id", userId)
           .is("archived_at", null)
-          .neq("status", "done");
+          .or("status.is.null,status.eq.pending,status.eq.in_progress");
 
         // Filter in JS: tasks/reminders with due_at today, events with start_at today
         const dueToday = (todayItems || []).filter((item) => {
@@ -226,7 +226,7 @@ export async function GET(req: NextRequest) {
           )
           .eq("responsible_user_id", userId)
           .is("archived_at", null)
-          .neq("status", "done");
+          .or("status.is.null,status.eq.pending,status.eq.in_progress");
 
         const nowISO = now.toISOString();
         const overdueItems = (allActiveItems || []).filter((item) => {
