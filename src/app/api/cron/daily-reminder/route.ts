@@ -57,6 +57,46 @@ function parseTime(timeStr: string): [number, number] {
   return [hour, minute];
 }
 
+/**
+ * Convert current UTC time to user's local timezone.
+ * Returns local totalMinutes and local date string (YYYY-MM-DD).
+ */
+function getLocalTime(timezone: string): {
+  totalMinutes: number;
+  dateStr: string;
+} {
+  const now = new Date();
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+
+    const get = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((p) => p.type === type)?.value || "0";
+    const hour = parseInt(get("hour"));
+    const minute = parseInt(get("minute"));
+
+    return {
+      totalMinutes: hour * 60 + minute,
+      dateStr: `${get("year")}-${get("month")}-${get("day")}`,
+    };
+  } catch {
+    // Invalid timezone — fall back to UTC
+    const h = now.getUTCHours();
+    const m = now.getUTCMinutes();
+    return {
+      totalMinutes: h * 60 + m,
+      dateStr: now.toISOString().split("T")[0],
+    };
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     console.log("[Daily Reminder] Starting execution");
@@ -120,6 +160,7 @@ export async function GET(req: NextRequest) {
     const eligibleUsers: Array<{
       pref: (typeof preferences)[0];
       matchedSlot: string;
+      localDateStr: string;
     }> = [];
     let alreadySentForSlot = 0;
 
@@ -129,32 +170,36 @@ export async function GET(req: NextRequest) {
           ? JSON.parse(pref.metadata)
           : pref.metadata || {};
 
-      // Get the list of preferred times (UTC) from metadata
-      // Default to 20:00 UTC if not set
+      // preferred_times are stored in the user's LOCAL timezone
       const preferredTimes: string[] = metadata.preferred_times || ["20:00:00"];
 
-      // Get already sent slots for today
+      // Convert current UTC time → user's local time for comparison
+      const userTz = pref.timezone || "UTC";
+      const { totalMinutes: localMinutes, dateStr: localDateStr } =
+        getLocalTime(userTz);
+
+      // Get already sent slots for today (using user's local date)
       const lastSentSlots: Record<string, string[]> =
         metadata.last_sent_slots || {};
-      const todaySentSlots: string[] = lastSentSlots[todayUTC] || [];
+      const todaySentSlots: string[] = lastSentSlots[localDateStr] || [];
 
       // Check each preferred time
       for (const timeSlot of preferredTimes) {
         const [prefHour, prefMinute] = parseTime(timeSlot);
 
-        // Check if this time slot matches current time
-        if (isTimeMatch(currentTotalMinutes, prefHour, prefMinute)) {
+        // Check if this time slot matches user's current local time
+        if (isTimeMatch(localMinutes, prefHour, prefMinute)) {
           // Check if already sent for this specific slot today
           if (todaySentSlots.includes(timeSlot)) {
             alreadySentForSlot++;
             console.log(
-              `[Daily Reminder] User ${pref.user_id}: Already sent for slot ${timeSlot} today`,
+              `[Daily Reminder] User ${pref.user_id.substring(0, 8)}: Already sent for slot ${timeSlot} today`,
             );
             continue;
           }
 
           // Eligible for this time slot!
-          eligibleUsers.push({ pref, matchedSlot: timeSlot });
+          eligibleUsers.push({ pref, matchedSlot: timeSlot, localDateStr });
           break; // Only match one slot per user per cron run
         }
       }
@@ -178,7 +223,7 @@ export async function GET(req: NextRequest) {
     let pushSent = 0;
     let pushFailed = 0;
 
-    for (const { pref, matchedSlot } of eligibleUsers) {
+    for (const { pref, matchedSlot, localDateStr } of eligibleUsers) {
       const userId = pref.user_id;
       const prefId = pref.id;
 
@@ -250,11 +295,11 @@ export async function GET(req: NextRequest) {
       const lastSentSlots: Record<string, string[]> =
         currentMetadata.last_sent_slots || {};
 
-      // Add this slot to today's sent slots
-      if (!lastSentSlots[todayUTC]) {
-        lastSentSlots[todayUTC] = [];
+      // Add this slot to today's sent slots (using user's local date)
+      if (!lastSentSlots[localDateStr]) {
+        lastSentSlots[localDateStr] = [];
       }
-      lastSentSlots[todayUTC].push(matchedSlot);
+      lastSentSlots[localDateStr].push(matchedSlot);
 
       // Clean up old dates (keep only last 7 days to prevent metadata bloat)
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)

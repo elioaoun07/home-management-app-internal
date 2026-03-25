@@ -54,11 +54,52 @@ function parseTime(timeStr: string): [number, number] {
 }
 
 function buildItemsSummaryMessage(titles: string[], total: number): string {
-  const preview = titles.slice(0, 3).map((t) => `• ${t}`).join("\n");
+  const preview = titles
+    .slice(0, 3)
+    .map((t) => `• ${t}`)
+    .join("\n");
   const remaining = total - 3;
-  return remaining > 0
-    ? `${preview}\nand ${remaining} more`
-    : preview;
+  return remaining > 0 ? `${preview}\nand ${remaining} more` : preview;
+}
+
+/**
+ * Convert current UTC time to user's local timezone.
+ * Returns local totalMinutes and local date string (YYYY-MM-DD).
+ */
+function getLocalTime(timezone: string): {
+  totalMinutes: number;
+  dateStr: string;
+} {
+  const now = new Date();
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+
+    const get = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((p) => p.type === type)?.value || "0";
+    const hour = parseInt(get("hour"));
+    const minute = parseInt(get("minute"));
+
+    return {
+      totalMinutes: hour * 60 + minute,
+      dateStr: `${get("year")}-${get("month")}-${get("day")}`,
+    };
+  } catch {
+    // Invalid timezone — fall back to UTC
+    const h = now.getUTCHours();
+    const m = now.getUTCMinutes();
+    return {
+      totalMinutes: h * 60 + m,
+      dateStr: now.toISOString().split("T")[0],
+    };
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -101,7 +142,10 @@ export async function GET(req: NextRequest) {
       .eq("enabled", true);
 
     if (prefError) {
-      console.error("[Daily Items Reminder] Error fetching preferences:", prefError);
+      console.error(
+        "[Daily Items Reminder] Error fetching preferences:",
+        prefError,
+      );
       return NextResponse.json({ error: prefError.message }, { status: 500 });
     }
 
@@ -116,6 +160,7 @@ export async function GET(req: NextRequest) {
     const eligibleUsers: Array<{
       pref: (typeof preferences)[0];
       matchedSlot: string;
+      localDateStr: string;
     }> = [];
     let alreadySentForSlot = 0;
 
@@ -125,21 +170,35 @@ export async function GET(req: NextRequest) {
           ? JSON.parse(pref.metadata)
           : pref.metadata || {};
 
-      const preferredTimes: string[] = metadata.preferred_times || ["07:00:00", "18:00:00"];
-      const lastSentSlots: Record<string, string[]> = metadata.last_sent_slots || {};
-      const todaySentSlots: string[] = lastSentSlots[todayUTC] || [];
+      // preferred_times are stored in the user's LOCAL timezone
+      const preferredTimes: string[] = metadata.preferred_times || [
+        "07:00:00",
+        "18:00:00",
+      ];
+      const lastSentSlots: Record<string, string[]> =
+        metadata.last_sent_slots || {};
+
+      // Convert current UTC time → user's local time for comparison
+      const userTz = pref.timezone || "UTC";
+      const { totalMinutes: localMinutes, dateStr: localDateStr } =
+        getLocalTime(userTz);
+      const todaySentSlots: string[] = lastSentSlots[localDateStr] || [];
+
+      console.log(
+        `[Daily Items Reminder] User ${pref.user_id.substring(0, 8)}: tz=${userTz}, localTime=${Math.floor(localMinutes / 60)}:${String(localMinutes % 60).padStart(2, "0")}, localDate=${localDateStr}, preferredTimes=${JSON.stringify(preferredTimes)}`,
+      );
 
       for (const timeSlot of preferredTimes) {
         const [prefHour, prefMinute] = parseTime(timeSlot);
-        if (isTimeMatch(currentTotalMinutes, prefHour, prefMinute)) {
+        if (isTimeMatch(localMinutes, prefHour, prefMinute)) {
           if (todaySentSlots.includes(timeSlot)) {
             alreadySentForSlot++;
             console.log(
-              `[Daily Items Reminder] User ${pref.user_id}: Already sent for slot ${timeSlot} today`,
+              `[Daily Items Reminder] User ${pref.user_id.substring(0, 8)}: Already sent for slot ${timeSlot} today`,
             );
             continue;
           }
-          eligibleUsers.push({ pref, matchedSlot: timeSlot });
+          eligibleUsers.push({ pref, matchedSlot: timeSlot, localDateStr });
           break;
         }
       }
@@ -160,7 +219,7 @@ export async function GET(req: NextRequest) {
     let pushFailed = 0;
     let skippedNoItems = 0;
 
-    for (const { pref, matchedSlot } of eligibleUsers) {
+    for (const { pref, matchedSlot, localDateStr } of eligibleUsers) {
       const userId = pref.user_id;
       const prefId = pref.id;
       const [slotHour] = parseTime(matchedSlot);
@@ -173,7 +232,7 @@ export async function GET(req: NextRequest) {
 
       if (isMorning) {
         // Query items due today for this user
-        const { data: todayItems } = await supabase
+        const { data: todayItems, error: morningQueryError } = await supabase
           .from("items")
           .select(
             `id, type, title, status, reminder_details(due_at), event_details(start_at)`,
@@ -182,21 +241,34 @@ export async function GET(req: NextRequest) {
           .is("archived_at", null)
           .or("status.is.null,status.eq.pending,status.eq.in_progress");
 
+        if (morningQueryError) {
+          console.error(
+            `[Daily Items Reminder] User ${userId.substring(0, 8)}: Morning query failed:`,
+            morningQueryError,
+          );
+          continue;
+        }
+
+        console.log(
+          `[Daily Items Reminder] User ${userId.substring(0, 8)}: Morning query returned ${todayItems?.length ?? 0} active items`,
+        );
+
         // Filter in JS: tasks/reminders with due_at today, events with start_at today
+        // Use user's local date for the "today" check
         const dueToday = (todayItems || []).filter((item) => {
           if (item.type === "task" || item.type === "reminder") {
             const rd = Array.isArray(item.reminder_details)
               ? item.reminder_details[0]
               : item.reminder_details;
             if (!rd?.due_at) return false;
-            return rd.due_at.startsWith(todayUTC);
+            return rd.due_at.startsWith(localDateStr);
           }
           if (item.type === "event") {
             const ed = Array.isArray(item.event_details)
               ? item.event_details[0]
               : item.event_details;
             if (!ed?.start_at) return false;
-            return ed.start_at.startsWith(todayUTC);
+            return ed.start_at.startsWith(localDateStr);
           }
           return false;
         });
@@ -219,14 +291,27 @@ export async function GET(req: NextRequest) {
         severity = "info";
       } else {
         // Query overdue items for this user
-        const { data: allActiveItems } = await supabase
-          .from("items")
-          .select(
-            `id, type, title, status, reminder_details(due_at), event_details(end_at)`,
-          )
-          .eq("responsible_user_id", userId)
-          .is("archived_at", null)
-          .or("status.is.null,status.eq.pending,status.eq.in_progress");
+        const { data: allActiveItems, error: eveningQueryError } =
+          await supabase
+            .from("items")
+            .select(
+              `id, type, title, status, reminder_details(due_at), event_details(end_at)`,
+            )
+            .eq("responsible_user_id", userId)
+            .is("archived_at", null)
+            .or("status.is.null,status.eq.pending,status.eq.in_progress");
+
+        if (eveningQueryError) {
+          console.error(
+            `[Daily Items Reminder] User ${userId.substring(0, 8)}: Evening query failed:`,
+            eveningQueryError,
+          );
+          continue;
+        }
+
+        console.log(
+          `[Daily Items Reminder] User ${userId.substring(0, 8)}: Evening query returned ${allActiveItems?.length ?? 0} active items`,
+        );
 
         const nowISO = now.toISOString();
         const overdueItems = (allActiveItems || []).filter((item) => {
@@ -279,7 +364,9 @@ export async function GET(req: NextRequest) {
           priority: isMorning ? "normal" : "high",
           action_type: "confirm",
           action_url: "/items",
-          expires_at: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+          expires_at: new Date(
+            now.getTime() + 24 * 60 * 60 * 1000,
+          ).toISOString(),
           push_status: "pending",
         })
         .select()
@@ -302,10 +389,10 @@ export async function GET(req: NextRequest) {
       const lastSentSlots: Record<string, string[]> =
         currentMetadata.last_sent_slots || {};
 
-      if (!lastSentSlots[todayUTC]) {
-        lastSentSlots[todayUTC] = [];
+      if (!lastSentSlots[localDateStr]) {
+        lastSentSlots[localDateStr] = [];
       }
-      lastSentSlots[todayUTC].push(matchedSlot);
+      lastSentSlots[localDateStr].push(matchedSlot);
 
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
         .toISOString()
@@ -367,7 +454,10 @@ export async function GET(req: NextRequest) {
 
             await supabase
               .from("notifications")
-              .update({ push_status: "sent", push_sent_at: new Date().toISOString() })
+              .update({
+                push_status: "sent",
+                push_sent_at: new Date().toISOString(),
+              })
               .eq("id", notification.id);
 
             await supabase
