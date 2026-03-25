@@ -18,6 +18,7 @@ import {
   StarIcon,
   TrendingUpIcon,
 } from "@/components/icons/FuturisticIcons";
+import { Lightbulb, Mail } from "lucide-react";
 import BlurredAmount from "@/components/ui/BlurredAmount";
 import { Card } from "@/components/ui/card";
 import { SyncIndicator } from "@/components/ui/SyncIndicator";
@@ -1206,7 +1207,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
             </div>
             {filteredTransactions.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-4xl mb-3">📭</div>
+                <Mail className="w-14 h-14 text-slate-400/40 mb-3 mx-auto" />
                 <p className={`${themeClasses.textMuted} mb-4`}>
                   No transactions found
                 </p>
@@ -1221,8 +1222,8 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
               </div>
             ) : (
               <>
-                <div className={`text-xs ${themeClasses.textFaint} px-1 mb-2`}>
-                  💡 Swipe right to edit • Swipe left to delete
+                <div className={`text-xs ${themeClasses.textFaint} px-1 mb-2 flex items-center gap-1`}>
+                  <Lightbulb className="w-3.5 h-3.5 text-yellow-400" /> Swipe right to edit • Swipe left to delete
                 </div>
                 {filteredTransactions.map((tx) => (
                   <SwipeableTransactionItem

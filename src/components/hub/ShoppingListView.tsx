@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   ChevronsDownUp,
@@ -1929,7 +1930,7 @@ export function ShoppingListView({
                 </div>
               ) : uncheckedItems.length === 0 && shoppingGroups.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 text-center">
-                  <span className="text-4xl mb-2">✅</span>
+                  <CheckCircle2 className="w-14 h-14 text-emerald-400/40 mb-2" />
                   <p className="text-sm text-white/50">All items checked!</p>
                   <p className="text-xs text-white/30 mt-1">
                     Tap &quot;Clear completed&quot; when done shopping

@@ -1,6 +1,7 @@
 "use client";
 
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
+import { CheckCircle2 } from "lucide-react";
 
 type Props = {
   totalOwed: number;
@@ -17,7 +18,7 @@ export default function DebtSummaryWidget({
     return (
       <WidgetCard title="Debt Overview">
         <div className="text-center py-6">
-          <p className="text-2xl mb-1">✓</p>
+          <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-1" />
           <p className="text-white/50 text-xs">No open debts — great job!</p>
         </div>
       </WidgetCard>

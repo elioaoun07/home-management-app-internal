@@ -10,8 +10,10 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  FileText,
   Menu,
   Pin,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -958,7 +960,7 @@ export function NotesListView({
                     pinnedItems.length === 0 &&
                     checkedItemsList.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-20 text-center">
-                        <span className="text-5xl mb-3">📝</span>
+                        <FileText className="w-16 h-16 text-cyan-400/40 mb-3" />
                         <p className="text-xl text-white/50">
                           Your notebook is empty
                         </p>
@@ -1248,7 +1250,9 @@ export function NotesListView({
           {/* Index Title - Futuristic engraved header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex-1">
-              <h2 className="book-index-title text-2xl">✦ Index ✦</h2>
+              <h2 className="book-index-title text-2xl flex items-center gap-2">
+                <Star className="w-6 h-6" /> Index <Star className="w-6 h-6" />
+              </h2>
               <p
                 className="text-xs mt-1 tracking-wide"
                 style={{

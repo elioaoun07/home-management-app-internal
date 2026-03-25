@@ -35,6 +35,8 @@ import type {
 } from "@/types/items";
 import { format, parse } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
+import { CheckCircle2, Circle, XCircle, RefreshCw } from "lucide-react";
+import type { ReactNode } from "react";
 import { CheckIcon, SparklesIcon } from "lucide-react";
 import {
   useCallback,
@@ -210,26 +212,26 @@ type Step = "title" | "date" | "details";
 // Priority configuration with theme-aware colors
 const priorityConfig: Record<
   ItemPriority,
-  { label: string; icon: string; gradient: string }
+  { label: string; icon: ReactNode; gradient: string }
 > = {
   low: {
     label: "Low",
-    icon: "🔵",
+    icon: <Circle className="w-3 h-3 fill-blue-500 text-blue-500" />,
     gradient: "from-gray-500/20 to-gray-600/20",
   },
   normal: {
     label: "Normal",
-    icon: "⚪",
+    icon: <Circle className="w-3 h-3 fill-gray-400 text-gray-400" />,
     gradient: "from-cyan-500/20 to-blue-500/20",
   },
   high: {
     label: "High",
-    icon: "🟠",
+    icon: <Circle className="w-3 h-3 fill-orange-500 text-orange-500" />,
     gradient: "from-orange-500/20 to-red-500/20",
   },
   urgent: {
     label: "Urgent",
-    icon: "🔴",
+    icon: <Circle className="w-3 h-3 fill-red-500 text-red-500" />,
     gradient: "from-red-500/30 to-pink-500/30",
   },
 };
@@ -237,7 +239,7 @@ const priorityConfig: Record<
 // Status configuration
 const statusConfig: Record<
   ItemStatus,
-  { label: string; icon: string; gradient: string }
+  { label: string; icon: ReactNode; gradient: string }
 > = {
   pending: {
     label: "Pending",
@@ -251,12 +253,12 @@ const statusConfig: Record<
   },
   completed: {
     label: "Completed",
-    icon: "✅",
+    icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />,
     gradient: "from-green-500/20 to-emerald-500/20",
   },
   cancelled: {
     label: "Cancelled",
-    icon: "❌",
+    icon: <XCircle className="w-3.5 h-3.5 text-red-400" />,
     gradient: "from-gray-500/20 to-slate-500/20",
   },
   archived: {
@@ -743,7 +745,12 @@ export default function MobileReminderForm() {
         parsedItem.recurrenceRule,
       );
       chips.push({
-        label: `🔄 ${recurrenceLabel}`,
+        label: (
+          <>
+            <RefreshCw className="w-3.5 h-3.5 text-blue-400 inline mr-1" />
+            {recurrenceLabel}
+          </>
+        ) as unknown as string,
         color: "from-green-500/30 to-emerald-500/30",
         confidence: parsedItem.confidence.recurrence,
       });
@@ -752,14 +759,8 @@ export default function MobileReminderForm() {
     // Priority chip (only if not normal)
     if (parsedItem.priority !== "normal") {
       const prioLabel = priorityConfig[parsedItem.priority].label;
-      const prioIcon =
-        parsedItem.priority === "urgent"
-          ? "🔴"
-          : parsedItem.priority === "high"
-            ? "🟠"
-            : "🔵";
       chips.push({
-        label: `${prioIcon} ${prioLabel}`,
+        label: prioLabel,
         color: "from-red-500/30 to-pink-500/30",
         confidence: parsedItem.confidence.priority,
       });

@@ -6,7 +6,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import SwipeableItem from "./SwipeableItem";
@@ -78,7 +78,7 @@ export default function TransferListView({
   if (transfers.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="text-3xl mb-3">🔄</div>
+        <RefreshCw className="w-12 h-12 text-slate-400/40 mb-3 mx-auto" />
         <p className={`text-sm font-medium ${themeClasses.text}`}>
           No transfers
         </p>

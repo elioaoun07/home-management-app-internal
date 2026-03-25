@@ -7,6 +7,7 @@ import type { ItemWithDetails } from "@/types/items";
 import { format, parseISO } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef } from "react";
+import { Calendar as CalendarIcon } from "lucide-react";
 
 // Item type colors
 const typeColors: Record<string, { bg: string; border: string; text: string }> =
@@ -374,7 +375,7 @@ export function MobileDayExpansionModal({
                         isPink ? "bg-pink-500/10" : "bg-cyan-500/10",
                       )}
                     >
-                      <span className="text-3xl">📅</span>
+                      <CalendarIcon className="w-8 h-8 text-blue-400/40" />
                     </div>
                     <p className="text-white/50 text-sm">No events scheduled</p>
                     <div className="flex items-center justify-center gap-2 mt-4">

@@ -12,6 +12,7 @@ import {
 } from "@/lib/queryConfig";
 import { qk } from "@/lib/queryKeys";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, BarChart2, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -562,7 +563,7 @@ export default function WatchView() {
                   letterSpacing: "1px",
                 }}
               >
-                📊 Transactions
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><BarChart2 style={{ width: "14px", height: "14px", color: "#60a5fa" }} /> Transactions</span>
               </div>
               <div
                 style={{
@@ -721,9 +722,9 @@ function ErrorScreen() {
         }}
       >
         <div
-          style={{ color: "#ef4444", fontSize: "56px", marginBottom: "20px" }}
+          style={{ marginBottom: "20px" }}
         >
-          ⚠️
+          <AlertTriangle style={{ width: "56px", height: "56px", color: "#ef4444" }} />
         </div>
         <div
           style={{
@@ -750,7 +751,8 @@ function ErrorScreen() {
             cursor: "pointer",
           }}
         >
-          🔄 Reload
+          <RefreshCw className="w-3.5 h-3.5 text-blue-400 inline mr-1" />
+          Reload
         </button>
       </div>
     </div>

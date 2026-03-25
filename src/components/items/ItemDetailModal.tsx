@@ -7,6 +7,7 @@ import {
 } from "@/features/items/useItemActions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
+import { Check } from "lucide-react";
 import type { ItemWithDetails } from "@/types/items";
 import {
   differenceInDays,
@@ -792,9 +793,9 @@ export default function ItemDetailModal({
                   <button
                     type="button"
                     onClick={() => handleQuickComplete()}
-                    className="flex-1 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
+                    className="flex-1 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors flex items-center justify-center gap-1"
                   >
-                    ✓ Complete
+                    <Check className="w-3.5 h-3.5 text-emerald-400" /> Complete
                   </button>
                   <button
                     type="button"

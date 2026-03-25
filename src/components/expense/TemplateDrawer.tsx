@@ -1,6 +1,7 @@
 "use client";
 
 import { PlusIcon, XIcon } from "@/components/icons/FuturisticIcons";
+import { Bell, Calendar, CheckCircle2, Wallet } from "lucide-react";
 import {
   useCreateReminderTemplate,
   useLaunchReminderTemplate,
@@ -245,7 +246,7 @@ export default function TemplateDrawer({
                   : "text-[hsl(var(--nav-text-secondary))] hover:text-[hsl(var(--nav-text-primary))]"
               )}
             >
-              💰 Budget
+              <span className="flex items-center justify-center gap-1"><Wallet className="w-4 h-4 text-emerald-400" /> Budget</span>
             </button>
             <button
               onClick={() => setTemplateMode("task")}
@@ -256,7 +257,7 @@ export default function TemplateDrawer({
                   : "text-[hsl(var(--nav-text-secondary))] hover:text-[hsl(var(--nav-text-primary))]"
               )}
             >
-              ✅ Tasks
+              <span className="flex items-center justify-center gap-1"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Tasks</span>
             </button>
           </div>
 
@@ -388,10 +389,10 @@ export default function TemplateDrawer({
 
                             const typeIcon =
                               template.item_type === "event"
-                                ? "📅"
+                                ? <Calendar className="w-5 h-5 text-blue-400" />
                                 : template.item_type === "reminder"
-                                  ? "⏰"
-                                  : "✅";
+                                  ? <Bell className="w-5 h-5 text-yellow-400" />
+                                  : <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
 
                             const priorityColor =
                               template.priority === "urgent"

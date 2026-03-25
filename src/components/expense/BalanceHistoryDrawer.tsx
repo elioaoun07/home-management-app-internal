@@ -29,15 +29,28 @@ import { format, isToday, isYesterday, parseISO } from "date-fns";
 import {
   AlertTriangle,
   Archive,
+  ArrowDown,
   ArrowDownLeft,
+  ArrowUp,
   ArrowUpRight,
   Calendar,
+  Check,
   ChevronDown,
+  Dot,
+  Handshake,
   History,
   Loader2,
   Minus,
+  Pencil,
+  Plus,
   Settings,
   ShoppingCart,
+  Star,
+  Wallet,
+  Wrench,
+  X,
+  Zap,
+  Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -154,7 +167,7 @@ function DayCard({
           {/* Opening balance */}
           <div className="py-3 flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-              <span className="text-blue-400 text-sm">💰</span>
+              <Wallet className="w-4 h-4 text-blue-400" />
             </div>
             <div className="flex-1">
               <p className={cn("text-xs", themeClasses.textFaint)}>
@@ -277,7 +290,7 @@ function DayCard({
           {/* Closing balance */}
           <div className="py-3 mt-2 flex items-center gap-3 border-t border-white/5">
             <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-              <span className="text-emerald-400 text-sm">✓</span>
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
             </div>
             <div className="flex-1">
               <p className={cn("text-xs", themeClasses.textFaint)}>
@@ -292,6 +305,26 @@ function DayCard({
       )}
     </div>
   );
+}
+
+// Map icon keys to Lucide components
+function getIconComponent(iconKey: string): React.ReactNode {
+  const iconMap: Record<string, React.ReactNode> = {
+    star: <Star className="w-4 h-4" />,
+    pencil: <Pencil className="w-4 h-4" />,
+    settings: <Settings className="w-4 h-4" />,
+    "arrow-down": <ArrowDown className="w-4 h-4" />,
+    "arrow-up": <ArrowUp className="w-4 h-4" />,
+    zap: <Zap className="w-4 h-4" />,
+    plus: <Plus className="w-4 h-4" />,
+    x: <X className="w-4 h-4" />,
+    users: <Users className="w-4 h-4" />,
+    check: <Check className="w-4 h-4" />,
+    wrench: <Wrench className="w-4 h-4" />,
+    handshake: <Handshake className="w-4 h-4" />,
+    dot: <Dot className="w-4 h-4" />,
+  };
+  return iconMap[iconKey] || null;
 }
 
 // Activity entry (transfers, adjustments only)
@@ -327,11 +360,11 @@ function ActivityEntry({
       <div className="flex items-center gap-3">
         <div
           className={cn(
-            "w-9 h-9 rounded-full flex items-center justify-center text-lg",
+            "w-9 h-9 rounded-full flex items-center justify-center",
             isPositive ? "bg-green-500/20" : "bg-red-500/20",
           )}
         >
-          <span>{typeInfo.icon}</span>
+          {getIconComponent(typeInfo.icon)}
         </div>
         <div className="flex-1 min-w-0">
           <p className={cn("text-sm font-medium truncate", themeClasses.text)}>

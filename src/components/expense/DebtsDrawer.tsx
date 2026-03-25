@@ -9,6 +9,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { CheckCircle2 } from "lucide-react";
 import type { DebtStatus } from "@/features/debts/types";
 import {
   useDebts,
@@ -143,7 +144,7 @@ export default function DebtsDrawer({ open, onOpenChange }: DebtsDrawerProps) {
                     ? "🎉"
                     : activeTab === "archived"
                       ? "📦"
-                      : "✅"}
+                      : <CheckCircle2 className="w-8 h-8 text-emerald-400" />}
                 </div>
                 <p className="text-white/40 text-sm">
                   {activeTab === "open"

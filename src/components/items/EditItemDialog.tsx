@@ -22,7 +22,7 @@ import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNoti
 import { cn } from "@/lib/utils";
 import type { ItemPriority, ItemWithDetails } from "@/types/items";
 import { format, parseISO } from "date-fns";
-import { Bell, MapPin, Repeat, Tag, User, Users } from "lucide-react";
+import { Bell, MapPin, Repeat, Sparkles, Tag, User, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -649,7 +649,7 @@ export default function EditItemDialog({
               />
               {isPublic && notifyAllHousehold && (
                 <p className="text-xs text-amber-300/70">
-                  ✨ Both household members will be notified
+                  <span className="inline-flex items-center gap-1"><Sparkles className="w-3.5 h-3.5 text-pink-400" /> Both household members will be notified</span>
                 </p>
               )}
               {isPublic &&
@@ -658,7 +658,7 @@ export default function EditItemDialog({
                 responsibleUserId !== householdData.currentUserId &&
                 responsibleUserId !== originalResponsibleUserId && (
                   <p className="text-xs text-pink-300/70">
-                    ✨{" "}
+                    <span className="inline-flex items-center gap-1"><Sparkles className="w-3.5 h-3.5 text-pink-400" /></span>{" "}
                     {
                       householdData.members.find(
                         (m) => m.id === responsibleUserId

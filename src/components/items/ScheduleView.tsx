@@ -17,6 +17,7 @@ import {
   startOfDay,
 } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
+import { Bell, Calendar, Check, MapPin } from "lucide-react";
 import { useMemo, useState } from "react";
 
 interface ScheduleViewProps {
@@ -306,7 +307,7 @@ export function ScheduleView({ items }: ScheduleViewProps) {
                             </span>
                             {isEvent && item.event_details?.location_text && (
                               <span className="text-[10px] text-white/30 truncate block mt-0.5">
-                                📍 {item.event_details.location_text}
+                                <span className="inline-flex items-center gap-0.5"><MapPin className="w-3.5 h-3.5 text-rose-400 inline" />{item.event_details.location_text}</span>
                               </span>
                             )}
                           </div>
@@ -327,8 +328,8 @@ export function ScheduleView({ items }: ScheduleViewProps) {
                           )}
 
                           {/* Type indicator */}
-                          <span className="text-[10px]">
-                            {isReminder ? "🔔" : isEvent ? "📅" : "✓"}
+                          <span className="flex items-center">
+                            {isReminder ? <Bell className="w-3.5 h-3.5 text-yellow-400" /> : isEvent ? <Calendar className="w-3.5 h-3.5 text-blue-400" /> : <Check className="w-3.5 h-3.5 text-emerald-400" />}
                           </span>
                         </motion.div>
                       );
@@ -355,7 +356,7 @@ export function ScheduleView({ items }: ScheduleViewProps) {
                 isPink ? "bg-pink-500/10" : "bg-cyan-500/10"
               )}
             >
-              <span className="text-3xl">📅</span>
+              <Calendar className="w-8 h-8 text-blue-400/40" />
             </div>
             <p className="text-sm text-white/50 font-medium">All clear!</p>
             <p className="text-[11px] text-white/30 mt-1">

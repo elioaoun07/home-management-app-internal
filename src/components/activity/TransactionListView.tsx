@@ -17,17 +17,19 @@ import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format } from "date-fns";
+import { Mail, Moon, Sun } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 import SwipeableItem from "./SwipeableItem";
 
 // ─── Time-of-day grouping ───────────────────────────────────────────
 type TimeOfDay = "morning" | "afternoon" | "evening";
 
-const TIME_SECTIONS: { key: TimeOfDay; label: string; icon: string }[] = [
-  { key: "morning", label: "Morning", icon: "☀️" },
-  { key: "afternoon", label: "Afternoon", icon: "🌤️" },
-  { key: "evening", label: "Evening", icon: "🌙" },
+const TIME_SECTIONS: { key: TimeOfDay; label: string; icon: ReactNode }[] = [
+  { key: "morning", label: "Morning", icon: <Sun className="w-3.5 h-3.5 text-yellow-400" /> },
+  { key: "afternoon", label: "Afternoon", icon: <Sun className="w-3.5 h-3.5 text-orange-400" /> },
+  { key: "evening", label: "Evening", icon: <Moon className="w-3.5 h-3.5 text-indigo-400" /> },
 ];
 
 function getTimeOfDay(insertedAt: string | undefined): TimeOfDay {
@@ -136,7 +138,7 @@ export default function TransactionListView({
   if (transactions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="text-3xl mb-3">📭</div>
+        <Mail className="w-12 h-12 text-slate-400/40 mb-3 mx-auto" />
         <p className={`text-sm font-medium ${themeClasses.text}`}>
           No transactions
         </p>
@@ -162,7 +164,7 @@ export default function TransactionListView({
                 onClick={() => toggleSection(key)}
                 className="flex items-center gap-2 w-full px-1 py-1.5 group"
               >
-                <span className="text-xs">{icon}</span>
+                <span className="flex items-center">{icon}</span>
                 <span
                   className={`text-[11px] font-medium tracking-wide uppercase ${themeClasses.textMuted}`}
                 >

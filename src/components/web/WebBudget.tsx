@@ -9,6 +9,7 @@ import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
+  BarChart2,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -835,7 +836,7 @@ const WebBudget = memo(function WebBudget() {
         {/* Empty State */}
         {summary && summary.categories.length === 0 && (
           <Card className="neo-card p-12 text-center">
-            <div className="text-6xl mb-4">📊</div>
+            <BarChart2 className="w-20 h-20 text-blue-400/40 mb-4" />
             <h3 className="text-xl font-semibold text-white mb-2">
               No Categories Yet
             </h3>

@@ -34,7 +34,27 @@ import {
 } from "@/hooks/useNotifications";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import { CheckCircle, ExternalLink, Sparkles, X } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowLeftRight,
+  Bell,
+  CheckCircle,
+  CheckCircle2,
+  CheckSquare,
+  Clock,
+  CreditCard,
+  ExternalLink,
+  FileText,
+  Info,
+  MessageCircle,
+  Sparkles,
+  Target,
+  Wallet,
+  X,
+  XCircle,
+} from "lucide-react";
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 type NotificationModalProps = {
@@ -201,42 +221,38 @@ export default function NotificationModal({
     }
   };
 
-  const getNotificationIcon = (notification: Notification): string => {
-    if (notification.icon && notification.icon.length <= 4) {
-      return notification.icon; // Emoji
-    }
-
-    // Map icon names or notification types to emojis
+  const getNotificationIcon = (notification: Notification): ReactNode => {
+    // Map notification types to Lucide icons
     if (notification.notification_type) {
       switch (notification.notification_type) {
         case "daily_reminder":
-          return "📝";
+          return <FileText className="w-5 h-5 text-cyan-400" />;
         case "budget_warning":
-          return "⚠️";
+          return <AlertTriangle className="w-5 h-5 text-amber-400" />;
         case "budget_exceeded":
-          return "🚨";
+          return <AlertCircle className="w-5 h-5 text-red-400" />;
         case "bill_due":
         case "bill_overdue":
-          return "💳";
+          return <CreditCard className="w-5 h-5 text-blue-400" />;
         case "item_reminder":
         case "item_due":
-          return "⏰";
+          return <Clock className="w-5 h-5 text-orange-400" />;
         case "item_overdue":
-          return "❗";
+          return <AlertCircle className="w-5 h-5 text-red-400" />;
         case "goal_milestone":
         case "goal_completed":
-          return "🎯";
+          return <Target className="w-5 h-5 text-cyan-400" />;
         case "chat_message":
         case "chat_mention":
-          return "💬";
+          return <MessageCircle className="w-5 h-5 text-blue-400" />;
         case "transaction_pending":
-          return "🔀"; // Split bill icon
+          return <ArrowLeftRight className="w-5 h-5 text-blue-400" />;
         case "success":
-          return "✅";
+          return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
         case "warning":
-          return "⚠️";
+          return <AlertTriangle className="w-5 h-5 text-amber-400" />;
         case "error":
-          return "❌";
+          return <XCircle className="w-5 h-5 text-red-400" />;
         default:
           break;
       }
@@ -245,30 +261,30 @@ export default function NotificationModal({
     // Fallback to icon field mapping
     switch (notification.icon) {
       case "bell":
-        return "🔔";
+        return <Bell className="w-5 h-5 text-yellow-400" />;
       case "transaction":
       case "log_transaction":
-        return "📝";
+        return <FileText className="w-5 h-5 text-cyan-400" />;
       case "split":
-        return "🔀";
+        return <ArrowLeftRight className="w-5 h-5 text-blue-400" />;
       case "check":
-        return "✅";
+        return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
       case "budget":
-        return "💰";
+        return <Wallet className="w-5 h-5 text-emerald-400" />;
       case "warning":
-        return "⚠️";
+        return <AlertTriangle className="w-5 h-5 text-amber-400" />;
       case "alert":
-        return "🚨";
+        return <AlertCircle className="w-5 h-5 text-red-400" />;
       case "success":
-        return "✅";
+        return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
       case "info":
-        return "ℹ️";
+        return <Info className="w-5 h-5 text-blue-400" />;
       case "task":
-        return "✔️";
+        return <CheckSquare className="w-5 h-5 text-emerald-400" />;
       case "reminder":
-        return "⏰";
+        return <Clock className="w-5 h-5 text-orange-400" />;
       default:
-        return "🔔";
+        return <Bell className="w-5 h-5 text-yellow-400" />;
     }
   };
 
@@ -379,7 +395,7 @@ export default function NotificationModal({
               >
                 <div className="flex items-start gap-3">
                   {/* Icon */}
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-xl">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
                     {getNotificationIcon(notification)}
                   </div>
 

@@ -17,7 +17,10 @@
       "Bash(find /c/Users/aoune/WebApp/budget-app/docs/features -type f -name *.md)",
       "Bash(pnpm typecheck:*)",
       "Bash(ls:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(2)",
+      "Bash(/tmp/changes_summary.txt:*)",
+      "Read(//tmp/**)"
     ]
   }
 }

@@ -282,7 +282,7 @@ export default function RecipeDialog({
                       if (r.ingredients?.length) setIngredients(r.ingredients);
                       if (r.steps?.length) setSteps(r.steps);
                       setExtractionStatus(
-                        `✅ Extracted from ${result.source === "youtube" ? "YouTube" : "website"}` +
+                        `Extracted from ${result.source === "youtube" ? "YouTube" : "website"}` +
                           (result.tokensUsed
                             ? ` (${result.tokensUsed} tokens)`
                             : ""),

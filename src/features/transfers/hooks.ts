@@ -67,10 +67,33 @@ export const transferKeys = {
 
 // --------------- localStorage transfer cache ---------------
 const TR_CACHE_PREFIX = "tr-cache-";
+const TR_CACHE_LATEST_KEY = "tr-cache-latest"; // Stable alias — written for every single-day fetch
 const TR_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
 
 function getTrCacheKey(start?: string, end?: string) {
   return `${TR_CACHE_PREFIX}${start || "all"}_${end || "all"}`;
+}
+
+/** Remove oldest date-keyed cache entries when there are more than 7. */
+function cleanupOldTrCaches() {
+  try {
+    const keys = Object.keys(localStorage).filter(
+      (k) => k.startsWith(TR_CACHE_PREFIX) && k !== TR_CACHE_LATEST_KEY,
+    );
+    if (keys.length <= 7) return;
+    const entries = keys
+      .map((k) => {
+        try {
+          return { key: k, ts: JSON.parse(localStorage.getItem(k)!).ts as number };
+        } catch {
+          return { key: k, ts: 0 };
+        }
+      })
+      .sort((a, b) => b.ts - a.ts);
+    entries.slice(7).forEach((e) => localStorage.removeItem(e.key));
+  } catch {
+    /* ignore */
+  }
 }
 
 function readTrCache(
@@ -78,14 +101,30 @@ function readTrCache(
   end?: string,
 ): { data: Transfer[]; ts: number } | undefined {
   try {
+    // Try exact date-range match first
     const raw = localStorage.getItem(getTrCacheKey(start, end));
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw);
-    if (Date.now() - parsed.ts > TR_CACHE_MAX_AGE) {
-      localStorage.removeItem(getTrCacheKey(start, end));
-      return undefined;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Date.now() - parsed.ts > TR_CACHE_MAX_AGE) {
+        localStorage.removeItem(getTrCacheKey(start, end));
+      } else {
+        return parsed;
+      }
     }
-    return parsed;
+    // Fallback: for single-day "today" requests with no exact match,
+    // return the latest alias so the user sees last-known data instantly
+    // instead of a skeleton. ts=0 makes RQ treat it as infinitely stale →
+    // triggers an immediate background refetch to get today's real data.
+    const today = new Date().toISOString().split("T")[0];
+    if (start === today && end === today) {
+      const aliasRaw = localStorage.getItem(TR_CACHE_LATEST_KEY);
+      if (aliasRaw) {
+        const parsed = JSON.parse(aliasRaw);
+        if (Date.now() - parsed.ts > TR_CACHE_MAX_AGE) return undefined;
+        return { data: parsed.data, ts: 0 };
+      }
+    }
+    return undefined;
   } catch {
     return undefined;
   }
@@ -98,12 +137,34 @@ function writeTrCache(
 ) {
   try {
     const trimmed = data.slice(0, 300);
-    localStorage.setItem(
-      getTrCacheKey(start, end),
-      JSON.stringify({ data: trimmed, ts: Date.now() }),
-    );
+    const payload = JSON.stringify({ data: trimmed, ts: Date.now() });
+    localStorage.setItem(getTrCacheKey(start, end), payload);
+    // Also write stable alias for single-day ranges so the next cold start
+    // (new day) can show last-known data instantly while fresh data loads.
+    if (start && end && start === end) {
+      localStorage.setItem(TR_CACHE_LATEST_KEY, payload);
+    }
+    // Prevent localStorage bloat from accumulating old date-keyed entries
+    cleanupOldTrCaches();
   } catch {
     /* quota exceeded — ignore */
+  }
+}
+
+/**
+ * Sync all in-memory transfer queries to localStorage so mutations
+ * (create/update/delete) are reflected in the persistent cache immediately.
+ * Call this in mutation onSettled callbacks.
+ */
+function syncTrCacheToLocalStorage(queryClient: ReturnType<typeof useQueryClient>) {
+  const allQueries = queryClient.getQueriesData<Transfer[]>({
+    queryKey: transferKeys.all,
+  });
+  for (const [key, data] of allQueries) {
+    if (data && Array.isArray(key) && key.length >= 3 && key[1] === "list") {
+      const filters = key[2] as { start?: string; end?: string } | undefined;
+      writeTrCache(filters?.start, filters?.end, data);
+    }
   }
 }
 
@@ -317,6 +378,8 @@ export function useUpdateTransfer() {
       );
     },
     onSettled: (_data, _error, variables) => {
+      // Sync in-memory state to localStorage so the next cold start is instant
+      syncTrCacheToLocalStorage(queryClient);
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
       queryClient.invalidateQueries({
         predicate: (query) => query.queryKey[0] === "account-balance",
@@ -402,6 +465,8 @@ export function useDeleteTransfer() {
       );
     },
     onSettled: () => {
+      // Sync in-memory state to localStorage so the next cold start is instant
+      syncTrCacheToLocalStorage(queryClient);
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
       queryClient.invalidateQueries({
         predicate: (query) => query.queryKey[0] === "account-balance",

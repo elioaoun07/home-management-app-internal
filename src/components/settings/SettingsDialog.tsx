@@ -7,6 +7,7 @@ import {
   SmartphoneIcon,
   WatchIcon,
 } from "@/components/icons/FuturisticIcons";
+import { Check, Clock, CreditCard } from "lucide-react";
 import { CategoryManagement } from "@/components/settings/CategoryManagement";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { Button } from "@/components/ui/button";
@@ -239,8 +240,8 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                       Blue
                     </p>
                     {colorTheme === "blue" && (
-                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-cyan-400 flex items-center justify-center text-slate-900 text-xs font-bold">
-                        ✓
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-cyan-400 flex items-center justify-center text-slate-900">
+                        <Check className="w-3.5 h-3.5" />
                       </div>
                     )}
                   </button>
@@ -261,8 +262,8 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                       Pink
                     </p>
                     {colorTheme === "pink" && (
-                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-pink-400 flex items-center justify-center text-slate-900 text-xs font-bold">
-                        ✓
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-pink-400 flex items-center justify-center text-slate-900">
+                        <Check className="w-3.5 h-3.5" />
                       </div>
                     )}
                   </button>
@@ -286,8 +287,8 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                       Light Mode
                     </p>
                     {colorTheme === "frost" && (
-                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                        ✓
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-white">
+                        <Check className="w-3.5 h-3.5" />
                       </div>
                     )}
                   </button>
@@ -311,8 +312,8 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                       Tablet View
                     </p>
                     {colorTheme === "calm" && (
-                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-stone-500 flex items-center justify-center text-white text-xs font-bold">
-                        ✓
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-stone-500 flex items-center justify-center text-white">
+                        <Check className="w-3.5 h-3.5" />
                       </div>
                     )}
                   </button>
@@ -569,7 +570,7 @@ function AccountsPanel() {
                     ? "💵"
                     : account.type === "bank"
                       ? "🏦"
-                      : "💳"}
+                      : <CreditCard className="w-4 h-4 text-blue-400" />}
                 </span>
               </div>
               <div className="flex-1 text-left">
@@ -710,12 +711,12 @@ function HouseholdPanel() {
           </span>
           {isLinked ? (
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold">
-              <span>✓</span>
+              <Check className="w-4 h-4" />
               <span>Linked</span>
             </div>
           ) : (
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 font-semibold">
-              <span>⏳</span>
+              <Clock className="w-4 h-4" />
               <span>Pending</span>
             </div>
           )}

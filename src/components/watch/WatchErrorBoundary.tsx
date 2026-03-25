@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
 import { Component, ReactNode } from "react";
 
 interface Props {
@@ -68,7 +69,7 @@ export class WatchErrorBoundary extends Component<Props, State> {
                 padding: "2rem",
               }}
             >
-              <div className="text-red-400 text-6xl mb-4">⚠️</div>
+              <AlertTriangle className="w-16 h-16 text-red-400 mb-4" />
               <div className="text-white text-lg font-semibold mb-2">
                 Watch Error
               </div>

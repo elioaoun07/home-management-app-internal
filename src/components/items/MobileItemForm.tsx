@@ -35,6 +35,7 @@ import type {
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
+import { Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -1031,7 +1032,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                     />
                     {isPublic && notifyAllHousehold && (
                       <p className="text-xs text-amber-300/70 mt-2">
-                        ✨ Both household members will be notified
+                        <span className="inline-flex items-center gap-1"><Sparkles className="w-3.5 h-3.5 text-pink-400" /> Both household members will be notified</span>
                       </p>
                     )}
                     {isPublic &&
@@ -1039,7 +1040,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                       responsibleUserId &&
                       responsibleUserId !== householdData.currentUserId && (
                         <p className="text-xs text-pink-300/70 mt-2">
-                          ✨{" "}
+                          <span className="inline-flex items-center gap-1"><Sparkles className="w-3.5 h-3.5 text-pink-400" /></span>{" "}
                           {
                             householdData.members.find(
                               (m) => m.id === responsibleUserId

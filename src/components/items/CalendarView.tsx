@@ -23,6 +23,7 @@ import {
   startOfWeek,
 } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
+import { Sparkles } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 // Icon components
@@ -483,7 +484,7 @@ export function CalendarView({
                     : "bg-cyan-500/20 text-cyan-300 border-cyan-400/30 hover:bg-cyan-500/30 hover:border-cyan-400/50",
                 )}
               >
-                ✨ Today
+                <span className="flex items-center gap-1"><Sparkles className="w-3.5 h-3.5 text-pink-400" /> Today</span>
               </motion.button>
             </div>
 

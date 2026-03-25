@@ -1,6 +1,7 @@
 "use client";
 
 import { Edit2Icon, Trash2Icon } from "@/components/icons/FuturisticIcons";
+import { Check } from "lucide-react";
 import BlurredAmount from "@/components/ui/BlurredAmount";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLbpSettings } from "@/features/preferences/useLbpSettings";
@@ -396,7 +397,7 @@ export default function SwipeableTransactionItem({
                 <>
                   <span>•</span>
                   {transaction.debt_status === "closed" ? (
-                    <span className="text-slate-400">Debt Settled ✓</span>
+                    <span className="text-slate-400 flex items-center gap-1">Debt Settled <Check className="w-3 h-3 text-emerald-400" /></span>
                   ) : transaction.debt_status === "archived" ? (
                     <span className="text-orange-400/70">Debt Archived</span>
                   ) : (

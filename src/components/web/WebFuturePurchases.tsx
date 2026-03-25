@@ -886,7 +886,7 @@ function AddPurchaseModal({
                   {recommendation.isFeasible ? (
                     <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg">
                       <TrendingUp className="w-4 h-4" />
-                      <span>This goal looks achievable! 🎯</span>
+                      <span className="flex items-center gap-1">This goal looks achievable! <Target className="w-4 h-4 text-cyan-400 inline" /></span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 text-sm text-amber-400 bg-amber-500/10 px-3 py-2 rounded-lg">

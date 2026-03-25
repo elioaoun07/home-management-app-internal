@@ -33,8 +33,10 @@ import {
   Clock,
   Layers,
   ListTodo,
+  Moon,
   Sparkles,
   Star,
+  Sun,
   Target,
   Volume2,
   VolumeX,
@@ -42,6 +44,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { RRule } from "rrule";
 
 // ============================================
@@ -155,12 +158,12 @@ const getCategoryGroup = (item: ItemWithDetails): string => {
 };
 
 // Morning greetings based on time
-const getGreeting = (hour: number): { emoji: string; text: string } => {
-  if (hour < 5) return { emoji: "🌙", text: "Working late?" };
-  if (hour < 12) return { emoji: "👋", text: "Good Morning!" };
-  if (hour < 17) return { emoji: "☀️", text: "Good Afternoon!" };
-  if (hour < 21) return { emoji: "🌆", text: "Good Evening!" };
-  return { emoji: "🌙", text: "Winding Down" };
+const getGreeting = (hour: number): { emoji: ReactNode; text: string } => {
+  if (hour < 5) return { emoji: <Moon className="w-5 h-5 text-indigo-400" />, text: "Working late?" };
+  if (hour < 12) return { emoji: <Sun className="w-5 h-5 text-yellow-400" />, text: "Good Morning!" };
+  if (hour < 17) return { emoji: <Sun className="w-5 h-5 text-orange-400" />, text: "Good Afternoon!" };
+  if (hour < 21) return { emoji: <Moon className="w-5 h-5 text-purple-400" />, text: "Good Evening!" };
+  return { emoji: <Moon className="w-5 h-5 text-indigo-400" />, text: "Winding Down" };
 };
 
 // ============================================
@@ -699,7 +702,7 @@ export default function WebTodayView() {
     // Current focus
     if (now) {
       parts.push(
-        `\n\n🎯 Currently: "${now.item.title}" at ${format(now.occurrenceDate, "h:mm a")}.`,
+        `\n\nCurrently: "${now.item.title}" at ${format(now.occurrenceDate, "h:mm a")}.`,
       );
     }
 
@@ -709,17 +712,17 @@ export default function WebTodayView() {
         (next.occurrenceDate.getTime() - currentTime.getTime()) / (1000 * 60),
       );
       if (timeUntil <= 60) {
-        parts.push(`\n\n⏰ In ${timeUntil} minutes: "${next.item.title}".`);
+        parts.push(`\n\nIn ${timeUntil} minutes: "${next.item.title}".`);
       } else {
         parts.push(
-          `\n\n📍 Next up at ${format(next.occurrenceDate, "h:mm a")}: "${next.item.title}".`,
+          `\n\nNext up at ${format(next.occurrenceDate, "h:mm a")}: "${next.item.title}".`,
         );
       }
     }
 
     // Top priorities callout
     if (topPriorities.length > 0 && totalToday > 1) {
-      parts.push("\n\n⭐ Key priorities for today:");
+      parts.push("\n\nKey priorities for today:");
       topPriorities.forEach((task, idx) => {
         parts.push(`\n  ${idx + 1}. ${task.item.title}`);
       });
@@ -793,7 +796,7 @@ export default function WebTodayView() {
               isFrost ? "text-slate-700" : "text-white/90",
             )}
           >
-            {greeting.emoji} {greeting.text}
+            <span className="inline-flex items-center gap-2">{greeting.emoji} {greeting.text}</span>
           </p>
           <h1
             className={cn(

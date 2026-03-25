@@ -12,6 +12,7 @@ import {
   PlusIcon,
   XIcon,
 } from "@/components/icons/FuturisticIcons";
+import { Calendar as CalendarLucide } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -782,7 +783,7 @@ export default function MobileExpenseForm() {
           });
           if (!res.ok) throw new Error("Failed");
           toast.success("Future payment scheduled!", {
-            icon: "📅",
+            icon: <CalendarLucide className="w-4 h-4 text-blue-400" />,
             description: `$${amountForToast} for ${categoryNameForToast} — due ${transactionData.date}`,
           });
           queryClient.invalidateQueries({

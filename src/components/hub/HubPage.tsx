@@ -55,7 +55,27 @@ import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Link as LinkIcon, RefreshCw, Settings } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  BarChart2,
+  Bell,
+  Bot,
+  Calendar,
+  Clock,
+  FileText,
+  Link as LinkIcon,
+  Lightbulb,
+  Pin,
+  RefreshCw,
+  Settings,
+  Sparkles,
+  Star,
+  Target,
+  Trash2,
+  Wallet,
+} from "lucide-react";
+import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -2285,8 +2305,10 @@ function ThreadConversation({
                   React.createElement(PurposeIcons[thread.purpose], {
                     className: "w-5 h-5",
                   })
+                ) : thread?.icon ? (
+                  <span className="text-lg">{thread.icon}</span>
                 ) : (
-                  <span className="text-lg">{thread?.icon || "💬"}</span>
+                  <Bell className="w-5 h-5 text-white" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
@@ -2731,29 +2753,29 @@ function ThreadConversation({
                                     className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center border-2 border-bg-custom shadow-lg"
                                     title={`Action: ${action.action_type}`}
                                   >
-                                    <span className="text-white text-xs font-bold">
+                                    <span className="text-white flex items-center justify-center">
                                       {action.action_type === "transaction" &&
-                                        "💰"}
+                                        <Wallet className="w-3 h-3 text-emerald-400" />}
                                       {action.action_type === "reminder" &&
-                                        "⏰"}
-                                      {action.action_type === "forward" && "↗️"}
-                                      {action.action_type === "pin" && "📌"}
+                                        <Bell className="w-3 h-3 text-yellow-400" />}
+                                      {action.action_type === "forward" && <ArrowUpRight className="w-3 h-3 text-white" />}
+                                      {action.action_type === "pin" && <Pin className="w-3 h-3 text-blue-400" />}
                                     </span>
                                   </div>
                                 ))}
                               </div>
                             )}
                             {isSystem && (
-                              <p className="text-xs text-violet-300 font-medium mb-1">
-                                🤖 System
+                              <p className="text-xs text-violet-300 font-medium mb-1 flex items-center gap-1">
+                                <Bot className="w-3 h-3 text-cyan-400" /> System
                               </p>
                             )}
 
                             {/* Show "This message was deleted/hidden" with undo button */}
                             {msg.deleted_at || (msg as any).is_hidden_by_me ? (
                               <div className="flex items-center gap-2">
-                                <p className="text-sm italic text-white/40">
-                                  🗑️{" "}
+                                <p className="text-sm italic text-white/40 flex items-center gap-1">
+                                  <Trash2 className="w-3.5 h-3.5 text-amber-400" />{" "}
                                   {msg.deleted_at
                                     ? "This message was deleted"
                                     : "Message hidden"}
@@ -2842,10 +2864,10 @@ function ThreadConversation({
                                     title={`Action: ${action.action_type}`}
                                   >
                                     {action.action_type === "transaction" &&
-                                      "💰"}
-                                    {action.action_type === "reminder" && "⏰"}
-                                    {action.action_type === "forward" && "↗️"}
-                                    {action.action_type === "pin" && "📌"}
+                                      <Wallet className="w-3.5 h-3.5 text-emerald-400" />}
+                                    {action.action_type === "reminder" && <Bell className="w-3.5 h-3.5 text-yellow-400" />}
+                                    {action.action_type === "forward" && <ArrowUpRight className="w-3.5 h-3.5 text-white" />}
+                                    {action.action_type === "pin" && <Pin className="w-3.5 h-3.5 text-blue-400" />}
                                     <span className="capitalize">
                                       {action.action_type}
                                     </span>
@@ -3119,7 +3141,7 @@ function ThreadConversation({
                         {hasReminderAction ? (
                           <CheckIcon className="w-5 h-5 text-emerald-400" />
                         ) : (
-                          <span className="text-xl">⏰</span>
+                          <Clock className="w-5 h-5 text-orange-400" />
                         )}
                       </div>
                       <div className="flex-1 text-left">
@@ -3184,7 +3206,7 @@ function ThreadConversation({
                         {hasTransactionAction ? (
                           <CheckIcon className="w-5 h-5 text-emerald-400" />
                         ) : (
-                          <span className="text-xl">💰</span>
+                          <Wallet className="w-5 h-5 text-emerald-400" />
                         )}
                       </div>
                       <div className="flex-1 text-left">
@@ -3637,42 +3659,34 @@ const PurposeIcons = {
 const PURPOSE_CONFIG = {
   general: {
     label: "General",
-    icon: "💬",
     defaultColor: "#6366f1", // Indigo
   },
   budget: {
     label: "Budget",
-    icon: "💰",
     defaultColor: "#10b981", // Emerald
   },
   reminder: {
     label: "Reminder",
-    icon: "⏰",
     defaultColor: "#f59e0b", // Amber
   },
   shopping: {
     label: "Shopping",
-    icon: "🛒",
     defaultColor: "#3b82f6", // Blue
   },
   travel: {
     label: "Travel",
-    icon: "✈️",
     defaultColor: "#8b5cf6", // Purple
   },
   health: {
     label: "Health",
-    icon: "🏥",
     defaultColor: "#ef4444", // Red
   },
   notes: {
     label: "Notes",
-    icon: "📝",
     defaultColor: "#eab308", // Yellow
   },
   other: {
     label: "Other",
-    icon: "📋",
     defaultColor: "#64748b", // Slate
   },
 } as const;
@@ -4166,7 +4180,7 @@ function CreateThreadModal({
     setPurpose(newPurpose);
     const config = PURPOSE_CONFIG[newPurpose];
     setColor(config.defaultColor);
-    setIcon(config.icon);
+    // Icon is now optional - don't set a default
   };
 
   const handleCreate = () => {
@@ -4515,18 +4529,18 @@ function FeedView() {
     );
   }
 
-  const getEmoji = (type: string) => {
+  const getEmoji = (type: string): ReactNode => {
     switch (type) {
       case "transaction_added":
         return "💸";
       case "goal_created":
-        return "🎯";
+        return <Target className="w-6 h-6 text-cyan-400" />;
       case "goal_completed":
         return "🏆";
       case "milestone":
-        return "⭐";
+        return <Star className="w-6 h-6 text-yellow-400" />;
       default:
-        return "📝";
+        return <FileText className="w-6 h-6 text-cyan-400" />;
     }
   };
 
@@ -4896,29 +4910,29 @@ function AlertsView() {
     );
   }
 
-  const getIcon = (type: string | null | undefined) => {
+  const getIcon = (type: string | null | undefined): ReactNode => {
     switch (type) {
       case "budget_warning":
       case "budget_exceeded":
-        return "⚠️";
+        return <AlertTriangle className="w-6 h-6 text-amber-400" />;
       case "goal_milestone":
       case "goal_completed":
         return "🎉";
       case "weekly_summary":
       case "monthly_summary":
-        return "📊";
+        return <BarChart2 className="w-6 h-6 text-blue-400" />;
       case "bill_due":
       case "bill_overdue":
-        return "📅";
+        return <Calendar className="w-6 h-6 text-blue-400" />;
       case "daily_reminder":
       case "transaction_reminder":
-        return "📝";
+        return <FileText className="w-6 h-6 text-cyan-400" />;
       case "item_reminder":
       case "item_due":
       case "item_overdue":
-        return "⏰";
+        return <Clock className="w-6 h-6 text-orange-400" />;
       default:
-        return "💡";
+        return <Lightbulb className="w-6 h-6 text-yellow-400" />;
     }
   };
 
@@ -4971,7 +4985,7 @@ function AlertsView() {
               )}
 
               <div className="flex items-start gap-3">
-                <div className="text-2xl">📝</div>
+                <FileText className="w-8 h-8 text-cyan-400/40" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <p className="text-sm font-semibold text-white">
@@ -5010,7 +5024,7 @@ function AlertsView() {
                       }
                       className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white/70 transition-all"
                     >
-                      ⏰ Snooze
+                      <Clock className="w-3 h-3" /> Snooze
                     </button>
                     <button
                       onClick={() =>

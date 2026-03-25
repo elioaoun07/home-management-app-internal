@@ -213,85 +213,85 @@ export function getChangeTypeInfo(changeType: BalanceChangeType): {
     case "initial_set":
       return {
         label: "Initial Balance",
-        icon: "✨",
+        icon: "star",
         colorClass: "text-blue-400",
       };
     case "manual_set":
       return {
         label: "Balance Set",
-        icon: "✎",
+        icon: "pencil",
         colorClass: "text-amber-400",
       };
     case "manual_adjustment":
       return {
         label: "Manual Adjustment",
-        icon: "⚙️",
+        icon: "settings",
         colorClass: "text-amber-400",
       };
     case "transfer_in":
       return {
         label: "Transfer In",
-        icon: "↓",
+        icon: "arrow-down",
         colorClass: "text-green-400",
       };
     case "transfer_out":
       return {
         label: "Transfer Out",
-        icon: "↑",
+        icon: "arrow-up",
         colorClass: "text-red-400",
       };
     case "transaction_expense":
       return {
         label: "Expense",
-        icon: "💸",
+        icon: "zap",
         colorClass: "text-red-400",
       };
     case "transaction_income":
       return {
         label: "Income",
-        icon: "💰",
+        icon: "plus",
         colorClass: "text-green-400",
       };
     case "transaction_deleted":
       return {
         label: "Transaction Deleted",
-        icon: "🗑️",
+        icon: "x",
         colorClass: "text-gray-400",
       };
     case "split_bill_paid":
       return {
         label: "Split Bill Paid",
-        icon: "👥",
+        icon: "users",
         colorClass: "text-purple-400",
       };
     case "split_bill_received":
       return {
         label: "Split Bill Received",
-        icon: "👥",
+        icon: "users",
         colorClass: "text-green-400",
       };
     case "draft_confirmed":
       return {
         label: "Draft Confirmed",
-        icon: "✓",
+        icon: "check",
         colorClass: "text-blue-400",
       };
     case "correction":
       return {
         label: "Correction",
-        icon: "🔧",
+        icon: "wrench",
         colorClass: "text-orange-400",
       };
     case "debt_settled":
       return {
         label: "Debt Settled",
-        icon: "🤝",
+        icon: "handshake",
         colorClass: "text-orange-400",
       };
     default:
       return {
         label: changeType,
-        icon: "•",
+        icon: "dot",
         colorClass: "text-gray-400",
       };
   }

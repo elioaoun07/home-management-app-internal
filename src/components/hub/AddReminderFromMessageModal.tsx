@@ -19,7 +19,9 @@ import type {
   ItemType,
 } from "@/types/items";
 import { format, parse } from "date-fns";
+import { Calendar, CheckCircle2, Circle, Clock } from "lucide-react";
 import { useCallback, useState } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
@@ -61,26 +63,26 @@ const ClockIcon = ({ className }: { className?: string }) => (
 
 const priorityConfig: Record<
   ItemPriority,
-  { label: string; icon: string; gradient: string }
+  { label: string; icon: ReactNode; gradient: string }
 > = {
   low: {
     label: "Low",
-    icon: "🔵",
+    icon: <Circle className="w-3 h-3 fill-blue-500 text-blue-500" />,
     gradient: "from-gray-500/20 to-gray-600/20",
   },
   normal: {
     label: "Normal",
-    icon: "⚪",
+    icon: <Circle className="w-3 h-3 fill-gray-400 text-gray-400" />,
     gradient: "from-cyan-500/20 to-blue-500/20",
   },
   high: {
     label: "High",
-    icon: "🟠",
+    icon: <Circle className="w-3 h-3 fill-orange-500 text-orange-500" />,
     gradient: "from-orange-500/20 to-red-500/20",
   },
   urgent: {
     label: "Urgent",
-    icon: "🔴",
+    icon: <Circle className="w-3 h-3 fill-red-500 text-red-500" />,
     gradient: "from-red-500/30 to-pink-500/30",
   },
 };
@@ -88,21 +90,21 @@ const priorityConfig: Record<
 // Type configuration
 const typeConfig: Record<
   ItemType,
-  { label: string; icon: string; gradient: string }
+  { label: string; icon: ReactNode; gradient: string }
 > = {
   reminder: {
     label: "Reminder",
-    icon: "⏰",
+    icon: <Clock className="w-4 h-4 text-cyan-400" />,
     gradient: "from-cyan-500/20 to-blue-500/20",
   },
   event: {
     label: "Event",
-    icon: "📅",
+    icon: <Calendar className="w-4 h-4 text-purple-400" />,
     gradient: "from-purple-500/20 to-pink-500/20",
   },
   task: {
     label: "Task",
-    icon: "✅",
+    icon: <CheckCircle2 className="w-4 h-4 text-emerald-400" />,
     gradient: "from-green-500/20 to-emerald-500/20",
   },
 };
@@ -347,7 +349,7 @@ export default function AddReminderFromMessageModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-1.5">
             Add {typeConfig[itemType].icon} {typeConfig[itemType].label} from
             Message
           </h2>

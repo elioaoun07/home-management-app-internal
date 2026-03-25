@@ -10,6 +10,7 @@ import {
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Lightbulb, Check } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -255,11 +256,11 @@ export default function CalculatorDialog({
               onClick={addTip}
               disabled={display === lastTipValue}
               className={cn(
-                "text-xs px-4 py-2 border font-medium transition-all",
+                "text-xs px-4 py-2 border font-medium transition-all flex items-center justify-center gap-1",
                 themeClasses.calculatorTipBtn
               )}
             >
-              💡 Add 10% Tip
+              <Lightbulb className="w-3.5 h-3.5 text-yellow-400" /> Add 10% Tip
             </Button>
           </div>
           {/* Keypad */}
@@ -436,11 +437,11 @@ export default function CalculatorDialog({
                     }
               }
               className={cn(
-                "font-bold text-xl transition-all hover:scale-110",
+                "font-bold text-xl transition-all hover:scale-110 flex items-center justify-center",
                 themeClasses.calculatorEqualBtn
               )}
             >
-              {operation ? "=" : "✓"}
+              {operation ? "=" : <Check className="w-4 h-4 text-emerald-400" />}
             </Button>
           </div>
         </div>

@@ -24,6 +24,7 @@ import { useAccounts } from "@/features/accounts/hooks";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
+import { Mail } from "lucide-react";
 import {
   getCurrentSeasonComparison,
   getDailySpending,
@@ -1870,7 +1871,7 @@ const WebDashboard = memo(function WebDashboard({
               })}
               {filteredTransactions.length === 0 && (
                 <div className="text-center py-8">
-                  <div className="text-3xl mb-2">📭</div>
+                  <Mail className="w-12 h-12 text-slate-400/40 mb-2 mx-auto" />
                   <p className={themeClasses.textMuted}>
                     No transactions found
                   </p>

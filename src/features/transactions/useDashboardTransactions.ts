@@ -123,10 +123,33 @@ type DashboardParams = {
 // localStorage — so the two systems can't conflict.
 // Uses localStorage (persistent) so history data survives across sessions.
 const TX_CACHE_PREFIX = "tx-cache-";
+const TX_CACHE_LATEST_KEY = "tx-cache-latest"; // Stable alias — written for every single-day fetch
 const TX_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
 
 function getTxCacheKey(start: string, end: string) {
   return `${TX_CACHE_PREFIX}${start}_${end}`;
+}
+
+/** Remove oldest date-keyed cache entries when there are more than 7. */
+function cleanupOldTxCaches() {
+  try {
+    const keys = Object.keys(localStorage).filter(
+      (k) => k.startsWith(TX_CACHE_PREFIX) && k !== TX_CACHE_LATEST_KEY,
+    );
+    if (keys.length <= 7) return;
+    const entries = keys
+      .map((k) => {
+        try {
+          return { key: k, ts: JSON.parse(localStorage.getItem(k)!).ts as number };
+        } catch {
+          return { key: k, ts: 0 };
+        }
+      })
+      .sort((a, b) => b.ts - a.ts);
+    entries.slice(7).forEach((e) => localStorage.removeItem(e.key));
+  } catch {
+    /* ignore */
+  }
 }
 
 function readTxCache(
@@ -134,14 +157,30 @@ function readTxCache(
   end: string,
 ): { data: Transaction[]; ts: number } | undefined {
   try {
+    // Try exact date-range match first
     const raw = localStorage.getItem(getTxCacheKey(start, end));
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw);
-    if (Date.now() - parsed.ts > TX_CACHE_MAX_AGE) {
-      localStorage.removeItem(getTxCacheKey(start, end));
-      return undefined;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Date.now() - parsed.ts > TX_CACHE_MAX_AGE) {
+        localStorage.removeItem(getTxCacheKey(start, end));
+      } else {
+        return parsed;
+      }
     }
-    return parsed;
+    // Fallback: for single-day "today" requests with no exact match,
+    // return the latest alias so the user sees last-known data instantly
+    // instead of a skeleton. ts=0 makes RQ treat it as infinitely stale →
+    // triggers an immediate background refetch to get today's real data.
+    const today = new Date().toISOString().split("T")[0];
+    if (start === today && end === today) {
+      const aliasRaw = localStorage.getItem(TX_CACHE_LATEST_KEY);
+      if (aliasRaw) {
+        const parsed = JSON.parse(aliasRaw);
+        if (Date.now() - parsed.ts > TX_CACHE_MAX_AGE) return undefined;
+        return { data: parsed.data, ts: 0 };
+      }
+    }
+    return undefined;
   } catch {
     return undefined;
   }
@@ -151,12 +190,35 @@ function writeTxCache(start: string, end: string, data: Transaction[]) {
   try {
     // Cap at 300 entries to stay well within localStorage quota
     const trimmed = data.slice(0, 300);
-    localStorage.setItem(
-      getTxCacheKey(start, end),
-      JSON.stringify({ data: trimmed, ts: Date.now() }),
-    );
+    const payload = JSON.stringify({ data: trimmed, ts: Date.now() });
+    localStorage.setItem(getTxCacheKey(start, end), payload);
+    // Also write stable alias for single-day ranges so the next cold start
+    // (new day) can show last-known data instantly while fresh data loads.
+    if (start === end) {
+      localStorage.setItem(TX_CACHE_LATEST_KEY, payload);
+    }
+    // Prevent localStorage bloat from accumulating old date-keyed entries
+    cleanupOldTxCaches();
   } catch {
     /* quota exceeded — ignore */
+  }
+}
+
+/**
+ * Sync all in-memory transaction queries to localStorage so mutations
+ * (add/update/delete) are reflected in the persistent cache immediately.
+ * Call this in mutation onSettled callbacks.
+ */
+function syncTxCacheToLocalStorage(
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  const allQueries = queryClient.getQueriesData<Transaction[]>({
+    queryKey: ["transactions", "dashboard"],
+  });
+  for (const [key, data] of allQueries) {
+    if (data && key.length >= 4) {
+      writeTxCache(key[2] as string, key[3] as string, data);
+    }
   }
 }
 
@@ -411,6 +473,8 @@ export function useDeleteTransaction() {
       }
     },
     onSettled: () => {
+      // Sync in-memory state to localStorage so the next cold start is instant
+      syncTxCacheToLocalStorage(queryClient);
       // Mark transaction queries as stale (refetch lazily to avoid deleted item flashing back)
       queryClient.invalidateQueries({
         queryKey: ["transactions"],
@@ -930,6 +994,8 @@ export function useAddTransaction() {
       }
     },
     onSettled: () => {
+      // Sync in-memory state to localStorage so the next cold start is instant
+      syncTxCacheToLocalStorage(queryClient);
       // Transaction cache is already updated in onSuccess, mark stale for lazy refetch
       queryClient.invalidateQueries({
         queryKey: ["transactions"],
@@ -1198,6 +1264,8 @@ export function useUpdateTransaction() {
       });
     },
     onSettled: () => {
+      // Sync in-memory state to localStorage so the next cold start is instant
+      syncTxCacheToLocalStorage(queryClient);
       // Transaction cache updated in onSuccess, mark stale for lazy refetch
       queryClient.invalidateQueries({
         queryKey: ["transactions"],

@@ -507,7 +507,7 @@ export function WebWeekView({
                 "text-white",
               )}
             >
-              ✨ Today
+              <span className="flex items-center gap-1"><Sparkles className="w-3.5 h-3.5 text-pink-400 inline" />Today</span>
             </motion.button>
           </div>
 

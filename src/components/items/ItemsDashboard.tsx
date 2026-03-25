@@ -29,7 +29,9 @@ import {
   startOfWeek,
 } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
+import { AlertTriangle, Calendar, CheckCircle2, Pin } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 import EditItemDialog from "./EditItemDialog";
 import ItemDetailModal from "./ItemDetailModal";
@@ -732,7 +734,7 @@ export default function ItemsDashboard({
     sectionKey: string;
     label: string;
     count: number;
-    emoji?: string;
+    emoji?: ReactNode;
     isOverdue?: boolean;
   }) => (
     <button
@@ -755,7 +757,7 @@ export default function ItemsDashboard({
           )}
         />
       </motion.div>
-      {emoji && <span className="text-xs">{emoji}</span>}
+      {emoji && <span className="flex items-center">{emoji}</span>}
       <span
         className={cn(
           "text-[11px] font-medium tracking-wide uppercase",
@@ -929,7 +931,7 @@ export default function ItemsDashboard({
                   sectionKey="overdue"
                   label="Overdue"
                   count={groupedByDate.overdue.length}
-                  emoji="⚠️"
+                  emoji={<AlertTriangle className="w-3.5 h-3.5 text-amber-400" />}
                   isOverdue
                 />
                 <AnimatePresence>
@@ -965,7 +967,7 @@ export default function ItemsDashboard({
                   sectionKey="today"
                   label="Today"
                   count={groupedByDate.today.length}
-                  emoji="📌"
+                  emoji={<Pin className="w-3.5 h-3.5 text-blue-400" />}
                 />
                 <AnimatePresence>
                   {expandedSections.today && (
@@ -1000,7 +1002,7 @@ export default function ItemsDashboard({
                   sectionKey="tomorrow"
                   label="Tomorrow"
                   count={groupedByDate.tomorrow.length}
-                  emoji="📅"
+                  emoji={<Calendar className="w-3.5 h-3.5 text-blue-400" />}
                 />
                 <AnimatePresence>
                   {expandedSections.tomorrow && (
@@ -1043,7 +1045,7 @@ export default function ItemsDashboard({
                         sectionKey={dateKey}
                         label={label}
                         count={items.length}
-                        emoji="🗓️"
+                        emoji={<Calendar className="w-3.5 h-3.5 text-blue-400" />}
                       />
                       <AnimatePresence>
                         {expandedSections[dateKey] && (
@@ -1081,7 +1083,7 @@ export default function ItemsDashboard({
                   sectionKey="completed"
                   label="Completed"
                   count={groupedByDate.completed.length}
-                  emoji="✅"
+                  emoji={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
                 />
                 <AnimatePresence>
                   {expandedSections.completed && (

@@ -9,15 +9,21 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
   CheckCircle2,
+  CheckSquare,
   ChevronUp,
+  ClipboardList,
   Clock,
   Loader2,
+  MessageCircle,
+  Pin,
   RefreshCw,
   Trash2,
+  Wallet,
   WifiOff,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 interface SyncIndicatorProps {
   className?: string;
@@ -398,7 +404,7 @@ export function SyncPill({ className }: { className?: string }) {
                       key={op.id}
                       className="flex items-center gap-2 py-1 px-2 rounded-lg bg-white/5"
                     >
-                      <span className="text-[10px] text-white/30 font-mono">
+                      <span className="flex items-center text-white/30">
                         {getFeatureIcon(op.feature)}
                       </span>
                       <span className="text-xs text-white/70 truncate flex-1">
@@ -419,20 +425,20 @@ export function SyncPill({ className }: { className?: string }) {
   );
 }
 
-function getFeatureIcon(feature: string): string {
+function getFeatureIcon(feature: string): ReactNode {
   switch (feature) {
     case "transaction":
-      return "💰";
+      return <Wallet className="w-3 h-3 text-emerald-400" />;
     case "item":
-      return "📋";
+      return <ClipboardList className="w-3 h-3 text-gray-400" />;
     case "hub-message":
-      return "💬";
+      return <MessageCircle className="w-3 h-3 text-blue-400" />;
     case "subtask":
-      return "☑️";
+      return <CheckSquare className="w-3 h-3 text-emerald-400" />;
     case "recurring":
-      return "🔄";
+      return <RefreshCw className="w-3 h-3 text-blue-400" />;
     default:
-      return "📌";
+      return <Pin className="w-3 h-3 text-blue-400" />;
   }
 }
 

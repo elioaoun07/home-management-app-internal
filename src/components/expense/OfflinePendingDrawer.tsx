@@ -15,8 +15,22 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import type { OfflineOperation } from "@/lib/offlineQueue";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
-import { Clock, Edit3, Trash2, WifiOff, X } from "lucide-react";
+import {
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  Edit3,
+  MessageCircle,
+  CheckSquare,
+  Pin,
+  RefreshCw,
+  Trash2,
+  Wallet,
+  WifiOff,
+  X,
+} from "lucide-react";
 import { useCallback, useState } from "react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 interface OfflinePendingDrawerProps {
@@ -64,7 +78,7 @@ export default function OfflinePendingDrawer({
 
       await sync.removeOfflineOperation(op.id);
       toast.success("Pending transaction removed", {
-        icon: "🗑️",
+        icon: <Trash2 className="w-4 h-4 text-amber-400" />,
         duration: 4000,
         action: {
           label: "Undo",
@@ -149,7 +163,7 @@ export default function OfflinePendingDrawer({
       }
 
       setEditingId(null);
-      toast.success("Pending transaction updated", { icon: "✏️" });
+      toast.success("Pending transaction updated", { icon: "Edit" });
     },
     [sync, editAmount, editDescription],
   );
@@ -227,7 +241,7 @@ export default function OfflinePendingDrawer({
         <div className="overflow-y-auto p-4 space-y-3">
           {pendingOps.length === 0 ? (
             <div className="text-center py-8">
-              <div className="text-3xl mb-2">✅</div>
+              <CheckCircle2 className="w-10 h-10 text-emerald-400 mb-2" />
               <p className="text-white/40 text-sm">No pending operations</p>
             </div>
           ) : (
@@ -301,9 +315,9 @@ export default function OfflinePendingDrawer({
                   ) : (
                     /* View Mode */
                     <div className="flex items-start gap-3">
-                      <span className="text-lg mt-0.5">
+                      <div className="mt-0.5">
                         {getFeatureIcon(op.feature)}
-                      </span>
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white font-medium truncate">
                           {op.metadata?.label ||
@@ -359,20 +373,20 @@ export default function OfflinePendingDrawer({
   );
 }
 
-function getFeatureIcon(feature: string): string {
+function getFeatureIcon(feature: string): ReactNode {
   switch (feature) {
     case "transaction":
-      return "💰";
+      return <Wallet className="w-4 h-4 text-emerald-400" />;
     case "item":
-      return "📋";
+      return <ClipboardList className="w-4 h-4 text-gray-400" />;
     case "hub-message":
-      return "💬";
+      return <MessageCircle className="w-4 h-4 text-blue-400" />;
     case "subtask":
-      return "☑️";
+      return <CheckSquare className="w-4 h-4 text-emerald-400" />;
     case "recurring":
-      return "🔄";
+      return <RefreshCw className="w-4 h-4 text-blue-400" />;
     default:
-      return "📌";
+      return <Pin className="w-4 h-4 text-blue-400" />;
   }
 }
 

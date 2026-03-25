@@ -9,6 +9,7 @@ import {
 import { ToastIcons } from "@/lib/toastIcons";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ArrowLeftRight } from "lucide-react";
 
 /**
  * SplitBillHandler - Global component that listens for pending split bills
@@ -35,7 +36,7 @@ export default function SplitBillHandler() {
         ? ` · Your share: $${firstSplit.suggested_amount.toFixed(2)}`
         : "";
       toast(`Split bill request for $${firstSplit.owner_amount.toFixed(2)}`, {
-        icon: "🔀",
+        icon: <ArrowLeftRight className="w-4 h-4 text-blue-400" />,
         description: `${firstSplit.category_name}${suggestedText} - Tap to add your portion`,
         duration: 10000,
         action: {

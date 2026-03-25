@@ -15,7 +15,9 @@ import type {
   ItemType,
   ReminderTemplate,
 } from "@/types/items";
+import { Bell, Calendar, CheckCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 interface ReminderTemplateDialogProps {
@@ -37,10 +39,10 @@ const PRIORITY_OPTIONS: {
   { value: "urgent", label: "Urgent", color: "bg-red-500" },
 ];
 
-const TYPE_OPTIONS: { value: ItemType; label: string; icon: string }[] = [
-  { value: "task", label: "Task", icon: "✅" },
-  { value: "reminder", label: "Reminder", icon: "⏰" },
-  { value: "event", label: "Event", icon: "📅" },
+const TYPE_OPTIONS: { value: ItemType; label: string; icon: ReactNode }[] = [
+  { value: "task", label: "Task", icon: <CheckCircle2 className="w-4 h-4 text-emerald-400 inline" /> },
+  { value: "reminder", label: "Reminder", icon: <Bell className="w-4 h-4 text-yellow-400 inline" /> },
+  { value: "event", label: "Event", icon: <Calendar className="w-4 h-4 text-blue-400 inline" /> },
 ];
 
 export default function ReminderTemplateDialog({
@@ -165,8 +167,7 @@ export default function ReminderTemplateDialog({
                       : "border-[hsl(var(--header-border)/0.3)] hover:border-[hsl(var(--nav-text-primary)/0.5)]"
                   }`}
                 >
-                  <span className="mr-1">{opt.icon}</span>
-                  {opt.label}
+                  <span className="inline-flex items-center gap-1">{opt.icon}{opt.label}</span>
                 </button>
               ))}
             </div>

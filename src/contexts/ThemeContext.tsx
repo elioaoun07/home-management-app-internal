@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Palette } from "lucide-react";
 import { toast } from "sonner";
 
 type Theme = "blue" | "pink" | "frost" | "calm";
@@ -154,7 +155,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         frost: { background: "#ffffff", border: "#6366f1", color: "#4338ca" },
         calm: { background: "#292524", border: "#78716c", color: "#d6cfc7" },
       };
-      toast.success(`🎨 ${themeNames[newTheme]} theme!`, {
+      toast.success(`${themeNames[newTheme]} theme!`, {
+        icon: <Palette className="w-4 h-4 text-purple-400" />,
         duration: 2000,
         style: {
           background: themeStyles[newTheme].background,
