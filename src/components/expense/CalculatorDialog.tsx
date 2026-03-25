@@ -222,7 +222,7 @@ export default function CalculatorDialog({
           {/* Display */}
           <div
             className={cn(
-              "p-5 rounded-xl text-right relative overflow-hidden border-2",
+              "p-5 rounded-xl relative overflow-hidden border-2",
               themeClasses.calculatorDisplayBg,
               themeClasses.border,
               themeClasses.calculatorShadow
@@ -231,37 +231,36 @@ export default function CalculatorDialog({
             <div
               className={`absolute inset-0 bg-gradient-to-br ${themeClasses.bgSurface} to-transparent pointer-events-none`}
             ></div>
-            <div
-              className={`text-4xl font-mono font-bold text-transparent bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text truncate relative z-10`}
-            >
-              {(() => {
-                const num = parseFloat(display);
-                // Show no decimals for whole numbers, up to 2 for decimals
-                return num % 1 === 0 ? num.toString() : num.toFixed(2);
-              })()}
-            </div>
-            {operation && previousValue && (
-              <div
-                className={`text-sm ${themeClasses.textMuted} mt-2 relative z-10`}
+            <div className="relative z-10 flex items-end justify-between gap-2">
+              <Button
+                variant="secondary"
+                onClick={addTip}
+                disabled={display === lastTipValue}
+                className={cn(
+                  "text-xs px-3 py-1.5 h-auto border font-medium transition-all flex items-center gap-1 self-center shrink-0",
+                  display === lastTipValue ? "opacity-40 cursor-not-allowed" : "",
+                  themeClasses.calculatorTipBtn
+                )}
               >
-                {previousValue} {operation}
+                <Lightbulb className="w-3 h-3 text-yellow-400" /> +10%
+              </Button>
+              <div className="text-right flex-1 min-w-0">
+                <div
+                  className={`text-4xl font-mono font-bold text-transparent bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text truncate`}
+                >
+                  {(() => {
+                    const num = parseFloat(display);
+                    // Show no decimals for whole numbers, up to 2 for decimals
+                    return num % 1 === 0 ? num.toString() : num.toFixed(2);
+                  })()}
+                </div>
+                {operation && previousValue && (
+                  <div className={`text-sm ${themeClasses.textMuted} mt-1`}>
+                    {previousValue} {operation}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-
-          {/* Add Tip Button */}
-          <div className="flex justify-end mb-2">
-            <Button
-              variant="secondary"
-              onClick={addTip}
-              disabled={display === lastTipValue}
-              className={cn(
-                "text-xs px-4 py-2 border font-medium transition-all flex items-center justify-center gap-1",
-                themeClasses.calculatorTipBtn
-              )}
-            >
-              <Lightbulb className="w-3.5 h-3.5 text-yellow-400" /> Add 10% Tip
-            </Button>
+            </div>
           </div>
           {/* Keypad */}
           <div className="grid grid-cols-4 gap-2">

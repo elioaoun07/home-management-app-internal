@@ -36,11 +36,15 @@ export default function AmountInput({ value, onChange, rightExtra }: Props) {
         </span>
         <Input
           id="amount"
-          type="number"
+          type="text"
           inputMode="decimal"
+          pattern="[0-9]*[.]?[0-9]*"
           placeholder="0.00"
           value={value}
-          onChange={(e) => onChange?.(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "" || /^\d*\.?\d*$/.test(v)) onChange?.(v);
+          }}
           className={`pl-8 pr-24 h-12 text-lg font-semibold transition-all focus:ring-0 focus-visible:ring-0 ${themeClasses.inputFocusForce}`}
         />
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">

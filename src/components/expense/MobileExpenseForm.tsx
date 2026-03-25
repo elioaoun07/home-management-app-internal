@@ -5,21 +5,15 @@
 "use client";
 
 import {
-  CalendarIcon,
   CalculatorIcon,
+  CalendarIcon,
   CheckIcon,
   ChevronLeftIcon,
   PlusIcon,
   XIcon,
 } from "@/components/icons/FuturisticIcons";
-import { Calendar as CalendarLucide } from "lucide-react";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Drawer,
   DrawerClose,
@@ -31,6 +25,11 @@ import {
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { MOBILE_NAV_HEIGHT } from "@/constants/layout";
 import {
   useDeleteAccount,
@@ -62,13 +61,22 @@ import {
 } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { isReallyOnline } from "@/lib/connectivityManager";
+import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
 import { AnimatePresence, Reorder, motion } from "framer-motion";
-import { Check, Eye, EyeOff, GripVertical, MinusCircle, X } from "lucide-react";
+import {
+  Calendar as CalendarLucide,
+  Check,
+  Eye,
+  EyeOff,
+  GripVertical,
+  MinusCircle,
+  X,
+} from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -143,7 +151,11 @@ function useLongPress(callback: () => void, threshold = 500) {
 
 export default function MobileExpenseForm() {
   // ── Diagnostic: verify this module loaded (not stale SW cache) ──
-  if (typeof window !== "undefined" && !(window as any).__expenseFormLogged) {
+  if (
+    process.env.NODE_ENV === "development" &&
+    typeof window !== "undefined" &&
+    !(window as any).__expenseFormLogged
+  ) {
     (window as any).__expenseFormLogged = true;
     console.log(
       "[OFFLINE] MobileExpenseForm MODULE LOADED (code version: 2026-03-06)",
@@ -255,6 +267,15 @@ export default function MobileExpenseForm() {
   // Dynamic header height measurement (replaces hardcoded top-[205px]/top-[80px])
   const headerRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(80);
+
+  // Amount input ref for programmatic focus
+  const amountInputRef = useRef<HTMLInputElement>(null);
+
+  // Touch tracking for swipe-back gesture
+  const touchStartX = useRef<number>(0);
+
+  // LBP change field collapsed/expanded state
+  const [lbpExpanded, setLbpExpanded] = useState(false);
 
   const { data: categories = [], refetch: refetchCategories } =
     useCategories(selectedAccountId);
@@ -621,17 +642,22 @@ export default function MobileExpenseForm() {
       (accounts.length > 0 || isReallyOnline())
     ) {
       hasInitializedRef.current = true;
-      console.log(
-        `[OFFLINE] Form INITIALIZED: step=${firstValidStep}, accounts=${accounts.length}, categories will load for accountId=${accounts.find((a: any) => a.is_default)?.id || "none"}`,
-      );
+      if (process.env.NODE_ENV === "development")
+        console.log(
+          `[OFFLINE] Form INITIALIZED: step=${firstValidStep}, accounts=${accounts.length}, categories will load for accountId=${accounts.find((a: any) => a.is_default)?.id || "none"}`,
+        );
       setStep(firstValidStep);
       setIsInitialized(true);
-    } else if (!hasInitializedRef.current) {
-      console.log(
-        `[OFFLINE] Form init BLOCKED: stepFlow=${stepFlow.length}, accountsLoading=${accountsLoading}, accounts=${accounts.length}, online=${isReallyOnline()}`,
-      );
     }
   }, [stepFlow, firstValidStep, accountsLoading, accounts.length]);
+
+  // Auto-refocus amount input when returning to the amount step
+  useEffect(() => {
+    if (step === "amount" && isInitialized) {
+      const t = setTimeout(() => amountInputRef.current?.focus(), 150);
+      return () => clearTimeout(t);
+    }
+  }, [step, isInitialized]);
 
   // Re-derive step if default account becomes available AFTER initialization
   // (e.g., persisted cache restores late, or account loaded from network)
@@ -658,7 +684,10 @@ export default function MobileExpenseForm() {
     const el = headerRef.current;
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
-      if (entry) setHeaderHeight(entry.contentRect.height + entry.target.getBoundingClientRect().top);
+      if (entry)
+        setHeaderHeight(
+          entry.contentRect.height + entry.target.getBoundingClientRect().top,
+        );
     });
     // Set initial height
     setHeaderHeight(el.getBoundingClientRect().bottom);
@@ -696,11 +725,7 @@ export default function MobileExpenseForm() {
     isAmountStep && (!amount || Number.parseFloat(amount) <= 0);
 
   const handleSubmit = async () => {
-    console.log(
-      `[OFFLINE] handleSubmit: canSubmit=${!!canSubmit}, isPending=${addTransactionMutation.isPending}, status=${addTransactionMutation.status}`,
-    );
     if (!canSubmit || addTransactionMutation.isPending) {
-      console.log("[OFFLINE] handleSubmit: BLOCKED by guard");
       return;
     }
 
@@ -768,7 +793,7 @@ export default function MobileExpenseForm() {
       // Create future payment via /api/drafts with scheduled_date = the future date
       (async () => {
         try {
-          const res = await fetch("/api/drafts", {
+          const res = await safeFetch("/api/drafts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -820,14 +845,8 @@ export default function MobileExpenseForm() {
         },
       );
     } else {
-      console.log(
-        "[OFFLINE] handleSubmit: calling addTransactionMutation.mutate()",
-      );
       addTransactionMutation.mutate(transactionData, {
         onSuccess: (newTransaction) => {
-          console.log(
-            `[OFFLINE] mutate.onSuccess callback: _offline=${newTransaction?._offline}, id=${newTransaction?.id}`,
-          );
           // Offline path: show special toast with "Saved offline" and undo that removes from queue
           if (newTransaction?._offline) {
             toast.success("Saved offline!", {
@@ -947,23 +966,44 @@ export default function MobileExpenseForm() {
     return ((currentIndex + 1) / visibleSteps.length) * 100;
   };
 
-  const getNextStep = (): Step | null => {
+  const getNextStep = (opts?: { skipSubcategory?: boolean }): Step | null => {
     const currentIndex = stepFlow.indexOf(step as Step);
     if (currentIndex === -1) return null;
 
     for (let i = currentIndex + 1; i < stepFlow.length; i++) {
       const nextStep = stepFlow[i];
       if (nextStep === "account" && defaultAccount) continue;
+      // Skip subcategory step when the category has no subcategories.
+      // opts.skipSubcategory lets callers pass a fresh value based on just-clicked data
+      // (avoiding stale state from the current render cycle).
+      if (nextStep === "subcategory") {
+        const skip =
+          opts?.skipSubcategory !== undefined
+            ? opts.skipSubcategory
+            : allSubcategories.length === 0;
+        if (skip) continue;
+      }
       return nextStep;
     }
-    console.log(
-      `[OFFLINE] getNextStep(): no more steps after "${step}" → will call handleSubmit`,
-    );
     return null;
   };
 
   const contentAreaStyles: CSSProperties = {
     bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT}px)`,
+  };
+
+  // Quick-amount presets for the amount step
+  const QUICK_AMOUNTS = ["5", "10", "20", "50"];
+
+  // Contextual next step label helper
+  const getNextStepLabel = (next: Step | null): string => {
+    if (!next) return `Add ${getTransactionLabel(selectedAccount?.type)}`;
+    const labels: Record<string, string> = {
+      account: "Account",
+      category: "Category",
+      subcategory: "Subcategory",
+    };
+    return labels[next] ?? "Next";
   };
 
   // NO SKELETON - Form renders instantly with cached data
@@ -989,7 +1029,7 @@ export default function MobileExpenseForm() {
                   if (navigator.vibrate) navigator.vibrate(5);
                   goBack();
                 }}
-                className={`p-1.5 -ml-2 rounded-lg ${themeClasses.bgSurface} hover:bg-opacity-30 active:scale-95 transition-all duration-200 ${themeClasses.border} hover:shadow-md`}
+                className={`p-2.5 -ml-2 rounded-lg ${themeClasses.bgSurface} hover:bg-opacity-30 active:scale-95 transition-all duration-200 ${themeClasses.border} hover:shadow-md`}
               >
                 <ChevronLeftIcon
                   className={`w-5 h-5 ${themeClasses.text} ${themeClasses.iconGlow}`}
@@ -1041,8 +1081,12 @@ export default function MobileExpenseForm() {
                   onClick={() => setStep("account")}
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150 shrink-0`}
                 >
-                  <span className={`text-[9px] ${themeClasses.textFaint}`}>Acct</span>
-                  <span className={`font-semibold text-[11px] ${themeClasses.text}`}>
+                  <span className={`text-[11px] ${themeClasses.textFaint}`}>
+                    Acct
+                  </span>
+                  <span
+                    className={`font-semibold text-[11px] ${themeClasses.text}`}
+                  >
                     {selectedAccount.name}
                   </span>
                 </button>
@@ -1061,14 +1105,18 @@ export default function MobileExpenseForm() {
 
               {selectedCategory &&
                 (() => {
-                  const TagCategoryIcon = getCategoryIcon(selectedCategory.name);
+                  const TagCategoryIcon = getCategoryIcon(
+                    selectedCategory.name,
+                  );
                   return (
                     <button
                       onClick={() => setStep("category")}
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150 shrink-0`}
                     >
                       <TagCategoryIcon className="w-3 h-3 text-amber-400" />
-                      <span className={`font-semibold text-[11px] ${themeClasses.textHighlight}`}>
+                      <span
+                        className={`font-semibold text-[11px] ${themeClasses.textHighlight}`}
+                      >
                         {selectedCategory.name}
                       </span>
                     </button>
@@ -1079,8 +1127,12 @@ export default function MobileExpenseForm() {
                 (() => {
                   const TagSubIcon = getCategoryIcon(selectedSubcategory.name);
                   return (
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${themeClasses.pillBg} shrink-0`}>
-                      <TagSubIcon className={`w-2.5 h-2.5 ${themeClasses.textFaint}`} />
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${themeClasses.pillBg} shrink-0`}
+                    >
+                      <TagSubIcon
+                        className={`w-2.5 h-2.5 ${themeClasses.textFaint}`}
+                      />
                       <span className={`text-[10px] ${themeClasses.textMuted}`}>
                         {selectedSubcategory.name}
                       </span>
@@ -1104,7 +1156,9 @@ export default function MobileExpenseForm() {
                   className={`w-auto p-0 ${themeClasses.modalBg} ${themeClasses.modalBorder}`}
                   align="start"
                 >
-                  <div className={`p-2 space-y-1.5 border-b ${themeClasses.border}`}>
+                  <div
+                    className={`p-2 space-y-1.5 border-b ${themeClasses.border}`}
+                  >
                     <button
                       onClick={() => setDate(new Date())}
                       className={`w-full px-2.5 py-1.5 text-xs rounded-lg ${themeClasses.bgSurface} ${themeClasses.textMuted} ${themeClasses.hoverBgSubtle} transition-all`}
@@ -1142,6 +1196,17 @@ export default function MobileExpenseForm() {
         <div
           className="fixed left-0 right-0 overflow-y-auto px-3 py-3 bg-bg-dark z-[45]"
           style={{ ...contentAreaStyles, top: `${headerHeight}px` }}
+          onTouchStart={(e) => {
+            touchStartX.current = e.touches[0].clientX;
+          }}
+          onTouchEnd={(e) => {
+            const delta = touchStartX.current - e.changedTouches[0].clientX;
+            // Swipe right-to-left (positive delta) → ignore; left-to-right (negative) → go back
+            if (delta < -60 && showBackButton) {
+              if (navigator.vibrate) navigator.vibrate([5, 5, 5]);
+              goBack();
+            }
+          }}
           onClick={(e) => {
             // If in edit mode and clicked on empty space (not a widget), exit edit mode
             if (isAnyEditMode && e.target === e.currentTarget) {
@@ -1152,9 +1217,13 @@ export default function MobileExpenseForm() {
           {step === "amount" && (
             <div key="amount-step" className="space-y-4 step-slide-in">
               {/* ── Hero Amount Card ── */}
-              <div className={`relative rounded-2xl bg-gradient-to-b ${themeClasses.heroCardBg} border ${themeClasses.heroCardBorder} p-5 space-y-4 overflow-hidden`}>
+              <div
+                className={`relative rounded-2xl bg-gradient-to-b ${themeClasses.heroCardBg} border ${themeClasses.heroCardBorder} p-5 space-y-4 overflow-hidden`}
+              >
                 {/* Subtle corner accent */}
-                <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${themeClasses.heroCardAccent} to-transparent rounded-bl-full pointer-events-none`} />
+                <div
+                  className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl ${themeClasses.heroCardAccent} to-transparent rounded-bl-full pointer-events-none`}
+                />
 
                 {/* Amount input */}
                 <div className="relative flex items-center">
@@ -1162,11 +1231,16 @@ export default function MobileExpenseForm() {
                     $
                   </span>
                   <Input
-                    type="number"
+                    ref={amountInputRef}
+                    type="text"
                     inputMode="decimal"
+                    pattern="[0-9]*[.]?[0-9]*"
                     placeholder="0.00"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "" || /^\d*\.?\d*$/.test(v)) setAmount(v);
+                    }}
                     suppressHydrationWarning
                     className={`text-2xl font-bold h-14 pl-10 pr-24 border text-center bg-bg-dark/60 ${themeClasses.border} ${themeClasses.textHighlight} placeholder:text-[hsl(var(--input-placeholder)/0.25)] ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all duration-200 rounded-xl`}
                     autoFocus
@@ -1220,15 +1294,82 @@ export default function MobileExpenseForm() {
                 </div>
               </div>
 
-              {/* LBP Change — compact side note aligned right */}
-              <div className="flex items-center justify-end gap-2.5 px-1">
-                {lbpRate &&
-                  lbpChangeInput &&
-                  parseFloat(lbpChangeInput) > 0 &&
-                  amount &&
-                  parseFloat(amount) > 0 && (
-                    <span className={`text-[11px] ${themeClasses.textFaint}`}>
-                      actual{" "}
+              {/* LBP collapsible icon / expanded input */}
+              <div className="flex items-center gap-1.5 pb-1.5 justify-end">
+                {/* LBP collapsible icon / expanded input — fixed to right */}
+                {lbpExpanded ? (
+                  <div
+                    className={`relative flex items-center h-7 px-2 rounded-full border-2 border-dashed bg-transparent ${themeClasses.border} transition-all duration-200 gap-1 shrink-0 ${!lbpRate ? "opacity-40 pointer-events-none" : ""}`}
+                  >
+                    <span
+                      className={`text-[10px] ${themeClasses.textFaint} pointer-events-none shrink-0`}
+                    >
+                      LBP
+                    </span>
+                    <input
+                      autoFocus
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="000"
+                      value={lbpChangeInput}
+                      onChange={(e) => setLbpChangeInput(e.target.value)}
+                      disabled={!isInitialized || !lbpRate}
+                      suppressHydrationWarning
+                      className={`w-12 bg-transparent border-none outline-none text-right text-[11px] ${themeClasses.textMuted} placeholder:opacity-30 disabled:cursor-not-allowed p-0`}
+                    />
+                    {lbpChangeInput && (
+                      <span
+                        className={`text-[10px] ${themeClasses.textFaint} pointer-events-none shrink-0`}
+                      >
+                        ,000
+                      </span>
+                    )}
+                    <button
+                      onClick={() => setLbpExpanded(false)}
+                      className={`ml-0.5 ${themeClasses.textFaint} hover:${themeClasses.textMuted} transition-colors shrink-0`}
+                    >
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => lbpRate && setLbpExpanded(true)}
+                    title="Log LBP change received"
+                    className={cn(
+                      "shrink-0 h-7 w-7 rounded-full flex items-center justify-center border transition-all active:scale-95",
+                      lbpChangeInput && parseFloat(lbpChangeInput) > 0
+                        ? `${themeClasses.bgActive} ${themeClasses.borderActive} ${themeClasses.text}`
+                        : `${themeClasses.pillBg} ${themeClasses.border} ${lbpRate ? themeClasses.textMuted : "opacity-30 cursor-not-allowed"}`,
+                    )}
+                  >
+                    <span className="text-[10px] font-bold">LBP</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Actual value hint — only when both USD amount and LBP are entered */}
+              {lbpRate &&
+                amount &&
+                parseFloat(amount) > 0 &&
+                lbpChangeInput &&
+                parseFloat(lbpChangeInput) > 0 && (
+                  <div className="flex justify-end pb-1.5">
+                    <span
+                      className={`text-[11px] ${themeClasses.textFaint} whitespace-nowrap`}
+                    >
+                      ≈{" "}
                       <span className={`font-semibold ${themeClasses.text}`}>
                         $
                         {calculateActualValue(
@@ -1237,34 +1378,8 @@ export default function MobileExpenseForm() {
                         )?.toFixed(2) ?? "—"}
                       </span>
                     </span>
-                  )}
-                <div
-                  className={`relative flex items-center h-7 w-28 px-2 rounded-md border border-dashed bg-transparent ${themeClasses.border} ${themeClasses.focusWithinBorder} transition-all duration-200 ${
-                    !lbpRate ? "opacity-40 cursor-not-allowed" : ""
-                  }`}
-                >
-                  <span className={`text-[10px] ${themeClasses.textFaint} pointer-events-none mr-1 shrink-0`}>
-                    LBP
-                  </span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    placeholder={lbpRate ? "0" : "—"}
-                    value={lbpChangeInput}
-                    onChange={(e) => setLbpChangeInput(e.target.value)}
-                    disabled={!isInitialized ? true : !lbpRate}
-                    suppressHydrationWarning
-                    className={`flex-1 bg-transparent border-none outline-none text-right text-[11px] ${themeClasses.textMuted} placeholder:text-[hsl(var(--input-placeholder)/0.25)] disabled:cursor-not-allowed p-0 w-full`}
-                  />
-                  <span
-                    className={`text-[10px] ${themeClasses.textFaint} pointer-events-none ml-0.5 transition-opacity duration-200 ${
-                      lbpChangeInput ? "opacity-100" : "opacity-0"
-                    }`}
-                  >
-                    ,000
-                  </span>
-                </div>
-              </div>
+                  </div>
+                )}
 
               {/* Next button */}
               <Button
@@ -1273,9 +1388,6 @@ export default function MobileExpenseForm() {
                 onClick={() => {
                   if (navigator.vibrate) navigator.vibrate(10);
                   const next = getNextStep();
-                  console.log(
-                    `[OFFLINE] Next button clicked: currentStep="${step}", nextStep="${next}", amount=${amount}, accountId=${selectedAccountId}`,
-                  );
                   if (next) {
                     setStep(next);
                   } else {
@@ -1284,7 +1396,7 @@ export default function MobileExpenseForm() {
                 }}
                 disabled={!amount || parseFloat(amount) <= 0}
               >
-                Next
+                {getNextStepLabel(getNextStep())}
               </Button>
 
               {/* ── Optional features (secondary, below Next) ── */}
@@ -1528,7 +1640,9 @@ export default function MobileExpenseForm() {
               </div>
 
               {editModeAccount && (
-                <p className={`text-xs ${themeClasses.textAccent} animate-in fade-in slide-in-from-top-2`}>
+                <p
+                  className={`text-xs ${themeClasses.textAccent} animate-in fade-in slide-in-from-top-2`}
+                >
                   Drag to reorder • Tap{" "}
                   <span className="inline-flex items-center justify-center w-4 h-4 bg-amber-500 rounded-full mx-0.5">
                     <EyeOff className="w-2.5 h-2.5 text-white" />
@@ -1601,11 +1715,15 @@ export default function MobileExpenseForm() {
                                 )}
                               >
                                 {/* Drag handle */}
-                                <div className={`${themeClasses.textFaint} cursor-grab active:cursor-grabbing`}>
+                                <div
+                                  className={`${themeClasses.textFaint} cursor-grab active:cursor-grabbing`}
+                                >
                                   <GripVertical className="w-5 h-5" />
                                 </div>
                                 <div className="flex-1">
-                                  <div className={`font-semibold text-base ${themeClasses.textHighlight}`}>
+                                  <div
+                                    className={`font-semibold text-base ${themeClasses.textHighlight}`}
+                                  >
                                     {account.name}
                                   </div>
                                   <div className="text-xs text-accent/70 capitalize mt-0.5">
@@ -1621,8 +1739,12 @@ export default function MobileExpenseForm() {
                     {/* Hidden accounts section */}
                     {orderedAccounts.filter((a: any) => a.visible === false)
                       .length > 0 && (
-                      <div className={`mt-4 pt-4 border-t ${themeClasses.border}`}>
-                        <p className={`text-xs ${themeClasses.textFaint} mb-2 flex items-center gap-1.5`}>
+                      <div
+                        className={`mt-4 pt-4 border-t ${themeClasses.border}`}
+                      >
+                        <p
+                          className={`text-xs ${themeClasses.textFaint} mb-2 flex items-center gap-1.5`}
+                        >
                           <EyeOff className="w-3.5 h-3.5" />
                           Hidden accounts
                         </p>
@@ -1664,10 +1786,14 @@ export default function MobileExpenseForm() {
                                   )}
                                 >
                                   <div className="flex-1">
-                                    <div className={`font-semibold text-base ${themeClasses.textMuted}`}>
+                                    <div
+                                      className={`font-semibold text-base ${themeClasses.textMuted}`}
+                                    >
                                       {account.name}
                                     </div>
-                                    <div className={`text-xs ${themeClasses.textFaint} capitalize mt-0.5`}>
+                                    <div
+                                      className={`text-xs ${themeClasses.textFaint} capitalize mt-0.5`}
+                                    >
                                       {account.type}
                                     </div>
                                   </div>
@@ -1692,6 +1818,7 @@ export default function MobileExpenseForm() {
                       >
                         <button
                           onClick={() => {
+                            if (navigator.vibrate) navigator.vibrate(10);
                             setSelectedAccountId(account.id);
                             const next = getNextStep();
                             if (next) {
@@ -1709,7 +1836,9 @@ export default function MobileExpenseForm() {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
-                              <div className={`font-semibold text-base ${themeClasses.textHighlight}`}>
+                              <div
+                                className={`font-semibold text-base ${themeClasses.textHighlight}`}
+                              >
                                 {account.name}
                               </div>
                               <div className="text-xs text-accent/70 capitalize mt-0.5">
@@ -1733,7 +1862,9 @@ export default function MobileExpenseForm() {
                     style={{ animationDelay: `${accounts.length * 40}ms` }}
                     className={`w-full p-3 rounded-lg border-2 border-dashed ${themeClasses.dashedBorder} ${themeClasses.dashedBorderHover} text-center transition-all active:scale-[0.98] category-appear bg-transparent ${themeClasses.dashedBgHover}`}
                   >
-                    <div className={`flex items-center justify-center gap-2 ${themeClasses.textMuted} ${themeClasses.textHover}`}>
+                    <div
+                      className={`flex items-center justify-center gap-2 ${themeClasses.textMuted} ${themeClasses.textHover}`}
+                    >
                       <PlusIcon className="w-5 h-5" />
                       <span className="font-medium">New Account</span>
                     </div>
@@ -1742,7 +1873,9 @@ export default function MobileExpenseForm() {
               </div>
 
               {!editModeAccount && accounts.length > 0 && (
-                <p className={`text-[10px] ${themeClasses.textFaint} text-center`}>
+                <p
+                  className={`text-[10px] ${themeClasses.textFaint} text-center`}
+                >
                   Hold to edit accounts
                 </p>
               )}
@@ -1769,7 +1902,9 @@ export default function MobileExpenseForm() {
               </div>
 
               {editModeCategory && (
-                <p className={`text-xs ${themeClasses.textAccent} animate-in fade-in slide-in-from-top-2`}>
+                <p
+                  className={`text-xs ${themeClasses.textAccent} animate-in fade-in slide-in-from-top-2`}
+                >
                   Drag to reorder • Tap{" "}
                   <span className="inline-flex items-center justify-center w-4 h-4 bg-amber-500 rounded-full mx-0.5">
                     <EyeOff className="w-2.5 h-2.5 text-white" />
@@ -1848,7 +1983,9 @@ export default function MobileExpenseForm() {
                                   )}
                                 >
                                   {/* Drag handle */}
-                                  <div className={`${themeClasses.textFaint} cursor-grab active:cursor-grabbing`}>
+                                  <div
+                                    className={`${themeClasses.textFaint} cursor-grab active:cursor-grabbing`}
+                                  >
                                     <GripVertical className="w-5 h-5" />
                                   </div>
                                   <div
@@ -1859,7 +1996,9 @@ export default function MobileExpenseForm() {
                                   >
                                     <IconComponent className="w-6 h-6" />
                                   </div>
-                                  <span className={`font-semibold text-sm ${themeClasses.textHighlight} flex-1`}>
+                                  <span
+                                    className={`font-semibold text-sm ${themeClasses.textHighlight} flex-1`}
+                                  >
                                     {category.name}
                                   </span>
                                 </div>
@@ -1872,8 +2011,12 @@ export default function MobileExpenseForm() {
                     {/* Hidden categories section */}
                     {orderedCategories.filter((c: any) => c.visible === false)
                       .length > 0 && (
-                      <div className={`mt-4 pt-4 border-t ${themeClasses.border}`}>
-                        <p className={`text-xs ${themeClasses.textFaint} mb-2 flex items-center gap-1.5`}>
+                      <div
+                        className={`mt-4 pt-4 border-t ${themeClasses.border}`}
+                      >
+                        <p
+                          className={`text-xs ${themeClasses.textFaint} mb-2 flex items-center gap-1.5`}
+                        >
                           <EyeOff className="w-3.5 h-3.5" />
                           Hidden categories
                         </p>
@@ -1924,7 +2067,9 @@ export default function MobileExpenseForm() {
                                     <div style={{ color: `${color}60` }}>
                                       <IconComponent className="w-6 h-6" />
                                     </div>
-                                    <span className={`font-semibold text-sm ${themeClasses.textMuted} flex-1`}>
+                                    <span
+                                      className={`font-semibold text-sm ${themeClasses.textMuted} flex-1`}
+                                    >
                                       {category.name}
                                     </span>
                                   </div>
@@ -1936,7 +2081,7 @@ export default function MobileExpenseForm() {
                     )}
                   </>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2 pb-4">
+                  <div className="grid grid-cols-3 gap-2 pb-4">
                     {orderedCategories.length === 0 ? (
                       <div className="col-span-2 text-center py-4">
                         <p className={`text-xs ${themeClasses.textFaint} mb-3`}>
@@ -1965,34 +2110,24 @@ export default function MobileExpenseForm() {
                               >
                                 <button
                                   onClick={() => {
-                                    console.log(
-                                      `[OFFLINE] Category clicked: "${category.name}" (id=${category.id}), mutation.isPending=${addTransactionMutation.isPending}, mutation.status=${addTransactionMutation.status}`,
-                                    );
+                                    if (navigator.vibrate)
+                                      navigator.vibrate(10);
                                     setSelectedCategoryId(category.id);
+                                    // Compute subcategories from the clicked category directly
+                                    // (can't rely on allSubcategories — state hasn't updated yet)
                                     const hasSubcategories =
                                       categories.some(
                                         (c: any) => c.parent_id === category.id,
                                       ) ||
                                       (category as any).subcategories?.length >
                                         0;
-
-                                    if (
-                                      hasSubcategories &&
-                                      stepFlow.includes("subcategory")
-                                    ) {
-                                      const next = getNextStep();
-                                      if (next) {
-                                        setStep(next);
-                                      } else {
-                                        handleSubmit();
-                                      }
+                                    const next = getNextStep({
+                                      skipSubcategory: !hasSubcategories,
+                                    });
+                                    if (next) {
+                                      setStep(next);
                                     } else {
-                                      const next = getNextStep();
-                                      if (next) {
-                                        setStep(next);
-                                      } else {
-                                        handleSubmit();
-                                      }
+                                      handleSubmit();
                                     }
                                   }}
                                   disabled={addTransactionMutation.isPending}
@@ -2006,7 +2141,7 @@ export default function MobileExpenseForm() {
                                       : undefined,
                                   }}
                                   className={cn(
-                                    "w-full p-3 rounded-lg border text-left transition-all min-h-[65px] active:scale-95",
+                                    "w-full p-3 rounded-lg border text-left transition-all min-h-[60px] active:scale-95",
                                     active
                                       ? "neo-card neo-glow-sm"
                                       : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} hover:bg-primary/5`,
@@ -2032,7 +2167,10 @@ export default function MobileExpenseForm() {
                                       );
                                     })()}
                                     <span
-                                      className={cn("font-semibold text-center text-xs", !active && themeClasses.textHighlight)}
+                                      className={cn(
+                                        "font-semibold text-center text-xs",
+                                        !active && themeClasses.textHighlight,
+                                      )}
                                       style={active ? { color } : undefined}
                                     >
                                       {category.name}
@@ -2050,15 +2188,21 @@ export default function MobileExpenseForm() {
                       onClick={() => setShowNewCategoryDrawer(true)}
                       className={`p-3 rounded-lg border-2 border-dashed ${themeClasses.dashedBorder} ${themeClasses.dashedBorderHover} text-center transition-all active:scale-95 min-h-[65px] bg-transparent ${themeClasses.dashedBgHover} flex flex-col items-center justify-center gap-1 category-appear`}
                     >
-                      <PlusIcon className={`w-6 h-6 ${themeClasses.textMuted}`} />
-                      <span className={`text-xs ${themeClasses.textMuted}`}>New</span>
+                      <PlusIcon
+                        className={`w-6 h-6 ${themeClasses.textMuted}`}
+                      />
+                      <span className={`text-xs ${themeClasses.textMuted}`}>
+                        New
+                      </span>
                     </button>
                   </div>
                 )}
               </div>
 
               {!editModeCategory && orderedCategories.length > 0 && (
-                <p className={`text-[10px] ${themeClasses.textFaint} text-center -mt-2`}>
+                <p
+                  className={`text-[10px] ${themeClasses.textFaint} text-center -mt-2`}
+                >
                   Hold to edit categories
                 </p>
               )}
@@ -2090,7 +2234,9 @@ export default function MobileExpenseForm() {
                   </div>
 
                   {editModeSubcategory && (
-                    <p className={`text-xs ${themeClasses.textAccent} animate-in fade-in slide-in-from-top-2`}>
+                    <p
+                      className={`text-xs ${themeClasses.textAccent} animate-in fade-in slide-in-from-top-2`}
+                    >
                       Drag to reorder • Tap{" "}
                       <span className="inline-flex items-center justify-center w-4 h-4 bg-amber-500 rounded-full mx-0.5">
                         <EyeOff className="w-2.5 h-2.5 text-white" />
@@ -2166,7 +2312,9 @@ export default function MobileExpenseForm() {
                                       )}
                                     >
                                       {/* Drag handle */}
-                                      <div className={`${themeClasses.textFaint} cursor-grab active:cursor-grabbing`}>
+                                      <div
+                                        className={`${themeClasses.textFaint} cursor-grab active:cursor-grabbing`}
+                                      >
                                         <GripVertical className="w-5 h-5" />
                                       </div>
                                       <div
@@ -2177,7 +2325,9 @@ export default function MobileExpenseForm() {
                                       >
                                         <IconComponent className="w-5 h-5" />
                                       </div>
-                                      <span className={`font-semibold text-sm ${themeClasses.textHighlight} flex-1`}>
+                                      <span
+                                        className={`font-semibold text-sm ${themeClasses.textHighlight} flex-1`}
+                                      >
                                         {sub.name}
                                       </span>
                                     </div>
@@ -2191,8 +2341,12 @@ export default function MobileExpenseForm() {
                         {orderedSubcategories.filter(
                           (s: any) => s.visible === false,
                         ).length > 0 && (
-                          <div className={`mt-4 pt-4 border-t ${themeClasses.border}`}>
-                            <p className={`text-xs ${themeClasses.textFaint} mb-2 flex items-center gap-1.5`}>
+                          <div
+                            className={`mt-4 pt-4 border-t ${themeClasses.border}`}
+                          >
+                            <p
+                              className={`text-xs ${themeClasses.textFaint} mb-2 flex items-center gap-1.5`}
+                            >
                               <EyeOff className="w-3.5 h-3.5" />
                               Hidden subcategories
                             </p>
@@ -2244,7 +2398,9 @@ export default function MobileExpenseForm() {
                                         <div style={{ color: `${color}60` }}>
                                           <IconComponent className="w-5 h-5" />
                                         </div>
-                                        <span className={`font-semibold text-sm ${themeClasses.textMuted} flex-1`}>
+                                        <span
+                                          className={`font-semibold text-sm ${themeClasses.textMuted} flex-1`}
+                                        >
                                           {sub.name}
                                         </span>
                                       </div>
@@ -2266,7 +2422,14 @@ export default function MobileExpenseForm() {
                               : `neo-card ${themeClasses.border} bg-bg-card-custom ${themeClasses.borderHover} ${themeClasses.bgHover}`,
                           )}
                         >
-                          <MinusCircle className={cn("w-5 h-5", !selectedSubcategoryId ? themeClasses.text : themeClasses.textMuted)} />
+                          <MinusCircle
+                            className={cn(
+                              "w-5 h-5",
+                              !selectedSubcategoryId
+                                ? themeClasses.text
+                                : themeClasses.textMuted,
+                            )}
+                          />
                           <span
                             className={cn(
                               "font-semibold text-xs",
@@ -2297,9 +2460,14 @@ export default function MobileExpenseForm() {
                                   className="relative"
                                 >
                                   <button
-                                    onClick={() =>
-                                      setSelectedSubcategoryId(sub.id)
-                                    }
+                                    onClick={() => {
+                                      if (navigator.vibrate)
+                                        navigator.vibrate(10);
+                                      setSelectedSubcategoryId(sub.id);
+                                      const next = getNextStep();
+                                      if (next) setStep(next);
+                                      else handleSubmit();
+                                    }}
                                     style={{
                                       borderColor: active ? color : undefined,
                                       backgroundColor: active
@@ -2332,7 +2500,10 @@ export default function MobileExpenseForm() {
                                       );
                                     })()}
                                     <span
-                                      className={cn("font-semibold text-xs", !active && themeClasses.textHighlight)}
+                                      className={cn(
+                                        "font-semibold text-xs",
+                                        !active && themeClasses.textHighlight,
+                                      )}
                                       style={active ? { color } : undefined}
                                     >
                                       {sub.name}
@@ -2348,15 +2519,21 @@ export default function MobileExpenseForm() {
                           onClick={() => setShowNewSubcategoryDrawer(true)}
                           className={`p-3 rounded-lg border-2 border-dashed ${themeClasses.dashedBorder} ${themeClasses.dashedBorderHover} text-center transition-all active:scale-95 min-h-[55px] bg-transparent ${themeClasses.dashedBgHover} flex flex-col items-center justify-center gap-1 category-appear`}
                         >
-                          <PlusIcon className={`w-5 h-5 ${themeClasses.textMuted}`} />
-                          <span className={`text-xs ${themeClasses.textMuted}`}>New</span>
+                          <PlusIcon
+                            className={`w-5 h-5 ${themeClasses.textMuted}`}
+                          />
+                          <span className={`text-xs ${themeClasses.textMuted}`}>
+                            New
+                          </span>
                         </button>
                       </div>
                     )}
                   </div>
 
                   {!editModeSubcategory && orderedSubcategories.length > 0 && (
-                    <p className={`text-[10px] ${themeClasses.textFaint} text-center`}>
+                    <p
+                      className={`text-[10px] ${themeClasses.textFaint} text-center`}
+                    >
                       Hold to edit subcategories
                     </p>
                   )}
@@ -2394,6 +2571,7 @@ export default function MobileExpenseForm() {
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What was this for?"
                   className={`!bg-bg-card-custom ${themeClasses.border} ${themeClasses.textHighlight} ${themeClasses.placeholder} ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} h-11`}
                 />
               </div>
@@ -2402,6 +2580,7 @@ export default function MobileExpenseForm() {
                 size="lg"
                 className="w-full h-12 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all active:scale-[0.98]"
                 onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(10);
                   const next = getNextStep();
                   if (next) {
                     setStep(next);
@@ -2413,9 +2592,7 @@ export default function MobileExpenseForm() {
               >
                 {addTransactionMutation.isPending
                   ? "Adding..."
-                  : getNextStep()
-                    ? "Next"
-                    : `Add ${getTransactionLabel(selectedAccount?.type)}`}
+                  : getNextStepLabel(getNextStep())}
               </Button>
             </div>
           )}
@@ -2480,7 +2657,9 @@ export default function MobileExpenseForm() {
           open={deleteConfirm !== null}
           onOpenChange={(open) => !open && setDeleteConfirm(null)}
         >
-          <DrawerContent className={`bg-bg-dark border-t ${themeClasses.border}`}>
+          <DrawerContent
+            className={`bg-bg-dark border-t ${themeClasses.border}`}
+          >
             <DrawerHeader className="text-center pb-2">
               <div className="mx-auto w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center mb-2">
                 <EyeOff className="w-6 h-6 text-amber-500" />
@@ -2497,7 +2676,9 @@ export default function MobileExpenseForm() {
                   ? `Hide ${deleteConfirm?.type === "account" ? "Account" : deleteConfirm?.type === "category" ? "Category" : "Subcategory"}?`
                   : "Confirm hiding?"}
               </DrawerTitle>
-              <DrawerDescription className={`${themeClasses.textMuted} text-sm`}>
+              <DrawerDescription
+                className={`${themeClasses.textMuted} text-sm`}
+              >
                 {deleteConfirm?.step === "first" ? (
                   <>
                     You're about to hide{" "}
