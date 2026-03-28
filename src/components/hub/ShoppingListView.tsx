@@ -4,8 +4,8 @@
 
 import { HubChatThread, HubMessage } from "@/features/hub/hooks";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
-import { supabaseBrowser } from "@/lib/supabase/client";
 import { useOfflinePendingStore } from "@/lib/stores/offlinePendingStore";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { MealPlanWithRecipe } from "@/types/recipe";
 import {
@@ -57,13 +57,7 @@ import {
   UtensilsCrossed,
   X,
 } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ProductComparisonSheet } from "./ProductComparisonSheet";
 
@@ -142,46 +136,150 @@ type VirtualRowDef =
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   Dairy: [
-    "milk", "cream", "butter", "cheese", "yogurt", "yoghurt", "sour cream",
-    "kefir", "cheddar", "mozzarella", "parmesan", "brie", "feta",
+    "milk",
+    "cream",
+    "butter",
+    "cheese",
+    "yogurt",
+    "yoghurt",
+    "sour cream",
+    "kefir",
+    "cheddar",
+    "mozzarella",
+    "parmesan",
+    "brie",
+    "feta",
   ],
   Meat: [
-    "chicken", "beef", "pork", "lamb", "turkey", "veal", "salmon", "tuna",
-    "shrimp", "prawns", "steak", "mince", "minced", "sausage", "bacon",
-    "ham", "fish", "tilapia", "cod", "haddock",
+    "chicken",
+    "beef",
+    "pork",
+    "lamb",
+    "turkey",
+    "veal",
+    "salmon",
+    "tuna",
+    "shrimp",
+    "prawns",
+    "steak",
+    "mince",
+    "minced",
+    "sausage",
+    "bacon",
+    "ham",
+    "fish",
+    "tilapia",
+    "cod",
+    "haddock",
   ],
   Produce: [
-    "apple", "banana", "orange", "lettuce", "tomato", "potato", "onion",
-    "garlic", "carrot", "spinach", "broccoli", "cucumber", "avocado",
-    "lemon", "lime", "pepper", "zucchini", "mushroom", "celery", "kale",
-    "arugula", "cabbage", "cauliflower", "asparagus", "herbs",
+    "apple",
+    "banana",
+    "orange",
+    "lettuce",
+    "tomato",
+    "potato",
+    "onion",
+    "garlic",
+    "carrot",
+    "spinach",
+    "broccoli",
+    "cucumber",
+    "avocado",
+    "lemon",
+    "lime",
+    "pepper",
+    "zucchini",
+    "mushroom",
+    "celery",
+    "kale",
+    "arugula",
+    "cabbage",
+    "cauliflower",
+    "asparagus",
+    "herbs",
   ],
   Bakery: [
-    "bread", "baguette", "croissant", "muffin", "bagel", "pita", "tortilla",
-    "wrap", "roll", "bun", "cake", "pastry", "loaf",
+    "bread",
+    "baguette",
+    "croissant",
+    "muffin",
+    "bagel",
+    "pita",
+    "tortilla",
+    "wrap",
+    "roll",
+    "bun",
+    "cake",
+    "pastry",
+    "loaf",
   ],
   Beverages: [
-    "juice", "water", "soda", "coffee", "tea", "wine", "beer", "cola",
-    "drink", "sparkling", "lemonade", "kombucha", "smoothie",
+    "juice",
+    "water",
+    "soda",
+    "coffee",
+    "tea",
+    "wine",
+    "beer",
+    "cola",
+    "drink",
+    "sparkling",
+    "lemonade",
+    "kombucha",
+    "smoothie",
   ],
   "Canned Goods": [
-    "canned", "chickpeas", "lentils", "beans", "corn", "sardines",
-    "tomato paste", "coconut milk", "broth", "stock",
+    "canned",
+    "chickpeas",
+    "lentils",
+    "beans",
+    "corn",
+    "sardines",
+    "tomato paste",
+    "coconut milk",
+    "broth",
+    "stock",
   ],
   Snacks: [
-    "chips", "crackers", "nuts", "popcorn", "chocolate", "candy",
-    "cookies", "biscuits", "granola", "pretzels", "trail mix",
+    "chips",
+    "crackers",
+    "nuts",
+    "popcorn",
+    "chocolate",
+    "candy",
+    "cookies",
+    "biscuits",
+    "granola",
+    "pretzels",
+    "trail mix",
   ],
-  Frozen: [
-    "frozen", "ice cream", "sorbet",
-  ],
+  Frozen: ["frozen", "ice cream", "sorbet"],
   Condiments: [
-    "ketchup", "mustard", "mayo", "mayonnaise", "sauce", "dressing",
-    "vinegar", "soy sauce", "hot sauce", "olive oil", "oil",
+    "ketchup",
+    "mustard",
+    "mayo",
+    "mayonnaise",
+    "sauce",
+    "dressing",
+    "vinegar",
+    "soy sauce",
+    "hot sauce",
+    "olive oil",
+    "oil",
   ],
   Grains: [
-    "rice", "pasta", "flour", "cereal", "oats", "quinoa", "couscous",
-    "noodles", "barley", "bulgur", "semolina",
+    "rice",
+    "pasta",
+    "flour",
+    "cereal",
+    "oats",
+    "quinoa",
+    "couscous",
+    "noodles",
+    "barley",
+    "bulgur",
+    "semolina",
   ],
 };
 
@@ -282,14 +380,12 @@ const SwipeToAssign = ({
 
       if (dx < 0) {
         // Left swipe → assign to me
-        const action =
-          assignedTo === currentUserId ? "unassign" : "assign-me";
+        const action = assignedTo === currentUserId ? "unassign" : "assign-me";
         setCurrentAction(action);
       } else {
         // Right swipe → assign to partner
         if (!partnerId) return;
-        const action =
-          assignedTo === partnerId ? "unassign" : "assign-partner";
+        const action = assignedTo === partnerId ? "unassign" : "assign-partner";
         setCurrentAction(action);
       }
     };
@@ -546,9 +642,13 @@ export function ShoppingListView({
 
   // ── Drag reorder state (Points 1 & 2) ──
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  const [activeDragType, setActiveDragType] = useState<"item" | "group" | null>(null);
+  const [activeDragType, setActiveDragType] = useState<"item" | "group" | null>(
+    null,
+  );
   // localItemOrders: groupKey → ordered item IDs (overrides DB order within session)
-  const [localItemOrders, setLocalItemOrders] = useState<Map<string, string[]>>(new Map());
+  const [localItemOrders, setLocalItemOrders] = useState<Map<string, string[]>>(
+    new Map(),
+  );
   // localGroupOrder: ordered group IDs (overrides DB order within session, null = server order)
   const [localGroupOrder, setLocalGroupOrder] = useState<string[] | null>(null);
 
@@ -594,9 +694,7 @@ export function ShoppingListView({
   const { data: shoppingGroupsData } = useQuery<{ groups: ShoppingGroup[] }>({
     queryKey: ["shopping-groups", threadId],
     queryFn: async () => {
-      const res = await fetch(
-        `/api/hub/shopping-groups?thread_id=${threadId}`,
-      );
+      const res = await fetch(`/api/hub/shopping-groups?thread_id=${threadId}`);
       if (!res.ok) return { groups: [] };
       return res.json();
     },
@@ -621,8 +719,7 @@ export function ShoppingListView({
   >({
     queryKey: ["catalogue-autocomplete", autocompleteQuery],
     queryFn: async () => {
-      if (!autocompleteQuery.trim() || autocompleteQuery.length < 2)
-        return [];
+      if (!autocompleteQuery.trim() || autocompleteQuery.length < 2) return [];
       const res = await fetch(
         `/api/catalogue/items?search=${encodeURIComponent(autocompleteQuery)}&limit=6`,
       );
@@ -749,7 +846,9 @@ export function ShoppingListView({
       mealPlanId: msg.meal_plan_id || null,
       shoppingGroupId: msg.shopping_group_id || null,
       assignedTo: msg.assigned_to || null,
-      sortOrder: (msg as Record<string, unknown>).item_sort_order as number | null ?? null,
+      sortOrder:
+        ((msg as Record<string, unknown>).item_sort_order as number | null) ??
+        null,
     }))
     .sort((a, b) => {
       if (a.checked !== b.checked) return a.checked ? 1 : -1;
@@ -892,8 +991,7 @@ export function ShoppingListView({
       )
         setGroupMenuOpen(null);
     };
-    if (groupMenuOpen)
-      document.addEventListener("mousedown", handler);
+    if (groupMenuOpen) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [groupMenuOpen]);
 
@@ -913,17 +1011,13 @@ export function ShoppingListView({
       shoppingGroups.length === 0
     ) {
       rows.push({ type: "empty-state", variant: "full" });
-    } else if (
-      uncheckedItems.length === 0 &&
-      shoppingGroups.length === 0
-    ) {
+    } else if (uncheckedItems.length === 0 && shoppingGroups.length === 0) {
       rows.push({ type: "empty-state", variant: "checked-only" });
     } else {
       uncheckedGrouped.forEach((group, groupIndex) => {
         const showHeader =
           uncheckedGrouped.length > 1 || group.type === "custom";
-        if (showHeader)
-          rows.push({ type: "group-header", group, groupIndex });
+        if (showHeader) rows.push({ type: "group-header", group, groupIndex });
         if (!group.isCollapsed) {
           if (group.items.length === 0 && group.type === "custom") {
             rows.push({ type: "empty-group", group });
@@ -994,7 +1088,10 @@ export function ShoppingListView({
   const itemSortableIds = useMemo(() => {
     const map = new Map<string, string[]>();
     uncheckedGrouped.forEach((g) => {
-      map.set(g.key, g.items.map((i) => i.id));
+      map.set(
+        g.key,
+        g.items.map((i) => i.id),
+      );
     });
     return map;
   }, [uncheckedGrouped]);
@@ -1107,7 +1204,9 @@ export function ShoppingListView({
         });
         if (!res.ok) throw new Error();
         const data = await res.json();
-        queryClient.invalidateQueries({ queryKey: ["shopping-groups", threadId] });
+        queryClient.invalidateQueries({
+          queryKey: ["shopping-groups", threadId],
+        });
         toast.success(`Group "${name.trim()}" created`, {
           duration: 4000,
           action: {
@@ -1161,7 +1260,9 @@ export function ShoppingListView({
         toast.success("Group renamed");
       } catch {
         toast.error("Failed to rename group");
-        queryClient.invalidateQueries({ queryKey: ["shopping-groups", threadId] });
+        queryClient.invalidateQueries({
+          queryKey: ["shopping-groups", threadId],
+        });
       }
       setEditingGroupId(null);
       setEditingGroupName("");
@@ -1219,8 +1320,12 @@ export function ShoppingListView({
         });
       } catch {
         toast.error("Failed to delete group");
-        queryClient.invalidateQueries({ queryKey: ["shopping-groups", threadId] });
-        queryClient.invalidateQueries({ queryKey: ["hub", "messages", threadId] });
+        queryClient.invalidateQueries({
+          queryKey: ["shopping-groups", threadId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["hub", "messages", threadId],
+        });
       }
     },
     [shoppingGroups, shoppingGroupsData, threadId, queryClient],
@@ -1398,8 +1503,7 @@ export function ShoppingListView({
 
     const headerPattern = /^(ingredient|quantity|item|name|amount)s?$/i;
     const firstLineIsHeader = lines.length > 0 && headerPattern.test(lines[0]);
-    const secondLineIsHeader =
-      lines.length > 1 && headerPattern.test(lines[1]);
+    const secondLineIsHeader = lines.length > 1 && headerPattern.test(lines[1]);
     const firstLineHasBothHeaders =
       lines.length > 0 &&
       /ingredient/i.test(lines[0]) &&
@@ -1517,7 +1621,9 @@ export function ShoppingListView({
         return m;
       });
 
-      const currentData = queryClient.getQueryData<{ messages: HubMessage[] }>(queryKey);
+      const currentData = queryClient.getQueryData<{ messages: HubMessage[] }>(
+        queryKey,
+      );
       const currentMsg = currentData?.messages.find((m) => m.id === itemId);
       const shouldCheck = !currentMsg?.checked_at;
       const prevAt = currentMsg?.checked_at;
@@ -1563,7 +1669,10 @@ export function ShoppingListView({
           fetch("/api/hub/messages", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "toggle_check", message_id: itemId }),
+            body: JSON.stringify({
+              action: "toggle_check",
+              message_id: itemId,
+            }),
           }),
         3,
         rollback,
@@ -1627,8 +1736,7 @@ export function ShoppingListView({
             duration: 4000,
             action: {
               label: "Undo",
-              onClick: () =>
-                queryClient.invalidateQueries({ queryKey }),
+              onClick: () => queryClient.invalidateQueries({ queryKey }),
             },
           },
         );
@@ -1714,8 +1822,9 @@ export function ShoppingListView({
   const assignItem = useCallback(
     async (itemId: string, userId: string | null) => {
       const queryKey = ["hub", "messages", threadId];
-      const previousData =
-        queryClient.getQueryData<{ messages: HubMessage[] }>(queryKey);
+      const previousData = queryClient.getQueryData<{ messages: HubMessage[] }>(
+        queryKey,
+      );
       const prevMsg = previousData?.messages.find((m) => m.id === itemId);
       const prevAssigned = prevMsg?.assigned_to ?? null;
       if (prevAssigned === userId) return;
@@ -1913,7 +2022,9 @@ export function ShoppingListView({
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-white text-sm truncate">{item.content}</span>
+                <span className="text-white text-sm truncate">
+                  {item.content}
+                </span>
 
                 {editingQuantityFor === item.id ? (
                   <input
@@ -1923,7 +2034,10 @@ export function ShoppingListView({
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        setItemQuantity(item.id, quantityInputValue.trim() || null);
+                        setItemQuantity(
+                          item.id,
+                          quantityInputValue.trim() || null,
+                        );
                         setEditingQuantityFor(null);
                         setQuantityInputValue("");
                       } else if (e.key === "Escape") {
@@ -1932,7 +2046,10 @@ export function ShoppingListView({
                       }
                     }}
                     onBlur={() => {
-                      setItemQuantity(item.id, quantityInputValue.trim() || null);
+                      setItemQuantity(
+                        item.id,
+                        quantityInputValue.trim() || null,
+                      );
                       setEditingQuantityFor(null);
                       setQuantityInputValue("");
                     }}
@@ -1955,18 +2072,20 @@ export function ShoppingListView({
                   </button>
                 )}
 
-                {enableItemUrls && item.itemUrl && editingUrlFor !== item.id && (
-                  <a
-                    href={item.itemUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-1 rounded hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-all"
-                    onClick={(e) => e.stopPropagation()}
-                    title={item.itemUrl}
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                )}
+                {enableItemUrls &&
+                  item.itemUrl &&
+                  editingUrlFor !== item.id && (
+                    <a
+                      href={item.itemUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1 rounded hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-all"
+                      onClick={(e) => e.stopPropagation()}
+                      title={item.itemUrl}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
               </div>
             </div>
 
@@ -2099,7 +2218,8 @@ export function ShoppingListView({
     dragListeners?: Record<string, unknown>,
     dragAttributes?: Record<string, unknown>,
   ) => {
-    const isEditing = group.groupId !== null && editingGroupId === group.groupId;
+    const isEditing =
+      group.groupId !== null && editingGroupId === group.groupId;
 
     return (
       <div className="flex items-center gap-1">
@@ -2254,8 +2374,12 @@ export function ShoppingListView({
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-500/20 border border-purple-500/40 shadow-2xl cursor-grabbing opacity-95">
           <GripVertical className="w-4 h-4 text-purple-400" />
           <FolderOpen className="w-4 h-4 text-purple-400" />
-          <span className="text-sm font-medium text-purple-300">{group.name}</span>
-          <span className="text-xs text-white/40 ml-auto">{group.items.length}</span>
+          <span className="text-sm font-medium text-purple-300">
+            {group.name}
+          </span>
+          <span className="text-xs text-white/40 ml-auto">
+            {group.items.length}
+          </span>
         </div>
       );
     }
@@ -2288,7 +2412,10 @@ export function ShoppingListView({
     switch (row.type) {
       case "toolbar": {
         return (
-          <div key={key} className="flex items-center justify-between pt-3 pb-1">
+          <div
+            key={key}
+            className="flex items-center justify-between pt-3 pb-1"
+          >
             <div className="flex items-center gap-2">
               {uncheckedGrouped.length > 1 && (
                 <button
@@ -2406,7 +2533,15 @@ export function ShoppingListView({
       case "item": {
         const { item, group } = row;
         return (
-          <div key={key} className={cn("mt-1.5", uncheckedGrouped.length > 1 || group.type === "custom" ? "ml-2" : "")}>
+          <div
+            key={key}
+            className={cn(
+              "mt-1.5",
+              uncheckedGrouped.length > 1 || group.type === "custom"
+                ? "ml-2"
+                : "",
+            )}
+          >
             <SortableItemWrapper id={item.id}>
               {({ listeners, attributes }) =>
                 renderShoppingItem(item, listeners, attributes)
@@ -2513,15 +2648,25 @@ export function ShoppingListView({
       case "empty-state": {
         if (row.variant === "full") {
           return (
-            <div key={key} className="flex flex-col items-center justify-center py-20 text-center">
+            <div
+              key={key}
+              className="flex flex-col items-center justify-center py-20 text-center"
+            >
               <span className="text-5xl mb-3">🛒</span>
-              <p className="text-sm text-white/50">Your shopping list is empty</p>
-              <p className="text-xs text-white/30 mt-1">Add items above to get started</p>
+              <p className="text-sm text-white/50">
+                Your shopping list is empty
+              </p>
+              <p className="text-xs text-white/30 mt-1">
+                Add items above to get started
+              </p>
             </div>
           );
         }
         return (
-          <div key={key} className="flex flex-col items-center justify-center py-10 text-center">
+          <div
+            key={key}
+            className="flex flex-col items-center justify-center py-10 text-center"
+          >
             <CheckCircle2 className="w-14 h-14 text-emerald-400/40 mb-2" />
             <p className="text-sm text-white/50">All items checked!</p>
             <p className="text-xs text-white/30 mt-1">
@@ -2591,7 +2736,9 @@ export function ShoppingListView({
                 >
                   <span>{result.name}</span>
                   {result.unit && (
-                    <span className="text-xs text-white/40 ml-2">{result.unit}</span>
+                    <span className="text-xs text-white/40 ml-2">
+                      {result.unit}
+                    </span>
                   )}
                 </button>
               ))}
@@ -2676,10 +2823,7 @@ export function ShoppingListView({
       </div>
 
       {/* ── List Section (virtualizer + dnd) ── */}
-      <div
-        ref={listContainerRef}
-        className="flex-1 overflow-y-auto px-4 pb-8"
-      >
+      <div ref={listContainerRef} className="flex-1 overflow-y-auto px-4 pb-8">
         {isLoading ? (
           <div className="py-4 space-y-3">
             {[1, 2, 3, 4].map((i) => (
@@ -2719,7 +2863,10 @@ export function ShoppingListView({
               >
                 {/* Virtualizer output */}
                 <div
-                  style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}
+                  style={{
+                    height: rowVirtualizer.getTotalSize(),
+                    position: "relative",
+                  }}
                 >
                   {rowVirtualizer.getVirtualItems().map((virtualItem) => {
                     const row = virtualRows[virtualItem.index];
