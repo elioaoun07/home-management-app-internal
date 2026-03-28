@@ -654,7 +654,7 @@ export default function MobileExpenseForm() {
   // Auto-refocus amount input when returning to the amount step
   useEffect(() => {
     if (step === "amount" && isInitialized) {
-      const t = setTimeout(() => amountInputRef.current?.focus(), 150);
+      const t = setTimeout(() => amountInputRef.current?.focus(), 300);
       return () => clearTimeout(t);
     }
   }, [step, isInitialized]);
@@ -685,9 +685,7 @@ export default function MobileExpenseForm() {
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
       if (entry)
-        setHeaderHeight(
-          entry.contentRect.height + entry.target.getBoundingClientRect().top,
-        );
+        setHeaderHeight(entry.target.getBoundingClientRect().bottom);
     });
     // Set initial height
     setHeaderHeight(el.getBoundingClientRect().bottom);
@@ -1243,7 +1241,6 @@ export default function MobileExpenseForm() {
                     }}
                     suppressHydrationWarning
                     className={`text-2xl font-bold h-14 pl-10 pr-24 border text-center bg-bg-dark/60 ${themeClasses.border} ${themeClasses.textHighlight} placeholder:text-[hsl(var(--input-placeholder)/0.25)] ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all duration-200 rounded-xl`}
-                    autoFocus
                   />
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
                     <button

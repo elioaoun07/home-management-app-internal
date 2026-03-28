@@ -24,7 +24,7 @@ export default function ExpenseClientWrapper() {
   }
 
   return (
-    <main className="h-screen overflow-hidden">
+    <main className="h-[100dvh] overflow-hidden">
       <MobileExpenseForm />
     </main>
   );
