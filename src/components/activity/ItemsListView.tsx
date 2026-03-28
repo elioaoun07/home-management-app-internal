@@ -129,6 +129,46 @@ const EmptyCalIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const ClockIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const TagIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+    <line x1="7" y1="7" x2="7.01" y2="7" />
+  </svg>
+);
+
+const WarningIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
 // ─────────────────────────────────────────────
 // Swipe constants (same as SwipeableItem.tsx)
 // ─────────────────────────────────────────────
@@ -425,6 +465,7 @@ function formatRelativeTime(dateStr: string): {
 // Constants
 // ─────────────────────────────────────────────
 type TypeFilter = "all" | ItemType;
+type GroupBy = "time" | "category";
 
 const TYPE_FILTERS: { key: TypeFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -444,6 +485,17 @@ const TIME_GROUP_META: {
   { key: "evening", label: "Evening", emoji: "🌙" },
   { key: "no-time", label: "No Time Set", emoji: "⏱" },
 ];
+
+const OVERDUE_KEY = "__overdue__";
+
+const CATEGORY_META: Record<string, { name: string; color: string }> = {
+  personal: { name: "Personal", color: "#8B5CF6" },
+  home: { name: "Home", color: "#1E90FF" },
+  family: { name: "Family", color: "#FFA500" },
+  community: { name: "Community", color: "#22C55E" },
+  friends: { name: "Friends", color: "#EC4899" },
+  work: { name: "Work", color: "#FF3B30" },
+};
 
 // ─────────────────────────────────────────────
 // Props
@@ -469,6 +521,9 @@ export default function ItemsListView({
   const themeClasses = useThemeClasses();
   const { theme: currentTheme } = useTheme();
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
+  const [catSectionOpen, setCatSectionOpen] = useState(false);
+  const [groupBy, setGroupBy] = useState<GroupBy>("time");
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
     null,
   );
@@ -476,7 +531,10 @@ export default function ItemsListView({
     item: ItemWithDetails;
     occurrenceDate: string;
   } | null>(null);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Overdue section starts collapsed by default
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    new Set([OVERDUE_KEY]),
+  );
 
   const { data: allItems = [], isLoading } = useItems({
     status: ["pending", "in_progress"] as ItemStatus[],
@@ -492,32 +550,59 @@ export default function ItemsListView({
     "yyyy-MM-dd",
   );
 
+  // Extract unique categories from all items
+  const availableCategories = useMemo(() => {
+    const cats = new Set<string>();
+    allItems.forEach((item) =>
+      item.categories?.forEach((c) => c && cats.add(c)),
+    );
+    return Array.from(cats).sort();
+  }, [allItems]);
+
   // Filter by type
   const typeFiltered = useMemo(() => {
     if (typeFilter === "all") return allItems;
     return allItems.filter((item) => item.type === typeFilter);
   }, [allItems, typeFilter]);
 
-  // Filter by date range
-  const rangeFiltered = useMemo(() => {
-    return typeFiltered.filter((item) => {
-      const dayStr = getItemDayStr(item);
-      if (!dayStr) return false;
-      return dayStr >= startDate && dayStr <= endDate;
-    });
-  }, [typeFiltered, startDate, endDate]);
+  // Filter by category (multiselect)
+  const categoryFiltered = useMemo(() => {
+    if (categoryFilters.length === 0) return typeFiltered;
+    return typeFiltered.filter((item) =>
+      item.categories?.some((c) => c && categoryFilters.includes(c)),
+    );
+  }, [typeFiltered, categoryFilters]);
 
   // Filter by user
   const userFiltered = useMemo(() => {
-    if (userFilter === "all" || !currentUserId) return rangeFiltered;
-    return rangeFiltered.filter((item) => {
+    if (userFilter === "all" || !currentUserId) return categoryFiltered;
+    return categoryFiltered.filter((item) => {
       const isOwner = item.user_id === currentUserId;
       return userFilter === "mine" ? isOwner : !isOwner;
     });
-  }, [rangeFiltered, userFilter, currentUserId]);
+  }, [categoryFiltered, userFilter, currentUserId]);
 
-  // Group
-  const groups = useMemo(() => {
+  // Overdue items: primary date before today (shown separately)
+  const overdueFiltered = useMemo(() => {
+    return userFiltered.filter((item) => {
+      const dayStr = getItemDayStr(item);
+      return dayStr !== null && dayStr < todayStr;
+    });
+  }, [userFiltered, todayStr]);
+
+  // Date range items: within range AND not overdue
+  const rangeFiltered = useMemo(() => {
+    return userFiltered.filter((item) => {
+      const dayStr = getItemDayStr(item);
+      if (!dayStr) return false;
+      if (dayStr < todayStr) return false; // handled in overdue section
+      return dayStr >= startDate && dayStr <= endDate;
+    });
+  }, [userFiltered, startDate, endDate, todayStr]);
+
+  // Group by time (existing logic)
+  const timeGroups = useMemo(() => {
+    if (groupBy !== "time") return null;
     if (isSingleDay) {
       const map: Record<TimeGroup, ItemWithDetails[]> = {
         "all-day": [],
@@ -526,7 +611,7 @@ export default function ItemsListView({
         evening: [],
         "no-time": [],
       };
-      userFiltered.forEach((item) => {
+      rangeFiltered.forEach((item) => {
         map[getTimeGroup(item)].push(item);
       });
       (Object.keys(map) as TimeGroup[]).forEach((key) => {
@@ -542,7 +627,7 @@ export default function ItemsListView({
       days.forEach((day) => {
         map[format(day, "yyyy-MM-dd")] = [];
       });
-      userFiltered.forEach((item) => {
+      rangeFiltered.forEach((item) => {
         const dayStr = getItemDayStr(item);
         if (dayStr && map[dayStr] !== undefined) {
           map[dayStr].push(item);
@@ -553,7 +638,21 @@ export default function ItemsListView({
       });
       return map;
     }
-  }, [userFiltered, isSingleDay, startDate, endDate]);
+  }, [rangeFiltered, groupBy, isSingleDay, startDate, endDate]);
+
+  // Group by category
+  const categoryGroups = useMemo(() => {
+    if (groupBy !== "category") return null;
+    const map: Record<string, ItemWithDetails[]> = {};
+    rangeFiltered.forEach((item) => {
+      const key = item.categories?.find(Boolean) ?? "Uncategorized";
+      (map[key] ??= []).push(item);
+    });
+    Object.keys(map).forEach((k) => {
+      map[k] = sortByTime(map[k]);
+    });
+    return map;
+  }, [rangeFiltered, groupBy]);
 
   const toggleCollapse = (key: string) => {
     setCollapsed((prev) => {
@@ -677,23 +776,154 @@ export default function ItemsListView({
     );
   };
 
-  // ── Type filter pills ──
-  const typeFilterRow = (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide mb-3">
-      {TYPE_FILTERS.map(({ key, label }) => (
-        <button
-          key={key}
-          onClick={() => setTypeFilter(key)}
-          className={cn(
-            "px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap flex-shrink-0 transition-all",
-            typeFilter === key
-              ? "neo-gradient text-white shadow-sm"
-              : `neo-card ${themeClasses.text} hover:bg-white/5`,
+  // ── Controls bar ──
+  const controlsBar = (
+    <div className="mb-3 neo-card rounded-xl overflow-hidden">
+      {/* Row 1: Type toggle + group-by */}
+      <div className="flex items-center gap-2 px-2.5 py-2.5">
+        {/* 3-option type toggle (clicking active → deselects = show all) */}
+        <div className="flex gap-0.5 bg-white/5 rounded-xl p-0.5 flex-1">
+          {(
+            [
+              { key: "reminder" as const, label: "Reminder", Icon: BellIcon },
+              { key: "event" as const, label: "Event", Icon: CalendarIconSm },
+              { key: "task" as const, label: "Task", Icon: CheckSquareIcon },
+            ] as const
+          ).map(({ key, label, Icon }) => {
+            const isActive = typeFilter === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setTypeFilter(isActive ? "all" : key)}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all",
+                  isActive
+                    ? "bg-violet-500/25 text-violet-300 shadow-sm"
+                    : `${themeClasses.text} hover:bg-white/5`,
+                )}
+              >
+                <Icon className="w-3 h-3 flex-shrink-0" />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Group-by mini toggle */}
+        <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5 flex-shrink-0">
+          <button
+            onClick={() => setGroupBy("time")}
+            title="Group by time"
+            className={cn(
+              "p-1.5 rounded-md transition-all",
+              groupBy === "time"
+                ? "bg-violet-500/25 text-violet-300"
+                : `${themeClasses.text} hover:bg-white/5`,
+            )}
+          >
+            <ClockIcon className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setGroupBy("category")}
+            title="Group by category"
+            className={cn(
+              "p-1.5 rounded-md transition-all",
+              groupBy === "category"
+                ? "bg-violet-500/25 text-violet-300"
+                : `${themeClasses.text} hover:bg-white/5`,
+            )}
+          >
+            <TagIcon className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Row 2: Category filter — collapsible */}
+      {availableCategories.length > 0 && (
+        <div className="border-t border-white/5">
+          <button
+            onClick={() => setCatSectionOpen((v) => !v)}
+            className="flex items-center gap-2 w-full px-2.5 py-2"
+          >
+            <TagIcon className="w-3 h-3 text-white/25 flex-shrink-0" />
+            <span
+              className={cn(
+                "text-[11px] font-medium flex-1 text-left",
+                themeClasses.textMuted,
+              )}
+            >
+              Categories
+            </span>
+            {categoryFilters.length > 0 && (
+              <span className="text-[10px] bg-violet-500/20 text-violet-300 px-1.5 py-0.5 rounded-full font-medium leading-none">
+                {categoryFilters.length}
+              </span>
+            )}
+            <ChevronUpIcon
+              className={cn(
+                "w-3 h-3 text-white/20 transition-transform",
+                !catSectionOpen && "rotate-180",
+              )}
+            />
+          </button>
+          {catSectionOpen && (
+            <div className="px-2.5 pb-2.5 flex flex-wrap gap-1.5">
+              {availableCategories.map((catId) => {
+                const meta = CATEGORY_META[catId] ?? {
+                  name: catId,
+                  color: "#94a3b8",
+                };
+                const isSelected = categoryFilters.includes(catId);
+                return (
+                  <button
+                    key={catId}
+                    onClick={() =>
+                      setCategoryFilters((prev) =>
+                        prev.includes(catId)
+                          ? prev.filter((c) => c !== catId)
+                          : [...prev, catId],
+                      )
+                    }
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all"
+                    style={
+                      isSelected
+                        ? {
+                            backgroundColor: `${meta.color}20`,
+                            color: meta.color,
+                            border: `1px solid ${meta.color}45`,
+                          }
+                        : {
+                            backgroundColor: "rgba(255,255,255,0.04)",
+                            color: "rgba(255,255,255,0.35)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                          }
+                    }
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{
+                        backgroundColor: isSelected
+                          ? meta.color
+                          : "rgba(255,255,255,0.2)",
+                      }}
+                    />
+                    {meta.name}
+                  </button>
+                );
+              })}
+              {categoryFilters.length > 0 && (
+                <button
+                  onClick={() => setCategoryFilters([])}
+                  className="flex items-center px-2 py-1 rounded-full text-[10px] text-white/30 hover:text-white/50 transition-all"
+                  style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           )}
-        >
-          {label}
-        </button>
-      ))}
+        </div>
+      )}
     </div>
   );
 
@@ -708,21 +938,38 @@ export default function ItemsListView({
     );
   }
 
-  // ── Empty ──
-  if (userFiltered.length === 0) {
+  // ── Overdue section renderer ──
+  const renderOverdueSection = () => {
+    if (overdueFiltered.length === 0) return null;
+    const isCollapsed = collapsed.has(OVERDUE_KEY);
     return (
-      <div className="flex flex-col gap-2">
-        {typeFilterRow}
-        <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <EmptyCalIcon className="w-10 h-10 text-white/20" />
-          <p className={cn("text-sm font-medium", themeClasses.text)}>
-            Nothing scheduled
-          </p>
-          <p className="text-xs text-white/40">No items for this period</p>
-        </div>
+      <div className="mb-4">
+        <button
+          onClick={() => toggleCollapse(OVERDUE_KEY)}
+          className="flex items-center gap-2 mb-2 w-full text-left"
+        >
+          <WarningIcon className="w-3 h-3 text-amber-400/70 flex-shrink-0" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-amber-400/70">
+            Overdue
+          </span>
+          <span className="text-[10px] text-amber-400/40 ml-0.5">
+            ({overdueFiltered.length})
+          </span>
+          <ChevronUpIcon
+            className={cn(
+              "w-3 h-3 text-amber-400/40 ml-auto transition-transform",
+              isCollapsed && "rotate-180",
+            )}
+          />
+        </button>
+        {!isCollapsed && (
+          <div className="flex flex-col gap-2 pl-2 border-l-2 border-amber-500/20">
+            {overdueFiltered.map(renderItem)}
+          </div>
+        )}
       </div>
     );
-  }
+  };
 
   // ── Group section renderer (shared) ──
   const renderSection = (
@@ -766,93 +1013,24 @@ export default function ItemsListView({
     );
   };
 
-  // ── Single-day view ──
-  if (isSingleDay) {
-    const dayGroups = groups as Record<TimeGroup, ItemWithDetails[]>;
+  // ── Empty (no range items AND no overdue) ──
+  if (rangeFiltered.length === 0 && overdueFiltered.length === 0) {
     return (
-      <>
-        {typeFilterRow}
-        <div className="flex flex-col gap-4">
-          {TIME_GROUP_META.map(({ key, label, emoji }) =>
-            renderSection(key, label, emoji, dayGroups[key] || []),
-          )}
+      <div className="flex flex-col gap-2">
+        {controlsBar}
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <EmptyCalIcon className="w-10 h-10 text-white/20" />
+          <p className={cn("text-sm font-medium", themeClasses.text)}>
+            Nothing scheduled
+          </p>
+          <p className="text-xs text-white/40">No items for this period</p>
         </div>
-
-        {selectedItem && (
-          <ItemDetailModal
-            item={selectedItem}
-            onClose={() => setSelectedItem(null)}
-            onEdit={() => setSelectedItem(null)}
-            onDelete={() => {
-              handleDelete(selectedItem);
-              setSelectedItem(null);
-            }}
-            currentUserId={currentUserId}
-          />
-        )}
-
-        {actionsState && (
-          <ItemActionsSheet
-            item={actionsState.item}
-            occurrenceDate={actionsState.occurrenceDate}
-            isOpen={!!actionsState}
-            onClose={() => setActionsState(null)}
-            onComplete={(reason) => {
-              handleComplete(
-                actionsState.item,
-                actionsState.occurrenceDate,
-                reason,
-              );
-              setActionsState(null);
-            }}
-            onPostpone={(type, reason) => {
-              handlePostpone(
-                actionsState.item,
-                actionsState.occurrenceDate,
-                type,
-                reason,
-              );
-              setActionsState(null);
-            }}
-            onCancel={(reason) => {
-              handleCancel(
-                actionsState.item,
-                actionsState.occurrenceDate,
-                reason,
-              );
-              setActionsState(null);
-            }}
-            onDelete={() => {
-              handleDelete(actionsState.item);
-              setActionsState(null);
-            }}
-          />
-        )}
-      </>
+      </div>
     );
   }
 
-  // ── Multi-day view ──
-  return (
+  const modals = (
     <>
-      {typeFilterRow}
-      <div className="flex flex-col gap-4">
-        {Object.entries(groups).map(([dayStr, items]) => {
-          let dayLabel: string;
-          if (dayStr === todayStr) dayLabel = "Today";
-          else if (dayStr === tomorrowStr) dayLabel = "Tomorrow";
-          else dayLabel = format(parseISO(dayStr), "EEE, MMM d");
-
-          return renderSection(
-            dayStr,
-            dayLabel,
-            undefined,
-            items,
-            dayStr === todayStr,
-          );
-        })}
-      </div>
-
       {selectedItem && (
         <ItemDetailModal
           item={selectedItem}
@@ -903,6 +1081,65 @@ export default function ItemsListView({
           }}
         />
       )}
+    </>
+  );
+
+  // ── Category grouping view ──
+  if (groupBy === "category" && categoryGroups) {
+    return (
+      <>
+        {controlsBar}
+        {renderOverdueSection()}
+        <div className="flex flex-col gap-4">
+          {Object.entries(categoryGroups).map(([cat, items]) =>
+            renderSection(cat, cat, "🏷", items),
+          )}
+        </div>
+        {modals}
+      </>
+    );
+  }
+
+  // ── Single-day time view ──
+  if (isSingleDay && timeGroups) {
+    const dayGroups = timeGroups as Record<TimeGroup, ItemWithDetails[]>;
+    return (
+      <>
+        {controlsBar}
+        {renderOverdueSection()}
+        <div className="flex flex-col gap-4">
+          {TIME_GROUP_META.map(({ key, label, emoji }) =>
+            renderSection(key, label, emoji, dayGroups[key] || []),
+          )}
+        </div>
+        {modals}
+      </>
+    );
+  }
+
+  // ── Multi-day date view ──
+  return (
+    <>
+      {controlsBar}
+      {renderOverdueSection()}
+      <div className="flex flex-col gap-4">
+        {timeGroups &&
+          Object.entries(timeGroups).map(([dayStr, items]) => {
+            let dayLabel: string;
+            if (dayStr === todayStr) dayLabel = "Today";
+            else if (dayStr === tomorrowStr) dayLabel = "Tomorrow";
+            else dayLabel = format(parseISO(dayStr), "EEE, MMM d");
+
+            return renderSection(
+              dayStr,
+              dayLabel,
+              undefined,
+              items,
+              dayStr === todayStr,
+            );
+          })}
+      </div>
+      {modals}
     </>
   );
 }

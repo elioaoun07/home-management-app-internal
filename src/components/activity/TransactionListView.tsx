@@ -17,7 +17,7 @@ import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format } from "date-fns";
-import { Mail, Moon, Sun } from "lucide-react";
+import { Mail, Moon, Sun, Tag } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
@@ -74,20 +74,42 @@ export default function TransactionListView({
   const { theme: currentUserTheme } = useTheme();
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<TimeOfDay>>(new Set());
+  const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
+  const [catSectionOpen, setCatSectionOpen] = useState(false);
 
   const { data: rawTransactions = [], isLoading } = useDashboardTransactions({
     startDate,
     endDate,
   });
 
-  const transactions = useMemo(() => {
-    if (userFilter === "all" || !currentUserId) return rawTransactions;
-    return rawTransactions.filter((tx) => {
-      const isOwner =
-        tx.is_owner ?? (tx.user_id ? tx.user_id === currentUserId : true);
-      return userFilter === "mine" ? isOwner : !isOwner;
+  const availableCategories = useMemo(() => {
+    const seen = new Map<string, string>();
+    rawTransactions.forEach((tx) => {
+      if (tx.category && !seen.has(tx.category)) {
+        seen.set(tx.category, tx.category_color || "#94a3b8");
+      }
     });
-  }, [rawTransactions, userFilter, currentUserId]);
+    return Array.from(seen.entries())
+      .map(([name, color]) => ({ name, color }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [rawTransactions]);
+
+  const transactions = useMemo(() => {
+    let filtered = rawTransactions;
+    if (userFilter !== "all" && currentUserId) {
+      filtered = filtered.filter((tx) => {
+        const isOwner =
+          tx.is_owner ?? (tx.user_id ? tx.user_id === currentUserId : true);
+        return userFilter === "mine" ? isOwner : !isOwner;
+      });
+    }
+    if (categoryFilters.length > 0) {
+      filtered = filtered.filter(
+        (tx) => tx.category && categoryFilters.includes(tx.category),
+      );
+    }
+    return filtered;
+  }, [rawTransactions, userFilter, currentUserId, categoryFilters]);
 
   const deleteMutation = useDeleteTransaction();
 
@@ -148,22 +170,102 @@ export default function TransactionListView({
     );
   }
 
+  const categorySubFilter = availableCategories.length > 0 ? (
+    <div className="mb-3 neo-card rounded-xl overflow-hidden">
+      <button
+        onClick={() => setCatSectionOpen((v) => !v)}
+        className="flex items-center gap-2 w-full px-3 py-2.5"
+      >
+        <Tag className="w-3.5 h-3.5 text-white/25 flex-shrink-0" />
+        <span className={cn("text-[11px] font-medium flex-1 text-left", themeClasses.textMuted)}>
+          Categories
+        </span>
+        {categoryFilters.length > 0 && (
+          <span className="text-[10px] neo-gradient text-white px-1.5 py-0.5 rounded-full font-medium leading-none">
+            {categoryFilters.length}
+          </span>
+        )}
+        <ChevronDownIcon
+          className={cn(
+            "w-3 h-3 text-white/20 transition-transform",
+            catSectionOpen && "rotate-180",
+          )}
+          size={12}
+        />
+      </button>
+      {catSectionOpen && (
+        <div className="px-3 pb-3 border-t border-white/5 pt-2 flex flex-wrap gap-1.5">
+          {availableCategories.map(({ name, color }) => {
+            const isSelected = categoryFilters.includes(name);
+            return (
+              <button
+                key={name}
+                onClick={() =>
+                  setCategoryFilters((prev) =>
+                    prev.includes(name)
+                      ? prev.filter((c) => c !== name)
+                      : [...prev, name],
+                  )
+                }
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all"
+                style={
+                  isSelected
+                    ? {
+                        backgroundColor: `${color}20`,
+                        color: color,
+                        border: `1px solid ${color}45`,
+                      }
+                    : {
+                        backgroundColor: "rgba(255,255,255,0.04)",
+                        color: "rgba(255,255,255,0.35)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                      }
+                }
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{
+                    backgroundColor: isSelected ? color : "rgba(255,255,255,0.2)",
+                  }}
+                />
+                {name}
+              </button>
+            );
+          })}
+          {categoryFilters.length > 0 && (
+            <button
+              onClick={() => setCategoryFilters([])}
+              className="flex items-center px-2 py-1 rounded-full text-[10px] text-white/30 hover:text-white/50 transition-all"
+              style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   if (transactions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <Mail className="w-12 h-12 text-slate-400/40 mb-3 mx-auto" />
-        <p className={`text-sm font-medium ${themeClasses.text}`}>
-          No transactions
-        </p>
-        <p className={`text-xs ${themeClasses.textMuted} mt-1`}>
-          No transactions found for this period
-        </p>
-      </div>
+      <>
+        {categorySubFilter}
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Mail className="w-12 h-12 text-slate-400/40 mb-3 mx-auto" />
+          <p className={`text-sm font-medium ${themeClasses.text}`}>
+            No transactions
+          </p>
+          <p className={`text-xs ${themeClasses.textMuted} mt-1`}>
+            No transactions found for this period
+          </p>
+        </div>
+      </>
     );
   }
 
   return (
     <>
+      {categorySubFilter}
       <div className="space-y-3">
         {TIME_SECTIONS.map(({ key, label, icon }) => {
           const sectionTxs = timeGroups[key];
