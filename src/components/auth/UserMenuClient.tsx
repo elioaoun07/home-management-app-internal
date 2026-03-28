@@ -19,6 +19,7 @@ import {
 import { useOnboarding } from "@/features/preferences/useOnboarding";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { createClient } from "@supabase/supabase-js";
+import { WifiOff } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import LinkHouseholdDialog from "./LinkHouseholdDialog";
@@ -41,6 +42,26 @@ export default function UserMenuClient({ name, email, avatarUrl }: Props) {
   const [linkOpen, setLinkOpen] = useState(false);
   const { data: onboarding } = useOnboarding();
   const themeClasses = useThemeClasses();
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    import("@/lib/connectivityManager").then((mod) => {
+      setIsOffline(!mod.isReallyOnline());
+    });
+    const handler = (e: Event) => {
+      setIsOffline(!((e as CustomEvent).detail?.online ?? true));
+    };
+    const onOffline = () => setIsOffline(true);
+    const onOnline = () => setIsOffline(false);
+    window.addEventListener("connectivity-changed", handler);
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.removeEventListener("connectivity-changed", handler);
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+    };
+  }, []);
 
   // Redirect to onboarding walkthrough for new users (except on auth/welcome routes)
   useEffect(() => {
@@ -89,19 +110,35 @@ export default function UserMenuClient({ name, email, avatarUrl }: Props) {
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            className={`flex items-center gap-1.5 p-1.5 h-auto rounded-lg ${themeClasses.bgSurface} backdrop-blur-sm ${themeClasses.border} ${themeClasses.bgHover} transition-all`}
+            className={`relative flex items-center gap-1.5 p-1.5 h-auto rounded-lg backdrop-blur-sm transition-all ${
+              isOffline
+                ? "bg-amber-500/10 border border-amber-500/50 animate-pulse"
+                : `${themeClasses.bgSurface} ${themeClasses.border} ${themeClasses.bgHover}`
+            }`}
           >
-            <Avatar className={`h-7 w-7 ${themeClasses.ringSelection}`}>
-              {avatarUrl ? (
-                <AvatarImage src={avatarUrl} alt={name} />
-              ) : (
-                <AvatarFallback
-                  className={`text-xs font-semibold ${themeClasses.bgSurface} ${themeClasses.labelText}`}
-                >
-                  {initials || <UserIcon className="h-3.5 w-3.5" />}
-                </AvatarFallback>
-              )}
-            </Avatar>
+            {isOffline && (
+              <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60 animate-ping" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+              </span>
+            )}
+            {isOffline ? (
+              <div className="h-7 w-7 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center">
+                <WifiOff className="h-3.5 w-3.5 text-amber-400" />
+              </div>
+            ) : (
+              <Avatar className={`h-7 w-7 ${themeClasses.ringSelection}`}>
+                {avatarUrl ? (
+                  <AvatarImage src={avatarUrl} alt={name} />
+                ) : (
+                  <AvatarFallback
+                    className={`text-xs font-semibold ${themeClasses.bgSurface} ${themeClasses.labelText}`}
+                  >
+                    {initials || <UserIcon className="h-3.5 w-3.5" />}
+                  </AvatarFallback>
+                )}
+              </Avatar>
+            )}
           </Button>
         </DropdownMenuTrigger>
 
@@ -109,6 +146,14 @@ export default function UserMenuClient({ name, email, avatarUrl }: Props) {
           align="end"
           className={`w-64 p-2 ${themeClasses.modalBg} ${themeClasses.border}`}
         >
+          {isOffline && (
+            <div className="flex items-center gap-2 px-3 py-2 mb-1 rounded-lg bg-amber-500/10 border border-amber-500/30">
+              <WifiOff className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <span className="text-xs font-semibold text-amber-400">
+                You&apos;re offline
+              </span>
+            </div>
+          )}
           <DropdownMenuLabel className="px-3 py-2">
             <div className="flex items-center gap-3">
               <Avatar className={`h-10 w-10 ${themeClasses.ringSelection}`}>

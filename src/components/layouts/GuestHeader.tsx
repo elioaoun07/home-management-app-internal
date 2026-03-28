@@ -1,5 +1,6 @@
 "use client";
 
+import { LockIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
@@ -37,15 +38,27 @@ export default function GuestHeader() {
           Budget Manager
         </h1>
       </div>
-      <Link href="/login">
-        <Button
-          variant="default"
-          size="sm"
-          className="neo-gradient text-white shadow-lg hover:scale-105 transition-transform"
-        >
-          Login
-        </Button>
-      </Link>
+      <div className="flex items-center gap-2">
+        {/* Flashing "not signed in" indicator */}
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/40 animate-pulse">
+          <div className="relative flex items-center justify-center">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-40 animate-ping" />
+            <LockIcon className="relative h-3.5 w-3.5 text-amber-400" />
+          </div>
+          <span className="text-[11px] font-semibold text-amber-400 hidden xs:block">
+            Not signed in
+          </span>
+        </div>
+        <Link href="/login">
+          <Button
+            variant="default"
+            size="sm"
+            className="neo-gradient text-white shadow-lg hover:scale-105 transition-transform"
+          >
+            Login
+          </Button>
+        </Link>
+      </div>
     </header>
   );
 }
