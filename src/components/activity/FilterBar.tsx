@@ -1,13 +1,19 @@
 "use client";
 
 import {
+  AlertBellIcon,
+  CalendarIcon,
+  CheckIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   EyeIcon,
   EyeOffIcon,
   FilterIcon,
+  ListIcon,
   RefreshIcon,
+  RotateCcwIcon,
   XIcon,
+  ZapIcon,
 } from "@/components/icons/FuturisticIcons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
@@ -200,17 +206,31 @@ function getDatePresets() {
   ];
 }
 
-const TYPE_FILTERS: { key: TypeFilter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "reminder", label: "Reminders" },
-  { key: "task", label: "Tasks" },
-  { key: "event", label: "Events" },
+const TYPE_FILTERS: {
+  key: TypeFilter;
+  label: string;
+  Icon: React.FC<{ className?: string }>;
+  color: string;
+}[] = [
+  { key: "all", label: "All", Icon: ListIcon, color: "text-white/50" },
+  {
+    key: "reminder",
+    label: "Reminders",
+    Icon: AlertBellIcon,
+    color: "text-violet-300",
+  },
+  { key: "task", label: "Tasks", Icon: CheckIcon, color: "text-cyan-300" },
+  { key: "event", label: "Events", Icon: CalendarIcon, color: "text-pink-300" },
 ];
 
-const RECURRING_FILTERS: { key: RecurringFilter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "recurring", label: "Repeating" },
-  { key: "one-time", label: "Once" },
+const RECURRING_FILTERS: {
+  key: RecurringFilter;
+  label: string;
+  Icon: React.FC<{ className?: string }>;
+}[] = [
+  { key: "all", label: "All", Icon: ListIcon },
+  { key: "recurring", label: "Repeating", Icon: RotateCcwIcon },
+  { key: "one-time", label: "Once", Icon: ZapIcon },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -244,6 +264,7 @@ export default function FilterBar({
   const { theme: currentUserTheme } = useTheme();
   const [showFilters, setShowFilters] = useState(false);
   const [catSectionOpen, setCatSectionOpen] = useState(false);
+  const [dateRangeOpen, setDateRangeOpen] = useState(false);
   const [customDateOpen, setCustomDateOpen] = useState(false);
   const [customStart, setCustomStart] = useState(dateRange.start);
   const [customEnd, setCustomEnd] = useState(dateRange.end);
@@ -471,143 +492,199 @@ export default function FilterBar({
             </button>
           )}
 
-          {/* Group by — only when showGroupToggle */}
-          {showGroupToggle && (
-            <div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">
-                Group by
-              </p>
-              <div className="flex gap-1.5">
-                <button
-                  onClick={() => onGroupModeChange("time")}
-                  className={cn(
-                    "p-2 rounded-lg transition-colors",
-                    groupMode === "time"
-                      ? "bg-violet-500/25 text-violet-300"
-                      : `neo-card ${themeClasses.text} hover:bg-white/5`,
-                  )}
-                  title="Group by time"
-                >
-                  <GroupTimeIcon className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onGroupModeChange("category")}
-                  className={cn(
-                    "p-2 rounded-lg transition-colors",
-                    groupMode === "category"
-                      ? "bg-violet-500/25 text-violet-300"
-                      : `neo-card ${themeClasses.text} hover:bg-white/5`,
-                  )}
-                  title="Group by category"
-                >
-                  <GroupCatIcon className="w-4 h-4" />
-                </button>
-              </div>
+          {/* Group by + Recurrence — same row */}
+          {(showGroupToggle || showJournalFilters) && (
+            <div className="flex items-start gap-4">
+              {showGroupToggle && (
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">
+                    Group by
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => onGroupModeChange("time")}
+                      className={cn(
+                        "p-2 rounded-lg transition-colors",
+                        groupMode === "time"
+                          ? "bg-violet-500/25 text-violet-300"
+                          : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                      )}
+                      title="Group by time"
+                    >
+                      <GroupTimeIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => onGroupModeChange("category")}
+                      className={cn(
+                        "p-2 rounded-lg transition-colors",
+                        groupMode === "category"
+                          ? "bg-violet-500/25 text-violet-300"
+                          : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                      )}
+                      title="Group by category"
+                    >
+                      <GroupCatIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              {showJournalFilters && (
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">
+                    Recurrence
+                  </p>
+                  <div className="flex gap-1.5">
+                    {RECURRING_FILTERS.map(({ key, label, Icon }) => (
+                      <button
+                        key={key}
+                        onClick={() => onRecurringFilterChange(key)}
+                        className={cn(
+                          "p-2 rounded-lg transition-colors",
+                          recurringFilter === key
+                            ? "bg-violet-500/25 text-violet-300"
+                            : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                        )}
+                        title={label}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Date Range */}
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">
-              Date Range
-            </p>
-
-            {/* Quick presets in 2-column grid */}
-            <div className="grid grid-cols-2 gap-1.5 mb-2.5">
-              {presets.map((preset) => {
-                const isActive =
-                  dateRange.start === preset.start &&
-                  dateRange.end === preset.end;
-                return (
-                  <button
-                    key={preset.label}
-                    onClick={() => {
-                      onDateRangeChange({
-                        start: preset.start,
-                        end: preset.end,
-                      });
-                      setCustomDateOpen(false);
-                    }}
-                    className={cn(
-                      "px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors",
-                      isActive
-                        ? "neo-gradient text-white"
-                        : `neo-card ${themeClasses.text} hover:bg-white/5`,
-                    )}
-                  >
-                    {preset.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Custom date range */}
-            <div className="neo-card rounded-xl overflow-hidden">
-              <button
-                onClick={() => setCustomDateOpen((v) => !v)}
-                className="w-full px-3 py-2 flex items-center justify-between"
-              >
+          {/* Date Range — collapsed by default */}
+          <div className="neo-card rounded-xl overflow-hidden">
+            <button
+              onClick={() => setDateRangeOpen((v) => !v)}
+              className="w-full px-3 py-2.5 flex items-center justify-between"
+            >
+              <p className="text-[10px] font-medium uppercase tracking-wider text-white/30">
+                Date Range
+              </p>
+              <div className="flex items-center gap-2">
                 <span
                   className={cn(
                     "text-[11px] font-medium",
-                    themeClasses.textMuted,
+                    activeDateLabel !== "Today"
+                      ? `${themeClasses.textActive}`
+                      : themeClasses.textMuted,
                   )}
                 >
-                  Custom Range
+                  {activeDateLabel}
                 </span>
-                {customDateOpen ? (
+                {dateRangeOpen ? (
                   <ChevronUpIcon className="w-3 h-3 text-white/20" />
                 ) : (
                   <ChevronDownIcon className="w-3 h-3 text-white/20" />
                 )}
-              </button>
-              {customDateOpen && (
-                <div className="px-3 pb-2.5 pt-2 border-t border-white/5 space-y-2">
-                  <div>
-                    <label className="text-[10px] text-white/40 block mb-1">
-                      Start Date
-                    </label>
-                    <input
-                      type="date"
-                      value={customStart}
-                      onChange={(e) => setCustomStart(e.target.value)}
-                      className={cn(
-                        "w-full px-2 py-1.5 rounded-lg text-[11px] bg-white/5 border border-white/10",
-                        "text-white placeholder-white/30 focus:outline-none focus:border-white/20",
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-white/40 block mb-1">
-                      End Date
-                    </label>
-                    <input
-                      type="date"
-                      value={customEnd}
-                      onChange={(e) => setCustomEnd(e.target.value)}
-                      className={cn(
-                        "w-full px-2 py-1.5 rounded-lg text-[11px] bg-white/5 border border-white/10",
-                        "text-white placeholder-white/30 focus:outline-none focus:border-white/20",
-                      )}
-                    />
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (customStart && customEnd) {
-                        onDateRangeChange({
-                          start: customStart,
-                          end: customEnd,
-                        });
-                        setCustomDateOpen(false);
-                      }
-                    }}
-                    className="w-full px-2 py-1.5 rounded-lg text-[11px] font-medium neo-gradient text-white transition-colors mt-1"
-                  >
-                    Apply
-                  </button>
+              </div>
+            </button>
+
+            {dateRangeOpen && (
+              <div className="border-t border-white/5 px-3 pb-3 pt-2.5 space-y-2.5">
+                {/* Quick presets in 2-column grid */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  {presets.map((preset) => {
+                    const isActive =
+                      dateRange.start === preset.start &&
+                      dateRange.end === preset.end;
+                    return (
+                      <button
+                        key={preset.label}
+                        onClick={() => {
+                          onDateRangeChange({
+                            start: preset.start,
+                            end: preset.end,
+                          });
+                          setCustomDateOpen(false);
+                          setDateRangeOpen(false);
+                        }}
+                        className={cn(
+                          "px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors",
+                          isActive
+                            ? "neo-gradient text-white"
+                            : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                        )}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+
+                {/* Custom date range */}
+                <div className="neo-card rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => setCustomDateOpen((v) => !v)}
+                    className="w-full px-3 py-2 flex items-center justify-between"
+                  >
+                    <span
+                      className={cn(
+                        "text-[11px] font-medium",
+                        themeClasses.textMuted,
+                      )}
+                    >
+                      Custom Range
+                    </span>
+                    {customDateOpen ? (
+                      <ChevronUpIcon className="w-3 h-3 text-white/20" />
+                    ) : (
+                      <ChevronDownIcon className="w-3 h-3 text-white/20" />
+                    )}
+                  </button>
+                  {customDateOpen && (
+                    <div className="px-3 pb-2.5 pt-2 border-t border-white/5 space-y-2">
+                      <div>
+                        <label className="text-[10px] text-white/40 block mb-1">
+                          Start Date
+                        </label>
+                        <input
+                          type="date"
+                          value={customStart}
+                          onChange={(e) => setCustomStart(e.target.value)}
+                          className={cn(
+                            "w-full px-2 py-1.5 rounded-lg text-[11px] bg-white/5 border border-white/10",
+                            "text-white placeholder-white/30 focus:outline-none focus:border-white/20",
+                          )}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-white/40 block mb-1">
+                          End Date
+                        </label>
+                        <input
+                          type="date"
+                          value={customEnd}
+                          onChange={(e) => setCustomEnd(e.target.value)}
+                          className={cn(
+                            "w-full px-2 py-1.5 rounded-lg text-[11px] bg-white/5 border border-white/10",
+                            "text-white placeholder-white/30 focus:outline-none focus:border-white/20",
+                          )}
+                        />
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (customStart && customEnd) {
+                            onDateRangeChange({
+                              start: customStart,
+                              end: customEnd,
+                            });
+                            setCustomDateOpen(false);
+                            setDateRangeOpen(false);
+                          }
+                        }}
+                        className="w-full px-2 py-1.5 rounded-lg text-[11px] font-medium neo-gradient text-white transition-colors mt-1"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Categories — collapsible, only when showCategoryFilter */}
@@ -695,55 +772,30 @@ export default function FilterBar({
             </div>
           )}
 
-          {/* Journal filters — only when showJournalFilters */}
+          {/* Type filter — icon buttons, only when showJournalFilters */}
           {showJournalFilters && (
-            <>
-              {/* Type filter */}
-              <div>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">
-                  Type
-                </p>
-                <div className="flex gap-0.5 neo-card rounded-xl p-0.5">
-                  {TYPE_FILTERS.map(({ key, label }) => (
-                    <button
-                      key={key}
-                      onClick={() => onTypeFilterChange(key)}
-                      className={cn(
-                        "flex-1 py-1 rounded-lg text-[11px] font-medium transition-colors",
-                        typeFilter === key
-                          ? "bg-violet-500/25 text-violet-300"
-                          : `${themeClasses.text} hover:bg-white/5`,
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">
+                Type
+              </p>
+              <div className="flex gap-1.5">
+                {TYPE_FILTERS.map(({ key, label, Icon, color }) => (
+                  <button
+                    key={key}
+                    onClick={() => onTypeFilterChange(key)}
+                    className={cn(
+                      "p-2 rounded-lg transition-colors",
+                      typeFilter === key
+                        ? "bg-white/10 " + color
+                        : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                    )}
+                    title={label}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </button>
+                ))}
               </div>
-
-              {/* Recurring filter */}
-              <div>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">
-                  Recurrence
-                </p>
-                <div className="flex gap-0.5 neo-card rounded-xl p-0.5">
-                  {RECURRING_FILTERS.map(({ key, label }) => (
-                    <button
-                      key={key}
-                      onClick={() => onRecurringFilterChange(key)}
-                      className={cn(
-                        "flex-1 py-1 rounded-lg text-[11px] font-medium transition-colors",
-                        recurringFilter === key
-                          ? "bg-violet-500/25 text-violet-300"
-                          : `${themeClasses.text} hover:bg-white/5`,
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
+            </div>
           )}
         </div>
       )}
