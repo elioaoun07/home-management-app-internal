@@ -50,16 +50,19 @@ interface AppModeContextType {
 const AppModeContext = createContext<AppModeContextType | undefined>(undefined);
 
 export function AppModeProvider({ children }: { children: ReactNode }) {
-  // Initialize appMode based on FAB selection from localStorage
-  const [appMode, setAppMode] = useState<AppMode>(() => {
-    if (typeof window !== "undefined") {
-      const fabSelection = localStorage.getItem("fab-last-selection");
-      if (fabSelection === "reminder") {
-        return "items";
-      }
+  // Always start with the server-safe default to avoid SSR/client hydration mismatch.
+  // Reading localStorage in a useState initializer causes the server to render "budget"
+  // while the client immediately renders "items", triggering a hydration error.
+  // useEffect runs only on the client after hydration, so it is safe to read localStorage there.
+  const [appMode, setAppMode] = useState<AppMode>("budget");
+
+  // Sync from localStorage after mount
+  useEffect(() => {
+    const fabSelection = localStorage.getItem("fab-last-selection");
+    if (fabSelection === "reminder") {
+      setAppMode("items");
     }
-    return "budget"; // Default to budget for expense mode or no selection
-  });
+  }, []);
   const [itemsSubMode, setItemsSubMode] = useState<ItemsSubMode>("all");
   const [createMode, setCreateMode] = useState<CreateMode>(null);
 

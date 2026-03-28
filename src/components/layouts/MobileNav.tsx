@@ -126,6 +126,7 @@ export default function MobileNav() {
     "/recipe",
     "/chat",
     "/reminders",
+    "/dashboard",
     "/focus",
     "/alerts",
   ];

@@ -543,6 +543,10 @@ interface ItemsListViewProps {
   endDate: string;
   currentUserId?: string;
   userFilter?: UserFilter;
+  // Controlled from parent (ActivityView filter panel)
+  typeFilter?: TypeFilter;
+  recurringFilter?: "all" | "one-time" | "recurring";
+  groupMode?: GroupBy;
 }
 
 // ─────────────────────────────────────────────
@@ -553,16 +557,25 @@ export default function ItemsListView({
   endDate,
   currentUserId,
   userFilter = "all",
+  typeFilter: externalTypeFilter,
+  recurringFilter: externalRecurringFilter,
+  groupMode: externalGroupMode,
 }: ItemsListViewProps) {
   const themeClasses = useThemeClasses();
   const { theme: currentTheme } = useTheme();
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [internalTypeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
   const [catSectionOpen, setCatSectionOpen] = useState(false);
-  const [groupBy, setGroupBy] = useState<GroupBy>("time");
-  const [recurringFilter, setRecurringFilter] = useState<
+  const [internalGroupBy, setGroupBy] = useState<GroupBy>("time");
+  const [internalRecurringFilter, setRecurringFilter] = useState<
     "all" | "one-time" | "recurring"
   >("all");
+
+  // Use controlled values when provided, otherwise internal state
+  const typeFilter = externalTypeFilter ?? internalTypeFilter;
+  const groupBy = externalGroupMode ?? internalGroupBy;
+  const recurringFilter = externalRecurringFilter ?? internalRecurringFilter;
+  const isControlled = externalTypeFilter !== undefined || externalRecurringFilter !== undefined || externalGroupMode !== undefined;
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
     null,
   );
@@ -885,8 +898,8 @@ export default function ItemsListView({
     );
   };
 
-  // ── Controls bar ──
-  const controlsBar = (
+  // ── Controls bar — hidden when parent controls these filters ──
+  const controlsBar = isControlled ? null : (
     <div className="mb-3 neo-card rounded-xl overflow-hidden">
       {/* Row 1: Type toggle + group-by */}
       <div className="flex items-center gap-2 px-2.5 py-2.5">

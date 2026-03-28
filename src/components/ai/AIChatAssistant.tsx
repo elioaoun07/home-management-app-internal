@@ -104,9 +104,11 @@ export default function AIChatAssistant() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // Hide AI chat button on standalone /chat page (only after mount)
-  const isChatPage = mounted && pathname?.startsWith("/chat");
-  const shouldHideButton = isChatPage;
+  // Hide AI chat button on standalone pages (only after mount)
+  const standaloneRoutes = ["/chat", "/dashboard", "/reminders"];
+  const isStandalonePage =
+    mounted && standaloneRoutes.some((r) => pathname?.startsWith(r));
+  const shouldHideButton = isStandalonePage;
   const [isExiting, setIsExiting] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
   const exitTimerRef = useRef<NodeJS.Timeout | null>(null);

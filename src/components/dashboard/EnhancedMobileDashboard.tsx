@@ -145,6 +145,14 @@ type Props = {
   endDate: string;
   currentUserId?: string;
   onDateRangeChange?: (start: string, end: string) => void;
+  /** When provided, controls the active view mode from the parent (hides internal toggle) */
+  controlledViewMode?: ViewMode;
+  /** When provided, controls ownership filter from parent (hides internal Me/Both/Partner tabs) */
+  externalOwnershipFilter?: OwnershipFilter;
+  /** When provided, additional category filtering applied on top of internal filters */
+  externalCategoryFilters?: string[];
+  /** Accepted from parent for API compatibility, not used for rendering */
+  groupMode?: "time" | "category";
 };
 
 type ViewMode = "widgets" | "analytics" | "list";
@@ -161,16 +169,23 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   endDate,
   currentUserId,
   onDateRangeChange,
+  controlledViewMode,
+  externalOwnershipFilter,
+  externalCategoryFilters,
+  groupMode: _groupMode,
 }: Props) {
   const { theme: currentUserTheme } = useTheme();
   const themeClasses = useThemeClasses();
   const { data: accounts } = useAccounts();
   const { isBlurred, toggleBlur } = usePrivacyBlur();
-  const [viewMode, setViewMode] = useState<ViewMode>("widgets");
+  const [internalViewMode, setViewMode] = useState<ViewMode>("widgets");
+  const viewMode = controlledViewMode ?? internalViewMode;
   const [filterCategory, setFilterCategory] = useState<string>("");
   const [filterAccount, setFilterAccount] = useState<string>("");
-  const [ownershipFilter, setOwnershipFilter] =
+  const [internalOwnershipFilter, setOwnershipFilter] =
     useState<OwnershipFilter>("all");
+  const isControlled = externalOwnershipFilter !== undefined;
+  const ownershipFilter = externalOwnershipFilter ?? internalOwnershipFilter;
   const [accountTypeFilter, setAccountTypeFilter] =
     useState<AccountTypeFilter>("expense");
   const [sortField, setSortField] = useState<SortField>("recent");
@@ -295,6 +310,13 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
       return sortOrder === "asc" ? comparison : -comparison;
     });
 
+    // External category filter from parent FilterBar
+    if (externalCategoryFilters && externalCategoryFilters.length > 0) {
+      filtered = filtered.filter(
+        (t) => t.category && externalCategoryFilters.includes(t.category),
+      );
+    }
+
     // Deduplicate by ID (safety net for concurrent optimistic updates)
     const seen = new Set<string>();
     const deduped = filtered.filter((t) => {
@@ -311,6 +333,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
     ownershipFilter,
     sortField,
     sortOrder,
+    externalCategoryFilters,
   ]);
 
   // Calculate summary stats from FILTERED transactions
@@ -479,6 +502,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
   return (
     <div className={`min-h-screen ${themeClasses.pageBg} pb-20`}>
       {/* Sticky Header with Ownership Toggle - positioned below app mode toggle */}
+      {!isControlled && (
       <div
         className={`sticky top-[112px] z-20 ${themeClasses.headerGradient} backdrop-blur-xl`}
       >
@@ -528,57 +552,59 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
 
         {/* View Toggle & Filters Row */}
         <div className="flex items-center gap-2 px-3 py-2">
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 p-0.5 rounded-lg neo-card">
-            <button
-              onClick={() => {
-                if (navigator.vibrate) navigator.vibrate(5);
-                setViewMode("widgets");
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                viewMode === "widgets"
-                  ? "neo-gradient text-white shadow-sm"
-                  : `${themeClasses.text} hover:bg-white/5`,
-              )}
-            >
-              <BarChart3Icon className="w-3.5 h-3.5 inline-block mr-1" />
-              Overview
-            </button>
-            <button
-              onClick={() => {
-                if (navigator.vibrate) navigator.vibrate(5);
-                setViewMode("analytics");
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                viewMode === "analytics"
-                  ? "neo-gradient text-white shadow-sm"
-                  : `${themeClasses.text} hover:bg-white/5`,
-              )}
-            >
-              <TrendingUpIcon className="w-3.5 h-3.5 inline-block mr-1" />
-              Analytics
-            </button>
-            <button
-              onClick={() => {
-                if (navigator.vibrate) navigator.vibrate(5);
-                setViewMode("list");
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                viewMode === "list"
-                  ? "neo-gradient text-white shadow-sm"
-                  : `${themeClasses.text} hover:bg-white/5`,
-              )}
-            >
-              <ListIcon className="w-3.5 h-3.5 inline-block mr-1" />
-              List
-            </button>
-          </div>
+          {/* View Mode Toggle — only shown when not controlled by parent */}
+          {!controlledViewMode && (
+            <div className="flex items-center gap-1 p-0.5 rounded-lg neo-card">
+              <button
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(5);
+                  setViewMode("widgets");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  viewMode === "widgets"
+                    ? "neo-gradient text-white shadow-sm"
+                    : `${themeClasses.text} hover:bg-white/5`,
+                )}
+              >
+                <BarChart3Icon className="w-3.5 h-3.5 inline-block mr-1" />
+                Overview
+              </button>
+              <button
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(5);
+                  setViewMode("analytics");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  viewMode === "analytics"
+                    ? "neo-gradient text-white shadow-sm"
+                    : `${themeClasses.text} hover:bg-white/5`,
+                )}
+              >
+                <TrendingUpIcon className="w-3.5 h-3.5 inline-block mr-1" />
+                Analytics
+              </button>
+              <button
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(5);
+                  setViewMode("list");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  viewMode === "list"
+                    ? "neo-gradient text-white shadow-sm"
+                    : `${themeClasses.text} hover:bg-white/5`,
+                )}
+              >
+                <ListIcon className="w-3.5 h-3.5 inline-block mr-1" />
+                List
+              </button>
+            </div>
+          )}
 
           {/* Spacer */}
           <div className="flex-1" />
@@ -835,6 +861,7 @@ const EnhancedMobileDashboard = memo(function EnhancedMobileDashboard({
           </div>
         )}
       </div>
+      )}
 
       {/* Content */}
       <div className="px-3 py-5">
