@@ -2466,7 +2466,6 @@ export default function MobileExpenseForm() {
                                       setSelectedSubcategoryId(sub.id);
                                       const next = getNextStep();
                                       if (next) setStep(next);
-                                      else handleSubmit();
                                     }}
                                     style={{
                                       borderColor: active ? color : undefined,
