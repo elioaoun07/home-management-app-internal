@@ -1742,7 +1742,7 @@ export function ShoppingListView({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Add Item Input - Fixed at top */}
       <div className="p-4 border-b border-white/5 bg-bg-card-custom/95 backdrop-blur-sm">
         <div className="flex gap-2">

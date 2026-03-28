@@ -1222,7 +1222,7 @@ export function NotesListView({
   );
 
   return (
-    <div className="flex h-full w-full relative overflow-hidden">
+    <div className="flex flex-1 min-h-0 w-full relative overflow-hidden">
       {/* Book Index Sidebar - Slides in from left like a book's table of contents */}
       <div
         className={cn(
