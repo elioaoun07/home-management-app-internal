@@ -482,6 +482,134 @@ self.addEventListener("notificationclose", (event) => {
 });
 
 // ============================================
+// PUSH SUBSCRIPTION CHANGE (Android FCM token rotation)
+// ============================================
+// Android Chrome/FCM periodically rotates push tokens. When this happens,
+// the browser fires `pushsubscriptionchange` so the app can re-register.
+// Without this handler, the old token goes stale and all pushes silently fail.
+
+self.addEventListener("pushsubscriptionchange", (event) => {
+  console.log("[SW] pushsubscriptionchange fired — FCM token likely rotated");
+  event.waitUntil(handlePushSubscriptionChange(event));
+});
+
+async function handlePushSubscriptionChange(event) {
+  try {
+    const oldEndpoint = event.oldSubscription
+      ? event.oldSubscription.endpoint
+      : null;
+
+    let newSubscription = event.newSubscription || null;
+
+    // If the browser didn't supply a new subscription, create one ourselves
+    if (!newSubscription) {
+      const vapidKey = await getStoredVapidKey();
+      if (!vapidKey) {
+        console.error("[SW] No VAPID key cached — cannot re-subscribe. User must re-enable notifications manually.");
+        notifyClientsSubscriptionLost();
+        return;
+      }
+
+      try {
+        newSubscription = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        });
+        console.log("[SW] Re-subscribed with new endpoint:", newSubscription.endpoint.substring(0, 50));
+      } catch (err) {
+        console.error("[SW] Failed to re-subscribe:", err);
+        notifyClientsSubscriptionLost();
+        return;
+      }
+    }
+
+    const subData = newSubscription.toJSON();
+
+    // First, try to notify open clients — they can re-sync via the normal subscribe flow
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    if (clients.length > 0) {
+      console.log("[SW] Notifying", clients.length, "client(s) about subscription change");
+      clients.forEach((client) => {
+        client.postMessage({
+          type: "SUBSCRIPTION_CHANGED",
+          endpoint: subData.endpoint,
+          p256dh: subData.keys?.p256dh,
+          auth: subData.keys?.auth,
+        });
+      });
+      // Clients will sync via usePushNotifications.ts → syncSubscriptionToDb()
+      return;
+    }
+
+    // No clients open — SW must sync the new subscription directly
+    console.log("[SW] No clients open — syncing subscription change directly to server");
+    const response = await fetch("/api/notifications/subscribe/sw", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        endpoint: subData.endpoint,
+        p256dh: subData.keys?.p256dh,
+        auth: subData.keys?.auth,
+        old_endpoint: oldEndpoint,
+      }),
+    });
+
+    if (response.ok) {
+      console.log("[SW] Subscription change synced to server successfully");
+    } else {
+      const text = await response.text().catch(() => "");
+      console.error("[SW] Failed to sync subscription change:", response.status, text);
+    }
+  } catch (err) {
+    console.error("[SW] Error in handlePushSubscriptionChange:", err);
+  }
+}
+
+function notifyClientsSubscriptionLost() {
+  self.clients
+    .matchAll({ type: "window", includeUncontrolled: true })
+    .then((clients) => {
+      clients.forEach((client) => {
+        client.postMessage({ type: "SUBSCRIPTION_LOST" });
+      });
+    });
+}
+
+// Read VAPID public key from IndexedDB (stored by usePushNotifications.ts on first subscribe)
+async function getStoredVapidKey() {
+  try {
+    return await new Promise((resolve, reject) => {
+      const req = indexedDB.open("push-config", 1);
+      req.onupgradeneeded = (e) => {
+        e.target.result.createObjectStore("config");
+      };
+      req.onsuccess = (e) => {
+        const db = e.target.result;
+        const tx = db.transaction("config", "readonly");
+        const store = tx.objectStore("config");
+        const get = store.get("vapidPublicKey");
+        get.onsuccess = () => resolve(get.result || null);
+        get.onerror = () => resolve(null);
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = self.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+// ============================================
 // ACTION HANDLERS
 // ============================================
 

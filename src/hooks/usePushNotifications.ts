@@ -16,7 +16,11 @@ const LAST_ENDPOINT_KEY = "push_last_endpoint";
 const LAST_SYNC_KEY = "push_last_sync";
 
 // Minimum time between foreground syncs (prevent spam on rapid focus/blur)
-const MIN_SYNC_INTERVAL_MS = 30000; // 30 seconds
+// Android gets a shorter window because FCM rotates tokens more aggressively
+const MIN_SYNC_INTERVAL_MS =
+  typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)
+    ? 15000
+    : 30000;
 
 // Type for ServiceWorkerRegistration with PushManager
 type SWRegistrationWithPush = ServiceWorkerRegistration & {
@@ -431,10 +435,30 @@ export function usePushNotifications() {
       setTimeout(handleForegroundSync, 500);
     };
 
+    // Listen for SW messages about subscription changes (from pushsubscriptionchange handler)
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data?.type === "SUBSCRIPTION_CHANGED") {
+        console.log("[Push] SW reported subscription change — forcing foreground sync");
+        isSyncing.current = false; // Reset throttle so sync runs immediately
+        handleForegroundSync();
+      } else if (event.data?.type === "SUBSCRIPTION_LOST") {
+        console.warn("[Push] SW reported subscription lost — prompting user to re-enable");
+        setState((prev) => ({
+          ...prev,
+          isSubscribed: false,
+          error: "Push subscription was lost. Please re-enable notifications.",
+        }));
+        setPushEnabledInStorage(false);
+        setLastEndpointInStorage(null);
+      }
+    };
+
+    navigator.serviceWorker?.addEventListener("message", handleSwMessage);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", handleFocus);
 
     return () => {
+      navigator.serviceWorker?.removeEventListener("message", handleSwMessage);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleFocus);
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
@@ -616,6 +640,32 @@ export function usePushNotifications() {
 // HELPER FUNCTIONS
 // ============================================
 
+// ============================================
+// VAPID KEY STORAGE (for SW pushsubscriptionchange handler)
+// ============================================
+
+async function storeVapidKeyInIdb(vapidKey: string): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open("push-config", 1);
+      req.onupgradeneeded = (e) => {
+        (e.target as IDBOpenDBRequest).result.createObjectStore("config");
+      };
+      req.onsuccess = (e) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        const tx = db.transaction("config", "readwrite");
+        tx.objectStore("config").put(vapidKey, "vapidPublicKey");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    // Non-critical — SW will prompt user to re-enable if key is missing
+  }
+}
+
 async function getOrRegisterServiceWorker(): Promise<SWRegistrationWithPush | null> {
   if (!("serviceWorker" in navigator)) return null;
 
@@ -711,6 +761,12 @@ async function saveSubscriptionToApi(
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || "Failed to save subscription");
+  }
+
+  // Cache VAPID public key in IndexedDB so the SW's pushsubscriptionchange
+  // handler can re-subscribe autonomously when FCM rotates the token.
+  if (VAPID_PUBLIC_KEY) {
+    storeVapidKeyInIdb(VAPID_PUBLIC_KEY);
   }
 }
 

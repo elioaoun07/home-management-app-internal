@@ -1,19 +1,10 @@
+import { sendPushToUser } from "@/lib/pushSender";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import webpush from "web-push";
 
 export const dynamic = "force-dynamic";
-
-// Configure VAPID for push notifications
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY!;
-
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-}
 
 // Notification types (maps to notification_type_enum in database)
 export type NotificationType =
@@ -306,77 +297,23 @@ export async function POST(request: NextRequest) {
   }
 
   // Send push notification immediately if requested
-  if (send_push && notification && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  if (send_push && notification) {
     try {
-      // Get user's push subscriptions
-      const { data: subscriptions } = await supabase
-        .from("push_subscriptions")
-        .select("*")
-        .eq("user_id", notificationUserId)
-        .eq("is_active", true);
+      const payload = JSON.stringify({
+        title,
+        body: message || "",
+        icon: "/appicon-192.png",
+        badge: "/appicon-192.png",
+        tag: notification.id,
+        data: {
+          type: notification_type || "general",
+          notification_id: notification.id,
+          url: action_url || "/expense",
+          ...(action_data || {}),
+        },
+      });
 
-      if (subscriptions && subscriptions.length > 0) {
-        const payload = JSON.stringify({
-          title,
-          body: message || "",
-          icon: "/appicon-192.png",
-          badge: "/appicon-192.png",
-          tag: notification.id,
-          data: {
-            type: notification_type || "general",
-            notification_id: notification.id,
-            url: action_url || "/expense",
-            ...(action_data || {}),
-          },
-        });
-
-        let pushSent = false;
-        for (const sub of subscriptions) {
-          try {
-            await webpush.sendNotification(
-              {
-                endpoint: sub.endpoint,
-                keys: {
-                  p256dh: sub.p256dh,
-                  auth: sub.auth,
-                },
-              },
-              payload,
-            );
-            pushSent = true;
-          } catch (pushError) {
-            const webPushError = pushError as { statusCode?: number };
-            // Remove invalid subscriptions (410 Gone or 404 Not Found)
-            if (
-              webPushError.statusCode === 410 ||
-              webPushError.statusCode === 404
-            ) {
-              // Use admin client to delete expired subscription
-              await adminClient
-                .from("push_subscriptions")
-                .delete()
-                .eq("id", sub.id);
-              console.log(
-                `[in-app] Removed expired push subscription ${sub.id}`,
-              );
-            } else {
-              console.error(
-                `[in-app] Push failed for subscription ${sub.id}:`,
-                pushError,
-              );
-            }
-          }
-        }
-
-        // Update push status
-        await adminClient
-          .from("notifications")
-          .update({
-            push_status: pushSent ? "sent" : "failed",
-            push_sent_at: pushSent ? new Date().toISOString() : null,
-          })
-          .eq("id", notification.id);
-      }
+      await sendPushToUser(adminClient, notificationUserId, payload, notification.id);
     } catch (pushError) {
       console.error("[in-app] Error sending push notification:", pushError);
       // Don't fail the request, notification was still created

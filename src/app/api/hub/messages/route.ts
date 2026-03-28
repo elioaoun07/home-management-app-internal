@@ -1,18 +1,10 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import webpush from "web-push";
+import { sendPushToUser } from "@/lib/pushSender";
 
 export const dynamic = "force-dynamic";
 
-// Configure VAPID for push notifications
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-}
 
 // GET - Fetch chat messages for a specific thread
 export async function GET(request: NextRequest) {
@@ -487,8 +479,6 @@ export async function POST(request: NextRequest) {
   console.log("[Chat Push] Debug:", {
     shouldSendPush,
     partnerUserId,
-    hasVapidPublic: !!VAPID_PUBLIC_KEY,
-    hasVapidPrivate: !!VAPID_PRIVATE_KEY,
     receiptId,
     receiptStatus,
     userAlreadyRead,
@@ -497,13 +487,7 @@ export async function POST(request: NextRequest) {
 
   // Send immediate push notification to partner (only for budget/reminder threads)
   // Skip if user already read the message (WhatsApp-style: they're in the chat)
-  if (
-    shouldSendPush &&
-    partnerUserId &&
-    VAPID_PUBLIC_KEY &&
-    VAPID_PRIVATE_KEY &&
-    !userAlreadyRead
-  ) {
+  if (shouldSendPush && partnerUserId && !userAlreadyRead) {
     try {
       // Get sender's display name
       const { data: senderProfile } = await supabase
@@ -517,15 +501,7 @@ export async function POST(request: NextRequest) {
         senderProfile?.email?.split("@")[0] ||
         "Partner";
 
-      // Get partner's push subscriptions
-      const { data: subscriptions } = await supabase
-        .from("push_subscriptions")
-        .select("id, endpoint, p256dh, auth")
-        .eq("user_id", partnerUserId)
-        .eq("is_active", true);
-
-      if (subscriptions && subscriptions.length > 0) {
-        const payload = JSON.stringify({
+      const payload = JSON.stringify({
           title: thread?.title || "New Message",
           body: `${senderName}: ${content.trim().substring(0, 100)}${content.length > 100 ? "..." : ""}`,
           icon: "/appicon-192.png",
@@ -539,57 +515,22 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        let pushSent = false;
-        for (const sub of subscriptions) {
-          try {
-            await webpush.sendNotification(
-              {
-                endpoint: sub.endpoint,
-                keys: { p256dh: sub.p256dh, auth: sub.auth },
-              },
-              payload,
-            );
-            pushSent = true;
-          } catch (pushError) {
-            const webPushError = pushError as { statusCode?: number };
-            // Remove invalid subscriptions
-            if (
-              webPushError.statusCode === 410 ||
-              webPushError.statusCode === 404
-            ) {
-              await supabase
-                .from("push_subscriptions")
-                .delete()
-                .eq("id", sub.id);
-            }
-            console.error(`[Chat] Push failed for sub ${sub.id}:`, pushError);
-          }
-        }
+        const pushResult = await sendPushToUser(supabase, partnerUserId, payload);
 
         // Update receipt push status
         if (receiptId) {
           await supabase
             .from("hub_message_receipts")
             .update({
-              push_status: pushSent ? "sent" : "failed",
+              push_status: pushResult.sent > 0 ? "sent" : "failed",
               push_sent_at: new Date().toISOString(),
-              push_error: pushSent ? null : "All subscriptions failed",
+              push_error:
+                pushResult.sent > 0
+                  ? null
+                  : "No active subscriptions or delivery failed",
             })
             .eq("id", receiptId);
         }
-      } else {
-        // No push subscriptions - mark as failed with reason
-        if (receiptId) {
-          await supabase
-            .from("hub_message_receipts")
-            .update({
-              push_status: "failed",
-              push_sent_at: new Date().toISOString(),
-              push_error: "No active push subscriptions for recipient",
-            })
-            .eq("id", receiptId);
-        }
-      }
     } catch (pushError) {
       console.error("[Chat] Error sending push notification:", pushError);
       // Update receipt with error

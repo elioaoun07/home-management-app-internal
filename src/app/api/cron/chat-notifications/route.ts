@@ -16,21 +16,14 @@
  * 6. Use deduplication to avoid sending same notification multiple times
  */
 
+import { sendPushToUser } from "@/lib/pushSender";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import webpush from "web-push";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const CRON_SECRET = process.env.CRON_SECRET;
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
-
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-}
 
 export async function GET(req: NextRequest) {
   try {
@@ -49,13 +42,6 @@ export async function GET(req: NextRequest) {
     if (!supabaseUrl || !supabaseKey) {
       return NextResponse.json(
         { error: "Server configuration error: Missing Supabase credentials" },
-        { status: 500 },
-      );
-    }
-
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-      return NextResponse.json(
-        { error: "Push notifications not configured" },
         { status: 500 },
       );
     }
@@ -242,28 +228,10 @@ export async function GET(req: NextRequest) {
     let pushSent = 0;
     let pushFailed = 0;
     let skippedDuplicate = 0;
-    let skippedNoPushSubs = 0;
 
     // Step 6: Process each user
     for (const [userId, userThreads] of groupedByUser) {
       // Get user's push subscriptions - ORDER BY last_used_at DESC to get the most recent
-      const { data: subscriptions, error: subsError } = await supabase
-        .from("push_subscriptions")
-        .select("id, endpoint, p256dh, auth, device_name, last_used_at")
-        .eq("user_id", userId)
-        .eq("is_active", true)
-        .order("last_used_at", { ascending: false });
-
-      if (subsError) continue;
-
-      if (!subscriptions || subscriptions.length === 0) {
-        skippedNoPushSubs++;
-        continue;
-      }
-
-      // Use the most recently used subscription
-      const primarySub = subscriptions[0];
-
       // Process each thread
       for (const [threadId, receipts] of userThreads) {
         const unreadCount = receipts.length;
@@ -359,7 +327,7 @@ export async function GET(req: NextRequest) {
 
         notificationsSent++;
 
-        // Send push notification to primary subscription only
+        // Send push notification to all active subscriptions
         const payload = JSON.stringify({
           title,
           body,
@@ -375,78 +343,29 @@ export async function GET(req: NextRequest) {
           },
         });
 
-        try {
-          await webpush.sendNotification(
-            {
-              endpoint: primarySub.endpoint,
-              keys: { p256dh: primarySub.p256dh, auth: primarySub.auth },
-            },
-            payload,
-          );
+        const pushResult = await sendPushToUser(
+          supabase,
+          userId,
+          payload,
+          notification.id,
+        );
 
-          pushSent++;
-          await supabase
-            .from("notifications")
-            .update({
-              push_status: "sent",
-              push_sent_at: new Date().toISOString(),
-            })
-            .eq("id", notification.id);
+        if (pushResult.sent > 0) pushSent++;
+        if (pushResult.allFailed) pushFailed++;
 
-          // Update last_used_at
-          await supabase
-            .from("push_subscriptions")
-            .update({ last_used_at: new Date().toISOString() })
-            .eq("id", primarySub.id);
-
-          // Also update the receipts' push_status so we don't retry
-          const receiptIds = receipts.map((r) => r.receipt_id);
-          await supabase
-            .from("hub_message_receipts")
-            .update({
-              push_status: "sent",
-              push_sent_at: new Date().toISOString(),
-            })
-            .in("id", receiptIds);
-        } catch (error: unknown) {
-          pushFailed++;
-          console.error(
-            `[Chat Notifications] ✗ Push failed to ${primarySub.device_name}:`,
-            error,
-          );
-
-          const statusCode =
-            error && typeof error === "object" && "statusCode" in error
-              ? (error as { statusCode: number }).statusCode
-              : null;
-
-          // Deactivate invalid subscriptions
-          if (statusCode === 404 || statusCode === 410) {
-            await supabase
-              .from("push_subscriptions")
-              .update({ is_active: false })
-              .eq("id", primarySub.id);
-          }
-
-          await supabase
-            .from("notifications")
-            .update({
-              push_status: "failed",
-              push_error: error instanceof Error ? error.message : "Unknown",
-            })
-            .eq("id", notification.id);
-
-          // Also mark receipts as failed so we can retry later or stop retrying
-          const receiptIds = receipts.map((r) => r.receipt_id);
-          await supabase
-            .from("hub_message_receipts")
-            .update({
-              push_status: "failed",
-              push_sent_at: new Date().toISOString(),
-              push_error: error instanceof Error ? error.message : "Unknown",
-            })
-            .in("id", receiptIds);
-        }
+        // Update receipts push_status
+        await supabase
+          .from("hub_message_receipts")
+          .update(
+            pushResult.sent > 0
+              ? { push_status: "sent", push_sent_at: new Date().toISOString() }
+              : {
+                  push_status: "failed",
+                  push_sent_at: new Date().toISOString(),
+                  push_error: "No active subscriptions or delivery failed",
+                },
+          )
+          .in("id", receiptIds);
       }
     }
 

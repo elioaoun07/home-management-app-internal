@@ -864,8 +864,11 @@ CREATE TABLE public.push_subscriptions (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id),
-  CONSTRAINT push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+  CONSTRAINT push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT push_subscriptions_user_id_endpoint_key UNIQUE (user_id, endpoint)
 );
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_active
+  ON public.push_subscriptions (user_id) WHERE is_active = true;
 CREATE TABLE public.recipe_versions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   recipe_id uuid NOT NULL,

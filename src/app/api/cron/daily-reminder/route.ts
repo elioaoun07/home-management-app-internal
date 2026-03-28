@@ -15,21 +15,14 @@
  * Endpoint: GET /api/cron/daily-reminder
  */
 
+import { sendPushToUser } from "@/lib/pushSender";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import webpush from "web-push";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const CRON_SECRET = process.env.CRON_SECRET;
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
-
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-}
 
 // Helper: Check if current UTC time matches a target time (within 5-minute window)
 function isTimeMatch(
@@ -327,102 +320,28 @@ export async function GET(req: NextRequest) {
       notificationsSent++;
 
       // Send push notification
-      if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-        const { data: subscriptions } = await supabase
-          .from("push_subscriptions")
-          .select("id, endpoint, p256dh, auth, device_name, last_used_at")
-          .eq("user_id", userId)
-          .eq("is_active", true)
-          .order("last_used_at", { ascending: false });
+      {
+        const payload = JSON.stringify({
+          title,
+          body: message,
+          icon: "/appicon-192.png",
+          badge: "/appicon-192.png",
+          tag: `daily-reminder-${todayUTC}-${matchedSlot.replace(/:/g, "")}`,
+          data: {
+            type: "daily_reminder",
+            notification_id: notification.id,
+            action_url: "/expense",
+          },
+        });
 
-        console.log(
-          `[Daily Reminder] User ${userId.substring(0, 8)}: Found ${subscriptions?.length || 0} active push subscriptions`,
+        const pushResult = await sendPushToUser(
+          supabase,
+          userId,
+          payload,
+          notification.id,
         );
-
-        if (subscriptions && subscriptions.length > 0) {
-          // Use the most recently used subscription (most likely valid)
-          const primarySub = subscriptions[0];
-          console.log(
-            `[Daily Reminder] Sending to: ${primarySub.device_name} (last used: ${primarySub.last_used_at})`,
-          );
-
-          const payload = JSON.stringify({
-            title,
-            body: message,
-            icon: "/appicon-192.png",
-            badge: "/appicon-192.png",
-            tag: `daily-reminder-${todayUTC}-${matchedSlot.replace(/:/g, "")}`,
-            data: {
-              type: "daily_reminder",
-              notification_id: notification.id,
-              action_url: "/expense",
-            },
-          });
-
-          try {
-            await webpush.sendNotification(
-              {
-                endpoint: primarySub.endpoint,
-                keys: { p256dh: primarySub.p256dh, auth: primarySub.auth },
-              },
-              payload,
-            );
-
-            pushSent++;
-            console.log(
-              `[Daily Reminder] ✓ Push sent successfully to ${primarySub.device_name}`,
-            );
-
-            await supabase
-              .from("notifications")
-              .update({
-                push_status: "sent",
-                push_sent_at: new Date().toISOString(),
-              })
-              .eq("id", notification.id);
-
-            // Update last_used_at
-            await supabase
-              .from("push_subscriptions")
-              .update({ last_used_at: new Date().toISOString() })
-              .eq("id", primarySub.id);
-          } catch (error: unknown) {
-            pushFailed++;
-            console.error(
-              `[Daily Reminder] ✗ Push failed for ${primarySub.device_name}:`,
-              error,
-            );
-
-            const statusCode =
-              error && typeof error === "object" && "statusCode" in error
-                ? (error as { statusCode: number }).statusCode
-                : null;
-
-            // Deactivate invalid subscriptions
-            if (statusCode === 404 || statusCode === 410) {
-              await supabase
-                .from("push_subscriptions")
-                .update({ is_active: false })
-                .eq("id", primarySub.id);
-            }
-
-            await supabase
-              .from("notifications")
-              .update({
-                push_status: "failed",
-                push_error: error instanceof Error ? error.message : "Unknown",
-              })
-              .eq("id", notification.id);
-          }
-        } else {
-          console.log(
-            `[Daily Reminder] User ${userId.substring(0, 8)}: No active push subscriptions found`,
-          );
-        }
-      } else {
-        console.log(
-          `[Daily Reminder] VAPID keys not configured, skipping push`,
-        );
+        if (pushResult.sent > 0) pushSent++;
+        if (pushResult.allFailed) pushFailed++;
       }
     }
 

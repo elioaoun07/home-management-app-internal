@@ -14,34 +14,20 @@
  * 4. Marks alert as fired
  */
 
+import { sendPushToUser } from "@/lib/pushSender";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import webpush from "web-push";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const CRON_SECRET = process.env.CRON_SECRET;
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
-
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-}
 
 export async function GET(req: NextRequest) {
   // Verify cron secret
   const authHeader = req.headers.get("authorization");
   if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    return NextResponse.json(
-      { error: "Push notifications not configured" },
-      { status: 500 },
-    );
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -208,28 +194,7 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        // Get user's push subscriptions - ORDER BY last_used_at DESC to get the most recent
-        // The most recently used subscription is most likely to be valid
-        const { data: subscriptions } = await supabase
-          .from("push_subscriptions")
-          .select("id, endpoint, p256dh, auth, device_name, last_used_at")
-          .eq("user_id", userId)
-          .eq("is_active", true)
-          .order("last_used_at", { ascending: false });
-
-        if (subscriptions && subscriptions.length > 0) {
-          console.log(
-            `[Item Reminders] User ${userId.substring(0, 8)} has ${subscriptions.length} active subscription(s)`,
-          );
-
-          // IMPORTANT: Only send to the MOST RECENT subscription (first one after ordering)
-          // This avoids sending to stale endpoints that haven't been cleaned up yet
-          const primarySub = subscriptions[0];
-          console.log(
-            `[Item Reminders] Sending to: ${primarySub.device_name} (last used: ${primarySub.last_used_at})`,
-          );
-
-          const payload = JSON.stringify({
+        const payload = JSON.stringify({
             title: item.title,
             body: item.description || `Your ${item.type} is due now`,
             icon: "/appicon-192.png",
@@ -247,98 +212,14 @@ export async function GET(req: NextRequest) {
             },
           });
 
-          // Send ONLY to the primary (most recent) subscription
-          try {
-            await webpush.sendNotification(
-              {
-                endpoint: primarySub.endpoint,
-                keys: { p256dh: primarySub.p256dh, auth: primarySub.auth },
-              },
-              payload,
-            );
-
-            sent++;
-            console.log(
-              `[Item Reminders] ✓ Push sent successfully to ${primarySub.device_name}`,
-            );
-
-            // Update push status
-            await supabase
-              .from("notifications")
-              .update({
-                push_status: "sent",
-                push_sent_at: new Date().toISOString(),
-              })
-              .eq("id", notification?.id);
-
-            // Update last_used_at to keep track of which subscriptions are working
-            await supabase
-              .from("push_subscriptions")
-              .update({ last_used_at: new Date().toISOString() })
-              .eq("id", primarySub.id);
-          } catch (error: unknown) {
-            failed++;
-            console.error(
-              `[Item Reminders] ✗ Push failed to ${primarySub.device_name}:`,
-              error,
-            );
-
-            const statusCode =
-              error && typeof error === "object" && "statusCode" in error
-                ? (error as { statusCode: number }).statusCode
-                : null;
-
-            // Mark subscription as inactive if it's definitively gone
-            if (statusCode === 404 || statusCode === 410) {
-              console.log(
-                `[Item Reminders] Marking subscription ${primarySub.id} as inactive (status ${statusCode})`,
-              );
-              await supabase
-                .from("push_subscriptions")
-                .update({ is_active: false })
-                .eq("id", primarySub.id);
-
-              // Try the next subscription if primary failed
-              if (subscriptions.length > 1) {
-                const fallback = subscriptions[1];
-                console.log(
-                  `[Item Reminders] Trying fallback: ${fallback.device_name}`,
-                );
-                try {
-                  await webpush.sendNotification(
-                    {
-                      endpoint: fallback.endpoint,
-                      keys: { p256dh: fallback.p256dh, auth: fallback.auth },
-                    },
-                    payload,
-                  );
-                  sent++;
-                  failed--; // Undo the failed count
-                  console.log(
-                    `[Item Reminders] ✓ Fallback succeeded to ${fallback.device_name}`,
-                  );
-                } catch (fallbackError) {
-                  console.error(
-                    `[Item Reminders] Fallback also failed:`,
-                    fallbackError,
-                  );
-                }
-              }
-            }
-
-            await supabase
-              .from("notifications")
-              .update({
-                push_status: "failed",
-                push_error: error instanceof Error ? error.message : "Unknown",
-              })
-              .eq("id", notification?.id);
-          }
-        } else {
-          console.log(
-            `[Item Reminders] No active subscriptions for user ${userId.substring(0, 8)}`,
+          const pushResult = await sendPushToUser(
+            supabase,
+            userId,
+            payload,
+            notification?.id,
           );
-        }
+          if (pushResult.sent > 0) sent++;
+          if (pushResult.allFailed) failed++;
       } // End of userId loop
 
       // Mark alert as fired (after all users have been notified)
