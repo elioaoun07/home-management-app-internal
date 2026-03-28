@@ -12,6 +12,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemStatus, ItemType, ItemWithDetails } from "@/types/items";
 import { eachDayOfInterval, format, parseISO } from "date-fns";
+import { RRule } from "rrule";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import ItemActionsSheet from "@/components/items/ItemActionsSheet";
 import ItemDetailModal from "@/components/items/ItemDetailModal";
@@ -427,6 +428,41 @@ function sortByTime(items: ItemWithDetails[]): ItemWithDetails[] {
   });
 }
 
+// ── Occurrence Entry (for recurring item expansion) ──
+interface OccurrenceEntry {
+  item: ItemWithDetails;
+  occurrenceDate: string; // ISO string for the specific occurrence
+  occurrenceDateStr: string; // YYYY-MM-DD
+}
+
+function buildRRuleString(
+  dtstart: Date,
+  recurrenceRule: { rrule: string; count?: number | null; end_until?: string | null },
+): string {
+  let rrulePart = recurrenceRule.rrule;
+  if (recurrenceRule.count && !rrulePart.includes("COUNT=")) {
+    rrulePart += `;COUNT=${recurrenceRule.count}`;
+  }
+  if (
+    recurrenceRule.end_until &&
+    !recurrenceRule.count &&
+    !rrulePart.includes("UNTIL=")
+  ) {
+    const untilDate = parseISO(recurrenceRule.end_until);
+    const untilStr =
+      untilDate.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    rrulePart += `;UNTIL=${untilStr}`;
+  }
+  return `DTSTART:${dtstart.toISOString().replace(/[-:]/g, "").split(".")[0]}Z\nRRULE:${rrulePart}`;
+}
+
+function sortEntriesByTime(entries: OccurrenceEntry[]): OccurrenceEntry[] {
+  return [...entries].sort(
+    (a, b) =>
+      new Date(a.occurrenceDate).getTime() - new Date(b.occurrenceDate).getTime(),
+  );
+}
+
 function getPriorityDotClass(priority: string): string {
   switch (priority) {
     case "urgent":
@@ -524,6 +560,9 @@ export default function ItemsListView({
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
   const [catSectionOpen, setCatSectionOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("time");
+  const [recurringFilter, setRecurringFilter] = useState<
+    "all" | "one-time" | "recurring"
+  >("all");
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
     null,
   );
@@ -582,77 +621,152 @@ export default function ItemsListView({
     });
   }, [categoryFiltered, userFilter, currentUserId]);
 
-  // Overdue items: primary date before today (shown separately)
-  const overdueFiltered = useMemo(() => {
-    return userFiltered.filter((item) => {
-      const dayStr = getItemDayStr(item);
-      return dayStr !== null && dayStr < todayStr;
-    });
-  }, [userFiltered, todayStr]);
+  // Expand items into OccurrenceEntry[] — one-time items use primary date,
+  // recurring items have each occurrence in the range expanded via RRule.
+  const { rangeEntries, overdueEntries } = useMemo(() => {
+    // Apply recurring filter
+    const base =
+      recurringFilter === "all"
+        ? userFiltered
+        : recurringFilter === "one-time"
+          ? userFiltered.filter((item) => !item.recurrence_rule?.rrule)
+          : userFiltered.filter((item) => !!item.recurrence_rule?.rrule);
 
-  // Date range items: within range AND not overdue
-  const rangeFiltered = useMemo(() => {
-    return userFiltered.filter((item) => {
-      const dayStr = getItemDayStr(item);
-      if (!dayStr) return false;
-      if (dayStr < todayStr) return false; // handled in overdue section
-      return dayStr >= startDate && dayStr <= endDate;
-    });
-  }, [userFiltered, startDate, endDate, todayStr]);
+    const rangeStart = parseISO(startDate);
+    rangeStart.setHours(0, 0, 0, 0);
+    const rangeEnd = parseISO(endDate);
+    rangeEnd.setHours(23, 59, 59, 999);
 
-  // Group by time (existing logic)
+    const range: OccurrenceEntry[] = [];
+    const overdue: OccurrenceEntry[] = [];
+
+    for (const item of base) {
+      if (!item.recurrence_rule?.rrule) {
+        // One-time item — use primary date directly
+        const dateStr = getItemDayStr(item);
+        const occurrenceDate = getItemPrimaryDateStr(item) ?? item.created_at;
+        if (!dateStr) continue;
+        if (dateStr < todayStr) {
+          overdue.push({ item, occurrenceDate, occurrenceDateStr: dateStr });
+        } else if (dateStr >= startDate && dateStr <= endDate) {
+          range.push({ item, occurrenceDate, occurrenceDateStr: dateStr });
+        }
+      } else {
+        // Recurring item — expand all occurrences within the date range
+        const rule = item.recurrence_rule;
+        const startAnchor = parseISO(rule.start_anchor);
+        try {
+          const rruleString = buildRRuleString(startAnchor, rule);
+          const rruleObj = RRule.fromString(rruleString);
+          const exceptionSet = new Set(
+            rule.exceptions?.map((e) =>
+              normalizeToLocalDateString(new Date(e.exdate)),
+            ) ?? [],
+          );
+          const occurrences = rruleObj.between(
+            new Date(rangeStart.getTime() - 1),
+            new Date(rangeEnd.getTime() + 1),
+            true,
+          );
+          for (const occ of occurrences) {
+            const occDateStr = normalizeToLocalDateString(occ);
+            if (exceptionSet.has(occDateStr)) continue;
+            const occIso = occ.toISOString();
+            if (occDateStr < todayStr) {
+              overdue.push({
+                item,
+                occurrenceDate: occIso,
+                occurrenceDateStr: occDateStr,
+              });
+            } else if (occDateStr >= startDate && occDateStr <= endDate) {
+              range.push({
+                item,
+                occurrenceDate: occIso,
+                occurrenceDateStr: occDateStr,
+              });
+            }
+          }
+        } catch {
+          // Fallback: use primary date
+          const dateStr = getItemDayStr(item);
+          const occurrenceDate =
+            getItemPrimaryDateStr(item) ?? item.created_at;
+          if (!dateStr) continue;
+          if (dateStr < todayStr) {
+            overdue.push({ item, occurrenceDate, occurrenceDateStr: dateStr });
+          } else if (dateStr >= startDate && dateStr <= endDate) {
+            range.push({ item, occurrenceDate, occurrenceDateStr: dateStr });
+          }
+        }
+      }
+    }
+
+    return { rangeEntries: range, overdueEntries: overdue };
+  }, [userFiltered, startDate, endDate, todayStr, recurringFilter]);
+
+  // Group by time
   const timeGroups = useMemo(() => {
     if (groupBy !== "time") return null;
     if (isSingleDay) {
-      const map: Record<TimeGroup, ItemWithDetails[]> = {
+      const map: Record<TimeGroup, OccurrenceEntry[]> = {
         "all-day": [],
         morning: [],
         afternoon: [],
         evening: [],
         "no-time": [],
       };
-      rangeFiltered.forEach((item) => {
-        map[getTimeGroup(item)].push(item);
+      rangeEntries.forEach((entry) => {
+        const { item } = entry;
+        let group: TimeGroup;
+        if (item.type === "event" && item.event_details?.all_day) {
+          group = "all-day";
+        } else {
+          const hour = new Date(entry.occurrenceDate).getHours();
+          if (hour < 5) group = "evening";
+          else if (hour < 12) group = "morning";
+          else if (hour < 18) group = "afternoon";
+          else group = "evening";
+        }
+        map[group].push(entry);
       });
       (Object.keys(map) as TimeGroup[]).forEach((key) => {
-        map[key] = sortByTime(map[key]);
+        map[key] = sortEntriesByTime(map[key]);
       });
-      return map as Record<string, ItemWithDetails[]>;
+      return map as Record<string, OccurrenceEntry[]>;
     } else {
       const days = eachDayOfInterval({
         start: parseISO(startDate),
         end: parseISO(endDate),
       });
-      const map: Record<string, ItemWithDetails[]> = {};
+      const map: Record<string, OccurrenceEntry[]> = {};
       days.forEach((day) => {
         map[format(day, "yyyy-MM-dd")] = [];
       });
-      rangeFiltered.forEach((item) => {
-        const dayStr = getItemDayStr(item);
-        if (dayStr && map[dayStr] !== undefined) {
-          map[dayStr].push(item);
+      rangeEntries.forEach((entry) => {
+        if (map[entry.occurrenceDateStr] !== undefined) {
+          map[entry.occurrenceDateStr].push(entry);
         }
       });
       Object.keys(map).forEach((key) => {
-        map[key] = sortByTime(map[key]);
+        map[key] = sortEntriesByTime(map[key]);
       });
       return map;
     }
-  }, [rangeFiltered, groupBy, isSingleDay, startDate, endDate]);
+  }, [rangeEntries, groupBy, isSingleDay, startDate, endDate]);
 
   // Group by category
   const categoryGroups = useMemo(() => {
     if (groupBy !== "category") return null;
-    const map: Record<string, ItemWithDetails[]> = {};
-    rangeFiltered.forEach((item) => {
-      const key = item.categories?.find(Boolean) ?? "Uncategorized";
-      (map[key] ??= []).push(item);
+    const map: Record<string, OccurrenceEntry[]> = {};
+    rangeEntries.forEach((entry) => {
+      const key = entry.item.categories?.find(Boolean) ?? "Uncategorized";
+      (map[key] ??= []).push(entry);
     });
     Object.keys(map).forEach((k) => {
-      map[k] = sortByTime(map[k]);
+      map[k] = sortEntriesByTime(map[k]);
     });
     return map;
-  }, [rangeFiltered, groupBy]);
+  }, [rangeEntries, groupBy]);
 
   const toggleCollapse = (key: string) => {
     setCollapsed((prev) => {
@@ -663,27 +777,22 @@ export default function ItemsListView({
     });
   };
 
-  const getOccurrenceDate = (item: ItemWithDetails): string =>
-    getItemPrimaryDateStr(item) || item.created_at;
-
   // ── Item row renderer ──
-  const renderItem = (item: ItemWithDetails) => {
-    const primaryDateStr = getItemPrimaryDateStr(item);
-    const isCompleted = primaryDateStr
-      ? isOccurrenceCompleted(
-          item.id,
-          new Date(primaryDateStr),
-          occurrenceActions,
-        )
-      : item.status === "completed";
+  const renderItem = (entry: OccurrenceEntry) => {
+    const { item, occurrenceDate } = entry;
+    const isCompleted = isOccurrenceCompleted(
+      item.id,
+      new Date(occurrenceDate),
+      occurrenceActions,
+    );
     const isOwner = currentUserId ? item.user_id === currentUserId : true;
 
     let timeText = "No time";
     let isOverdue = false;
     if (item.type === "event" && item.event_details?.all_day) {
       timeText = "All day";
-    } else if (primaryDateStr) {
-      const rel = formatRelativeTime(primaryDateStr);
+    } else {
+      const rel = formatRelativeTime(occurrenceDate);
       timeText = rel.text;
       isOverdue = rel.isOverdue;
     }
@@ -709,9 +818,9 @@ export default function ItemsListView({
 
     return (
       <SwipeableJournalItem
-        key={item.id}
-        onComplete={() => isOwner && handleComplete(item, getOccurrenceDate(item))}
-        onOptions={() => setActionsState({ item, occurrenceDate: getOccurrenceDate(item) })}
+        key={`${item.id}-${entry.occurrenceDateStr}`}
+        onComplete={() => isOwner && handleComplete(item, occurrenceDate)}
+        onOptions={() => setActionsState({ item, occurrenceDate })}
         onClick={() => setSelectedItem(item)}
       >
         <div
@@ -838,7 +947,34 @@ export default function ItemsListView({
         </div>
       </div>
 
-      {/* Row 2: Category filter — collapsible */}
+      {/* Row 2: Recurring filter */}
+      <div className="border-t border-white/5 flex items-center gap-1.5 px-2.5 py-2">
+        <RepeatIcon className="w-3 h-3 text-white/25 flex-shrink-0" />
+        <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5 flex-1">
+          {(
+            [
+              { key: "all" as const, label: "All" },
+              { key: "one-time" as const, label: "Once" },
+              { key: "recurring" as const, label: "Repeat" },
+            ] as const
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setRecurringFilter(key)}
+              className={cn(
+                "flex-1 text-center py-1 rounded-md text-[11px] font-medium transition-all",
+                recurringFilter === key
+                  ? "bg-violet-500/25 text-violet-300"
+                  : `${themeClasses.text} hover:bg-white/5`,
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Row 3: Category filter — collapsible */}
       {availableCategories.length > 0 && (
         <div className="border-t border-white/5">
           <button
@@ -940,7 +1076,7 @@ export default function ItemsListView({
 
   // ── Overdue section renderer ──
   const renderOverdueSection = () => {
-    if (overdueFiltered.length === 0) return null;
+    if (overdueEntries.length === 0) return null;
     const isCollapsed = collapsed.has(OVERDUE_KEY);
     return (
       <div className="mb-4">
@@ -953,7 +1089,7 @@ export default function ItemsListView({
             Overdue
           </span>
           <span className="text-[10px] text-amber-400/40 ml-0.5">
-            ({overdueFiltered.length})
+            ({overdueEntries.length})
           </span>
           <ChevronUpIcon
             className={cn(
@@ -964,7 +1100,7 @@ export default function ItemsListView({
         </button>
         {!isCollapsed && (
           <div className="flex flex-col gap-2 pl-2 border-l-2 border-amber-500/20">
-            {overdueFiltered.map(renderItem)}
+            {overdueEntries.map(renderItem)}
           </div>
         )}
       </div>
@@ -976,10 +1112,10 @@ export default function ItemsListView({
     key: string,
     label: string,
     emoji: string | undefined,
-    items: ItemWithDetails[],
+    entries: OccurrenceEntry[],
     isToday = false,
   ) => {
-    if (items.length === 0) return null;
+    if (entries.length === 0) return null;
     const isCollapsed = collapsed.has(key);
     return (
       <div key={key}>
@@ -997,7 +1133,7 @@ export default function ItemsListView({
             {label}
           </span>
           <span className="text-[10px] text-white/30 ml-0.5">
-            ({items.length})
+            ({entries.length})
           </span>
           <ChevronUpIcon
             className={cn(
@@ -1007,14 +1143,14 @@ export default function ItemsListView({
           />
         </button>
         {!isCollapsed && (
-          <div className="flex flex-col gap-2">{items.map(renderItem)}</div>
+          <div className="flex flex-col gap-2">{entries.map(renderItem)}</div>
         )}
       </div>
     );
   };
 
   // ── Empty (no range items AND no overdue) ──
-  if (rangeFiltered.length === 0 && overdueFiltered.length === 0) {
+  if (rangeEntries.length === 0 && overdueEntries.length === 0) {
     return (
       <div className="flex flex-col gap-2">
         {controlsBar}
@@ -1102,7 +1238,7 @@ export default function ItemsListView({
 
   // ── Single-day time view ──
   if (isSingleDay && timeGroups) {
-    const dayGroups = timeGroups as Record<TimeGroup, ItemWithDetails[]>;
+    const dayGroups = timeGroups as Record<TimeGroup, OccurrenceEntry[]>;
     return (
       <>
         {controlsBar}
