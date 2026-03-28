@@ -13,7 +13,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { yyyyMmDd } from "@/lib/utils/date";
-import { useMemo, useRef, useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type UserFilter = "all" | "mine" | "partner";
@@ -64,14 +64,30 @@ export interface FilterBarProps {
 
 // ─── Inline Icons ─────────────────────────────────────────────────────────────
 const UserIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
     <circle cx="12" cy="7" r="4" />
   </svg>
 );
 
 const UsersIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
     <circle cx="9" cy="7" r="4" />
     <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
@@ -80,27 +96,53 @@ const UsersIcon = ({ className }: { className?: string }) => (
 );
 
 const HeartIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
   </svg>
 );
 
 const GroupTimeIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
     <circle cx="12" cy="12" r="10" />
     <polyline points="12 6 12 12 16 14" />
   </svg>
 );
 
 const GroupCatIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
     <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
     <line x1="7" y1="7" x2="7.01" y2="7" />
   </svg>
 );
 
 const TagIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
     <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
     <line x1="7" y1="7" x2="7.01" y2="7" />
   </svg>
@@ -132,16 +174,29 @@ function getDatePresets() {
   const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
 
-  const threeMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 2, 1);
-
   return [
     { label: "Today", start: todayStr, end: todayStr },
-    { label: "Yesterday", start: yyyyMmDd(yesterday), end: yyyyMmDd(yesterday) },
+    {
+      label: "Yesterday",
+      start: yyyyMmDd(yesterday),
+      end: yyyyMmDd(yesterday),
+    },
     { label: "This Week", start: yyyyMmDd(weekStart), end: yyyyMmDd(weekEnd) },
-    { label: "Last Week", start: yyyyMmDd(lastWeekStart), end: yyyyMmDd(lastWeekEnd) },
-    { label: "This Month", start: yyyyMmDd(monthStart), end: yyyyMmDd(monthEnd) },
-    { label: "Last Month", start: yyyyMmDd(lastMonthStart), end: yyyyMmDd(lastMonthEnd) },
-    { label: "3 Months", start: yyyyMmDd(threeMonthsAgo), end: todayStr },
+    {
+      label: "Last Week",
+      start: yyyyMmDd(lastWeekStart),
+      end: yyyyMmDd(lastWeekEnd),
+    },
+    {
+      label: "This Month",
+      start: yyyyMmDd(monthStart),
+      end: yyyyMmDd(monthEnd),
+    },
+    {
+      label: "Last Month",
+      start: yyyyMmDd(lastMonthStart),
+      end: yyyyMmDd(lastMonthEnd),
+    },
   ];
 }
 
@@ -196,12 +251,15 @@ export default function FilterBar({
 
   const presets = useMemo(() => getDatePresets(), []);
 
-  const themeColor = currentUserTheme === "pink"
-    ? { me: "#ec4899", partner: "#3b82f6" }
-    : { me: "#3b82f6", partner: "#ec4899" };
+  const themeColor =
+    currentUserTheme === "pink"
+      ? { me: "#ec4899", partner: "#3b82f6" }
+      : { me: "#3b82f6", partner: "#ec4899" };
 
   const activeDateLabel = useMemo(() => {
-    const match = presets.find((p) => p.start === dateRange.start && p.end === dateRange.end);
+    const match = presets.find(
+      (p) => p.start === dateRange.start && p.end === dateRange.end,
+    );
     return match?.label ?? "Custom";
   }, [presets, dateRange]);
 
@@ -213,13 +271,23 @@ export default function FilterBar({
     if (showJournalFilters && recurringFilter !== "all") count++;
     if (showCategoryFilter && categoryFilters.length > 0) count++;
     return count;
-  }, [activeDateLabel, showJournalFilters, typeFilter, recurringFilter, showCategoryFilter, categoryFilters]);
+  }, [
+    activeDateLabel,
+    showJournalFilters,
+    typeFilter,
+    recurringFilter,
+    showCategoryFilter,
+    categoryFilters,
+  ]);
 
   // Close filter panel on outside click
   useEffect(() => {
     if (!showFilters) return;
     const handler = (e: MouseEvent) => {
-      if (filterPanelRef.current && !filterPanelRef.current.contains(e.target as Node)) {
+      if (
+        filterPanelRef.current &&
+        !filterPanelRef.current.contains(e.target as Node)
+      ) {
         setShowFilters(false);
       }
     };
@@ -246,7 +314,11 @@ export default function FilterBar({
               ? "text-white"
               : "border-transparent text-slate-400 hover:text-slate-300",
           )}
-          style={userFilter === "mine" ? { borderColor: themeColor.me, color: themeColor.me } : {}}
+          style={
+            userFilter === "mine"
+              ? { borderColor: themeColor.me, color: themeColor.me }
+              : {}
+          }
         >
           <UserIcon className="w-3.5 h-3.5" />
           Me
@@ -271,7 +343,11 @@ export default function FilterBar({
               ? "text-white"
               : "border-transparent text-slate-400 hover:text-slate-300",
           )}
-          style={userFilter === "partner" ? { borderColor: themeColor.partner, color: themeColor.partner } : {}}
+          style={
+            userFilter === "partner"
+              ? { borderColor: themeColor.partner, color: themeColor.partner }
+              : {}
+          }
         >
           <HeartIcon className="w-3.5 h-3.5" />
           Partner
@@ -279,12 +355,15 @@ export default function FilterBar({
       </div>
 
       {/* Row 2: Section tabs + action icons */}
-      <div className="flex items-center gap-2 px-3 py-2">
+      <div className="flex items-center gap-1.5 px-2 py-2">
         {/* Section tabs */}
-        <div className="flex gap-0.5 neo-card rounded-xl p-1 flex-1">
+        <div className="flex gap-0.5 neo-card rounded-xl p-1 flex-1 min-w-0">
           {sections.map(({ key, label, Icon, variant }, idx) => {
             const isActive = activeSection === key;
-            const showDivider = idx > 0 && sections[idx - 1]?.variant !== variant && variant === "journal";
+            const showDivider =
+              idx > 0 &&
+              sections[idx - 1]?.variant !== variant &&
+              variant === "journal";
             return (
               <div
                 key={key}
@@ -296,7 +375,7 @@ export default function FilterBar({
                 <button
                   onClick={() => onSectionChange(key)}
                   className={cn(
-                    "w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                    "w-full flex items-center justify-center gap-1 px-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors min-w-0",
                     isActive
                       ? variant === "journal"
                         ? "bg-violet-500/25 text-violet-300 shadow-sm"
@@ -305,7 +384,7 @@ export default function FilterBar({
                   )}
                 >
                   <Icon className="w-3 h-3 flex-shrink-0" />
-                  <span>{label}</span>
+                  <span className="truncate">{label}</span>
                 </button>
               </div>
             );
@@ -316,7 +395,7 @@ export default function FilterBar({
         <button
           onClick={() => setShowFilters((v) => !v)}
           className={cn(
-            "relative p-1.5 rounded-lg transition-colors",
+            "relative p-1.5 rounded-lg transition-colors flex-shrink-0",
             showFilters || activeFilterCount > 0
               ? `${themeClasses.bgActive} ${themeClasses.textActive}`
               : `neo-card ${themeClasses.text} hover:bg-white/5`,
@@ -334,14 +413,16 @@ export default function FilterBar({
           onClick={onRefresh}
           disabled={isFetching}
           className={cn(
-            "p-1.5 rounded-lg transition-colors",
+            "p-1.5 rounded-lg transition-colors flex-shrink-0",
             isFetching
               ? `${themeClasses.bgActive} ${themeClasses.textActive}`
               : `neo-card ${themeClasses.text} hover:bg-white/5`,
           )}
           title="Refresh data"
         >
-          <RefreshIcon className={cn("w-4 h-4", isFetching && "animate-spin")} />
+          <RefreshIcon
+            className={cn("w-4 h-4", isFetching && "animate-spin")}
+          />
         </button>
 
         {/* Eye — budget sections only */}
@@ -352,14 +433,18 @@ export default function FilterBar({
               onToggleBlur();
             }}
             className={cn(
-              "p-1.5 rounded-lg transition-colors",
+              "p-1.5 rounded-lg transition-colors flex-shrink-0",
               isBlurred
                 ? `${themeClasses.bgActive} ${themeClasses.textActive}`
                 : `neo-card ${themeClasses.text} hover:bg-white/5`,
             )}
             title={isBlurred ? "Show amounts" : "Hide amounts"}
           >
-            {isBlurred ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+            {isBlurred ? (
+              <EyeOffIcon className="w-4 h-4" />
+            ) : (
+              <EyeIcon className="w-4 h-4" />
+            )}
           </button>
         )}
       </div>
@@ -389,7 +474,9 @@ export default function FilterBar({
           {/* Group by — only when showGroupToggle */}
           {showGroupToggle && (
             <div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">Group by</p>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">
+                Group by
+              </p>
               <div className="flex gap-1.5">
                 <button
                   onClick={() => onGroupModeChange("time")}
@@ -428,12 +515,17 @@ export default function FilterBar({
             {/* Quick presets in 2-column grid */}
             <div className="grid grid-cols-2 gap-1.5 mb-2.5">
               {presets.map((preset) => {
-                const isActive = dateRange.start === preset.start && dateRange.end === preset.end;
+                const isActive =
+                  dateRange.start === preset.start &&
+                  dateRange.end === preset.end;
                 return (
                   <button
                     key={preset.label}
                     onClick={() => {
-                      onDateRangeChange({ start: preset.start, end: preset.end });
+                      onDateRangeChange({
+                        start: preset.start,
+                        end: preset.end,
+                      });
                       setCustomDateOpen(false);
                     }}
                     className={cn(
@@ -455,7 +547,12 @@ export default function FilterBar({
                 onClick={() => setCustomDateOpen((v) => !v)}
                 className="w-full px-3 py-2 flex items-center justify-between"
               >
-                <span className={cn("text-[11px] font-medium", themeClasses.textMuted)}>
+                <span
+                  className={cn(
+                    "text-[11px] font-medium",
+                    themeClasses.textMuted,
+                  )}
+                >
                   Custom Range
                 </span>
                 {customDateOpen ? (
@@ -467,7 +564,9 @@ export default function FilterBar({
               {customDateOpen && (
                 <div className="px-3 pb-2.5 pt-2 border-t border-white/5 space-y-2">
                   <div>
-                    <label className="text-[10px] text-white/40 block mb-1">Start Date</label>
+                    <label className="text-[10px] text-white/40 block mb-1">
+                      Start Date
+                    </label>
                     <input
                       type="date"
                       value={customStart}
@@ -479,7 +578,9 @@ export default function FilterBar({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-white/40 block mb-1">End Date</label>
+                    <label className="text-[10px] text-white/40 block mb-1">
+                      End Date
+                    </label>
                     <input
                       type="date"
                       value={customEnd}
@@ -493,7 +594,10 @@ export default function FilterBar({
                   <button
                     onClick={() => {
                       if (customStart && customEnd) {
-                        onDateRangeChange({ start: customStart, end: customEnd });
+                        onDateRangeChange({
+                          start: customStart,
+                          end: customEnd,
+                        });
                         setCustomDateOpen(false);
                       }
                     }}
@@ -514,7 +618,12 @@ export default function FilterBar({
                 className="flex items-center gap-2 w-full px-3 py-2.5"
               >
                 <TagIcon className="w-3.5 h-3.5 text-white/25 flex-shrink-0" />
-                <span className={cn("text-[11px] font-medium flex-1 text-left", themeClasses.textMuted)}>
+                <span
+                  className={cn(
+                    "text-[11px] font-medium flex-1 text-left",
+                    themeClasses.textMuted,
+                  )}
+                >
                   Categories
                 </span>
                 {categoryFilters.length > 0 && (
@@ -525,7 +634,10 @@ export default function FilterBar({
                 {catSectionOpen ? (
                   <ChevronUpIcon className="w-3 h-3 text-white/20" size={12} />
                 ) : (
-                  <ChevronDownIcon className="w-3 h-3 text-white/20" size={12} />
+                  <ChevronDownIcon
+                    className="w-3 h-3 text-white/20"
+                    size={12}
+                  />
                 )}
               </button>
               {catSectionOpen && (
@@ -559,7 +671,11 @@ export default function FilterBar({
                       >
                         <span
                           className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: isSelected ? color : "rgba(255,255,255,0.2)" }}
+                          style={{
+                            backgroundColor: isSelected
+                              ? color
+                              : "rgba(255,255,255,0.2)",
+                          }}
                         />
                         {name}
                       </button>
@@ -584,7 +700,9 @@ export default function FilterBar({
             <>
               {/* Type filter */}
               <div>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">Type</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">
+                  Type
+                </p>
                 <div className="flex gap-0.5 neo-card rounded-xl p-0.5">
                   {TYPE_FILTERS.map(({ key, label }) => (
                     <button
@@ -605,7 +723,9 @@ export default function FilterBar({
 
               {/* Recurring filter */}
               <div>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">Recurrence</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-white/30 mb-2">
+                  Recurrence
+                </p>
                 <div className="flex gap-0.5 neo-card rounded-xl p-0.5">
                   {RECURRING_FILTERS.map(({ key, label }) => (
                     <button
