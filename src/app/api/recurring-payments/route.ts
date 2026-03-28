@@ -12,8 +12,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Fetch own + household partner's recurring payments (RLS handles access)
-    const { data, error } = await supabase
+    // Check for household link to also fetch partner's recurring payments
+    const { data: link } = await supabase
+      .from("household_links")
+      .select("owner_user_id, partner_user_id")
+      .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
+      .eq("active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const partnerId = link
+      ? link.owner_user_id === user.id
+        ? link.partner_user_id
+        : link.owner_user_id
+      : null;
+
+    // Build query: own items + partner's non-private items
+    let query = supabase
       .from("recurring_payments")
       .select(
         `
@@ -23,8 +39,20 @@ export async function GET(request: Request) {
         subcategory:user_categories!recurring_payments_subcategory_id_fkey(id, name, slug)
       `,
       )
-      .eq("is_active", true)
-      .order("next_due_date", { ascending: true });
+      .eq("is_active", true);
+
+    if (partnerId) {
+      // Own items + partner's non-private items
+      query = query.or(
+        `user_id.eq.${user.id},and(user_id.eq.${partnerId},is_private.eq.false)`,
+      );
+    } else {
+      query = query.eq("user_id", user.id);
+    }
+
+    const { data, error } = await query.order("next_due_date", {
+      ascending: true,
+    });
 
     if (error) {
       console.error("Error fetching recurring payments:", error);
@@ -67,6 +95,7 @@ export async function POST(request: Request) {
       recurrence_day,
       next_due_date,
       payment_method,
+      is_private,
     } = body;
 
     // Validation
@@ -103,6 +132,7 @@ export async function POST(request: Request) {
         recurrence_day: recurrence_day || null,
         next_due_date,
         payment_method: payment_method || "manual",
+        is_private: is_private ?? false,
         is_active: true,
       })
       .select()

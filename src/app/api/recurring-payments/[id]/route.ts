@@ -18,7 +18,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    // Only allow updating specific fields
+    // Only allow updating specific fields (owner only — enforced by user_id filter below)
     const allowedFields = [
       "name",
       "amount",
@@ -30,6 +30,7 @@ export async function PATCH(
       "next_due_date",
       "is_active",
       "payment_method",
+      "is_private",
     ];
 
     const updates: any = {};
@@ -137,7 +138,7 @@ export async function POST(
     const { id } = await params;
     const body = await request.json();
 
-    // Get the recurring payment (RLS allows household partner access)
+    // Get the recurring payment
     const { data: recurringPayment, error: fetchError } = await supabase
       .from("recurring_payments")
       .select("*")
@@ -149,6 +150,27 @@ export async function POST(
         { error: "Recurring payment not found" },
         { status: 404 },
       );
+    }
+
+    // Authorization: owner can always confirm. Partner can confirm non-private items.
+    if (recurringPayment.user_id !== user.id) {
+      if (recurringPayment.is_private) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
+      // Verify current user and payment owner share an active household link
+      const ownerId = recurringPayment.user_id;
+      const { data: link } = await supabase
+        .from("household_links")
+        .select("id")
+        .or(
+          `and(owner_user_id.eq.${user.id},partner_user_id.eq.${ownerId}),and(partner_user_id.eq.${user.id},owner_user_id.eq.${ownerId})`,
+        )
+        .eq("active", true)
+        .maybeSingle();
+
+      if (!link) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
     }
 
     // Allow overriding amount, description, account, category, subcategory at confirm time

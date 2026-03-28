@@ -5,6 +5,7 @@ import {
   CheckIcon,
   Edit2Icon,
   ListIcon,
+  LockIcon,
   PlusIcon,
   Trash2Icon,
   XIcon,
@@ -30,6 +31,10 @@ import {
   useUpdateRecurringPayment,
 } from "@/features/recurring/useRecurringPayments";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import {
+  getMemberDisplayName,
+  useHouseholdMembers,
+} from "@/hooks/useHouseholdMembers";
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
@@ -58,6 +63,9 @@ export default function RecurringPage() {
   const { data: accounts = [] } = useMyAccounts();
   const defaultAccount = accounts.find((a) => a.is_default) || accounts[0];
   const { data: categories = [] } = useCategories(defaultAccount?.id);
+  const { data: householdData } = useHouseholdMembers();
+  const currentUserId = householdData?.currentUserId ?? null;
+  const members = householdData?.members ?? [];
 
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [editingPayment, setEditingPayment] = useState<RecurringPayment | null>(
@@ -84,6 +92,7 @@ export default function RecurringPage() {
     recurrence_day: "",
     next_due_date: "",
     payment_method: "manual" as "manual" | "auto",
+    is_private: false,
   });
 
   // Confirm payment form state
@@ -135,6 +144,7 @@ export default function RecurringPage() {
         recurrence_day: editingPayment.recurrence_day?.toString() || "",
         next_due_date: editingPayment.next_due_date,
         payment_method: editingPayment.payment_method || "manual",
+        is_private: editingPayment.is_private ?? false,
       });
       setShowAddDrawer(true);
     }
@@ -165,6 +175,7 @@ export default function RecurringPage() {
       recurrence_day: "",
       next_due_date: "",
       payment_method: "manual",
+      is_private: false,
     });
   };
 
@@ -194,6 +205,7 @@ export default function RecurringPage() {
             : null,
           next_due_date: formData.next_due_date,
           payment_method: formData.payment_method,
+          is_private: formData.is_private,
         });
         // Toast with undo shown by hook
       } else {
@@ -210,6 +222,7 @@ export default function RecurringPage() {
             : null,
           next_due_date: formData.next_due_date,
           payment_method: formData.payment_method,
+          is_private: formData.is_private,
         });
         // Toast with undo shown by hook
       }
@@ -281,14 +294,19 @@ export default function RecurringPage() {
 
   const getDueDateInfo = (payment: RecurringPayment) => {
     const dueDate = new Date(payment.next_due_date);
-    const isDue = isPast(dueDate) || isToday(dueDate);
+    const isDueToday = isToday(dueDate);
+    const isOverdue = isPast(dueDate) && !isDueToday;
+    const isDue = isDueToday || isOverdue;
+    const isUpcoming = !isDue; // future — payment is up to date
 
     return {
       isDue,
-      isOverdue: isPast(dueDate) && !isToday(dueDate),
-      formatted: isToday(dueDate)
+      isDueToday,
+      isOverdue,
+      isUpcoming,
+      formatted: isDueToday
         ? "Due Today"
-        : isDue
+        : isOverdue
           ? `Overdue by ${formatDistanceToNow(dueDate)}`
           : `Due ${formatDistanceToNow(dueDate, { addSuffix: true })}`,
       date: format(dueDate, "MMM d, yyyy"),
@@ -409,24 +427,34 @@ export default function RecurringPage() {
                 new Date(payment.next_due_date).getDate();
               const isManual =
                 (payment.payment_method ?? "manual") === "manual";
+              const isOwner =
+                !currentUserId || payment.user_id === currentUserId;
 
               return (
                 <div
                   key={payment.id}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
-                    dueDateInfo.isDue
-                      ? cn(themeClasses.bgActive, "neo-glow")
-                      : "hover:bg-white/5",
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all border",
+                    dueDateInfo.isOverdue
+                      ? "border-red-500/40 bg-red-500/5"
+                      : dueDateInfo.isDueToday
+                        ? cn(
+                            themeClasses.bgActive,
+                            themeClasses.borderActive,
+                            "neo-glow",
+                          )
+                        : "border-transparent hover:bg-white/5",
                   )}
                 >
                   {/* Day */}
                   <span
                     className={cn(
                       "w-8 text-center text-sm font-bold tabular-nums",
-                      dueDateInfo.isDue
-                        ? themeClasses.textHighlight
-                        : "text-white/60",
+                      dueDateInfo.isOverdue
+                        ? "text-red-400"
+                        : dueDateInfo.isDueToday
+                          ? themeClasses.textHighlight
+                          : "text-white/60",
                     )}
                   >
                     {day}
@@ -438,13 +466,25 @@ export default function RecurringPage() {
                     onClick={() =>
                       isManual
                         ? setConfirmingPayment(payment)
-                        : setEditingPayment(payment)
+                        : isOwner
+                          ? setEditingPayment(payment)
+                          : undefined
                     }
                   >
-                    <p className="text-sm font-medium text-white truncate">
-                      {payment.name}
-                    </p>
-                    {payment.category && (
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium text-white truncate">
+                        {payment.name}
+                      </p>
+                      {payment.is_private && isOwner && (
+                        <LockIcon className="w-3 h-3 text-white/30 flex-shrink-0" />
+                      )}
+                    </div>
+                    {!isOwner && (
+                      <p className="text-[10px] text-purple-400/70 truncate">
+                        {getMemberDisplayName(members, payment.user_id)}
+                      </p>
+                    )}
+                    {payment.category && isOwner && (
                       <p className="text-[10px] text-white/30 truncate">
                         {payment.category.name}
                       </p>
@@ -455,7 +495,9 @@ export default function RecurringPage() {
                   <span
                     className={cn(
                       "w-16 text-right text-sm font-semibold tabular-nums",
-                      themeClasses.textHighlight,
+                      dueDateInfo.isOverdue
+                        ? "text-red-400"
+                        : themeClasses.textHighlight,
                     )}
                   >
                     ${payment.amount.toFixed(0)}
@@ -473,24 +515,28 @@ export default function RecurringPage() {
                     {isManual ? "Cash" : "Auto"}
                   </span>
 
-                  {/* Log transaction button (manual payments always) */}
+                  {/* Log transaction button */}
                   <div className="w-8 flex justify-center">
                     {isManual ? (
                       <button
                         onClick={() => setConfirmingPayment(payment)}
                         className={cn(
                           "p-1.5 rounded-md active:scale-95 transition-all",
-                          dueDateInfo.isDue
-                            ? themeClasses.bgActive
-                            : themeClasses.bgSurface,
+                          dueDateInfo.isOverdue
+                            ? "bg-red-500/20"
+                            : dueDateInfo.isDueToday
+                              ? themeClasses.bgActive
+                              : themeClasses.bgSurface,
                         )}
                       >
                         <CheckIcon
                           className={cn(
                             "w-3.5 h-3.5",
-                            dueDateInfo.isDue
-                              ? themeClasses.textHighlight
-                              : themeClasses.text,
+                            dueDateInfo.isOverdue
+                              ? "text-red-400"
+                              : dueDateInfo.isDueToday
+                                ? themeClasses.textHighlight
+                                : themeClasses.text,
                           )}
                         />
                       </button>
@@ -537,18 +583,23 @@ export default function RecurringPage() {
               const day =
                 payment.recurrence_day ??
                 new Date(payment.next_due_date).getDate();
+              const isOwner =
+                !currentUserId || payment.user_id === currentUserId;
 
               return (
                 <div
                   key={payment.id}
                   className={cn(
-                    "neo-card p-4 transition-all",
-                    dueDateInfo.isDue &&
-                      cn(
-                        "neo-glow",
-                        themeClasses.borderActive,
-                        themeClasses.bgActive,
-                      ),
+                    "neo-card p-4 transition-all border",
+                    dueDateInfo.isOverdue
+                      ? "border-red-500/50 bg-red-500/5 neo-glow"
+                      : dueDateInfo.isDueToday
+                        ? cn(
+                            "neo-glow",
+                            themeClasses.borderActive,
+                            themeClasses.bgActive,
+                          )
+                        : "border-green-500/20 bg-green-500/5",
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -556,23 +607,27 @@ export default function RecurringPage() {
                       <div
                         className={cn(
                           "w-10 h-10 rounded-lg flex items-center justify-center",
-                          dueDateInfo.isDue
-                            ? themeClasses.bgActive
-                            : themeClasses.bgSurface,
+                          dueDateInfo.isOverdue
+                            ? "bg-red-500/15"
+                            : dueDateInfo.isDueToday
+                              ? themeClasses.bgActive
+                              : themeClasses.bgSurface,
                         )}
                       >
                         <IconComponent
                           className={cn(
                             "w-5 h-5",
-                            dueDateInfo.isDue
-                              ? themeClasses.textHighlight
-                              : themeClasses.text,
+                            dueDateInfo.isOverdue
+                              ? "text-red-400"
+                              : dueDateInfo.isDueToday
+                                ? themeClasses.textHighlight
+                                : themeClasses.text,
                           )}
                         />
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <h3 className="font-semibold text-white">
                             {payment.name}
                           </h3>
@@ -586,11 +641,24 @@ export default function RecurringPage() {
                           >
                             {isManual ? "Cash" : "Auto"}
                           </span>
+                          {payment.is_private && isOwner && (
+                            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-white/8 text-white/40 font-medium">
+                              <LockIcon className="w-2.5 h-2.5" />
+                              Private
+                            </span>
+                          )}
+                          {!isOwner && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 font-medium">
+                              {getMemberDisplayName(members, payment.user_id)}
+                            </span>
+                          )}
                         </div>
                         <p
                           className={cn(
                             "text-2xl font-bold mb-2",
-                            themeClasses.textHighlight,
+                            dueDateInfo.isOverdue
+                              ? "text-red-400"
+                              : themeClasses.textHighlight,
                           )}
                         >
                           ${payment.amount.toFixed(2)}
@@ -599,13 +667,15 @@ export default function RecurringPage() {
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <span
                             className={cn(
-                              "px-2 py-1 rounded-full",
-                              dueDateInfo.isDue
-                                ? cn(
-                                    themeClasses.bgActive,
-                                    themeClasses.textHighlight,
-                                  )
-                                : cn(themeClasses.bgSurface, themeClasses.text),
+                              "px-2 py-1 rounded-full font-medium",
+                              dueDateInfo.isOverdue
+                                ? "bg-red-500/15 text-red-400"
+                                : dueDateInfo.isDueToday
+                                  ? cn(
+                                      themeClasses.bgActive,
+                                      themeClasses.textHighlight,
+                                    )
+                                  : "bg-green-500/15 text-green-400",
                             )}
                           >
                             {dueDateInfo.formatted}
@@ -624,46 +694,54 @@ export default function RecurringPage() {
                     </div>
 
                     <div className="flex gap-1">
-                      {/* Log transaction (manual payments always) */}
+                      {/* Log transaction (manual payments — visible to owner and partner) */}
                       {isManual && (
                         <button
                           onClick={() => setConfirmingPayment(payment)}
                           className={cn(
                             "p-2 rounded-lg active:scale-95 transition-all",
-                            dueDateInfo.isDue
-                              ? themeClasses.bgActive
-                              : themeClasses.bgSurface,
-                            themeClasses.bgHover,
+                            dueDateInfo.isOverdue
+                              ? "bg-red-500/15 hover:bg-red-500/25"
+                              : dueDateInfo.isDueToday
+                                ? cn(themeClasses.bgActive, themeClasses.bgHover)
+                                : cn(themeClasses.bgSurface, themeClasses.bgHover),
                           )}
                         >
                           <CheckIcon
                             className={cn(
                               "w-4 h-4",
-                              dueDateInfo.isDue
-                                ? themeClasses.textHighlight
-                                : themeClasses.text,
+                              dueDateInfo.isOverdue
+                                ? "text-red-400"
+                                : dueDateInfo.isDueToday
+                                  ? themeClasses.textHighlight
+                                  : themeClasses.text,
                             )}
                           />
                         </button>
                       )}
-                      <button
-                        onClick={() => setEditingPayment(payment)}
-                        className={cn(
-                          "p-2 rounded-lg active:scale-95 transition-all",
-                          themeClasses.bgSurface,
-                          themeClasses.bgHover,
-                        )}
-                      >
-                        <Edit2Icon
-                          className={cn("w-4 h-4", themeClasses.text)}
-                        />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(payment.id)}
-                        className="p-2 rounded-lg bg-[#ef4444]/10 hover:bg-[#ef4444]/20 active:scale-95 transition-all"
-                      >
-                        <Trash2Icon className="w-4 h-4 text-[#ef4444]" />
-                      </button>
+                      {/* Edit/Delete — owner only */}
+                      {isOwner && (
+                        <>
+                          <button
+                            onClick={() => setEditingPayment(payment)}
+                            className={cn(
+                              "p-2 rounded-lg active:scale-95 transition-all",
+                              themeClasses.bgSurface,
+                              themeClasses.bgHover,
+                            )}
+                          >
+                            <Edit2Icon
+                              className={cn("w-4 h-4", themeClasses.text)}
+                            />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(payment.id)}
+                            className="p-2 rounded-lg bg-[#ef4444]/10 hover:bg-[#ef4444]/20 active:scale-95 transition-all"
+                          >
+                            <Trash2Icon className="w-4 h-4 text-[#ef4444]" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -992,6 +1070,49 @@ export default function RecurringPage() {
                       className={`${themeClasses.formControlBg} text-white`}
                     />
                   </div>
+
+                  {/* Private toggle */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        is_private: !formData.is_private,
+                      })
+                    }
+                    className={cn(
+                      "w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all",
+                      formData.is_private
+                        ? "bg-white/8 border-white/20 text-white"
+                        : "border-white/8 text-white/40",
+                      themeClasses.bgSurface,
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <LockIcon className="w-4 h-4" />
+                      <div className="text-left">
+                        <div className="text-sm font-medium">Private</div>
+                        <div className="text-[10px] text-white/30">
+                          Only you can see this payment
+                        </div>
+                      </div>
+                    </div>
+                    <div
+                      className={cn(
+                        "w-9 h-5 rounded-full transition-all relative",
+                        formData.is_private
+                          ? "bg-white/30"
+                          : "bg-white/10",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all",
+                          formData.is_private ? "left-4" : "left-0.5",
+                        )}
+                      />
+                    </div>
+                  </button>
 
                   <Button
                     onClick={handleSubmit}

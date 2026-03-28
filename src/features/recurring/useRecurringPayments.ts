@@ -20,6 +20,7 @@ export type RecurringPayment = {
   next_due_date: string;
   last_processed_date: string | null;
   payment_method: "manual" | "auto";
+  is_private: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -79,6 +80,7 @@ export function useCreateRecurringPayment() {
       recurrence_day?: number | null;
       next_due_date: string;
       payment_method?: "manual" | "auto";
+      is_private?: boolean;
     }) => {
       const res = await safeFetch("/api/recurring-payments", {
         method: "POST",
@@ -138,6 +140,7 @@ export function useUpdateRecurringPayment() {
       next_due_date?: string;
       is_active?: boolean;
       payment_method?: "manual" | "auto";
+      is_private?: boolean;
     }) => {
       const res = await safeFetch(`/api/recurring-payments/${id}`, {
         method: "PATCH",
@@ -178,6 +181,7 @@ export function useUpdateRecurringPayment() {
                   next_due_date: prev.next_due_date,
                   is_active: prev.is_active,
                   payment_method: prev.payment_method,
+                  is_private: prev.is_private,
                 }),
               });
               queryClient.invalidateQueries({ queryKey: QUERY_KEY });
@@ -245,6 +249,7 @@ export function useDeleteRecurringPayment() {
                   recurrence_day: deleted.recurrence_day,
                   next_due_date: deleted.next_due_date,
                   payment_method: deleted.payment_method,
+                  is_private: deleted.is_private,
                 }),
               });
               queryClient.invalidateQueries({ queryKey: QUERY_KEY });

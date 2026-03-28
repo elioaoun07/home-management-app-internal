@@ -941,6 +941,7 @@ CREATE TABLE public.recurring_payments (
   recurrence_day integer,
   next_due_date date NOT NULL,
   last_processed_date date,
+  is_private boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
