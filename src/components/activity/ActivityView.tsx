@@ -18,6 +18,7 @@ import FilterBar, {
 import ItemsListView from "./ItemsListView";
 import TransactionListView from "./TransactionListView";
 import TransferListView from "./TransferListView";
+import { useAppModeSafe } from "@/contexts/AppModeContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 
 type ActiveSection = "transactions" | "transfers" | "items";
@@ -49,8 +50,20 @@ export default function ActivityView() {
   const themeClasses = useThemeClasses();
   const { isBlurred, toggleBlur } = usePrivacyBlur();
   const queryClient = useQueryClient();
+  const appModeCtx = useAppModeSafe();
 
-  const [activeSection, setActiveSection] = useState<ActiveSection>("transactions");
+  const [activeSection, setActiveSection] = useState<ActiveSection>(
+    appModeCtx?.isItemsMode ? "items" : "transactions",
+  );
+
+  // Sync active section when the FAB mode changes
+  useEffect(() => {
+    if (appModeCtx?.isItemsMode) {
+      setActiveSection("items");
+    } else if (appModeCtx?.isBudgetMode) {
+      setActiveSection("transactions");
+    }
+  }, [appModeCtx?.isItemsMode, appModeCtx?.isBudgetMode]);
   const [userFilter, setUserFilter] = useState<UserFilter>("all");
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [groupMode, setGroupMode] = useState<GroupMode>("time");

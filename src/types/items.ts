@@ -278,6 +278,7 @@ export interface CreateTaskInput extends CreateItemInput {
   type: "task";
   due_at?: string | null;
   estimate_minutes?: number | null;
+  alerts?: CreateAlertInput[];
   category_ids?: UUID[];
   recurrence_rule?: CreateRecurrenceInput;
 }

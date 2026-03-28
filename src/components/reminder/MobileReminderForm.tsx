@@ -30,6 +30,7 @@ import {
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import type {
+  CreateAlertInput,
   CreateEventInput,
   CreateRecurrenceInput,
   CreateReminderInput,
@@ -284,6 +285,73 @@ const CATEGORIES = [
 ] as const;
 
 // ============================================
+// TASK ALERT PRESETS
+// ============================================
+
+type TaskAlertPreset =
+  | "none"
+  | "15min"
+  | "30min"
+  | "1hour"
+  | "3hours"
+  | "1day"
+  | "2days"
+  | "1week"
+  | "1weekend";
+
+const TASK_ALERT_PRESETS: Array<{
+  value: TaskAlertPreset;
+  label: string;
+  short: string;
+}> = [
+  { value: "none", label: "At due time (default)", short: "Auto" },
+  { value: "15min", label: "15 min before", short: "15m" },
+  { value: "30min", label: "30 min before", short: "30m" },
+  { value: "1hour", label: "1 hour before", short: "1h" },
+  { value: "3hours", label: "3 hours before", short: "3h" },
+  { value: "1day", label: "1 day before (9am)", short: "1d" },
+  { value: "2days", label: "2 days before (9am)", short: "2d" },
+  { value: "1week", label: "1 week before (9am)", short: "1wk" },
+  { value: "1weekend", label: "Weekend before (Sat 9am)", short: "Wknd" },
+];
+
+function getAlertInputFromPreset(
+  preset: TaskAlertPreset,
+  dueAtIso: string,
+): CreateAlertInput | null {
+  switch (preset) {
+    case "none":
+      return null;
+    case "15min":
+      return { kind: "relative", offset_minutes: 15, relative_to: "due", channel: "push" };
+    case "30min":
+      return { kind: "relative", offset_minutes: 30, relative_to: "due", channel: "push" };
+    case "1hour":
+      return { kind: "relative", offset_minutes: 60, relative_to: "due", channel: "push" };
+    case "3hours":
+      return { kind: "relative", offset_minutes: 180, relative_to: "due", channel: "push" };
+    case "1day":
+      return { kind: "relative", offset_minutes: 1440, relative_to: "due", custom_time: "09:00", channel: "push" };
+    case "2days":
+      return { kind: "relative", offset_minutes: 2880, relative_to: "due", custom_time: "09:00", channel: "push" };
+    case "1week":
+      return { kind: "relative", offset_minutes: 10080, relative_to: "due", custom_time: "09:00", channel: "push" };
+    case "1weekend": {
+      const due = new Date(dueAtIso);
+      const dayOfWeek = due.getDay(); // 0=Sun, 6=Sat
+      // Days to go back to reach the Saturday before the due date
+      const daysToSat = dayOfWeek === 6 ? 7 : dayOfWeek === 0 ? 1 : dayOfWeek + 1;
+      const sat = new Date(due);
+      sat.setDate(sat.getDate() - daysToSat);
+      sat.setHours(9, 0, 0, 0);
+      return { kind: "absolute", trigger_at: sat.toISOString(), channel: "push" };
+    }
+    default:
+      return null;
+  }
+}
+
+// ============================================
 // COMPONENT
 // ============================================
 
@@ -331,6 +399,9 @@ export default function MobileReminderForm() {
     "personal",
   ]);
 
+  // Task alert state
+  const [taskAlertPreset, setTaskAlertPreset] = useState<TaskAlertPreset>("none");
+
   // Recurrence state
   const [recurrenceRule, setRecurrenceRule] = useState("");
 
@@ -343,6 +414,10 @@ export default function MobileReminderForm() {
     "set-date",
   );
   const [editingDateField, setEditingDateField] = useState<string | null>(null);
+
+  // Expandable sections in the date modal
+  const [showAlertInModal, setShowAlertInModal] = useState(false);
+  const [showEndDateInModal, setShowEndDateInModal] = useState(false);
 
   // Voice input state
   const [isListening, setIsListening] = useState(false);
@@ -525,7 +600,10 @@ export default function MobileReminderForm() {
     setEndTime("");
     setSelectedCategoryIds(["personal"]);
     setRecurrenceRule("");
+    setTaskAlertPreset("none");
     setManualOverrides({ type: false, priority: false, categories: false, dates: false });
+    setShowAlertInModal(false);
+    setShowEndDateInModal(false);
   }, []);
 
   // Submit handler
@@ -540,27 +618,12 @@ export default function MobileReminderForm() {
 
     try {
       if (itemType === "event") {
-        // Set defaults if missing
-        const today = new Date();
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const formatDate = (d: Date) => d.toISOString().split("T")[0];
-        const formatTime = (d: Date) => d.toTimeString().slice(0, 5);
-
-        const defaultStartDate = startDate || formatDate(today);
-        const defaultStartTime = startTime || formatTime(today);
-        const defaultEndDate = endDate || formatDate(tomorrow);
-        const defaultEndTime = endTime || formatTime(today);
-
-        // Check for missing event fields
+        // Check for missing event fields — open modal without pre-filling defaults
         if (!startDate || !startTime || !endDate || !endTime) {
-          setStartDate(defaultStartDate);
-          setStartTime(defaultStartTime);
-          setEndDate(defaultEndDate);
-          setEndTime(defaultEndTime);
-
           setMissingFieldType("event");
           setDateModalIntent("submit");
+          setShowAlertInModal(taskAlertPreset !== "none");
+          setShowEndDateInModal(true);
           setShowMissingFieldsModal(true);
           return;
         }
@@ -579,6 +642,10 @@ export default function MobileReminderForm() {
           };
         }
 
+        const eventAlertInput = startAtIso
+          ? getAlertInputFromPreset(taskAlertPreset, startAtIso)
+          : null;
+
         const input: CreateEventInput = {
           type: "event",
           title: title.trim(),
@@ -588,6 +655,7 @@ export default function MobileReminderForm() {
           is_public: !isPrivate,
           start_at: startAtIso,
           end_at: endAtIso,
+          alerts: eventAlertInput ? [eventAlertInput] : undefined,
           category_ids:
             selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
           recurrence_rule,
@@ -599,21 +667,12 @@ export default function MobileReminderForm() {
           description: title,
         });
       } else if (itemType === "task") {
-        // Set defaults if missing
-        const today = new Date();
-        const formatDate = (d: Date) => d.toISOString().split("T")[0];
-        const formatTime = (d: Date) => d.toTimeString().slice(0, 5);
-
-        const defaultDueDate = dueDate || formatDate(today);
-        const defaultDueTime = dueTime || formatTime(today);
-
-        // Check for missing task fields - always prompt if no date/time set
+        // Check for missing task fields — open modal without pre-filling defaults
         if (!dueDate || !dueTime) {
-          setDueDate(defaultDueDate);
-          setDueTime(defaultDueTime);
-
           setMissingFieldType("task");
           setDateModalIntent("submit");
+          setShowAlertInModal(true);
+          setShowEndDateInModal(false);
           setShowMissingFieldsModal(true);
           return;
         }
@@ -634,6 +693,10 @@ export default function MobileReminderForm() {
           };
         }
 
+        const alertInput = dueAtIso
+          ? getAlertInputFromPreset(taskAlertPreset, dueAtIso)
+          : null;
+
         const input: CreateTaskInput = {
           type: "task",
           title: title.trim(),
@@ -641,6 +704,7 @@ export default function MobileReminderForm() {
           priority,
           is_public: !isPrivate,
           due_at: dueAtIso,
+          alerts: alertInput ? [alertInput] : undefined,
           category_ids:
             selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
           recurrence_rule,
@@ -652,21 +716,12 @@ export default function MobileReminderForm() {
           description: title,
         });
       } else {
-        // Set defaults if missing
-        const today = new Date();
-        const formatDate = (d: Date) => d.toISOString().split("T")[0];
-        const formatTime = (d: Date) => d.toTimeString().slice(0, 5);
-
-        const defaultDueDate = dueDate || formatDate(today);
-        const defaultDueTime = dueTime || formatTime(today);
-
-        // Check for missing reminder fields - always prompt if no date/time set
+        // Check for missing reminder fields — open modal without pre-filling defaults
         if (!dueDate || !dueTime) {
-          setDueDate(defaultDueDate);
-          setDueTime(defaultDueTime);
-
           setMissingFieldType("reminder");
           setDateModalIntent("submit");
+          setShowAlertInModal(false);
+          setShowEndDateInModal(false);
           setShowMissingFieldsModal(true);
           return;
         }
@@ -999,6 +1054,8 @@ export default function MobileReminderForm() {
                     if (!dueTime) setDueTime(fmtT(today));
                     setMissingFieldType(itemType === "task" ? "task" : "reminder");
                   }
+                  setShowAlertInModal(itemType === "task" || itemType === "event");
+                  setShowEndDateInModal(itemType === "event");
                   setDateModalIntent("set-date");
                   setShowMissingFieldsModal(true);
                 }}
@@ -1077,6 +1134,65 @@ export default function MobileReminderForm() {
                   </div>
                 </PopoverContent>
               </Popover>
+
+              {/* Task Alert Tag — only visible when type is task */}
+              {itemType === "task" && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className={cn(
+                        "inline-flex items-center gap-1 px-2.5 py-1 rounded-full active:scale-95 transition-all duration-150 shrink-0",
+                        taskAlertPreset !== "none"
+                          ? "bg-amber-500/20 hover:bg-amber-500/30"
+                          : `${themeClasses.pillBg} ${themeClasses.pillBgHover}`,
+                      )}
+                    >
+                      <BellIcon
+                        className={cn(
+                          "w-3 h-3",
+                          taskAlertPreset !== "none"
+                            ? "text-amber-400"
+                            : themeClasses.textMuted,
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "font-semibold text-[11px]",
+                          taskAlertPreset !== "none"
+                            ? "text-amber-300"
+                            : themeClasses.textMuted,
+                        )}
+                      >
+                        {TASK_ALERT_PRESETS.find(
+                          (p) => p.value === taskAlertPreset,
+                        )?.short ?? "Alert"}
+                      </span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    sideOffset={6}
+                    className="w-52 p-1 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
+                  >
+                    {TASK_ALERT_PRESETS.map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => setTaskAlertPreset(preset.value)}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all",
+                          taskAlertPreset === preset.value
+                            ? "bg-amber-500/20 text-amber-300 font-semibold"
+                            : `${themeClasses.textMuted} hover:bg-white/5`,
+                        )}
+                      >
+                        <BellIcon className="w-3.5 h-3.5" />
+                        {preset.label}
+                      </button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
           </div>
         </div>
@@ -1215,6 +1331,8 @@ export default function MobileReminderForm() {
                       if (!dueTime) setDueTime(formatTimeStr(today));
                       setMissingFieldType("reminder");
                     }
+                    setShowAlertInModal(itemType === "task" || itemType === "event");
+                    setShowEndDateInModal(itemType === "event");
                     setDateModalIntent("set-date");
                     setShowMissingFieldsModal(true);
                   }}
@@ -1293,60 +1411,52 @@ export default function MobileReminderForm() {
                     )}
                   />
                 </div>
+
+                {/* Private/Public Toggle — icon only */}
+                <button
+                  type="button"
+                  onClick={() => setIsPrivate(!isPrivate)}
+                  className={cn(
+                    "h-10 w-10 flex items-center justify-center rounded-xl border transition-all duration-300 active:scale-95 shrink-0",
+                    isPrivate
+                      ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow}`
+                      : `bg-bg-dark/40 ${themeClasses.border}`,
+                  )}
+                >
+                  <svg
+                    className={cn(
+                      "w-4 h-4 transition-all duration-500",
+                      isPrivate
+                        ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(20,184,166,0.8)]`
+                        : themeClasses.textFaint,
+                    )}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    {isPrivate ? (
+                      <>
+                        <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </>
+                    ) : (
+                      <>
+                        <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                      </>
+                    )}
+                  </svg>
+                </button>
               </div>
             </div>
 
-            {/* CREATE BUTTON + PRIVATE TOGGLE */}
-            <div className="flex items-center gap-2 mt-2">
-              <button
-                onClick={() => setIsPrivate(!isPrivate)}
-                className={cn(
-                  "group relative h-12 px-3 rounded-xl border transition-all duration-300 active:scale-95 flex items-center gap-1.5 overflow-hidden flex-shrink-0",
-                  isPrivate
-                    ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow}`
-                    : `neo-card ${themeClasses.border} ${themeClasses.borderHover}`,
-                )}
-              >
-                <svg
-                  className={cn(
-                    "relative w-4 h-4 transition-all duration-500",
-                    isPrivate
-                      ? `${themeClasses.textActive} drop-shadow-[0_0_10px_rgba(20,184,166,0.8)]`
-                      : `${themeClasses.textFaint} ${themeClasses.textHover}`,
-                  )}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2.5}
-                >
-                  {isPrivate ? (
-                    <>
-                      <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </>
-                  ) : (
-                    <>
-                      <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-                    </>
-                  )}
-                </svg>
-                <span
-                  className={cn(
-                    "relative text-[10px] font-semibold tracking-wide transition-all duration-300",
-                    isPrivate
-                      ? `${themeClasses.textActive}`
-                      : `${themeClasses.textFaint}`,
-                  )}
-                >
-                  {isPrivate ? "Private" : "Public"}
-                </span>
-              </button>
-
+            {/* CREATE BUTTON — full width */}
+            <div className="mt-2">
               <Button
                 onClick={handleSubmit}
                 disabled={!title.trim() || isPending}
-                className="flex-1 h-12 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5 transition-all active:scale-[0.98] spring-bounce"
+                className="w-full h-12 text-base font-semibold neo-gradient text-white border-0 shadow-lg hover:shadow-xl hover:scale-[1.02] hover:-translate-y-0.5 transition-all active:scale-[0.98] spring-bounce"
               >
                 {isPending ? (
                   <span className="flex items-center gap-2">
@@ -1407,279 +1517,238 @@ export default function MobileReminderForm() {
                   📅 Complete Date & Time
                 </h3>
                 <p className={cn("text-sm", themeClasses.textSecondary)}>
-                  {missingFieldType === "event"
-                    ? "Please set the start and end date/time for your event"
-                    : "Please set the date and time for your item"}
+                  {itemType === "event"
+                    ? "Set the start and end date/time for your event"
+                    : itemType === "task"
+                      ? "Set the due date — add an alert to notify you"
+                      : "Set the date and time for your reminder"}
                 </p>
               </div>
 
-              {/* Date/Time Inputs */}
+              {/* Date/Time Inputs — progressive: Reminder → +Alert → Task → +End Date → Event */}
               <div className="space-y-3">
-                {missingFieldType === "event" ? (
-                  <>
-                    {/* Start Date & Time */}
-                    <div className="bg-[#0d1f35] border border-cyan-500/20 p-4 rounded-xl space-y-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CalendarIcon className="w-4 h-4 text-cyan-400" />
-                        <Label className="text-sm font-semibold text-cyan-300">
-                          Start Date & Time
-                        </Label>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* Start Date */}
-                        <div className="relative">
-                          {editingDateField === "startDate" ? (
-                            <Input
-                              type="date"
-                              value={startDate}
-                              onChange={(e) => setStartDate(e.target.value)}
-                              onBlur={() => setEditingDateField(null)}
-                              autoFocus
-                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setEditingDateField("startDate")}
-                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
-                            >
-                              {formatDateDisplay(startDate)}
-                            </button>
-                          )}
-                        </div>
-                        {/* Start Time */}
-                        <div className="relative">
-                          {editingDateField === "startTime" ? (
-                            <Input
-                              type="time"
-                              value={startTime}
-                              onChange={(e) => setStartTime(e.target.value)}
-                              onBlur={() => setEditingDateField(null)}
-                              autoFocus
-                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setEditingDateField("startTime")}
-                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
-                            >
-                              {formatTimeDisplay(startTime)}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* End Date & Time */}
-                    <div className="bg-[#0d1f35] border border-cyan-500/20 p-4 rounded-xl space-y-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CalendarIcon className="w-4 h-4 text-cyan-400" />
-                        <Label className="text-sm font-semibold text-cyan-300">
-                          End Date & Time
-                        </Label>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* End Date */}
-                        <div className="relative">
-                          {editingDateField === "endDate" ? (
-                            <Input
-                              type="date"
-                              value={endDate}
-                              onChange={(e) => setEndDate(e.target.value)}
-                              onBlur={() => setEditingDateField(null)}
-                              autoFocus
-                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setEditingDateField("endDate")}
-                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
-                            >
-                              {formatDateDisplay(endDate)}
-                            </button>
-                          )}
-                        </div>
-                        {/* End Time */}
-                        <div className="relative">
-                          {editingDateField === "endTime" ? (
-                            <Input
-                              type="time"
-                              value={endTime}
-                              onChange={(e) => setEndTime(e.target.value)}
-                              onBlur={() => setEditingDateField(null)}
-                              autoFocus
-                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setEditingDateField("endTime")}
-                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
-                            >
-                              {formatTimeDisplay(endTime)}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  /* Reminder/Task Date & Time */
-                  <div className="space-y-3">
-                    <div className="bg-[#0d1f35] border border-cyan-500/20 p-4 rounded-xl space-y-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <BellIcon className="w-4 h-4 text-cyan-400" />
-                        <Label className="text-sm font-semibold text-cyan-300">
-                          Due Date & Time
-                        </Label>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* Due Date */}
-                        <div className="relative">
-                          {editingDateField === "dueDate" ? (
-                            <Input
-                              type="date"
-                              value={dueDate}
-                              onChange={(e) => setDueDate(e.target.value)}
-                              onBlur={() => setEditingDateField(null)}
-                              autoFocus
-                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setEditingDateField("dueDate")}
-                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
-                            >
-                              {formatDateDisplay(dueDate)}
-                            </button>
-                          )}
-                        </div>
-                        {/* Due Time */}
-                        <div className="relative">
-                          {editingDateField === "dueTime" ? (
-                            <Input
-                              type="time"
-                              value={dueTime}
-                              onChange={(e) => setDueTime(e.target.value)}
-                              onBlur={() => setEditingDateField(null)}
-                              autoFocus
-                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setEditingDateField("dueTime")}
-                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
-                            >
-                              {formatTimeDisplay(dueTime)}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* End Date — set to convert to Event; clear to revert */}
-                    <div
-                      className={cn(
-                        "border p-4 rounded-xl space-y-3 transition-all duration-200",
-                        endDate
-                          ? "bg-pink-500/10 border-pink-500/40"
-                          : "bg-[#0d1f35] border-pink-500/20",
+                {/* ── Start / Due Date (always visible) ── */}
+                <div className="bg-[#0d1f35] border border-cyan-500/20 p-4 rounded-xl space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CalendarIcon className="w-4 h-4 text-cyan-400" />
+                    <Label className="text-sm font-semibold text-cyan-300">
+                      {itemType === "event" ? "Start Date & Time" : "Date & Time"}
+                    </Label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="relative">
+                      {editingDateField === "startDate_u" ? (
+                        <Input
+                          type="date"
+                          value={itemType === "event" ? startDate : dueDate}
+                          onChange={(e) => {
+                            if (itemType === "event") setStartDate(e.target.value);
+                            else setDueDate(e.target.value);
+                          }}
+                          onBlur={() => setEditingDateField(null)}
+                          autoFocus
+                          className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setEditingDateField("startDate_u")}
+                          className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
+                        >
+                          {formatDateDisplay(itemType === "event" ? startDate : dueDate)}
+                        </button>
                       )}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <CalendarIcon className="w-4 h-4 text-pink-400" />
-                          <Label className="text-sm font-semibold text-pink-300">
-                            End Date{" "}
-                            {endDate ? (
-                              <span className="text-xs font-normal text-pink-400">
-                                — Event mode active
-                              </span>
-                            ) : (
-                              <span className="text-xs font-normal text-pink-300/60">
-                                — add to convert to Event
-                              </span>
-                            )}
-                          </Label>
-                        </div>
-                        {endDate && (
+                    </div>
+                    <div className="relative">
+                      {editingDateField === "startTime_u" ? (
+                        <Input
+                          type="time"
+                          value={itemType === "event" ? startTime : dueTime}
+                          onChange={(e) => {
+                            if (itemType === "event") setStartTime(e.target.value);
+                            else setDueTime(e.target.value);
+                          }}
+                          onBlur={() => setEditingDateField(null)}
+                          autoFocus
+                          className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setEditingDateField("startTime_u")}
+                          className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
+                        >
+                          {formatTimeDisplay(itemType === "event" ? startTime : dueTime)}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Alert — collapsed button or expanded section ── */}
+                {showAlertInModal ? (
+                  <div className="bg-[#0d1f35] border border-amber-500/20 p-4 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <BellIcon className="w-4 h-4 text-amber-400" />
+                        <Label className="text-sm font-semibold text-amber-300">
+                          Alert
+                        </Label>
+                        <span className="text-xs text-amber-300/50 font-normal">
+                          — notify before due time
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAlertInModal(false);
+                          setTaskAlertPreset("none");
+                          if (!showEndDateInModal) {
+                            setItemType("reminder");
+                            setManualOverrides((prev) => ({ ...prev, type: false }));
+                          }
+                        }}
+                        className="text-xs text-amber-300/60 hover:text-amber-300 transition-colors px-2 py-0.5 rounded-md hover:bg-amber-500/10"
+                      >
+                        Remove ✕
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {TASK_ALERT_PRESETS.map((preset) => (
+                        <button
+                          key={preset.value}
+                          type="button"
+                          onClick={() => setTaskAlertPreset(preset.value)}
+                          className={cn(
+                            "px-3 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95",
+                            taskAlertPreset === preset.value
+                              ? "bg-amber-500/30 text-amber-200 ring-1 ring-amber-400/50"
+                              : "bg-white/5 text-white/50 hover:bg-white/10",
+                          )}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAlertInModal(true);
+                      if (itemType === "reminder") {
+                        setItemType("task");
+                        setManualOverrides((prev) => ({ ...prev, type: true }));
+                      }
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-amber-500/30 text-amber-400/60 hover:border-amber-500/50 hover:text-amber-400 transition-all active:scale-[0.99] text-sm"
+                  >
+                    <BellIcon className="w-4 h-4" />
+                    <span>Add Alert</span>
+                    <span className="text-xs opacity-60 ml-1">→ upgrades to Task</span>
+                  </button>
+                )}
+
+                {/* ── End Date — collapsed button or expanded section ── */}
+                {showEndDateInModal ? (
+                  <div className="bg-pink-500/10 border border-pink-500/40 p-4 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <CalendarIcon className="w-4 h-4 text-pink-400" />
+                        <Label className="text-sm font-semibold text-pink-300">
+                          End Date & Time{" "}
+                          <span className="text-xs font-normal text-pink-400">— Event</span>
+                        </Label>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEndDateInModal(false);
+                          setEndDate("");
+                          setEndTime("");
+                          if (showAlertInModal) {
+                            setItemType("task");
+                            setManualOverrides((prev) => ({ ...prev, type: true }));
+                          } else {
+                            setItemType("reminder");
+                            setManualOverrides((prev) => ({ ...prev, type: false }));
+                          }
+                        }}
+                        className="text-xs text-pink-300/60 hover:text-pink-300 transition-colors px-2 py-0.5 rounded-md hover:bg-pink-500/10"
+                      >
+                        Remove ✕
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="relative">
+                        {editingDateField === "endDate" ? (
+                          <Input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            onBlur={() => setEditingDateField(null)}
+                            autoFocus
+                            className="py-3 h-11 bg-[#0a1628] border border-pink-500/30 text-pink-100 [color-scheme:dark]"
+                          />
+                        ) : (
                           <button
                             type="button"
-                            onClick={() => {
-                              setEndDate("");
-                              setEndTime("");
-                              if (itemType === "event") {
-                                setItemType("reminder");
-                                setManualOverrides((prev) => ({ ...prev, type: false }));
-                              }
-                              setMissingFieldType("reminder");
-                            }}
-                            className="text-xs text-pink-300/60 hover:text-pink-300 transition-colors px-2 py-0.5 rounded-md hover:bg-pink-500/10"
+                            onClick={() => setEditingDateField("endDate")}
+                            className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-pink-500/20 rounded-md text-left text-pink-100 hover:border-pink-500/40 transition-colors text-sm"
                           >
-                            Clear ✕
+                            {endDate ? formatDateDisplay(endDate) : "No end date"}
                           </button>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* End Date */}
-                        <div className="relative">
-                          {editingDateField === "endDate" ? (
-                            <Input
-                              type="date"
-                              value={endDate}
-                              onChange={(e) => {
-                                setEndDate(e.target.value);
-                                if (e.target.value) {
-                                  setItemType("event");
-                                  setManualOverrides((prev) => ({ ...prev, type: true }));
-                                  if (!startDate && dueDate) setStartDate(dueDate);
-                                  if (!startTime && dueTime) setStartTime(dueTime);
-                                  setMissingFieldType("event");
-                                }
-                              }}
-                              onBlur={() => setEditingDateField(null)}
-                              autoFocus
-                              className="py-3 h-11 bg-[#0a1628] border border-pink-500/30 text-pink-100 [color-scheme:dark]"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setEditingDateField("endDate")}
-                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-pink-500/20 rounded-md text-left text-pink-100 hover:border-pink-500/40 transition-colors text-sm"
-                            >
-                              {endDate ? formatDateDisplay(endDate) : "No end date"}
-                            </button>
-                          )}
-                        </div>
-                        {/* End Time */}
-                        <div className="relative">
-                          {editingDateField === "endTime" ? (
-                            <Input
-                              type="time"
-                              value={endTime}
-                              onChange={(e) => setEndTime(e.target.value)}
-                              onBlur={() => setEditingDateField(null)}
-                              autoFocus
-                              className="py-3 h-11 bg-[#0a1628] border border-pink-500/30 text-pink-100 [color-scheme:dark]"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setEditingDateField("endTime")}
-                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-pink-500/20 rounded-md text-left text-pink-100 hover:border-pink-500/40 transition-colors text-sm"
-                            >
-                              {endTime ? formatTimeDisplay(endTime) : "No end time"}
-                            </button>
-                          )}
-                        </div>
+                      <div className="relative">
+                        {editingDateField === "endTime" ? (
+                          <Input
+                            type="time"
+                            value={endTime}
+                            onChange={(e) => setEndTime(e.target.value)}
+                            onBlur={() => setEditingDateField(null)}
+                            autoFocus
+                            className="py-3 h-11 bg-[#0a1628] border border-pink-500/30 text-pink-100 [color-scheme:dark]"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingDateField("endTime")}
+                            className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-pink-500/20 rounded-md text-left text-pink-100 hover:border-pink-500/40 transition-colors text-sm"
+                          >
+                            {endTime ? formatTimeDisplay(endTime) : "No end time"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = new Date();
+                      const tomorrow = new Date(today);
+                      tomorrow.setDate(tomorrow.getDate() + 1);
+                      const fmt = (d: Date) => d.toISOString().split("T")[0];
+                      const fmtT = (d: Date) => d.toTimeString().slice(0, 5);
+                      // Carry current start date over to event start
+                      if (!startDate) setStartDate(dueDate || fmt(today));
+                      if (!startTime) setStartTime(dueTime || fmtT(today));
+                      if (!endDate) setEndDate(fmt(tomorrow));
+                      if (!endTime) setEndTime(dueTime || fmtT(today));
+                      setShowEndDateInModal(true);
+                      setItemType("event");
+                      setManualOverrides((prev) => ({ ...prev, type: true }));
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-pink-500/30 text-pink-400/60 hover:border-pink-500/50 hover:text-pink-400 transition-all active:scale-[0.99] text-sm"
+                  >
+                    <CalendarIcon className="w-4 h-4" />
+                    <span>Add End Date</span>
+                    <span className="text-xs opacity-60 ml-1">→ upgrades to Event</span>
+                  </button>
                 )}
+
               </div>
 
               {/* Action Buttons */}
@@ -1703,7 +1772,7 @@ export default function MobileReminderForm() {
                     // If intent is "set-date", just close — user continues filling the form
                   }}
                   disabled={
-                    missingFieldType === "event"
+                    itemType === "event"
                       ? !startDate || !startTime || !endDate || !endTime
                       : !dueDate || !dueTime
                   }
