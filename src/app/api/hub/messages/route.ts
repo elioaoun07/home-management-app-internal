@@ -979,6 +979,13 @@ export async function PATCH(request: NextRequest) {
 
           const { assigned_to } = body;
 
+          // Fetch thread_id for realtime broadcast
+          const { data: assignMsg } = await supabase
+            .from("hub_messages")
+            .select("thread_id")
+            .eq("id", message_id)
+            .single();
+
           // assigned_to can be a user UUID or null (to unassign)
           const { error: assignError } = await supabase
             .from("hub_messages")
@@ -992,11 +999,73 @@ export async function PATCH(request: NextRequest) {
             );
           }
 
+          // Broadcast assignment update for realtime sync
+          if (assignMsg?.thread_id) {
+            const assignChannel = supabase.channel(`thread-${assignMsg.thread_id}`);
+            await assignChannel.subscribe();
+            await assignChannel.send({
+              type: "broadcast",
+              event: "item-assign-update",
+              payload: {
+                message_id,
+                assigned_to: assigned_to || null,
+                updated_by: user.id,
+              },
+            });
+            await supabase.removeChannel(assignChannel);
+          }
+
           return NextResponse.json({
             success: true,
             message_id,
             assigned_to: assigned_to || null,
           });
+        }
+
+        case "bulk_check": {
+          const { message_ids: bulkIds, checked } = body;
+          if (!Array.isArray(bulkIds) || bulkIds.length === 0) {
+            return NextResponse.json(
+              { error: "message_ids required" },
+              { status: 400 },
+            );
+          }
+          const now = new Date().toISOString();
+          const { error: bulkError } = await supabase
+            .from("hub_messages")
+            .update({
+              checked_at: checked ? now : null,
+              checked_by: checked ? user.id : null,
+            })
+            .in("id", bulkIds);
+
+          if (bulkError) {
+            return NextResponse.json(
+              { error: "Failed to bulk check items" },
+              { status: 500 },
+            );
+          }
+          return NextResponse.json({ success: true, updated: bulkIds.length });
+        }
+
+        case "reorder_items": {
+          const { items: itemOrders } = body;
+          if (!Array.isArray(itemOrders) || itemOrders.length === 0) {
+            return NextResponse.json(
+              { error: "items required" },
+              { status: 400 },
+            );
+          }
+          // Batch update sort orders
+          await Promise.all(
+            itemOrders.map(({ id, item_sort_order }: { id: string; item_sort_order: number }) =>
+              supabase
+                .from("hub_messages")
+                .update({ item_sort_order })
+                .eq("id", id),
+            ),
+          );
+          return NextResponse.json({ success: true });
         }
 
         case "clear_checked": {

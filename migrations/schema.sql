@@ -552,6 +552,7 @@ CREATE TABLE public.hub_messages (
   voice_transcript text,
   voice_duration integer,
   meal_plan_id uuid,
+  item_sort_order float,
   CONSTRAINT hub_messages_pkey PRIMARY KEY (id),
   CONSTRAINT hub_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
   CONSTRAINT hub_messages_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
