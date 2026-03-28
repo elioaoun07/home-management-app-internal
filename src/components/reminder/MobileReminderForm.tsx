@@ -8,6 +8,11 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { MOBILE_CONTENT_BOTTOM_OFFSET } from "@/constants/layout";
 import {
   useCreateEvent,
@@ -289,6 +294,10 @@ export default function MobileReminderForm() {
   const createTask = useCreateTask();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Header height measurement (for fixed positioning of content)
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(160);
+
   // Smart text input state
   const [smartInput, setSmartInput] = useState("");
   const [parsedItem, setParsedItem] = useState<ParsedItem | null>(null);
@@ -298,7 +307,8 @@ export default function MobileReminderForm() {
     type: boolean;
     priority: boolean;
     categories: boolean;
-  }>({ type: false, priority: false, categories: false });
+    dates: boolean;
+  }>({ type: false, priority: false, categories: false, dates: false });
 
   // Form state (can be overridden manually after parsing)
   const [title, setTitle] = useState("");
@@ -429,6 +439,20 @@ export default function MobileReminderForm() {
   useEffect(() => {
     if (!smartInput.trim()) {
       setParsedItem(null);
+      // Reset non-overridden fields to defaults when input is cleared
+      if (!manualOverrides.type) setItemType("reminder");
+      if (!manualOverrides.priority) setPriority("normal");
+      if (!manualOverrides.categories) setSelectedCategoryIds(["personal"]);
+      if (!manualOverrides.dates) {
+        setDueDate("");
+        setDueTime("");
+        setStartDate("");
+        setStartTime("");
+        setEndDate("");
+        setEndTime("");
+      }
+      setTitle("");
+      setRecurrenceRule("");
       return;
     }
 
@@ -450,30 +474,33 @@ export default function MobileReminderForm() {
         setPriority(parsed.priority);
       }
 
-      // Add detected categories to existing ones (additive, not replacing)
-      if (
-        !manualOverrides.categories &&
-        parsed.categoryIds &&
-        parsed.categoryIds.length > 0
-      ) {
-        setSelectedCategoryIds((prev) => {
-          const combined = new Set([...prev, ...parsed.categoryIds!]);
-          return Array.from(combined);
-        });
+      // Reactively replace categories based on current parse result (not additive)
+      if (!manualOverrides.categories) {
+        setSelectedCategoryIds(
+          parsed.categoryIds && parsed.categoryIds.length > 0
+            ? parsed.categoryIds
+            : ["personal"],
+        );
       }
 
       if (parsed.recurrenceRule) {
         setRecurrenceRule(parsed.recurrenceRule);
+      } else {
+        setRecurrenceRule("");
       }
 
       if (parsed.type === "event" && !manualOverrides.type) {
-        if (parsed.startDate) setStartDate(parsed.startDate);
-        if (parsed.startTime) setStartTime(parsed.startTime);
-        if (parsed.endDate) setEndDate(parsed.endDate);
-        if (parsed.endTime) setEndTime(parsed.endTime);
+        if (!manualOverrides.dates) {
+          setStartDate(parsed.startDate || "");
+          setStartTime(parsed.startTime || "");
+          setEndDate(parsed.endDate || "");
+          setEndTime(parsed.endTime || "");
+        }
       } else if (!manualOverrides.type) {
-        if (parsed.dueDate) setDueDate(parsed.dueDate);
-        if (parsed.dueTime) setDueTime(parsed.dueTime);
+        if (!manualOverrides.dates) {
+          setDueDate(parsed.dueDate || "");
+          setDueTime(parsed.dueTime || "");
+        }
       }
     }, 300);
 
@@ -498,7 +525,7 @@ export default function MobileReminderForm() {
     setEndTime("");
     setSelectedCategoryIds(["personal"]);
     setRecurrenceRule("");
-    setManualOverrides({ type: false, priority: false, categories: false });
+    setManualOverrides({ type: false, priority: false, categories: false, dates: false });
   }, []);
 
   // Submit handler
@@ -687,8 +714,20 @@ export default function MobileReminderForm() {
     }
   };
 
+  // Measure header height for dynamic content offset
+  useEffect(() => {
+    if (!headerRef.current) return;
+    const measure = () => {
+      if (headerRef.current) setHeaderHeight(headerRef.current.offsetHeight);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(headerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   const contentAreaStyles: CSSProperties = {
-    paddingBottom: `calc(${MOBILE_CONTENT_BOTTOM_OFFSET + 80}px)`,
+    bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_CONTENT_BOTTOM_OFFSET}px)`,
   };
 
   const isPending =
@@ -774,14 +813,15 @@ export default function MobileReminderForm() {
   return (
     <>
       <div className="fixed inset-0 top-14 bg-bg-dark flex flex-col">
-        {/* HEADER */}
+        {/* HEADER - fixed, matches MobileExpenseForm structure */}
         <div
+          ref={headerRef}
           className={cn(
-            "sticky top-0 z-[50] bg-gradient-to-b from-bg-card-custom to-bg-medium border-b px-3 py-3 shadow-2xl shadow-black/10 backdrop-blur-xl",
+            "fixed top-0 left-0 right-0 z-[100] bg-gradient-to-b from-bg-card-custom to-bg-medium border-b px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top",
             themeClasses.border,
           )}
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-2 pt-16">
             <div className="w-8" />
 
             {/* Title with AI indicator */}
@@ -790,9 +830,9 @@ export default function MobileReminderForm() {
                 className={cn("w-4 h-4", themeClasses.textActive)}
               />
               <h1
-                className={cn("text-lg font-semibold", themeClasses.headerText)}
+                className={`text-base font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`}
               >
-                Quick Entry
+                New Item
               </h1>
             </div>
 
@@ -819,12 +859,232 @@ export default function MobileReminderForm() {
               </svg>
             </button>
           </div>
+
+          {/* Separator line */}
+          <div className="h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent mb-2" />
+
+          {/* Inline Tags Row — selected values, tap to edit inline */}
+          <div className="-mx-1 overflow-x-auto scrollbar-none">
+            <div className="flex items-center gap-1.5 px-1 min-w-max pb-1">
+
+              {/* Priority Tag — flag only, no label */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    className={`inline-flex items-center px-2 py-1.5 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150 shrink-0`}
+                  >
+                    <FlagIcon
+                      className={cn(
+                        "w-3.5 h-3.5",
+                        priority === "urgent"
+                          ? "text-red-500"
+                          : priority === "high"
+                            ? "text-orange-500"
+                            : priority === "normal"
+                              ? "text-cyan-400"
+                              : "text-blue-400",
+                      )}
+                    />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  sideOffset={6}
+                  className="w-40 p-1 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
+                >
+                  {(Object.keys(priorityConfig) as ItemPriority[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => {
+                        setPriority(p);
+                        setManualOverrides((prev) => ({ ...prev, priority: true }));
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all",
+                        priority === p
+                          ? `bg-gradient-to-r ${priorityConfig[p].gradient} ${themeClasses.text} font-semibold`
+                          : `${themeClasses.textMuted} hover:bg-white/5`,
+                      )}
+                    >
+                      {priorityConfig[p].icon}
+                      {priorityConfig[p].label}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
+
+              {/* Type Tag */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    className={cn(
+                      "inline-flex items-center gap-1 px-2.5 py-1 rounded-full active:scale-95 transition-all duration-150 shrink-0",
+                      itemType === "reminder"
+                        ? "bg-cyan-500/20 hover:bg-cyan-500/30"
+                        : itemType === "event"
+                          ? "bg-pink-500/20 hover:bg-pink-500/30"
+                          : "bg-purple-500/20 hover:bg-purple-500/30",
+                    )}
+                  >
+                    {itemType === "reminder" ? (
+                      <BellIcon className="w-3 h-3 text-cyan-400" />
+                    ) : itemType === "event" ? (
+                      <CalendarIcon className="w-3 h-3 text-pink-400" />
+                    ) : (
+                      <ClipboardCheckIcon className="w-3 h-3 text-purple-400" />
+                    )}
+                    <span
+                      className={cn(
+                        "font-semibold text-[11px]",
+                        itemType === "reminder"
+                          ? "text-cyan-300"
+                          : itemType === "event"
+                            ? "text-pink-300"
+                            : "text-purple-300",
+                      )}
+                    >
+                      {itemType === "reminder" ? "Reminder" : itemType === "event" ? "Event" : "Task"}
+                    </span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  sideOffset={6}
+                  className="w-36 p-1 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
+                >
+                  {([
+                    { type: "reminder" as ItemType, icon: BellIcon, label: "Reminder", color: "text-cyan-300", bg: "from-cyan-500/20 to-cyan-600/20" },
+                    { type: "event" as ItemType, icon: CalendarIcon, label: "Event", color: "text-pink-300", bg: "from-pink-500/20 to-pink-600/20" },
+                    { type: "task" as ItemType, icon: ClipboardCheckIcon, label: "Task", color: "text-purple-300", bg: "from-purple-500/20 to-purple-600/20" },
+                  ] as const).map((item) => (
+                    <button
+                      key={item.type}
+                      type="button"
+                      onClick={() => {
+                        setItemType(item.type);
+                        setManualOverrides((prev) => ({ ...prev, type: true }));
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all",
+                        itemType === item.type
+                          ? `bg-gradient-to-r ${item.bg} ${item.color} font-semibold`
+                          : `${themeClasses.textMuted} hover:bg-white/5`,
+                      )}
+                    >
+                      <item.icon className={cn("w-3.5 h-3.5", item.color)} />
+                      {item.label}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
+
+              {/* Date Tag */}
+              <button
+                type="button"
+                onClick={() => {
+                  const today = new Date();
+                  const tomorrow = new Date(today);
+                  tomorrow.setDate(tomorrow.getDate() + 1);
+                  const fmt = (d: Date) => d.toISOString().split("T")[0];
+                  const fmtT = (d: Date) => d.toTimeString().slice(0, 5);
+                  if (itemType === "event") {
+                    if (!startDate) setStartDate(fmt(today));
+                    if (!startTime) setStartTime(fmtT(today));
+                    if (!endDate) setEndDate(fmt(tomorrow));
+                    if (!endTime) setEndTime(fmtT(today));
+                    setMissingFieldType("event");
+                  } else {
+                    if (!dueDate) setDueDate(fmt(today));
+                    if (!dueTime) setDueTime(fmtT(today));
+                    setMissingFieldType(itemType === "task" ? "task" : "reminder");
+                  }
+                  setDateModalIntent("set-date");
+                  setShowMissingFieldsModal(true);
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-500/20 hover:bg-purple-500/30 active:scale-95 transition-all duration-150 shrink-0"
+              >
+                <CalendarIcon className="w-3 h-3 text-purple-400" />
+                <span className="font-semibold text-[11px] text-purple-300">
+                  {itemType === "event"
+                    ? startDate
+                      ? format(new Date(startDate + "T00:00:00"), "MMM d")
+                      : "Date"
+                    : dueDate
+                      ? format(new Date(dueDate + "T00:00:00"), "MMM d")
+                      : "Date"}
+                </span>
+              </button>
+
+              {/* Category Tag */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    className={cn(
+                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full active:scale-95 transition-all duration-150 shrink-0",
+                      selectedCategoryIds.length > 1
+                        ? "bg-gradient-to-r from-violet-500/40 to-pink-500/40 hover:from-violet-500/50 hover:to-pink-500/50 ring-1 ring-violet-400/50"
+                        : "bg-violet-500/20 hover:bg-violet-500/30"
+                    )}
+                  >
+                    <TagIcon className="w-3 h-3 text-violet-400" />
+                    <span className="font-semibold text-[11px] text-violet-300">
+                      {selectedCategoryIds.length > 0
+                        ? CATEGORIES.find((c) => c.id === selectedCategoryIds[0])?.name ?? "Category"
+                        : "Category"}
+                    </span>
+                    {selectedCategoryIds.length > 1 && (
+                      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-pink-500/60 text-[9px] font-bold text-white shrink-0">
+                        +{selectedCategoryIds.length - 1}
+                      </span>
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  sideOffset={6}
+                  className="w-52 p-2 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
+                >
+                  <div className="grid grid-cols-2 gap-1">
+                    {CATEGORIES.map((cat) => {
+                      const CatIcon = categoryIcons[cat.id];
+                      const isSelected = selectedCategoryIds.includes(cat.id);
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategoryIds(isSelected ? selectedCategoryIds.filter((id) => id !== cat.id) : [...selectedCategoryIds, cat.id]);
+                            setManualOverrides((prev) => ({ ...prev, categories: true }));
+                          }}
+                          className={cn(
+                            "flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs transition-all",
+                            isSelected
+                              ? "bg-white/10 font-semibold"
+                              : `${themeClasses.textMuted} hover:bg-white/5`,
+                          )}
+                          style={isSelected ? { color: cat.color_hex } : undefined}
+                        >
+                          {CatIcon && (
+                            <span style={{ color: cat.color_hex }}>
+                              <CatIcon className="w-3.5 h-3.5" />
+                            </span>
+                          )}
+                          {cat.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
         </div>
 
-        {/* CONTENT - Single Page */}
+        {/* CONTENT - Single Page, fixed below dynamic header */}
         <div
-          className="flex-1 overflow-y-auto pt-4 px-4"
-          style={contentAreaStyles}
+          className="fixed left-0 right-0 overflow-y-auto px-4 py-4 bg-bg-dark z-[45]"
+          style={{ ...contentAreaStyles, top: `${headerHeight}px` }}
         >
           <motion.div
             initial={{ opacity: 0.8, y: 4 }}
@@ -927,335 +1187,112 @@ export default function MobileReminderForm() {
                 </motion.div>
               )}
 
-              {/* Date Display - Clickable to open modal */}
-              <button
-                type="button"
-                onClick={() => {
-                  const today = new Date();
-                  const tomorrow = new Date(today);
-                  tomorrow.setDate(tomorrow.getDate() + 1);
-                  const formatDateStr = (d: Date) =>
-                    d.toISOString().split("T")[0];
-                  const formatTimeStr = (d: Date) =>
-                    d.toTimeString().slice(0, 5);
+              {/* Date Display + Priority Input Row */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = new Date();
+                    const tomorrow = new Date(today);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const formatDateStr = (d: Date) =>
+                      d.toISOString().split("T")[0];
+                    const formatTimeStr = (d: Date) =>
+                      d.toTimeString().slice(0, 5);
 
-                  if (itemType === "event") {
-                    if (!startDate) setStartDate(formatDateStr(today));
-                    if (!startTime) setStartTime(formatTimeStr(today));
-                    if (!endDate) setEndDate(formatDateStr(tomorrow));
-                    if (!endTime) setEndTime(formatTimeStr(today));
-                    setMissingFieldType("event");
-                  } else if (itemType === "task") {
-                    if (!dueDate) setDueDate(formatDateStr(today));
-                    if (!dueTime) setDueTime(formatTimeStr(today));
-                    setMissingFieldType("task");
-                  } else {
-                    if (!dueDate) setDueDate(formatDateStr(today));
-                    if (!dueTime) setDueTime(formatTimeStr(today));
-                    setMissingFieldType("reminder");
-                  }
-                  setDateModalIntent("set-date");
-                  setShowMissingFieldsModal(true);
-                }}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all hover:scale-[1.02] active:scale-[0.98]",
-                  "bg-bg-dark/40 border",
-                  themeClasses.border,
-                  themeClasses.text,
-                )}
-              >
-                <CalendarIcon className="w-4 h-4 text-purple" />
-                <span className={themeClasses.textMuted}>Date:</span>
-                <span className="font-semibold text-purple">
-                  {itemType === "event" ? (
-                    startDate && endDate ? (
+                    if (itemType === "event") {
+                      if (!startDate) setStartDate(formatDateStr(today));
+                      if (!startTime) setStartTime(formatTimeStr(today));
+                      if (!endDate) setEndDate(formatDateStr(tomorrow));
+                      if (!endTime) setEndTime(formatTimeStr(today));
+                      setMissingFieldType("event");
+                    } else if (itemType === "task") {
+                      if (!dueDate) setDueDate(formatDateStr(today));
+                      if (!dueTime) setDueTime(formatTimeStr(today));
+                      setMissingFieldType("task");
+                    } else {
+                      if (!dueDate) setDueDate(formatDateStr(today));
+                      if (!dueTime) setDueTime(formatTimeStr(today));
+                      setMissingFieldType("reminder");
+                    }
+                    setDateModalIntent("set-date");
+                    setShowMissingFieldsModal(true);
+                  }}
+                  className={cn(
+                    "flex-1 flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all hover:scale-[1.02] active:scale-[0.98]",
+                    "bg-bg-dark/40 border",
+                    themeClasses.border,
+                    themeClasses.text,
+                  )}
+                >
+                  <CalendarIcon className="w-4 h-4 text-purple" />
+                  <span className={themeClasses.textMuted}>Date:</span>
+                  <span className="font-semibold text-purple">
+                    {itemType === "event" ? (
+                      startDate && endDate ? (
+                        <>
+                          {formatDateDisplay(startDate)}
+                          {startTime && ` ${formatTimeDisplay(startTime)}`}
+                          <span className={themeClasses.textMuted}> → </span>
+                          {formatDateDisplay(endDate)}
+                          {endTime && ` ${formatTimeDisplay(endTime)}`}
+                        </>
+                      ) : (
+                        "Tap to set date & time"
+                      )
+                    ) : dueDate ? (
                       <>
-                        {formatDateDisplay(startDate)}
-                        {startTime && ` ${formatTimeDisplay(startTime)}`}
-                        <span className={themeClasses.textMuted}> → </span>
-                        {formatDateDisplay(endDate)}
-                        {endTime && ` ${formatTimeDisplay(endTime)}`}
+                        {formatDateDisplay(dueDate)}
+                        {dueTime && ` ${formatTimeDisplay(dueTime)}`}
                       </>
                     ) : (
                       "Tap to set date & time"
-                    )
-                  ) : dueDate ? (
-                    <>
-                      {formatDateDisplay(dueDate)}
-                      {dueTime && ` ${formatTimeDisplay(dueTime)}`}
-                    </>
-                  ) : (
-                    "Tap to set date & time"
-                  )}
-                </span>
-              </button>
-            </div>
+                    )}
+                  </span>
+                </button>
 
-            {/* ── Section divider ── */}
-            <div className="flex items-center gap-3 px-1">
-              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent" />
-              <span className="text-[10px] text-slate-600 uppercase tracking-[0.15em] select-none">
-                Options
-              </span>
-              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent" />
-            </div>
-
-            {/* TYPE SELECTOR */}
-            <div className="space-y-2">
-              <Label
-                className={cn(
-                  "text-xs font-semibold uppercase tracking-wider px-1",
-                  themeClasses.textSecondary,
-                )}
-              >
-                Type
-              </Label>
-              <div className="flex gap-2">
-                {[
-                  {
-                    type: "reminder" as ItemType,
-                    icon: BellIcon,
-                    label: "Reminder",
-                    activeClasses:
-                      "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]",
-                    inactiveClasses:
-                      "text-cyan-300/50 hover:text-cyan-300/70 hover:bg-cyan-500/5",
-                  },
-                  {
-                    type: "event" as ItemType,
-                    icon: CalendarIcon,
-                    label: "Event",
-                    activeClasses:
-                      "bg-pink-500/20 text-pink-300 ring-1 ring-pink-500/40 shadow-[0_0_15px_rgba(236,72,153,0.25)]",
-                    inactiveClasses:
-                      "text-pink-300/50 hover:text-pink-300/70 hover:bg-pink-500/5",
-                  },
-                  {
-                    type: "task" as ItemType,
-                    icon: ClipboardCheckIcon,
-                    label: "Task",
-                    activeClasses:
-                      "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.25)]",
-                    inactiveClasses:
-                      "text-purple-300/50 hover:text-purple-300/70 hover:bg-purple-500/5",
-                  },
-                ].map((item) => (
-                  <button
-                    key={item.type}
-                    type="button"
-                    onClick={() => {
-                      setItemType(item.type);
-                      setManualOverrides((prev) => ({ ...prev, type: true }));
+                {/* Priority Mini-Input: p + digit */}
+                <div className={cn("flex items-center rounded-xl border bg-bg-dark/40 overflow-hidden shrink-0", themeClasses.border)}>
+                  <span className={cn("pl-2.5 pr-1 py-2 text-sm font-bold select-none", themeClasses.textSecondary)}>
+                    p
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={
+                      priority === "urgent"
+                        ? "1"
+                        : priority === "high"
+                          ? "2"
+                          : priority === "normal"
+                            ? "3"
+                            : "4"
+                    }
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^1-4]/g, "").slice(-1);
+                      const map: Record<string, ItemPriority> = { "1": "urgent", "2": "high", "3": "normal", "4": "low" };
+                      if (map[val]) {
+                        setPriority(map[val]);
+                        setManualOverrides((prev) => ({ ...prev, priority: true }));
+                      }
+                    }}
+                    onFocus={(e) => e.target.select()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Backspace" || e.key === "Delete") e.preventDefault();
                     }}
                     className={cn(
-                      "flex-1 py-2.5 px-3 rounded-xl text-sm font-semibold transition-all active:scale-95 flex items-center justify-center gap-1.5",
-                      itemType === item.type
-                        ? item.activeClasses
-                        : `neo-card ${themeClasses.border} ${item.inactiveClasses}`,
+                      "w-7 pr-2 py-2 text-center text-sm font-bold bg-transparent border-0 outline-none",
+                      priority === "urgent"
+                        ? "text-red-400"
+                        : priority === "high"
+                          ? "text-orange-400"
+                          : priority === "normal"
+                            ? "text-cyan-400"
+                            : "text-blue-400",
                     )}
-                  >
-                    <item.icon className="w-4 h-4" />
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* PRIORITY SELECTOR - Pill Tabs */}
-            <div className="space-y-2">
-              <Label
-                className={cn(
-                  "text-xs font-semibold uppercase tracking-wider px-1",
-                  themeClasses.textSecondary,
-                )}
-              >
-                Priority
-              </Label>
-              <div className="relative p-1 rounded-2xl bg-gray-900/60 backdrop-blur-sm border border-white/5">
-                {/* Animated Background Pill */}
-                <motion.div
-                  className={cn(
-                    "absolute top-1 bottom-1 rounded-xl",
-                    priority === "low" &&
-                      "bg-gradient-to-r from-gray-600/80 to-gray-500/60",
-                    priority === "normal" &&
-                      "bg-gradient-to-r from-cyan-600/80 to-cyan-500/60",
-                    priority === "high" &&
-                      "bg-gradient-to-r from-orange-600/80 to-orange-500/60",
-                    priority === "urgent" &&
-                      "bg-gradient-to-r from-red-600/80 to-red-500/60",
-                  )}
-                  initial={false}
-                  animate={{
-                    left:
-                      priority === "low"
-                        ? "4px"
-                        : priority === "normal"
-                          ? "25%"
-                          : priority === "high"
-                            ? "50%"
-                            : "75%",
-                    width: "calc(25% - 2px)",
-                  }}
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                  style={{
-                    boxShadow:
-                      priority === "low"
-                        ? "0 0 20px rgba(107, 114, 128, 0.4)"
-                        : priority === "normal"
-                          ? "0 0 20px rgba(6, 182, 212, 0.4)"
-                          : priority === "high"
-                            ? "0 0 20px rgba(249, 115, 22, 0.4)"
-                            : "0 0 20px rgba(239, 68, 68, 0.4)",
-                  }}
-                />
-                {/* Priority Options */}
-                <div className="relative flex">
-                  {(Object.keys(priorityConfig) as ItemPriority[]).map((p) => {
-                    const isSelected = priority === p;
-                    return (
-                      <motion.button
-                        key={p}
-                        type="button"
-                        onClick={() => {
-                          setPriority(p);
-                          setManualOverrides((prev) => ({
-                            ...prev,
-                            priority: true,
-                          }));
-                        }}
-                        className={cn(
-                          "flex-1 py-2.5 px-1 rounded-xl text-xs font-semibold transition-colors relative z-10",
-                          isSelected ? "text-white" : themeClasses.textMuted,
-                        )}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <motion.span
-                          animate={{
-                            opacity: isSelected ? 1 : 0.6,
-                            y: isSelected ? 0 : 1,
-                          }}
-                          transition={{ duration: 0.15 }}
-                        >
-                          {priorityConfig[p].label}
-                        </motion.span>
-                      </motion.button>
-                    );
-                  })}
+                  />
                 </div>
-              </div>
-            </div>
-
-            {/* CATEGORY SELECTOR - Icon Grid */}
-            <div className="space-y-2">
-              <Label
-                className={cn(
-                  "text-xs font-semibold uppercase tracking-wider px-1",
-                  themeClasses.textSecondary,
-                )}
-              >
-                Categories{" "}
-                <span className={themeClasses.textMuted}>
-                  {selectedCategoryIds.length > 0
-                    ? `(${selectedCategoryIds.length})`
-                    : "(Select at least one)"}
-                </span>
-              </Label>
-              <div className="grid grid-cols-3 gap-2">
-                {CATEGORIES.map((category, idx) => {
-                  const isSelected = selectedCategoryIds.includes(category.id);
-                  const Icon = categoryIcons[category.id];
-
-                  return (
-                    <motion.button
-                      key={category.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedCategoryIds((prev) =>
-                          prev.includes(category.id)
-                            ? prev.filter((id) => id !== category.id)
-                            : [...prev, category.id],
-                        );
-                        setManualOverrides((prev) => ({
-                          ...prev,
-                          categories: true,
-                        }));
-                      }}
-                      className={cn(
-                        "relative py-3 px-2 rounded-xl text-xs font-medium transition-all overflow-hidden",
-                        isSelected
-                          ? "shadow-lg"
-                          : `neo-card ${themeClasses.border} hover:border-opacity-50`,
-                      )}
-                      style={{
-                        background: isSelected
-                          ? `linear-gradient(135deg, ${category.color_hex}dd, ${category.color_hex})`
-                          : undefined,
-                      }}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.03 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      {/* Animated background pulse */}
-                      {isSelected && (
-                        <motion.div
-                          className="absolute inset-0 rounded-xl"
-                          style={{
-                            background: `radial-gradient(circle at center, ${category.color_hex}33, transparent)`,
-                          }}
-                          animate={{
-                            scale: [1, 1.2, 1],
-                            opacity: [0.5, 0.8, 0.5],
-                          }}
-                          transition={{
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: "easeInOut",
-                          }}
-                        />
-                      )}
-
-                      <div className="relative flex flex-col items-center gap-1.5">
-                        {/* Icon */}
-                        <motion.div
-                          className={cn(
-                            "w-7 h-7 rounded-lg flex items-center justify-center",
-                            isSelected
-                              ? "bg-white/20 backdrop-blur-sm text-white"
-                              : themeClasses.bgSurface,
-                          )}
-                          style={{
-                            color: !isSelected ? category.color_hex : undefined,
-                          }}
-                        >
-                          <Icon className="w-4 h-4" />
-                        </motion.div>
-
-                        {/* Label */}
-                        <span
-                          className={cn(
-                            "text-center leading-tight font-semibold text-[10px]",
-                            isSelected ? "text-white" : themeClasses.text,
-                          )}
-                        >
-                          {category.name}
-                        </span>
-                      </div>
-
-                      {/* Check badge */}
-                      {isSelected && (
-                        <motion.div
-                          initial={{ scale: 0, rotate: -180 }}
-                          animate={{ scale: 1, rotate: 0 }}
-                          className="absolute -top-1 -right-1 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-lg"
-                        >
-                          <CheckIcon className="w-3 h-3 text-green-600" />
-                        </motion.div>
-                      )}
-                    </motion.button>
-                  );
-                })}
               </div>
             </div>
 
@@ -1490,55 +1527,155 @@ export default function MobileReminderForm() {
                   </>
                 ) : (
                   /* Reminder/Task Date & Time */
-                  <div className="bg-[#0d1f35] border border-cyan-500/20 p-4 rounded-xl space-y-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <BellIcon className="w-4 h-4 text-cyan-400" />
-                      <Label className="text-sm font-semibold text-cyan-300">
-                        Due Date & Time
-                      </Label>
+                  <div className="space-y-3">
+                    <div className="bg-[#0d1f35] border border-cyan-500/20 p-4 rounded-xl space-y-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <BellIcon className="w-4 h-4 text-cyan-400" />
+                        <Label className="text-sm font-semibold text-cyan-300">
+                          Due Date & Time
+                        </Label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Due Date */}
+                        <div className="relative">
+                          {editingDateField === "dueDate" ? (
+                            <Input
+                              type="date"
+                              value={dueDate}
+                              onChange={(e) => setDueDate(e.target.value)}
+                              onBlur={() => setEditingDateField(null)}
+                              autoFocus
+                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditingDateField("dueDate")}
+                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
+                            >
+                              {formatDateDisplay(dueDate)}
+                            </button>
+                          )}
+                        </div>
+                        {/* Due Time */}
+                        <div className="relative">
+                          {editingDateField === "dueTime" ? (
+                            <Input
+                              type="time"
+                              value={dueTime}
+                              onChange={(e) => setDueTime(e.target.value)}
+                              onBlur={() => setEditingDateField(null)}
+                              autoFocus
+                              className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditingDateField("dueTime")}
+                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
+                            >
+                              {formatTimeDisplay(dueTime)}
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Due Date */}
-                      <div className="relative">
-                        {editingDateField === "dueDate" ? (
-                          <Input
-                            type="date"
-                            value={dueDate}
-                            onChange={(e) => setDueDate(e.target.value)}
-                            onBlur={() => setEditingDateField(null)}
-                            autoFocus
-                            className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
-                          />
-                        ) : (
+
+                    {/* End Date — set to convert to Event; clear to revert */}
+                    <div
+                      className={cn(
+                        "border p-4 rounded-xl space-y-3 transition-all duration-200",
+                        endDate
+                          ? "bg-pink-500/10 border-pink-500/40"
+                          : "bg-[#0d1f35] border-pink-500/20",
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <CalendarIcon className="w-4 h-4 text-pink-400" />
+                          <Label className="text-sm font-semibold text-pink-300">
+                            End Date{" "}
+                            {endDate ? (
+                              <span className="text-xs font-normal text-pink-400">
+                                — Event mode active
+                              </span>
+                            ) : (
+                              <span className="text-xs font-normal text-pink-300/60">
+                                — add to convert to Event
+                              </span>
+                            )}
+                          </Label>
+                        </div>
+                        {endDate && (
                           <button
                             type="button"
-                            onClick={() => setEditingDateField("dueDate")}
-                            className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
+                            onClick={() => {
+                              setEndDate("");
+                              setEndTime("");
+                              if (itemType === "event") {
+                                setItemType("reminder");
+                                setManualOverrides((prev) => ({ ...prev, type: false }));
+                              }
+                              setMissingFieldType("reminder");
+                            }}
+                            className="text-xs text-pink-300/60 hover:text-pink-300 transition-colors px-2 py-0.5 rounded-md hover:bg-pink-500/10"
                           >
-                            {formatDateDisplay(dueDate)}
+                            Clear ✕
                           </button>
                         )}
                       </div>
-                      {/* Due Time */}
-                      <div className="relative">
-                        {editingDateField === "dueTime" ? (
-                          <Input
-                            type="time"
-                            value={dueTime}
-                            onChange={(e) => setDueTime(e.target.value)}
-                            onBlur={() => setEditingDateField(null)}
-                            autoFocus
-                            className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setEditingDateField("dueTime")}
-                            className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
-                          >
-                            {formatTimeDisplay(dueTime)}
-                          </button>
-                        )}
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* End Date */}
+                        <div className="relative">
+                          {editingDateField === "endDate" ? (
+                            <Input
+                              type="date"
+                              value={endDate}
+                              onChange={(e) => {
+                                setEndDate(e.target.value);
+                                if (e.target.value) {
+                                  setItemType("event");
+                                  setManualOverrides((prev) => ({ ...prev, type: true }));
+                                  if (!startDate && dueDate) setStartDate(dueDate);
+                                  if (!startTime && dueTime) setStartTime(dueTime);
+                                  setMissingFieldType("event");
+                                }
+                              }}
+                              onBlur={() => setEditingDateField(null)}
+                              autoFocus
+                              className="py-3 h-11 bg-[#0a1628] border border-pink-500/30 text-pink-100 [color-scheme:dark]"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditingDateField("endDate")}
+                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-pink-500/20 rounded-md text-left text-pink-100 hover:border-pink-500/40 transition-colors text-sm"
+                            >
+                              {endDate ? formatDateDisplay(endDate) : "No end date"}
+                            </button>
+                          )}
+                        </div>
+                        {/* End Time */}
+                        <div className="relative">
+                          {editingDateField === "endTime" ? (
+                            <Input
+                              type="time"
+                              value={endTime}
+                              onChange={(e) => setEndTime(e.target.value)}
+                              onBlur={() => setEditingDateField(null)}
+                              autoFocus
+                              className="py-3 h-11 bg-[#0a1628] border border-pink-500/30 text-pink-100 [color-scheme:dark]"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditingDateField("endTime")}
+                              className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-pink-500/20 rounded-md text-left text-pink-100 hover:border-pink-500/40 transition-colors text-sm"
+                            >
+                              {endTime ? formatTimeDisplay(endTime) : "No end time"}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1557,6 +1694,8 @@ export default function MobileReminderForm() {
                 <Button
                   onClick={() => {
                     setShowMissingFieldsModal(false);
+                    // User confirmed a date — lock it from smart-input overwrite
+                    setManualOverrides((prev) => ({ ...prev, dates: true }));
                     if (dateModalIntent === "submit") {
                       // User clicked Create without date — now submit
                       setTimeout(() => handleSubmit(), 100);
