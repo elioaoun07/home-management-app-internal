@@ -36,6 +36,24 @@ export async function POST(req: NextRequest) {
     console.log(`[Subscribe] Device Name: ${device_name}`);
     console.log(`[Subscribe] Endpoint: ${endpoint.substring(0, 60)}...`);
 
+    // Step 0: Check if this exact endpoint was previously inactive (dead FCM token)
+    // Must happen BEFORE step 2 which deletes inactive rows
+    const { data: existingDeadSub } = await supabase
+      .from("push_subscriptions")
+      .select("is_active")
+      .eq("user_id", user.id)
+      .eq("endpoint", endpoint)
+      .maybeSingle();
+
+    const was_previously_inactive =
+      existingDeadSub !== null && !existingDeadSub.is_active;
+
+    if (was_previously_inactive) {
+      console.log(
+        `[Subscribe] ⚠️ Endpoint was previously marked inactive (dead FCM token) — client will be instructed to re-subscribe`,
+      );
+    }
+
     // Step 1: If device_id provided, delete ALL other subscriptions for this device
     // This is the KEY fix - device_id is unique per browser installation
     if (device_id) {
@@ -121,6 +139,7 @@ export async function POST(req: NextRequest) {
       success: true,
       id: data.id,
       active_subscriptions: count,
+      was_previously_inactive,
     });
   } catch (error) {
     console.error("[Subscribe] Error in subscribe route:", error);

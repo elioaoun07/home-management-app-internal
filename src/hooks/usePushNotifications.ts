@@ -175,7 +175,7 @@ export function usePushNotifications() {
     async (
       subscription: PushSubscription,
       force: boolean = false,
-    ): Promise<boolean> => {
+    ): Promise<{ success: boolean; needsResubscribe?: boolean }> => {
       // Throttle syncs unless forced
       if (!force) {
         const lastSync = getLastSyncTime();
@@ -184,7 +184,7 @@ export function usePushNotifications() {
           console.log(
             `[Push] Skipping sync - only ${Math.round(timeSinceLastSync / 1000)}s since last sync`,
           );
-          return true;
+          return { success: true };
         }
       }
 
@@ -210,14 +210,55 @@ export function usePushNotifications() {
       );
 
       try {
-        await saveSubscriptionToApi(subscription);
+        const result = await saveSubscriptionToApi(subscription);
         setLastEndpointInStorage(currentEndpoint);
         setLastSyncTime();
-        console.log("[Push] ✓ Subscription synced to DB successfully");
-        return true;
+        if (result.was_previously_inactive) {
+          console.warn(
+            "[Push] ⚠️ Server flagged endpoint as previously dead — FCM token rotation needed",
+          );
+        } else {
+          console.log("[Push] ✓ Subscription synced to DB successfully");
+        }
+        return { success: true, needsResubscribe: result.was_previously_inactive };
       } catch (error) {
         console.error("[Push] ✗ Failed to sync subscription:", error);
-        return false;
+        return { success: false };
+      }
+    },
+    [],
+  );
+
+  // ========== Force fresh FCM subscription (dead token recovery) ==========
+  // Called when the server signals the current endpoint was previously inactive.
+  // Chrome Android may cache a dead FCM token without firing pushsubscriptionchange.
+  // We unsubscribe and re-subscribe to force Chrome to obtain a fresh token from FCM.
+  const forceResubscribe = useCallback(
+    async (deadSubscription: PushSubscription): Promise<void> => {
+      console.log(
+        "[Push] 🔄 Forcing fresh FCM subscription to replace dead endpoint",
+      );
+      try {
+        const registration = (await navigator.serviceWorker
+          .ready) as SWRegistrationWithPush;
+        await deadSubscription.unsubscribe();
+        console.log("[Push] Old (dead) subscription unregistered");
+
+        const newSub = await createLocalPushSubscription(registration);
+        if (newSub) {
+          console.log(
+            "[Push] ✓ Fresh subscription obtained:",
+            newSub.endpoint.substring(0, 50),
+          );
+          await saveSubscriptionToApi(newSub);
+          setLastEndpointInStorage(newSub.endpoint);
+          setLastSyncTime();
+          setState((prev) => ({ ...prev, subscription: newSub }));
+        } else {
+          console.error("[Push] Failed to obtain fresh subscription");
+        }
+      } catch (err) {
+        console.error("[Push] forceResubscribe error:", err);
       }
     },
     [],
@@ -306,6 +347,7 @@ export function usePushNotifications() {
 
       if (subscription) {
         // We have a local subscription - sync it to DB immediately
+        const activeSub = subscription; // capture non-null for .then() closure
         setPushEnabledInStorage(true);
         setState({
           isSupported: true,
@@ -313,11 +355,15 @@ export function usePushNotifications() {
           isSubscribed: true,
           isLoading: false,
           error: null,
-          subscription,
+          subscription: activeSub,
         });
 
-        // Sync to DB (don't await - let it happen in background)
-        syncSubscriptionToDb(subscription, false);
+        // Sync to DB in background; if the endpoint was dead, force fresh re-subscription
+        syncSubscriptionToDb(activeSub, false).then((result) => {
+          if (result.needsResubscribe) {
+            forceResubscribe(activeSub);
+          }
+        });
         return;
       }
 
@@ -367,7 +413,7 @@ export function usePushNotifications() {
       isInitializing.current = false;
       console.log("[Push] === initializePushState END ===");
     }
-  }, [syncSubscriptionToDb]);
+  }, [syncSubscriptionToDb, forceResubscribe]);
 
   // ========== Foreground Sync (CRITICAL!) ==========
   // This is called EVERY TIME the app comes to foreground
@@ -395,11 +441,18 @@ export function usePushNotifications() {
           console.log(
             "[Push] 🔄 Endpoint changed on foreground - forcing sync!",
           );
-          await syncSubscriptionToDb(subscription, true);
+          const result = await syncSubscriptionToDb(subscription, true);
           setState((prev) => ({ ...prev, subscription }));
+          if (result.needsResubscribe) {
+            await forceResubscribe(subscription);
+          }
         } else {
-          // Same endpoint - still sync but not forced (will be throttled)
-          syncSubscriptionToDb(subscription, false);
+          // Same endpoint - sync (throttled); if dead, force fresh subscription
+          syncSubscriptionToDb(subscription, false).then((result) => {
+            if (result.needsResubscribe) {
+              forceResubscribe(subscription);
+            }
+          });
         }
       } else if (getPushEnabledFromStorage()) {
         // Subscription disappeared! Try to restore it
@@ -416,7 +469,7 @@ export function usePushNotifications() {
     } finally {
       isSyncing.current = false;
     }
-  }, [syncSubscriptionToDb]);
+  }, [syncSubscriptionToDb, forceResubscribe]);
 
   // ========== Effect: Initialize + Foreground Listener ==========
   useEffect(() => {
@@ -736,7 +789,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 async function saveSubscriptionToApi(
   subscription: PushSubscription,
-): Promise<void> {
+): Promise<{ was_previously_inactive?: boolean }> {
   const subscriptionData = subscription.toJSON();
   const deviceId = getOrCreateDeviceId();
   const deviceType = getDeviceType();
@@ -767,6 +820,12 @@ async function saveSubscriptionToApi(
   // handler can re-subscribe autonomously when FCM rotates the token.
   if (VAPID_PUBLIC_KEY) {
     storeVapidKeyInIdb(VAPID_PUBLIC_KEY);
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    return {};
   }
 }
 
