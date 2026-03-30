@@ -1856,8 +1856,13 @@ function ThreadConversation({
     ],
   );
 
+  // Invalidate shopping groups when partner creates/renames/deletes a group
+  const handleShoppingGroupUpdate = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["shopping-groups", threadId] });
+  }, [queryClient, threadId]);
+
   // Subscribe to realtime updates - no polling needed!
-  useRealtimeMessages(threadId, handleNewMessageFromOther);
+  useRealtimeMessages(threadId, handleNewMessageFromOther, handleShoppingGroupUpdate);
 
   // Broadcast receipt updates when we have unread messages from others
   // The broadcast function handles deduplication, so we can call this freely
@@ -2001,6 +2006,7 @@ function ThreadConversation({
       quantityOrTopicId?: string,
       topicId?: string,
       shoppingGroupId?: string,
+      sortOrder?: number,
     ) => {
       // Handle both old signature (content, topicId) and new (content, quantity, topicId)
       // If called from notes, quantityOrTopicId is topicId
@@ -2015,6 +2021,7 @@ function ThreadConversation({
         topic_id: actualTopicId,
         item_quantity: quantity,
         shopping_group_id: shoppingGroupId,
+        item_sort_order: sortOrder,
       });
     },
     [sendMessage, threadId, thread?.purpose],

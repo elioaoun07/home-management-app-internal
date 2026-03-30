@@ -35,6 +35,7 @@
 14. **Never edit `src/components/ui/`** — shadcn/ui auto-generated primitives.
 15. **Zod schemas for all API input validation** — derive TS types with `z.infer<>`.
 16. **Household linking in API routes**: when fetching user-owned data, always check `household_links` for an active partner and include their data unless `ownOnly=true` is passed. See `src/app/api/accounts/route.ts:28-52`.
+17. **Color identity** — current user = **blue** (`blue-400/500`), partner = **pink** (`pink-400/500`). Apply consistently for all color-coded UI: assignment labels, accent bars, avatars, indicators, and any context where "me vs partner" needs visual distinction. Never swap these colors.
 
 ---
 

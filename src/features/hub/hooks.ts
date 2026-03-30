@@ -112,6 +112,7 @@ export type HubMessage = {
   meal_plan_id?: string | null; // Reference to meal plan if from recipe
   // Shopping group fields
   shopping_group_id?: string | null; // Reference to custom shopping group
+  item_sort_order?: number | null; // Sort order within group (float for stable reorder)
 };
 
 export type HubFeedItem = {
@@ -433,6 +434,7 @@ const activeChannels = new Map<
 export function useRealtimeMessages(
   threadId: string | null,
   onNewMessageFromOther?: (messageId: string) => void,
+  onShoppingGroupUpdate?: () => void,
 ) {
   const queryClient = useQueryClient();
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -444,6 +446,9 @@ export function useRealtimeMessages(
   // Store callback in ref to avoid recreating handleNewMessage
   const onNewMessageFromOtherRef = useRef(onNewMessageFromOther);
   onNewMessageFromOtherRef.current = onNewMessageFromOther;
+
+  const onShoppingGroupUpdateRef = useRef(onShoppingGroupUpdate);
+  onShoppingGroupUpdateRef.current = onShoppingGroupUpdate;
 
   const handleNewMessage = useCallback(
     (payload: { new: HubMessage }) => {
@@ -680,6 +685,45 @@ export function useRealtimeMessages(
     [queryClient],
   );
 
+  // Handle item assign updates (shopping list items assigned to a user)
+  const handleItemAssignUpdate = useCallback(
+    (payload: {
+      message_id: string;
+      thread_id: string;
+      assigned_to: string | null;
+      updated_by: string;
+    }) => {
+      const currentThreadId = threadIdRef.current;
+      const { message_id, assigned_to, updated_by } = payload;
+
+      queryClient.setQueryData(
+        ["hub", "messages", currentThreadId],
+        (
+          oldData:
+            | {
+                messages: HubMessage[];
+                thread_id: string;
+                household_id: string;
+                current_user_id: string;
+              }
+            | undefined,
+        ) => {
+          if (!oldData) return oldData;
+          // Skip own update — optimistic update already applied
+          if (updated_by === oldData.current_user_id) return oldData;
+
+          return {
+            ...oldData,
+            messages: oldData.messages.map((msg) =>
+              msg.id === message_id ? { ...msg, assigned_to } : msg,
+            ),
+          };
+        },
+      );
+    },
+    [queryClient],
+  );
+
   // Reconnection state
   const reconnectAttempt = useRef(0);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -825,6 +869,21 @@ export function useRealtimeMessages(
           );
         }
       })
+      .on("broadcast", { event: "item-assign-update" }, (payload) => {
+        if (payload.payload) {
+          handleItemAssignUpdate(
+            payload.payload as {
+              message_id: string;
+              thread_id: string;
+              assigned_to: string | null;
+              updated_by: string;
+            },
+          );
+        }
+      })
+      .on("broadcast", { event: "shopping-group-update" }, () => {
+        onShoppingGroupUpdateRef.current?.();
+      })
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
           setIsSubscribed(true);
@@ -864,6 +923,7 @@ export function useRealtimeMessages(
     handleNewMessage,
     handleReceiptUpdate,
     handleItemCheckUpdate,
+    handleItemAssignUpdate,
     cleanup,
     startFallbackPolling,
     stopFallbackPolling,
@@ -980,12 +1040,14 @@ export function useSendMessage() {
       topic_id,
       item_quantity,
       shopping_group_id,
+      item_sort_order,
     }: {
       content: string;
       thread_id: string;
       topic_id?: string;
       item_quantity?: string;
       shopping_group_id?: string;
+      item_sort_order?: number;
     }) => {
       if (!isReallyOnline()) {
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -1028,6 +1090,7 @@ export function useSendMessage() {
           topic_id,
           item_quantity,
           shopping_group_id,
+          item_sort_order,
         }),
       });
       if (!res.ok) throw new Error("Failed to send message");
@@ -1104,7 +1167,7 @@ export function useSendMessage() {
         .slice(2)}`;
 
       if (currentUserId) {
-        // Optimistically add the new message
+        // Optimistically add the new message (includes shopping fields to avoid double add)
         const optimisticMessage: HubMessage = {
           id: optimisticId, // Temporary ID
           household_id: currentData?.messages?.[0]?.household_id ?? "",
@@ -1119,6 +1182,17 @@ export function useSendMessage() {
           reply_to_id: null,
           status: "sent", // Show as sent immediately
           topic_id: variables.topic_id ?? null,
+          item_quantity: variables.item_quantity ?? null,
+          shopping_group_id: variables.shopping_group_id ?? null,
+          item_sort_order: variables.item_sort_order ?? null,
+          checked_at: null,
+          checked_by: null,
+          item_url: null,
+          has_links: false,
+          source: "user",
+          source_item_id: null,
+          meal_plan_id: null,
+          assigned_to: null,
         };
 
         queryClient.setQueryData(

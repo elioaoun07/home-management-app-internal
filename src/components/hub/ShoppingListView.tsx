@@ -2,6 +2,7 @@
 // realtime sync, batch check, virtualizer, and smart categorisation.
 "use client";
 
+import { useTheme } from "@/contexts/ThemeContext";
 import { HubChatThread, HubMessage } from "@/features/hub/hooks";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useOfflinePendingStore } from "@/lib/stores/offlinePendingStore";
@@ -62,6 +63,27 @@ import { toast } from "sonner";
 import { ProductComparisonSheet } from "./ProductComparisonSheet";
 
 // ─────────────────────────────────────────────────────
+// Theme-based identity colors (Rule #17: me=my theme, partner=other theme)
+// ─────────────────────────────────────────────────────
+type IdentityColor = "blue" | "pink";
+const IDENTITY_COLORS = {
+  blue: {
+    accent: "bg-blue-400",
+    bg: "bg-blue-500/20",
+    bgLight: "bg-blue-500/8",
+    text: "text-blue-400",
+    textLight: "text-blue-300",
+  },
+  pink: {
+    accent: "bg-pink-400",
+    bg: "bg-pink-500/20",
+    bgLight: "bg-pink-500/8",
+    text: "text-pink-400",
+    textLight: "text-pink-300",
+  },
+} as const;
+
+// ─────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────
 
@@ -115,6 +137,7 @@ interface ShoppingListViewProps {
     quantity?: string,
     topicId?: string,
     shoppingGroupId?: string,
+    sortOrder?: number,
   ) => void;
   onDeleteItem: (messageId: string) => void;
   isLoading?: boolean;
@@ -316,6 +339,8 @@ interface SwipeToAssignProps {
   partnerName: string;
   assignedTo: string | null;
   onAssign: (itemId: string, userId: string | null) => void;
+  myColor: IdentityColor;
+  partnerColor: IdentityColor;
   children: React.ReactNode;
 }
 
@@ -326,8 +351,12 @@ const SwipeToAssign = ({
   partnerName,
   assignedTo,
   onAssign,
+  myColor,
+  partnerColor,
   children,
 }: SwipeToAssignProps) => {
+  const myColors = IDENTITY_COLORS[myColor];
+  const partnerColors = IDENTITY_COLORS[partnerColor];
   const outerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [offsetX, setOffsetX] = useState(0);
@@ -436,53 +465,45 @@ const SwipeToAssign = ({
 
   return (
     <div ref={outerRef} className="relative overflow-hidden rounded-xl">
-      {/* Right reveal (left swipe → assign to me) — only visible while swiping */}
-      {isActive && (
+      {/* Right reveal (left swipe → assign to me) */}
+      {isActive && offsetX < 0 && (
         <div
           className={cn(
-            "absolute inset-y-0 right-0 flex items-center justify-end px-4 rounded-xl transition-colors z-0",
+            "absolute inset-y-0 right-0 flex items-center justify-end pr-3 rounded-xl transition-colors z-0",
             isConfirmed
               ? currentAction === "unassign"
-                ? "bg-red-500/30"
-                : "bg-blue-500/30"
-              : "bg-blue-500/10",
+                ? "bg-red-500/20"
+                : myColors.bg
+              : myColors.bgLight,
           )}
+          style={{ width: `${Math.abs(offsetX) + 16}px` }}
         >
-          <div className="flex flex-col items-center gap-0.5">
-            {currentAction === "unassign" ? (
-              <X className="w-5 h-5 text-red-400" />
-            ) : (
-              <User className="w-5 h-5 text-blue-400" />
-            )}
-            <span className="text-[10px] text-blue-300">
-              {currentAction === "unassign" ? "Unassign" : "Me"}
+          {isConfirmed && (
+            <span className={cn("text-[10px] font-medium", currentAction === "unassign" ? "text-red-400" : myColors.text)}>
+              {currentAction === "unassign" ? "✕" : "Me"}
             </span>
-          </div>
+          )}
         </div>
       )}
 
-      {/* Left reveal (right swipe → assign to partner) — only visible while swiping */}
-      {isActive && (
+      {/* Left reveal (right swipe → assign to partner) */}
+      {isActive && offsetX > 0 && (
         <div
           className={cn(
-            "absolute inset-y-0 left-0 flex items-center justify-start px-4 rounded-xl transition-colors z-0",
+            "absolute inset-y-0 left-0 flex items-center justify-start pl-3 rounded-xl transition-colors z-0",
             isConfirmed
               ? currentAction === "unassign"
-                ? "bg-red-500/30"
-                : "bg-pink-500/30"
-              : "bg-pink-500/10",
+                ? "bg-red-500/20"
+                : partnerColors.bg
+              : partnerColors.bgLight,
           )}
+          style={{ width: `${Math.abs(offsetX) + 16}px` }}
         >
-          <div className="flex flex-col items-center gap-0.5">
-            {currentAction === "unassign" ? (
-              <X className="w-5 h-5 text-red-400" />
-            ) : (
-              <UserCheck className="w-5 h-5 text-pink-400" />
-            )}
-            <span className="text-[10px] text-pink-300">
-              {currentAction === "unassign" ? "Unassign" : partnerName}
+          {isConfirmed && (
+            <span className={cn("text-[10px] font-medium", currentAction === "unassign" ? "text-red-400" : partnerColors.text)}>
+              {currentAction === "unassign" ? "✕" : partnerName.split(" ")[0]}
             </span>
-          </div>
+          )}
         </div>
       )}
 
@@ -668,13 +689,26 @@ export function ShoppingListView({
     groupName: string;
   } | null>(null);
 
-  // ── Partner presence (Point 12) ──
+  // ── Partner presence + typing (Point 12) ──
   const [partnerOnline, setPartnerOnline] = useState(false);
+  const [partnerTyping, setPartnerTyping] = useState(false);
+  const partnerTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const presenceChannelRef = useRef<ReturnType<ReturnType<typeof supabaseBrowser>["channel"]> | null>(null);
+  const typingBroadcastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Virtual list ref (Point 10) ──
   const listContainerRef = useRef<HTMLDivElement>(null);
 
   const enableItemUrls = thread?.enable_item_urls ?? false;
+
+  // ── Theme-based identity colors ──
+  // My theme determines my color; partner gets the other.
+  // blue/frost/calm → me=blue, partner=pink. pink → me=pink, partner=blue.
+  const { theme } = useTheme();
+  const myColor: IdentityColor = theme === "pink" ? "pink" : "blue";
+  const partnerColor: IdentityColor = myColor === "blue" ? "pink" : "blue";
+  const myColors = IDENTITY_COLORS[myColor];
+  const partnerColors = IDENTITY_COLORS[partnerColor];
 
   // ── Household members ──
   const { data: householdData } = useHouseholdMembers();
@@ -761,44 +795,17 @@ export function ShoppingListView({
     else if (autocompleteQuery.length >= 2) setShowAutocomplete(true);
   }, [autocompleteResults, autocompleteQuery]);
 
-  // ── Realtime subscription (Point 12) ──
+  // ── Presence tracking (partner online + typing indicator) ──
+  // item-check-update and item-assign-update are handled by useRealtimeMessages in hooks.ts
   useEffect(() => {
     const channel = supabaseBrowser()
-      .channel(`thread-${threadId}`)
-      .on("broadcast", { event: "item-check-update" }, (payload) => {
-        const { message_id, checked_at, checked_by, updated_by } =
-          payload.payload ?? {};
-        if (!message_id || updated_by === currentUserId) return;
-        queryClient.setQueryData<{ messages: HubMessage[] }>(
-          ["hub", "messages", threadId],
-          (old) => {
-            if (!old) return old;
-            return {
-              ...old,
-              messages: old.messages.map((msg) =>
-                msg.id === message_id
-                  ? { ...msg, checked_at, checked_by }
-                  : msg,
-              ),
-            };
-          },
-        );
-      })
-      .on("broadcast", { event: "item-assign-update" }, (payload) => {
-        const { message_id, assigned_to, updated_by } = payload.payload ?? {};
-        if (!message_id || updated_by === currentUserId) return;
-        queryClient.setQueryData<{ messages: HubMessage[] }>(
-          ["hub", "messages", threadId],
-          (old) => {
-            if (!old) return old;
-            return {
-              ...old,
-              messages: old.messages.map((msg) =>
-                msg.id === message_id ? { ...msg, assigned_to } : msg,
-              ),
-            };
-          },
-        );
+      .channel(`thread-presence-${threadId}`)
+      .on("broadcast", { event: "typing-update" }, (payload) => {
+        const { user_id } = payload.payload ?? {};
+        if (!user_id || user_id === currentUserId) return;
+        setPartnerTyping(true);
+        if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
+        partnerTypingTimer.current = setTimeout(() => setPartnerTyping(false), 3000);
       })
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState();
@@ -816,7 +823,12 @@ export function ShoppingListView({
         }
       });
 
+    presenceChannelRef.current = channel;
+
     return () => {
+      presenceChannelRef.current = null;
+      if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
+      if (typingBroadcastTimer.current) clearTimeout(typingBroadcastTimer.current);
       supabaseBrowser().removeChannel(channel);
     };
   }, [threadId, currentUserId, queryClient]);
@@ -1433,40 +1445,17 @@ export function ShoppingListView({
       }
     }
 
-    // Point 9: Optimistic add — insert temp item into cache immediately
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    queryClient.setQueryData<{ messages: HubMessage[] }>(
-      ["hub", "messages", threadId],
-      (old) => {
-        if (!old) return old;
-        const tempMsg: HubMessage = {
-          id: tempId,
-          household_id: "",
-          thread_id: threadId,
-          sender_user_id: currentUserId,
-          message_type: "text",
-          content,
-          transaction_id: null,
-          goal_id: null,
-          alert_id: null,
-          created_at: new Date().toISOString(),
-          reply_to_id: null,
-          item_quantity: quantity ?? null,
-          shopping_group_id: activeGroupId ?? null,
-          checked_at: null,
-          checked_by: null,
-          item_url: null,
-          has_links: false,
-          source: "user",
-          source_item_id: null,
-          meal_plan_id: null,
-          assigned_to: null,
-        };
-        return { ...old, messages: [...old.messages, tempMsg] };
-      },
+    // Compute next sort order so the optimistic item stays stable in position
+    const groupItems = uncheckedItems.filter(
+      (i) => i.shoppingGroupId === (activeGroupId ?? null) && i.sortOrder !== null,
     );
+    const maxOrder = groupItems.length > 0
+      ? Math.max(...groupItems.map((i) => i.sortOrder!))
+      : 0;
+    const nextSortOrder = maxOrder + 1;
 
-    onAddItem(content, quantity, undefined, activeGroupId || undefined);
+    // Optimistic add is handled by useSendMessage.onMutate — no duplicate needed here
+    onAddItem(content, quantity, undefined, activeGroupId || undefined, nextSortOrder);
     setNewItem("");
     setShowAutocomplete(false);
     setCategorySuggestion(null);
@@ -1569,13 +1558,36 @@ export function ShoppingListView({
     }
 
     if (parsedItems.length > 0) {
-      parsedItems.forEach(({ content, quantity }) => {
-        onAddItem(content, quantity, undefined, activeGroupId || undefined);
-      });
-      setNewItem("");
-      toast.success(
-        `Added ${parsedItems.length} item${parsedItems.length > 1 ? "s" : ""} to list`,
+      // Deduplicate against existing items (case-insensitive exact match)
+      const existingContents = new Set(
+        uncheckedItems.map((i) => i.content.toLowerCase().trim()),
       );
+      const newItems = parsedItems.filter(
+        ({ content }) => !existingContents.has(content.toLowerCase().trim()),
+      );
+      const skipped = parsedItems.length - newItems.length;
+
+      // Compute sequential sort orders so pasted items stay in order
+      const groupItems = uncheckedItems.filter(
+        (i) => i.shoppingGroupId === (activeGroupId ?? null) && i.sortOrder !== null,
+      );
+      let baseOrder = groupItems.length > 0
+        ? Math.max(...groupItems.map((i) => i.sortOrder!))
+        : 0;
+
+      newItems.forEach(({ content, quantity }) => {
+        baseOrder += 1;
+        onAddItem(content, quantity, undefined, activeGroupId || undefined, baseOrder);
+      });
+
+      setNewItem("");
+      if (newItems.length > 0) {
+        toast.success(
+          `Added ${newItems.length} item${newItems.length > 1 ? "s" : ""}${skipped > 0 ? ` · ${skipped} duplicate${skipped > 1 ? "s" : ""} skipped` : ""}`,
+        );
+      } else {
+        toast.info(`All ${skipped} item${skipped > 1 ? "s" : ""} already on the list`);
+      }
     }
   };
 
@@ -1957,6 +1969,8 @@ export function ShoppingListView({
         partnerName={partnerName}
         assignedTo={item.assignedTo}
         onAssign={assignItem}
+        myColor={myColor}
+        partnerColor={partnerColor}
       >
         <div
           className={cn(
@@ -1970,12 +1984,12 @@ export function ShoppingListView({
                   : "border border-white/5 hover:border-white/10",
           )}
         >
-          {/* Thin left accent bar for assignment */}
+          {/* Thin left accent bar for assignment (theme-based identity) */}
           {item.assignedTo && (
             <div
               className={cn(
                 "absolute left-0 inset-y-0 w-[3px] rounded-l-xl",
-                isAssignedToMe ? "bg-blue-400" : "bg-pink-400",
+                isAssignedToMe ? myColors.accent : partnerColors.accent,
               )}
             />
           )}
@@ -2021,71 +2035,73 @@ export function ShoppingListView({
             )}
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-white text-sm truncate">
+              <div className="flex items-start gap-2">
+                <span className="text-white text-sm break-words flex-1 min-w-0 pt-0.5">
                   {item.content}
                 </span>
 
-                {editingQuantityFor === item.id ? (
-                  <input
-                    type="text"
-                    value={quantityInputValue}
-                    onChange={(e) => setQuantityInputValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
+                <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
+                  {editingQuantityFor === item.id ? (
+                    <input
+                      type="text"
+                      value={quantityInputValue}
+                      onChange={(e) => setQuantityInputValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          setItemQuantity(
+                            item.id,
+                            quantityInputValue.trim() || null,
+                          );
+                          setEditingQuantityFor(null);
+                          setQuantityInputValue("");
+                        } else if (e.key === "Escape") {
+                          setEditingQuantityFor(null);
+                          setQuantityInputValue("");
+                        }
+                      }}
+                      onBlur={() => {
                         setItemQuantity(
                           item.id,
                           quantityInputValue.trim() || null,
                         );
                         setEditingQuantityFor(null);
                         setQuantityInputValue("");
-                      } else if (e.key === "Escape") {
-                        setEditingQuantityFor(null);
-                        setQuantityInputValue("");
-                      }
-                    }}
-                    onBlur={() => {
-                      setItemQuantity(
-                        item.id,
-                        quantityInputValue.trim() || null,
-                      );
-                      setEditingQuantityFor(null);
-                      setQuantityInputValue("");
-                    }}
-                    placeholder="e.g., 2 bags"
-                    className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium border border-blue-400/50 focus:outline-none focus:border-blue-400 w-24 flex-shrink-0"
-                    autoFocus
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                ) : (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingQuantityFor(item.id);
-                      setQuantityInputValue(item.quantity || "");
-                    }}
-                    className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium hover:bg-blue-500/30 transition-all flex-shrink-0"
-                    title="Click to edit quantity"
-                  >
-                    {item.quantity || "+ qty"}
-                  </button>
-                )}
-
-                {enableItemUrls &&
-                  item.itemUrl &&
-                  editingUrlFor !== item.id && (
-                    <a
-                      href={item.itemUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1 rounded hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-all"
+                      }}
+                      placeholder="e.g., 2 bags"
+                      className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium border border-blue-400/50 focus:outline-none focus:border-blue-400 w-24"
+                      autoFocus
                       onClick={(e) => e.stopPropagation()}
-                      title={item.itemUrl}
+                    />
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingQuantityFor(item.id);
+                        setQuantityInputValue(item.quantity || "");
+                      }}
+                      className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium hover:bg-blue-500/30 transition-all"
+                      title="Click to edit quantity"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
+                      {item.quantity || "+ qty"}
+                    </button>
                   )}
+
+                  {enableItemUrls &&
+                    item.itemUrl &&
+                    editingUrlFor !== item.id && (
+                      <a
+                        href={item.itemUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1 rounded hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-all"
+                        onClick={(e) => e.stopPropagation()}
+                        title={item.itemUrl}
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                </div>
               </div>
             </div>
 
@@ -2613,26 +2629,28 @@ export function ShoppingListView({
               <Check className="w-4 h-4 text-white" />
             </button>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-white/50 text-sm line-through truncate">
+              <div className="flex items-start gap-2">
+                <span className="text-white/50 text-sm line-through break-words flex-1 min-w-0 pt-0.5">
                   {item.content}
                 </span>
-                {item.quantity && (
-                  <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300/50 text-xs font-medium line-through flex-shrink-0">
-                    {item.quantity}
-                  </span>
-                )}
-                {enableItemUrls && item.itemUrl && (
-                  <a
-                    href={item.itemUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-1 rounded hover:bg-blue-500/20 text-blue-400/60 hover:text-blue-400 transition-all flex-shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                )}
+                <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
+                  {item.quantity && (
+                    <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300/50 text-xs font-medium line-through">
+                      {item.quantity}
+                    </span>
+                  )}
+                  {enableItemUrls && item.itemUrl && (
+                    <a
+                      href={item.itemUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1 rounded hover:bg-blue-500/20 text-blue-400/60 hover:text-blue-400 transition-all"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
             <button
@@ -2696,7 +2714,18 @@ export function ShoppingListView({
           <textarea
             ref={inputRef}
             value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
+            onChange={(e) => {
+              setNewItem(e.target.value);
+              // Debounce typing broadcast so we don't flood the channel
+              if (typingBroadcastTimer.current) clearTimeout(typingBroadcastTimer.current);
+              typingBroadcastTimer.current = setTimeout(() => {
+                presenceChannelRef.current?.send({
+                  type: "broadcast",
+                  event: "typing-update",
+                  payload: { user_id: currentUserId },
+                });
+              }, 300);
+            }}
             onKeyDown={handleKeyPress}
             onPaste={handlePaste}
             onBlur={() => setTimeout(() => setShowAutocomplete(false), 150)}
@@ -2804,14 +2833,23 @@ export function ShoppingListView({
 
         {/* Status indicators */}
         <div className="flex items-center gap-3 mt-2">
-          {/* Partner online indicator (Point 12) */}
-          {partnerOnline && (
+          {/* Partner online indicator (Point 12 — uses partner's identity color) */}
+          {partnerTyping ? (
+            <div className={cn("flex items-center gap-1.5 text-[10px]", partnerColors.text)}>
+              <span className="flex gap-0.5">
+                <span className={cn("w-1 h-1 rounded-full animate-bounce", partnerColors.accent)} style={{ animationDelay: "0ms" }} />
+                <span className={cn("w-1 h-1 rounded-full animate-bounce", partnerColors.accent)} style={{ animationDelay: "150ms" }} />
+                <span className={cn("w-1 h-1 rounded-full animate-bounce", partnerColors.accent)} style={{ animationDelay: "300ms" }} />
+              </span>
+              <span>{partnerName} is adding…</span>
+            </div>
+          ) : partnerOnline ? (
             <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <Users2 className="w-3 h-3" />
               <span>{partnerName} is here</span>
             </div>
-          )}
+          ) : null}
           {/* Offline pending badge (Point 13) */}
           {pendingCount > 0 && (
             <div className="flex items-center gap-1 text-[10px] text-amber-400/70">

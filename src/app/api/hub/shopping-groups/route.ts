@@ -125,6 +125,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // Broadcast group change so partner's list auto-refreshes
+    const bc = supabase.channel(`thread-${thread_id}`);
+    await bc.subscribe();
+    await bc.send({
+      type: "broadcast",
+      event: "shopping-group-update",
+      payload: { thread_id, action: "created", group_id: group.id },
+    });
+    await supabase.removeChannel(bc);
+
     return NextResponse.json({ group });
   } catch {
     return NextResponse.json(
@@ -175,6 +185,23 @@ export async function PATCH(req: NextRequest) {
 
         if (error) {
           return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        // Broadcast so partner sees the rename
+        const { data: renamedGroup } = await supabase
+          .from("shopping_groups")
+          .select("thread_id")
+          .eq("id", group_id)
+          .maybeSingle();
+        if (renamedGroup?.thread_id) {
+          const bc = supabase.channel(`thread-${renamedGroup.thread_id}`);
+          await bc.subscribe();
+          await bc.send({
+            type: "broadcast",
+            event: "shopping-group-update",
+            payload: { thread_id: renamedGroup.thread_id, action: "renamed", group_id },
+          });
+          await supabase.removeChannel(bc);
         }
 
         return NextResponse.json({
@@ -283,6 +310,13 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
+    // Fetch thread_id before deleting (needed for broadcast)
+    const { data: deletedGroup } = await supabase
+      .from("shopping_groups")
+      .select("thread_id")
+      .eq("id", group_id)
+      .maybeSingle();
+
     // Move all items in this group to ungrouped first
     await supabase
       .from("hub_messages")
@@ -297,6 +331,18 @@ export async function DELETE(req: NextRequest) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Broadcast so partner's list removes the group
+    if (deletedGroup?.thread_id) {
+      const bc = supabase.channel(`thread-${deletedGroup.thread_id}`);
+      await bc.subscribe();
+      await bc.send({
+        type: "broadcast",
+        event: "shopping-group-update",
+        payload: { thread_id: deletedGroup.thread_id, action: "deleted", group_id },
+      });
+      await supabase.removeChannel(bc);
     }
 
     return NextResponse.json({ success: true, group_id });
