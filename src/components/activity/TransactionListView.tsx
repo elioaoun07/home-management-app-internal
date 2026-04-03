@@ -17,42 +17,11 @@ import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import { format } from "date-fns";
-import { Mail, Moon, Sun, Tag } from "lucide-react";
+import { Mail, Tag } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import { toast } from "sonner";
 import SwipeableItem from "./SwipeableItem";
 
-// ─── Time-of-day grouping ───────────────────────────────────────────
-type TimeOfDay = "morning" | "afternoon" | "evening";
-
-const TIME_SECTIONS: { key: TimeOfDay; label: string; icon: ReactNode }[] = [
-  { key: "morning", label: "Morning", icon: <Sun className="w-3.5 h-3.5 text-yellow-400" /> },
-  { key: "afternoon", label: "Afternoon", icon: <Sun className="w-3.5 h-3.5 text-orange-400" /> },
-  { key: "evening", label: "Evening", icon: <Moon className="w-3.5 h-3.5 text-indigo-400" /> },
-];
-
-function getTimeOfDay(insertedAt: string | undefined): TimeOfDay {
-  if (!insertedAt) return "afternoon"; // safe fallback
-  const hour = new Date(insertedAt).getHours();
-  if (hour >= 5 && hour < 12) return "morning";
-  if (hour >= 12 && hour < 18) return "afternoon";
-  return "evening"; // 18-23, 0-4
-}
-
-function groupByTimeOfDay(
-  txs: Transaction[],
-): Record<TimeOfDay, Transaction[]> {
-  const groups: Record<TimeOfDay, Transaction[]> = {
-    morning: [],
-    afternoon: [],
-    evening: [],
-  };
-  for (const tx of txs) {
-    groups[getTimeOfDay(tx.inserted_at)].push(tx);
-  }
-  return groups;
-}
 
 // ─── Component ──────────────────────────────────────────────────────
 type UserFilter = "all" | "mine" | "partner";
@@ -126,8 +95,13 @@ export default function TransactionListView({
     return rawTransactions.find((t) => t.id === selectedTxId) || null;
   }, [selectedTxId, rawTransactions]);
 
-  const timeGroups = useMemo(
-    () => groupByTimeOfDay(transactions),
+  const sortedTransactions = useMemo(
+    () =>
+      [...transactions].sort((a, b) => {
+        const aTime = a.inserted_at ? new Date(a.inserted_at).getTime() : 0;
+        const bTime = b.inserted_at ? new Date(b.inserted_at).getTime() : 0;
+        return bTime - aTime;
+      }),
     [transactions],
   );
 
@@ -395,34 +369,9 @@ export default function TransactionListView({
             );
           })
         ) : (
-          TIME_SECTIONS.map(({ key, label, icon }) => {
-            const sectionTxs = timeGroups[key];
-            if (sectionTxs.length === 0) return null;
-            const isCollapsed = collapsed.has(key);
-            return (
-              <div key={key}>
-                <button
-                  onClick={() => toggleSection(key)}
-                  className="flex items-center gap-2 w-full px-1 py-1.5 group"
-                >
-                  <span className="flex items-center">{icon}</span>
-                  <span className={`text-[11px] font-medium tracking-wide uppercase ${themeClasses.textMuted}`}>
-                    {label}
-                  </span>
-                  <span className={`text-[10px] ${themeClasses.textMuted} opacity-50`}>{sectionTxs.length}</span>
-                  <div className={`flex-1 h-px ${themeClasses.textMuted} opacity-10 bg-current`} />
-                  {isCollapsed ? (
-                    <ChevronDownIcon className={`w-3 h-3 ${themeClasses.textMuted} opacity-50`} size={12} />
-                  ) : (
-                    <ChevronUpIcon className={`w-3 h-3 ${themeClasses.textMuted} opacity-50`} size={12} />
-                  )}
-                </button>
-                {!isCollapsed && (
-                  <div className="space-y-2">{sectionTxs.map((tx) => renderTxRow(tx))}</div>
-                )}
-              </div>
-            );
-          })
+          <div className="space-y-2">
+            {sortedTransactions.map((tx) => renderTxRow(tx))}
+          </div>
         )}
       </div>
 

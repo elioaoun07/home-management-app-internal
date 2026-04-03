@@ -472,25 +472,37 @@ export default function FilterBar({
 
       {/* Filter Panel */}
       {showFilters && (
-        <div className="animate-in slide-in-from-top-2 duration-150 border-t border-white/5 px-3 pb-3 pt-2 space-y-3 relative">
-          {/* Clear all filters button — absolute positioned */}
-          {activeFilterCount > 0 && (
+        <div className="animate-in slide-in-from-top-2 duration-150 border-t border-white/5 px-3 pb-3 pt-2 space-y-3">
+          {/* Panel header: Reset (left) + Close (right) */}
+          <div className="flex items-center justify-between -mb-1">
+            {activeFilterCount > 0 ? (
+              <button
+                onClick={() => {
+                  const today = yyyyMmDd(new Date());
+                  onDateRangeChange({ start: today, end: today });
+                  if (showCategoryFilter) onCategoryFiltersChange([]);
+                  if (showJournalFilters) {
+                    onTypeFilterChange("all");
+                    onRecurringFilterChange("all");
+                  }
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
+                title="Reset all filters"
+              >
+                <RotateCcwIcon className="w-3 h-3" />
+                Reset
+              </button>
+            ) : (
+              <div />
+            )}
             <button
-              onClick={() => {
-                const today = yyyyMmDd(new Date());
-                onDateRangeChange({ start: today, end: today });
-                if (showCategoryFilter) onCategoryFiltersChange([]);
-                if (showJournalFilters) {
-                  onTypeFilterChange("all");
-                  onRecurringFilterChange("all");
-                }
-              }}
-              className="absolute top-2 right-3 p-1.5 rounded-lg transition-colors text-slate-400 hover:text-slate-200 hover:bg-white/5"
-              title="Clear all filters"
+              onClick={() => setShowFilters(false)}
+              className="p-1.5 rounded-lg transition-colors text-slate-400 hover:text-slate-200 hover:bg-white/5"
+              title="Close filters"
             >
               <XIcon className="w-4 h-4" />
             </button>
-          )}
+          </div>
 
           {/* Group by + Recurrence — same row */}
           {(showGroupToggle || showJournalFilters) && (
