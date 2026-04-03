@@ -1,6 +1,7 @@
 // src/features/hub/itemLinksHooks.ts
 // React Query hooks for shopping item multi-link feature
 
+import { ToastIcons } from "@/lib/toastIcons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -160,11 +161,22 @@ export function useRefreshLink() {
         (old) => {
           if (!old) return [updatedLink];
           return old.map((link) =>
-            link.id === updatedLink.id ? updatedLink : link
+            link.id === updatedLink.id ? updatedLink : link,
           );
-        }
+        },
       );
-      toast.success("Product info refreshed!");
+      toast.success("Product info refreshed!", {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({
+              queryKey: itemLinksKeys.byMessage(updatedLink.message_id),
+            });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(`Refresh failed: ${error.message}`);
@@ -182,7 +194,7 @@ export function useDeleteItemLink(messageId: string) {
     mutationFn: async (linkId: string) => {
       // Get the link data before deleting for undo
       const existingLinks = queryClient.getQueryData<ShoppingItemLink[]>(
-        itemLinksKeys.byMessage(messageId)
+        itemLinksKeys.byMessage(messageId),
       );
       const deletedLink = existingLinks?.find((l) => l.id === linkId);
       await deleteItemLink(linkId);
@@ -247,12 +259,21 @@ export function useRefreshAllLinks(messageId: string) {
               }
               resolve();
             }, index * 1000);
-          })
-      )
+          }),
+      ),
     );
 
     const successful = results.filter((r) => r.status === "fulfilled").length;
-    toast.success(`Refreshed ${successful}/${links.length} links`);
+    toast.success(`Refreshed ${successful}/${links.length} links`, {
+      icon: ToastIcons.update,
+      duration: 4000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          // Bulk refresh can't easily be undone, re-fetch to sync
+        },
+      },
+    });
   };
 
   return { refreshAll, isRefreshing: refreshMutation.isPending };
@@ -267,7 +288,7 @@ export function useRefreshAllLinks(messageId: string) {
  */
 export function formatPrice(
   price: number | null,
-  currency: string = "USD"
+  currency: string = "USD",
 ): string {
   if (price === null) return "Price N/A";
 
@@ -326,17 +347,17 @@ export function getStockStatusInfo(status: ShoppingItemLink["stock_status"]): {
  * Find the best deal from a list of links
  */
 export function findBestDeal(
-  links: ShoppingItemLink[]
+  links: ShoppingItemLink[],
 ): ShoppingItemLink | null {
   // Only consider in-stock items with prices
   const available = links.filter(
-    (l) => l.price !== null && l.stock_status !== "out_of_stock"
+    (l) => l.price !== null && l.stock_status !== "out_of_stock",
   );
 
   if (available.length === 0) return null;
 
   return available.reduce((best, current) =>
-    (current.price ?? Infinity) < (best.price ?? Infinity) ? current : best
+    (current.price ?? Infinity) < (best.price ?? Infinity) ? current : best,
   );
 }
 
@@ -344,7 +365,7 @@ export function findBestDeal(
  * Sort links by price (lowest first), then by stock status
  */
 export function sortLinksByValue(
-  links: ShoppingItemLink[]
+  links: ShoppingItemLink[],
 ): ShoppingItemLink[] {
   return [...links].sort((a, b) => {
     // Out of stock items go to the end

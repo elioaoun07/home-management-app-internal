@@ -682,7 +682,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         .catch(() => {
           /* best-effort */
         });
-    }, 3000);
+    }, 6000);
 
     return () => clearTimeout(timer);
   }, [queryClient]);

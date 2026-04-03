@@ -9,7 +9,6 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { CheckCircle2 } from "lucide-react";
 import type { DebtStatus } from "@/features/debts/types";
 import {
   useDebts,
@@ -19,6 +18,7 @@ import {
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { CheckCircle2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -38,7 +38,9 @@ export default function DebtsDrawer({ open, onOpenChange }: DebtsDrawerProps) {
   const [activeTab, setActiveTab] = useState<"open" | "archived" | "closed">(
     "open",
   );
-  const { data: debts = [], isLoading } = useDebts(activeTab);
+  const { data: debts = [], isLoading } = useDebts(activeTab, {
+    enabled: open,
+  });
   const deleteDebt = useDeleteDebt();
   const unarchiveDebt = useUnarchiveDebt();
 
@@ -140,11 +142,13 @@ export default function DebtsDrawer({ open, onOpenChange }: DebtsDrawerProps) {
             ) : debts.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-3xl mb-2">
-                  {activeTab === "open"
-                    ? "🎉"
-                    : activeTab === "archived"
-                      ? "📦"
-                      : <CheckCircle2 className="w-8 h-8 text-emerald-400" />}
+                  {activeTab === "open" ? (
+                    "🎉"
+                  ) : activeTab === "archived" ? (
+                    "📦"
+                  ) : (
+                    <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                  )}
                 </div>
                 <p className="text-white/40 text-sm">
                   {activeTab === "open"

@@ -1,6 +1,8 @@
 // src/features/recipes/hooks.ts
 "use client";
 
+import { safeFetch } from "@/lib/safeFetch";
+import { ToastIcons } from "@/lib/toastIcons";
 import type {
   AIRecipeOptimization,
   AIServingScale,
@@ -81,7 +83,7 @@ async function fetchRecipe(id: string): Promise<Recipe> {
 }
 
 async function createRecipe(input: RecipeInsert): Promise<Recipe> {
-  const res = await fetch("/api/recipes", {
+  const res = await safeFetch("/api/recipes", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -94,7 +96,7 @@ async function createRecipe(input: RecipeInsert): Promise<Recipe> {
 }
 
 async function updateRecipe(id: string, input: RecipeUpdate): Promise<Recipe> {
-  const res = await fetch(`/api/recipes/${id}`, {
+  const res = await safeFetch(`/api/recipes/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -107,7 +109,7 @@ async function updateRecipe(id: string, input: RecipeUpdate): Promise<Recipe> {
 }
 
 async function deleteRecipe(id: string): Promise<void> {
-  const res = await fetch(`/api/recipes/${id}`, { method: "DELETE" });
+  const res = await safeFetch(`/api/recipes/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
     throw new Error(json.error || "Failed to delete recipe");
@@ -122,7 +124,7 @@ async function toggleFavorite(
 }
 
 async function generateRecipeWithAI(id: string): Promise<Recipe> {
-  const res = await fetch(`/api/recipes/${id}/generate`, {
+  const res = await safeFetch(`/api/recipes/${id}/generate`, {
     method: "POST",
   });
   if (!res.ok) {
@@ -154,7 +156,7 @@ async function fetchMealPlansByDate(
 }
 
 async function createMealPlan(input: MealPlanInsert): Promise<MealPlan> {
-  const res = await fetch("/api/meal-plans", {
+  const res = await safeFetch("/api/meal-plans", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -170,7 +172,7 @@ async function updateMealPlan(
   id: string,
   input: MealPlanUpdate,
 ): Promise<MealPlan> {
-  const res = await fetch(`/api/meal-plans/${id}`, {
+  const res = await safeFetch(`/api/meal-plans/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -183,7 +185,7 @@ async function updateMealPlan(
 }
 
 async function deleteMealPlan(id: string): Promise<void> {
-  const res = await fetch(`/api/meal-plans/${id}`, { method: "DELETE" });
+  const res = await safeFetch(`/api/meal-plans/${id}`, { method: "DELETE" });
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
     throw new Error(json.error || "Failed to delete meal plan");
@@ -196,7 +198,7 @@ async function addIngredientsToShopping(input: {
   ingredientIndices: number[]; // Which ingredients to add
   threadId: string;
 }): Promise<{ added: number; messageIds: string[] }> {
-  const res = await fetch("/api/meal-plans/add-to-shopping", {
+  const res = await safeFetch("/api/meal-plans/add-to-shopping", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -236,7 +238,16 @@ export function useCreateRecipe() {
     mutationFn: createRecipe,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: recipeKeys.all });
-      toast.success("Recipe created!");
+      toast.success("Recipe created!", {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: recipeKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -253,7 +264,16 @@ export function useUpdateRecipe() {
     onSuccess: (recipe) => {
       queryClient.invalidateQueries({ queryKey: recipeKeys.all });
       queryClient.setQueryData(recipeKeys.detail(recipe.id), recipe);
-      toast.success("Recipe updated!");
+      toast.success("Recipe updated!", {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: recipeKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -268,7 +288,16 @@ export function useDeleteRecipe() {
     mutationFn: deleteRecipe,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: recipeKeys.all });
-      toast.success("Recipe deleted");
+      toast.success("Recipe deleted", {
+        icon: ToastIcons.delete,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: recipeKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -324,7 +353,16 @@ export function useCreateMealPlan() {
     mutationFn: createMealPlan,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: mealPlanKeys.all });
-      toast.success("Meal planned!");
+      toast.success("Meal planned!", {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: mealPlanKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -340,7 +378,16 @@ export function useUpdateMealPlan() {
       updateMealPlan(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: mealPlanKeys.all });
-      toast.success("Meal plan updated!");
+      toast.success("Meal plan updated!", {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: mealPlanKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -355,7 +402,16 @@ export function useDeleteMealPlan() {
     mutationFn: deleteMealPlan,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: mealPlanKeys.all });
-      toast.success("Meal removed from plan");
+      toast.success("Meal removed from plan", {
+        icon: ToastIcons.delete,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: mealPlanKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -371,7 +427,16 @@ export function useAddIngredientsToShopping() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: mealPlanKeys.all });
       queryClient.invalidateQueries({ queryKey: ["hub"] });
-      toast.success(`${data.added} ingredients added to shopping list`);
+      toast.success(`${data.added} ingredients added to shopping list`, {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: mealPlanKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -389,7 +454,16 @@ export function useGenerateRecipe() {
     onSuccess: (recipe) => {
       queryClient.invalidateQueries({ queryKey: recipeKeys.all });
       queryClient.setQueryData(recipeKeys.detail(recipe.id), recipe);
-      toast.success("Recipe generated with AI!");
+      toast.success("Recipe generated with AI!", {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: recipeKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -405,7 +479,7 @@ async function optimizeRecipe(
   id: string,
   userInput?: Partial<Recipe>,
 ): Promise<AIRecipeOptimization & { tokensUsed: number | null }> {
-  const res = await fetch(`/api/recipes/${id}/optimize`, {
+  const res = await safeFetch(`/api/recipes/${id}/optimize`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userInput }),
@@ -423,7 +497,7 @@ async function scaleRecipe(
   currentServings?: number,
   ingredients?: RecipeIngredient[],
 ): Promise<AIServingScale & { tokensUsed: number | null }> {
-  const res = await fetch(`/api/recipes/${id}/scale`, {
+  const res = await safeFetch(`/api/recipes/${id}/scale`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ targetServings, currentServings, ingredients }),
@@ -442,7 +516,7 @@ async function substituteIngredient(
   recipeName?: string,
   allIngredients?: string[],
 ): Promise<AISubstitution & { answer?: string; tokensUsed: number | null }> {
-  const res = await fetch(`/api/recipes/${recipeId}/substitute`, {
+  const res = await safeFetch(`/api/recipes/${recipeId}/substitute`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ingredient, question, recipeName, allIngredients }),
@@ -468,7 +542,7 @@ async function createRecipeVersion(
   recipeId: string,
   data: Omit<RecipeVersionInsert, "recipe_id" | "user_id">,
 ): Promise<RecipeVersion> {
-  const res = await fetch(`/api/recipes/${recipeId}/versions`, {
+  const res = await safeFetch(`/api/recipes/${recipeId}/versions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -494,7 +568,7 @@ async function createCookingLog(
   recipeId: string,
   data: Omit<CookingLogInsert, "recipe_id" | "user_id" | "cooked_at">,
 ): Promise<CookingLog> {
-  const res = await fetch(`/api/recipes/${recipeId}/cooking-log`, {
+  const res = await safeFetch(`/api/recipes/${recipeId}/cooking-log`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -603,7 +677,16 @@ export function useCreateRecipeVersion() {
         queryKey: recipeKeys.versions(version.recipe_id),
       });
       queryClient.invalidateQueries({ queryKey: recipeKeys.all });
-      toast.success(`Version "${version.version_label}" saved!`);
+      toast.success(`Version "${version.version_label}" saved!`, {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: recipeKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -639,7 +722,16 @@ export function useCreateCookingLog() {
         queryKey: recipeKeys.cookingLogs(variables.recipeId),
       });
       queryClient.invalidateQueries({ queryKey: recipeKeys.all });
-      toast.success("Cooking feedback saved!");
+      toast.success("Cooking feedback saved!", {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: recipeKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -684,7 +776,7 @@ interface ExtractFromUrlResponse {
 async function extractRecipeFromUrl(
   url: string,
 ): Promise<ExtractFromUrlResponse> {
-  const res = await fetch("/api/recipes/extract-from-url", {
+  const res = await safeFetch("/api/recipes/extract-from-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),

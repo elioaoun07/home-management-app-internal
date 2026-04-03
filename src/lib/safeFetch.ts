@@ -31,7 +31,11 @@ export class OfflineError extends Error {
  */
 export function isOfflineError(err: unknown): boolean {
   if (err instanceof OfflineError) return true;
-  if (err instanceof TypeError) return true; // "Failed to fetch" / "NetworkError"
+  if (
+    err instanceof TypeError &&
+    /failed to fetch|networkerror|load failed/i.test(err.message)
+  )
+    return true;
   if (err instanceof DOMException && err.name === "AbortError") return true;
   if (
     err instanceof Error &&

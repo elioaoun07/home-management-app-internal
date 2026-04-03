@@ -52,8 +52,6 @@ import {
   Plus,
   Square,
   Trash2,
-  User,
-  UserCheck,
   Users2,
   UtensilsCrossed,
   X,
@@ -400,8 +398,16 @@ const SwipeToAssign = ({
       e.preventDefault();
       setIsDragging(true);
 
-      const resistance = Math.abs(dx) > CONFIRM_THRESHOLD ? 0.3 : 1;
-      const clampedOffset = Math.max(-150, Math.min(150, dx * resistance));
+      const absDx = Math.abs(dx);
+      const sign = dx < 0 ? -1 : 1;
+      const clampedOffset =
+        sign *
+        Math.min(
+          150,
+          absDx > CONFIRM_THRESHOLD
+            ? CONFIRM_THRESHOLD + (absDx - CONFIRM_THRESHOLD) * 0.3
+            : absDx,
+        );
       setOffsetX(clampedOffset);
 
       const confirmed = Math.abs(dx) >= CONFIRM_THRESHOLD;
@@ -478,11 +484,15 @@ const SwipeToAssign = ({
           )}
           style={{ width: `${Math.abs(offsetX) + 16}px` }}
         >
-          {isConfirmed && (
-            <span className={cn("text-[10px] font-medium", currentAction === "unassign" ? "text-red-400" : myColors.text)}>
-              {currentAction === "unassign" ? "✕" : "Me"}
-            </span>
-          )}
+          <span
+            className={cn(
+              "text-[10px] font-medium transition-opacity duration-150",
+              isConfirmed ? "opacity-100" : "opacity-0",
+              currentAction === "unassign" ? "text-red-400" : myColors.text,
+            )}
+          >
+            {currentAction === "unassign" ? "✕" : "Me"}
+          </span>
         </div>
       )}
 
@@ -499,11 +509,17 @@ const SwipeToAssign = ({
           )}
           style={{ width: `${Math.abs(offsetX) + 16}px` }}
         >
-          {isConfirmed && (
-            <span className={cn("text-[10px] font-medium", currentAction === "unassign" ? "text-red-400" : partnerColors.text)}>
-              {currentAction === "unassign" ? "✕" : partnerName.split(" ")[0]}
-            </span>
-          )}
+          <span
+            className={cn(
+              "text-[10px] font-medium transition-opacity duration-150",
+              isConfirmed ? "opacity-100" : "opacity-0",
+              currentAction === "unassign"
+                ? "text-red-400"
+                : partnerColors.text,
+            )}
+          >
+            {currentAction === "unassign" ? "✕" : partnerName.split(" ")[0]}
+          </span>
         </div>
       )}
 
@@ -676,6 +692,7 @@ export function ShoppingListView({
   // ── Batch selection (Point 3) ──
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [showBulkGroupPicker, setShowBulkGroupPicker] = useState(false);
 
   // ── Autocomplete (Point 4) ──
   const [showAutocomplete, setShowAutocomplete] = useState(false);
@@ -693,8 +710,12 @@ export function ShoppingListView({
   const [partnerOnline, setPartnerOnline] = useState(false);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const partnerTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const presenceChannelRef = useRef<ReturnType<ReturnType<typeof supabaseBrowser>["channel"]> | null>(null);
-  const typingBroadcastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const presenceChannelRef = useRef<ReturnType<
+    ReturnType<typeof supabaseBrowser>["channel"]
+  > | null>(null);
+  const typingBroadcastTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   // ── Virtual list ref (Point 10) ──
   const listContainerRef = useRef<HTMLDivElement>(null);
@@ -804,8 +825,12 @@ export function ShoppingListView({
         const { user_id } = payload.payload ?? {};
         if (!user_id || user_id === currentUserId) return;
         setPartnerTyping(true);
-        if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
-        partnerTypingTimer.current = setTimeout(() => setPartnerTyping(false), 3000);
+        if (partnerTypingTimer.current)
+          clearTimeout(partnerTypingTimer.current);
+        partnerTypingTimer.current = setTimeout(
+          () => setPartnerTyping(false),
+          3000,
+        );
       })
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState();
@@ -828,7 +853,8 @@ export function ShoppingListView({
     return () => {
       presenceChannelRef.current = null;
       if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
-      if (typingBroadcastTimer.current) clearTimeout(typingBroadcastTimer.current);
+      if (typingBroadcastTimer.current)
+        clearTimeout(typingBroadcastTimer.current);
       supabaseBrowser().removeChannel(channel);
     };
   }, [threadId, currentUserId, queryClient]);
@@ -1032,7 +1058,7 @@ export function ShoppingListView({
         if (showHeader) rows.push({ type: "group-header", group, groupIndex });
         if (!group.isCollapsed) {
           if (group.items.length === 0 && group.type === "custom") {
-            rows.push({ type: "empty-group", group });
+            // Don't push a row — chevron + count=0 already signals empty
           } else {
             group.items.forEach((item) =>
               rows.push({ type: "item", item, group }),
@@ -1447,15 +1473,23 @@ export function ShoppingListView({
 
     // Compute next sort order so the optimistic item stays stable in position
     const groupItems = uncheckedItems.filter(
-      (i) => i.shoppingGroupId === (activeGroupId ?? null) && i.sortOrder !== null,
+      (i) =>
+        i.shoppingGroupId === (activeGroupId ?? null) && i.sortOrder !== null,
     );
-    const maxOrder = groupItems.length > 0
-      ? Math.max(...groupItems.map((i) => i.sortOrder!))
-      : 0;
+    const maxOrder =
+      groupItems.length > 0
+        ? Math.max(...groupItems.map((i) => i.sortOrder!))
+        : 0;
     const nextSortOrder = maxOrder + 1;
 
     // Optimistic add is handled by useSendMessage.onMutate — no duplicate needed here
-    onAddItem(content, quantity, undefined, activeGroupId || undefined, nextSortOrder);
+    onAddItem(
+      content,
+      quantity,
+      undefined,
+      activeGroupId || undefined,
+      nextSortOrder,
+    );
     setNewItem("");
     setShowAutocomplete(false);
     setCategorySuggestion(null);
@@ -1569,15 +1603,23 @@ export function ShoppingListView({
 
       // Compute sequential sort orders so pasted items stay in order
       const groupItems = uncheckedItems.filter(
-        (i) => i.shoppingGroupId === (activeGroupId ?? null) && i.sortOrder !== null,
+        (i) =>
+          i.shoppingGroupId === (activeGroupId ?? null) && i.sortOrder !== null,
       );
-      let baseOrder = groupItems.length > 0
-        ? Math.max(...groupItems.map((i) => i.sortOrder!))
-        : 0;
+      let baseOrder =
+        groupItems.length > 0
+          ? Math.max(...groupItems.map((i) => i.sortOrder!))
+          : 0;
 
       newItems.forEach(({ content, quantity }) => {
         baseOrder += 1;
-        onAddItem(content, quantity, undefined, activeGroupId || undefined, baseOrder);
+        onAddItem(
+          content,
+          quantity,
+          undefined,
+          activeGroupId || undefined,
+          baseOrder,
+        );
       });
 
       setNewItem("");
@@ -1586,7 +1628,9 @@ export function ShoppingListView({
           `Added ${newItems.length} item${newItems.length > 1 ? "s" : ""}${skipped > 0 ? ` · ${skipped} duplicate${skipped > 1 ? "s" : ""} skipped` : ""}`,
         );
       } else {
-        toast.info(`All ${skipped} item${skipped > 1 ? "s" : ""} already on the list`);
+        toast.info(
+          `All ${skipped} item${skipped > 1 ? "s" : ""} already on the list`,
+        );
       }
     }
   };
@@ -1759,6 +1803,28 @@ export function ShoppingListView({
     },
     [selectedItems, threadId, queryClient, currentUserId],
   );
+
+  const bulkMoveToGroup = useCallback(
+    async (groupId: string | null) => {
+      const ids = Array.from(selectedItems);
+      await Promise.all(ids.map((id) => moveItemToGroup(id, groupId)));
+      setSelectionMode(false);
+      setSelectedItems(new Set());
+      setShowBulkGroupPicker(false);
+    },
+    [selectedItems, moveItemToGroup],
+  );
+
+  const bulkDelete = useCallback(async () => {
+    const ids = Array.from(selectedItems);
+    await Promise.all(ids.map((id) => onDeleteItem(id)));
+    setSelectionMode(false);
+    setSelectedItems(new Set());
+  }, [selectedItems, onDeleteItem]);
+
+  const selectAll = useCallback(() => {
+    setSelectedItems(new Set(uncheckedItems.map((i) => i.id)));
+  }, [uncheckedItems]);
 
   // ── Set item quantity ──
   const setItemQuantity = useCallback(
@@ -1993,7 +2059,7 @@ export function ShoppingListView({
               )}
             />
           )}
-          <div className="flex items-center gap-2 p-3">
+          <div className="flex items-center gap-2 px-3 py-2">
             {/* Drag handle (Point 1) */}
             {!selectionMode && dragListeners && (
               <button
@@ -2073,17 +2139,29 @@ export function ShoppingListView({
                       autoFocus
                       onClick={(e) => e.stopPropagation()}
                     />
-                  ) : (
+                  ) : item.quantity ? (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditingQuantityFor(item.id);
                         setQuantityInputValue(item.quantity || "");
                       }}
-                      className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium hover:bg-blue-500/30 transition-all"
+                      className="px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300/80 text-xs font-medium hover:bg-blue-500/25 transition-all"
                       title="Click to edit quantity"
                     >
-                      {item.quantity || "+ qty"}
+                      {item.quantity}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingQuantityFor(item.id);
+                        setQuantityInputValue("");
+                      }}
+                      className="p-0.5 rounded text-white/15 hover:text-white/40 transition-all"
+                      title="Add quantity"
+                    >
+                      <Plus className="w-3 h-3" />
                     </button>
                   )}
 
@@ -2106,7 +2184,7 @@ export function ShoppingListView({
             </div>
 
             {!selectionMode && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
                 {enableItemUrls && (
                   <button
                     onClick={() => openComparisonSheet(item.id, item.content)}
@@ -2118,7 +2196,7 @@ export function ShoppingListView({
                     )}
                     title={item.hasLinks ? "Compare stores" : "Add store links"}
                   >
-                    <Layers className="w-4 h-4" />
+                    <Layers className="w-3.5 h-3.5" />
                   </button>
                 )}
                 {enableItemUrls && (
@@ -2132,7 +2210,7 @@ export function ShoppingListView({
                     )}
                     title={item.itemUrl ? "Edit quick link" : "Add quick link"}
                   >
-                    <LinkIcon className="w-4 h-4" />
+                    <LinkIcon className="w-3.5 h-3.5" />
                   </button>
                 )}
                 {shoppingGroups.length > 0 && (
@@ -2143,19 +2221,19 @@ export function ShoppingListView({
                     className={cn(
                       "p-1.5 rounded-lg transition-all",
                       movingItemId === item.id
-                        ? "text-purple-400 bg-purple-500/20"
+                        ? "text-purple-400 bg-purple-500/20 !opacity-100"
                         : "text-white/30 hover:bg-white/10 hover:text-white/60",
                     )}
                     title="Move to group"
                   >
-                    <FolderPlus className="w-4 h-4" />
+                    <FolderPlus className="w-3.5 h-3.5" />
                   </button>
                 )}
                 <button
                   onClick={() => onDeleteItem(item.id)}
                   className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400/60 hover:text-red-400 transition-all"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
@@ -2255,25 +2333,25 @@ export function ShoppingListView({
         <button
           onClick={() => toggleGroupCollapse(group.key)}
           className={cn(
-            "flex-1 flex items-center gap-2 px-3 py-2 rounded-lg transition-all",
+            "flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all",
             group.type === "custom"
-              ? "bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20"
+              ? "hover:bg-purple-500/10"
               : group.type === "meal-plan"
-                ? "bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20"
-                : "bg-white/5 hover:bg-white/10 border border-white/10",
+                ? "hover:bg-emerald-500/10"
+                : "hover:bg-white/5",
           )}
         >
           {group.isCollapsed ? (
-            <ChevronRight className="w-4 h-4 text-white/50 flex-shrink-0" />
+            <ChevronRight className="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-white/50 flex-shrink-0" />
+            <ChevronDown className="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
           )}
           {group.type === "meal-plan" ? (
-            <UtensilsCrossed className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <UtensilsCrossed className="w-3.5 h-3.5 text-emerald-400/70 flex-shrink-0" />
           ) : group.type === "custom" ? (
-            <FolderOpen className="w-4 h-4 text-purple-400 flex-shrink-0" />
+            <FolderOpen className="w-3.5 h-3.5 text-purple-400/70 flex-shrink-0" />
           ) : (
-            <List className="w-4 h-4 text-white/50 flex-shrink-0" />
+            <List className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
           )}
 
           {isEditing ? (
@@ -2283,9 +2361,9 @@ export function ShoppingListView({
               onChange={(e) => setEditingGroupName(e.target.value)}
               onKeyDown={(e) => {
                 e.stopPropagation();
-                if (e.key === "Enter" && group.groupId)
-                  renameGroup(group.groupId, editingGroupName);
-                else if (e.key === "Escape") {
+                if (e.key === "Enter" && group.groupId) {
+                  e.currentTarget.blur();
+                } else if (e.key === "Escape") {
                   setEditingGroupId(null);
                   setEditingGroupName("");
                 }
@@ -2299,18 +2377,19 @@ export function ShoppingListView({
                 }
               }}
               onClick={(e) => e.stopPropagation()}
-              className="flex-1 px-1.5 py-0.5 text-sm font-medium bg-white/10 border border-white/20 rounded text-white focus:outline-none focus:border-purple-400"
+              className="flex-1 px-2 py-1 text-xs font-semibold uppercase tracking-wide bg-white/15 border border-purple-400/50 rounded text-white focus:outline-none focus:border-purple-300 focus:bg-white/25"
               autoFocus
+              onFocus={(e) => e.currentTarget.select()}
             />
           ) : (
             <span
               className={cn(
-                "text-sm font-medium flex-1 text-left truncate",
+                "text-xs font-semibold uppercase tracking-wide flex-1 text-left truncate",
                 group.type === "custom"
-                  ? "text-purple-300"
+                  ? "text-purple-400/80"
                   : group.type === "meal-plan"
-                    ? "text-emerald-300"
-                    : "text-white/70",
+                    ? "text-emerald-400/80"
+                    : "text-white/40",
               )}
             >
               {group.name}
@@ -2326,7 +2405,7 @@ export function ShoppingListView({
               })}
             </span>
           )}
-          <span className="text-xs text-white/40 bg-white/10 px-2 py-0.5 rounded-full flex-shrink-0">
+          <span className="text-[10px] text-white/30 tabular-nums flex-shrink-0">
             {group.items.length}
           </span>
         </button>
@@ -2344,19 +2423,19 @@ export function ShoppingListView({
                   groupMenuOpen === group.groupId ? null : group.groupId,
                 );
               }}
-              className="p-2 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/70 transition-all"
+              className="p-1.5 rounded-lg hover:bg-white/15 text-white/50 hover:text-white transition-all"
             >
-              <MoreHorizontal className="w-4 h-4" />
+              <MoreHorizontal className="w-3.5 h-3.5" />
             </button>
             {groupMenuOpen === group.groupId && (
-              <div className="absolute right-0 top-full mt-1 z-50 bg-gray-900 border border-white/10 rounded-lg shadow-xl overflow-hidden min-w-[140px]">
+              <div className="absolute right-0 top-full mt-1 z-50 bg-gray-900/95 backdrop-blur border border-white/20 rounded-lg shadow-xl overflow-hidden min-w-[140px]">
                 <button
                   onClick={() => {
                     setEditingGroupId(group.groupId);
                     setEditingGroupName(group.name);
                     setGroupMenuOpen(null);
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-all"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/15 transition-all border-b border-white/10"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                   Rename
@@ -2366,7 +2445,7 @@ export function ShoppingListView({
                     setGroupMenuOpen(null);
                     if (group.groupId) deleteGroup(group.groupId);
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-all"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/15 transition-all"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   Delete
@@ -2439,15 +2518,9 @@ export function ShoppingListView({
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-all"
                 >
                   {allCollapsed ? (
-                    <>
-                      <ChevronsUpDown className="w-3.5 h-3.5" />
-                      Expand all
-                    </>
+                    <ChevronsUpDown className="w-3.5 h-3.5" />
                   ) : (
-                    <>
-                      <ChevronsDownUp className="w-3.5 h-3.5" />
-                      Collapse all
-                    </>
+                    <ChevronsDownUp className="w-3.5 h-3.5" />
                   )}
                 </button>
               )}
@@ -2466,7 +2539,6 @@ export function ShoppingListView({
                   )}
                 >
                   <CheckSquare className="w-3.5 h-3.5" />
-                  {selectionMode ? "Cancel" : "Select"}
                 </button>
               )}
             </div>
@@ -2549,15 +2621,7 @@ export function ShoppingListView({
       case "item": {
         const { item, group } = row;
         return (
-          <div
-            key={key}
-            className={cn(
-              "mt-1.5",
-              uncheckedGrouped.length > 1 || group.type === "custom"
-                ? "ml-2"
-                : "",
-            )}
-          >
+          <div key={key} className="mt-1 ml-2">
             <SortableItemWrapper id={item.id}>
               {({ listeners, attributes }) =>
                 renderShoppingItem(item, listeners, attributes)
@@ -2569,7 +2633,7 @@ export function ShoppingListView({
 
       case "empty-group": {
         return (
-          <div key={key} className="ml-2">
+          <div key={key} className="h-1">
             <p className="text-xs text-white/25 text-center py-3 italic">
               No items in this group
             </p>
@@ -2582,11 +2646,9 @@ export function ShoppingListView({
           <div key={key} className="py-4 border-t border-white/5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="h-px w-8 bg-white/10" />
-                <span className="text-xs text-white/40">
-                  Completed ({checkedItemsList.length})
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-white/30">
+                  Done · {checkedItemsList.length}
                 </span>
-                <div className="h-px w-8 bg-white/10" />
               </div>
               <button
                 onClick={handleClearChecked}
@@ -2614,7 +2676,7 @@ export function ShoppingListView({
           <div
             key={key}
             className={cn(
-              "group flex items-center gap-3 p-3 rounded-xl bg-white/5 opacity-60 mb-1.5",
+              "group flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 opacity-50 mb-1",
               isAssignedToMe
                 ? "border-2 border-blue-400/30"
                 : isAssignedToPartner
@@ -2709,7 +2771,7 @@ export function ShoppingListView({
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* ── Input Section ── */}
-      <div className="p-4 border-b border-white/5 bg-bg-card-custom/95 backdrop-blur-sm shrink-0">
+      <div className="px-3 pt-3 pb-2 border-b border-white/5 bg-bg-card-custom/95 backdrop-blur-sm shrink-0">
         <div className="flex gap-2 relative">
           <textarea
             ref={inputRef}
@@ -2717,7 +2779,8 @@ export function ShoppingListView({
             onChange={(e) => {
               setNewItem(e.target.value);
               // Debounce typing broadcast so we don't flood the channel
-              if (typingBroadcastTimer.current) clearTimeout(typingBroadcastTimer.current);
+              if (typingBroadcastTimer.current)
+                clearTimeout(typingBroadcastTimer.current);
               typingBroadcastTimer.current = setTimeout(() => {
                 presenceChannelRef.current?.send({
                   type: "broadcast",
@@ -2799,17 +2862,14 @@ export function ShoppingListView({
 
         {/* Group selector */}
         {shoppingGroups.length > 0 && (
-          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-            <span className="text-[10px] text-white/30 uppercase tracking-wider">
-              Add to:
-            </span>
+          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
             <button
               onClick={() => setActiveGroupId(null)}
               className={cn(
-                "px-2 py-0.5 rounded-md text-xs transition-all",
+                "px-2 py-0.5 rounded-md text-[10px] transition-all",
                 activeGroupId === null
-                  ? "bg-white/15 text-white font-medium"
-                  : "bg-white/5 text-white/50 hover:bg-white/10",
+                  ? "bg-white/15 text-white/80 font-medium"
+                  : "text-white/35 hover:text-white/60",
               )}
             >
               General
@@ -2819,10 +2879,10 @@ export function ShoppingListView({
                 key={g.id}
                 onClick={() => setActiveGroupId(g.id)}
                 className={cn(
-                  "px-2 py-0.5 rounded-md text-xs transition-all",
+                  "px-2 py-0.5 rounded-md text-[10px] transition-all",
                   activeGroupId === g.id
-                    ? "bg-purple-500/30 text-purple-300 font-medium"
-                    : "bg-white/5 text-white/50 hover:bg-purple-500/10",
+                    ? "bg-purple-500/20 text-purple-300 font-medium"
+                    : "text-white/35 hover:text-purple-300/60",
                 )}
               >
                 {g.name}
@@ -2835,11 +2895,34 @@ export function ShoppingListView({
         <div className="flex items-center gap-3 mt-2">
           {/* Partner online indicator (Point 12 — uses partner's identity color) */}
           {partnerTyping ? (
-            <div className={cn("flex items-center gap-1.5 text-[10px]", partnerColors.text)}>
+            <div
+              className={cn(
+                "flex items-center gap-1.5 text-[10px]",
+                partnerColors.text,
+              )}
+            >
               <span className="flex gap-0.5">
-                <span className={cn("w-1 h-1 rounded-full animate-bounce", partnerColors.accent)} style={{ animationDelay: "0ms" }} />
-                <span className={cn("w-1 h-1 rounded-full animate-bounce", partnerColors.accent)} style={{ animationDelay: "150ms" }} />
-                <span className={cn("w-1 h-1 rounded-full animate-bounce", partnerColors.accent)} style={{ animationDelay: "300ms" }} />
+                <span
+                  className={cn(
+                    "w-1 h-1 rounded-full animate-bounce",
+                    partnerColors.accent,
+                  )}
+                  style={{ animationDelay: "0ms" }}
+                />
+                <span
+                  className={cn(
+                    "w-1 h-1 rounded-full animate-bounce",
+                    partnerColors.accent,
+                  )}
+                  style={{ animationDelay: "150ms" }}
+                />
+                <span
+                  className={cn(
+                    "w-1 h-1 rounded-full animate-bounce",
+                    partnerColors.accent,
+                  )}
+                  style={{ animationDelay: "300ms" }}
+                />
               </span>
               <span>{partnerName} is adding…</span>
             </div>
@@ -2861,7 +2944,7 @@ export function ShoppingListView({
       </div>
 
       {/* ── List Section (virtualizer + dnd) ── */}
-      <div ref={listContainerRef} className="flex-1 overflow-y-auto px-4 pb-8">
+      <div ref={listContainerRef} className="flex-1 overflow-y-auto px-3 pb-8">
         {isLoading ? (
           <div className="py-4 space-y-3">
             {[1, 2, 3, 4].map((i) => (
@@ -2878,9 +2961,6 @@ export function ShoppingListView({
                 </div>
               </div>
             ))}
-            <p className="text-center text-xs text-white/30 mt-6">
-              Loading your shopping list...
-            </p>
           </div>
         ) : (
           <DndContext
@@ -2904,6 +2984,7 @@ export function ShoppingListView({
                   style={{
                     height: rowVirtualizer.getTotalSize(),
                     position: "relative",
+                    transition: "height 200ms ease",
                   }}
                 >
                   {rowVirtualizer.getVirtualItems().map((virtualItem) => {
@@ -2938,34 +3019,80 @@ export function ShoppingListView({
       </div>
 
       {/* ── Batch Selection Action Bar (Point 3) ── */}
-      {selectionMode && selectedItems.size > 0 && (
-        <div className="fixed bottom-20 left-4 right-4 z-40 flex items-center gap-2 p-3 rounded-2xl bg-gray-900/95 border border-white/10 backdrop-blur-sm shadow-2xl">
-          <span className="text-xs text-white/60 flex-1">
-            {selectedItems.size} selected
-          </span>
-          <button
-            onClick={() => bulkCheck(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-xs font-medium transition-all"
-          >
-            <Check className="w-3.5 h-3.5" />
-            Check
-          </button>
-          <button
-            onClick={() => bulkCheck(false)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-white/70 hover:bg-white/15 text-xs font-medium transition-all"
-          >
-            <Square className="w-3.5 h-3.5" />
-            Uncheck
-          </button>
-          <button
-            onClick={() => {
-              setSelectionMode(false);
-              setSelectedItems(new Set());
-            }}
-            className="p-1.5 rounded-xl bg-white/5 text-white/40 hover:bg-white/10 transition-all"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
+      {selectionMode && (
+        <div className="fixed bottom-20 left-4 right-4 z-40 rounded-2xl bg-gray-900/95 border border-white/10 backdrop-blur-sm shadow-2xl overflow-hidden">
+          {showBulkGroupPicker ? (
+            /* Group picker panel */
+            <div className="p-3">
+              <p className="text-[10px] text-white/40 uppercase tracking-wide mb-2">
+                Move {selectedItems.size} item{selectedItems.size !== 1 ? "s" : ""} to…
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => bulkMoveToGroup(null)}
+                  className="px-2.5 py-1 rounded-lg bg-white/10 text-white/70 hover:bg-white/20 text-xs font-medium transition-all"
+                >
+                  General
+                </button>
+                {shoppingGroups.map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => bulkMoveToGroup(g.id)}
+                    className="px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-300 hover:bg-purple-500/35 text-xs font-medium transition-all"
+                  >
+                    {g.name}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setShowBulkGroupPicker(false)}
+                  className="px-2.5 py-1 rounded-lg bg-white/5 text-white/30 hover:bg-white/10 text-xs transition-all ml-auto"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Main action bar */
+            <div className="flex items-center gap-1.5 p-3">
+              <span className="text-xs text-white/50 mr-1">
+                {selectedItems.size > 0 ? `${selectedItems.size} selected` : "Select items"}
+              </span>
+              {/* Select all / none */}
+              <button
+                onClick={selectedItems.size === uncheckedItems.length ? () => setSelectedItems(new Set()) : selectAll}
+                className="px-2.5 py-1.5 rounded-xl bg-white/8 text-white/60 hover:bg-white/15 hover:text-white text-xs font-medium transition-all"
+              >
+                {selectedItems.size === uncheckedItems.length ? "None" : "All"}
+              </button>
+              {selectedItems.size > 0 && shoppingGroups.length > 0 && (
+                <button
+                  onClick={() => setShowBulkGroupPicker(true)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-purple-500/20 text-purple-300 hover:bg-purple-500/35 text-xs font-medium transition-all"
+                >
+                  <FolderPlus className="w-3.5 h-3.5" />
+                  Move
+                </button>
+              )}
+              {selectedItems.size > 0 && (
+                <button
+                  onClick={bulkDelete}
+                  className="p-1.5 rounded-xl bg-red-500/15 text-red-400/70 hover:bg-red-500/25 hover:text-red-400 transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setSelectionMode(false);
+                  setSelectedItems(new Set());
+                  setShowBulkGroupPicker(false);
+                }}
+                className="p-1.5 rounded-xl bg-white/5 text-white/40 hover:bg-white/10 transition-all ml-auto"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 

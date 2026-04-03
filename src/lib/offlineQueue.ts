@@ -148,31 +148,33 @@ export async function addToQueue(op: QueueableOperation): Promise<string> {
   try {
     const db = await openDB();
 
-    // Check queue size
-    const count = await new Promise<number>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      const store = tx.objectStore(STORE_NAME);
-      const countReq = store.count();
-      countReq.onsuccess = () => resolve(countReq.result);
-      countReq.onerror = () => reject(countReq.error);
-    });
+    try {
+      // Check queue size
+      const count = await new Promise<number>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readonly");
+        const store = tx.objectStore(STORE_NAME);
+        const countReq = store.count();
+        countReq.onsuccess = () => resolve(countReq.result);
+        countReq.onerror = () => reject(countReq.error);
+      });
 
-    if (count >= MAX_QUEUE_SIZE) {
+      if (count >= MAX_QUEUE_SIZE) {
+        // Undo the optimistic increment
+        offlinePendingActions.decrement();
+        throw new Error("Too many pending changes. Please connect to sync.");
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const addReq = store.add(operation);
+        addReq.onsuccess = () => resolve();
+        addReq.onerror = () => reject(addReq.error);
+      });
+    } finally {
       db.close();
-      // Undo the optimistic increment
-      offlinePendingActions.decrement();
-      throw new Error("Too many pending changes. Please connect to sync.");
     }
 
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readwrite");
-      const store = tx.objectStore(STORE_NAME);
-      const addReq = store.add(operation);
-      addReq.onsuccess = () => resolve();
-      addReq.onerror = () => reject(addReq.error);
-    });
-
-    db.close();
     return operation.id;
   } catch (err) {
     // Fall back to memory — the increment already happened above
@@ -198,14 +200,17 @@ export async function removeFromQueue(id: string): Promise<void> {
 
   try {
     const db = await openDB();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readwrite");
-      const store = tx.objectStore(STORE_NAME);
-      const deleteReq = store.delete(id);
-      deleteReq.onsuccess = () => resolve();
-      deleteReq.onerror = () => reject(deleteReq.error);
-    });
-    db.close();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const deleteReq = store.delete(id);
+        deleteReq.onsuccess = () => resolve();
+        deleteReq.onerror = () => reject(deleteReq.error);
+      });
+    } finally {
+      db.close();
+    }
     offlinePendingActions.decrement();
     notifyQueueChanged();
   } catch {
@@ -222,17 +227,20 @@ export async function getAllPending(): Promise<OfflineOperation[]> {
 
   try {
     const db = await openDB();
-    const ops = await new Promise<OfflineOperation[]>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      const store = tx.objectStore(STORE_NAME);
-      const index = store.index("createdAt");
-      const getAllReq = index.getAll();
-      getAllReq.onsuccess = () =>
-        resolve(getAllReq.result as OfflineOperation[]);
-      getAllReq.onerror = () => reject(getAllReq.error);
-    });
-    db.close();
-    return ops;
+    try {
+      const ops = await new Promise<OfflineOperation[]>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readonly");
+        const store = tx.objectStore(STORE_NAME);
+        const index = store.index("createdAt");
+        const getAllReq = index.getAll();
+        getAllReq.onsuccess = () =>
+          resolve(getAllReq.result as OfflineOperation[]);
+        getAllReq.onerror = () => reject(getAllReq.error);
+      });
+      return ops;
+    } finally {
+      db.close();
+    }
   } catch {
     return [...memoryQueue].sort((a, b) => a.createdAt - b.createdAt);
   }
@@ -248,14 +256,17 @@ export async function clearQueue(): Promise<void> {
 
   try {
     const db = await openDB();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readwrite");
-      const store = tx.objectStore(STORE_NAME);
-      const clearReq = store.clear();
-      clearReq.onsuccess = () => resolve();
-      clearReq.onerror = () => reject(clearReq.error);
-    });
-    db.close();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const clearReq = store.clear();
+        clearReq.onsuccess = () => resolve();
+        clearReq.onerror = () => reject(clearReq.error);
+      });
+    } finally {
+      db.close();
+    }
     offlinePendingActions.reset();
     notifyQueueChanged();
   } catch {
@@ -272,15 +283,18 @@ export async function getQueueCount(): Promise<number> {
 
   try {
     const db = await openDB();
-    const count = await new Promise<number>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      const store = tx.objectStore(STORE_NAME);
-      const countReq = store.count();
-      countReq.onsuccess = () => resolve(countReq.result);
-      countReq.onerror = () => reject(countReq.error);
-    });
-    db.close();
-    return count;
+    try {
+      const count = await new Promise<number>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readonly");
+        const store = tx.objectStore(STORE_NAME);
+        const countReq = store.count();
+        countReq.onsuccess = () => resolve(countReq.result);
+        countReq.onerror = () => reject(countReq.error);
+      });
+      return count;
+    } finally {
+      db.close();
+    }
   } catch {
     return memoryQueue.length;
   }
@@ -298,29 +312,31 @@ export async function updateRetryCount(
 
   try {
     const db = await openDB();
-    const op = await new Promise<OfflineOperation | undefined>(
-      (resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readonly");
-        const store = tx.objectStore(STORE_NAME);
-        const getReq = store.get(id);
-        getReq.onsuccess = () =>
-          resolve(getReq.result as OfflineOperation | undefined);
-        getReq.onerror = () => reject(getReq.error);
-      },
-    );
+    try {
+      const op = await new Promise<OfflineOperation | undefined>(
+        (resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const store = tx.objectStore(STORE_NAME);
+          const getReq = store.get(id);
+          getReq.onsuccess = () =>
+            resolve(getReq.result as OfflineOperation | undefined);
+          getReq.onerror = () => reject(getReq.error);
+        },
+      );
 
-    if (op) {
-      op.retryCount = count;
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        const store = tx.objectStore(STORE_NAME);
-        const putReq = store.put(op);
-        putReq.onsuccess = () => resolve();
-        putReq.onerror = () => reject(putReq.error);
-      });
+      if (op) {
+        op.retryCount = count;
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, "readwrite");
+          const store = tx.objectStore(STORE_NAME);
+          const putReq = store.put(op);
+          putReq.onsuccess = () => resolve();
+          putReq.onerror = () => reject(putReq.error);
+        });
+      }
+    } finally {
+      db.close();
     }
-
-    db.close();
   } catch {
     const op = memoryQueue.find((o) => o.id === id);
     if (op) op.retryCount = count;
@@ -348,34 +364,36 @@ export async function updateQueuedOperation(
 
   try {
     const db = await openDB();
-    const op = await new Promise<OfflineOperation | undefined>(
-      (resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readonly");
+    try {
+      const op = await new Promise<OfflineOperation | undefined>(
+        (resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const store = tx.objectStore(STORE_NAME);
+          const getReq = store.get(id);
+          getReq.onsuccess = () =>
+            resolve(getReq.result as OfflineOperation | undefined);
+          getReq.onerror = () => reject(getReq.error);
+        },
+      );
+
+      if (!op) {
+        return false;
+      }
+
+      if (updates.body) op.body = { ...op.body, ...updates.body };
+      if (updates.metadata)
+        op.metadata = { ...op.metadata, ...updates.metadata };
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readwrite");
         const store = tx.objectStore(STORE_NAME);
-        const getReq = store.get(id);
-        getReq.onsuccess = () =>
-          resolve(getReq.result as OfflineOperation | undefined);
-        getReq.onerror = () => reject(getReq.error);
-      },
-    );
-
-    if (!op) {
+        const putReq = store.put(op);
+        putReq.onsuccess = () => resolve();
+        putReq.onerror = () => reject(putReq.error);
+      });
+    } finally {
       db.close();
-      return false;
     }
-
-    if (updates.body) op.body = { ...op.body, ...updates.body };
-    if (updates.metadata) op.metadata = { ...op.metadata, ...updates.metadata };
-
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readwrite");
-      const store = tx.objectStore(STORE_NAME);
-      const putReq = store.put(op);
-      putReq.onsuccess = () => resolve();
-      putReq.onerror = () => reject(putReq.error);
-    });
-
-    db.close();
     notifyQueueChanged();
     return true;
   } catch {

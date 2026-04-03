@@ -1,6 +1,8 @@
 // src/features/catalogue/hooks.ts
 "use client";
 
+import { safeFetch } from "@/lib/safeFetch";
+import { ToastIcons } from "@/lib/toastIcons";
 import type {
   CatalogueCategory,
   CatalogueItem,
@@ -31,9 +33,9 @@ async function fetchModules(): Promise<CatalogueModule[]> {
 }
 
 async function createModule(
-  input: CreateModuleInput
+  input: CreateModuleInput,
 ): Promise<CatalogueModule> {
-  const res = await fetch("/api/catalogue/modules", {
+  const res = await safeFetch("/api/catalogue/modules", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -46,10 +48,10 @@ async function createModule(
 }
 
 async function updateModule(
-  input: UpdateModuleInput
+  input: UpdateModuleInput,
 ): Promise<CatalogueModule> {
   const { id, ...data } = input;
-  const res = await fetch(`/api/catalogue/modules/${id}`, {
+  const res = await safeFetch(`/api/catalogue/modules/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -62,7 +64,9 @@ async function updateModule(
 }
 
 async function deleteModule(id: string): Promise<void> {
-  const res = await fetch(`/api/catalogue/modules/${id}`, { method: "DELETE" });
+  const res = await safeFetch(`/api/catalogue/modules/${id}`, {
+    method: "DELETE",
+  });
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
     throw new Error(json.error || "Failed to delete module");
@@ -71,7 +75,7 @@ async function deleteModule(id: string): Promise<void> {
 
 // Categories
 async function fetchCategories(
-  moduleId?: string
+  moduleId?: string,
 ): Promise<CatalogueCategory[]> {
   const url = moduleId
     ? `/api/catalogue/categories?module_id=${moduleId}`
@@ -82,9 +86,9 @@ async function fetchCategories(
 }
 
 async function createCategory(
-  input: CreateCategoryInput
+  input: CreateCategoryInput,
 ): Promise<CatalogueCategory> {
-  const res = await fetch("/api/catalogue/categories", {
+  const res = await safeFetch("/api/catalogue/categories", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -97,10 +101,10 @@ async function createCategory(
 }
 
 async function updateCategory(
-  input: UpdateCategoryInput
+  input: UpdateCategoryInput,
 ): Promise<CatalogueCategory> {
   const { id, ...data } = input;
-  const res = await fetch(`/api/catalogue/categories/${id}`, {
+  const res = await safeFetch(`/api/catalogue/categories/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -113,7 +117,7 @@ async function updateCategory(
 }
 
 async function deleteCategory(id: string): Promise<void> {
-  const res = await fetch(`/api/catalogue/categories/${id}`, {
+  const res = await safeFetch(`/api/catalogue/categories/${id}`, {
     method: "DELETE",
   });
   if (!res.ok) {
@@ -125,7 +129,7 @@ async function deleteCategory(id: string): Promise<void> {
 // Items
 async function fetchItems(
   moduleId?: string,
-  categoryId?: string
+  categoryId?: string,
 ): Promise<CatalogueItem[]> {
   const params = new URLSearchParams();
   if (moduleId) params.set("module_id", moduleId);
@@ -143,7 +147,7 @@ async function fetchItem(id: string): Promise<CatalogueItem> {
 }
 
 async function createItem(input: CreateItemInput): Promise<CatalogueItem> {
-  const res = await fetch("/api/catalogue/items", {
+  const res = await safeFetch("/api/catalogue/items", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -157,7 +161,7 @@ async function createItem(input: CreateItemInput): Promise<CatalogueItem> {
 
 async function updateItem(input: UpdateItemInput): Promise<CatalogueItem> {
   const { id, ...data } = input;
-  const res = await fetch(`/api/catalogue/items/${id}`, {
+  const res = await safeFetch(`/api/catalogue/items/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -170,7 +174,9 @@ async function updateItem(input: UpdateItemInput): Promise<CatalogueItem> {
 }
 
 async function deleteItem(id: string): Promise<CatalogueItem> {
-  const res = await fetch(`/api/catalogue/items/${id}`, { method: "DELETE" });
+  const res = await safeFetch(`/api/catalogue/items/${id}`, {
+    method: "DELETE",
+  });
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
     throw new Error(json.error || "Failed to delete item");
@@ -186,9 +192,9 @@ async function fetchSubItems(itemId: string): Promise<CatalogueSubItem[]> {
 }
 
 async function createSubItem(
-  input: CreateSubItemInput
+  input: CreateSubItemInput,
 ): Promise<CatalogueSubItem> {
-  const res = await fetch("/api/catalogue/sub-items", {
+  const res = await safeFetch("/api/catalogue/sub-items", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -201,10 +207,10 @@ async function createSubItem(
 }
 
 async function updateSubItem(
-  input: UpdateSubItemInput
+  input: UpdateSubItemInput,
 ): Promise<CatalogueSubItem> {
   const { id, ...data } = input;
-  const res = await fetch(`/api/catalogue/sub-items/${id}`, {
+  const res = await safeFetch(`/api/catalogue/sub-items/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -217,7 +223,7 @@ async function updateSubItem(
 }
 
 async function deleteSubItem(id: string): Promise<void> {
-  const res = await fetch(`/api/catalogue/sub-items/${id}`, {
+  const res = await safeFetch(`/api/catalogue/sub-items/${id}`, {
     method: "DELETE",
   });
   if (!res.ok) {
@@ -321,13 +327,13 @@ export function useUpdateModule() {
     onMutate: async (input) => {
       await qc.cancelQueries({ queryKey: catalogueKeys.modules() });
       const previous = qc.getQueryData<CatalogueModule[]>(
-        catalogueKeys.modules()
+        catalogueKeys.modules(),
       );
 
       if (previous) {
         qc.setQueryData<CatalogueModule[]>(
           catalogueKeys.modules(),
-          previous.map((m) => (m.id === input.id ? { ...m, ...input } : m))
+          previous.map((m) => (m.id === input.id ? { ...m, ...input } : m)),
         );
       }
 
@@ -343,7 +349,16 @@ export function useUpdateModule() {
       qc.invalidateQueries({ queryKey: catalogueKeys.modules() });
     },
     onSuccess: (updated) => {
-      toast.success(`"${updated.name}" updated`);
+      toast.success(`"${updated.name}" updated`, {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            qc.invalidateQueries({ queryKey: catalogueKeys.modules() });
+          },
+        },
+      });
     },
   });
 }
@@ -356,14 +371,14 @@ export function useDeleteModule() {
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: catalogueKeys.modules() });
       const previous = qc.getQueryData<CatalogueModule[]>(
-        catalogueKeys.modules()
+        catalogueKeys.modules(),
       );
       const deleted = previous?.find((m) => m.id === id);
 
       if (previous) {
         qc.setQueryData<CatalogueModule[]>(
           catalogueKeys.modules(),
-          previous.filter((m) => m.id !== id)
+          previous.filter((m) => m.id !== id),
         );
       }
 
@@ -455,7 +470,16 @@ export function useUpdateCategory() {
     mutationFn: updateCategory,
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: catalogueKeys.categories() });
-      toast.success(`"${updated.name}" updated`);
+      toast.success(`"${updated.name}" updated`, {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            qc.invalidateQueries({ queryKey: catalogueKeys.categories() });
+          },
+        },
+      });
     },
     onError: (err) => {
       toast.error(err.message || "Failed to update category");
@@ -471,14 +495,14 @@ export function useDeleteCategory() {
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: catalogueKeys.categories() });
       const previous = qc.getQueryData<CatalogueCategory[]>(
-        catalogueKeys.categories()
+        catalogueKeys.categories(),
       );
       const deleted = previous?.find((c) => c.id === id);
 
       if (previous) {
         qc.setQueryData<CatalogueCategory[]>(
           catalogueKeys.categories(),
-          previous.filter((c) => c.id !== id)
+          previous.filter((c) => c.id !== id),
         );
       }
 
@@ -571,8 +595,8 @@ export function useUpdateItem() {
         { queryKey: catalogueKeys.items() },
         (old) =>
           old?.map((item) =>
-            item.id === input.id ? { ...item, ...input } : item
-          )
+            item.id === input.id ? { ...item, ...input } : item,
+          ),
       );
 
       return { previous };
@@ -585,7 +609,16 @@ export function useUpdateItem() {
       qc.invalidateQueries({ queryKey: catalogueKeys.items() });
     },
     onSuccess: (updated) => {
-      toast.success(`"${updated.name}" updated`);
+      toast.success(`"${updated.name}" updated`, {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            qc.invalidateQueries({ queryKey: catalogueKeys.items() });
+          },
+        },
+      });
     },
   });
 }
@@ -610,7 +643,7 @@ export function useDeleteItem() {
       // Optimistically remove from all caches
       qc.setQueriesData<CatalogueItem[]>(
         { queryKey: catalogueKeys.items() },
-        (old) => old?.filter((item) => item.id !== id)
+        (old) => old?.filter((item) => item.id !== id),
       );
 
       return { deleted };
@@ -676,7 +709,16 @@ export function useCreateSubItem() {
         queryKey: catalogueKeys.subItems(created.item_id),
       });
       qc.invalidateQueries({ queryKey: catalogueKeys.items() });
-      toast.success(`Sub-item added`);
+      toast.success(`Sub-item added`, {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            qc.invalidateQueries({ queryKey: catalogueKeys.items() });
+          },
+        },
+      });
     },
     onError: (err) => {
       toast.error(err.message || "Failed to create sub-item");
@@ -709,14 +751,14 @@ export function useDeleteSubItem(itemId: string) {
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: catalogueKeys.subItems(itemId) });
       const previous = qc.getQueryData<CatalogueSubItem[]>(
-        catalogueKeys.subItems(itemId)
+        catalogueKeys.subItems(itemId),
       );
       const deleted = previous?.find((s) => s.id === id);
 
       if (previous) {
         qc.setQueryData<CatalogueSubItem[]>(
           catalogueKeys.subItems(itemId),
-          previous.filter((s) => s.id !== id)
+          previous.filter((s) => s.id !== id),
         );
       }
 

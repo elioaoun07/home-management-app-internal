@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+export const dynamic = "force-dynamic";
+
 const BodySchema = z.object({ email: z.string().email() });
 
 function getBaseUrl(req: NextRequest): string {
@@ -31,7 +33,7 @@ export async function POST(req: NextRequest) {
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
 
   const redirectTo = `${site}/reset-password/update`; // absolute URL
@@ -42,7 +44,7 @@ export async function POST(req: NextRequest) {
   if (error) {
     return NextResponse.redirect(
       `${site}/reset-password?error=${encodeURIComponent(error.message)}`,
-      { status: 302 }
+      { status: 302 },
     );
   }
 

@@ -49,9 +49,11 @@ import {
   useHubState,
 } from "@/features/hub/useHubPersistence";
 import { useItem } from "@/features/items/useItems";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
+import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -73,6 +75,7 @@ import {
   Star,
   Target,
   Trash2,
+  Users2,
   Wallet,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -1589,6 +1592,19 @@ function ThreadConversation({
   const hasScrolledToUnread = useRef(false);
   const hasProcessedUnread = useRef(false);
 
+  // Partner presence + typing + voice indicators
+  const [partnerOnline, setPartnerOnline] = useState(false);
+  const [partnerTyping, setPartnerTyping] = useState(false);
+  const [partnerRecordingVoice, setPartnerRecordingVoice] = useState(false);
+  const partnerVoiceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const presenceChannelRef = useRef<ReturnType<ReturnType<typeof supabaseBrowser>["channel"]> | null>(null);
+  const partnerTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingBroadcastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { data: householdData } = useHouseholdMembers();
+  const partnerName = householdData?.members?.find((m) => !m.isCurrentUser)?.displayName ?? "Partner";
+  const partnerColor = theme === "pink" ? "text-blue-400" : "text-pink-400";
+  const partnerDotColor = theme === "pink" ? "bg-blue-400" : "bg-pink-400";
+
   // Subscribe to visibility changes - refetch when user returns to tab after being away
   useVisibilityRefresh(threadId);
 
@@ -1884,6 +1900,63 @@ function ThreadConversation({
 
   const messages = data?.messages || [];
   const currentUserId = data?.current_user_id;
+
+  // Presence + typing channel for non-shopping/non-notes chat threads
+  useEffect(() => {
+    if (!threadId || !currentUserId) return;
+    const channel = supabaseBrowser()
+      .channel(`thread-presence-${threadId}`)
+      .on("broadcast", { event: "typing-update" }, (payload) => {
+        const { user_id } = payload.payload ?? {};
+        if (!user_id || user_id === currentUserId) return;
+        setPartnerTyping(true);
+        if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
+        partnerTypingTimer.current = setTimeout(() => setPartnerTyping(false), 3000);
+      })
+      .on("broadcast", { event: "voice-recording-update" }, (payload) => {
+        const { user_id, active } = payload.payload ?? {};
+        if (!user_id || user_id === currentUserId) return;
+        if (active) {
+          setPartnerRecordingVoice(true);
+          // Auto-clear after 60s as safety net
+          if (partnerVoiceTimer.current) clearTimeout(partnerVoiceTimer.current);
+          partnerVoiceTimer.current = setTimeout(() => setPartnerRecordingVoice(false), 60000);
+        } else {
+          if (partnerVoiceTimer.current) clearTimeout(partnerVoiceTimer.current);
+          setPartnerRecordingVoice(false);
+        }
+      })
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState();
+        const others = Object.values(state)
+          .flat()
+          .filter((p: Record<string, unknown>) => p.user_id !== currentUserId);
+        setPartnerOnline(others.length > 0);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ user_id: currentUserId, online_at: new Date().toISOString() });
+        }
+      });
+    presenceChannelRef.current = channel;
+    return () => {
+      presenceChannelRef.current = null;
+      if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
+      if (typingBroadcastTimer.current) clearTimeout(typingBroadcastTimer.current);
+      if (partnerVoiceTimer.current) clearTimeout(partnerVoiceTimer.current);
+      supabaseBrowser().removeChannel(channel);
+    };
+  }, [threadId, currentUserId]);
+
+  // Broadcast voice recording state to partner
+  useEffect(() => {
+    if (!currentUserId || !presenceChannelRef.current) return;
+    presenceChannelRef.current.send({
+      type: "broadcast",
+      event: "voice-recording-update",
+      payload: { user_id: currentUserId, active: isVoiceMode },
+    });
+  }, [isVoiceMode, currentUserId]);
 
   // OPTIMIZED: Use message_actions from messages response instead of separate API call
   const messageActions = data?.message_actions || [];
@@ -2946,11 +3019,67 @@ function ThreadConversation({
                   }}
                 />
               ) : (
+                <>
+                  {/* Partner presence / typing / voice indicators */}
+                  <div className="flex items-center gap-3 mb-1.5">
+                    {partnerRecordingVoice ? (
+                      <div className={cn("flex items-center gap-1.5 text-[10px]", partnerColor)}>
+                        {/* Mic icon with pulsing ring */}
+                        <span className="relative flex items-center justify-center">
+                          <span className={cn("absolute w-4 h-4 rounded-full animate-ping opacity-40", partnerDotColor)} />
+                          <svg className="relative w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm-2 18.93A8.001 8.001 0 0 1 4.07 13H6.1a6 6 0 0 0 11.8 0h2.03A8.001 8.001 0 0 1 14 19.93V22h-4v-2.07z" />
+                          </svg>
+                        </span>
+                        {/* Sound wave bars */}
+                        <span className="flex items-center gap-px">
+                          {[0, 150, 75, 225, 0].map((delay, i) => (
+                            <span
+                              key={i}
+                              className={cn("w-px rounded-full animate-pulse", partnerDotColor)}
+                              style={{
+                                height: `${[6, 10, 14, 10, 6][i]}px`,
+                                animationDelay: `${delay}ms`,
+                                animationDuration: "600ms",
+                              }}
+                            />
+                          ))}
+                        </span>
+                        <span>{partnerName} is recording…</span>
+                      </div>
+                    ) : partnerTyping ? (
+                      <div className={cn("flex items-center gap-1.5 text-[10px]", partnerColor)}>
+                        <span className="flex gap-0.5">
+                          <span className={cn("w-1 h-1 rounded-full animate-bounce", partnerDotColor)} style={{ animationDelay: "0ms" }} />
+                          <span className={cn("w-1 h-1 rounded-full animate-bounce", partnerDotColor)} style={{ animationDelay: "150ms" }} />
+                          <span className={cn("w-1 h-1 rounded-full animate-bounce", partnerDotColor)} style={{ animationDelay: "300ms" }} />
+                        </span>
+                        <span>{partnerName} is typing…</span>
+                      </div>
+                    ) : partnerOnline ? (
+                      <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <Users2 className="w-3 h-3" />
+                        <span>{partnerName} is here</span>
+                      </div>
+                    ) : null}
+                  </div>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    onChange={(e) => {
+                      setNewMessage(e.target.value);
+                      // Broadcast typing indicator to partner
+                      if (typingBroadcastTimer.current) clearTimeout(typingBroadcastTimer.current);
+                      typingBroadcastTimer.current = setTimeout(() => {
+                        presenceChannelRef.current?.send({
+                          type: "broadcast",
+                          event: "typing-update",
+                          payload: { user_id: currentUserId },
+                        });
+                      }, 300);
+                    }}
                     onKeyDown={(e) =>
                       e.key === "Enter" && !e.shiftKey && handleSend()
                     }
@@ -3052,6 +3181,7 @@ function ThreadConversation({
                       )}
                   </div>
                 </div>
+                </>
               )}
             </div>
           )}

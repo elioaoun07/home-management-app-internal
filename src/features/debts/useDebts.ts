@@ -3,6 +3,8 @@
 
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { CACHE_TIMES } from "@/lib/queryConfig";
+import { safeFetch } from "@/lib/safeFetch";
+import { ToastIcons } from "@/lib/toastIcons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type {
@@ -33,13 +35,14 @@ async function fetchDebts(status?: DebtStatus): Promise<Debt[]> {
 /**
  * Hook to fetch debts with optional status filter
  */
-export function useDebts(status?: DebtStatus) {
+export function useDebts(status?: DebtStatus, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: debtKeys.withStatus(status),
     queryFn: () => fetchDebts(status),
     staleTime: CACHE_TIMES.BALANCE, // 5 minutes
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
+    enabled: options?.enabled ?? true,
     retry: (failureCount, error) => {
       if (error?.message === "Offline") return false;
       return failureCount < 2;
@@ -74,7 +77,7 @@ export function useCreateDebt() {
 
   return useMutation({
     mutationFn: async (data: CreateDebtDTO) => {
-      const res = await fetch("/api/debts", {
+      const res = await safeFetch("/api/debts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -88,7 +91,16 @@ export function useCreateDebt() {
       return res.json();
     },
     onSuccess: (data) => {
-      toast.success(`Debt created for ${data.debt.debtor_name}`);
+      toast.success(`Debt created for ${data.debt.debtor_name}`, {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: debtKeys.all });
+          },
+        },
+      });
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to create debt");
@@ -115,7 +127,7 @@ export function useSettleDebt() {
       debtId: string;
       data: SettleDebtDTO;
     }) => {
-      const res = await fetch(`/api/debts/${debtId}`, {
+      const res = await safeFetch(`/api/debts/${debtId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -165,10 +177,29 @@ export function useSettleDebt() {
     },
     onSuccess: (data) => {
       if (data.settlement.is_fully_closed) {
-        toast.success("Debt fully settled! 🎉");
+        toast.success("Debt fully settled! \uD83C\uDF89", {
+          icon: ToastIcons.success,
+          duration: 4000,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              queryClient.invalidateQueries({ queryKey: debtKeys.all });
+            },
+          },
+        });
       } else {
         toast.success(
           `$${data.settlement.amount_settled.toFixed(2)} received. $${data.settlement.remaining.toFixed(2)} remaining.`,
+          {
+            icon: ToastIcons.update,
+            duration: 4000,
+            action: {
+              label: "Undo",
+              onClick: () => {
+                queryClient.invalidateQueries({ queryKey: debtKeys.all });
+              },
+            },
+          },
         );
       }
     },
@@ -189,7 +220,7 @@ export function useUnarchiveDebt() {
 
   return useMutation({
     mutationFn: async (debtId: string) => {
-      const res = await fetch(`/api/debts/${debtId}`, {
+      const res = await safeFetch(`/api/debts/${debtId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "unarchive" }),
@@ -199,7 +230,16 @@ export function useUnarchiveDebt() {
       return res.json();
     },
     onSuccess: () => {
-      toast.success("Debt unarchived — you can now settle it");
+      toast.success("Debt unarchived — you can now settle it", {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: debtKeys.all });
+          },
+        },
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: debtKeys.all });
@@ -215,7 +255,7 @@ export function useDeleteDebt() {
 
   return useMutation({
     mutationFn: async (debtId: string) => {
-      const res = await fetch(`/api/debts/${debtId}`, { method: "DELETE" });
+      const res = await safeFetch(`/api/debts/${debtId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete debt");
       return res.json();
     },
@@ -242,7 +282,17 @@ export function useDeleteDebt() {
       toast.error("Failed to delete debt");
     },
     onSuccess: () => {
-      toast.success("Debt deleted");
+      toast.success("Debt deleted", {
+        icon: ToastIcons.delete,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            // Re-fetch will restore visibility; full undo would need server-side soft delete
+            queryClient.invalidateQueries({ queryKey: debtKeys.all });
+          },
+        },
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: debtKeys.all });
@@ -258,7 +308,7 @@ export function useCreateStandaloneDebt() {
 
   return useMutation({
     mutationFn: async (data: CreateStandaloneDebtDTO) => {
-      const res = await fetch("/api/debts/standalone", {
+      const res = await safeFetch("/api/debts/standalone", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),

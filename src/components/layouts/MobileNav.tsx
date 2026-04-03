@@ -138,7 +138,7 @@ export default function MobileNav() {
       // Prefetch in the background after mount
       setTimeout(() => {
         prefetchAllTabs(queryClient);
-      }, 1000);
+      }, 3000);
     }
   }, [queryClient]);
 
@@ -346,11 +346,13 @@ export default function MobileNav() {
             </span>
           </button>
         </div>
-        <TemplateDrawer
-          open={showTemplateDrawer}
-          onOpenChange={setShowTemplateDrawer}
-          onSelect={handleTemplateSelect}
-        />
+        {showTemplateDrawer && (
+          <TemplateDrawer
+            open={showTemplateDrawer}
+            onOpenChange={setShowTemplateDrawer}
+            onSelect={handleTemplateSelect}
+          />
+        )}
 
         {/* Template Confirmation Dialog */}
         <Dialog

@@ -7,9 +7,9 @@ import {
   usePendingSplits,
 } from "@/features/transactions/useSplitBill";
 import { ToastIcons } from "@/lib/toastIcons";
+import { ArrowLeftRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeftRight } from "lucide-react";
 
 /**
  * SplitBillHandler - Global component that listens for pending split bills
@@ -17,7 +17,14 @@ import { ArrowLeftRight } from "lucide-react";
  * Should be placed in the root layout.
  */
 export default function SplitBillHandler() {
-  const { data, isLoading } = usePendingSplits();
+  // Defer the split bill query to avoid competing with critical page-load fetches
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setReady(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const { data, isLoading } = usePendingSplits(ready);
   const completeSplit = useCompleteSplitBill();
   const { currentSplit, openSplitBillModal, closeSplitBillModal } =
     useSplitBillModal();

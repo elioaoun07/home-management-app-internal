@@ -1,3 +1,4 @@
+import { safeFetch } from "@/lib/safeFetch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 type PendingSplit = {
@@ -18,7 +19,7 @@ type CompleteSplitParams = {
   account_id: string;
 };
 
-export function usePendingSplits() {
+export function usePendingSplits(enabled = true) {
   return useQuery<{ pending_splits: PendingSplit[] }>({
     queryKey: ["pending-splits"],
     queryFn: async () => {
@@ -30,6 +31,7 @@ export function usePendingSplits() {
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
     refetchOnWindowFocus: true,
+    enabled,
   });
 }
 
@@ -43,7 +45,7 @@ export function useCompleteSplitBill() {
       description,
       account_id,
     }: CompleteSplitParams) => {
-      const res = await fetch("/api/transactions/split-bill", {
+      const res = await safeFetch("/api/transactions/split-bill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

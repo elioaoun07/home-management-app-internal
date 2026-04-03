@@ -4,6 +4,7 @@
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { ToastIcons } from "@/lib/toastIcons";
 import type {
   CreateEventInput,
   CreateReminderInput,
@@ -2120,7 +2121,16 @@ export function useCreateRecurrenceException() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
-      toast.success("Exception created for this occurrence");
+      toast.success("Exception created for this occurrence", {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+          },
+        },
+      });
     },
     onError: (error) => {
       console.error("Failed to create recurrence exception:", error);
@@ -2155,7 +2165,16 @@ export function useDeleteRecurrenceException() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
-      toast.success("Exception removed");
+      toast.success("Exception removed", {
+        icon: ToastIcons.delete,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+          },
+        },
+      });
     },
     onError: (error) => {
       console.error("Failed to delete recurrence exception:", error);
@@ -2194,7 +2213,16 @@ export function useUpdateRecurrenceException() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
-      toast.success("Occurrence updated");
+      toast.success("Occurrence updated", {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+          },
+        },
+      });
     },
     onError: (error) => {
       console.error("Failed to update recurrence exception:", error);

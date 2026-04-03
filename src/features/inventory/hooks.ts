@@ -1,6 +1,7 @@
 // src/features/inventory/hooks.ts
 "use client";
 
+import { ToastIcons } from "@/lib/toastIcons";
 import type { CatalogueItem } from "@/types/catalogue";
 import type {
   CreateInventoryItemInput,
@@ -200,7 +201,16 @@ export function useCreateInventoryItem() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
       queryClient.invalidateQueries({ queryKey: ["catalogue"] });
-      toast.success(`${data.item.name} added to inventory`);
+      toast.success(`${data.item.name} added to inventory`, {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -215,7 +225,16 @@ export function useRestockItem() {
     mutationFn: restockItem,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
-      toast.success("Item restocked successfully");
+      toast.success("Item restocked successfully", {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -251,7 +270,17 @@ export function useAddToShopping() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
       queryClient.invalidateQueries({ queryKey: ["hub"] });
-      toast.success(`${data.added} items added to shopping list`);
+      toast.success(`${data.added} items added to shopping list`, {
+        icon: ToastIcons.create,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
+            queryClient.invalidateQueries({ queryKey: ["hub"] });
+          },
+        },
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message);

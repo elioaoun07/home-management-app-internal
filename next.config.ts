@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     // Note: Adjust CSP connect-src/script-src to include any third-party domains you intentionally use.
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const connectSrc = ["'self'", "https:", "wss:"];
-    const scriptSrc = ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:"];
+    const scriptSrc = ["'self'", "'unsafe-inline'"];
     const styleSrc = ["'self'", "'unsafe-inline'", "https:"];
     const mediaSrc = ["'self'", "blob:", "data:"];
 
@@ -64,11 +64,11 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "**",
+        hostname: "*.supabase.co",
       },
       {
-        protocol: "http",
-        hostname: "**",
+        protocol: "https",
+        hostname: "*.supabase.in",
       },
     ],
   },

@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+export const dynamic = "force-dynamic";
+
 const FormSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   confirm: z.string().optional(),
@@ -48,13 +50,13 @@ export async function POST(req: NextRequest) {
   if (data.confirm && data.password !== data.confirm) {
     return NextResponse.redirect(
       `${site}/reset-password/update?error=${encodeURIComponent("Passwords do not match")}`,
-      { status: 302 }
+      { status: 302 },
     );
   }
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
 
   // If tokens from the hash were posted, set a session first
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
     if (setErr) {
       return NextResponse.redirect(
         `${site}/reset-password/update?error=${encodeURIComponent(setErr.message)}`,
-        { status: 302 }
+        { status: 302 },
       );
     }
   }
@@ -78,7 +80,7 @@ export async function POST(req: NextRequest) {
   if (updErr) {
     return NextResponse.redirect(
       `${site}/reset-password/update?error=${encodeURIComponent(updErr.message)}`,
-      { status: 302 }
+      { status: 302 },
     );
   }
 

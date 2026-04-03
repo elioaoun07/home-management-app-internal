@@ -1,6 +1,8 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await supabaseServer();
@@ -26,7 +28,7 @@ export async function POST(request: NextRequest) {
       console.error("Failed to log error:", error);
       return NextResponse.json(
         { error: "Failed to log error" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -59,7 +61,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       return NextResponse.json(
         { error: "Failed to fetch logs" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -68,7 +70,7 @@ export async function GET(request: NextRequest) {
     console.error("Error fetching logs:", err);
     return NextResponse.json(
       { error: "Failed to fetch logs" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

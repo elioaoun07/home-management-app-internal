@@ -1,6 +1,7 @@
 // src/features/statement-import/hooks.ts
 // React Query hooks for statement import feature
 
+import { safeFetch } from "@/lib/safeFetch";
 import { MerchantMapping, ParsedTransaction } from "@/types/statement";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -35,7 +36,7 @@ export function useSaveMerchantMapping() {
       subcategory_id?: string | null;
       account_id?: string | null;
     }) => {
-      const res = await fetch("/api/merchant-mappings", {
+      const res = await safeFetch("/api/merchant-mappings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(mapping),
@@ -57,7 +58,7 @@ export function useDeleteMerchantMapping() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/merchant-mappings?id=${id}`, {
+      const res = await safeFetch(`/api/merchant-mappings?id=${id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to delete merchant mapping");
@@ -75,7 +76,7 @@ export function useDeleteMerchantMapping() {
 export function useParseStatement() {
   return useMutation({
     mutationFn: async (
-      file: File
+      file: File,
     ): Promise<{
       transactions: ParsedTransaction[];
       matchedCount: number;
@@ -86,7 +87,7 @@ export function useParseStatement() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("/api/statement-import/parse", {
+      const res = await safeFetch("/api/statement-import/parse", {
         method: "POST",
         body: formData,
       });
@@ -121,7 +122,7 @@ export function useImportTransactions() {
       }>;
       file_name: string;
     }) => {
-      const res = await fetch("/api/statement-import/import", {
+      const res = await safeFetch("/api/statement-import/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),

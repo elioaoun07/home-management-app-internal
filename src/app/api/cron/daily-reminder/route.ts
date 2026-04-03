@@ -94,9 +94,9 @@ export async function GET(req: NextRequest) {
   try {
     console.log("[Daily Reminder] Starting execution");
 
-    // Verify cron secret (skip in dev or if not set)
+    // Verify cron secret (required — never skip)
     const authHeader = req.headers.get("authorization");
-    if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+    if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
       console.log("[Daily Reminder] Unauthorized request");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

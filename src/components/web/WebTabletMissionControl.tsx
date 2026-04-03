@@ -119,7 +119,7 @@ const typeColors: Record<
 };
 
 const priorityColors: Record<string, string> = {
-  urgent: "text-red-400 bg-red-500/20",
+  urgent: "text-amber-400 bg-amber-500/20",
   high: "text-orange-400 bg-orange-500/20",
   normal: "text-blue-400 bg-blue-500/20",
   low: "text-gray-400 bg-gray-500/20",
@@ -373,7 +373,7 @@ function NestedSubtaskItem({
       <div
         className={cn(
           "group/subtask flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors",
-          isOverdue && "border border-red-500/30 bg-red-500/5",
+          isOverdue && "border border-white/20 bg-white/5",
         )}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
       >
@@ -402,7 +402,7 @@ function NestedSubtaskItem({
             isCompleted
               ? "bg-green-500 border-green-500"
               : isOverdue
-                ? "border-red-400/50 hover:border-red-400"
+                ? "border-amber-400/50 hover:border-amber-400"
                 : isPink
                   ? "border-pink-400/50 hover:border-pink-400"
                   : "border-cyan-400/50 hover:border-cyan-400",
@@ -690,7 +690,7 @@ function SubtaskItem({
     <div
       className={cn(
         "group/subtask flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors",
-        isOverdue && "border border-red-500/30 bg-red-500/5",
+        isOverdue && "border border-white/20 bg-white/5",
       )}
     >
       <button
@@ -701,7 +701,7 @@ function SubtaskItem({
           isCompletedForOccurrence
             ? "bg-green-500 border-green-500"
             : isOverdue
-              ? "border-red-400/50 hover:border-red-400"
+              ? "border-amber-400/50 hover:border-amber-400"
               : isPink
                 ? "border-pink-400/50 hover:border-pink-400"
                 : "border-cyan-400/50 hover:border-cyan-400",
@@ -1064,8 +1064,8 @@ function TodayTaskCard({
               : "bg-amber-500/15 border-l-amber-400 border-amber-500/30"
             : isOverdue
               ? isFrost
-                ? "bg-red-50 border-l-red-500 border-red-200"
-                : "bg-red-500/15 border-l-red-400 border-red-500/30"
+                ? "bg-amber-50 border-l-amber-400 border-amber-200"
+                : "bg-white/[0.06] border-l-amber-400 border-white/20"
               : isFrost
                 ? "bg-indigo-50/50 hover:bg-indigo-50 border-indigo-200"
                 : "bg-white/[0.08] hover:bg-white/[0.12] border-white/15",
@@ -1112,7 +1112,7 @@ function TodayTaskCard({
                 />
               )}
               {item.priority === "urgent" && (
-                <Zap className="w-2.5 h-2.5 text-red-400 flex-shrink-0" />
+                <Zap className="w-2.5 h-2.5 text-amber-400 flex-shrink-0" />
               )}
             </div>
             <div
@@ -1141,7 +1141,7 @@ function TodayTaskCard({
                 </span>
               )}
               {isOverdue && !isPostponed && (
-                <span className="text-red-400">• overdue</span>
+                <span className="text-white/40">• overdue</span>
               )}
             </div>
           </div>

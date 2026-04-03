@@ -4,6 +4,7 @@
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { ToastIcons } from "@/lib/toastIcons";
 import type { ItemWithDetails } from "@/types/items";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, addWeeks, parseISO } from "date-fns";
@@ -852,6 +853,7 @@ export function useUndoOccurrenceAction() {
 // ============================================
 
 export function useItemActionsWithToast() {
+  const queryClient = useQueryClient();
   const completeItem = useCompleteItem();
   const uncompleteItem = useUncompleteItem();
   const postponeItem = usePostponeItem();
@@ -1027,7 +1029,16 @@ export function useItemActionsWithToast() {
         isRecurring,
       });
 
-      toast.success(`"${item.title}" marked as pending`);
+      toast.success(`"${item.title}" marked as pending`, {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+          },
+        },
+      });
     } catch (error) {
       toast.error("Failed to uncomplete item");
       console.error(error);

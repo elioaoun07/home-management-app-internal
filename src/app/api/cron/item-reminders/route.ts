@@ -24,9 +24,9 @@ export const maxDuration = 60;
 const CRON_SECRET = process.env.CRON_SECRET;
 
 export async function GET(req: NextRequest) {
-  // Verify cron secret
+  // Verify cron secret (required — never skip)
   const authHeader = req.headers.get("authorization");
-  if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -195,31 +195,31 @@ export async function GET(req: NextRequest) {
         }
 
         const payload = JSON.stringify({
-            title: item.title,
-            body: item.description || `Your ${item.type} is due now`,
-            icon: "/appicon-192.png",
-            badge: "/appicon-192.png",
-            tag: `item-${item.id}-${userId}`,
-            data: {
-              type: notificationType,
-              notification_id: notification?.id,
-              item_id: item.id,
-              item_title: item.title,
-              alert_id: alert.id,
-              occurrence_date: new Date().toISOString().split("T")[0],
-              is_recurring: !!item.item_recurrence_rules?.length,
-              url: `/expense?tab=reminder&item=${item.id}`,
-            },
-          });
+          title: item.title,
+          body: item.description || `Your ${item.type} is due now`,
+          icon: "/appicon-192.png",
+          badge: "/appicon-192.png",
+          tag: `item-${item.id}-${userId}`,
+          data: {
+            type: notificationType,
+            notification_id: notification?.id,
+            item_id: item.id,
+            item_title: item.title,
+            alert_id: alert.id,
+            occurrence_date: new Date().toISOString().split("T")[0],
+            is_recurring: !!item.item_recurrence_rules?.length,
+            url: `/expense?tab=reminder&item=${item.id}`,
+          },
+        });
 
-          const pushResult = await sendPushToUser(
-            supabase,
-            userId,
-            payload,
-            notification?.id,
-          );
-          if (pushResult.sent > 0) sent++;
-          if (pushResult.allFailed) failed++;
+        const pushResult = await sendPushToUser(
+          supabase,
+          userId,
+          payload,
+          notification?.id,
+        );
+        if (pushResult.sent > 0) sent++;
+        if (pushResult.allFailed) failed++;
       } // End of userId loop
 
       // Mark alert as fired (after all users have been notified)

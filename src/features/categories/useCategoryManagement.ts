@@ -1,5 +1,6 @@
 "use client";
 
+import { safeFetch } from "@/lib/safeFetch";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 type CategoryOperation =
@@ -51,9 +52,9 @@ type BulkUpdateData = {
 
 async function manageCategoryOperation(
   operation: CategoryOperation,
-  data: any
+  data: any,
 ) {
-  const response = await fetch("/api/categories/manage", {
+  const response = await safeFetch("/api/categories/manage", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ operation, data }),
