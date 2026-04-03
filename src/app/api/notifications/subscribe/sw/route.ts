@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
           device_name: device_name || "Unknown Device",
           user_agent: user_agent || "",
           is_active: true,
+          failed_at: null, // Clear any previous failure tracking
           last_used_at: new Date().toISOString(),
         },
         {

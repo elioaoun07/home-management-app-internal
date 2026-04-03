@@ -862,6 +862,7 @@ CREATE TABLE public.push_subscriptions (
   user_agent text,
   is_active boolean NOT NULL DEFAULT true,
   last_used_at timestamp with time zone,
+  failed_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id),

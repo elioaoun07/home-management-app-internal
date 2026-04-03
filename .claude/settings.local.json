@@ -30,7 +30,8 @@
       "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")",
       "Bash(xargs cat:*)",
       "Bash(grep:*)",
-      "Bash(pnpm add:*)"
+      "Bash(pnpm add:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
