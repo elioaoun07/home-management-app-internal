@@ -11,6 +11,7 @@ import {
   Sparkline,
 } from "@/components/charts/MiniCharts";
 import AnalyticsDashboard from "@/components/dashboard-v2/AnalyticsDashboard";
+import ReviewDashboard from "@/components/dashboard-v2/ReviewDashboard";
 import CategoryDetailView from "@/components/dashboard/CategoryDetailView";
 import TransactionDetailModal from "@/components/dashboard/TransactionDetailModal";
 import {
@@ -19,12 +20,13 @@ import {
 } from "@/components/ui/animated-number";
 import { Card } from "@/components/ui/card";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { usePrivacyBlur } from "@/contexts/PrivacyBlurContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAccounts } from "@/features/accounts/hooks";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import { Mail } from "lucide-react";
+import { Eye, EyeOff, Mail } from "lucide-react";
 import {
   getCurrentSeasonComparison,
   getDailySpending,
@@ -128,6 +130,7 @@ const WebDashboard = memo(function WebDashboard({
 }: Props) {
   const { theme: currentUserTheme } = useTheme();
   const themeClasses = useThemeClasses();
+  const { isBlurred: hideNumbers, toggleBlur: toggleHideNumbers } = usePrivacyBlur();
   const queryClient = useQueryClient();
   const deleteMutation = useDeleteTransaction();
   const { data: accounts } = useAccounts();
@@ -148,7 +151,7 @@ const WebDashboard = memo(function WebDashboard({
   const [hoveredTransaction, setHoveredTransaction] = useState<string | null>(
     null,
   );
-  const [dashboardView, setDashboardView] = useState<"overview" | "analytics">(
+  const [dashboardView, setDashboardView] = useState<"overview" | "analytics" | "review">(
     "overview",
   );
 
@@ -676,7 +679,11 @@ const WebDashboard = memo(function WebDashboard({
   }
 
   return (
-    <div className={`min-h-full ${themeClasses.pageBg}`}>
+    <div className={`min-h-full ${themeClasses.pageBg}`} data-private={hideNumbers}>
+      <style>{`
+        [data-private="true"] .tabular-nums { filter: blur(8px); transition: filter 0.2s; user-select: none; }
+        [data-private="false"] .tabular-nums { filter: none; transition: filter 0.2s; }
+      `}</style>
       {/* Loading indicator - subtle animated bar at top */}
       {isRefetching && (
         <div className="fixed top-0 left-0 right-0 z-50 h-0.5 bg-slate-800 overflow-hidden">
@@ -762,6 +769,7 @@ const WebDashboard = memo(function WebDashboard({
             </div>
           </div>
           <div className="flex items-center justify-between px-4 py-1.5">
+            <div className="flex items-center gap-1.5">
             <button
               onClick={handleRefresh}
               disabled={isRefreshing || hasPendingTransactions}
@@ -772,6 +780,21 @@ const WebDashboard = memo(function WebDashboard({
             >
               <RefreshCw className={cn("w-3.5 h-3.5", themeClasses.text)} />
             </button>
+            <button
+              onClick={toggleHideNumbers}
+              className={cn(
+                "p-1.5 rounded-lg neo-card transition-all",
+                hideNumbers && `${themeClasses.bgActive}`,
+              )}
+              title={hideNumbers ? "Show numbers" : "Hide numbers"}
+            >
+              {hideNumbers ? (
+                <EyeOff className={cn("w-3.5 h-3.5", themeClasses.textActive)} />
+              ) : (
+                <Eye className={cn("w-3.5 h-3.5", themeClasses.text)} />
+              )}
+            </button>
+            </div>
 
             {/* View Toggle */}
             <div className="flex items-center gap-1 p-0.5 rounded-lg neo-card">
@@ -798,6 +821,18 @@ const WebDashboard = memo(function WebDashboard({
               >
                 <TrendingUp className="w-3.5 h-3.5" />
                 Analytics
+              </button>
+              <button
+                onClick={() => setDashboardView("review")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  dashboardView === "review"
+                    ? "neo-gradient text-white shadow-sm"
+                    : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
+                )}
+              >
+                <LineChart className="w-3.5 h-3.5" />
+                Review
               </button>
             </div>
 
@@ -866,6 +901,18 @@ const WebDashboard = memo(function WebDashboard({
             startDate={startDate}
             endDate={endDate}
             transactions={filteredTransactions}
+          />
+        </div>
+      )}
+
+      {/* Review View */}
+      {dashboardView === "review" && (
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <ReviewDashboard
+            transactions={transactions}
+            startDate={startDate}
+            endDate={endDate}
+            ownershipFilter={ownershipFilter}
           />
         </div>
       )}
@@ -1174,7 +1221,7 @@ const WebDashboard = memo(function WebDashboard({
                           >
                             {cat}
                           </span>
-                          <span className="text-xs font-semibold text-slate-300">
+                          <span className="text-xs font-semibold text-slate-300 tabular-nums">
                             ${data.amount.toFixed(0)}
                           </span>
                         </div>
@@ -1848,14 +1895,14 @@ const WebDashboard = memo(function WebDashboard({
                       </div>
                     )}
                     <div className="text-right">
-                      <p className={cn("text-sm font-bold", themeClasses.text)}>
+                      <p className={cn("text-sm font-bold tabular-nums", themeClasses.text)}>
                         ${displayAmount.toFixed(2)}
                       </p>
                       {/* Show split breakdown only when viewing "all" */}
                       {isSplitCompleted &&
                         tx.collaborator_amount &&
                         ownershipFilter === "all" && (
-                          <p className="text-[9px] text-slate-500">
+                          <p className="text-[9px] text-slate-500 tabular-nums">
                             <span className="text-blue-400">
                               ${tx.amount.toFixed(0)}
                             </span>

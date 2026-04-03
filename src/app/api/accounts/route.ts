@@ -111,6 +111,11 @@ export async function GET(req: NextRequest) {
         if (!accountId)
           throw new Error("Failed to create or resolve account id");
 
+        // Ensure balance row exists for this account
+        await supabase
+          .from("account_balances")
+          .upsert({ account_id: accountId, user_id: user.id, balance: 0 }, { onConflict: "account_id", ignoreDuplicates: true });
+
         // Insert root categories and their subcategories for this account
         for (const cat of seed.categories) {
           const { data: root, error: rootErr } = await supabase
@@ -299,6 +304,13 @@ export async function POST(req: NextRequest) {
         console.error("Error seeding categories for new account:", seedError);
         // Don't fail the account creation, categories can be added manually
       }
+    }
+
+    // Create the initial balance row (required for adjustAccountBalance to work)
+    if (data?.id) {
+      await supabase
+        .from("account_balances")
+        .insert({ account_id: data.id, user_id: user.id, balance: 0 });
     }
 
     return NextResponse.json(data, {

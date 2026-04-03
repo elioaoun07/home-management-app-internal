@@ -2,6 +2,7 @@
 
 import React from "react";
 import EnhancedMobileDashboard from "@/components/dashboard/EnhancedMobileDashboard";
+import ReviewDashboard from "@/components/dashboard-v2/ReviewDashboard";
 import ItemsListView from "@/components/activity/ItemsListView";
 import FilterBar, {
   type FilterBarSection,
@@ -23,7 +24,7 @@ import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-type DashMode = "overview" | "list" | "journal";
+type DashMode = "overview" | "list" | "journal" | "review";
 
 // ─── Tab Icons ────────────────────────────────────────────────────────────────
 const OverviewIcon = ({ className }: { className?: string }) => (
@@ -53,14 +54,23 @@ const JournalIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const ReviewIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 5V3M12 21v-2M5 12H3M21 12h-2" strokeWidth="1.5" />
+  </svg>
+);
+
 const DASH_SECTIONS: FilterBarSection[] = [
   { key: "overview", label: "Overview", Icon: OverviewIcon, variant: "neutral" },
+  { key: "review", label: "Review", Icon: ReviewIcon, variant: "neutral" },
   { key: "list", label: "List", Icon: ListIcon, variant: "neutral" },
   { key: "journal", label: "Journal", Icon: JournalIcon, variant: "journal" },
 ];
 
-// Map dashMode to EnhancedMobileDashboard's viewMode
-const VIEW_MODE_MAP: Record<Exclude<DashMode, "journal">, "widgets" | "list"> = {
+// Map dashMode to EnhancedMobileDashboard's viewMode (review handled separately)
+const VIEW_MODE_MAP: Record<"overview" | "list", "widgets" | "list"> = {
   overview: "widgets",
   list: "list",
 };
@@ -271,7 +281,7 @@ export default function DashboardClientPage() {
         availableCategories={availableCategories}
         categoryFilters={categoryFilters}
         onCategoryFiltersChange={setCategoryFilters}
-        showCategoryFilter={dashMode === "list" || dashMode === "overview"}
+        showCategoryFilter={dashMode === "list" || dashMode === "overview" || dashMode === "review"}
         typeFilter={typeFilter}
         onTypeFilterChange={setTypeFilter}
         recurringFilter={recurringFilter}
@@ -302,6 +312,15 @@ export default function DashboardClientPage() {
             groupMode={groupMode}
           />
         </div>
+      ) : dashMode === "review" ? (
+        <div className="px-3 pt-4 pb-24">
+          <ReviewDashboard
+            transactions={transactions}
+            startDate={dateRange.start}
+            endDate={dateRange.end}
+            ownershipFilter={ownershipFilter}
+          />
+        </div>
       ) : (
         <EnhancedMobileDashboard
           transactions={transactions}
@@ -309,7 +328,7 @@ export default function DashboardClientPage() {
           endDate={dateRange.end}
           currentUserId={currentUserId}
           onDateRangeChange={handleDateRangeChange}
-          controlledViewMode={VIEW_MODE_MAP[dashMode]}
+          controlledViewMode={VIEW_MODE_MAP[dashMode as "overview" | "list"]}
           externalOwnershipFilter={ownershipFilter}
           externalCategoryFilters={categoryFilters}
           groupMode={groupMode}

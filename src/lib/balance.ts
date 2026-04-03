@@ -30,16 +30,28 @@ export async function adjustAccountBalance(
     .eq("account_id", accountId)
     .maybeSingle();
 
-  if (readError || !current) {
-    console.error(
-      "[adjustAccountBalance] No balance row for account:",
+  let balanceRow = current;
+
+  if (readError || !balanceRow) {
+    // Balance row missing — auto-create it so the operation can proceed
+    console.warn(
+      "[adjustAccountBalance] No balance row for account, creating one:",
       accountId,
-      readError,
     );
-    return { newBalance: 0, previousBalance: 0 };
+    await admin
+      .from("account_balances")
+      .insert({ account_id: accountId, balance: 0, user_id: metadata?.userId ?? "" });
+    // Re-fetch after insert
+    const { data: created } = await admin
+      .from("account_balances")
+      .select("balance")
+      .eq("account_id", accountId)
+      .maybeSingle();
+    if (!created) return { newBalance: 0, previousBalance: 0 };
+    balanceRow = created;
   }
 
-  const previousBalance = Number(current.balance);
+  const previousBalance = Number(balanceRow.balance);
   const newBalance = previousBalance + delta;
 
   const { error: updateError } = await admin

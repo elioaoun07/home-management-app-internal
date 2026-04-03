@@ -31,7 +31,8 @@
       "Bash(xargs cat:*)",
       "Bash(grep:*)",
       "Bash(pnpm add:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(git log:*)"
     ]
   }
 }

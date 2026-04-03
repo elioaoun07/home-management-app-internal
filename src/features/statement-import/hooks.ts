@@ -90,6 +90,7 @@ export function useParseStatement() {
       const res = await safeFetch("/api/statement-import/parse", {
         method: "POST",
         body: formData,
+        timeoutMs: 120_000, // PDF parsing can be slow — 2 min timeout
       });
 
       if (!res.ok) {
@@ -126,6 +127,7 @@ export function useImportTransactions() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
+        timeoutMs: 60_000, // Bulk import can be slow — 1 min timeout
       });
 
       if (!res.ok) {
