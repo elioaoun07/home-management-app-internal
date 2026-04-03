@@ -78,6 +78,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
   const [filter, setFilter] = useState<FilterType>("all");
   const [keywordGroups, setKeywordGroups] = useState<KeywordGroup[]>([]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<{ imported_count: number; skipped_count: number } | null>(null);
 
   const { data: accounts = [] } = useMyAccounts();
   const parseStatement = useParseStatement();
@@ -112,6 +113,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
       setFilter("all");
       setKeywordGroups([]);
       setExpandedGroup(null);
+      setImportResult(null);
     }
     onOpenChange(newOpen);
   };
@@ -417,6 +419,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
       save_merchant_mapping: boolean;
       merchant_pattern: string;
       merchant_name: string;
+      statement_hash?: string;
     }> = [];
 
     // Create mapping from transaction ID to category assignment
@@ -479,6 +482,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
             merchant_pattern: mapping?.keyword || txn.description,
             merchant_name:
               mapping?.keyword || txn.merchant_name || txn.description,
+            statement_hash: txn.statement_hash,
           });
         }
       });
@@ -494,6 +498,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
         file_name: fileName,
       });
 
+      setImportResult({ imported_count: result.imported_count, skipped_count: result.skipped_count ?? 0 });
       toast.success(
         `Successfully imported ${result.imported_count} transactions`
       );
@@ -818,9 +823,23 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
               <h3 className={`text-xl font-semibold ${themeClasses.text} mb-2`}>
                 Import Successful!
               </h3>
-              <p className={themeClasses.textMuted}>
-                Your transactions have been added to your account.
-              </p>
+              {importResult && (
+                <div className="space-y-1 mt-3">
+                  <p className={themeClasses.textMuted}>
+                    {importResult.imported_count} transaction{importResult.imported_count !== 1 ? "s" : ""} added to your account.
+                  </p>
+                  {importResult.skipped_count > 0 && (
+                    <p className="text-amber-400/80 text-sm">
+                      {importResult.skipped_count} duplicate{importResult.skipped_count !== 1 ? "s" : ""} skipped — already imported from a previous upload.
+                    </p>
+                  )}
+                </div>
+              )}
+              {!importResult && (
+                <p className={themeClasses.textMuted}>
+                  Your transactions have been added to your account.
+                </p>
+              )}
             </div>
           )}
         </div>

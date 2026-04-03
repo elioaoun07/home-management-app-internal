@@ -1055,6 +1055,7 @@ CREATE TABLE public.transactions (
   scheduled_date date,
   is_debt_return boolean NOT NULL DEFAULT false,
   parent_transaction_id uuid,
+  statement_hash text,
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
   CONSTRAINT transactions_category_fk FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_subcategory_fk FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
@@ -1064,6 +1065,9 @@ CREATE TABLE public.transactions (
   CONSTRAINT transactions_collaborator_account_id_fkey FOREIGN KEY (collaborator_account_id) REFERENCES public.accounts(id),
   CONSTRAINT transactions_parent_transaction_id_fkey FOREIGN KEY (parent_transaction_id) REFERENCES public.transactions(id)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS transactions_statement_hash_uniq
+  ON public.transactions(user_id, statement_hash)
+  WHERE statement_hash IS NOT NULL;
 CREATE TABLE public.transfers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,

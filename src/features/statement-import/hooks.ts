@@ -120,6 +120,7 @@ export function useImportTransactions() {
         merchant_pattern?: string;
         merchant_name?: string;
         matched?: boolean;
+        statement_hash?: string;
       }>;
       file_name: string;
     }) => {

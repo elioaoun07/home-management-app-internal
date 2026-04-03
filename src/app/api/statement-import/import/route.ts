@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
     const importedTransactions = [];
     const merchantMappingsToSave = [];
     const accountDeductions: Record<string, number> = {}; // Track deductions per account
+    let skippedCount = 0; // Duplicate rows from re-uploading the same statement
 
     for (const t of transactions) {
       // Insert transaction
@@ -64,11 +65,17 @@ export async function POST(req: NextRequest) {
           subcategory_id: t.subcategory_id || null,
           is_draft: false,
           is_imported: true, // Mark as imported from bank statement
+          statement_hash: t.statement_hash || null,
         })
         .select()
         .single();
 
       if (txnError) {
+        // 23505 = unique_violation — this row already exists (duplicate import)
+        if ((txnError as any).code === "23505") {
+          skippedCount++;
+          continue;
+        }
         console.error("Failed to insert transaction:", txnError);
         continue;
       }
@@ -163,6 +170,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       imported_count: importedTransactions.length,
+      skipped_count: skippedCount,
       merchant_mappings_saved: merchantMappingsToSave.length,
     });
   } catch (error) {

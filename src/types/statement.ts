@@ -38,6 +38,10 @@ export interface ParsedTransaction {
   selected: boolean; // true if user wants to import this transaction
   // Split transaction support
   splits?: TransactionSplit[]; // if set, import as multiple transactions
+  // SHA-256 fingerprint of the original statement row (date|description|moneyOut|moneyIn|balance).
+  // Used to prevent duplicate imports when the same e-statement is uploaded twice.
+  // Not set for split sub-transactions (they have no 1-to-1 statement row).
+  statement_hash?: string;
 }
 
 export interface StatementImport {
@@ -68,6 +72,8 @@ export interface ImportTransactionsRequest {
     save_merchant_mapping?: boolean;
     merchant_pattern?: string;
     merchant_name?: string;
+    // Deduplication fingerprint — omit for split sub-transactions
+    statement_hash?: string;
   }>;
   file_name: string;
 }

@@ -1,7 +1,10 @@
 // src/lib/bank-statement-parser.ts
 // Specialized parser for Lebanese bank statements (Fresh USD format)
 // Designed for 0% error rate on the specific bank format
+// NOTE: This module is server-only (used in API routes). The node:crypto import
+// must not be bundled for the client.
 
+import { createHash } from "node:crypto";
 import { ParsedTransaction } from "@/types/statement";
 
 /**
@@ -471,6 +474,13 @@ export function convertToUITransactions(
       account_id: mapping?.account_id || null,
       matched: !!mapping,
       selected: !isReversal, // Don't auto-select reversals
+      statement_hash: generateStatementHash(
+        raw.date,
+        raw.description,
+        raw.moneyOut,
+        raw.moneyIn,
+        raw.balance,
+      ),
     };
   });
 }
@@ -623,6 +633,28 @@ export const LEBANESE_MERCHANTS: Array<{
     suggestedSubcategory: "Electronics",
   },
 ];
+
+/**
+ * Generate a SHA-256 fingerprint from the five raw PDF columns.
+ * Used to detect duplicate rows when the same e-statement is uploaded twice.
+ * Format hashed: "date|description|moneyOut|moneyIn|balance"
+ */
+function generateStatementHash(
+  date: string,
+  description: string,
+  moneyOut: number | null,
+  moneyIn: number | null,
+  balance: number,
+): string {
+  const raw = [
+    date,
+    description.trim().toLowerCase(),
+    moneyOut !== null ? moneyOut.toFixed(2) : "",
+    moneyIn !== null ? moneyIn.toFixed(2) : "",
+    balance.toFixed(2),
+  ].join("|");
+  return createHash("sha256").update(raw).digest("hex");
+}
 
 /**
  * Detect if content is CSV or needs PDF parsing
