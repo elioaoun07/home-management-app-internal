@@ -2,6 +2,7 @@
 
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
+import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import {
   Bar,
@@ -27,9 +28,10 @@ const CHART_PALETTE = [
 
 type Props = {
   months: MonthlyAnalytics[] | undefined;
+  activeCategories?: string[];
 };
 
-export default function CategoryComparisonChart({ months }: Props) {
+export default function CategoryComparisonChart({ months, activeCategories = [] }: Props) {
   const [showType, setShowType] = useState<"expense" | "income">("expense");
 
   // Get top 6 categories across all months
@@ -130,35 +132,40 @@ export default function CategoryComparisonChart({ months }: Props) {
               content={<CustomTooltip categoryColors={categoryColors} />}
               cursor={{ fill: "rgba(255,255,255,0.04)" }}
             />
-            {categories.map((cat, i) => (
-              <Bar
-                key={cat}
-                dataKey={cat}
-                stackId="a"
-                fill={`url(#grad-${cat.replace(/\s+/g, "-")})`}
-                radius={
-                  i === categories.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]
-                }
-              />
-            ))}
+            {categories.map((cat, i) => {
+              const isFiltered = activeCategories.length > 0 && !activeCategories.includes(cat);
+              return (
+                <Bar
+                  key={cat}
+                  dataKey={cat}
+                  stackId="a"
+                  fill={`url(#grad-${cat.replace(/\s+/g, "-")})`}
+                  radius={i === categories.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+                  opacity={isFiltered ? 0.2 : 1}
+                />
+              );
+            })}
           </BarChart>
         </ResponsiveContainer>
       </div>
       <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
-        {categories.map((cat) => (
-          <div key={cat} className="flex items-center gap-1.5">
-            <div
-              className="w-2.5 h-2.5 rounded-full ring-1 ring-white/10"
-              style={{
-                backgroundColor: categoryColors[cat],
-                boxShadow: `0 0 6px ${categoryColors[cat]}50`,
-              }}
-            />
-            <span className="text-[10px] text-white/60 truncate max-w-[72px]">
-              {cat}
-            </span>
-          </div>
-        ))}
+        {categories.map((cat) => {
+          const isFiltered = activeCategories.length > 0 && !activeCategories.includes(cat);
+          return (
+            <div key={cat} className={cn("flex items-center gap-1.5 transition-opacity", isFiltered ? "opacity-30" : "opacity-100")}>
+              <div
+                className="w-2.5 h-2.5 rounded-full ring-1 ring-white/10"
+                style={{
+                  backgroundColor: categoryColors[cat],
+                  boxShadow: isFiltered ? "none" : `0 0 6px ${categoryColors[cat]}50`,
+                }}
+              />
+              <span className="text-[10px] text-white/60 truncate max-w-[72px]">
+                {cat}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </WidgetCard>
   );

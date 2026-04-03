@@ -36,6 +36,7 @@
 15. **Zod schemas for all API input validation** — derive TS types with `z.infer<>`.
 16. **Household linking in API routes**: when fetching user-owned data, always check `household_links` for an active partner and include their data unless `ownOnly=true` is passed. See `src/app/api/accounts/route.ts:28-52`.
 17. **Color identity** — current user = **blue** (`blue-400/500`), partner = **pink** (`pink-400/500`). Apply consistently for all color-coded UI: assignment labels, accent bars, avatars, indicators, and any context where "me vs partner" needs visual distinction. Never swap these colors.
+18. **Floating panels (dropdowns, popovers, command palettes) must be opaque** — never use `neo-card` (which is semi-transparent glass) on panels that float above page content. Use `tc.bgPage` from `useThemeClasses()` as the background class so the panel is the same solid color as the page background per theme. `neo-card` is only for non-overlaid cards. Glass/blur on floating panels causes text bleed-through from content behind them.
 
 ---
 

@@ -3,6 +3,7 @@
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import BlurredAmount from "@/components/ui/BlurredAmount";
 import { useAccounts } from "@/features/accounts/hooks";
+import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
 import {
   calculateIncomeExpenseSummary,
   type TransactionWithAccount,
@@ -14,6 +15,7 @@ type Props = {
   transactions: TransactionWithAccount[];
   startDate: string;
   endDate: string;
+  months?: MonthlyAnalytics[];
 };
 
 function getPeriodLabel(start: string, end: string): string {
@@ -31,10 +33,25 @@ function getPeriodLabel(start: string, end: string): string {
   return `${format(s, "MMM yyyy")} – ${format(e, "MMM yyyy")}`;
 }
 
+function MoMBadge({ current, previous, invert = false }: { current: number; previous: number; invert?: boolean }) {
+  if (previous <= 0 || current <= 0) return null;
+  const pct = ((current - previous) / previous) * 100;
+  const isGood = invert ? pct <= 0 : pct >= 0;
+  const absP = Math.abs(pct);
+  if (absP < 0.5) return <span className="text-[9px] text-white/25">no change</span>;
+  const color = Math.abs(pct) < 3 ? "text-white/40" : isGood ? "text-emerald-400" : "text-red-400";
+  return (
+    <span className={`text-[9px] font-medium ${color}`}>
+      {pct >= 0 ? "+" : ""}{pct.toFixed(1)}% MoM
+    </span>
+  );
+}
+
 export default function PeriodSummaryWidget({
   transactions,
   startDate,
   endDate,
+  months,
 }: Props) {
   const { data: accounts } = useAccounts();
 
@@ -42,6 +59,14 @@ export default function PeriodSummaryWidget({
     () => calculateIncomeExpenseSummary(transactions, accounts),
     [transactions, accounts],
   );
+
+  // MoM comparison from analytics months
+  const momData = useMemo(() => {
+    if (!months || months.length < 2) return null;
+    const curr = months[months.length - 1];
+    const prev = months[months.length - 2];
+    return { curr, prev };
+  }, [months]);
 
   const { daysElapsed, totalDays } = useMemo(() => {
     const now = new Date();
@@ -103,6 +128,7 @@ export default function PeriodSummaryWidget({
               ${income.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </p>
           </BlurredAmount>
+          {momData && <MoMBadge current={momData.curr.income} previous={momData.prev.income} />}
         </div>
 
         {/* Spent */}
@@ -118,6 +144,7 @@ export default function PeriodSummaryWidget({
               ${expense.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </p>
           </BlurredAmount>
+          {momData && <MoMBadge current={momData.curr.expense} previous={momData.prev.expense} invert />}
         </div>
 
         {/* Remaining / Over */}
@@ -156,6 +183,7 @@ export default function PeriodSummaryWidget({
               })}
             </p>
           </BlurredAmount>
+          {momData && <MoMBadge current={momData.curr.savings} previous={momData.prev.savings} />}
         </div>
       </div>
 

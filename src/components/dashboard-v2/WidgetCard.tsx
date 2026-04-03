@@ -2,6 +2,7 @@
 
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
 import type { ReactNode } from "react";
 
 type WidgetCardProps = {
@@ -11,6 +12,12 @@ type WidgetCardProps = {
   children: ReactNode;
   className?: string;
   noPadding?: boolean;
+  /** Shows hover state and pointer cursor on clickable chart elements */
+  interactive?: boolean;
+  /** Shows a filter badge when this widget is actively filtering */
+  filterActive?: boolean;
+  /** Callback to clear filters originating from this widget */
+  onFilterReset?: () => void;
 };
 
 export default function WidgetCard({
@@ -20,13 +27,23 @@ export default function WidgetCard({
   children,
   className,
   noPadding,
+  interactive,
+  filterActive,
+  onFilterReset,
 }: WidgetCardProps) {
   const tc = useThemeClasses();
 
   return (
-    <div className={cn("neo-card rounded-xl overflow-hidden", className)}>
+    <div
+      className={cn(
+        "neo-card rounded-xl overflow-hidden",
+        interactive && "group/widget",
+        filterActive && "ring-1 ring-cyan-500/30",
+        className,
+      )}
+    >
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
-        <div>
+        <div className="flex items-center gap-2 min-w-0">
           <h3
             className={cn(
               "text-xs font-semibold uppercase tracking-wider",
@@ -35,12 +52,30 @@ export default function WidgetCard({
           >
             {title}
           </h3>
-          {subtitle && (
-            <p className="text-[10px] text-white/40 mt-0.5">{subtitle}</p>
+          {filterActive && (
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-cyan-500/15 text-cyan-400 uppercase tracking-wider shrink-0">
+              ★ filtered
+            </span>
           )}
         </div>
-        {action && <div>{action}</div>}
+        <div className="flex items-center gap-1.5">
+          {filterActive && onFilterReset && (
+            <button
+              onClick={onFilterReset}
+              className="p-1 rounded-md text-white/30 hover:text-white/70 hover:bg-white/10 transition-colors"
+              title="Clear widget filter"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+          {action && <div>{action}</div>}
+        </div>
       </div>
+      {subtitle && (
+        <p className="text-[10px] text-white/40 px-4 -mt-0.5 mb-1">
+          {subtitle}
+        </p>
+      )}
       <div className={noPadding ? "" : "px-4 pb-4 pt-1"}>{children}</div>
     </div>
   );

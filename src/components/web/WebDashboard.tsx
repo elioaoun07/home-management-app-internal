@@ -26,7 +26,6 @@ import { useAccounts } from "@/features/accounts/hooks";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import { Eye, EyeOff, Mail } from "lucide-react";
 import {
   getCurrentSeasonComparison,
   getDailySpending,
@@ -52,11 +51,15 @@ import {
   ArrowUpCircle,
   BarChart3,
   CalendarDays,
+  ChevronDown,
   DollarSign,
+  Eye,
+  EyeOff,
   Filter,
   Heart,
   Leaf,
   LineChart,
+  Mail,
   Pencil,
   PiggyBank,
   Receipt,
@@ -72,7 +75,7 @@ import {
   Wallet,
   Wind,
 } from "lucide-react";
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type Transaction = {
@@ -120,6 +123,277 @@ const getDayName = (dayIndex: number) => {
   return days[dayIndex];
 };
 
+/** Multi-select dropdown with a fully opaque (non-glass) panel — required per Hard Rule #18 */
+function MultiFilterDropdown({
+  values,
+  onChange,
+  options,
+  placeholder,
+  icon,
+}: {
+  values: string[];
+  onChange: (v: string[]) => void;
+  options: string[];
+  placeholder: string;
+  icon?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const tc = useThemeClasses();
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const toggle = (v: string) =>
+    onChange(
+      values.includes(v) ? values.filter((x) => x !== v) : [...values, v],
+    );
+
+  const hasSelection = values.length > 0;
+  const label =
+    values.length === 0
+      ? placeholder
+      : values.length === 1
+        ? values[0]
+        : `${values.length} selected`;
+
+  return (
+    <div ref={ref} className="relative flex-1">
+      <button
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
+          hasSelection
+            ? `${tc.bgActive} ${tc.textActive}`
+            : `neo-card neo-border ${tc.text} hover:bg-white/5`,
+        )}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          {icon}
+          <span className="truncate">{label}</span>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {hasSelection && (
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange([]);
+              }}
+              className="w-3.5 h-3.5 flex items-center justify-center rounded-full opacity-60 hover:opacity-100 leading-none"
+            >
+              ×
+            </span>
+          )}
+          <ChevronDown
+            className={cn(
+              "w-3 h-3 transition-transform duration-200",
+              open && "rotate-180",
+            )}
+          />
+        </div>
+      </button>
+
+      {open && (
+        /* IMPORTANT: solid bgPage — no glass/backdrop-blur on floating panels (Hard Rule #18) */
+        <div
+          className={cn(
+            "absolute top-full left-0 right-0 mt-1 z-50 rounded-xl border shadow-2xl shadow-black/50",
+            "overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150",
+            tc.bgPage,
+            tc.border,
+          )}
+        >
+          <div className="px-3 py-1.5 border-b border-white/8">
+            <p className="text-[10px] text-white/35 uppercase tracking-widest">
+              {placeholder}
+            </p>
+          </div>
+          <div className="max-h-52 overflow-y-auto py-0.5">
+            {options.map((opt) => {
+              const isSelected = values.includes(opt);
+              return (
+                <button
+                  key={opt || "unknown"}
+                  onClick={() => toggle(opt)}
+                  className={cn(
+                    "w-full px-3 py-1.5 text-left text-xs transition-colors flex items-center gap-2.5",
+                    isSelected
+                      ? `${tc.textActive} font-semibold bg-white/5`
+                      : "text-white/70 hover:text-white/90 hover:bg-white/5",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 transition-all",
+                      isSelected
+                        ? `${tc.bgActive} border-transparent`
+                        : "border-white/20 bg-transparent",
+                    )}
+                  >
+                    {isSelected && (
+                      <span className="text-white text-[8px] font-bold leading-none">
+                        ✓
+                      </span>
+                    )}
+                  </div>
+                  <span className="truncate">{opt}</span>
+                </button>
+              );
+            })}
+          </div>
+          {hasSelection && (
+            <>
+              <div className="h-px bg-white/8" />
+              <button
+                onClick={() => {
+                  onChange([]);
+                  setOpen(false);
+                }}
+                className="w-full px-3 py-1.5 text-left text-[10px] text-white/40 hover:text-white/60 hover:bg-white/5 transition-colors"
+              >
+                Clear all
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Single-select dropdown — also solid panel per Hard Rule #18 */
+function SingleFilterDropdown({
+  value,
+  onChange,
+  options,
+  placeholder,
+  icon,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder: string;
+  icon?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const tc = useThemeClasses();
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative flex-1">
+      <button
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
+          value
+            ? `${tc.bgActive} ${tc.textActive}`
+            : `neo-card neo-border ${tc.text} hover:bg-white/5`,
+        )}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          {icon}
+          <span className="truncate">{value || placeholder}</span>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {value && (
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange("");
+              }}
+              className="w-3.5 h-3.5 flex items-center justify-center rounded-full opacity-60 hover:opacity-100 leading-none"
+            >
+              ×
+            </span>
+          )}
+          <ChevronDown
+            className={cn(
+              "w-3 h-3 transition-transform duration-200",
+              open && "rotate-180",
+            )}
+          />
+        </div>
+      </button>
+
+      {open && (
+        /* IMPORTANT: solid bgPage — no glass on floating panels (Hard Rule #18) */
+        <div
+          className={cn(
+            "absolute top-full left-0 right-0 mt-1 z-50 rounded-xl border shadow-2xl shadow-black/50",
+            "overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150",
+            tc.bgPage,
+            tc.border,
+          )}
+        >
+          <div className="px-3 py-1.5 border-b border-white/8">
+            <p className="text-[10px] text-white/35 uppercase tracking-widest">
+              {placeholder}
+            </p>
+          </div>
+          <div className="max-h-52 overflow-y-auto py-0.5">
+            <button
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+              }}
+              className={cn(
+                "w-full px-3 py-1.5 text-left text-xs transition-colors",
+                !value
+                  ? `${tc.textActive} font-semibold bg-white/5`
+                  : "text-white/40 hover:text-white/60 hover:bg-white/5",
+              )}
+            >
+              All
+            </button>
+            {options.map((opt) => (
+              <button
+                key={opt || "unknown"}
+                onClick={() => {
+                  onChange(opt || "");
+                  setOpen(false);
+                }}
+                className={cn(
+                  "w-full px-3 py-1.5 text-left text-xs transition-colors flex items-center justify-between gap-2",
+                  value === opt
+                    ? `${tc.textActive} font-semibold bg-white/5`
+                    : "text-white/70 hover:text-white/90 hover:bg-white/5",
+                )}
+              >
+                <span className="truncate">{opt}</span>
+                {value === opt && (
+                  <span
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                      tc.bgActive,
+                    )}
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const WebDashboard = memo(function WebDashboard({
   transactions,
   startDate,
@@ -130,7 +404,8 @@ const WebDashboard = memo(function WebDashboard({
 }: Props) {
   const { theme: currentUserTheme } = useTheme();
   const themeClasses = useThemeClasses();
-  const { isBlurred: hideNumbers, toggleBlur: toggleHideNumbers } = usePrivacyBlur();
+  const { isBlurred: hideNumbers, toggleBlur: toggleHideNumbers } =
+    usePrivacyBlur();
   const queryClient = useQueryClient();
   const deleteMutation = useDeleteTransaction();
   const { data: accounts } = useAccounts();
@@ -139,8 +414,11 @@ const WebDashboard = memo(function WebDashboard({
     useState<OwnershipFilter>("all");
   const [accountTypeFilter, setAccountTypeFilter] =
     useState<AccountTypeFilter>("expense");
-  const [filterCategory, setFilterCategory] = useState<string>("");
+  const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [filterAccount, setFilterAccount] = useState<string>("");
+  const [filterMinAmount, setFilterMinAmount] = useState<number>(0);
+  const [filterMaxAmount, setFilterMaxAmount] = useState<number>(0);
+  const [filterDescription, setFilterDescription] = useState<string>("");
   const [sortField, setSortField] = useState<SortField>("recent");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [showFilters, setShowFilters] = useState(false);
@@ -151,9 +429,9 @@ const WebDashboard = memo(function WebDashboard({
   const [hoveredTransaction, setHoveredTransaction] = useState<string | null>(
     null,
   );
-  const [dashboardView, setDashboardView] = useState<"overview" | "analytics" | "review">(
-    "overview",
-  );
+  const [dashboardView, setDashboardView] = useState<
+    "overview" | "analytics" | "review"
+  >("overview");
 
   // Ref for controlling map zoom from external components
   const zoomToCountryRef = useRef<{
@@ -239,11 +517,23 @@ const WebDashboard = memo(function WebDashboard({
   const filteredTransactions = useMemo(() => {
     let filtered = [...typeFilteredTransactions];
 
-    // Category and account filters only
-    if (filterCategory)
-      filtered = filtered.filter((t) => t.category === filterCategory);
+    // Category, account, amount, and description filters
+    if (filterCategories.length > 0)
+      filtered = filtered.filter((t) =>
+        filterCategories.includes(t.category ?? ""),
+      );
     if (filterAccount)
       filtered = filtered.filter((t) => t.account_name === filterAccount);
+    if (filterMinAmount > 0)
+      filtered = filtered.filter((t) => Math.abs(t.amount) >= filterMinAmount);
+    if (filterMaxAmount > 0)
+      filtered = filtered.filter((t) => Math.abs(t.amount) <= filterMaxAmount);
+    if (filterDescription) {
+      const search = filterDescription.toLowerCase();
+      filtered = filtered.filter((t) =>
+        (t.description ?? "").toLowerCase().includes(search),
+      );
+    }
 
     filtered.sort((a, b) => {
       let comparison = 0;
@@ -263,8 +553,11 @@ const WebDashboard = memo(function WebDashboard({
     return filtered;
   }, [
     typeFilteredTransactions,
-    filterCategory,
+    filterCategories,
     filterAccount,
+    filterMinAmount,
+    filterMaxAmount,
+    filterDescription,
     sortField,
     sortOrder,
     ownershipFilter,
@@ -590,14 +883,20 @@ const WebDashboard = memo(function WebDashboard({
   // ==================== END ANALYTICS ====================
 
   const hasActiveFilters =
-    filterCategory ||
+    filterCategories.length > 0 ||
     filterAccount ||
+    filterMinAmount > 0 ||
+    filterMaxAmount > 0 ||
+    filterDescription.length > 0 ||
     ownershipFilter !== "all" ||
     accountTypeFilter !== "expense";
 
   const clearFilters = () => {
-    setFilterCategory("");
+    setFilterCategories([]);
     setFilterAccount("");
+    setFilterMinAmount(0);
+    setFilterMaxAmount(0);
+    setFilterDescription("");
     setOwnershipFilter("all");
     setAccountTypeFilter("expense");
   };
@@ -679,7 +978,10 @@ const WebDashboard = memo(function WebDashboard({
   }
 
   return (
-    <div className={`min-h-full ${themeClasses.pageBg}`} data-private={hideNumbers}>
+    <div
+      className={`min-h-full ${themeClasses.pageBg}`}
+      data-private={hideNumbers}
+    >
       <style>{`
         [data-private="true"] .tabular-nums { filter: blur(8px); transition: filter 0.2s; user-select: none; }
         [data-private="false"] .tabular-nums { filter: none; transition: filter 0.2s; }
@@ -770,30 +1072,32 @@ const WebDashboard = memo(function WebDashboard({
           </div>
           <div className="flex items-center justify-between px-4 py-1.5">
             <div className="flex items-center gap-1.5">
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing || hasPendingTransactions}
-              className={cn(
-                "p-1.5 rounded-lg neo-card transition-all",
-                isRefreshing && "animate-spin",
-              )}
-            >
-              <RefreshCw className={cn("w-3.5 h-3.5", themeClasses.text)} />
-            </button>
-            <button
-              onClick={toggleHideNumbers}
-              className={cn(
-                "p-1.5 rounded-lg neo-card transition-all",
-                hideNumbers && `${themeClasses.bgActive}`,
-              )}
-              title={hideNumbers ? "Show numbers" : "Hide numbers"}
-            >
-              {hideNumbers ? (
-                <EyeOff className={cn("w-3.5 h-3.5", themeClasses.textActive)} />
-              ) : (
-                <Eye className={cn("w-3.5 h-3.5", themeClasses.text)} />
-              )}
-            </button>
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing || hasPendingTransactions}
+                className={cn(
+                  "p-1.5 rounded-lg neo-card transition-all",
+                  isRefreshing && "animate-spin",
+                )}
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", themeClasses.text)} />
+              </button>
+              <button
+                onClick={toggleHideNumbers}
+                className={cn(
+                  "p-1.5 rounded-lg neo-card transition-all",
+                  hideNumbers && `${themeClasses.bgActive}`,
+                )}
+                title={hideNumbers ? "Show numbers" : "Hide numbers"}
+              >
+                {hideNumbers ? (
+                  <EyeOff
+                    className={cn("w-3.5 h-3.5", themeClasses.textActive)}
+                  />
+                ) : (
+                  <Eye className={cn("w-3.5 h-3.5", themeClasses.text)} />
+                )}
+              </button>
             </div>
 
             {/* View Toggle */}
@@ -862,31 +1166,89 @@ const WebDashboard = memo(function WebDashboard({
                 />
               </div>
               <div className="flex gap-2">
-                <select
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className={`px-2 py-1.5 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-xs flex-1`}
-                >
-                  <option value="">All Categories</option>
-                  {categories.map((cat) => (
-                    <option key={cat || "unknown"} value={cat || ""}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-                <select
+                <MultiFilterDropdown
+                  values={filterCategories}
+                  onChange={setFilterCategories}
+                  options={categories as string[]}
+                  placeholder="All Categories"
+                />
+                <SingleFilterDropdown
                   value={filterAccount}
-                  onChange={(e) => setFilterAccount(e.target.value)}
-                  className={`px-2 py-1.5 rounded-lg ${themeClasses.bgSurface} neo-border text-white text-xs flex-1`}
-                >
-                  <option value="">All Accounts</option>
-                  {accountsList.map((acc) => (
-                    <option key={acc || "unknown"} value={acc || ""}>
-                      {acc}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setFilterAccount}
+                  options={accountsList as string[]}
+                  placeholder="All Accounts"
+                />
               </div>
+              {/* Amount range filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-white/40 uppercase tracking-wider flex-shrink-0">
+                  Amount
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={10}
+                  value={filterMinAmount || ""}
+                  onChange={(e) =>
+                    setFilterMinAmount(Number(e.target.value) || 0)
+                  }
+                  placeholder="Min"
+                  className="flex-1 px-2.5 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 text-white/80 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+                />
+                <span className="text-white/20 text-xs">–</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={10}
+                  value={filterMaxAmount || ""}
+                  onChange={(e) =>
+                    setFilterMaxAmount(Number(e.target.value) || 0)
+                  }
+                  placeholder="Max"
+                  className="flex-1 px-2.5 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 text-white/80 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+                />
+                {(filterMinAmount > 0 || filterMaxAmount > 0) && (
+                  <button
+                    onClick={() => {
+                      setFilterMinAmount(0);
+                      setFilterMaxAmount(0);
+                    }}
+                    className="text-[10px] text-white/40 hover:text-white/60 transition-colors flex-shrink-0"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {/* Description search */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-white/40 uppercase tracking-wider flex-shrink-0">
+                  Search
+                </span>
+                <input
+                  type="text"
+                  value={filterDescription}
+                  onChange={(e) => setFilterDescription(e.target.value)}
+                  placeholder="Search descriptions…"
+                  className="flex-1 px-2.5 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 text-white/80 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+                />
+                {filterDescription && (
+                  <button
+                    onClick={() => setFilterDescription("")}
+                    className="text-[10px] text-white/40 hover:text-white/60 transition-colors flex-shrink-0"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {/* Clear all */}
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="w-full text-center text-[10px] text-white/30 hover:text-white/60 transition-colors py-1 uppercase tracking-wider"
+                >
+                  Clear All Filters
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -909,10 +1271,21 @@ const WebDashboard = memo(function WebDashboard({
       {dashboardView === "review" && (
         <div className="max-w-7xl mx-auto px-4 py-4">
           <ReviewDashboard
-            transactions={transactions}
+            transactions={ownershipFilteredTransactions}
             startDate={startDate}
             endDate={endDate}
             ownershipFilter={ownershipFilter}
+            filterCategories={filterCategories}
+            filterAccount={filterAccount}
+            filterMinAmount={filterMinAmount}
+            onCategoryClick={(cat) => {
+              setFilterCategories((prev) =>
+                prev.includes(cat)
+                  ? prev.filter((c) => c !== cat)
+                  : [...prev, cat],
+              );
+              setShowFilters(true);
+            }}
           />
         </div>
       )}
@@ -1895,7 +2268,12 @@ const WebDashboard = memo(function WebDashboard({
                       </div>
                     )}
                     <div className="text-right">
-                      <p className={cn("text-sm font-bold tabular-nums", themeClasses.text)}>
+                      <p
+                        className={cn(
+                          "text-sm font-bold tabular-nums",
+                          themeClasses.text,
+                        )}
+                      >
                         ${displayAmount.toFixed(2)}
                       </p>
                       {/* Show split breakdown only when viewing "all" */}

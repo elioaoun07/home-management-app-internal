@@ -24,6 +24,8 @@ const PALETTE = [
 
 type Props = {
   transactions: TransactionWithAccount[];
+  onCategoryClick?: (category: string) => void;
+  activeCategories?: string[];
 };
 
 type SliceData = {
@@ -33,7 +35,7 @@ type SliceData = {
   percent: number;
 };
 
-export default function CategoryDonutWidget({ transactions }: Props) {
+export default function CategoryDonutWidget({ transactions, onCategoryClick, activeCategories = [] }: Props) {
   const { data: accounts } = useAccounts();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -87,8 +89,24 @@ export default function CategoryDonutWidget({ transactions }: Props) {
     );
   }
 
+  const titleAction =
+    activeCategories.length > 0 ? (
+      <div className="flex items-center gap-1 flex-wrap">
+        {activeCategories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => onCategoryClick?.(cat)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 transition-colors"
+          >
+            {cat}
+            <span className="opacity-60">×</span>
+          </button>
+        ))}
+      </div>
+    ) : undefined;
+
   return (
-    <WidgetCard title="Spending by Category" subtitle="Current period breakdown">
+    <WidgetCard title="Spending by Category" subtitle="Click a slice to filter dashboard" action={titleAction}>
       <div className="flex items-center gap-2">
         {/* Donut */}
         <div className="relative flex-shrink-0" style={{ width: 160, height: 160 }}>
@@ -116,29 +134,35 @@ export default function CategoryDonutWidget({ transactions }: Props) {
                 stroke="none"
                 onMouseEnter={(_, index) => setActiveIndex(index)}
                 onMouseLeave={() => setActiveIndex(null)}
-                onClick={(_, index) =>
-                  setActiveIndex(activeIndex === index ? null : index)
-                }
+                onClick={(data, index) => {
+                  setActiveIndex(activeIndex === index ? null : index);
+                  if (data.name) onCategoryClick?.(data.name);
+                }}
               >
-                {slices.map((s, i) => (
-                  <Cell
-                    key={s.name}
-                    fill={s.color}
-                    opacity={
-                      activeIndex === null || activeIndex === i ? 1 : 0.35
-                    }
-                    style={{
-                      filter:
-                        activeIndex === i
-                          ? `drop-shadow(0 0 8px ${s.color})`
-                          : undefined,
-                      cursor: "pointer",
-                      transition: "opacity 0.2s, transform 0.2s",
-                      transformOrigin: "center",
-                      transform: activeIndex === i ? "scale(1.05)" : "scale(1)",
-                    }}
-                  />
-                ))}
+                {slices.map((s, i) => {
+                  const isActive = activeCategories.length === 0 || activeCategories.includes(s.name);
+                  const isHovered = activeIndex === i;
+                  return (
+                    <Cell
+                      key={s.name}
+                      fill={s.color}
+                      opacity={
+                        isHovered
+                          ? 1
+                          : activeCategories.length > 0
+                            ? isActive ? 1 : 0.2
+                            : activeIndex === null ? 1 : 0.35
+                      }
+                      style={{
+                        filter: isHovered ? `drop-shadow(0 0 8px ${s.color})` : undefined,
+                        cursor: "pointer",
+                        transition: "opacity 0.2s, transform 0.2s",
+                        transformOrigin: "center",
+                        transform: isHovered ? "scale(1.05)" : "scale(1)",
+                      }}
+                    />
+                  );
+                })}
               </Pie>
               <Tooltip
                 content={<DonutTooltip total={total} />}
@@ -191,17 +215,20 @@ export default function CategoryDonutWidget({ transactions }: Props) {
               className="w-full flex items-center gap-2 group transition-all"
               onMouseEnter={() => setActiveIndex(i)}
               onMouseLeave={() => setActiveIndex(null)}
-              onClick={() => setActiveIndex(activeIndex === i ? null : i)}
+              onClick={() => {
+                setActiveIndex(activeIndex === i ? null : i);
+                onCategoryClick?.(s.name);
+              }}
             >
               <div
                 className="flex-shrink-0 w-2 h-2 rounded-full ring-1 ring-white/10 transition-all duration-200"
                 style={{
                   backgroundColor: s.color,
                   boxShadow:
-                    activeIndex === i
+                    activeIndex === i || activeCategories.includes(s.name)
                       ? `0 0 8px ${s.color}, 0 0 16px ${s.color}60`
                       : `0 0 4px ${s.color}50`,
-                  transform: activeIndex === i ? "scale(1.4)" : "scale(1)",
+                  transform: activeIndex === i || activeCategories.includes(s.name) ? "scale(1.4)" : "scale(1)",
                 }}
               />
               <div className="flex-1 min-w-0">
@@ -210,9 +237,9 @@ export default function CategoryDonutWidget({ transactions }: Props) {
                     className="text-[10px] truncate font-medium transition-colors"
                     style={{
                       color:
-                        activeIndex === null || activeIndex === i
+                        activeIndex === i || activeCategories.includes(s.name) || (activeIndex === null && activeCategories.length === 0)
                           ? s.color
-                          : `${s.color}50`,
+                          : `${s.color}35`,
                     }}
                   >
                     {s.name}
@@ -220,7 +247,14 @@ export default function CategoryDonutWidget({ transactions }: Props) {
                   <BlurredAmount blurIntensity="sm">
                     <span
                       className="text-[10px] font-semibold flex-shrink-0 tabular-nums"
-                      style={{ color: activeIndex === i ? s.color : "rgba(255,255,255,0.55)" }}
+                      style={{
+                        color:
+                          activeIndex === i || activeCategories.includes(s.name)
+                            ? s.color
+                            : activeCategories.length > 0
+                              ? "rgba(255,255,255,0.25)"
+                              : "rgba(255,255,255,0.55)",
+                      }}
                     >
                       ${s.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
@@ -233,7 +267,10 @@ export default function CategoryDonutWidget({ transactions }: Props) {
                     style={{
                       width: `${s.percent}%`,
                       backgroundColor: s.color,
-                      opacity: activeIndex === null || activeIndex === i ? 1 : 0.3,
+                      opacity:
+                        activeIndex === i || activeCategories.includes(s.name) || (activeIndex === null && activeCategories.length === 0)
+                          ? 1
+                          : 0.2,
                     }}
                   />
                 </div>

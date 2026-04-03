@@ -7,9 +7,10 @@ import { useEffect, useState } from "react";
 type Props = {
   score: number;
   factors: { label: string; score: number; weight: number; max: number }[];
+  previousScore?: number;
 };
 
-export default function HealthScoreWidget({ score, factors }: Props) {
+export default function HealthScoreWidget({ score, factors, previousScore }: Props) {
   const tc = useThemeClasses();
   const [animatedScore, setAnimatedScore] = useState(0);
 
@@ -53,8 +54,26 @@ export default function HealthScoreWidget({ score, factors }: Props) {
     );
   }
 
+  const scoreDelta = previousScore !== undefined ? score - previousScore : null;
+
   return (
-    <WidgetCard title="Financial Health" subtitle={label}>
+    <WidgetCard
+      title="Financial Health"
+      subtitle={label}
+      action={
+        scoreDelta !== null && Math.abs(scoreDelta) >= 1 ? (
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+              scoreDelta >= 0
+                ? "bg-emerald-500/20 text-emerald-400"
+                : "bg-red-500/20 text-red-400"
+            }`}
+          >
+            {scoreDelta >= 0 ? "+" : ""}{scoreDelta} pts MoM
+          </span>
+        ) : undefined
+      }
+    >
       {/* Gauge */}
       <div className="flex justify-center mb-2">
         <div
