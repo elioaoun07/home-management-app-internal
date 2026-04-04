@@ -70,7 +70,10 @@ self.addEventListener("activate", (event) => {
       caches.keys().then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key !== CACHE_NAME && key !== STATIC_CACHE && key !== API_CACHE)
+            .filter(
+              (key) =>
+                key !== CACHE_NAME && key !== STATIC_CACHE && key !== API_CACHE,
+            )
             .map((key) => {
               console.log("[SW] Removing old cache:", key);
               return caches.delete(key);
@@ -174,8 +177,14 @@ self.addEventListener("fetch", (event) => {
       caches.match(request).then((cached) => {
         const fetchPromise = fetch(request, { mode: "cors" })
           .then((response) => {
-            if (response && (response.type === "basic" || response.type === "cors") && response.ok) {
-              caches.open(STATIC_CACHE).then((cache) => cache.put(request, response.clone()));
+            if (
+              response &&
+              (response.type === "basic" || response.type === "cors") &&
+              response.ok
+            ) {
+              caches
+                .open(STATIC_CACHE)
+                .then((cache) => cache.put(request, response.clone()));
             }
             return response;
           })
@@ -192,8 +201,14 @@ self.addEventListener("fetch", (event) => {
       caches.match(request).then((cached) => {
         if (cached) return cached;
         return fetch(request, { mode: "cors" }).then((response) => {
-          if (response && (response.type === "basic" || response.type === "cors") && response.ok) {
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, response.clone()));
+          if (
+            response &&
+            (response.type === "basic" || response.type === "cors") &&
+            response.ok
+          ) {
+            caches
+              .open(STATIC_CACHE)
+              .then((cache) => cache.put(request, response.clone()));
           }
           return response;
         });
@@ -275,7 +290,9 @@ self.addEventListener("fetch", (event) => {
           fetch(request)
             .then((freshResponse) => {
               if (freshResponse && freshResponse.ok) {
-                caches.open(CACHE_NAME).then((cache) => cache.put(request, freshResponse));
+                caches
+                  .open(CACHE_NAME)
+                  .then((cache) => cache.put(request, freshResponse));
               }
             })
             .catch(() => {});
@@ -283,7 +300,10 @@ self.addEventListener("fetch", (event) => {
         }
 
         // No cache — cold load, try network with adaptive timeout
-        const networkResponse = await fetchWithTimeout(request, getAdaptiveTimeout());
+        const networkResponse = await fetchWithTimeout(
+          request,
+          getAdaptiveTimeout(),
+        );
         if (networkResponse && networkResponse.ok) {
           const clone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
@@ -319,21 +339,30 @@ self.addEventListener("fetch", (event) => {
             fetch(request)
               .then((freshResponse) => {
                 if (freshResponse && freshResponse.ok) {
-                  caches.open(STATIC_CACHE).then((cache) => cache.put(request, freshResponse));
+                  caches
+                    .open(STATIC_CACHE)
+                    .then((cache) => cache.put(request, freshResponse));
                 }
               })
               .catch(() => {});
             return cached;
           }
           // No cache — fetch with adaptive timeout
-          const networkResponse = await fetchWithTimeout(request, getAdaptiveTimeout());
+          const networkResponse = await fetchWithTimeout(
+            request,
+            getAdaptiveTimeout(),
+          );
           if (networkResponse && networkResponse.ok) {
             const clone = networkResponse.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+            caches
+              .open(STATIC_CACHE)
+              .then((cache) => cache.put(request, clone));
             return networkResponse;
           }
           // Serve cached HTML for this route rather than empty JSON (which crashes RSC parser)
-          const htmlFallback = await caches.match(new URL(request.url).pathname);
+          const htmlFallback = await caches.match(
+            new URL(request.url).pathname,
+          );
           if (htmlFallback) return htmlFallback;
           return new Response("{}", {
             status: 200,
@@ -348,7 +377,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         const cached = await caches.match(request);
-        const networkResponse = await fetchWithTimeout(request, getAdaptiveTimeout());
+        const networkResponse = await fetchWithTimeout(
+          request,
+          getAdaptiveTimeout(),
+        );
 
         if (networkResponse && networkResponse.ok) {
           const clone = networkResponse.clone();
@@ -681,7 +713,9 @@ async function handlePushSubscriptionChange(event) {
     if (!newSubscription) {
       const vapidKey = await getStoredVapidKey();
       if (!vapidKey) {
-        console.error("[SW] No VAPID key cached — cannot re-subscribe. User must re-enable notifications manually.");
+        console.error(
+          "[SW] No VAPID key cached — cannot re-subscribe. User must re-enable notifications manually.",
+        );
         notifyClientsSubscriptionLost();
         return;
       }
@@ -691,7 +725,10 @@ async function handlePushSubscriptionChange(event) {
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidKey),
         });
-        console.log("[SW] Re-subscribed with new endpoint:", newSubscription.endpoint.substring(0, 50));
+        console.log(
+          "[SW] Re-subscribed with new endpoint:",
+          newSubscription.endpoint.substring(0, 50),
+        );
       } catch (err) {
         console.error("[SW] Failed to re-subscribe:", err);
         notifyClientsSubscriptionLost();
@@ -702,9 +739,16 @@ async function handlePushSubscriptionChange(event) {
     const subData = newSubscription.toJSON();
 
     // First, try to notify open clients — they can re-sync via the normal subscribe flow
-    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const clients = await self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true,
+    });
     if (clients.length > 0) {
-      console.log("[SW] Notifying", clients.length, "client(s) about subscription change");
+      console.log(
+        "[SW] Notifying",
+        clients.length,
+        "client(s) about subscription change",
+      );
       clients.forEach((client) => {
         client.postMessage({
           type: "SUBSCRIPTION_CHANGED",
@@ -718,7 +762,9 @@ async function handlePushSubscriptionChange(event) {
     }
 
     // No clients open — SW must sync the new subscription directly
-    console.log("[SW] No clients open — syncing subscription change directly to server");
+    console.log(
+      "[SW] No clients open — syncing subscription change directly to server",
+    );
     const response = await fetch("/api/notifications/subscribe/sw", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -734,7 +780,11 @@ async function handlePushSubscriptionChange(event) {
       console.log("[SW] Subscription change synced to server successfully");
     } else {
       const text = await response.text().catch(() => "");
-      console.error("[SW] Failed to sync subscription change:", response.status, text);
+      console.error(
+        "[SW] Failed to sync subscription change:",
+        response.status,
+        text,
+      );
     }
   } catch (err) {
     console.error("[SW] Error in handlePushSubscriptionChange:", err);
@@ -1009,7 +1059,12 @@ self.addEventListener("message", (event) => {
         caches.open(STATIC_CACHE).then((cache) => {
           payload.urls.forEach((url) => {
             caches.match(url).then((hit) => {
-              if (!hit) fetch(url).then((r) => { if (r.ok) cache.put(url, r); }).catch(() => {});
+              if (!hit)
+                fetch(url)
+                  .then((r) => {
+                    if (r.ok) cache.put(url, r);
+                  })
+                  .catch(() => {});
             });
           });
         });

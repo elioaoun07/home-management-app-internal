@@ -91,7 +91,11 @@ export default async function RootLayout({
     : undefined;
 
   return (
-    <html lang="en" suppressHydrationWarning className={`scroll-smooth ${caveat.variable} ${handlee.variable}`}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`scroll-smooth ${caveat.variable} ${handlee.variable}`}
+    >
       <head>
         {/* Critical early CSS to prevent ANY flash of wrong theme color */}
         <script

@@ -53,7 +53,9 @@ export function EagerDataPrefetch() {
         queryClient.prefetchQuery({
           queryKey: ["accounts", { own: true, includeHidden: true }],
           queryFn: async () => {
-            const res = await fetch("/api/accounts?own=true&includeHidden=true");
+            const res = await fetch(
+              "/api/accounts?own=true&includeHidden=true",
+            );
             if (!res.ok) return [];
             return res.json();
           },
