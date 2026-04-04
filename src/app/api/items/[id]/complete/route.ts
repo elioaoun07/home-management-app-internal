@@ -1,5 +1,7 @@
 // src/app/api/items/[id]/complete/route.ts
 // Server-side item completion endpoint for service worker quick actions
+import { resetCompletedPrerequisiteItem } from "@/lib/prerequisites/engine";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -13,6 +15,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // Use supabaseServer only for authentication; adminDb for all data ops (bypasses RLS)
     const supabase = await supabaseServer();
     const {
       data: { user },
@@ -21,6 +24,8 @@ export async function POST(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const adminDb = supabaseAdmin();
 
     const { id: itemId } = await params;
     const body: CompleteRequestBody = await request.json();
@@ -33,10 +38,10 @@ export async function POST(
       );
     }
 
-    // Verify item exists and belongs to user (or their household)
-    const { data: item, error: itemError } = await supabase
+    // Fetch item via adminDb to bypass RLS (partner's token would be blocked otherwise)
+    const { data: item, error: itemError } = await adminDb
       .from("items")
-      .select("id, user_id, status, type")
+      .select("id, user_id, status, type, responsible_user_id, notify_all_household, is_public")
       .eq("id", itemId)
       .single();
 
@@ -44,9 +49,31 @@ export async function POST(
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
 
+    // Authorization: creator, responsible user, or any household member when "All Household"
+    const isCreator = item.user_id === user.id;
+    const isResponsible = item.responsible_user_id === user.id;
+    let canComplete = isCreator || isResponsible;
+
+    if (!canComplete && item.notify_all_household && item.is_public) {
+      const { data: link } = await adminDb
+        .from("household_links")
+        .select("id")
+        .eq("active", true)
+        .or(
+          `and(owner_user_id.eq.${item.user_id},partner_user_id.eq.${user.id}),` +
+          `and(owner_user_id.eq.${user.id},partner_user_id.eq.${item.user_id})`
+        )
+        .maybeSingle();
+      canComplete = !!link;
+    }
+
+    if (!canComplete) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     if (is_recurring) {
       // For recurring items: record completion of this occurrence
-      const { data, error } = await supabase
+      const { data, error } = await adminDb
         .from("item_occurrence_actions")
         .insert({
           item_id: itemId,
@@ -93,8 +120,8 @@ export async function POST(
 
       // Update item status + record action in parallel
       const [itemResult, actionResult] = await Promise.all([
-        supabase.from("items").update(updatePayload).eq("id", itemId),
-        supabase.from("item_occurrence_actions").insert({
+        adminDb.from("items").update(updatePayload).eq("id", itemId),
+        adminDb.from("item_occurrence_actions").insert({
           item_id: itemId,
           occurrence_date,
           action_type: "completed",
@@ -114,16 +141,20 @@ export async function POST(
       }
 
       // Also update reminder_details if it exists
-      await supabase
+      await adminDb
         .from("reminder_details")
         .update({ completed_at: new Date().toISOString() })
         .eq("item_id", itemId);
+
+      // If this item has prerequisites, reset it to dormant for next trigger
+      const wasReset = await resetCompletedPrerequisiteItem(itemId, adminDb);
 
       return NextResponse.json({
         success: true,
         type: "item",
         itemId,
         archived: shouldArchive,
+        resetToDormant: wasReset,
       });
     }
   } catch (error) {

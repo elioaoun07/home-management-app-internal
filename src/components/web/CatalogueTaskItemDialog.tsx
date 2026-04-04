@@ -1,5 +1,6 @@
 "use client";
 
+import { PrerequisitePicker } from "@/components/items/PrerequisitePicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,6 +31,7 @@ import type {
   RecurrencePattern,
 } from "@/types/catalogue";
 import { PRIORITY_COLORS, PRIORITY_LABELS } from "@/types/catalogue";
+import type { CreatePrerequisiteInput } from "@/types/prerequisites";
 import {
   AlertCircle,
   CalendarClock,
@@ -175,6 +177,10 @@ export default function CatalogueTaskItemDialog({
   // New fields: categories and visibility
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
+  // Trigger conditions (prerequisites)
+  const [triggerConditions, setTriggerConditions] = useState<
+    CreatePrerequisiteInput[]
+  >([]);
 
   const isLoading = createItem.isPending || updateItem.isPending;
   const isEditing = !!editingItem;
@@ -200,6 +206,11 @@ export default function CatalogueTaskItemDialog({
         setTags(editingItem.tags || []);
         setSelectedCategoryIds(editingItem.item_category_ids || []);
         setIsPublic(editingItem.is_public || false);
+        // Trigger conditions from metadata
+        setTriggerConditions(
+          (editingItem.metadata_json
+            ?.trigger_conditions as CreatePrerequisiteInput[]) || [],
+        );
         // Flexible routine state
         setIsFlexibleRoutine(editingItem.is_flexible_routine || false);
         setFlexiblePeriod(
@@ -223,6 +234,8 @@ export default function CatalogueTaskItemDialog({
         setTagInput("");
         setSelectedCategoryIds([]);
         setIsPublic(false);
+        // Reset trigger conditions
+        setTriggerConditions([]);
         // Reset flexible routine state
         setIsFlexibleRoutine(false);
         setFlexiblePeriod(null);
@@ -290,6 +303,11 @@ export default function CatalogueTaskItemDialog({
         item_category_ids:
           selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
         is_public: isPublic,
+        // Store trigger conditions in metadata
+        metadata_json:
+          triggerConditions.length > 0
+            ? { trigger_conditions: triggerConditions }
+            : undefined,
         // Flexible routine fields
         is_flexible_routine: isFlexibleRoutine,
         flexible_period: isFlexibleRoutine
@@ -830,6 +848,14 @@ export default function CatalogueTaskItemDialog({
                 {selectedCategoryIds.length !== 1 ? "ies" : "y"} selected
               </p>
             )}
+          </div>
+
+          {/* Trigger Conditions */}
+          <div className="space-y-2">
+            <PrerequisitePicker
+              value={triggerConditions}
+              onChange={setTriggerConditions}
+            />
           </div>
 
           {/* Visibility (Public/Private) */}

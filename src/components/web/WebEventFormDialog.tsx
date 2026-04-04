@@ -4,8 +4,12 @@ import {
   CustomRecurrencePicker,
   describeRRule,
 } from "@/components/items/CustomRecurrencePicker";
+import { PrerequisitePicker } from "@/components/items/PrerequisitePicker";
 import { ResponsibleUserPicker } from "@/components/items/ResponsibleUserPicker";
-import { SmartAlertPicker, type SmartAlertValue } from "@/components/items/SmartAlertPicker";
+import {
+  SmartAlertPicker,
+  type SmartAlertValue,
+} from "@/components/items/SmartAlertPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,6 +46,7 @@ import type {
   ItemType,
   ItemWithDetails,
 } from "@/types/items";
+import type { CreatePrerequisiteInput } from "@/types/prerequisites";
 import { format, parseISO } from "date-fns";
 import { motion } from "framer-motion";
 import {
@@ -187,7 +192,7 @@ export function WebEventFormDialog({
   const [recurrenceRule, setRecurrenceRule] = useState("");
   const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
   const [recurrenceCount, setRecurrenceCount] = useState<number | undefined>(
-    undefined
+    undefined,
   );
   const [recurrenceForever, setRecurrenceForever] = useState(true);
   const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
@@ -205,6 +210,11 @@ export function WebEventFormDialog({
     string | undefined
   >(undefined);
   const [notifyAllHousehold, setNotifyAllHousehold] = useState(false);
+
+  // Prerequisites (trigger conditions)
+  const [prerequisites, setPrerequisites] = useState<CreatePrerequisiteInput[]>(
+    [],
+  );
 
   // Mutations
   const createReminder = useCreateReminder();
@@ -229,7 +239,7 @@ export function WebEventFormDialog({
         setIsPublic(editItem.is_public ?? true);
         setResponsibleUserId(
           (editItem.responsible_user_id || householdData?.currentUserId) ??
-            undefined
+            undefined,
         );
         setNotifyAllHousehold(editItem.notify_all_household ?? false);
 
@@ -241,7 +251,10 @@ export function WebEventFormDialog({
           setRecurrenceRule(editItem.recurrence_rule.rrule || "");
           if (editItem.recurrence_rule.end_until) {
             setRecurrenceEndDate(
-              format(parseISO(editItem.recurrence_rule.end_until), "yyyy-MM-dd")
+              format(
+                parseISO(editItem.recurrence_rule.end_until),
+                "yyyy-MM-dd",
+              ),
             );
             setRecurrenceForever(false);
           } else if (editItem.recurrence_rule.count) {
@@ -307,11 +320,12 @@ export function WebEventFormDialog({
         setRecurrenceCount(undefined);
         setRecurrenceForever(true);
         setSelectedCategories(
-          prefillCategory ? [prefillCategory] : ["personal"]
+          prefillCategory ? [prefillCategory] : ["personal"],
         );
         setIsPublic(true);
         setResponsibleUserId(householdData?.currentUserId ?? undefined);
         setNotifyAllHousehold(false);
+        setPrerequisites([]);
       }
     }
   }, [
@@ -342,7 +356,7 @@ export function WebEventFormDialog({
       if (isEditing && editItem) {
         // Update existing item
         const supabase = await import("@/lib/supabase/client").then((m) =>
-          m.supabaseBrowser()
+          m.supabaseBrowser(),
         );
 
         // Update base fields (title, description, priority, visibility)
@@ -372,7 +386,7 @@ export function WebEventFormDialog({
             // If end is before start and dates are the same, add a day to end
             if (startDate === endDate && endDateTime <= startDateTime) {
               endDateTime = new Date(
-                endDateTime.getTime() + 24 * 60 * 60 * 1000
+                endDateTime.getTime() + 24 * 60 * 60 * 1000,
               );
             }
 
@@ -453,7 +467,8 @@ export function WebEventFormDialog({
         });
       } else {
         // Create new item
-        const enableAlert = alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime);
+        const enableAlert =
+          alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime);
         const alerts: CreateAlertInput[] = [];
         if (enableAlert) {
           alerts.push({
@@ -499,6 +514,7 @@ export function WebEventFormDialog({
             is_public: isPublic,
             responsible_user_id: responsibleUserId,
             notify_all_household: notifyAllHousehold,
+            prerequisites: prerequisites.length > 0 ? prerequisites : undefined,
           };
           const newReminder = await createReminder.mutateAsync(input);
 
@@ -549,7 +565,7 @@ export function WebEventFormDialog({
             // If end is before start and dates are the same, add a day to end
             if (startDate === endDate && endDateTime <= startDateTime) {
               endDateTime = new Date(
-                endDateTime.getTime() + 24 * 60 * 60 * 1000
+                endDateTime.getTime() + 24 * 60 * 60 * 1000,
               );
             }
 
@@ -587,6 +603,7 @@ export function WebEventFormDialog({
             is_public: isPublic,
             responsible_user_id: responsibleUserId,
             notify_all_household: notifyAllHousehold,
+            prerequisites: prerequisites.length > 0 ? prerequisites : undefined,
           };
           const newEvent = await createEvent.mutateAsync(input);
 
@@ -623,7 +640,7 @@ export function WebEventFormDialog({
         } else if (itemType === "task") {
           // Convert local date/time to ISO string (properly handles timezone)
           const dueAtIso = new Date(
-            `${startDate}T${startTime}:00`
+            `${startDate}T${startTime}:00`,
           ).toISOString();
           const endUntilIso = recurrenceEndDate
             ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString()
@@ -653,6 +670,7 @@ export function WebEventFormDialog({
             is_public: isPublic,
             responsible_user_id: responsibleUserId,
             notify_all_household: notifyAllHousehold,
+            prerequisites: prerequisites.length > 0 ? prerequisites : undefined,
           };
           const newTask = await createTask.mutateAsync(input);
 
@@ -737,20 +755,20 @@ export function WebEventFormDialog({
       <DialogContent
         className={cn(
           "sm:max-w-[600px] neo-card border",
-          isPink ? "border-pink-500/30" : "border-cyan-500/30"
+          isPink ? "border-pink-500/30" : "border-cyan-500/30",
         )}
       >
         <DialogHeader>
           <DialogTitle
             className={cn(
               "flex items-center gap-3 text-xl font-bold",
-              isPink ? "text-pink-300" : "text-cyan-300"
+              isPink ? "text-pink-300" : "text-cyan-300",
             )}
           >
             <div
               className={cn(
                 "p-2 rounded-xl",
-                isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
               )}
             >
               <Sparkles className="w-5 h-5" />
@@ -781,7 +799,7 @@ export function WebEventFormDialog({
                         "flex items-center justify-center gap-2 p-3.5 rounded-xl border transition-all",
                         isSelected
                           ? cn(config.color, "shadow-lg")
-                          : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+                          : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10",
                       )}
                     >
                       {config.icon}
@@ -813,7 +831,7 @@ export function WebEventFormDialog({
                 themeClasses.inputBorder,
                 "text-white placeholder:text-white/40",
                 "focus:ring-2",
-                isPink ? "focus:ring-pink-500/30" : "focus:ring-cyan-500/30"
+                isPink ? "focus:ring-pink-500/30" : "focus:ring-cyan-500/30",
               )}
             />
           </div>
@@ -854,7 +872,7 @@ export function WebEventFormDialog({
                       "flex-1",
                       themeClasses.inputBg,
                       themeClasses.inputBorder,
-                      "text-white"
+                      "text-white",
                     )}
                   />
                   {!allDay && (
@@ -866,7 +884,7 @@ export function WebEventFormDialog({
                         "w-32",
                         themeClasses.inputBg,
                         themeClasses.inputBorder,
-                        "text-white"
+                        "text-white",
                       )}
                     />
                   )}
@@ -888,7 +906,7 @@ export function WebEventFormDialog({
                         "flex-1",
                         themeClasses.inputBg,
                         themeClasses.inputBorder,
-                        "text-white"
+                        "text-white",
                       )}
                     />
                     {!allDay && (
@@ -900,7 +918,7 @@ export function WebEventFormDialog({
                           "w-32",
                           themeClasses.inputBg,
                           themeClasses.inputBorder,
-                          "text-white"
+                          "text-white",
                         )}
                       />
                     )}
@@ -917,13 +935,13 @@ export function WebEventFormDialog({
                 <div
                   className={cn(
                     "p-1.5 rounded-lg",
-                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                   )}
                 >
                   <Repeat
                     className={cn(
                       "w-4 h-4",
-                      isPink ? "text-pink-400" : "text-cyan-400"
+                      isPink ? "text-pink-400" : "text-cyan-400",
                     )}
                   />
                 </div>
@@ -945,7 +963,7 @@ export function WebEventFormDialog({
                         ? isPink
                           ? "bg-gradient-to-r from-pink-500/30 to-pink-600/20 border-pink-500/50 text-pink-200 shadow-lg shadow-pink-500/20"
                           : "bg-gradient-to-r from-cyan-500/30 to-cyan-600/20 border-cyan-500/50 text-cyan-200 shadow-lg shadow-cyan-500/20"
-                        : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:border-white/20"
+                        : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:border-white/20",
                     )}
                   >
                     {preset.label}
@@ -964,7 +982,7 @@ export function WebEventFormDialog({
                       ? isPink
                         ? "bg-gradient-to-r from-pink-500/30 to-pink-600/20 border-pink-500/50 text-pink-200 shadow-lg shadow-pink-500/20"
                         : "bg-gradient-to-r from-cyan-500/30 to-cyan-600/20 border-cyan-500/50 text-cyan-200 shadow-lg shadow-cyan-500/20"
-                      : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:border-white/20"
+                      : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:border-white/20",
                   )}
                 >
                   Custom...
@@ -977,7 +995,7 @@ export function WebEventFormDialog({
                   <p
                     className={cn(
                       "text-sm mt-1",
-                      isPink ? "text-pink-300/80" : "text-cyan-300/80"
+                      isPink ? "text-pink-300/80" : "text-cyan-300/80",
                     )}
                   >
                     {describeRRule(recurrenceRule)}
@@ -1010,7 +1028,7 @@ export function WebEventFormDialog({
                       <InfinityIcon
                         className={cn(
                           "w-4 h-4",
-                          isPink ? "text-pink-400" : "text-cyan-400"
+                          isPink ? "text-pink-400" : "text-cyan-400",
                         )}
                       />
                       <span className="text-sm text-white/80">
@@ -1032,7 +1050,7 @@ export function WebEventFormDialog({
                           ? isPink
                             ? "bg-gradient-to-r from-pink-500 to-pink-600 shadow-lg shadow-pink-500/30"
                             : "bg-gradient-to-r from-cyan-500 to-cyan-600 shadow-lg shadow-cyan-500/30"
-                          : "bg-white/20"
+                          : "bg-white/20",
                       )}
                     >
                       <motion.div
@@ -1070,7 +1088,7 @@ export function WebEventFormDialog({
                           className={cn(
                             themeClasses.inputBg,
                             themeClasses.inputBorder,
-                            "text-white"
+                            "text-white",
                           )}
                         />
                       </div>
@@ -1094,7 +1112,7 @@ export function WebEventFormDialog({
                           className={cn(
                             themeClasses.inputBg,
                             themeClasses.inputBorder,
-                            "text-white placeholder:text-white/40"
+                            "text-white placeholder:text-white/40",
                           )}
                         />
                       </div>
@@ -1112,13 +1130,13 @@ export function WebEventFormDialog({
                 <div
                   className={cn(
                     "p-1.5 rounded-lg",
-                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                   )}
                 >
                   <Tag
                     className={cn(
                       "w-4 h-4",
-                      isPink ? "text-pink-400" : "text-cyan-400"
+                      isPink ? "text-pink-400" : "text-cyan-400",
                     )}
                   />
                 </div>
@@ -1143,14 +1161,14 @@ export function WebEventFormDialog({
                         setSelectedCategories((prev) =>
                           isSelected
                             ? prev.filter((id) => id !== category.id)
-                            : [...prev, category.id]
+                            : [...prev, category.id],
                         );
                       }}
                       className={cn(
                         "flex items-center gap-2 p-3 rounded-xl border transition-all",
                         isSelected
                           ? "border-opacity-50 shadow-lg"
-                          : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+                          : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10",
                       )}
                       style={{
                         backgroundColor: isSelected
@@ -1182,13 +1200,13 @@ export function WebEventFormDialog({
               <div
                 className={cn(
                   "p-1.5 rounded-lg",
-                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                 )}
               >
                 <AlertCircle
                   className={cn(
                     "w-4 h-4",
-                    isPink ? "text-pink-400" : "text-cyan-400"
+                    isPink ? "text-pink-400" : "text-cyan-400",
                   )}
                 />
               </div>
@@ -1211,7 +1229,7 @@ export function WebEventFormDialog({
                       "flex items-center justify-center gap-2 p-2.5 rounded-xl border transition-all",
                       isSelected
                         ? cn(config.color, "shadow-lg")
-                        : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+                        : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10",
                     )}
                   >
                     {config.icon}
@@ -1229,13 +1247,13 @@ export function WebEventFormDialog({
                 <div
                   className={cn(
                     "p-1.5 rounded-lg",
-                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                   )}
                 >
                   <Bell
                     className={cn(
                       "w-4 h-4",
-                      isPink ? "text-pink-400" : "text-cyan-400"
+                      isPink ? "text-pink-400" : "text-cyan-400",
                     )}
                   />
                 </div>
@@ -1258,13 +1276,13 @@ export function WebEventFormDialog({
                 <div
                   className={cn(
                     "p-1.5 rounded-lg",
-                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                   )}
                 >
                   <MapPin
                     className={cn(
                       "w-4 h-4",
-                      isPink ? "text-pink-400" : "text-cyan-400"
+                      isPink ? "text-pink-400" : "text-cyan-400",
                     )}
                   />
                 </div>
@@ -1280,7 +1298,7 @@ export function WebEventFormDialog({
                   "rounded-xl",
                   themeClasses.inputBg,
                   themeClasses.inputBorder,
-                  "text-white placeholder:text-white/40"
+                  "text-white placeholder:text-white/40",
                 )}
               />
             </div>
@@ -1293,21 +1311,21 @@ export function WebEventFormDialog({
                 <div
                   className={cn(
                     "p-1.5 rounded-lg",
-                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                   )}
                 >
                   {isPublic ? (
                     <Users
                       className={cn(
                         "w-4 h-4",
-                        isPink ? "text-pink-400" : "text-cyan-400"
+                        isPink ? "text-pink-400" : "text-cyan-400",
                       )}
                     />
                   ) : (
                     <User
                       className={cn(
                         "w-4 h-4",
-                        isPink ? "text-pink-400" : "text-cyan-400"
+                        isPink ? "text-pink-400" : "text-cyan-400",
                       )}
                     />
                   )}
@@ -1329,7 +1347,7 @@ export function WebEventFormDialog({
                       ? isPink
                         ? "bg-pink-500/50"
                         : "bg-cyan-500/50"
-                      : "bg-white/20"
+                      : "bg-white/20",
                   )}
                 >
                   <motion.div
@@ -1360,13 +1378,13 @@ export function WebEventFormDialog({
                 <div
                   className={cn(
                     "p-1.5 rounded-lg",
-                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                   )}
                 >
                   <User
                     className={cn(
                       "w-4 h-4",
-                      isPink ? "text-pink-400" : "text-cyan-400"
+                      isPink ? "text-pink-400" : "text-cyan-400",
                     )}
                   />
                 </div>
@@ -1402,7 +1420,7 @@ export function WebEventFormDialog({
                     <Sparkles className="w-3 h-3" />
                     {
                       householdData.members.find(
-                        (m) => m.id === responsibleUserId
+                        (m) => m.id === responsibleUserId,
                       )?.displayName
                     }{" "}
                     will be notified
@@ -1416,19 +1434,35 @@ export function WebEventFormDialog({
             </div>
           )}
 
+          {/* Trigger Conditions (Prerequisites) */}
+          {!isEditing && (
+            <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+              <PrerequisitePicker
+                value={prerequisites}
+                onChange={setPrerequisites}
+              />
+              {prerequisites.length > 0 && (
+                <p className="text-xs text-amber-300/60">
+                  Item will start as dormant and activate when conditions are
+                  met.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Description */}
           <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
             <div className="flex items-center gap-2">
               <div
                 className={cn(
                   "p-1.5 rounded-lg",
-                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20"
+                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                 )}
               >
                 <Sparkles
                   className={cn(
                     "w-4 h-4",
-                    isPink ? "text-pink-400" : "text-cyan-400"
+                    isPink ? "text-pink-400" : "text-cyan-400",
                   )}
                 />
               </div>
@@ -1445,7 +1479,7 @@ export function WebEventFormDialog({
                 "rounded-xl",
                 themeClasses.inputBg,
                 themeClasses.inputBorder,
-                "text-white placeholder:text-white/40 resize-none"
+                "text-white placeholder:text-white/40 resize-none",
               )}
             />
           </div>
@@ -1479,7 +1513,7 @@ export function WebEventFormDialog({
             className={cn(
               "neo-gradient text-white px-8 shadow-lg",
               isPink ? "shadow-pink-500/20" : "shadow-cyan-500/20",
-              isPending && "opacity-50 cursor-not-allowed"
+              isPending && "opacity-50 cursor-not-allowed",
             )}
           >
             {isPending ? (

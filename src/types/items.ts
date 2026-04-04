@@ -16,7 +16,8 @@ export type ItemStatus =
   | "in_progress"
   | "completed"
   | "cancelled"
-  | "archived";
+  | "archived"
+  | "dormant";
 
 export type AlertChannel = "push" | "email" | "sms" | "in_app";
 
@@ -61,6 +62,7 @@ export interface ItemWithDetails extends Item {
   alerts?: ItemAlert[];
   recurrence_rule?: RecurrenceRule | null;
   attachments?: ItemAttachment[];
+  prerequisites?: import("@/types/prerequisites").ItemPrerequisite[];
 }
 
 /** Item Category for organizing items */
@@ -247,6 +249,8 @@ export interface CreateItemInput {
   // Catalogue template link
   source_catalogue_item_id?: UUID; // Link to catalogue template
   is_template_instance?: boolean; // True if this is a template instance
+  // Prerequisites (triggers) - items start dormant until conditions met
+  prerequisites?: import("@/types/prerequisites").CreatePrerequisiteInput[];
 }
 
 /** Input for creating a reminder */
@@ -417,6 +421,7 @@ export const STATUS_COLORS: Record<ItemStatus, { blue: string; pink: string }> =
     completed: { blue: "text-green-400", pink: "text-green-400" },
     cancelled: { blue: "text-gray-400", pink: "text-gray-400" },
     archived: { blue: "text-gray-500", pink: "text-gray-500" },
+    dormant: { blue: "text-purple-400", pink: "text-purple-400" },
   };
 
 // ============================================

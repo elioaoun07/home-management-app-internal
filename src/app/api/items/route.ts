@@ -33,6 +33,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the base item
+    // If prerequisites are provided, start as dormant (trigger-only)
+    const hasPrerequisites =
+      Array.isArray(body.prerequisites) && body.prerequisites.length > 0;
+
     const { data: item, error: itemError } = await supabase
       .from("items")
       .insert({
@@ -41,7 +45,7 @@ export async function POST(request: NextRequest) {
         title: body.title,
         description: body.description || null,
         priority: body.priority || "normal",
-        status: body.status || "pending",
+        status: hasPrerequisites ? "dormant" : body.status || "pending",
         metadata_json: body.metadata_json || null,
         is_public: body.is_public || false,
         responsible_user_id: body.responsible_user_id || user.id,
@@ -194,6 +198,31 @@ export async function POST(request: NextRequest) {
         console.error(
           "[items/route] Failed to create recurrence:",
           recurrenceError,
+        );
+      }
+    }
+
+    // Prerequisites (triggers)
+    if (hasPrerequisites) {
+      const prereqs = body.prerequisites.map(
+        (p: {
+          condition_type: string;
+          condition_config: Record<string, unknown>;
+          logic_group?: number;
+        }) => ({
+          item_id: item.id,
+          condition_type: p.condition_type,
+          condition_config: p.condition_config,
+          logic_group: p.logic_group ?? 0,
+        }),
+      );
+      const { error: prereqError } = await supabase
+        .from("item_prerequisites")
+        .insert(prereqs);
+      if (prereqError) {
+        console.error(
+          "[items/route] Failed to create prerequisites:",
+          prereqError,
         );
       }
     }

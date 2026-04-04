@@ -35,6 +35,9 @@ export const CACHE_TIMES = {
 
   // Onboarding - 24 hours (never changes)
   ONBOARDING: 1000 * 60 * 60 * 24,
+
+  // NFC tags - 30 minutes (rarely changes)
+  NFC: 1000 * 60 * 30,
 } as const;
 
 // Query key factory with consistent naming
@@ -76,7 +79,7 @@ export function getCachedBalance(accountId: string): {
   if (typeof window === "undefined") return null;
   try {
     const cached = localStorage.getItem(
-      `${LOCAL_STORAGE_KEYS.BALANCE_CACHE}_${accountId}`
+      `${LOCAL_STORAGE_KEYS.BALANCE_CACHE}_${accountId}`,
     );
     if (cached) {
       return JSON.parse(cached);
@@ -98,7 +101,7 @@ export function setCachedBalance(accountId: string, balance: number): void {
       JSON.stringify({
         balance,
         updatedAt: new Date().toISOString(),
-      })
+      }),
     );
   } catch {
     // Ignore storage errors
@@ -140,7 +143,7 @@ export function setCachedPreferences(prefs: {
     const existing = getCachedPreferences() || {};
     localStorage.setItem(
       LOCAL_STORAGE_KEYS.USER_PREFERENCES,
-      JSON.stringify({ ...existing, ...prefs })
+      JSON.stringify({ ...existing, ...prefs }),
     );
   } catch {
     // Ignore storage errors

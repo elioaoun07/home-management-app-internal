@@ -41,9 +41,15 @@ import type {
 } from "@/types/items";
 import { format, parse } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, Circle, XCircle, RefreshCw } from "lucide-react";
+import {
+  CheckCircle2,
+  CheckIcon,
+  Circle,
+  RefreshCw,
+  SparklesIcon,
+  XCircle,
+} from "lucide-react";
 import type { ReactNode } from "react";
-import { CheckIcon, SparklesIcon } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -272,6 +278,11 @@ const statusConfig: Record<
     icon: "📦",
     gradient: "from-gray-500/20 to-slate-500/20",
   },
+  dormant: {
+    label: "Dormant",
+    icon: "💤",
+    gradient: "from-purple-500/20 to-violet-500/20",
+  },
 };
 
 // Hardcoded categories - default for all users
@@ -323,28 +334,71 @@ function getAlertInputFromPreset(
     case "none":
       return null;
     case "15min":
-      return { kind: "relative", offset_minutes: 15, relative_to: "due", channel: "push" };
+      return {
+        kind: "relative",
+        offset_minutes: 15,
+        relative_to: "due",
+        channel: "push",
+      };
     case "30min":
-      return { kind: "relative", offset_minutes: 30, relative_to: "due", channel: "push" };
+      return {
+        kind: "relative",
+        offset_minutes: 30,
+        relative_to: "due",
+        channel: "push",
+      };
     case "1hour":
-      return { kind: "relative", offset_minutes: 60, relative_to: "due", channel: "push" };
+      return {
+        kind: "relative",
+        offset_minutes: 60,
+        relative_to: "due",
+        channel: "push",
+      };
     case "3hours":
-      return { kind: "relative", offset_minutes: 180, relative_to: "due", channel: "push" };
+      return {
+        kind: "relative",
+        offset_minutes: 180,
+        relative_to: "due",
+        channel: "push",
+      };
     case "1day":
-      return { kind: "relative", offset_minutes: 1440, relative_to: "due", custom_time: "09:00", channel: "push" };
+      return {
+        kind: "relative",
+        offset_minutes: 1440,
+        relative_to: "due",
+        custom_time: "09:00",
+        channel: "push",
+      };
     case "2days":
-      return { kind: "relative", offset_minutes: 2880, relative_to: "due", custom_time: "09:00", channel: "push" };
+      return {
+        kind: "relative",
+        offset_minutes: 2880,
+        relative_to: "due",
+        custom_time: "09:00",
+        channel: "push",
+      };
     case "1week":
-      return { kind: "relative", offset_minutes: 10080, relative_to: "due", custom_time: "09:00", channel: "push" };
+      return {
+        kind: "relative",
+        offset_minutes: 10080,
+        relative_to: "due",
+        custom_time: "09:00",
+        channel: "push",
+      };
     case "1weekend": {
       const due = new Date(dueAtIso);
       const dayOfWeek = due.getDay(); // 0=Sun, 6=Sat
       // Days to go back to reach the Saturday before the due date
-      const daysToSat = dayOfWeek === 6 ? 7 : dayOfWeek === 0 ? 1 : dayOfWeek + 1;
+      const daysToSat =
+        dayOfWeek === 6 ? 7 : dayOfWeek === 0 ? 1 : dayOfWeek + 1;
       const sat = new Date(due);
       sat.setDate(sat.getDate() - daysToSat);
       sat.setHours(9, 0, 0, 0);
-      return { kind: "absolute", trigger_at: sat.toISOString(), channel: "push" };
+      return {
+        kind: "absolute",
+        trigger_at: sat.toISOString(),
+        channel: "push",
+      };
     }
     default:
       return null;
@@ -400,7 +454,8 @@ export default function MobileReminderForm() {
   ]);
 
   // Task alert state
-  const [taskAlertPreset, setTaskAlertPreset] = useState<TaskAlertPreset>("none");
+  const [taskAlertPreset, setTaskAlertPreset] =
+    useState<TaskAlertPreset>("none");
 
   // Recurrence state
   const [recurrenceRule, setRecurrenceRule] = useState("");
@@ -601,7 +656,12 @@ export default function MobileReminderForm() {
     setSelectedCategoryIds(["personal"]);
     setRecurrenceRule("");
     setTaskAlertPreset("none");
-    setManualOverrides({ type: false, priority: false, categories: false, dates: false });
+    setManualOverrides({
+      type: false,
+      priority: false,
+      categories: false,
+      dates: false,
+    });
     setShowAlertInModal(false);
     setShowEndDateInModal(false);
   }, []);
@@ -921,7 +981,6 @@ export default function MobileReminderForm() {
           {/* Inline Tags Row — selected values, tap to edit inline */}
           <div className="-mx-1 overflow-x-auto scrollbar-none">
             <div className="flex items-center gap-1.5 px-1 min-w-max pb-1">
-
               {/* Priority Tag — flag only, no label */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -953,7 +1012,10 @@ export default function MobileReminderForm() {
                       type="button"
                       onClick={() => {
                         setPriority(p);
-                        setManualOverrides((prev) => ({ ...prev, priority: true }));
+                        setManualOverrides((prev) => ({
+                          ...prev,
+                          priority: true,
+                        }));
                       }}
                       className={cn(
                         "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all",
@@ -999,7 +1061,11 @@ export default function MobileReminderForm() {
                             : "text-purple-300",
                       )}
                     >
-                      {itemType === "reminder" ? "Reminder" : itemType === "event" ? "Event" : "Task"}
+                      {itemType === "reminder"
+                        ? "Reminder"
+                        : itemType === "event"
+                          ? "Event"
+                          : "Task"}
                     </span>
                   </button>
                 </PopoverTrigger>
@@ -1008,11 +1074,31 @@ export default function MobileReminderForm() {
                   sideOffset={6}
                   className="w-36 p-1 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
                 >
-                  {([
-                    { type: "reminder" as ItemType, icon: BellIcon, label: "Reminder", color: "text-cyan-300", bg: "from-cyan-500/20 to-cyan-600/20" },
-                    { type: "event" as ItemType, icon: CalendarIcon, label: "Event", color: "text-pink-300", bg: "from-pink-500/20 to-pink-600/20" },
-                    { type: "task" as ItemType, icon: ClipboardCheckIcon, label: "Task", color: "text-purple-300", bg: "from-purple-500/20 to-purple-600/20" },
-                  ] as const).map((item) => (
+                  {(
+                    [
+                      {
+                        type: "reminder" as ItemType,
+                        icon: BellIcon,
+                        label: "Reminder",
+                        color: "text-cyan-300",
+                        bg: "from-cyan-500/20 to-cyan-600/20",
+                      },
+                      {
+                        type: "event" as ItemType,
+                        icon: CalendarIcon,
+                        label: "Event",
+                        color: "text-pink-300",
+                        bg: "from-pink-500/20 to-pink-600/20",
+                      },
+                      {
+                        type: "task" as ItemType,
+                        icon: ClipboardCheckIcon,
+                        label: "Task",
+                        color: "text-purple-300",
+                        bg: "from-purple-500/20 to-purple-600/20",
+                      },
+                    ] as const
+                  ).map((item) => (
                     <button
                       key={item.type}
                       type="button"
@@ -1052,9 +1138,13 @@ export default function MobileReminderForm() {
                   } else {
                     if (!dueDate) setDueDate(fmt(today));
                     if (!dueTime) setDueTime(fmtT(today));
-                    setMissingFieldType(itemType === "task" ? "task" : "reminder");
+                    setMissingFieldType(
+                      itemType === "task" ? "task" : "reminder",
+                    );
                   }
-                  setShowAlertInModal(itemType === "task" || itemType === "event");
+                  setShowAlertInModal(
+                    itemType === "task" || itemType === "event",
+                  );
                   setShowEndDateInModal(itemType === "event");
                   setDateModalIntent("set-date");
                   setShowMissingFieldsModal(true);
@@ -1081,13 +1171,15 @@ export default function MobileReminderForm() {
                       "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full active:scale-95 transition-all duration-150 shrink-0",
                       selectedCategoryIds.length > 1
                         ? "bg-gradient-to-r from-violet-500/40 to-pink-500/40 hover:from-violet-500/50 hover:to-pink-500/50 ring-1 ring-violet-400/50"
-                        : "bg-violet-500/20 hover:bg-violet-500/30"
+                        : "bg-violet-500/20 hover:bg-violet-500/30",
                     )}
                   >
                     <TagIcon className="w-3 h-3 text-violet-400" />
                     <span className="font-semibold text-[11px] text-violet-300">
                       {selectedCategoryIds.length > 0
-                        ? CATEGORIES.find((c) => c.id === selectedCategoryIds[0])?.name ?? "Category"
+                        ? (CATEGORIES.find(
+                            (c) => c.id === selectedCategoryIds[0],
+                          )?.name ?? "Category")
                         : "Category"}
                     </span>
                     {selectedCategoryIds.length > 1 && (
@@ -1111,8 +1203,17 @@ export default function MobileReminderForm() {
                           key={cat.id}
                           type="button"
                           onClick={() => {
-                            setSelectedCategoryIds(isSelected ? selectedCategoryIds.filter((id) => id !== cat.id) : [...selectedCategoryIds, cat.id]);
-                            setManualOverrides((prev) => ({ ...prev, categories: true }));
+                            setSelectedCategoryIds(
+                              isSelected
+                                ? selectedCategoryIds.filter(
+                                    (id) => id !== cat.id,
+                                  )
+                                : [...selectedCategoryIds, cat.id],
+                            );
+                            setManualOverrides((prev) => ({
+                              ...prev,
+                              categories: true,
+                            }));
                           }}
                           className={cn(
                             "flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs transition-all",
@@ -1120,7 +1221,9 @@ export default function MobileReminderForm() {
                               ? "bg-white/10 font-semibold"
                               : `${themeClasses.textMuted} hover:bg-white/5`,
                           )}
-                          style={isSelected ? { color: cat.color_hex } : undefined}
+                          style={
+                            isSelected ? { color: cat.color_hex } : undefined
+                          }
                         >
                           {CatIcon && (
                             <span style={{ color: cat.color_hex }}>
@@ -1331,7 +1434,9 @@ export default function MobileReminderForm() {
                       if (!dueTime) setDueTime(formatTimeStr(today));
                       setMissingFieldType("reminder");
                     }
-                    setShowAlertInModal(itemType === "task" || itemType === "event");
+                    setShowAlertInModal(
+                      itemType === "task" || itemType === "event",
+                    );
                     setShowEndDateInModal(itemType === "event");
                     setDateModalIntent("set-date");
                     setShowMissingFieldsModal(true);
@@ -1370,8 +1475,18 @@ export default function MobileReminderForm() {
                 </button>
 
                 {/* Priority Mini-Input: p + digit */}
-                <div className={cn("flex items-center rounded-xl border bg-bg-dark/40 overflow-hidden shrink-0", themeClasses.border)}>
-                  <span className={cn("pl-2.5 pr-1 py-2 text-sm font-bold select-none", themeClasses.textSecondary)}>
+                <div
+                  className={cn(
+                    "flex items-center rounded-xl border bg-bg-dark/40 overflow-hidden shrink-0",
+                    themeClasses.border,
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "pl-2.5 pr-1 py-2 text-sm font-bold select-none",
+                      themeClasses.textSecondary,
+                    )}
+                  >
                     p
                   </span>
                   <input
@@ -1388,16 +1503,27 @@ export default function MobileReminderForm() {
                             : "4"
                     }
                     onChange={(e) => {
-                      const val = e.target.value.replace(/[^1-4]/g, "").slice(-1);
-                      const map: Record<string, ItemPriority> = { "1": "urgent", "2": "high", "3": "normal", "4": "low" };
+                      const val = e.target.value
+                        .replace(/[^1-4]/g, "")
+                        .slice(-1);
+                      const map: Record<string, ItemPriority> = {
+                        "1": "urgent",
+                        "2": "high",
+                        "3": "normal",
+                        "4": "low",
+                      };
                       if (map[val]) {
                         setPriority(map[val]);
-                        setManualOverrides((prev) => ({ ...prev, priority: true }));
+                        setManualOverrides((prev) => ({
+                          ...prev,
+                          priority: true,
+                        }));
                       }
                     }}
                     onFocus={(e) => e.target.select()}
                     onKeyDown={(e) => {
-                      if (e.key === "Backspace" || e.key === "Delete") e.preventDefault();
+                      if (e.key === "Backspace" || e.key === "Delete")
+                        e.preventDefault();
                     }}
                     className={cn(
                       "w-7 pr-2 py-2 text-center text-sm font-bold bg-transparent border-0 outline-none",
@@ -1437,12 +1563,26 @@ export default function MobileReminderForm() {
                   >
                     {isPrivate ? (
                       <>
-                        <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                        <rect
+                          x="5"
+                          y="11"
+                          width="14"
+                          height="10"
+                          rx="2"
+                          ry="2"
+                        />
                         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                       </>
                     ) : (
                       <>
-                        <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                        <rect
+                          x="5"
+                          y="11"
+                          width="14"
+                          height="10"
+                          rx="2"
+                          ry="2"
+                        />
                         <path d="M7 11V7a5 5 0 0 1 9.9-1" />
                       </>
                     )}
@@ -1527,13 +1667,14 @@ export default function MobileReminderForm() {
 
               {/* Date/Time Inputs — progressive: Reminder → +Alert → Task → +End Date → Event */}
               <div className="space-y-3">
-
                 {/* ── Start / Due Date (always visible) ── */}
                 <div className="bg-[#0d1f35] border border-cyan-500/20 p-4 rounded-xl space-y-3">
                   <div className="flex items-center gap-2 mb-2">
                     <CalendarIcon className="w-4 h-4 text-cyan-400" />
                     <Label className="text-sm font-semibold text-cyan-300">
-                      {itemType === "event" ? "Start Date & Time" : "Date & Time"}
+                      {itemType === "event"
+                        ? "Start Date & Time"
+                        : "Date & Time"}
                     </Label>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -1543,7 +1684,8 @@ export default function MobileReminderForm() {
                           type="date"
                           value={itemType === "event" ? startDate : dueDate}
                           onChange={(e) => {
-                            if (itemType === "event") setStartDate(e.target.value);
+                            if (itemType === "event")
+                              setStartDate(e.target.value);
                             else setDueDate(e.target.value);
                           }}
                           onBlur={() => setEditingDateField(null)}
@@ -1556,7 +1698,9 @@ export default function MobileReminderForm() {
                           onClick={() => setEditingDateField("startDate_u")}
                           className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
                         >
-                          {formatDateDisplay(itemType === "event" ? startDate : dueDate)}
+                          {formatDateDisplay(
+                            itemType === "event" ? startDate : dueDate,
+                          )}
                         </button>
                       )}
                     </div>
@@ -1566,7 +1710,8 @@ export default function MobileReminderForm() {
                           type="time"
                           value={itemType === "event" ? startTime : dueTime}
                           onChange={(e) => {
-                            if (itemType === "event") setStartTime(e.target.value);
+                            if (itemType === "event")
+                              setStartTime(e.target.value);
                             else setDueTime(e.target.value);
                           }}
                           onBlur={() => setEditingDateField(null)}
@@ -1579,7 +1724,9 @@ export default function MobileReminderForm() {
                           onClick={() => setEditingDateField("startTime_u")}
                           className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
                         >
-                          {formatTimeDisplay(itemType === "event" ? startTime : dueTime)}
+                          {formatTimeDisplay(
+                            itemType === "event" ? startTime : dueTime,
+                          )}
                         </button>
                       )}
                     </div>
@@ -1606,7 +1753,10 @@ export default function MobileReminderForm() {
                           setTaskAlertPreset("none");
                           if (!showEndDateInModal) {
                             setItemType("reminder");
-                            setManualOverrides((prev) => ({ ...prev, type: false }));
+                            setManualOverrides((prev) => ({
+                              ...prev,
+                              type: false,
+                            }));
                           }
                         }}
                         className="text-xs text-amber-300/60 hover:text-amber-300 transition-colors px-2 py-0.5 rounded-md hover:bg-amber-500/10"
@@ -1646,7 +1796,9 @@ export default function MobileReminderForm() {
                   >
                     <BellIcon className="w-4 h-4" />
                     <span>Add Alert</span>
-                    <span className="text-xs opacity-60 ml-1">→ upgrades to Task</span>
+                    <span className="text-xs opacity-60 ml-1">
+                      → upgrades to Task
+                    </span>
                   </button>
                 )}
 
@@ -1658,7 +1810,9 @@ export default function MobileReminderForm() {
                         <CalendarIcon className="w-4 h-4 text-pink-400" />
                         <Label className="text-sm font-semibold text-pink-300">
                           End Date & Time{" "}
-                          <span className="text-xs font-normal text-pink-400">— Event</span>
+                          <span className="text-xs font-normal text-pink-400">
+                            — Event
+                          </span>
                         </Label>
                       </div>
                       <button
@@ -1669,10 +1823,16 @@ export default function MobileReminderForm() {
                           setEndTime("");
                           if (showAlertInModal) {
                             setItemType("task");
-                            setManualOverrides((prev) => ({ ...prev, type: true }));
+                            setManualOverrides((prev) => ({
+                              ...prev,
+                              type: true,
+                            }));
                           } else {
                             setItemType("reminder");
-                            setManualOverrides((prev) => ({ ...prev, type: false }));
+                            setManualOverrides((prev) => ({
+                              ...prev,
+                              type: false,
+                            }));
                           }
                         }}
                         className="text-xs text-pink-300/60 hover:text-pink-300 transition-colors px-2 py-0.5 rounded-md hover:bg-pink-500/10"
@@ -1697,7 +1857,9 @@ export default function MobileReminderForm() {
                             onClick={() => setEditingDateField("endDate")}
                             className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-pink-500/20 rounded-md text-left text-pink-100 hover:border-pink-500/40 transition-colors text-sm"
                           >
-                            {endDate ? formatDateDisplay(endDate) : "No end date"}
+                            {endDate
+                              ? formatDateDisplay(endDate)
+                              : "No end date"}
                           </button>
                         )}
                       </div>
@@ -1717,7 +1879,9 @@ export default function MobileReminderForm() {
                             onClick={() => setEditingDateField("endTime")}
                             className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-pink-500/20 rounded-md text-left text-pink-100 hover:border-pink-500/40 transition-colors text-sm"
                           >
-                            {endTime ? formatTimeDisplay(endTime) : "No end time"}
+                            {endTime
+                              ? formatTimeDisplay(endTime)
+                              : "No end time"}
                           </button>
                         )}
                       </div>
@@ -1745,10 +1909,11 @@ export default function MobileReminderForm() {
                   >
                     <CalendarIcon className="w-4 h-4" />
                     <span>Add End Date</span>
-                    <span className="text-xs opacity-60 ml-1">→ upgrades to Event</span>
+                    <span className="text-xs opacity-60 ml-1">
+                      → upgrades to Event
+                    </span>
                   </button>
                 )}
-
               </div>
 
               {/* Action Buttons */}

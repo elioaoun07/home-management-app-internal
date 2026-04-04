@@ -16,6 +16,7 @@ import { RRule } from "rrule";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import ItemActionsSheet from "@/components/items/ItemActionsSheet";
 import ItemDetailModal from "@/components/items/ItemDetailModal";
+import { ResponsibleUserBadge } from "@/components/items/ResponsibleUserPicker";
 
 // ─────────────────────────────────────────────
 // Inline Icons
@@ -799,6 +800,11 @@ export default function ItemsListView({
       occurrenceActions,
     );
     const isOwner = currentUserId ? item.user_id === currentUserId : true;
+    const isAllHousehold = !!(item.notify_all_household && item.is_public);
+    const canComplete =
+      isOwner ||
+      (currentUserId ? item.responsible_user_id === currentUserId : false) ||
+      isAllHousehold;
 
     let timeText = "No time";
     let isOverdue = false;
@@ -832,7 +838,7 @@ export default function ItemsListView({
     return (
       <SwipeableJournalItem
         key={`${item.id}-${entry.occurrenceDateStr}`}
-        onComplete={() => isOwner && handleComplete(item, occurrenceDate)}
+        onComplete={() => canComplete && handleComplete(item, occurrenceDate)}
         onOptions={() => setActionsState({ item, occurrenceDate })}
         onClick={() => setSelectedItem(item)}
       >
@@ -887,6 +893,16 @@ export default function ItemsListView({
                 </span>
               )}
             </div>
+            {/* Responsible indicator — shown when item is not owned by current user */}
+            {!isOwner && item.responsible_user_id && (
+              <div className="mt-0.5">
+                {isAllHousehold ? (
+                  <span className="text-[10px] text-amber-400/70">All Household</span>
+                ) : (
+                  <ResponsibleUserBadge userId={item.responsible_user_id} className="text-[10px]" />
+                )}
+              </div>
+            )}
           </div>
 
           {/* Completed check */}

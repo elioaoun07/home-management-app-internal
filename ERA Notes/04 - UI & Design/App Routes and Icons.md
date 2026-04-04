@@ -8,6 +8,7 @@ tags:
   - type/ui
   - scope/routes
 ---
+
 # App Routes & Icons Reference
 
 > **Purpose**: Central documentation of all app routes and their associated icons. All new routes/icons should be added here.
@@ -81,12 +82,12 @@ tags:
 ## 🔧 Utility Routes
 
 | Route            | Purpose               | Icon (if any)  |
-| ---------------- | --------------------- | -------------- |
+| ---------------- | --------------------- | -------------- | --- | ------------ | ----------------------------------- | ---------------------------- |
 | `/settings`      | User settings         | `SettingsIcon` |
 | `/quick-expense` | Quick add expense     | N/A            |
 | `/error-logs`    | Debug error logs      | N/A            |
 | `/qr/expense`    | QR code expense entry | N/A            |
-| `/g/[tag]`       | Guest portal (public) | N/A            |
+| `/g/[tag]`       | Guest portal (public) | N/A            |     | `/nfc/[tag]` | NFC tag interaction (authenticated) | `DoorOpen` / `Home` (lucide) |
 
 ---
 

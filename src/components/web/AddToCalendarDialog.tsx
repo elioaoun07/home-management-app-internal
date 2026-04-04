@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { ResponsibleUserPicker } from "@/components/items/ResponsibleUserPicker";
 import { useUpdateItem } from "@/features/catalogue/hooks";
 import {
   useCreateEvent,
@@ -24,6 +25,8 @@ import {
   useCreateTask,
 } from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
+import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
 import type { CatalogueItem, RecurrencePattern } from "@/types/catalogue";
 import { RECURRENCE_PATTERN_LABELS } from "@/types/catalogue";
@@ -143,10 +146,13 @@ export default function AddToCalendarDialog({
   onSuccess,
 }: Props) {
   const themeClasses = useThemeClasses();
+  const { theme } = useTheme();
+  const isPink = theme === "pink";
   const createReminder = useCreateReminder();
   const createEvent = useCreateEvent();
   const createTask = useCreateTask();
   const updateCatalogueItem = useUpdateItem();
+  const { data: householdData } = useHouseholdMembers();
 
   // Form state - initialized from catalogue item
   const [startDate, setStartDate] = useState("");
@@ -158,6 +164,9 @@ export default function AddToCalendarDialog({
   const [hasEndDate, setHasEndDate] = useState(false);
   const [endDate, setEndDate] = useState("");
   const [locationText, setLocationText] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
+  const [responsibleUserId, setResponsibleUserId] = useState<string | undefined>(undefined);
+  const [notifyAllHousehold, setNotifyAllHousehold] = useState(false);
 
   const isLoading =
     createReminder.isPending ||
@@ -213,6 +222,11 @@ export default function AddToCalendarDialog({
       // End date
       setHasEndDate(false);
       setEndDate("");
+
+      // Visibility / responsible — reset to defaults
+      setIsPublic(catalogueItem.is_public ?? true);
+      setResponsibleUserId(undefined);
+      setNotifyAllHousehold(false);
     }
   }, [open, catalogueItem]);
 
@@ -290,7 +304,9 @@ export default function AddToCalendarDialog({
             catalogueItem.priority === "critical"
               ? "urgent"
               : (catalogueItem.priority as any),
-          is_public: false,
+          is_public: isPublic,
+          responsible_user_id: responsibleUserId,
+          notify_all_household: notifyAllHousehold,
           start_at: startAt,
           end_at: endAt,
           location_text: locationText || undefined,
@@ -309,7 +325,9 @@ export default function AddToCalendarDialog({
             catalogueItem.priority === "critical"
               ? "urgent"
               : (catalogueItem.priority as any),
-          is_public: false,
+          is_public: isPublic,
+          responsible_user_id: responsibleUserId,
+          notify_all_household: notifyAllHousehold,
           due_at: startAt,
           has_checklist: parsedSubtasks.length > 0,
           subtasks: parsedSubtasks,
@@ -329,7 +347,9 @@ export default function AddToCalendarDialog({
             catalogueItem.priority === "critical"
               ? "urgent"
               : (catalogueItem.priority as any),
-          is_public: false,
+          is_public: isPublic,
+          responsible_user_id: responsibleUserId,
+          notify_all_household: notifyAllHousehold,
           due_at: startAt,
           recurrence_rule: recurrenceRule,
           // Bi-directional catalogue link
@@ -493,6 +513,59 @@ export default function AddToCalendarDialog({
                   themeClasses.inputBg,
                   "border-white/10 text-white placeholder:text-white/40",
                 )}
+              />
+            </div>
+          )}
+
+          {/* Visibility */}
+          <div className="space-y-2">
+            <Label className="text-white/80 text-sm font-medium">Visibility</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => { setIsPublic(false); setNotifyAllHousehold(false); }}
+                className={cn(
+                  "p-3 rounded-xl border transition-all flex items-center gap-2",
+                  !isPublic
+                    ? "border-slate-500 bg-slate-500/20"
+                    : "border-white/10 bg-white/5 hover:bg-white/10",
+                )}
+              >
+                <span className={cn("text-sm font-medium", !isPublic ? "text-white" : "text-white/70")}>
+                  Private
+                </span>
+                <span className="text-xs text-white/40 ml-auto">Only you</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPublic(true)}
+                className={cn(
+                  "p-3 rounded-xl border transition-all flex items-center gap-2",
+                  isPublic
+                    ? isPink ? "border-pink-500 bg-pink-500/20" : "border-cyan-500 bg-cyan-500/20"
+                    : "border-white/10 bg-white/5 hover:bg-white/10",
+                )}
+              >
+                <span className={cn("text-sm font-medium", isPublic ? "text-white" : "text-white/70")}>
+                  Household
+                </span>
+                <span className="text-xs text-white/40 ml-auto">Shared</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Responsible user — only when public and household has a partner */}
+          {isPublic && householdData?.hasPartner && (
+            <div className="space-y-2">
+              <Label className="text-white/80 text-sm font-medium">Responsible</Label>
+              <ResponsibleUserPicker
+                value={responsibleUserId}
+                notifyAllHousehold={notifyAllHousehold}
+                onChange={(userId, allHousehold) => {
+                  setResponsibleUserId(userId);
+                  setNotifyAllHousehold(allHousehold);
+                }}
+                isPublic={isPublic}
               />
             </div>
           )}

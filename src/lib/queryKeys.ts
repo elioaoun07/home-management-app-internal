@@ -21,4 +21,11 @@ export const qk = {
 
   // Draft transactions
   drafts: () => ["drafts"] as const,
+
+  // NFC tags
+  nfcTags: () => ["nfc-tags"] as const,
+  nfcTag: (slug: string) => ["nfc-tags", { slug }] as const,
+  nfcHistory: (slug: string) => ["nfc-history", { slug }] as const,
+  nfcTagItems: (slug: string) => ["nfc-tag-items", { slug }] as const,
+  nfcChecklist: (slug: string) => ["nfc-checklist", { slug }] as const,
 };

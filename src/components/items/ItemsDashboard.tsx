@@ -30,8 +30,8 @@ import {
 } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Calendar, CheckCircle2, Pin } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import EditItemDialog from "./EditItemDialog";
 import ItemDetailModal from "./ItemDetailModal";
@@ -265,6 +265,7 @@ const statusColors: Record<ItemStatus, { bg: string; text: string }> = {
   completed: { bg: "bg-green-500/20", text: "text-green-400" },
   cancelled: { bg: "bg-gray-500/20", text: "text-gray-400" },
   archived: { bg: "bg-gray-500/20", text: "text-gray-400" },
+  dormant: { bg: "bg-purple-500/20", text: "text-purple-400" },
 };
 
 // Helper to format relative date
@@ -931,7 +932,9 @@ export default function ItemsDashboard({
                   sectionKey="overdue"
                   label="Overdue"
                   count={groupedByDate.overdue.length}
-                  emoji={<AlertTriangle className="w-3.5 h-3.5 text-amber-400" />}
+                  emoji={
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                  }
                   isOverdue
                 />
                 <AnimatePresence>
@@ -1045,7 +1048,9 @@ export default function ItemsDashboard({
                         sectionKey={dateKey}
                         label={label}
                         count={items.length}
-                        emoji={<Calendar className="w-3.5 h-3.5 text-blue-400" />}
+                        emoji={
+                          <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                        }
                       />
                       <AnimatePresence>
                         {expandedSections[dateKey] && (
@@ -1083,7 +1088,9 @@ export default function ItemsDashboard({
                   sectionKey="completed"
                   label="Completed"
                   count={groupedByDate.completed.length}
-                  emoji={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                  emoji={
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  }
                 />
                 <AnimatePresence>
                   {expandedSections.completed && (

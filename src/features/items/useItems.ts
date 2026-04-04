@@ -519,10 +519,36 @@ export function useCreateReminder() {
         }
       }
 
+      // Create prerequisites (trigger conditions) if provided
+      if (input.prerequisites?.length) {
+        const prereqs = input.prerequisites.map((p) => ({
+          item_id: item.id,
+          condition_type: p.condition_type,
+          condition_config: p.condition_config,
+          logic_group: p.logic_group ?? 0,
+        }));
+        const { error: prereqError } = await supabase
+          .from("item_prerequisites")
+          .insert(prereqs);
+        if (prereqError) {
+          console.error("Failed to create prerequisites:", prereqError);
+        } else {
+          // Set item to dormant — it activates when prerequisites are met
+          await supabase
+            .from("items")
+            .update({ status: "dormant", updated_at: new Date().toISOString() })
+            .eq("id", item.id);
+          (item as Record<string, unknown>).status = "dormant";
+        }
+      }
+
       return item as Item;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+      if (variables.prerequisites?.length) {
+        queryClient.invalidateQueries({ queryKey: ["nfc-tag-items"] });
+      }
     },
   });
 }
@@ -666,10 +692,36 @@ export function useCreateEvent() {
         if (alertsError) throw alertsError;
       }
 
+      // Create prerequisites (trigger conditions) if provided
+      if (input.prerequisites?.length) {
+        const prereqs = input.prerequisites.map((p) => ({
+          item_id: item.id,
+          condition_type: p.condition_type,
+          condition_config: p.condition_config,
+          logic_group: p.logic_group ?? 0,
+        }));
+        const { error: prereqError } = await supabase
+          .from("item_prerequisites")
+          .insert(prereqs);
+        if (prereqError) {
+          console.error("Failed to create prerequisites:", prereqError);
+        } else {
+          // Set item to dormant — it activates when prerequisites are met
+          await supabase
+            .from("items")
+            .update({ status: "dormant", updated_at: new Date().toISOString() })
+            .eq("id", item.id);
+          (item as Record<string, unknown>).status = "dormant";
+        }
+      }
+
       return item as Item;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+      if (variables.prerequisites?.length) {
+        queryClient.invalidateQueries({ queryKey: ["nfc-tag-items"] });
+      }
     },
   });
 }
@@ -779,10 +831,36 @@ export function useCreateTask() {
         }
       }
 
+      // Create prerequisites (trigger conditions) if provided
+      if (input.prerequisites?.length) {
+        const prereqs = input.prerequisites.map((p) => ({
+          item_id: item.id,
+          condition_type: p.condition_type,
+          condition_config: p.condition_config,
+          logic_group: p.logic_group ?? 0,
+        }));
+        const { error: prereqError } = await supabase
+          .from("item_prerequisites")
+          .insert(prereqs);
+        if (prereqError) {
+          console.error("Failed to create prerequisites:", prereqError);
+        } else {
+          // Set item to dormant — it activates when prerequisites are met
+          await supabase
+            .from("items")
+            .update({ status: "dormant", updated_at: new Date().toISOString() })
+            .eq("id", item.id);
+          (item as Record<string, unknown>).status = "dormant";
+        }
+      }
+
       return item as Item;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+      if (variables.prerequisites?.length) {
+        queryClient.invalidateQueries({ queryKey: ["nfc-tag-items"] });
+      }
     },
   });
 }

@@ -1,4 +1,4 @@
-]633;E;pnpm dev;2ea4834e-3730-473f-a150-558cfc2f4d06]633;C<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->
+]633;E;echo '<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->';4d517f07-0989-4cda-a3fb-d2588d5946bb]633;C<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->
 
 # CLAUDE.md
 
@@ -67,6 +67,7 @@ Shared code belongs in `src/components/`, `src/lib/`, or `src/types/` — availa
 | Transfers                                              | `src/features/transfers/`                                                                                                                                      |
 | Watch UI                                               | `src/components/watch/`                                                                                                                                        |
 | Guest Portal                                           | `src/app/g/[tag]/`                                                                                                                                             |
+| NFC Tags                                               | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`                                                                                                 |
 
 ### Junction Modules
 
@@ -84,6 +85,7 @@ Bridge between Standalone modules. May import from any standalone feature direct
 | Notifications     | Items (alerts), Recurring (payment reminders), Budget (spending alerts)              |
 | Household Sharing | ALL modules — shared data layer via `household_links` + `profiles`                   |
 | Sync & Offline    | ALL modules — IndexedDB queue + `OfflineSyncEngine`                                  |
+| Prerequisites     | NFC Tags + Items (trigger engine for dormant → pending activation)                   |
 
 ---
 
@@ -177,6 +179,8 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Guest Portal             | `src/app/g/[tag]/`, `src/components/guest/`                | `ERA Notes/02 - Standalone Modules/Guest Portal/`       | Standalone |
 | Sync & Offline           | `src/contexts/SyncContext.tsx`, `src/lib/offlineQueue.ts`  | `ERA Notes/03 - Junction Modules/Sync & Offline/`       | Junction   |
 | Error Logs               | `src/app/error-logs/`, `src/app/api/error-logs/`           | `ERA Notes/02 - Standalone Modules/Error Logs/`         | Standalone |
+| NFC Tags                 | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/` | `ERA Notes/02 - Standalone Modules/NFC Tags/`        | Standalone |
+| Prerequisites            | `src/lib/prerequisites/`, `src/app/api/items/[id]/prerequisites/` | `ERA Notes/03 - Junction Modules/Prerequisites/`  | Junction   |
 
 ---
 

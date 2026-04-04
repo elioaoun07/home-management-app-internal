@@ -17,18 +17,36 @@ import {
   useUpdateRecurrenceRule,
   useUpdateReminderDetails,
 } from "@/features/items/useItems";
+import { useNfcTags } from "@/features/nfc/hooks";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNotification";
+import { safeFetch } from "@/lib/safeFetch";
 import { cn } from "@/lib/utils";
 import type { ItemPriority, ItemWithDetails } from "@/types/items";
+import type {
+  CreatePrerequisiteInput,
+  ItemPrerequisite,
+} from "@/types/prerequisites";
 import { format, parseISO } from "date-fns";
-import { Bell, MapPin, Repeat, Sparkles, Tag, User, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  Bell,
+  MapPin,
+  Nfc,
+  Repeat,
+  Sparkles,
+  Tag,
+  Trash2,
+  User,
+  Users,
+  Zap,
+} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   CustomRecurrencePicker,
   describeRRule,
 } from "./CustomRecurrencePicker";
+import { PrerequisitePicker } from "./PrerequisitePicker";
 import { ResponsibleUserPicker } from "./ResponsibleUserPicker";
 import { SmartAlertPicker, type SmartAlertValue } from "./SmartAlertPicker";
 
@@ -75,6 +93,80 @@ export default function EditItemDialog({
   >(undefined);
   const [recurrenceRule, setRecurrenceRule] = useState("");
   const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
+
+  // Prerequisites
+  const [existingPrerequisites, setExistingPrerequisites] = useState<
+    ItemPrerequisite[]
+  >([]);
+  const [newPrerequisites, setNewPrerequisites] = useState<
+    CreatePrerequisiteInput[]
+  >([]);
+  const { data: nfcTags = [] } = useNfcTags();
+
+  // Fetch existing prerequisites when item changes
+  useEffect(() => {
+    if (!item?.id) {
+      setExistingPrerequisites([]);
+      setNewPrerequisites([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/items/${item.id}/prerequisites`);
+        if (res.ok && !cancelled) {
+          setExistingPrerequisites(await res.json());
+        }
+      } catch {
+        // Ignore fetch errors
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [item?.id]);
+
+  const removeExistingPrerequisite = useCallback(
+    async (prereqId: string) => {
+      if (!item) return;
+      try {
+        const res = await safeFetch(
+          `/api/items/${item.id}/prerequisites?prerequisiteId=${prereqId}`,
+          { method: "DELETE" },
+        );
+        if (res.ok) {
+          setExistingPrerequisites((prev) =>
+            prev.filter((p) => p.id !== prereqId),
+          );
+          toast.success("Prerequisite removed");
+        }
+      } catch {
+        toast.error("Failed to remove prerequisite");
+      }
+    },
+    [item],
+  );
+
+  const addNewPrerequisite = useCallback(
+    async (prereq: CreatePrerequisiteInput) => {
+      if (!item) return;
+      try {
+        const res = await safeFetch(`/api/items/${item.id}/prerequisites`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(prereq),
+        });
+        if (res.ok) {
+          const created = await res.json();
+          setExistingPrerequisites((prev) => [...prev, created]);
+          toast.success("Prerequisite added");
+        }
+      } catch {
+        toast.error("Failed to add prerequisite");
+      }
+    },
+    [item],
+  );
 
   // Category options
   const CATEGORIES = [
@@ -173,7 +265,7 @@ export default function EditItemDialog({
     setSaving(true);
     try {
       const supabase = await import("@/lib/supabase/client").then((m) =>
-        m.supabaseBrowser()
+        m.supabaseBrowser(),
       );
 
       // Update base item
@@ -229,7 +321,7 @@ export default function EditItemDialog({
             let endDateTime = new Date(`${endDate}T${endTime}:00`);
             if (startDate === endDate && endDateTime <= startDateTime) {
               endDateTime = new Date(
-                endDateTime.getTime() + 24 * 60 * 60 * 1000
+                endDateTime.getTime() + 24 * 60 * 60 * 1000,
               );
             }
             endAtIso = endDateTime.toISOString();
@@ -245,16 +337,14 @@ export default function EditItemDialog({
         }
       }
 
-      // Update recurrence rule if changed (for reminders and events)
-      if (item.type === "reminder" || item.type === "event") {
+      // Update recurrence rule if changed (for reminders, events, and tasks)
+      if (item.type === "reminder" || item.type === "event" || item.type === "task") {
         const originalRrule = item.recurrence_rule?.rrule || "";
         if (recurrenceRule !== originalRrule) {
           const startAnchor =
-            item.type === "event" && startDate && startTime
+            startDate && startTime
               ? new Date(`${startDate}T${startTime}:00`).toISOString()
-              : item.type === "reminder" && startDate && startTime
-                ? new Date(`${startDate}T${startTime}:00`).toISOString()
-                : new Date().toISOString();
+              : new Date().toISOString();
 
           await updateRecurrenceRule.mutateAsync({
             itemId: item.id,
@@ -303,7 +393,7 @@ export default function EditItemDialog({
           "sm:max-w-md",
           isPink
             ? "bg-gray-900 border-pink-500/30"
-            : "bg-gray-900 border-cyan-500/30"
+            : "bg-gray-900 border-cyan-500/30",
         )}
       >
         <DialogHeader>
@@ -345,6 +435,80 @@ export default function EditItemDialog({
               className="bg-white/5 border-white/10 text-white resize-none"
               rows={3}
             />
+          </div>
+
+          {/* Prerequisites (Trigger Conditions) */}
+          <div className="space-y-3 border-t border-white/10 pt-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-white/70">
+              <Zap className="w-4 h-4" />
+              <span>
+                Trigger Conditions{" "}
+                {existingPrerequisites.length > 0 && (
+                  <span className="text-white/40">
+                    ({existingPrerequisites.length})
+                  </span>
+                )}
+              </span>
+            </div>
+
+            {/* Existing prerequisites */}
+            {existingPrerequisites.map((prereq) => {
+              const config = prereq.condition_config as unknown as Record<
+                string,
+                unknown
+              >;
+              const tagName =
+                prereq.condition_type === "nfc_state_change"
+                  ? (nfcTags.find((t) => t.id === config.tag_id)?.label ??
+                    "Unknown tag")
+                  : prereq.condition_type;
+
+              return (
+                <div
+                  key={prereq.id}
+                  className="flex items-center justify-between rounded-lg bg-white/5 border border-white/10 px-3 py-2"
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <Nfc className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="text-white/80">{tagName}</span>
+                    <span className="text-white/40">→</span>
+                    <span className="text-amber-300/80">
+                      {(config.target_state as string) ?? "?"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeExistingPrerequisite(prereq.id)}
+                    className="p-1 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+
+            {/* Add new prerequisite */}
+            <PrerequisitePicker
+              value={newPrerequisites}
+              onChange={(prereqs) => {
+                // When a new prerequisite is added, immediately persist it
+                if (prereqs.length > newPrerequisites.length) {
+                  const latest = prereqs[prereqs.length - 1];
+                  addNewPrerequisite(latest);
+                  // Don't keep it in newPrerequisites — it'll appear in existingPrerequisites after save
+                  return;
+                }
+                setNewPrerequisites(prereqs);
+              }}
+              compact
+            />
+
+            {(existingPrerequisites.length > 0 ||
+              newPrerequisites.length > 0) && (
+              <p className="text-xs text-amber-300/60">
+                Item is dormant — activates when conditions are met.
+              </p>
+            )}
           </div>
 
           {/* Start Date & Time */}
@@ -441,14 +605,14 @@ export default function EditItemDialog({
                       setSelectedCategories((prev) =>
                         isSelected
                           ? prev.filter((id) => id !== cat.id)
-                          : [...prev, cat.id]
+                          : [...prev, cat.id],
                       );
                     }}
                     className={cn(
                       "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
                       isSelected
                         ? "text-white"
-                        : "bg-white/5 text-white/50 hover:bg-white/10"
+                        : "bg-white/5 text-white/50 hover:bg-white/10",
                     )}
                     style={{
                       backgroundColor: isSelected
@@ -478,8 +642,8 @@ export default function EditItemDialog({
             />
           </div>
 
-          {/* Recurrence - for events and reminders */}
-          {(item.type === "event" || item.type === "reminder") && (
+          {/* Recurrence - for events, reminders, and tasks */}
+          {(item.type === "event" || item.type === "reminder" || item.type === "task") && (
             <div className="space-y-2">
               <Label className="text-white/70 flex items-center gap-2">
                 <Repeat className="w-4 h-4" />
@@ -503,7 +667,7 @@ export default function EditItemDialog({
                         ? isPink
                           ? "bg-pink-500/30 text-pink-300 border border-pink-400/50"
                           : "bg-cyan-500/30 text-cyan-300 border border-cyan-400/50"
-                        : "bg-white/5 text-white/50 hover:bg-white/10"
+                        : "bg-white/5 text-white/50 hover:bg-white/10",
                     )}
                   >
                     {preset.label}
@@ -525,7 +689,7 @@ export default function EditItemDialog({
                       ? isPink
                         ? "bg-pink-500/30 text-pink-300 border border-pink-400/50"
                         : "bg-cyan-500/30 text-cyan-300 border border-cyan-400/50"
-                      : "bg-white/5 text-white/50 hover:bg-white/10"
+                      : "bg-white/5 text-white/50 hover:bg-white/10",
                   )}
                 >
                   Custom...
@@ -542,7 +706,7 @@ export default function EditItemDialog({
                   <p
                     className={cn(
                       "text-xs mt-1",
-                      isPink ? "text-pink-300/80" : "text-cyan-300/80"
+                      isPink ? "text-pink-300/80" : "text-cyan-300/80",
                     )}
                   >
                     {describeRRule(recurrenceRule)}
@@ -573,7 +737,7 @@ export default function EditItemDialog({
                     "px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-1",
                     priority === p.value
                       ? cn(p.color, "text-white")
-                      : "bg-white/5 text-white/50 hover:bg-white/10"
+                      : "bg-white/5 text-white/50 hover:bg-white/10",
                   )}
                 >
                   {p.label}
@@ -608,13 +772,13 @@ export default function EditItemDialog({
                     ? isPink
                       ? "bg-pink-500/50"
                       : "bg-cyan-500/50"
-                    : "bg-white/20"
+                    : "bg-white/20",
                 )}
               >
                 <div
                   className={cn(
                     "absolute top-1 w-4 h-4 rounded-full bg-white shadow-md transition-all",
-                    isPublic ? "left-[calc(100%-20px)]" : "left-1"
+                    isPublic ? "left-[calc(100%-20px)]" : "left-1",
                   )}
                 />
               </button>
@@ -649,7 +813,10 @@ export default function EditItemDialog({
               />
               {isPublic && notifyAllHousehold && (
                 <p className="text-xs text-amber-300/70">
-                  <span className="inline-flex items-center gap-1"><Sparkles className="w-3.5 h-3.5 text-pink-400" /> Both household members will be notified</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Both
+                    household members will be notified
+                  </span>
                 </p>
               )}
               {isPublic &&
@@ -658,10 +825,12 @@ export default function EditItemDialog({
                 responsibleUserId !== householdData.currentUserId &&
                 responsibleUserId !== originalResponsibleUserId && (
                   <p className="text-xs text-pink-300/70">
-                    <span className="inline-flex items-center gap-1"><Sparkles className="w-3.5 h-3.5 text-pink-400" /></span>{" "}
+                    <span className="inline-flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+                    </span>{" "}
                     {
                       householdData.members.find(
-                        (m) => m.id === responsibleUserId
+                        (m) => m.id === responsibleUserId,
                       )?.displayName
                     }{" "}
                     will be notified
@@ -686,7 +855,7 @@ export default function EditItemDialog({
             className={cn(
               isPink
                 ? "bg-pink-500 hover:bg-pink-600"
-                : "bg-cyan-500 hover:bg-cyan-600"
+                : "bg-cyan-500 hover:bg-cyan-600",
             )}
           >
             {saving ? "Saving..." : "Save Changes"}

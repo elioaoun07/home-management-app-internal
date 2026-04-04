@@ -7,7 +7,6 @@ import {
 } from "@/features/items/useItemActions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import { Check } from "lucide-react";
 import type { ItemWithDetails } from "@/types/items";
 import {
   differenceInDays,
@@ -17,10 +16,12 @@ import {
   isBefore,
   parseISO,
 } from "date-fns";
+import { Check } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import ItemActionsSheet from "./ItemActionsSheet";
 import { PromoteToCatalogueDialog } from "./PromoteToCatalogueDialog";
+import { ResponsibleUserBadge } from "./ResponsibleUserPicker";
 
 // Icons
 const XIcon = ({ className }: { className?: string }) => (
@@ -198,6 +199,7 @@ const statusColors = {
   completed: { bg: "bg-green-500/20", text: "text-green-400" },
   cancelled: { bg: "bg-gray-500/20", text: "text-gray-400" },
   archived: { bg: "bg-gray-500/20", text: "text-gray-400" },
+  dormant: { bg: "bg-purple-500/20", text: "text-purple-400" },
 };
 
 type Props = {
@@ -263,11 +265,15 @@ export default function ItemDetailModal({
     handleDelete: doDelete,
   } = useItemActionsWithToast();
 
-  // Determine ownership
-  const isOwner = currentUserId
-    ? item.responsible_user_id === currentUserId ||
-      item.user_id === currentUserId
-    : true;
+  // Determine fine-grained permissions
+  const isCreator = currentUserId ? item.user_id === currentUserId : true;
+  const isResponsible = currentUserId ? item.responsible_user_id === currentUserId : true;
+  const isAllHousehold = !!(item.notify_all_household && item.is_public);
+  const canComplete = isCreator || isResponsible || isAllHousehold;
+  const canEdit = isCreator;
+  const canDelete = isCreator;
+  // Keep isOwner as alias for border color and "(Partner's)" label
+  const isOwner = isCreator;
 
   // Item type info
   const isReminder = item.type === "reminder";
@@ -736,15 +742,40 @@ export default function ItemDetailModal({
               </>
             )}
           </div>
+
+          {/* Responsible user */}
+          {item.responsible_user_id && (
+            <div className="flex items-center gap-2 text-white/50 text-sm">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              <span>Responsible:</span>
+              {item.notify_all_household ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-amber-500/20 text-amber-300">
+                  All Household
+                </span>
+              ) : (
+                <ResponsibleUserBadge userId={item.responsible_user_id} />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer Actions */}
         <div className="p-4 border-t border-white/10">
-          {isOwner ? (
+          {(canComplete || canEdit) ? (
             <div className="space-y-3">
+              {/* Info banner for household-assigned items (partner completing) */}
+              {canComplete && !canEdit && !isCompleted && (
+                <div className="text-xs text-amber-300/70 text-center py-1">
+                  Assigned to all household — you can complete this
+                </div>
+              )}
+
               {/* Primary Actions Row */}
               <div className="flex gap-2">
-                {!isCompleted && (
+                {!isCompleted && canComplete && (
                   <button
                     type="button"
                     onClick={() => setShowActionsSheet(true)}
@@ -754,21 +785,23 @@ export default function ItemDetailModal({
                     Actions
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={handleEdit}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-colors",
-                    isPink
-                      ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
-                      : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30",
-                  )}
-                >
-                  <Edit2Icon className="w-5 h-5" />
-                  Edit
-                </button>
-                {/* Promote to Catalogue - only show if not already linked */}
-                {!isLinkedToCatalogue && (
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={handleEdit}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-colors",
+                      isPink
+                        ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
+                        : "bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30",
+                    )}
+                  >
+                    <Edit2Icon className="w-5 h-5" />
+                    Edit
+                  </button>
+                )}
+                {/* Promote to Catalogue - only show if not already linked and user is creator */}
+                {canEdit && !isLinkedToCatalogue && (
                   <button
                     type="button"
                     onClick={() => setShowPromoteDialog(true)}
@@ -778,17 +811,19 @@ export default function ItemDetailModal({
                     <BookMarkedIcon className="w-5 h-5" />
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={handleDeleteWithActions}
-                  className="px-4 py-3 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
-                >
-                  <Trash2Icon className="w-5 h-5" />
-                </button>
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteWithActions}
+                    className="px-4 py-3 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                  >
+                    <Trash2Icon className="w-5 h-5" />
+                  </button>
+                )}
               </div>
 
               {/* Quick Actions for incomplete items */}
-              {!isCompleted && (
+              {!isCompleted && canComplete && (
                 <div className="flex gap-2 text-xs">
                   <button
                     type="button"

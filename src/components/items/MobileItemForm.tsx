@@ -32,6 +32,7 @@ import type {
   CreateTaskInput,
   ItemPriority,
 } from "@/types/items";
+import type { CreatePrerequisiteInput } from "@/types/prerequisites";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
@@ -42,6 +43,7 @@ import {
   CustomRecurrencePicker,
   describeRRule,
 } from "./CustomRecurrencePicker";
+import { PrerequisitePicker } from "./PrerequisitePicker";
 import { ResponsibleUserPicker } from "./ResponsibleUserPicker";
 import { SmartAlertPicker, type SmartAlertValue } from "./SmartAlertPicker";
 
@@ -211,11 +213,17 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
     offsetMinutes: 15,
     customTime: null,
   });
-  const enableAlert = alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime);
+  const enableAlert =
+    alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime);
 
   // Recurrence state
   const [recurrenceRule, setRecurrenceRule] = useState("");
   const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
+
+  // Prerequisites (trigger conditions)
+  const [prerequisites, setPrerequisites] = useState<CreatePrerequisiteInput[]>(
+    [],
+  );
 
   // Mutations
   const createReminder = useCreateReminder();
@@ -257,6 +265,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
       setLocation("");
       setAlertValue({ offsetMinutes: 15, customTime: null });
       setRecurrenceRule("");
+      setPrerequisites([]);
     }
   }, [isOpen]);
 
@@ -339,6 +348,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           is_public: isPublic,
           responsible_user_id: responsibleUserId,
           notify_all_household: notifyAllHousehold,
+          prerequisites: prerequisites.length > 0 ? prerequisites : undefined,
         };
 
         const item = await createReminder.mutateAsync(input);
@@ -415,6 +425,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           is_public: isPublic,
           responsible_user_id: responsibleUserId,
           notify_all_household: notifyAllHousehold,
+          prerequisites: prerequisites.length > 0 ? prerequisites : undefined,
         };
 
         const item = await createEvent.mutateAsync(input);
@@ -462,6 +473,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           is_public: isPublic,
           responsible_user_id: responsibleUserId,
           notify_all_household: notifyAllHousehold,
+          prerequisites: prerequisites.length > 0 ? prerequisites : undefined,
         };
 
         const item = await createTask.mutateAsync(input);
@@ -536,7 +548,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
         className={cn(
           "neo-card border-t",
           isPink ? "border-pink-400/30" : "border-cyan-400/30",
-          "max-h-[90vh]"
+          "max-h-[90vh]",
         )}
       >
         <DrawerHeader className="border-b border-white/10 pb-4">
@@ -544,7 +556,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
             <DrawerTitle
               className={cn(
                 "text-lg font-bold",
-                isPink ? "text-pink-400" : "text-cyan-400"
+                isPink ? "text-pink-400" : "text-cyan-400",
               )}
             >
               {getFormTitle()}
@@ -570,7 +582,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                     ? isPink
                       ? "bg-pink-400"
                       : "bg-cyan-400"
-                    : "bg-white/20"
+                    : "bg-white/20",
                 )}
               />
             ))}
@@ -592,7 +604,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                   <Label
                     className={cn(
                       "text-sm font-medium",
-                      isPink ? "text-pink-300" : "text-cyan-300"
+                      isPink ? "text-pink-300" : "text-cyan-300",
                     )}
                   >
                     {isReminder
@@ -616,7 +628,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                       "mt-2 h-12 text-lg",
                       themeClasses.inputBg,
                       themeClasses.inputBorder,
-                      "text-white placeholder:text-white/40"
+                      "text-white placeholder:text-white/40",
                     )}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && isStepValid()) goNext();
@@ -640,7 +652,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                     <Label
                       className={cn(
                         "text-sm font-medium",
-                        isPink ? "text-pink-300" : "text-cyan-300"
+                        isPink ? "text-pink-300" : "text-cyan-300",
                       )}
                     >
                       When is it due?
@@ -658,7 +670,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                           className={cn(
                             themeClasses.inputBg,
                             themeClasses.inputBorder,
-                            "text-white"
+                            "text-white",
                           )}
                         />
                       </div>
@@ -674,7 +686,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                           className={cn(
                             themeClasses.inputBg,
                             themeClasses.inputBorder,
-                            "text-white"
+                            "text-white",
                           )}
                         />
                       </div>
@@ -689,7 +701,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                       <Label
                         className={cn(
                           "text-sm font-medium",
-                          isPink ? "text-pink-300" : "text-cyan-300"
+                          isPink ? "text-pink-300" : "text-cyan-300",
                         )}
                       >
                         All day event
@@ -703,7 +715,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                             ? isPink
                               ? "bg-pink-500"
                               : "bg-cyan-500"
-                            : "bg-white/20"
+                            : "bg-white/20",
                         )}
                       >
                         <motion.div
@@ -736,7 +748,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                           className={cn(
                             themeClasses.inputBg,
                             themeClasses.inputBorder,
-                            "text-white"
+                            "text-white",
                           )}
                         />
                         {!allDay && (
@@ -747,7 +759,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                             className={cn(
                               themeClasses.inputBg,
                               themeClasses.inputBorder,
-                              "text-white"
+                              "text-white",
                             )}
                           />
                         )}
@@ -766,7 +778,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                           className={cn(
                             themeClasses.inputBg,
                             themeClasses.inputBorder,
-                            "text-white"
+                            "text-white",
                           )}
                         />
                         {!allDay && (
@@ -777,7 +789,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                             className={cn(
                               themeClasses.inputBg,
                               themeClasses.inputBorder,
-                              "text-white"
+                              "text-white",
                             )}
                           />
                         )}
@@ -799,7 +811,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                         className={cn(
                           themeClasses.inputBg,
                           themeClasses.inputBorder,
-                          "text-white placeholder:text-white/40"
+                          "text-white placeholder:text-white/40",
                         )}
                       />
                     </div>
@@ -838,7 +850,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                               ? isPink
                                 ? "bg-pink-500/30 text-pink-300 border border-pink-400/50"
                                 : "bg-cyan-500/30 text-cyan-300 border border-cyan-400/50"
-                              : "bg-white/10 text-white/60 border border-transparent"
+                              : "bg-white/10 text-white/60 border border-transparent",
                           )}
                         >
                           {preset.label}
@@ -863,7 +875,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                             ? isPink
                               ? "bg-pink-500/30 text-pink-300 border border-pink-400/50"
                               : "bg-cyan-500/30 text-cyan-300 border border-cyan-400/50"
-                            : "bg-white/10 text-white/60 border border-transparent"
+                            : "bg-white/10 text-white/60 border border-transparent",
                         )}
                       >
                         Custom...
@@ -883,7 +895,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                         <p
                           className={cn(
                             "text-xs mt-1",
-                            isPink ? "text-pink-300/80" : "text-cyan-300/80"
+                            isPink ? "text-pink-300/80" : "text-cyan-300/80",
                           )}
                         >
                           {describeRRule(recurrenceRule)}
@@ -937,7 +949,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                   <Label
                     className={cn(
                       "text-sm font-medium",
-                      isPink ? "text-pink-300" : "text-cyan-300"
+                      isPink ? "text-pink-300" : "text-cyan-300",
                     )}
                   >
                     Notes (optional)
@@ -951,7 +963,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                       "mt-2 resize-none",
                       themeClasses.inputBg,
                       themeClasses.inputBorder,
-                      "text-white placeholder:text-white/40"
+                      "text-white placeholder:text-white/40",
                     )}
                   />
                 </div>
@@ -991,7 +1003,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                           ? isPink
                             ? "bg-pink-500"
                             : "bg-cyan-500"
-                          : "bg-white/20"
+                          : "bg-white/20",
                       )}
                     >
                       <motion.div
@@ -1032,7 +1044,10 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                     />
                     {isPublic && notifyAllHousehold && (
                       <p className="text-xs text-amber-300/70 mt-2">
-                        <span className="inline-flex items-center gap-1"><Sparkles className="w-3.5 h-3.5 text-pink-400" /> Both household members will be notified</span>
+                        <span className="inline-flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5 text-pink-400" />{" "}
+                          Both household members will be notified
+                        </span>
                       </p>
                     )}
                     {isPublic &&
@@ -1040,10 +1055,12 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                       responsibleUserId &&
                       responsibleUserId !== householdData.currentUserId && (
                         <p className="text-xs text-pink-300/70 mt-2">
-                          <span className="inline-flex items-center gap-1"><Sparkles className="w-3.5 h-3.5 text-pink-400" /></span>{" "}
+                          <span className="inline-flex items-center gap-1">
+                            <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+                          </span>{" "}
                           {
                             householdData.members.find(
-                              (m) => m.id === responsibleUserId
+                              (m) => m.id === responsibleUserId,
                             )?.displayName
                           }{" "}
                           will be notified
@@ -1051,6 +1068,21 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                       )}
                   </div>
                 )}
+
+                {/* Trigger Conditions (Prerequisites) */}
+                <div className="pt-2 border-t border-white/10">
+                  <PrerequisitePicker
+                    value={prerequisites}
+                    onChange={setPrerequisites}
+                    compact
+                  />
+                  {prerequisites.length > 0 && (
+                    <p className="text-xs text-amber-300/60 mt-2">
+                      Item will start as dormant and activate when conditions
+                      are met.
+                    </p>
+                  )}
+                </div>
               </motion.div>
             )}
 
@@ -1066,7 +1098,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                 <Label
                   className={cn(
                     "text-sm font-medium",
-                    isPink ? "text-pink-300" : "text-cyan-300"
+                    isPink ? "text-pink-300" : "text-cyan-300",
                   )}
                 >
                   Priority
@@ -1085,13 +1117,13 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                           "border",
                           isSelected
                             ? cn(config.bgColor, "border-current", config.color)
-                            : "border-white/10 hover:border-white/30"
+                            : "border-white/10 hover:border-white/30",
                         )}
                       >
                         <span
                           className={cn(
                             "text-sm font-medium",
-                            isSelected ? config.color : "text-white/80"
+                            isSelected ? config.color : "text-white/80",
                           )}
                         >
                           {config.label}
@@ -1115,7 +1147,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                 <div
                   className={cn(
                     "p-4 rounded-xl",
-                    isPink ? "bg-pink-500/10" : "bg-cyan-500/10"
+                    isPink ? "bg-pink-500/10" : "bg-cyan-500/10",
                   )}
                 >
                   <h3 className="text-lg font-semibold text-white mb-3">
@@ -1160,7 +1192,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                       className={cn(
                         "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs",
                         priorityConfig[priority].bgColor,
-                        priorityConfig[priority].color
+                        priorityConfig[priority].color,
                       )}
                     >
                       {priorityConfig[priority].label} priority
@@ -1215,7 +1247,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                             }
                           >
                             {householdData.members.find(
-                              (m) => m.id === responsibleUserId
+                              (m) => m.id === responsibleUserId,
                             )?.displayName || "Me"}
                           </span>
                         </span>
@@ -1274,7 +1306,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
                 className={cn(
                   "flex-1",
                   themeClasses.border,
-                  "text-white hover:bg-white/10"
+                  "text-white hover:bg-white/10",
                 )}
               >
                 Back

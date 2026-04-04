@@ -1130,3 +1130,256 @@ CREATE TABLE public.user_preferences (
   CONSTRAINT user_preferences_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+
+-- ============================================
+-- NFC TAGS
+-- ============================================
+-- NOTE: item_status_enum was altered to include 'dormant':
+-- ALTER TYPE item_status_enum ADD VALUE IF NOT EXISTS 'dormant';
+
+CREATE TABLE public.nfc_tags (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  tag_slug text NOT NULL,
+  label text NOT NULL,
+  location_name text,
+  icon text,
+  states jsonb NOT NULL DEFAULT '[]'::jsonb,
+  current_state text,
+  is_active boolean NOT NULL DEFAULT true,
+  checklists jsonb NOT NULL DEFAULT '{}'::jsonb, -- { "leaving": [{ id, title, order }], ... }
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT nfc_tags_pkey PRIMARY KEY (id),
+  CONSTRAINT nfc_tags_tag_slug_key UNIQUE (tag_slug),
+  CONSTRAINT nfc_tags_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+
+CREATE TABLE public.nfc_state_log (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tag_id uuid NOT NULL,
+  previous_state text,
+  new_state text NOT NULL,
+  changed_by uuid NOT NULL,
+  metadata_json jsonb,
+  changed_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT nfc_state_log_pkey PRIMARY KEY (id),
+  CONSTRAINT nfc_state_log_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.nfc_tags(id) ON DELETE CASCADE,
+  CONSTRAINT nfc_state_log_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES auth.users(id)
+);
+
+CREATE INDEX idx_nfc_state_log_tag_id ON public.nfc_state_log (tag_id, changed_at DESC);
+
+-- ============================================
+-- ITEM PREREQUISITES (Trigger Engine)
+-- ============================================
+-- Condition types: nfc_state_change, item_completed, weather, time_window, schedule, custom_formula
+-- Logic: prerequisites in the same logic_group are ANDed; different groups are ORed
+-- Example: (group 0: nfc_state=leaving AND time_window=morning) OR (group 1: item_completed=pack-bag)
+
+CREATE TABLE public.item_prerequisites (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  condition_type text NOT NULL CHECK (condition_type IN ('nfc_state_change', 'item_completed', 'weather', 'time_window', 'schedule', 'custom_formula')),
+  condition_config jsonb NOT NULL,
+  logic_group integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  last_evaluated_at timestamp with time zone,
+  last_result boolean,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT item_prerequisites_pkey PRIMARY KEY (id),
+  CONSTRAINT item_prerequisites_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_item_prerequisites_item_id ON public.item_prerequisites (item_id);
+CREATE INDEX idx_item_prerequisites_condition_type ON public.item_prerequisites (condition_type) WHERE is_active = true;
+
+-- ============================================
+-- NFC CHECKLIST ITEMS (replaces jsonb checklists on nfc_tags)
+-- ============================================
+-- Persistent checklist definitions per tag + state.
+-- source_tag_id / source_state enable cross-tag awareness:
+--   e.g. "Turn off Oven" on main-door auto-checks when oven NFC current_state = 'off'
+
+CREATE TABLE public.nfc_checklist_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tag_id uuid NOT NULL,
+  state text NOT NULL,
+  title text NOT NULL,
+  order_index integer NOT NULL DEFAULT 0,
+  source_tag_id uuid,
+  source_state text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT nfc_checklist_items_pkey PRIMARY KEY (id),
+  CONSTRAINT nfc_checklist_items_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.nfc_tags(id) ON DELETE CASCADE,
+  CONSTRAINT nfc_checklist_items_source_tag_id_fkey FOREIGN KEY (source_tag_id) REFERENCES public.nfc_tags(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_nfc_checklist_items_tag_state ON public.nfc_checklist_items (tag_id, state) WHERE is_active = true;
+
+-- ============================================
+-- NFC CHECKLIST COMPLETIONS (per tap session)
+-- ============================================
+-- Each completion is scoped to a specific state_log entry (tap session).
+-- On next tap for the same state, a new state_log is created → fresh session.
+
+CREATE TABLE public.nfc_checklist_completions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  checklist_item_id uuid NOT NULL,
+  state_log_id uuid NOT NULL,
+  completed_by uuid NOT NULL,
+  completed_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT nfc_checklist_completions_pkey PRIMARY KEY (id),
+  CONSTRAINT nfc_checklist_completions_item_fkey FOREIGN KEY (checklist_item_id) REFERENCES public.nfc_checklist_items(id) ON DELETE CASCADE,
+  CONSTRAINT nfc_checklist_completions_log_fkey FOREIGN KEY (state_log_id) REFERENCES public.nfc_state_log(id) ON DELETE CASCADE,
+  CONSTRAINT nfc_checklist_completions_user_fkey FOREIGN KEY (completed_by) REFERENCES auth.users(id),
+  CONSTRAINT nfc_checklist_completions_unique UNIQUE (checklist_item_id, state_log_id)
+);
+
+-- ============================================
+-- RLS POLICIES — NFC TAGS (household sharing)
+-- ============================================
+ALTER TABLE public.nfc_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.nfc_state_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.nfc_checklist_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.nfc_checklist_completions ENABLE ROW LEVEL SECURITY;
+
+-- nfc_tags: owner or household partner
+CREATE POLICY "nfc_tags_select" ON public.nfc_tags FOR SELECT USING (
+  user_id = auth.uid()
+  OR EXISTS (
+    SELECT 1 FROM public.household_links
+    WHERE active = true
+    AND (
+      (owner_user_id = auth.uid() AND partner_user_id = nfc_tags.user_id)
+      OR (partner_user_id = auth.uid() AND owner_user_id = nfc_tags.user_id)
+    )
+  )
+);
+CREATE POLICY "nfc_tags_insert" ON public.nfc_tags FOR INSERT WITH CHECK (user_id = auth.uid());
+CREATE POLICY "nfc_tags_update" ON public.nfc_tags FOR UPDATE USING (
+  user_id = auth.uid()
+  OR EXISTS (
+    SELECT 1 FROM public.household_links
+    WHERE active = true
+    AND (
+      (owner_user_id = auth.uid() AND partner_user_id = nfc_tags.user_id)
+      OR (partner_user_id = auth.uid() AND owner_user_id = nfc_tags.user_id)
+    )
+  )
+);
+CREATE POLICY "nfc_tags_delete" ON public.nfc_tags FOR DELETE USING (user_id = auth.uid());
+
+-- nfc_state_log: readable by household, insertable by authenticated user
+CREATE POLICY "nfc_state_log_select" ON public.nfc_state_log FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.nfc_tags t
+    WHERE t.id = nfc_state_log.tag_id
+    AND (
+      t.user_id = auth.uid()
+      OR EXISTS (
+        SELECT 1 FROM public.household_links
+        WHERE active = true
+        AND (
+          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
+          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
+        )
+      )
+    )
+  )
+);
+CREATE POLICY "nfc_state_log_insert" ON public.nfc_state_log FOR INSERT WITH CHECK (changed_by = auth.uid());
+
+-- nfc_checklist_items: household can CRUD (both members manage)
+CREATE POLICY "nfc_checklist_items_select" ON public.nfc_checklist_items FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.nfc_tags t
+    WHERE t.id = nfc_checklist_items.tag_id
+    AND (
+      t.user_id = auth.uid()
+      OR EXISTS (
+        SELECT 1 FROM public.household_links
+        WHERE active = true
+        AND (
+          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
+          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
+        )
+      )
+    )
+  )
+);
+CREATE POLICY "nfc_checklist_items_insert" ON public.nfc_checklist_items FOR INSERT WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.nfc_tags t
+    WHERE t.id = nfc_checklist_items.tag_id
+    AND (
+      t.user_id = auth.uid()
+      OR EXISTS (
+        SELECT 1 FROM public.household_links
+        WHERE active = true
+        AND (
+          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
+          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
+        )
+      )
+    )
+  )
+);
+CREATE POLICY "nfc_checklist_items_update" ON public.nfc_checklist_items FOR UPDATE USING (
+  EXISTS (
+    SELECT 1 FROM public.nfc_tags t
+    WHERE t.id = nfc_checklist_items.tag_id
+    AND (
+      t.user_id = auth.uid()
+      OR EXISTS (
+        SELECT 1 FROM public.household_links
+        WHERE active = true
+        AND (
+          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
+          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
+        )
+      )
+    )
+  )
+);
+CREATE POLICY "nfc_checklist_items_delete" ON public.nfc_checklist_items FOR DELETE USING (
+  EXISTS (
+    SELECT 1 FROM public.nfc_tags t
+    WHERE t.id = nfc_checklist_items.tag_id
+    AND (
+      t.user_id = auth.uid()
+      OR EXISTS (
+        SELECT 1 FROM public.household_links
+        WHERE active = true
+        AND (
+          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
+          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
+        )
+      )
+    )
+  )
+);
+
+-- nfc_checklist_completions: household can read/write
+CREATE POLICY "nfc_checklist_completions_select" ON public.nfc_checklist_completions FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.nfc_checklist_items ci
+    JOIN public.nfc_tags t ON t.id = ci.tag_id
+    WHERE ci.id = nfc_checklist_completions.checklist_item_id
+    AND (
+      t.user_id = auth.uid()
+      OR EXISTS (
+        SELECT 1 FROM public.household_links
+        WHERE active = true
+        AND (
+          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
+          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
+        )
+      )
+    )
+  )
+);
+CREATE POLICY "nfc_checklist_completions_insert" ON public.nfc_checklist_completions FOR INSERT WITH CHECK (completed_by = auth.uid());
+CREATE POLICY "nfc_checklist_completions_delete" ON public.nfc_checklist_completions FOR DELETE USING (completed_by = auth.uid());
