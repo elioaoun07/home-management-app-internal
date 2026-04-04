@@ -46,13 +46,16 @@ function NfcBridgePage({ tagSlug }: { tagSlug: string }) {
   );
 
   useEffect(() => {
-    // Store the destination so the PWA can pick it up on open
-    setNfcRedirectCookie(`/nfc/${encodeURIComponent(tagSlug)}`);
-
     const ua = navigator.userAgent;
     if (/iPad|iPhone|iPod/.test(ua)) setPlatform("ios");
-    else if (/Android/i.test(ua)) setPlatform("android");
+    else if (/Android/i.test(ua)) {
+      setPlatform("android");
+      // Android WebAPK can share cookies — store the redirect cookie
+      setNfcRedirectCookie(`/nfc/${encodeURIComponent(tagSlug)}`);
+    }
   }, [tagSlug]);
+
+  const loginUrl = `/login?redirect=/nfc/${encodeURIComponent(tagSlug)}`;
 
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 px-6 py-10">
@@ -70,22 +73,16 @@ function NfcBridgePage({ tagSlug }: { tagSlug: string }) {
       </div>
 
       {platform === "ios" && (
-        <div className="w-full max-w-sm space-y-3">
-          {[
-            "Find the ERA icon on your Home Screen",
-            "Tap it to open the app",
-            "ERA will take you straight to this checklist",
-          ].map((step, i) => (
-            <div
-              key={i}
-              className="flex items-start gap-3 rounded-2xl bg-white/5 px-4 py-3"
-            >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-xs font-bold text-cyan-400">
-                {i + 1}
-              </span>
-              <p className="text-sm leading-snug text-white/70">{step}</p>
-            </div>
-          ))}
+        <div className="w-full max-w-sm space-y-4">
+          <a
+            href={loginUrl}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-6 py-3.5 text-sm font-semibold text-white transition-all active:scale-95 hover:bg-cyan-600"
+          >
+            Sign In to Continue
+          </a>
+          <p className="text-center text-xs leading-relaxed text-white/40">
+            Sign in once and future NFC taps will work instantly
+          </p>
         </div>
       )}
 
@@ -118,18 +115,24 @@ function NfcBridgePage({ tagSlug }: { tagSlug: string }) {
       )}
 
       {platform === "other" && (
-        <p className="max-w-xs text-center text-sm text-white/50">
-          Open the ERA app from your device&apos;s home screen and it will
-          navigate here automatically.
-        </p>
+        <div className="w-full max-w-sm space-y-4">
+          <a
+            href={loginUrl}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-6 py-3.5 text-sm font-semibold text-white transition-all active:scale-95 hover:bg-cyan-600"
+          >
+            Sign In to Continue
+          </a>
+        </div>
       )}
 
-      <a
-        href={`/login?redirect=/nfc/${encodeURIComponent(tagSlug)}`}
-        className="mt-2 text-xs text-white/30 underline-offset-2 hover:text-white/50 hover:underline"
-      >
-        Sign in via browser instead
-      </a>
+      {platform === "android" && (
+        <a
+          href={loginUrl}
+          className="mt-2 text-xs text-white/30 underline-offset-2 hover:text-white/50 hover:underline"
+        >
+          Sign in via browser instead
+        </a>
+      )}
     </div>
   );
 }

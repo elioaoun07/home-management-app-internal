@@ -54,6 +54,8 @@ function LoginContent() {
     }
   }, [errorParam]);
 
+  const redirectTo = searchParams.get("redirect");
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsLoading(true);
@@ -63,7 +65,7 @@ function LoginContent() {
 
     saveCredentials(email, rememberMe);
 
-    const result = await loginAction(formData);
+    const result = await loginAction(formData, redirectTo);
     if (result?.error) {
       toast.error(result.error);
       setIsLoading(false);

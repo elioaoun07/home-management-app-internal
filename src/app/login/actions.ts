@@ -4,7 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-export async function loginAction(formData: FormData) {
+export async function loginAction(formData: FormData, redirectTo?: string | null) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
 
@@ -53,6 +53,10 @@ export async function loginAction(formData: FormData) {
     return { error: "Login failed - no session" };
   }
 
-  // Successfully logged in
-  redirect("/expense");
+  // Successfully logged in — redirect to the requested page or default
+  const destination =
+    redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
+      ? redirectTo
+      : "/expense";
+  redirect(destination);
 }
