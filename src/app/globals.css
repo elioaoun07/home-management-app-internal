@@ -59,7 +59,7 @@ body.theme-loaded {
 
   /* Handwriting font for notebook-style notes */
   .font-handwriting {
-    font-family: "Handlee", cursive;
+    font-family: var(--font-handlee), cursive;
     font-weight: 600;
   }
 
@@ -729,7 +729,7 @@ body.theme-loaded {
 
   /* Index title styling */
   .book-index-title {
-    font-family: "Caveat", "Handlee", cursive;
+    font-family: var(--font-caveat), var(--font-handlee), cursive;
     letter-spacing: 0.08em;
     color: rgba(6, 182, 212, 0.9) !important;
     text-shadow:
@@ -821,7 +821,7 @@ body.theme-loaded {
 
   /* Page number badge */
   .book-index-page-num {
-    font-family: "Caveat", "Handlee", cursive;
+    font-family: var(--font-caveat), var(--font-handlee), cursive;
     font-size: 0.875rem;
     opacity: 0.5;
     min-width: 1.5rem;

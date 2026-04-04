@@ -96,8 +96,9 @@ export function startProbing(): void {
   // Start interval
   restartProbing();
 
-  // Do an immediate probe on startup so the state is accurate from the start
-  probeNow();
+  // Defer the initial probe so it doesn't compete with critical data fetches
+  // on slow 3G connections. Trust navigator.onLine for the first few seconds.
+  setTimeout(() => probeNow(), 5000);
 }
 
 /** Stop probing (cleanup). */

@@ -135,10 +135,11 @@ export default function MobileNav() {
   useEffect(() => {
     if (!prefetchedRef.current.all) {
       prefetchedRef.current.all = true;
-      // Prefetch in the background after mount
+      // Prefetch in the background well after mount — on 3G the initial
+      // data fetches take 4-6s, so firing more requests at 3s competes.
       setTimeout(() => {
         prefetchAllTabs(queryClient);
-      }, 3000);
+      }, 10_000);
     }
   }, [queryClient]);
 

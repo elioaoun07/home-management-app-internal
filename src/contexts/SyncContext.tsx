@@ -668,7 +668,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     if (!isReallyOnline()) return;
 
     reconciliationDone.current = true;
-    // Delay to avoid contending with initial data fetches
+    // Delay significantly to avoid contending with initial data fetches.
+    // On 3G, early network requests cascade — reconcile is best-effort
+    // maintenance, so it can safely wait until the app is fully loaded.
+    // Extended from 30s to 60s to free bandwidth during slow-network cold loads.
     const timer = setTimeout(() => {
       fetch("/api/accounts/reconcile", { method: "POST" })
         .then(async (res) => {
@@ -682,7 +685,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         .catch(() => {
           /* best-effort */
         });
-    }, 6000);
+    }, 60_000);
 
     return () => clearTimeout(timer);
   }, [queryClient]);

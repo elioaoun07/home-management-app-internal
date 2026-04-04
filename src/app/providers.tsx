@@ -100,9 +100,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 1000 * 60 * 5, // 5 minutes
+            networkMode: "offlineFirst", // Serve cache immediately without waiting for connectivity confirmation
             gcTime: 1000 * 60 * 60 * 24, // 24 hours
-            // networkMode defaults to 'online' — queries pause when offline (good: avoids flood of ERR_INTERNET_DISCONNECTED).
-            // Only mutations use 'always' so our offline queue works.
             refetchOnWindowFocus: false,
             refetchOnReconnect: true,
             refetchOnMount: false, // Use cache, don't refetch on mount

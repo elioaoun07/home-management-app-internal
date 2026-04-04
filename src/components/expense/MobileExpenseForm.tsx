@@ -13,7 +13,6 @@ import {
   XIcon,
 } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Drawer,
   DrawerClose,
@@ -86,13 +85,29 @@ import {
   type CSSProperties,
 } from "react";
 import { toast } from "sonner";
+import dynamic from "next/dynamic";
 import AccountBalance from "./AccountBalance";
-import CalculatorDialog from "./CalculatorDialog";
 import { useExpenseForm } from "./ExpenseFormContext";
-import NewAccountDrawer from "./NewAccountDrawer";
-import NewCategoryDrawer from "./NewCategoryDrawer";
-import NewSubcategoryDrawer from "./NewSubcategoryDrawer";
 import VoiceEntryButton from "./VoiceEntryButton";
+
+// Lazy-load Calendar and drawers — never visible on initial render.
+// Each adds 10-25KB to the critical JS bundle on 3G.
+const Calendar = dynamic(
+  () => import("@/components/ui/calendar").then((m) => m.Calendar),
+  { ssr: false },
+);
+const CalculatorDialog = dynamic(() => import("./CalculatorDialog"), {
+  ssr: false,
+});
+const NewAccountDrawer = dynamic(() => import("./NewAccountDrawer"), {
+  ssr: false,
+});
+const NewCategoryDrawer = dynamic(() => import("./NewCategoryDrawer"), {
+  ssr: false,
+});
+const NewSubcategoryDrawer = dynamic(() => import("./NewSubcategoryDrawer"), {
+  ssr: false,
+});
 
 type Step = SectionKey | "confirm";
 

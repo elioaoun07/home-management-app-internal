@@ -1,20 +1,37 @@
-import AIChatAssistant from "@/components/ai/AIChatAssistant";
 import { DeepLinkHandler } from "@/components/DeepLinkHandler";
+import { DeferredComponents } from "@/components/DeferredComponents";
 import { EagerDataPrefetch } from "@/components/EagerDataPrefetch";
 import { ErrorLogger } from "@/components/ErrorLogger";
-import SplitBillHandler from "@/components/expense/SplitBillHandler";
 import ConditionalHeader from "@/components/layouts/ConditionalHeader";
 import GuestHeader from "@/components/layouts/GuestHeader";
 import MobileNav from "@/components/layouts/MobileNav";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { ServiceWorkerWarmup } from "@/components/ServiceWorkerWarmup";
 import { Toaster } from "@/components/ui/sonner";
 import { SyncPill } from "@/components/ui/SyncIndicator";
 import { SplitBillProvider } from "@/contexts/SplitBillContext";
 import { UserProvider } from "@/contexts/UserContext";
 import { supabaseServerRSC } from "@/lib/supabase/server";
 import type { Metadata, Viewport } from "next";
+import { Caveat, Handlee } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
+
+const caveat = Caveat({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-caveat",
+  display: "swap",
+  preload: true,
+});
+
+const handlee = Handlee({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-handlee",
+  display: "swap",
+  preload: false,
+});
 
 export const metadata: Metadata = {
   title: "Budget Manager • Smart Expense Tracking",
@@ -74,19 +91,8 @@ export default async function RootLayout({
     : undefined;
 
   return (
-    <html lang="en" suppressHydrationWarning className="scroll-smooth">
+    <html lang="en" suppressHydrationWarning className={`scroll-smooth ${caveat.variable} ${handlee.variable}`}>
       <head>
-        {/* Google Fonts - Handwriting for Notes */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Handlee&display=swap"
-          rel="stylesheet"
-        />
         {/* Critical early CSS to prevent ANY flash of wrong theme color */}
         <script
           dangerouslySetInnerHTML={{
@@ -152,6 +158,7 @@ export default async function RootLayout({
               {/* Eager prefetch critical data immediately on app load */}
               {user && <EagerDataPrefetch />}
               <ServiceWorkerRegistration />
+              <ServiceWorkerWarmup />
               <DeepLinkHandler />
               <ErrorLogger />
               {/* Conditional header - show user menu when logged in, login button when logged out */}
@@ -167,8 +174,7 @@ export default async function RootLayout({
               {children}
               <SyncPill />
               <MobileNav />
-              {user && <AIChatAssistant />}
-              {user && <SplitBillHandler />}
+              {user && <DeferredComponents />}
               <Toaster
                 richColors
                 closeButton

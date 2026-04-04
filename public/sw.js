@@ -1,25 +1,48 @@
 // Service Worker for Push Notifications + Offline Caching
 // Handles push events, displays notifications with alarm-like behavior, and caches app shell
 
-const SW_VERSION = "3.3.0";
+const SW_VERSION = "5.0.0";
 
 // ============================================
 // CACHE CONFIGURATION
 // ============================================
 
-const CACHE_NAME = "app-shell-v1";
+const CACHE_NAME = "app-shell-v5";
 const STATIC_CACHE = "static-assets-v1";
+const API_CACHE = "api-cache-v1";
+
+// Read-only API routes that are safe to cache with stale-while-revalidate.
+// Mutations (/api/transactions POST, etc.) are never cached — only these GETs.
+const CACHEABLE_API_PREFIXES = [
+  "/api/accounts",
+  "/api/user-preferences",
+  "/api/categories",
+  "/api/onboarding",
+  "/api/drafts",
+  "/api/future-payments",
+];
 
 // App shell assets to pre-cache on install
 // CRITICAL: Include actual app pages so the PWA loads offline after closing/reopening
 const SHELL_ASSETS = [
   "/offline",
   "/expense",
+  "/dashboard",
+  "/reminders",
+  "/recurring",
   "/",
   "/appicon-192.png",
   "/appicon-512.png",
   "/manifest.json",
 ];
+
+// Navigation timeout — if network doesn't respond within this window,
+// serve from cache immediately. Prevents 30-120s hangs on slow connections.
+// NOTE: getAdaptiveTimeout() is used at runtime for network-speed-aware timeouts.
+const NAV_TIMEOUT_MS = 2500; // fallback for cold SW boot before getAdaptiveTimeout is defined
+
+// Core app routes whose RSC payloads we cache for offline use
+const CORE_ROUTES = ["/expense", "/dashboard", "/reminders", "/recurring", "/"];
 
 // ============================================
 // INSTALL & ACTIVATE
@@ -47,17 +70,61 @@ self.addEventListener("activate", (event) => {
       caches.keys().then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key !== CACHE_NAME && key !== STATIC_CACHE)
+            .filter((key) => key !== CACHE_NAME && key !== STATIC_CACHE && key !== API_CACHE)
             .map((key) => {
               console.log("[SW] Removing old cache:", key);
               return caches.delete(key);
             }),
         ),
       ),
+      // Enable Navigation Preload — lets the browser start the network request
+      // in parallel with SW boot, saving 100-500ms on cold starts.
+      // Gracefully ignored on browsers that don't support it (Safari, Firefox).
+      self.registration.navigationPreload &&
+        self.registration.navigationPreload.enable().catch(() => {}),
       clients.claim(),
     ]),
   );
 });
+
+// ============================================
+// NETWORK RACE HELPER — timeout-based fallback
+// ============================================
+
+/**
+ * Returns an adaptive timeout in ms based on the detected network speed.
+ * Prevents aborting 3G chunk downloads that need 4-8s to complete.
+ */
+function getAdaptiveTimeout() {
+  try {
+    const type = navigator.connection?.effectiveType;
+    if (type === "4g") return 3000;
+    if (type === "3g") return 8000;
+    if (type === "2g" || type === "slow-2g") return 15000;
+  } catch {}
+  return 5000;
+}
+
+/**
+ * Race a network fetch against a timeout. If the network doesn't respond
+ * within `timeoutMs`, resolve with `undefined` so the caller can serve cache.
+ * This prevents 30-120s hangs on slow/flaky connections.
+ */
+function fetchWithTimeout(request, timeoutMs) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  return fetch(request, { signal: controller.signal })
+    .then((response) => {
+      clearTimeout(timeoutId);
+      return response;
+    })
+    .catch((err) => {
+      clearTimeout(timeoutId);
+      // Return undefined on timeout/network failure — caller falls back to cache
+      return undefined;
+    });
+}
 
 // ============================================
 // FETCH HANDLER — Offline Caching Strategy
@@ -70,13 +137,72 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests (mutations go through online queue)
   if (request.method !== "GET") return;
 
-  // Skip API requests — never cache data responses
-  if (url.pathname.startsWith("/api/")) return;
+  // Selective API caching: cache read-only endpoints with stale-while-revalidate.
+  // All other /api/ routes (health checks, mutations endpoints) are skipped.
+  if (url.pathname.startsWith("/api/")) {
+    const isCacheable = CACHEABLE_API_PREFIXES.some((prefix) =>
+      url.pathname.startsWith(prefix),
+    );
+    if (isCacheable) {
+      event.respondWith(
+        (async () => {
+          const cached = await caches.match(request);
+          // Stale-while-revalidate: return cache immediately, refresh in background
+          const fetchPromise = fetch(request)
+            .then((freshResponse) => {
+              if (freshResponse && freshResponse.ok) {
+                caches
+                  .open(API_CACHE)
+                  .then((cache) => cache.put(request, freshResponse.clone()));
+              }
+              return freshResponse;
+            })
+            .catch(() => cached);
+          return cached || fetchPromise;
+        })(),
+      );
+    }
+    return;
+  }
 
   // Skip Supabase requests
   if (url.hostname.includes("supabase")) return;
 
-  // Skip cross-origin requests except CDN assets
+  // Google Fonts CSS — stale-while-revalidate (served fresh but cached for offline)
+  if (url.hostname === "fonts.googleapis.com") {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fetchPromise = fetch(request, { mode: "cors" })
+          .then((response) => {
+            if (response && (response.type === "basic" || response.type === "cors") && response.ok) {
+              caches.open(STATIC_CACHE).then((cache) => cache.put(request, response.clone()));
+            }
+            return response;
+          })
+          .catch(() => cached);
+        return cached || fetchPromise;
+      }),
+    );
+    return;
+  }
+
+  // Google Fonts binary files — cache-first (URL-versioned, immutable)
+  if (url.hostname === "fonts.gstatic.com") {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request, { mode: "cors" }).then((response) => {
+          if (response && (response.type === "basic" || response.type === "cors") && response.ok) {
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, response.clone()));
+          }
+          return response;
+        });
+      }),
+    );
+    return;
+  }
+
+  // Skip all other cross-origin requests
   if (url.origin !== self.location.origin) return;
 
   // Static assets (/_next/static/) — Cache-first (immutable, fingerprinted)
@@ -122,67 +248,117 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests (HTML pages) — Network-first with cache fallback
+  // Navigation requests (HTML pages) — Stale-while-revalidate
+  // Serve from cache IMMEDIATELY if available, update in background.
+  // Only block on network for cold loads (no cache yet).
   if (
     request.mode === "navigate" ||
     request.headers.get("accept")?.includes("text/html")
   ) {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(async () => {
-          // Network failed — try cache
-          const cached = await caches.match(request);
-          if (cached) return cached;
-          // Fallback to cached root (Next.js app shell)
-          const rootCached = await caches.match("/");
-          if (rootCached) return rootCached;
-          // Last resort — offline page
-          const offlineCached = await caches.match("/offline");
-          if (offlineCached) return offlineCached;
-          return new Response("Offline", {
-            status: 503,
-            statusText: "Offline",
-          });
-        }),
+      (async () => {
+        // Navigation Preload — browser started this in parallel with SW boot (100-500ms faster cold loads)
+        const preloadResponse = event.preloadResponse
+          ? await event.preloadResponse.catch(() => undefined)
+          : undefined;
+
+        if (preloadResponse && preloadResponse.ok) {
+          const clone = preloadResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          return preloadResponse;
+        }
+
+        // Serve from cache IMMEDIATELY if available — no waiting
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) {
+          // Stale-while-revalidate: update cache in background, return cache now
+          fetch(request)
+            .then((freshResponse) => {
+              if (freshResponse && freshResponse.ok) {
+                caches.open(CACHE_NAME).then((cache) => cache.put(request, freshResponse));
+              }
+            })
+            .catch(() => {});
+          return cachedResponse;
+        }
+
+        // No cache — cold load, try network with adaptive timeout
+        const networkResponse = await fetchWithTimeout(request, getAdaptiveTimeout());
+        if (networkResponse && networkResponse.ok) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          return networkResponse;
+        }
+
+        // Network failed — try root app shell, then offline page
+        const rootCached = await caches.match("/");
+        if (rootCached) return rootCached;
+        const offlineCached = await caches.match("/offline");
+        if (offlineCached) return offlineCached;
+
+        return new Response("Offline", {
+          status: 503,
+          statusText: "Offline",
+        });
+      })(),
     );
     return;
   }
 
-  // Next.js chunks, RSC payloads & other JS/CSS — Network-first with cache fallback
-  // Using network-first prevents stale JS chunks from causing hydration mismatches
+  // RSC payloads — Stale-while-revalidate (serve cache instantly, refresh in background)
+  // Other /_next/ — Network-first with 3s timeout (reduced from 5s)
   if (url.pathname.startsWith("/_next/")) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        return fetch(request)
-          .then((response) => {
-            if (response.ok) {
-              const clone = response.clone();
-              caches
-                .open(STATIC_CACHE)
-                .then((cache) => cache.put(request, clone));
-            }
-            return response;
-          })
-          .catch(() => {
-            // Offline: return cached version if available
-            if (cached) return cached;
-            // For RSC payloads, return empty JSON rather than 504 to avoid app crashes
-            if (url.pathname.includes(".rsc") || url.searchParams.has("_rsc")) {
-              return new Response("{}", {
-                status: 200,
-                headers: { "Content-Type": "application/json" },
-              });
-            }
-            return new Response("", { status: 504 });
+    const isRSC = url.pathname.includes(".rsc") || url.searchParams.has("_rsc");
+
+    if (isRSC) {
+      event.respondWith(
+        (async () => {
+          const cached = await caches.match(request);
+          if (cached) {
+            // Serve cache immediately, update in background
+            fetch(request)
+              .then((freshResponse) => {
+                if (freshResponse && freshResponse.ok) {
+                  caches.open(STATIC_CACHE).then((cache) => cache.put(request, freshResponse));
+                }
+              })
+              .catch(() => {});
+            return cached;
+          }
+          // No cache — fetch with adaptive timeout
+          const networkResponse = await fetchWithTimeout(request, getAdaptiveTimeout());
+          if (networkResponse && networkResponse.ok) {
+            const clone = networkResponse.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+            return networkResponse;
+          }
+          // Serve cached HTML for this route rather than empty JSON (which crashes RSC parser)
+          const htmlFallback = await caches.match(new URL(request.url).pathname);
+          if (htmlFallback) return htmlFallback;
+          return new Response("{}", {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
           });
-      }),
+        })(),
+      );
+      return;
+    }
+
+    // Non-RSC /_next/ — network-first with adaptive timeout
+    event.respondWith(
+      (async () => {
+        const cached = await caches.match(request);
+        const networkResponse = await fetchWithTimeout(request, getAdaptiveTimeout());
+
+        if (networkResponse && networkResponse.ok) {
+          const clone = networkResponse.clone();
+          caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+          return networkResponse;
+        }
+
+        if (cached) return cached;
+        return new Response("", { status: 504 });
+      })(),
     );
     return;
   }
@@ -826,6 +1002,19 @@ self.addEventListener("message", (event) => {
   const { type, payload } = event.data || {};
 
   switch (type) {
+    case "WARM_CACHE":
+      // Background-cache all JS chunks collected from the main thread.
+      // Runs after first page load so subsequent visits are instant from SW cache.
+      if (Array.isArray(payload?.urls)) {
+        caches.open(STATIC_CACHE).then((cache) => {
+          payload.urls.forEach((url) => {
+            caches.match(url).then((hit) => {
+              if (!hit) fetch(url).then((r) => { if (r.ok) cache.put(url, r); }).catch(() => {});
+            });
+          });
+        });
+      }
+      break;
     case "SKIP_WAITING":
       self.skipWaiting();
       break;
