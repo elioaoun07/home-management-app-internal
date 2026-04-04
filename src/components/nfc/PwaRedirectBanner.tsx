@@ -58,9 +58,7 @@ export function PwaRedirectBanner() {
           </div>
 
           <div className="min-w-0 space-y-1.5">
-            <p className="text-sm font-medium text-white/90">
-              Open in ERA App
-            </p>
+            <p className="text-sm font-medium text-white/90">Open in ERA App</p>
 
             {platform === "ios" ? (
               <p className="text-xs leading-relaxed text-white/50">

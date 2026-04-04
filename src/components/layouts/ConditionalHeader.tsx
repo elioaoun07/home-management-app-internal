@@ -58,6 +58,7 @@ export default function ConditionalHeader({
     mounted &&
     (pathname?.startsWith("/g/") ||
       pathname?.startsWith("/temp") ||
+      pathname?.startsWith("/nfc/") ||
       viewMode === "watch" ||
       viewMode === "web");
 

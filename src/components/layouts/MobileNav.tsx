@@ -129,6 +129,7 @@ export default function MobileNav() {
     "/dashboard",
     "/focus",
     "/alerts",
+    "/nfc/",
   ];
 
   // Prefetch all tabs on initial mount for instant switching
