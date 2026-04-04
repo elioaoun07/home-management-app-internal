@@ -4,6 +4,22 @@ import { useTabSafe } from "@/contexts/TabContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+// Cookie written by NfcBridgePage when the user taps an NFC tag in the browser.
+// The PWA picks it up here on next open and navigates to the stored path.
+const NFC_REDIRECT_COOKIE = "era_nfc_redirect";
+
+function consumeNfcRedirectCookie(): string | null {
+  const match = document.cookie
+    .split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${NFC_REDIRECT_COOKIE}=`));
+  if (!match) return null;
+  const value = decodeURIComponent(match.split("=").slice(1).join("="));
+  // Immediately clear the cookie
+  document.cookie = `${NFC_REDIRECT_COOKIE}=; path=/; max-age=0; SameSite=Strict`;
+  return value;
+}
+
 /**
  * DeepLinkHandler - Processes URL params and custom events from the service worker
  * to route notifications to the correct tab/view without a full page reload.
@@ -18,10 +34,28 @@ import { useEffect } from "react";
  *
  * Also listens for "notification-navigate" CustomEvent dispatched by
  * ServiceWorkerRegistration when the app is already open.
+ *
+ * NFC bridge: when a user taps an NFC tag in the browser, a cookie is set.
+ * On next PWA open (standalone mode), this handler reads that cookie and
+ * navigates to the stored NFC path so the authenticated checklist loads.
  */
 export function DeepLinkHandler() {
   const tabCtx = useTabSafe();
   const router = useRouter();
+
+  // NFC redirect cookie pickup — only in standalone PWA mode
+  useEffect(() => {
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as unknown as { standalone?: boolean }).standalone === true;
+    if (!isStandalone) return;
+
+    const nfcPath = consumeNfcRedirectCookie();
+    if (nfcPath && nfcPath.startsWith("/nfc/")) {
+      router.push(nfcPath);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!tabCtx) return;

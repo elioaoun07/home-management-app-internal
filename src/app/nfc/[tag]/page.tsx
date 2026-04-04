@@ -1,7 +1,6 @@
 // src/app/nfc/[tag]/page.tsx
-// Authenticated NFC tag interaction page
+// NFC tag interaction page — public route, auth handled client-side
 import { supabaseServerRSC } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import NfcTapClient from "./nfc-tap-client";
 
 export const dynamic = "force-dynamic";
@@ -13,26 +12,25 @@ export default async function NfcTagPage({
 }) {
   const { tag } = await params;
 
-  // Auth check — redirect to login if not authenticated
   const supabase = await supabaseServerRSC();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    redirect(`/login?redirect=/nfc/${encodeURIComponent(tag)}`);
-  }
 
-  // Fetch user profile for display name
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("id", user.id)
-    .maybeSingle();
+  // Fetch profile only when authenticated
+  const { data: profile } = user
+    ? await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .maybeSingle()
+    : { data: null };
 
   return (
     <NfcTapClient
       tagSlug={tag}
-      displayName={profile?.full_name ?? user.email?.split("@")[0] ?? "User"}
+      isAuthenticated={!!user}
+      displayName={profile?.full_name ?? user?.email?.split("@")[0] ?? ""}
     />
   );
 }

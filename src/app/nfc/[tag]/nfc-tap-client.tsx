@@ -22,14 +22,121 @@ import {
   Loader2,
   RotateCcw,
   ShieldOff,
+  Smartphone,
   Wifi,
   WifiOff,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// Cookie name used by DeepLinkHandler to pick up the NFC destination after
+// the user switches from browser → PWA.
+const NFC_REDIRECT_COOKIE = "era_nfc_redirect";
+
+/** Set a short-lived first-party cookie readable by the PWA on the same origin. */
+function setNfcRedirectCookie(path: string) {
+  document.cookie = `${NFC_REDIRECT_COOKIE}=${encodeURIComponent(path)}; path=/; max-age=600; SameSite=Strict`;
+}
+
+// ---- Bridge page (shown in browser when user is not authenticated) ----
+
+function NfcBridgePage({ tagSlug }: { tagSlug: string }) {
+  const [platform, setPlatform] = useState<"ios" | "android" | "other">(
+    "other",
+  );
+
+  useEffect(() => {
+    // Store the destination so the PWA can pick it up on open
+    setNfcRedirectCookie(`/nfc/${encodeURIComponent(tagSlug)}`);
+
+    const ua = navigator.userAgent;
+    if (/iPad|iPhone|iPod/.test(ua)) setPlatform("ios");
+    else if (/Android/i.test(ua)) setPlatform("android");
+  }, [tagSlug]);
+
+  return (
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 px-6 py-10">
+      {/* Icon */}
+      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-cyan-500/15">
+        <Smartphone className="h-10 w-10 text-cyan-400" />
+      </div>
+
+      <div className="text-center">
+        <h1 className="text-2xl font-bold text-white">Open in ERA App</h1>
+        <p className="mt-2 max-w-xs text-sm leading-relaxed text-white/50">
+          This NFC tag works inside the ERA app where you&apos;re already signed
+          in.
+        </p>
+      </div>
+
+      {platform === "ios" && (
+        <div className="w-full max-w-sm space-y-3">
+          {[
+            "Find the ERA icon on your Home Screen",
+            "Tap it to open the app",
+            "ERA will take you straight to this checklist",
+          ].map((step, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-3 rounded-2xl bg-white/5 px-4 py-3"
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-xs font-bold text-cyan-400">
+                {i + 1}
+              </span>
+              <p className="text-sm leading-snug text-white/70">{step}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {platform === "android" && (
+        <div className="w-full max-w-sm space-y-3">
+          <div className="rounded-2xl bg-white/5 px-4 py-3 text-sm leading-relaxed text-white/70">
+            <p className="font-medium text-white/90">Option 1 — Tap below</p>
+            <p className="mt-1 text-white/50">
+              If ERA is installed, Android may open it automatically.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              // Re-trigger the navigation — if the WebAPK intent filter is
+              // enabled ("Open by default"), Chrome will hand off to the PWA.
+              window.location.href = window.location.href;
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 px-6 py-3.5 text-sm font-semibold text-white transition-all active:scale-95 hover:bg-cyan-600"
+          >
+            Try opening in ERA
+          </button>
+          <div className="rounded-2xl bg-white/5 px-4 py-3 text-sm leading-relaxed text-white/70">
+            <p className="font-medium text-white/90">Option 2 — Enable auto-open</p>
+            <p className="mt-1 text-white/50">
+              Settings → Apps → ERA → Open supported links → Open in this app.
+              Then re-tap the NFC tag.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {platform === "other" && (
+        <p className="max-w-xs text-center text-sm text-white/50">
+          Open the ERA app from your device&apos;s home screen and it will
+          navigate here automatically.
+        </p>
+      )}
+
+      <a
+        href={`/login?redirect=/nfc/${encodeURIComponent(tagSlug)}`}
+        className="mt-2 text-xs text-white/30 underline-offset-2 hover:text-white/50 hover:underline"
+      >
+        Sign in via browser instead
+      </a>
+    </div>
+  );
+}
+
 interface NfcTapClientProps {
   tagSlug: string;
+  isAuthenticated: boolean;
   displayName: string;
 }
 
@@ -43,6 +150,7 @@ type Phase =
 
 export default function NfcTapClient({
   tagSlug,
+  isAuthenticated,
   displayName,
 }: NfcTapClientProps) {
   const router = useRouter();
@@ -52,6 +160,16 @@ export default function NfcTapClient({
     error: tagError,
   } = useNfcTag(tagSlug);
   const tapMutation = useNfcTap(tagSlug);
+
+  // null = not yet determined (SSR hydration), true/false after first effect
+  const [isStandalone, setIsStandalone] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setIsStandalone(
+      window.matchMedia("(display-mode: standalone)").matches ||
+        (navigator as unknown as { standalone?: boolean }).standalone === true,
+    );
+  }, []);
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [nextState, setNextState] = useState<string | null>(null);
@@ -222,6 +340,30 @@ export default function NfcTapClient({
   // ============================================
   // RENDER
   // ============================================
+
+  // Standalone mode not yet determined — show spinner
+  if (isStandalone === null) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
+      </div>
+    );
+  }
+
+  // In browser (not standalone) and not authenticated → bridge page
+  if (!isAuthenticated && !isStandalone) {
+    return <NfcBridgePage tagSlug={tagSlug} />;
+  }
+
+  // In standalone PWA but not authenticated → redirect to login
+  if (!isAuthenticated && isStandalone) {
+    router.replace(`/login?redirect=/nfc/${encodeURIComponent(tagSlug)}`);
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
+      </div>
+    );
+  }
 
   if (tagLoading || phase === "loading") {
     return (
