@@ -1,4 +1,4 @@
-]633;E;echo '<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->';4d517f07-0989-4cda-a3fb-d2588d5946bb]633;C<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->
+<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->
 
 # CLAUDE.md
 
@@ -37,6 +37,7 @@
 16. **Household linking in API routes**: when fetching user-owned data, always check `household_links` for an active partner and include their data unless `ownOnly=true` is passed. See `src/app/api/accounts/route.ts:28-52`.
 17. **Color identity** — current user = **blue** (`blue-400/500`), partner = **pink** (`pink-400/500`). Apply consistently for all color-coded UI: assignment labels, accent bars, avatars, indicators, and any context where "me vs partner" needs visual distinction. Never swap these colors.
 18. **Floating panels (dropdowns, popovers, command palettes) must be opaque** — never use `neo-card` (which is semi-transparent glass) on panels that float above page content. Use `tc.bgPage` from `useThemeClasses()` as the background class so the panel is the same solid color as the page background per theme. `neo-card` is only for non-overlaid cards. Glass/blur on floating panels causes text bleed-through from content behind them.
+19. **Fixed/sticky headers must not overlap page content** — when using `fixed` or `sticky` positioning on headers (`h-14`, etc.), the content below **must** have matching top padding (e.g., `pt-14`) to prevent overlap. For standalone/isolated pages (NFC, guest portal, etc.) that render their own layout, ensure the root layout's `ConditionalHeader` and `MobileNav` hide on those routes — otherwise a fixed header with no content offset causes overlap. Always verify on mobile viewport.
 
 ---
 
@@ -67,7 +68,7 @@ Shared code belongs in `src/components/`, `src/lib/`, or `src/types/` — availa
 | Transfers                                              | `src/features/transfers/`                                                                                                                                      |
 | Watch UI                                               | `src/components/watch/`                                                                                                                                        |
 | Guest Portal                                           | `src/app/g/[tag]/`                                                                                                                                             |
-| NFC Tags                                               | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`                                                                                                 |
+| NFC Tags                                               | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`                                                                                                  |
 
 ### Junction Modules
 
@@ -150,37 +151,37 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 
 ## Feature Index
 
-| Feature                  | Src paths                                                  | Vault doc                                               | Type       |
-| ------------------------ | ---------------------------------------------------------- | ------------------------------------------------------- | ---------- |
-| Accounts & Balance       | `src/features/accounts/`, `src/features/balance/`          | `ERA Notes/02 - Standalone Modules/Accounts & Balance/` | Standalone |
-| Transactions             | `src/app/expense/`, `src/features/transactions/`           | `ERA Notes/02 - Standalone Modules/Transactions/`       | Standalone |
-| Categories               | `src/features/categories/`                                 | `ERA Notes/02 - Standalone Modules/Categories/`         | Standalone |
-| Recurring Payments       | `src/app/recurring/`, `src/features/recurring/`            | `ERA Notes/02 - Standalone Modules/Recurring Payments/` | Standalone |
-| Recipes                  | `src/features/recipes/`, `src/app/recipe/`                 | `ERA Notes/02 - Standalone Modules/Recipes/`            | Standalone |
-| Meal Planning            | `src/app/api/meal-plans/`                                  | `ERA Notes/03 - Junction Modules/Meal Planning/`        | Junction   |
-| Inventory                | `src/features/inventory/`, `src/app/inventory/`            | `ERA Notes/02 - Standalone Modules/Inventory/`          | Standalone |
-| Debts                    | `src/features/debts/`                                      | `ERA Notes/02 - Standalone Modules/Debts/`              | Standalone |
-| Catalogue                | `src/app/catalogue/`, `src/features/catalogue/`            | `ERA Notes/02 - Standalone Modules/Catalogue/`          | Standalone |
-| Future Purchases         | `src/features/future-purchases/`                           | `ERA Notes/02 - Standalone Modules/Future Purchases/`   | Standalone |
-| Budget Allocation        | `src/features/budget/`                                     | `ERA Notes/02 - Standalone Modules/Budget Allocation/`  | Standalone |
-| Preferences (LBP, theme) | `src/features/preferences/`                                | `ERA Notes/02 - Standalone Modules/Preferences/`        | Standalone |
-| Statement Import         | `src/features/statement-import/`                           | `ERA Notes/02 - Standalone Modules/Statement Import/`   | Standalone |
-| Transfers                | `src/features/transfers/`                                  | `ERA Notes/02 - Standalone Modules/Transfers/`          | Standalone |
-| Hub Chat                 | `src/app/hub/`, `src/features/hub/`, `src/components/hub/` | `ERA Notes/03 - Junction Modules/Hub Chat/`             | Junction   |
-| Shopping List            | `src/components/hub/ShoppingListView.tsx`                  | `ERA Notes/03 - Junction Modules/Shopping List/`        | Junction   |
-| Message Actions          | `src/features/hub/messageActions.ts`                       | `ERA Notes/03 - Junction Modules/Message Actions/`      | Junction   |
-| Items / Reminders        | `src/app/items/`, `src/features/items/`                    | `ERA Notes/02 - Standalone Modules/Items & Reminders/`  | Standalone |
-| AI Assistant             | `src/app/api/ai-chat/`, `src/lib/ai/`                      | `ERA Notes/03 - Junction Modules/AI Assistant/`         | Junction   |
-| Notifications            | `src/app/api/notifications/`, `src/app/api/cron/`          | `ERA Notes/03 - Junction Modules/Notifications/`        | Junction   |
-| Household Sharing        | `src/features/hub/`                                        | `ERA Notes/03 - Junction Modules/Household Sharing/`    | Junction   |
-| Analytics                | `src/features/analytics/`                                  | `ERA Notes/02 - Standalone Modules/Analytics/`          | Standalone |
-| Drafts                   | `src/features/drafts/`                                     | `ERA Notes/02 - Standalone Modules/Drafts/`             | Standalone |
-| Watch UI                 | `src/components/watch/`                                    | `ERA Notes/02 - Standalone Modules/Watch UI/`           | Standalone |
-| Guest Portal             | `src/app/g/[tag]/`, `src/components/guest/`                | `ERA Notes/02 - Standalone Modules/Guest Portal/`       | Standalone |
-| Sync & Offline           | `src/contexts/SyncContext.tsx`, `src/lib/offlineQueue.ts`  | `ERA Notes/03 - Junction Modules/Sync & Offline/`       | Junction   |
-| Error Logs               | `src/app/error-logs/`, `src/app/api/error-logs/`           | `ERA Notes/02 - Standalone Modules/Error Logs/`         | Standalone |
-| NFC Tags                 | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/` | `ERA Notes/02 - Standalone Modules/NFC Tags/`        | Standalone |
-| Prerequisites            | `src/lib/prerequisites/`, `src/app/api/items/[id]/prerequisites/` | `ERA Notes/03 - Junction Modules/Prerequisites/`  | Junction   |
+| Feature                  | Src paths                                                         | Vault doc                                               | Type       |
+| ------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------- | ---------- |
+| Accounts & Balance       | `src/features/accounts/`, `src/features/balance/`                 | `ERA Notes/02 - Standalone Modules/Accounts & Balance/` | Standalone |
+| Transactions             | `src/app/expense/`, `src/features/transactions/`                  | `ERA Notes/02 - Standalone Modules/Transactions/`       | Standalone |
+| Categories               | `src/features/categories/`                                        | `ERA Notes/02 - Standalone Modules/Categories/`         | Standalone |
+| Recurring Payments       | `src/app/recurring/`, `src/features/recurring/`                   | `ERA Notes/02 - Standalone Modules/Recurring Payments/` | Standalone |
+| Recipes                  | `src/features/recipes/`, `src/app/recipe/`                        | `ERA Notes/02 - Standalone Modules/Recipes/`            | Standalone |
+| Meal Planning            | `src/app/api/meal-plans/`                                         | `ERA Notes/03 - Junction Modules/Meal Planning/`        | Junction   |
+| Inventory                | `src/features/inventory/`, `src/app/inventory/`                   | `ERA Notes/02 - Standalone Modules/Inventory/`          | Standalone |
+| Debts                    | `src/features/debts/`                                             | `ERA Notes/02 - Standalone Modules/Debts/`              | Standalone |
+| Catalogue                | `src/app/catalogue/`, `src/features/catalogue/`                   | `ERA Notes/02 - Standalone Modules/Catalogue/`          | Standalone |
+| Future Purchases         | `src/features/future-purchases/`                                  | `ERA Notes/02 - Standalone Modules/Future Purchases/`   | Standalone |
+| Budget Allocation        | `src/features/budget/`                                            | `ERA Notes/02 - Standalone Modules/Budget Allocation/`  | Standalone |
+| Preferences (LBP, theme) | `src/features/preferences/`                                       | `ERA Notes/02 - Standalone Modules/Preferences/`        | Standalone |
+| Statement Import         | `src/features/statement-import/`                                  | `ERA Notes/02 - Standalone Modules/Statement Import/`   | Standalone |
+| Transfers                | `src/features/transfers/`                                         | `ERA Notes/02 - Standalone Modules/Transfers/`          | Standalone |
+| Hub Chat                 | `src/app/hub/`, `src/features/hub/`, `src/components/hub/`        | `ERA Notes/03 - Junction Modules/Hub Chat/`             | Junction   |
+| Shopping List            | `src/components/hub/ShoppingListView.tsx`                         | `ERA Notes/03 - Junction Modules/Shopping List/`        | Junction   |
+| Message Actions          | `src/features/hub/messageActions.ts`                              | `ERA Notes/03 - Junction Modules/Message Actions/`      | Junction   |
+| Items / Reminders        | `src/app/items/`, `src/features/items/`                           | `ERA Notes/02 - Standalone Modules/Items & Reminders/`  | Standalone |
+| AI Assistant             | `src/app/api/ai-chat/`, `src/lib/ai/`                             | `ERA Notes/03 - Junction Modules/AI Assistant/`         | Junction   |
+| Notifications            | `src/app/api/notifications/`, `src/app/api/cron/`                 | `ERA Notes/03 - Junction Modules/Notifications/`        | Junction   |
+| Household Sharing        | `src/features/hub/`                                               | `ERA Notes/03 - Junction Modules/Household Sharing/`    | Junction   |
+| Analytics                | `src/features/analytics/`                                         | `ERA Notes/02 - Standalone Modules/Analytics/`          | Standalone |
+| Drafts                   | `src/features/drafts/`                                            | `ERA Notes/02 - Standalone Modules/Drafts/`             | Standalone |
+| Watch UI                 | `src/components/watch/`                                           | `ERA Notes/02 - Standalone Modules/Watch UI/`           | Standalone |
+| Guest Portal             | `src/app/g/[tag]/`, `src/components/guest/`                       | `ERA Notes/02 - Standalone Modules/Guest Portal/`       | Standalone |
+| Sync & Offline           | `src/contexts/SyncContext.tsx`, `src/lib/offlineQueue.ts`         | `ERA Notes/03 - Junction Modules/Sync & Offline/`       | Junction   |
+| Error Logs               | `src/app/error-logs/`, `src/app/api/error-logs/`                  | `ERA Notes/02 - Standalone Modules/Error Logs/`         | Standalone |
+| NFC Tags                 | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`     | `ERA Notes/02 - Standalone Modules/NFC Tags/`           | Standalone |
+| Prerequisites            | `src/lib/prerequisites/`, `src/app/api/items/[id]/prerequisites/` | `ERA Notes/03 - Junction Modules/Prerequisites/`        | Junction   |
 
 ---
 
