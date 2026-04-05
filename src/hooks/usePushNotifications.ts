@@ -168,6 +168,9 @@ export function usePushNotifications() {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitializing = useRef(false);
   const isSyncing = useRef(false);
+  // Prevents infinite force-resubscribe loops if Chrome keeps returning the same dead token.
+  // Resets when the component unmounts (page reload), giving one attempt per app session.
+  const hasForceResubscribedThisSession = useRef(false);
 
   // ========== CORE: Sync subscription to DB ==========
   // This is the KEY function - called on init AND every foreground
@@ -220,7 +223,7 @@ export function usePushNotifications() {
         } else {
           console.log("[Push] ✓ Subscription synced to DB successfully");
         }
-        return { success: true, needsResubscribe: result.was_previously_inactive };
+        return { success: true, needsResubscribe: result.needs_resubscribe || result.was_previously_inactive };
       } catch (error) {
         console.error("[Push] ✗ Failed to sync subscription:", error);
         return { success: false };
@@ -230,14 +233,26 @@ export function usePushNotifications() {
   );
 
   // ========== Force fresh FCM subscription (dead token recovery) ==========
-  // Called when the server signals the current endpoint was previously inactive.
+  // Called when the server signals the current endpoint is failing (failed_at set or inactive).
   // Chrome Android may cache a dead FCM token without firing pushsubscriptionchange.
   // We unsubscribe and re-subscribe to force Chrome to obtain a fresh token from FCM.
   const forceResubscribe = useCallback(
     async (deadSubscription: PushSubscription): Promise<void> => {
+      // Anti-loop: only attempt once per app session. If this is triggered again
+      // (e.g., the fresh token is also bad), we stop rather than looping indefinitely.
+      if (hasForceResubscribedThisSession.current) {
+        console.warn(
+          "[Push] Already attempted force-resubscribe this session — skipping to avoid loop",
+        );
+        return;
+      }
+      hasForceResubscribedThisSession.current = true;
+
+      const oldEndpoint = deadSubscription.endpoint;
       console.log(
         "[Push] 🔄 Forcing fresh FCM subscription to replace dead endpoint",
       );
+
       try {
         const registration = (await navigator.serviceWorker
           .ready) as SWRegistrationWithPush;
@@ -246,6 +261,24 @@ export function usePushNotifications() {
 
         const newSub = await createLocalPushSubscription(registration);
         if (newSub) {
+          // Safety check: if Chrome returned the exact same endpoint, the token
+          // is truly stuck. Clearing it is the only safe option — user must re-enable.
+          if (newSub.endpoint === oldEndpoint) {
+            console.error(
+              "[Push] Chrome returned the same endpoint after resubscribe — FCM token is stuck. Clearing push state.",
+            );
+            setPushEnabledInStorage(false);
+            setLastEndpointInStorage(null);
+            setState((prev) => ({
+              ...prev,
+              isSubscribed: false,
+              subscription: null,
+              error:
+                "Push subscription expired. Please disable and re-enable notifications in Settings.",
+            }));
+            return;
+          }
+
           console.log(
             "[Push] ✓ Fresh subscription obtained:",
             newSub.endpoint.substring(0, 50),
@@ -256,6 +289,11 @@ export function usePushNotifications() {
           setState((prev) => ({ ...prev, subscription: newSub }));
         } else {
           console.error("[Push] Failed to obtain fresh subscription");
+          setState((prev) => ({
+            ...prev,
+            error:
+              "Could not refresh push subscription. Try toggling notifications off and on in Settings.",
+          }));
         }
       } catch (err) {
         console.error("[Push] forceResubscribe error:", err);
@@ -588,6 +626,13 @@ export function usePushNotifications() {
       setLastEndpointInStorage(subscription.endpoint);
       setLastSyncTime();
 
+      // Register Periodic Background Sync so the SW can self-heal the subscription
+      // even when the app is closed (Chrome Android installed PWA only).
+      // This is the backstop against FCM token rotation going undetected.
+      registerPeriodicHealthCheck(registration).catch(() => {
+        // Non-critical — foreground sync is the fallback
+      });
+
       setState((prev) => ({
         ...prev,
         isSubscribed: true,
@@ -789,7 +834,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 async function saveSubscriptionToApi(
   subscription: PushSubscription,
-): Promise<{ was_previously_inactive?: boolean }> {
+): Promise<{ was_previously_inactive?: boolean; needs_resubscribe?: boolean }> {
   const subscriptionData = subscription.toJSON();
   const deviceId = getOrCreateDeviceId();
   const deviceType = getDeviceType();
@@ -838,5 +883,40 @@ async function removeSubscription(endpoint: string): Promise<void> {
     });
   } catch (error) {
     console.error("[Push] Error removing subscription:", error);
+  }
+}
+
+// ============================================
+// PERIODIC BACKGROUND SYNC REGISTRATION
+// ============================================
+// Registers a daily background health check so the SW can detect and heal a dead
+// FCM subscription even when the app is closed (Chrome Android + installed PWA only).
+// This is the main defence against FCM token rotation going undetected.
+
+async function registerPeriodicHealthCheck(
+  registration: SWRegistrationWithPush,
+): Promise<void> {
+  const periodicSync = (registration as unknown as { periodicSync?: { register: (tag: string, options: { minInterval: number }) => Promise<void>; getTags: () => Promise<string[]> } }).periodicSync;
+
+  if (!periodicSync) {
+    console.log("[Push] Periodic Background Sync not supported on this browser — skipping");
+    return;
+  }
+
+  try {
+    // Check if already registered to avoid duplicate registrations
+    const tags = await periodicSync.getTags();
+    if (tags.includes("push-health-check")) {
+      console.log("[Push] Periodic health check already registered");
+      return;
+    }
+
+    await periodicSync.register("push-health-check", {
+      minInterval: 12 * 60 * 60 * 1000, // hint: at least every 12 hours
+    });
+    console.log("[Push] ✓ Periodic push health check registered (12h interval)");
+  } catch (err) {
+    // Fails silently on browsers/contexts that don't support it
+    console.log("[Push] Could not register periodic health check:", err);
   }
 }

@@ -6,6 +6,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { logPushEvent } from "./pushLogger";
 
 let vapidConfigured = false;
 
@@ -93,7 +94,18 @@ export async function sendPushToUser(
 
   const now = new Date().toISOString();
 
+  // Extract notification title for log context (best-effort JSON parse)
+  let notificationTitle: string | null = null;
+  try {
+    const parsed = JSON.parse(payload) as { title?: string };
+    notificationTitle = parsed.title ?? null;
+  } catch {
+    // Not JSON or no title — fine
+  }
+
   for (const sub of subscriptions) {
+    const endpointPreview = sub.endpoint.substring(0, 80);
+
     // ── Grace period logic for previously-failed subscriptions ──
     if (sub.failed_at) {
       const failedAt = new Date(sub.failed_at).getTime();
@@ -102,13 +114,24 @@ export async function sendPushToUser(
       if (timeSinceFailure > GRACE_PERIOD_MS) {
         // Grace period expired (72h+) — permanently deactivate
         result.deactivated.push(sub.id);
+        const hoursDown = Math.round(timeSinceFailure / 3600000);
         console.log(
-          `[pushSender] Subscription ${sub.id.substring(0, 8)} failed for ${Math.round(timeSinceFailure / 3600000)}h — deactivating`,
+          `[pushSender] Subscription ${sub.id.substring(0, 8)} failed for ${hoursDown}h — deactivating`,
         );
         await supabase
           .from("push_subscriptions")
           .update({ is_active: false })
           .eq("id", sub.id);
+        logPushEvent(supabase, {
+          user_id: userId,
+          subscription_id: sub.id,
+          event_type: "grace_period_expired",
+          device_name: sub.device_name,
+          endpoint_preview: endpointPreview,
+          notification_id: notificationId,
+          notification_title: notificationTitle,
+          metadata: { hours_in_grace_period: hoursDown },
+        });
         continue;
       }
 
@@ -119,9 +142,20 @@ export async function sendPushToUser(
       }
 
       // Between 1h and 72h — retry once to check if endpoint recovered
+      const hoursAgo = Math.round(timeSinceFailure / 3600000);
       console.log(
-        `[pushSender] Retrying ${sub.device_name} (${sub.id.substring(0, 8)}) — in grace period (${Math.round(timeSinceFailure / 3600000)}h)`,
+        `[pushSender] Retrying ${sub.device_name} (${sub.id.substring(0, 8)}) — in grace period (${hoursAgo}h)`,
       );
+      logPushEvent(supabase, {
+        user_id: userId,
+        subscription_id: sub.id,
+        event_type: "grace_period_retry",
+        device_name: sub.device_name,
+        endpoint_preview: endpointPreview,
+        notification_id: notificationId,
+        notification_title: notificationTitle,
+        metadata: { hours_in_grace_period: hoursAgo },
+      });
     }
 
     try {
@@ -141,11 +175,22 @@ export async function sendPushToUser(
         .from("push_subscriptions")
         .update({ last_used_at: now, failed_at: null })
         .eq("id", sub.id);
+      logPushEvent(supabase, {
+        user_id: userId,
+        subscription_id: sub.id,
+        event_type: "send_success",
+        device_name: sub.device_name,
+        endpoint_preview: endpointPreview,
+        notification_id: notificationId,
+        notification_title: notificationTitle,
+      });
     } catch (err: unknown) {
       const statusCode =
         err && typeof err === "object" && "statusCode" in err
           ? (err as { statusCode: number }).statusCode
           : null;
+      const errMessage =
+        err instanceof Error ? err.message : String(err);
 
       if (statusCode === 410 || statusCode === 404) {
         result.failed++;
@@ -161,6 +206,18 @@ export async function sendPushToUser(
             .from("push_subscriptions")
             .update({ failed_at: now })
             .eq("id", sub.id);
+          logPushEvent(supabase, {
+            user_id: userId,
+            subscription_id: sub.id,
+            event_type: "send_failure_410",
+            device_name: sub.device_name,
+            endpoint_preview: endpointPreview,
+            error_code: statusCode,
+            error_message: errMessage,
+            notification_id: notificationId,
+            notification_title: notificationTitle,
+            metadata: { grace_period_started: true },
+          });
         } else {
           // Already in grace period — just log (don't update failed_at)
           const hoursAgo = Math.round(
@@ -169,6 +226,18 @@ export async function sendPushToUser(
           console.log(
             `[pushSender] Subscription ${sub.id.substring(0, 8)} still failing (${statusCode}, ${hoursAgo}h into grace period)`,
           );
+          logPushEvent(supabase, {
+            user_id: userId,
+            subscription_id: sub.id,
+            event_type: "send_failure_410",
+            device_name: sub.device_name,
+            endpoint_preview: endpointPreview,
+            error_code: statusCode,
+            error_message: errMessage,
+            notification_id: notificationId,
+            notification_title: notificationTitle,
+            metadata: { hours_in_grace_period: hoursAgo },
+          });
         }
       } else {
         // Transient error (503, network, etc.) — don't track as permanent failure
@@ -177,6 +246,17 @@ export async function sendPushToUser(
           `[pushSender] ✗ Push failed for ${sub.device_name} (status ${statusCode ?? "unknown"}):`,
           err instanceof Error ? err.message : err,
         );
+        logPushEvent(supabase, {
+          user_id: userId,
+          subscription_id: sub.id,
+          event_type: "send_failure_other",
+          device_name: sub.device_name,
+          endpoint_preview: endpointPreview,
+          error_code: statusCode,
+          error_message: errMessage,
+          notification_id: notificationId,
+          notification_title: notificationTitle,
+        });
       }
     }
   }

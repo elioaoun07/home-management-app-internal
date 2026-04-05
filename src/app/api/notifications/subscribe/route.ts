@@ -2,6 +2,7 @@
 // API route to save push subscription to database
 // ROBUST version: Uses unique device_id for proper stale subscription cleanup
 
+import { logPushEvent } from "@/lib/pushLogger";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
@@ -36,21 +37,31 @@ export async function POST(req: NextRequest) {
     console.log(`[Subscribe] Device Name: ${device_name}`);
     console.log(`[Subscribe] Endpoint: ${endpoint.substring(0, 60)}...`);
 
-    // Step 0: Check if this exact endpoint was previously inactive (dead FCM token)
+    // Step 0: Check if this exact endpoint has problems (inactive OR in failure grace period)
     // Must happen BEFORE step 2 which deletes inactive rows
-    const { data: existingDeadSub } = await supabase
+    const { data: existingSub } = await supabase
       .from("push_subscriptions")
-      .select("is_active")
+      .select("is_active, failed_at")
       .eq("user_id", user.id)
       .eq("endpoint", endpoint)
       .maybeSingle();
 
     const was_previously_inactive =
-      existingDeadSub !== null && !existingDeadSub.is_active;
+      existingSub !== null && !existingSub.is_active;
+
+    // Detect subscriptions in the grace period (is_active=true but failed_at set).
+    // These are actively failing but haven't hit the 72h deactivation threshold yet.
+    const was_failing =
+      existingSub !== null && !!existingSub.is_active && !!existingSub.failed_at;
 
     if (was_previously_inactive) {
       console.log(
         `[Subscribe] ⚠️ Endpoint was previously marked inactive (dead FCM token) — client will be instructed to re-subscribe`,
+      );
+    }
+    if (was_failing) {
+      console.log(
+        `[Subscribe] ⚠️ Endpoint is in failure grace period (failed_at=${existingSub!.failed_at}) — preserving failed_at and instructing client to re-subscribe`,
       );
     }
 
@@ -106,7 +117,12 @@ export async function POST(req: NextRequest) {
           device_name: device_name || getDeviceType(user_agent || ""),
           user_agent,
           is_active: true,
-          failed_at: null, // Clear any previous failure tracking
+          // CRITICAL: Do NOT clear failed_at if the subscription is actively failing.
+          // Clearing it resets the 72h grace period timer and creates a destructive loop:
+          // cron sets failed_at → foreground sync clears it → cron sets it again → repeat.
+          // Instead, keep failed_at intact so the grace period progresses, and tell the
+          // client to force-resubscribe for a fresh FCM token.
+          failed_at: was_failing ? existingSub!.failed_at : null,
           last_used_at: new Date().toISOString(),
         },
         {
@@ -136,11 +152,38 @@ export async function POST(req: NextRequest) {
       `[Subscribe] ✓ Subscription saved. User now has ${count} active subscription(s)`,
     );
 
+    const endpointPreview = endpoint.substring(0, 80);
+    if (was_failing || was_previously_inactive) {
+      logPushEvent(supabase, {
+        user_id: user.id,
+        subscription_id: data.id,
+        event_type: "subscription_failing",
+        device_name: device_name ?? null,
+        endpoint_preview: endpointPreview,
+        metadata: {
+          was_failing,
+          was_previously_inactive,
+          failed_at: was_failing ? existingSub!.failed_at : null,
+        },
+      });
+    } else {
+      logPushEvent(supabase, {
+        user_id: user.id,
+        subscription_id: data.id,
+        event_type: "subscribed",
+        device_name: device_name ?? null,
+        endpoint_preview: endpointPreview,
+        metadata: { active_subscriptions: count },
+      });
+    }
+
     return NextResponse.json({
       success: true,
       id: data.id,
       active_subscriptions: count,
       was_previously_inactive,
+      // Tell client to force-resubscribe whenever the endpoint is known-bad
+      needs_resubscribe: was_failing || was_previously_inactive,
     });
   } catch (error) {
     console.error("[Subscribe] Error in subscribe route:", error);

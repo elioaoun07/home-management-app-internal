@@ -871,6 +871,25 @@ CREATE TABLE public.push_subscriptions (
 );
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_active
   ON public.push_subscriptions (user_id) WHERE is_active = true;
+CREATE TABLE public.push_event_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  subscription_id uuid,
+  event_type text NOT NULL,
+  device_name text,
+  endpoint_preview text,
+  error_code integer,
+  error_message text,
+  notification_id uuid,
+  notification_title text,
+  metadata jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT push_event_logs_pkey PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS idx_push_event_logs_user_created
+  ON public.push_event_logs (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_push_event_logs_event_type
+  ON public.push_event_logs (event_type, created_at DESC);
 CREATE TABLE public.recipe_versions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   recipe_id uuid NOT NULL,

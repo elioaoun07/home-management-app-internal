@@ -8,6 +8,7 @@
 // already knows the exact old subscription endpoint can update it.
 // Uses supabaseAdmin because there is no user session in the SW context.
 
+import { logPushEvent } from "@/lib/pushLogger";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -91,6 +92,17 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`[SW subscribe] ✓ Subscription updated for user ${user_id.substring(0, 8)}`);
+
+    logPushEvent(supabase, {
+      user_id,
+      event_type: "sw_token_rotation",
+      device_name,
+      endpoint_preview: endpoint.substring(0, 80),
+      metadata: {
+        old_endpoint_preview: old_endpoint.substring(0, 80),
+        source: "pushsubscriptionchange_or_periodic_sync",
+      },
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {

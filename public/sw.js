@@ -836,6 +836,120 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 // ============================================
+// PERIODIC BACKGROUND SYNC (Android subscription health check)
+// ============================================
+// Chrome on Android supports Periodic Background Sync for installed PWAs.
+// This wakes the SW ~once per day even when the app is closed, allowing us to
+// detect and heal dead FCM subscriptions without the user opening the app.
+//
+// Registration happens in usePushNotifications.ts after a successful subscribe.
+
+self.addEventListener("periodicsync", (event) => {
+  if (event.tag === "push-health-check") {
+    console.log("[SW] Periodic push health check triggered");
+    event.waitUntil(periodicPushHealthCheck());
+  }
+});
+
+async function periodicPushHealthCheck() {
+  try {
+    // Get the current subscription the browser has
+    const subscription = await self.registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      console.log("[SW] Periodic health check: no local subscription — nothing to do");
+      return;
+    }
+
+    // Ask the server if this endpoint is healthy
+    const response = await fetch("/api/notifications/subscription-health", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subscription.endpoint }),
+    });
+
+    if (!response.ok) {
+      console.warn("[SW] Health check API error:", response.status);
+      return;
+    }
+
+    const { needs_resubscribe, reason } = await response.json();
+
+    if (!needs_resubscribe) {
+      console.log("[SW] Periodic health check: subscription is healthy ✓");
+      return;
+    }
+
+    console.log(`[SW] Periodic health check: subscription needs renewal (reason: ${reason}) — re-subscribing`);
+
+    // Retrieve cached VAPID key (stored by usePushNotifications on first subscribe)
+    const vapidKey = await getStoredVapidKey();
+    if (!vapidKey) {
+      console.error("[SW] No VAPID key cached — cannot re-subscribe autonomously");
+      notifyClientsSubscriptionLost();
+      return;
+    }
+
+    const oldEndpoint = subscription.endpoint;
+
+    // Unsubscribe the dead token and get a fresh one from FCM
+    await subscription.unsubscribe();
+
+    let newSubscription;
+    try {
+      newSubscription = await self.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      });
+    } catch (err) {
+      console.error("[SW] Periodic health check: failed to re-subscribe:", err);
+      return;
+    }
+
+    if (newSubscription.endpoint === oldEndpoint) {
+      console.warn("[SW] Periodic health check: Chrome returned same endpoint — skipping (will retry next cycle)");
+      return;
+    }
+
+    console.log("[SW] Periodic health check: fresh endpoint obtained:", newSubscription.endpoint.substring(0, 50));
+
+    // If the app is open, let the client handle the sync (normal subscribe flow with auth)
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    if (clients.length > 0) {
+      clients.forEach((client) => {
+        client.postMessage({
+          type: "SUBSCRIPTION_CHANGED",
+          endpoint: newSubscription.toJSON().endpoint,
+          p256dh: newSubscription.toJSON().keys?.p256dh,
+          auth: newSubscription.toJSON().keys?.auth,
+        });
+      });
+      return;
+    }
+
+    // App is closed — sync directly using the SW route (auth via old_endpoint)
+    const syncResponse = await fetch("/api/notifications/subscribe/sw", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        endpoint: newSubscription.toJSON().endpoint,
+        p256dh: newSubscription.toJSON().keys?.p256dh,
+        auth: newSubscription.toJSON().keys?.auth,
+        old_endpoint: oldEndpoint,
+      }),
+    });
+
+    if (syncResponse.ok) {
+      console.log("[SW] Periodic health check: subscription healed successfully ✓");
+    } else {
+      console.error("[SW] Periodic health check: failed to sync new subscription:", syncResponse.status);
+    }
+  } catch (err) {
+    console.error("[SW] Periodic health check error:", err);
+  }
+}
+
+// ============================================
 // ACTION HANDLERS
 // ============================================
 
