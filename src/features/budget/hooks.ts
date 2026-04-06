@@ -4,6 +4,7 @@ import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import type {
   BudgetAllocation,
+  BudgetCategoryView,
   BudgetSummary,
   CreateBudgetAllocationInput,
 } from "@/types/budgetAllocation";
@@ -17,9 +18,11 @@ interface BudgetResponse {
   accounts: Account[];
 }
 
+const BUDGET_KEY = "budget-allocations";
+
 async function fetchBudgetAllocations(
   month?: string,
-  accountId?: string
+  accountId?: string,
 ): Promise<BudgetResponse> {
   const params = new URLSearchParams();
   if (month) params.set("month", month);
@@ -34,7 +37,7 @@ async function fetchBudgetAllocations(
 }
 
 async function saveBudgetAllocation(
-  input: CreateBudgetAllocationInput
+  input: CreateBudgetAllocationInput,
 ): Promise<BudgetAllocation> {
   const res = await safeFetch("/api/budget-allocations", {
     method: "POST",
@@ -59,27 +62,112 @@ async function deleteBudgetAllocation(id: string): Promise<void> {
 }
 
 /**
- * Fetch budget allocations with spending data
+ * Fetch budget allocations with spending data.
+ * Overrides global refetchOnMount: false so navigating back to this page
+ * always fetches fresh data from the server.
  */
 export function useBudgetAllocations(month?: string, accountId?: string) {
   return useQuery({
-    queryKey: ["budget-allocations", month, accountId],
+    queryKey: [BUDGET_KEY, month, accountId],
     queryFn: () => fetchBudgetAllocations(month, accountId),
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
+    refetchOnMount: "always", // override global false — budget data must be fresh on every mount
   });
 }
 
 /**
- * Save or update a budget allocation
+ * Helper: apply a budget amount change optimistically to the cached summary.
+ * Works for both parent-category and subcategory budget edits.
+ */
+function applyBudgetOptimistic(
+  old: BudgetResponse | undefined,
+  input: CreateBudgetAllocationInput,
+): BudgetResponse | undefined {
+  if (!old) return old;
+
+  const updatedCategories: BudgetCategoryView[] = old.summary.categories.map(
+    (cat) => {
+      // Subcategory budget change
+      if (input.subcategory_id && cat.category_id === input.category_id) {
+        const updatedSubs = cat.subcategories?.map((sub) =>
+          sub.subcategory_id === input.subcategory_id
+            ? { ...sub, total_budget: input.monthly_budget }
+            : sub,
+        );
+        return { ...cat, subcategories: updatedSubs };
+      }
+      // Parent category budget change
+      if (!input.subcategory_id && cat.category_id === input.category_id) {
+        return { ...cat, total_budget: input.monthly_budget };
+      }
+      return cat;
+    },
+  );
+
+  const newTotalBudget = updatedCategories.reduce(
+    (sum, c) => sum + c.total_budget,
+    0,
+  );
+
+  return {
+    ...old,
+    summary: {
+      ...old.summary,
+      categories: updatedCategories,
+      total_budget: newTotalBudget,
+      total_remaining: newTotalBudget - old.summary.total_spent,
+      unallocated: old.summary.income_balance - newTotalBudget,
+    },
+  };
+}
+
+/**
+ * Save or update a budget allocation.
+ *
+ * Uses optimistic updates + cancelQueries to avoid stale-refetch races:
+ *   onMutate  → cancel in-flight fetches, apply optimistic budget in cache
+ *   onError   → rollback to previous cache snapshot
+ *   onSuccess → toast with undo
+ *   onSettled → always invalidate to reconcile with real server data
  */
 export function useSaveBudgetAllocation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: saveBudgetAllocation,
+
+    onMutate: async (input) => {
+      // 1. Cancel any in-flight refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: [BUDGET_KEY] });
+
+      // 2. Snapshot every active budget query for rollback
+      const previousQueries = queryClient.getQueriesData<BudgetResponse>({
+        queryKey: [BUDGET_KEY],
+      });
+
+      // 3. Optimistically update all matching budget queries
+      queryClient.setQueriesData<BudgetResponse>(
+        { queryKey: [BUDGET_KEY] },
+        (old) => applyBudgetOptimistic(old, input),
+      );
+
+      return { previousQueries };
+    },
+
+    onError: (_err, _input, context) => {
+      // Rollback every budget query to its pre-mutation snapshot
+      if (context?.previousQueries) {
+        for (const [key, data] of context.previousQueries) {
+          if (data) queryClient.setQueryData(key, data);
+        }
+      }
+      toast.error("Failed to save budget allocation", {
+        icon: ToastIcons.error,
+      });
+    },
+
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["budget-allocations"] });
       toast.success("Budget saved", {
         icon: ToastIcons.create,
         duration: 4000,
@@ -87,9 +175,13 @@ export function useSaveBudgetAllocation() {
           label: "Undo",
           onClick: async () => {
             try {
-              await safeFetch(`/api/budget-allocations?id=${data.id}`, { method: "DELETE" });
-              queryClient.invalidateQueries({ queryKey: ["budget-allocations"] });
-              toast.success("Budget allocation removed", { icon: ToastIcons.delete });
+              await safeFetch(`/api/budget-allocations?id=${data.id}`, {
+                method: "DELETE",
+              });
+              queryClient.invalidateQueries({ queryKey: [BUDGET_KEY] });
+              toast.success("Budget allocation removed", {
+                icon: ToastIcons.delete,
+              });
             } catch {
               toast.error("Failed to undo");
             }
@@ -97,8 +189,11 @@ export function useSaveBudgetAllocation() {
         },
       });
     },
-    onError: () => {
-      toast.error("Failed to save budget allocation", { icon: ToastIcons.error });
+
+    // Always refetch from server after mutation settles (success OR error)
+    // to reconcile the optimistic cache with the real DB state.
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: [BUDGET_KEY] });
     },
   });
 }
@@ -112,7 +207,7 @@ export function useDeleteBudgetAllocation() {
   return useMutation({
     mutationFn: deleteBudgetAllocation,
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ["budget-allocations"] });
+      queryClient.invalidateQueries({ queryKey: [BUDGET_KEY] });
       toast.success("Budget allocation removed", {
         icon: ToastIcons.delete,
         duration: 4000,
@@ -125,7 +220,9 @@ export function useDeleteBudgetAllocation() {
       });
     },
     onError: () => {
-      toast.error("Failed to delete budget allocation", { icon: ToastIcons.error });
+      toast.error("Failed to delete budget allocation", {
+        icon: ToastIcons.error,
+      });
     },
   });
 }

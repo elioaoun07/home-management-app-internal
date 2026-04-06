@@ -2,127 +2,420 @@
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
-import { useThemeClasses } from "@/hooks/useThemeClasses";
-import { cn } from "@/lib/utils";
-import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  AlertTriangle,
-  BarChart2,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Edit3,
-  TrendingUp,
-  User,
-  Users,
-  Wallet,
-  X,
-} from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   useBudgetAllocations,
   useSaveBudgetAllocation,
 } from "@/features/budget/hooks";
-import { useMyAccounts } from "@/features/accounts/hooks";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { cn } from "@/lib/utils";
+import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import type {
-  BudgetAssignment,
   BudgetCategoryView,
-  BudgetSubcategoryView,
+  BudgetOwnershipFilter,
+  BudgetSummary,
+  BudgetWeek,
 } from "@/types/budgetAllocation";
-import { ASSIGNMENT_LABELS, ASSIGNMENT_COLORS } from "@/types/budgetAllocation";
+import { BUDGET_WEEK_LABELS } from "@/types/budgetAllocation";
 import { format } from "date-fns";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  DollarSign,
+  Edit3,
+  Heart,
+  Lightbulb,
+  PieChart,
+  Settings2,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  User,
+  Users,
+  Wallet,
+} from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-// Assignment toggle component
-const AssignmentToggle = memo(function AssignmentToggle({
+// ===== Ownership Toggle (Me / Both / Partner) =====
+const OwnershipToggle = memo(function OwnershipToggle({
   value,
   onChange,
   hasPartner,
-  compact = false,
+  tc,
 }: {
-  value: BudgetAssignment;
-  onChange: (v: BudgetAssignment) => void;
+  value: BudgetOwnershipFilter;
+  onChange: (v: BudgetOwnershipFilter) => void;
   hasPartner: boolean;
-  compact?: boolean;
+  tc: ReturnType<typeof useThemeClasses>;
 }) {
-  const options: BudgetAssignment[] = hasPartner
-    ? ["user", "partner", "both"]
-    : ["user", "both"];
+  const items: {
+    id: BudgetOwnershipFilter;
+    icon: typeof User;
+    label: string;
+  }[] = hasPartner
+    ? [
+        { id: "mine", icon: User, label: "Me" },
+        { id: "all", icon: Users, label: "Both" },
+        { id: "partner", icon: Heart, label: "Partner" },
+      ]
+    : [
+        { id: "mine", icon: User, label: "Me" },
+        { id: "all", icon: Users, label: "Both" },
+      ];
 
   return (
-    <div className={cn("flex gap-1", compact ? "scale-90" : "")}>
-      {options.map((opt) => (
+    <div className="flex items-center gap-1 p-1 rounded-xl neo-card">
+      {items.map((item) => (
         <button
-          key={opt}
-          onClick={() => onChange(opt)}
+          key={item.id}
+          onClick={() => onChange(item.id)}
           className={cn(
-            "px-2 py-1 rounded-lg text-xs font-medium transition-all",
-            value === opt
-              ? "ring-2 ring-offset-1 ring-offset-slate-900"
-              : "opacity-60 hover:opacity-100"
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+            value === item.id
+              ? `${tc.bgActive} ${tc.textActive}`
+              : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
           )}
-          style={{
-            backgroundColor: `${ASSIGNMENT_COLORS[opt]}20`,
-            color: ASSIGNMENT_COLORS[opt],
-            ...(value === opt && { boxShadow: `0 0 0 2px ${ASSIGNMENT_COLORS[opt]}` }),
-          }}
         >
-          {opt === "user" && <User className="w-3 h-3 inline mr-1" />}
-          {opt === "partner" && <User className="w-3 h-3 inline mr-1" />}
-          {opt === "both" && <Users className="w-3 h-3 inline mr-1" />}
-          {!compact && ASSIGNMENT_LABELS[opt]}
+          <item.icon className="w-3.5 h-3.5" />
+          {item.label}
         </button>
       ))}
     </div>
   );
 });
 
-// Subcategory budget row
-const SubcategoryBudgetRow = memo(function SubcategoryBudgetRow({
-  subcategory,
-  categoryId,
-  accountId,
-  hasPartner,
-  onSave,
+// ===== Account Filter =====
+const AccountFilter = memo(function AccountFilter({
+  accounts,
+  selectedId,
+  onSelect,
 }: {
-  subcategory: BudgetSubcategoryView;
-  categoryId: string;
-  accountId: string;
-  hasPartner: boolean;
-  onSave: (data: {
-    category_id: string;
-    subcategory_id: string;
-    account_id: string;
-    assigned_to: BudgetAssignment;
-    monthly_budget: number;
-  }) => void;
+  accounts: { id: string; name: string; type: string }[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
 }) {
-  const themeClasses = useThemeClasses();
-  const [budget, setBudget] = useState(subcategory.total_budget);
-  const [assignment, setAssignment] = useState<BudgetAssignment>(
-    subcategory.user_budget > 0
-      ? "user"
-      : subcategory.partner_budget > 0
-        ? "partner"
-        : "both"
+  const expenseAccounts = accounts.filter((a) => a.type === "expense");
+  if (expenseAccounts.length <= 1) return null;
+
+  return (
+    <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      <button
+        onClick={() => onSelect(null)}
+        className={cn(
+          "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+          selectedId === null
+            ? "bg-white/15 text-white"
+            : "bg-white/5 text-slate-400 hover:bg-white/10",
+        )}
+      >
+        All Accounts
+      </button>
+      {expenseAccounts.map((acc) => (
+        <button
+          key={acc.id}
+          onClick={() => onSelect(acc.id)}
+          className={cn(
+            "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
+            selectedId === acc.id
+              ? "bg-white/15 text-white"
+              : "bg-white/5 text-slate-400 hover:bg-white/10",
+          )}
+        >
+          {acc.name}
+        </button>
+      ))}
+    </div>
   );
+});
+
+// ===== Week Review Toggle =====
+const WeekToggle = memo(function WeekToggle({
+  value,
+  onChange,
+  currentWeekIndex,
+}: {
+  value: BudgetWeek;
+  onChange: (w: BudgetWeek) => void;
+  currentWeekIndex: number;
+}) {
+  const weeks: BudgetWeek[] = ["w0", "w1", "w2", "w3", "w4"];
+
+  return (
+    <div className="flex items-center gap-1 p-1 rounded-xl bg-white/5">
+      {weeks.map((w) => {
+        const weekNum = parseInt(w.slice(1));
+        const isActive = value === w;
+        const isPast = weekNum < currentWeekIndex;
+        const isCurrent = weekNum === currentWeekIndex;
+
+        return (
+          <button
+            key={w}
+            onClick={() => onChange(w)}
+            className={cn(
+              "px-2.5 py-1 rounded-lg text-xs font-medium transition-all relative",
+              isActive
+                ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30"
+                : isPast
+                  ? "text-slate-500 hover:text-slate-400 hover:bg-white/5"
+                  : "text-slate-400 hover:bg-white/5",
+            )}
+          >
+            {BUDGET_WEEK_LABELS[w]}
+            {isCurrent && !isActive && (
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-violet-400" />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+});
+
+// ===== Income Balance Card =====
+const IncomeBalanceCard = memo(function IncomeBalanceCard({
+  summary,
+  ownershipFilter,
+}: {
+  summary: BudgetSummary;
+  ownershipFilter: BudgetOwnershipFilter;
+}) {
+  const displayBalance = useMemo(() => {
+    if (ownershipFilter === "mine") return summary.user_income_balance;
+    if (ownershipFilter === "partner") return summary.partner_income_balance;
+    return summary.income_balance;
+  }, [summary, ownershipFilter]);
+
+  const allocated = summary.total_budget;
+  const unallocated = displayBalance - allocated;
+  const allocationPct =
+    displayBalance > 0 ? Math.min((allocated / displayBalance) * 100, 100) : 0;
+
+  return (
+    <Card className="neo-card p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-emerald-500/20">
+            <Wallet className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <p className="text-sm text-slate-400">
+              Income Balance
+              {ownershipFilter === "all" &&
+                summary.partner_income_balance > 0 && (
+                  <span className="text-xs text-slate-500 ml-1">
+                    (Combined)
+                  </span>
+                )}
+            </p>
+            <p className="text-2xl font-bold text-emerald-300">
+              $
+              {displayBalance.toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-slate-500">Allocated</p>
+          <p className="text-lg font-semibold text-violet-300">
+            ${allocated.toLocaleString()}
+          </p>
+        </div>
+      </div>
+
+      {/* Allocation progress bar */}
+      <div className="h-2.5 bg-slate-800/50 rounded-full overflow-hidden mb-2">
+        <motion.div
+          className="h-full rounded-full"
+          initial={{ width: 0 }}
+          animate={{ width: `${allocationPct}%` }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          style={{
+            background:
+              allocationPct > 100
+                ? "linear-gradient(90deg, #ef4444, #f87171)"
+                : "linear-gradient(90deg, #8b5cf6, #a78bfa)",
+            boxShadow:
+              allocationPct > 100
+                ? "0 0 12px rgba(239,68,68,0.4)"
+                : "0 0 12px rgba(139,92,246,0.4)",
+          }}
+        />
+      </div>
+
+      <div className="flex justify-between text-xs">
+        <span className="text-slate-500">
+          {allocationPct.toFixed(0)}% allocated
+        </span>
+        <span
+          className={cn(
+            "font-medium",
+            unallocated >= 0 ? "text-emerald-400" : "text-red-400",
+          )}
+        >
+          {unallocated >= 0 ? "$" : "-$"}
+          {Math.abs(unallocated).toLocaleString()} unallocated
+        </span>
+      </div>
+
+      {/* Per-user breakdown when "Both" is selected */}
+      {ownershipFilter === "all" && summary.partner_income_balance > 0 && (
+        <div className="mt-3 pt-3 border-t border-white/5 grid grid-cols-2 gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-blue-400" />
+            <span className="text-xs text-slate-400">Me</span>
+            <span className="text-xs font-medium text-blue-300 ml-auto">
+              ${summary.user_income_balance.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-pink-400" />
+            <span className="text-xs text-slate-400">Partner</span>
+            <span className="text-xs font-medium text-pink-300 ml-auto">
+              ${summary.partner_income_balance.toLocaleString()}
+            </span>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+});
+
+// ===== Spending Stats Row =====
+const SpendingStats = memo(function SpendingStats({
+  summary,
+  ownershipFilter,
+}: {
+  summary: BudgetSummary;
+  ownershipFilter: BudgetOwnershipFilter;
+}) {
+  const spent = useMemo(() => {
+    if (ownershipFilter === "mine") return summary.user_spent;
+    if (ownershipFilter === "partner") return summary.partner_spent;
+    return summary.total_spent;
+  }, [summary, ownershipFilter]);
+
+  const budget = useMemo(() => {
+    if (ownershipFilter === "mine") return summary.user_budget;
+    if (ownershipFilter === "partner") return summary.partner_budget;
+    return summary.total_budget;
+  }, [summary, ownershipFilter]);
+
+  const remaining = budget - spent;
+  const pctUsed = budget > 0 ? (spent / budget) * 100 : 0;
+
+  return (
+    <div className="grid grid-cols-3 gap-3 mb-6">
+      <Card className="neo-card p-4 text-center">
+        <TrendingUp className="w-4 h-4 text-violet-400 mx-auto mb-1" />
+        <p className="text-xs text-slate-500">Budget</p>
+        <p className="text-lg font-bold text-white">
+          ${budget.toLocaleString()}
+        </p>
+      </Card>
+      <Card className="neo-card p-4 text-center">
+        <TrendingDown className="w-4 h-4 text-amber-400 mx-auto mb-1" />
+        <p className="text-xs text-slate-500">Spent</p>
+        <p className="text-lg font-bold text-amber-300">
+          ${spent.toLocaleString()}
+        </p>
+        <p className="text-[10px] text-slate-500">{pctUsed.toFixed(0)}% used</p>
+      </Card>
+      <Card className="neo-card p-4 text-center">
+        {remaining >= 0 ? (
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
+        ) : (
+          <AlertTriangle className="w-4 h-4 text-red-400 mx-auto mb-1" />
+        )}
+        <p className="text-xs text-slate-500">Remaining</p>
+        <p
+          className={cn(
+            "text-lg font-bold",
+            remaining >= 0 ? "text-emerald-300" : "text-red-300",
+          )}
+        >
+          {remaining < 0 ? "-" : ""}${Math.abs(remaining).toLocaleString()}
+        </p>
+      </Card>
+    </div>
+  );
+});
+
+// ===== Category Budget Card =====
+const CategoryBudgetCard = memo(function CategoryBudgetCard({
+  category,
+  incomeBalance,
+  totalAllocated,
+  onBudgetChange,
+  onSubPercentageChange,
+  ownershipFilter,
+}: {
+  category: BudgetCategoryView;
+  incomeBalance: number;
+  totalAllocated: number;
+  onBudgetChange: (
+    categoryId: string,
+    accountId: string,
+    amount: number,
+  ) => void;
+  onSubPercentageChange: (
+    categoryId: string,
+    subcategoryId: string,
+    accountId: string,
+    pct: number,
+  ) => void;
+  ownershipFilter: BudgetOwnershipFilter;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const spentPercent = budget > 0 ? Math.min((subcategory.total_spent / budget) * 100, 100) : 0;
-  const remaining = budget - subcategory.total_spent;
-  const isOver = remaining < 0;
+  const budget = category.total_budget;
+  const spent = useMemo(() => {
+    if (ownershipFilter === "mine") return category.user_spent;
+    if (ownershipFilter === "partner") return category.partner_spent;
+    return category.total_spent;
+  }, [category, ownershipFilter]);
 
-  const handleSave = () => {
-    onSave({
-      category_id: categoryId,
-      subcategory_id: subcategory.subcategory_id,
-      account_id: accountId,
-      assigned_to: assignment,
-      monthly_budget: budget,
-    });
-    setIsEditing(false);
+  const remaining = budget - spent;
+  const isOver = remaining < 0;
+  const spentPct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+  const maxAvailable = incomeBalance - totalAllocated + budget;
+
+  const hasSubcategories =
+    category.subcategories && category.subcategories.length > 0;
+
+  // Subcategory percentages (local state for editing)
+  const [subPercentages, setSubPercentages] = useState<Record<string, number>>(
+    () => {
+      if (!hasSubcategories) return {};
+      const map: Record<string, number> = {};
+      const subs = category.subcategories!;
+      const totalSubBudget = subs.reduce((s, sub) => s + sub.total_budget, 0);
+      subs.forEach((sub) => {
+        if (totalSubBudget > 0) {
+          map[sub.subcategory_id] = Math.round(
+            (sub.total_budget / totalSubBudget) * 100,
+          );
+        } else {
+          // Distribute evenly
+          map[sub.subcategory_id] = Math.round(100 / subs.length);
+        }
+      });
+      return map;
+    },
+  );
+
+  const handleStartEdit = () => {
+    setEditValue(budget.toString());
+    setIsEditing(true);
   };
 
   useEffect(() => {
@@ -132,158 +425,44 @@ const SubcategoryBudgetRow = memo(function SubcategoryBudgetRow({
     }
   }, [isEditing]);
 
-  const IconComponent = getCategoryIcon(subcategory.subcategory_name);
-
-  return (
-    <div className="pl-6 py-3 border-t border-white/5 flex items-center gap-4">
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        <IconComponent className="w-4 h-4 text-slate-400 flex-shrink-0" />
-        <span className="text-sm text-slate-300 truncate">
-          {subcategory.subcategory_name}
-        </span>
-      </div>
-
-      <AssignmentToggle
-        value={assignment}
-        onChange={(v) => {
-          setAssignment(v);
-          setTimeout(() => handleSave(), 100);
-        }}
-        hasPartner={hasPartner}
-        compact
-      />
-
-      <div className="flex items-center gap-2 w-32">
-        {isEditing ? (
-          <div className="flex items-center gap-1">
-            <span className="text-slate-500">$</span>
-            <Input
-              ref={inputRef}
-              type="number"
-              value={budget}
-              onChange={(e) => setBudget(Number(e.target.value) || 0)}
-              onBlur={handleSave}
-              onKeyDown={(e) => e.key === "Enter" && handleSave()}
-              className="w-20 h-7 text-sm bg-slate-800/50 border-slate-700"
-            />
-          </div>
-        ) : (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="flex items-center gap-1 hover:bg-white/5 px-2 py-1 rounded transition-all"
-          >
-            <span className="text-sm font-medium text-white">
-              ${budget.toLocaleString()}
-            </span>
-            <Edit3 className="w-3 h-3 text-slate-500" />
-          </button>
-        )}
-      </div>
-
-      <div className="w-24 text-right">
-        <span
-          className={cn(
-            "text-sm font-medium",
-            isOver ? "text-red-400" : "text-emerald-400"
-          )}
-        >
-          {isOver ? "-" : ""}${Math.abs(remaining).toLocaleString()}
-        </span>
-      </div>
-    </div>
-  );
-});
-
-// Category budget card
-const CategoryBudgetCard = memo(function CategoryBudgetCard({
-  category,
-  hasPartner,
-  onSave,
-}: {
-  category: BudgetCategoryView;
-  hasPartner: boolean;
-  onSave: (data: {
-    category_id: string;
-    subcategory_id?: string | null;
-    account_id: string;
-    assigned_to: BudgetAssignment;
-    monthly_budget: number;
-  }) => void;
-}) {
-  const themeClasses = useThemeClasses();
-  const [localBudget, setLocalBudget] = useState(category.total_budget);
-  const [assignment, setAssignment] = useState<BudgetAssignment>(
-    category.user_budget > 0
-      ? "user"
-      : category.partner_budget > 0
-        ? "partner"
-        : "both"
-  );
-  const [isEditingManual, setIsEditingManual] = useState(false);
-  const [manualInput, setManualInput] = useState(category.total_budget.toString());
-  const [isExpanded, setIsExpanded] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setLocalBudget(category.total_budget);
-    setManualInput(category.total_budget.toString());
-  }, [category.total_budget]);
-
-  useEffect(() => {
-    if (isEditingManual && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isEditingManual]);
-
-  const spentPercentage = useMemo(() => {
-    if (localBudget === 0) return 0;
-    return Math.min((category.total_spent / localBudget) * 100, 100);
-  }, [category.total_spent, localBudget]);
-
-  const remaining = localBudget - category.total_spent;
-  const isOverBudget = remaining < 0;
-  const isNearLimit = spentPercentage >= 80 && !isOverBudget;
-  const hasSubcategories = category.subcategories && category.subcategories.length > 0;
-
-  const handleSliderChange = (value: number[]) => {
-    setLocalBudget(value[0]);
-    setManualInput(value[0].toString());
+  const handleCommitEdit = () => {
+    const num = Math.max(0, parseInt(editValue, 10) || 0);
+    onBudgetChange(category.category_id, category.account_id, num);
+    setIsEditing(false);
   };
 
-  const handleSliderCommit = (value: number[]) => {
-    onSave({
-      category_id: category.category_id,
-      subcategory_id: null,
-      account_id: category.account_id,
-      assigned_to: assignment,
-      monthly_budget: value[0],
+  const handleSubPercentageChange = (subId: string, newPct: number) => {
+    const subs = category.subcategories!;
+    const clampedPct = Math.max(0, Math.min(100, newPct));
+    const otherSubs = subs.filter((s) => s.subcategory_id !== subId);
+
+    // Distribute remaining percentage proportionally among others
+    const remainingPct = 100 - clampedPct;
+    const otherTotal = otherSubs.reduce(
+      (s, sub) => s + (subPercentages[sub.subcategory_id] || 0),
+      0,
+    );
+
+    const newMap: Record<string, number> = { [subId]: clampedPct };
+    otherSubs.forEach((sub) => {
+      const oldPct = subPercentages[sub.subcategory_id] || 0;
+      newMap[sub.subcategory_id] =
+        otherTotal > 0
+          ? Math.round((oldPct / otherTotal) * remainingPct)
+          : Math.round(remainingPct / otherSubs.length);
     });
-  };
 
-  const handleManualInputBlur = () => {
-    const numValue = parseInt(manualInput, 10) || 0;
-    const clampedValue = Math.min(Math.max(numValue, 0), 10000);
-    setLocalBudget(clampedValue);
-    setManualInput(clampedValue.toString());
-    onSave({
-      category_id: category.category_id,
-      subcategory_id: null,
-      account_id: category.account_id,
-      assigned_to: assignment,
-      monthly_budget: clampedValue,
-    });
-    setIsEditingManual(false);
-  };
+    setSubPercentages(newMap);
 
-  const handleAssignmentChange = (newAssignment: BudgetAssignment) => {
-    setAssignment(newAssignment);
-    onSave({
-      category_id: category.category_id,
-      subcategory_id: null,
-      account_id: category.account_id,
-      assigned_to: newAssignment,
-      monthly_budget: localBudget,
+    // Save subcategory allocations based on percentages
+    subs.forEach((sub) => {
+      const pct = newMap[sub.subcategory_id] || 0;
+      onSubPercentageChange(
+        category.category_id,
+        sub.subcategory_id,
+        category.account_id,
+        pct,
+      );
     });
   };
 
@@ -292,253 +471,145 @@ const CategoryBudgetCard = memo(function CategoryBudgetCard({
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="group"
+      exit={{ opacity: 0, y: -16 }}
     >
       <Card
         className={cn(
-          "neo-card transition-all duration-300",
-          "hover:shadow-xl hover:-translate-y-1",
-          isOverBudget && "ring-2 ring-red-500/30",
-          isNearLimit && "ring-2 ring-amber-500/30"
+          "neo-card transition-all duration-200 overflow-hidden",
+          isOver && "ring-1 ring-red-500/30",
         )}
-        style={{
-          background: `linear-gradient(135deg, ${category.category_color}08 0%, transparent 50%)`,
-        }}
       >
-        <div className="p-5">
-          {/* Category Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div
-                className="p-2.5 rounded-xl transition-transform group-hover:scale-110"
-                style={{
-                  backgroundColor: `${category.category_color}20`,
-                  boxShadow: `0 0 20px ${category.category_color}30`,
-                  color: category.category_color,
-                }}
+        <div className="p-4">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-3">
+            <div
+              className="p-2 rounded-lg flex-shrink-0"
+              style={{
+                backgroundColor: `${category.category_color}20`,
+                color: category.category_color,
+              }}
+            >
+              <IconComponent className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3
+                className="font-semibold text-sm truncate"
+                style={{ color: category.category_color }}
               >
-                <IconComponent className="w-5 h-5" />
-              </div>
-              <div>
-                <h3
-                  className="font-semibold text-base"
-                  style={{ color: category.category_color }}
-                >
-                  {category.category_name}
-                </h3>
-                <div className="flex items-center gap-2 mt-0.5">
-                  {isOverBudget ? (
-                    <span className="flex items-center gap-1 text-xs text-red-400">
-                      <AlertTriangle className="w-3 h-3" />
-                      Over budget
-                    </span>
-                  ) : isNearLimit ? (
-                    <span className="flex items-center gap-1 text-xs text-amber-400">
-                      <AlertTriangle className="w-3 h-3" />
-                      Near limit
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-xs text-emerald-400">
-                      <CheckCircle2 className="w-3 h-3" />
-                      On track
-                    </span>
-                  )}
-                </div>
-              </div>
+                {category.category_name}
+              </h3>
+              {isOver ? (
+                <span className="text-[10px] text-red-400 flex items-center gap-0.5">
+                  <AlertTriangle className="w-2.5 h-2.5" /> Over by $
+                  {Math.abs(remaining).toLocaleString()}
+                </span>
+              ) : budget > 0 ? (
+                <span className="text-[10px] text-slate-500">
+                  ${spent.toLocaleString()} / ${budget.toLocaleString()} spent
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-500">
+                  No budget set
+                </span>
+              )}
             </div>
 
-            {/* Budget Amount Display */}
-            <div className="text-right">
-              {isEditingManual ? (
-                <div className="flex items-center gap-1 justify-end">
-                  <span className="text-xl font-bold text-white">$</span>
+            {/* Budget amount */}
+            <div className="text-right flex-shrink-0">
+              {isEditing ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-slate-400">$</span>
                   <Input
                     ref={inputRef}
-                    type="text"
-                    value={manualInput}
-                    onChange={(e) =>
-                      setManualInput(e.target.value.replace(/[^0-9]/g, ""))
-                    }
-                    onBlur={handleManualInputBlur}
+                    type="number"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={handleCommitEdit}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") handleManualInputBlur();
-                      if (e.key === "Escape") {
-                        setManualInput(localBudget.toString());
-                        setIsEditingManual(false);
-                      }
+                      if (e.key === "Enter") handleCommitEdit();
+                      if (e.key === "Escape") setIsEditing(false);
                     }}
-                    className="w-24 h-8 text-xl font-bold text-white bg-slate-800/50 border-white/20 text-right px-2"
+                    className="w-20 h-7 text-sm text-right bg-slate-800/50 border-slate-700"
                   />
-                  <span className="text-xs text-slate-400">/mo</span>
                 </div>
               ) : (
                 <button
-                  onClick={() => setIsEditingManual(true)}
-                  className="group flex items-center gap-1.5 hover:bg-white/5 rounded-lg px-2 py-1 -mr-2 transition-all"
+                  onClick={handleStartEdit}
+                  className="flex items-center gap-1 hover:bg-white/5 px-2 py-1 rounded transition-all group"
                 >
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold text-white">
-                      ${localBudget.toLocaleString()}
-                    </span>
-                    <span className="text-xs text-slate-400">/mo</span>
-                  </div>
-                  <Edit3 className="w-3.5 h-3.5 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <span className="text-lg font-bold text-white">
+                    ${budget.toLocaleString()}
+                  </span>
+                  <Edit3 className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100" />
                 </button>
               )}
-              <p
-                className={cn(
-                  "text-sm font-medium mt-0.5",
-                  isOverBudget ? "text-red-400" : "text-slate-400"
-                )}
-              >
-                ${category.total_spent.toLocaleString()} spent
-              </p>
             </div>
           </div>
 
-          {/* Assignment Toggle */}
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs text-slate-500">Budget for:</span>
-            <AssignmentToggle
-              value={assignment}
-              onChange={handleAssignmentChange}
-              hasPartner={hasPartner}
-            />
-          </div>
-
-          {/* Spent Progress Bar */}
-          <div className="mb-4">
-            <div className="h-2 bg-slate-800/50 rounded-full overflow-hidden">
-              <motion.div
-                className="h-full rounded-full"
-                initial={{ width: 0 }}
-                animate={{ width: `${spentPercentage}%` }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-                style={{
-                  background: isOverBudget
-                    ? "linear-gradient(90deg, #ef4444, #f87171)"
-                    : isNearLimit
-                      ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
-                      : `linear-gradient(90deg, ${category.category_color}, ${category.category_color}cc)`,
-                  boxShadow: isOverBudget
-                    ? "0 0 15px rgba(239, 68, 68, 0.5)"
-                    : isNearLimit
-                      ? "0 0 15px rgba(245, 158, 11, 0.5)"
-                      : `0 0 15px ${category.category_color}50`,
-                }}
-              />
-            </div>
-            <div className="flex justify-between mt-1.5">
-              <span className="text-xs text-slate-500">$0</span>
-              <span className="text-xs text-slate-500">
-                ${(localBudget * 0.5).toLocaleString()}
-              </span>
-              <span className="text-xs text-slate-500">
-                ${localBudget.toLocaleString()}
-              </span>
-            </div>
-          </div>
-
-          {/* Budget Slider */}
-          <div className="relative">
-            <div className="flex items-center gap-4">
-              <span className="text-xs text-slate-400 w-8">$0</span>
-              <div className="flex-1 relative">
-                <Slider
-                  value={[Math.min(localBudget, 5000)]}
-                  min={0}
-                  max={5000}
-                  step={50}
-                  onValueChange={handleSliderChange}
-                  onValueCommit={handleSliderCommit}
-                  className={cn(
-                    "cursor-pointer",
-                    "[&_[role=slider]]:h-5 [&_[role=slider]]:w-5",
-                    "[&_[role=slider]]:border-2 [&_[role=slider]]:border-white",
-                    "[&_[role=slider]]:shadow-[0_0_15px_rgba(255,255,255,0.3)]",
-                    "[&_[role=slider]]:transition-transform [&_[role=slider]]:hover:scale-125",
-                    "[&_[data-orientation=horizontal]]:h-2"
-                  )}
-                  style={
-                    {
-                      "--slider-track-bg": `linear-gradient(90deg, ${category.category_color}50, ${category.category_color})`,
-                      "--slider-thumb-bg": category.category_color,
-                    } as React.CSSProperties
-                  }
+          {/* Progress bar */}
+          {budget > 0 && (
+            <div className="mb-2">
+              <div className="h-1.5 bg-slate-800/50 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${spentPct}%` }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                  style={{
+                    background: isOver
+                      ? "linear-gradient(90deg, #ef4444, #f87171)"
+                      : `linear-gradient(90deg, ${category.category_color}cc, ${category.category_color})`,
+                  }}
                 />
               </div>
-              <span className="text-xs text-slate-400 w-12 text-right">
-                $5,000
+            </div>
+          )}
+
+          {/* Quick budget presets */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[50, 100, 200, 500, 1000].map((amt) => (
+              <button
+                key={amt}
+                onClick={() =>
+                  onBudgetChange(category.category_id, category.account_id, amt)
+                }
+                className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-medium transition-all",
+                  budget === amt
+                    ? "bg-white/15 text-white"
+                    : "bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300",
+                )}
+              >
+                ${amt}
+              </button>
+            ))}
+            {maxAvailable > 0 && (
+              <span className="text-[10px] text-slate-600 ml-auto">
+                max: ${Math.max(0, maxAvailable).toLocaleString()}
               </span>
-            </div>
-
-            {/* Quick preset buttons */}
-            <div className="flex items-center gap-2 mt-3">
-              <span className="text-xs text-slate-500">Quick set:</span>
-              {[100, 250, 500, 1000, 2000].map((preset) => (
-                <button
-                  key={preset}
-                  onClick={() => {
-                    setLocalBudget(preset);
-                    setManualInput(preset.toString());
-                    onSave({
-                      category_id: category.category_id,
-                      subcategory_id: null,
-                      account_id: category.account_id,
-                      assigned_to: assignment,
-                      monthly_budget: preset,
-                    });
-                  }}
-                  className={cn(
-                    "px-2 py-0.5 rounded text-xs font-medium transition-all",
-                    localBudget === preset
-                      ? "bg-white/20 text-white"
-                      : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-300"
-                  )}
-                >
-                  ${preset}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Remaining Budget */}
-          <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-            <span className="text-sm text-slate-400">Remaining</span>
-            <span
-              className={cn(
-                "text-lg font-bold",
-                isOverBudget
-                  ? "text-red-400"
-                  : isNearLimit
-                    ? "text-amber-400"
-                    : "text-emerald-400"
-              )}
-            >
-              {isOverBudget ? "-" : ""}${Math.abs(remaining).toLocaleString()}
-            </span>
+            )}
           </div>
         </div>
 
-        {/* Subcategory Expansion */}
+        {/* Subcategory % Spread */}
         {hasSubcategories && (
           <>
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="w-full px-5 py-3 border-t border-white/5 flex items-center justify-between text-sm text-slate-400 hover:bg-white/5 transition-colors"
+              className="w-full px-4 py-2 border-t border-white/5 flex items-center justify-between text-xs text-slate-400 hover:bg-white/5 transition-colors"
             >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5">
                 {isExpanded ? (
-                  <ChevronDown className="w-4 h-4" />
+                  <ChevronDown className="w-3.5 h-3.5" />
                 ) : (
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-3.5 h-3.5" />
                 )}
+                <PieChart className="w-3 h-3" />
                 {category.subcategories!.length} subcategories
               </span>
-              <span className="text-xs">Set individual budgets</span>
+              <span className="text-[10px] text-slate-500">Set % spread</span>
             </button>
 
             <AnimatePresence>
@@ -549,16 +620,58 @@ const CategoryBudgetCard = memo(function CategoryBudgetCard({
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  {category.subcategories!.map((sub) => (
-                    <SubcategoryBudgetRow
-                      key={sub.subcategory_id}
-                      subcategory={sub}
-                      categoryId={category.category_id}
-                      accountId={category.account_id}
-                      hasPartner={hasPartner}
-                      onSave={onSave}
-                    />
-                  ))}
+                  <div className="px-4 pb-3 space-y-2">
+                    {category.subcategories!.map((sub) => {
+                      const pct = subPercentages[sub.subcategory_id] || 0;
+                      const allocatedAmount =
+                        budget > 0 ? Math.round((pct / 100) * budget) : 0;
+                      const subSpent =
+                        ownershipFilter === "mine"
+                          ? sub.user_spent
+                          : ownershipFilter === "partner"
+                            ? sub.partner_spent
+                            : sub.total_spent;
+                      const SubIcon = getCategoryIcon(sub.subcategory_name);
+
+                      return (
+                        <div
+                          key={sub.subcategory_id}
+                          className="flex items-center gap-3 pl-2"
+                        >
+                          <SubIcon className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                          <span className="text-xs text-slate-300 flex-1 min-w-0 truncate">
+                            {sub.subcategory_name}
+                          </span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={pct}
+                              onChange={(e) =>
+                                handleSubPercentageChange(
+                                  sub.subcategory_id,
+                                  parseInt(e.target.value, 10),
+                                )
+                              }
+                              className="w-16 h-1 accent-violet-500"
+                            />
+                            <span className="text-xs font-medium text-violet-300 w-8 text-right">
+                              {pct}%
+                            </span>
+                            <span className="text-xs text-slate-500 w-14 text-right">
+                              ${allocatedAmount.toLocaleString()}
+                            </span>
+                          </div>
+                          {subSpent > 0 && (
+                            <span className="text-[10px] text-slate-500 w-10 text-right">
+                              -${subSpent.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -569,281 +682,517 @@ const CategoryBudgetCard = memo(function CategoryBudgetCard({
   );
 });
 
-// Account filter tabs
-const AccountTabs = memo(function AccountTabs({
-  accounts,
-  selectedAccountId,
-  onSelect,
+// ===== Dashboard Quick View =====
+const BudgetDashboardView = memo(function BudgetDashboardView({
+  summary,
+  ownershipFilter,
 }: {
-  accounts: { id: string; name: string }[];
-  selectedAccountId: string | null;
-  onSelect: (id: string | null) => void;
+  summary: BudgetSummary;
+  ownershipFilter: BudgetOwnershipFilter;
 }) {
+  const categoriesSorted = useMemo(() => {
+    return [...summary.categories].sort(
+      (a, b) => b.total_spent - a.total_spent,
+    );
+  }, [summary.categories]);
+
+  const topOverspent = useMemo(
+    () =>
+      categoriesSorted.filter(
+        (c) => c.total_spent > c.total_budget && c.total_budget > 0,
+      ),
+    [categoriesSorted],
+  );
+
+  const topUnderspent = useMemo(
+    () =>
+      categoriesSorted.filter(
+        (c) =>
+          c.total_budget > 0 &&
+          c.total_spent <= c.total_budget &&
+          c.total_budget - c.total_spent > 0,
+      ),
+    [categoriesSorted],
+  );
+
   return (
-    <div className="flex items-center gap-2 overflow-x-auto pb-2">
-      <button
-        onClick={() => onSelect(null)}
-        className={cn(
-          "px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap",
-          selectedAccountId === null
-            ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg"
-            : "bg-slate-800/50 text-slate-400 hover:bg-slate-700/50"
-        )}
-      >
-        All Accounts
-      </button>
-      {accounts.map((acc) => (
-        <button
-          key={acc.id}
-          onClick={() => onSelect(acc.id)}
-          className={cn(
-            "px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap",
-            selectedAccountId === acc.id
-              ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg"
-              : "bg-slate-800/50 text-slate-400 hover:bg-slate-700/50"
+    <div className="space-y-4">
+      {/* Budget Health */}
+      <Card className="neo-card p-5">
+        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+          <Target className="w-4 h-4 text-violet-400" />
+          Budget Health
+        </h3>
+        <div className="space-y-3">
+          {summary.categories.map((cat) => {
+            const pct =
+              cat.total_budget > 0
+                ? (cat.total_spent / cat.total_budget) * 100
+                : 0;
+            const isOver = pct > 100;
+            const IconComp = getCategoryIcon(cat.category_name);
+
+            return (
+              <div key={cat.category_id} className="flex items-center gap-3">
+                <span
+                  className="flex-shrink-0"
+                  style={{ color: cat.category_color }}
+                >
+                  <IconComp className="w-3.5 h-3.5" />
+                </span>
+                <span className="text-xs text-slate-300 w-20 truncate">
+                  {cat.category_name}
+                </span>
+                <div className="flex-1 h-1.5 bg-slate-800/50 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(pct, 100)}%`,
+                      backgroundColor: isOver
+                        ? "#ef4444"
+                        : pct > 80
+                          ? "#f59e0b"
+                          : cat.category_color,
+                    }}
+                  />
+                </div>
+                <span
+                  className={cn(
+                    "text-[10px] font-medium w-10 text-right",
+                    isOver
+                      ? "text-red-400"
+                      : pct > 80
+                        ? "text-amber-400"
+                        : "text-slate-400",
+                  )}
+                >
+                  {pct.toFixed(0)}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Insights */}
+      <Card className="neo-card p-5">
+        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+          <Lightbulb className="w-4 h-4 text-amber-400" />
+          Insights
+        </h3>
+        <div className="space-y-2">
+          {topOverspent.length > 0 && (
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-red-500/10">
+              <AlertTriangle className="w-3.5 h-3.5 text-red-400 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-red-300">
+                <span className="font-medium">Over budget:</span>{" "}
+                {topOverspent.map((c) => c.category_name).join(", ")}
+              </p>
+            </div>
           )}
-        >
-          {acc.name}
-        </button>
-      ))}
+          {topUnderspent.length > 0 && (
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-emerald-500/10">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-emerald-300">
+                <span className="font-medium">On track:</span>{" "}
+                {topUnderspent
+                  .slice(0, 3)
+                  .map((c) => c.category_name)
+                  .join(", ")}
+                {topUnderspent.length > 3 &&
+                  ` +${topUnderspent.length - 3} more`}
+              </p>
+            </div>
+          )}
+          {summary.unallocated > 0 && (
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-violet-500/10">
+              <DollarSign className="w-3.5 h-3.5 text-violet-400 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-violet-300">
+                <span className="font-medium">
+                  ${summary.unallocated.toLocaleString()}
+                </span>{" "}
+                unallocated &mdash; consider distributing to savings or
+                emergency fund
+              </p>
+            </div>
+          )}
+          {summary.total_budget > 0 && summary.total_spent === 0 && (
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-blue-500/10">
+              <Lightbulb className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-blue-300">
+                Budget set but no spending yet this month &mdash; you&apos;re
+                starting fresh!
+              </p>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Category Spending Breakdown */}
+      <Card className="neo-card p-5">
+        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-cyan-400" />
+          Spending vs Budget
+        </h3>
+        <div className="space-y-3">
+          {categoriesSorted.map((cat) => {
+            const catSpent =
+              ownershipFilter === "mine"
+                ? cat.user_spent
+                : ownershipFilter === "partner"
+                  ? cat.partner_spent
+                  : cat.total_spent;
+            const CatIcon = getCategoryIcon(cat.category_name);
+
+            return (
+              <div key={cat.category_id}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span style={{ color: cat.category_color }}>
+                      <CatIcon className="w-3.5 h-3.5" />
+                    </span>
+                    <span className="text-xs text-slate-300">
+                      {cat.category_name}
+                    </span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-amber-300">
+                      ${catSpent.toLocaleString()}
+                    </span>
+                    <span className="text-slate-600"> / </span>
+                    <span className="text-slate-400">
+                      ${cat.total_budget.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-1 h-2">
+                  {cat.total_budget > 0 && (
+                    <>
+                      <div
+                        className="h-full rounded-sm"
+                        style={{
+                          width: `${Math.min(
+                            (catSpent / Math.max(cat.total_budget, catSpent)) *
+                              100,
+                            100,
+                          )}%`,
+                          backgroundColor:
+                            catSpent > cat.total_budget
+                              ? "#ef4444"
+                              : cat.category_color,
+                        }}
+                      />
+                      {catSpent < cat.total_budget && (
+                        <div
+                          className="h-full rounded-sm bg-slate-800/40"
+                          style={{
+                            width: `${
+                              ((cat.total_budget - catSpent) /
+                                Math.max(cat.total_budget, catSpent)) *
+                              100
+                            }%`,
+                          }}
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
     </div>
   );
 });
 
+// ===== Main Component =====
 const WebBudget = memo(function WebBudget() {
-  const themeClasses = useThemeClasses();
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const tc = useThemeClasses();
   const currentMonth = format(new Date(), "yyyy-MM");
 
-  const { data, isLoading, error } = useBudgetAllocations(currentMonth, selectedAccountId || undefined);
+  // State
+  const [ownershipFilter, setOwnershipFilter] =
+    useState<BudgetOwnershipFilter>("all");
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
+    null,
+  );
+  const [activeWeek, setActiveWeek] = useState<BudgetWeek>(() => {
+    const dayOfMonth = new Date().getDate();
+    if (dayOfMonth <= 7) return "w0";
+    if (dayOfMonth <= 14) return "w1";
+    if (dayOfMonth <= 21) return "w2";
+    if (dayOfMonth <= 28) return "w3";
+    return "w4";
+  });
+  const [view, setView] = useState<"edit" | "dashboard">("edit");
+
+  // Current week index for highlighting
+  const currentWeekIndex = useMemo(() => {
+    const day = new Date().getDate();
+    if (day <= 7) return 0;
+    if (day <= 14) return 1;
+    if (day <= 21) return 2;
+    if (day <= 28) return 3;
+    return 4;
+  }, []);
+
+  // Data
+  const { data, isLoading, error } = useBudgetAllocations(
+    currentMonth,
+    selectedAccountId || undefined,
+  );
   const saveMutation = useSaveBudgetAllocation();
 
   const summary = data?.summary;
   const hasPartner = data?.hasPartner ?? false;
-  const accounts = data?.accounts?.filter((a) => a.type === "expense") ?? [];
+  const accounts = data?.accounts ?? [];
 
-  const handleSave = (budgetData: {
-    category_id: string;
-    subcategory_id?: string | null;
-    account_id: string;
-    assigned_to: BudgetAssignment;
-    monthly_budget: number;
-  }) => {
-    saveMutation.mutate({
-      ...budgetData,
-      budget_month: null, // Default recurring budget
-    });
-  };
+  // Filtered income balance based on ownership
+  const displayIncomeBalance = useMemo(() => {
+    if (!summary) return 0;
+    if (ownershipFilter === "mine") return summary.user_income_balance;
+    if (ownershipFilter === "partner") return summary.partner_income_balance;
+    return summary.income_balance;
+  }, [summary, ownershipFilter]);
 
-  const overallSpentPercentage = useMemo(() => {
-    if (!summary || summary.total_budget === 0) return 0;
-    return Math.min((summary.total_spent / summary.total_budget) * 100, 100);
-  }, [summary]);
+  // Total allocated across all categories
+  const totalAllocated = useMemo(() => summary?.total_budget ?? 0, [summary]);
+
+  // Save budget for a category
+  const handleBudgetChange = useCallback(
+    (categoryId: string, accountId: string, amount: number) => {
+      saveMutation.mutate({
+        category_id: categoryId,
+        subcategory_id: null,
+        account_id: accountId,
+        assigned_to: "both",
+        monthly_budget: amount,
+        budget_month: null,
+      });
+    },
+    [saveMutation],
+  );
+
+  // Save subcategory percentage allocation
+  const handleSubPercentageChange = useCallback(
+    (
+      categoryId: string,
+      subcategoryId: string,
+      accountId: string,
+      pct: number,
+    ) => {
+      // Find the parent category's budget
+      const cat = summary?.categories.find((c) => c.category_id === categoryId);
+      if (!cat) return;
+
+      const amount = Math.round((pct / 100) * cat.total_budget);
+      saveMutation.mutate({
+        category_id: categoryId,
+        subcategory_id: subcategoryId,
+        account_id: accountId,
+        assigned_to: "both",
+        monthly_budget: amount,
+        budget_month: null,
+      });
+    },
+    [saveMutation, summary],
+  );
 
   return (
-    <div className={`min-h-screen ${themeClasses.pageBg} pb-24`}>
+    <div className={`min-h-screen ${tc.pageBg} pb-24`}>
       {/* Header */}
       <div
-        className={`sticky top-0 z-20 ${themeClasses.headerGradient} backdrop-blur-xl border-b border-white/5`}
+        className={`sticky top-0 z-20 ${tc.headerGradient} backdrop-blur-xl border-b border-white/5`}
       >
-        <div className="max-w-7xl mx-auto py-4 px-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+        <div className="max-w-5xl mx-auto py-3 px-4 md:px-6">
+          {/* Top row: title + ownership toggle */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/20">
-                <Wallet className="w-6 h-6 text-violet-400" />
+                <Wallet className="w-5 h-5 text-violet-400" />
               </div>
               <div>
                 <h1
-                  className={`text-xl font-bold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
+                  className={`text-lg font-bold bg-gradient-to-r ${tc.titleGradient} bg-clip-text text-transparent`}
                 >
                   Monthly Budget
                 </h1>
-                <p className="text-sm text-slate-400">
-                  Set spending limits for each category
+                <p className="text-[11px] text-slate-500">
+                  {format(new Date(), "MMMM yyyy")}
                 </p>
               </div>
             </div>
-            {hasPartner && (
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <Users className="w-4 h-4" />
-                <span>Household Mode</span>
-              </div>
-            )}
+            <OwnershipToggle
+              value={ownershipFilter}
+              onChange={setOwnershipFilter}
+              hasPartner={hasPartner}
+              tc={tc}
+            />
+          </div>
+
+          {/* Second row: account filter + week toggle */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <AccountFilter
+              accounts={accounts}
+              selectedId={selectedAccountId}
+              onSelect={setSelectedAccountId}
+            />
+            <WeekToggle
+              value={activeWeek}
+              onChange={setActiveWeek}
+              currentWeekIndex={currentWeekIndex}
+            />
+          </div>
+
+          {/* View toggle */}
+          <div className="flex items-center gap-1 mt-3 p-1 rounded-xl bg-white/5 w-fit">
+            <button
+              onClick={() => setView("edit")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                view === "edit"
+                  ? "bg-violet-500/20 text-violet-300"
+                  : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
+              )}
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              Allocate
+            </button>
+            <button
+              onClick={() => setView("dashboard")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                view === "dashboard"
+                  ? "bg-violet-500/20 text-violet-300"
+                  : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
+              )}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Dashboard
+            </button>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        {/* Account Filter Tabs */}
-        {accounts.length > 1 && (
-          <div className="mb-6">
-            <AccountTabs
-              accounts={accounts}
-              selectedAccountId={selectedAccountId}
-              onSelect={setSelectedAccountId}
-            />
-          </div>
-        )}
-
-        {/* Overall Budget Summary */}
-        <Card className="neo-card p-6 mb-6 bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-transparent">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-violet-500/20">
-                <Wallet className="w-6 h-6 text-violet-400" />
-              </div>
-              <div>
-                <p className="text-sm text-violet-300/70 font-medium">
-                  Total Budget
-                </p>
-                <p className="text-2xl font-bold text-violet-300">
-                  ${(summary?.total_budget ?? 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-amber-500/20">
-                <TrendingUp className="w-6 h-6 text-amber-400" />
-              </div>
-              <div>
-                <p className="text-sm text-amber-300/70 font-medium">
-                  Total Spent
-                </p>
-                <p className="text-2xl font-bold text-amber-300">
-                  ${(summary?.total_spent ?? 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div
-                className={cn(
-                  "p-3 rounded-xl",
-                  (summary?.total_remaining ?? 0) >= 0
-                    ? "bg-emerald-500/20"
-                    : "bg-red-500/20"
-                )}
-              >
-                {(summary?.total_remaining ?? 0) >= 0 ? (
-                  <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-                ) : (
-                  <AlertTriangle className="w-6 h-6 text-red-400" />
-                )}
-              </div>
-              <div>
-                <p
-                  className={cn(
-                    "text-sm font-medium",
-                    (summary?.total_remaining ?? 0) >= 0
-                      ? "text-emerald-300/70"
-                      : "text-red-300/70"
-                  )}
-                >
-                  Remaining
-                </p>
-                <p
-                  className={cn(
-                    "text-2xl font-bold",
-                    (summary?.total_remaining ?? 0) >= 0
-                      ? "text-emerald-300"
-                      : "text-red-300"
-                  )}
-                >
-                  {(summary?.total_remaining ?? 0) < 0 ? "-" : ""}$
-                  {Math.abs(summary?.total_remaining ?? 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Partner breakdown if available */}
-          {hasPartner && summary && (
-            <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-3 gap-4">
-              <div className="text-center">
-                <p className="text-xs text-cyan-400/70 mb-1">Me</p>
-                <p className="text-sm font-medium text-cyan-300">
-                  ${summary.user_spent.toLocaleString()} / ${summary.user_budget.toLocaleString()}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-pink-400/70 mb-1">Partner</p>
-                <p className="text-sm font-medium text-pink-300">
-                  ${summary.partner_spent.toLocaleString()} / ${summary.partner_budget.toLocaleString()}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-violet-400/70 mb-1">Shared</p>
-                <p className="text-sm font-medium text-violet-300">
-                  ${summary.shared_budget.toLocaleString()} budget
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Overall Progress Bar */}
-          <div className="mt-6">
-            <div className="h-3 bg-slate-800/50 rounded-full overflow-hidden">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-500"
-                initial={{ width: 0 }}
-                animate={{ width: `${overallSpentPercentage}%` }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
-                style={{
-                  boxShadow: "0 0 20px rgba(139, 92, 246, 0.5)",
-                }}
-              />
-            </div>
-            <p className="text-xs text-slate-400 mt-2 text-center">
-              {overallSpentPercentage.toFixed(1)}% of total budget used
-            </p>
-          </div>
-        </Card>
-
-        {/* Loading State */}
+      <div className="max-w-5xl mx-auto px-4 md:px-6 pt-6">
+        {/* Loading */}
         {isLoading && (
           <div className="text-center py-12">
             <div className="animate-spin w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full mx-auto mb-4" />
-            <p className="text-slate-400">Loading budget data...</p>
+            <p className="text-slate-400 text-sm">Loading budget...</p>
           </div>
         )}
 
-        {/* Error State */}
+        {/* Error */}
         {error && (
           <Card className="neo-card p-6 text-center">
-            <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-            <p className="text-red-400">Failed to load budget data</p>
+            <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+            <p className="text-red-400 text-sm">Failed to load budget data</p>
           </Card>
         )}
 
-        {/* Category Budget Grid */}
-        {summary && summary.categories.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            <AnimatePresence>
-              {summary.categories.map((category) => (
-                <CategoryBudgetCard
-                  key={category.category_id}
-                  category={category}
-                  hasPartner={hasPartner}
-                  onSave={handleSave}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-        )}
+        {summary && (
+          <>
+            {/* Income Balance */}
+            <IncomeBalanceCard
+              summary={summary}
+              ownershipFilter={ownershipFilter}
+            />
 
-        {/* Empty State */}
-        {summary && summary.categories.length === 0 && (
-          <Card className="neo-card p-12 text-center">
-            <BarChart2 className="w-20 h-20 text-blue-400/40 mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">
-              No Categories Yet
-            </h3>
-            <p className="text-slate-400">
-              Add expense accounts and categories to start setting budgets.
-            </p>
-          </Card>
+            {/* Week review context banner */}
+            {activeWeek !== "w0" && (
+              <Card className="neo-card p-3 mb-4 border-l-2 border-l-violet-500/50">
+                <div className="flex items-center gap-2">
+                  <ArrowRight className="w-3.5 h-3.5 text-violet-400" />
+                  <p className="text-xs text-slate-400">
+                    <span className="font-medium text-violet-300">
+                      {BUDGET_WEEK_LABELS[activeWeek]} Review
+                    </span>{" "}
+                    &mdash; Review previous weeks and adjust allocations based
+                    on actual spending.
+                    {activeWeek === "w1" &&
+                      " Compare against your initial plan (W0)."}
+                    {activeWeek === "w2" &&
+                      " Analyze W0→W1 trends and course correct."}
+                    {activeWeek === "w3" &&
+                      " Final stretch — tighten where needed."}
+                    {activeWeek === "w4" &&
+                      " Close out the month. Any leftover? Save it."}
+                  </p>
+                </div>
+              </Card>
+            )}
+
+            {/* Spending Stats */}
+            <SpendingStats
+              summary={summary}
+              ownershipFilter={ownershipFilter}
+            />
+
+            {/* Edit View: Category allocation */}
+            {view === "edit" && (
+              <>
+                {summary.categories.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <AnimatePresence>
+                      {summary.categories.map((cat) => (
+                        <CategoryBudgetCard
+                          key={cat.category_id}
+                          category={cat}
+                          incomeBalance={displayIncomeBalance}
+                          totalAllocated={totalAllocated}
+                          onBudgetChange={handleBudgetChange}
+                          onSubPercentageChange={handleSubPercentageChange}
+                          ownershipFilter={ownershipFilter}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  <Card className="neo-card p-10 text-center">
+                    <BarChart3 className="w-14 h-14 text-violet-400/30 mx-auto mb-3" />
+                    <h3 className="text-base font-semibold text-white mb-1">
+                      No Categories
+                    </h3>
+                    <p className="text-sm text-slate-400">
+                      Add expense accounts and categories to start budgeting.
+                    </p>
+                  </Card>
+                )}
+
+                {/* Budget over income warning */}
+                {totalAllocated > displayIncomeBalance &&
+                  displayIncomeBalance > 0 && (
+                    <Card className="neo-card p-3 mt-4 border-l-2 border-l-red-500/50">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                        <p className="text-xs text-red-300">
+                          Total allocated (${totalAllocated.toLocaleString()})
+                          exceeds income ($
+                          {displayIncomeBalance.toLocaleString()}) by{" "}
+                          <span className="font-medium">
+                            $
+                            {(
+                              totalAllocated - displayIncomeBalance
+                            ).toLocaleString()}
+                          </span>
+                        </p>
+                      </div>
+                    </Card>
+                  )}
+              </>
+            )}
+
+            {/* Dashboard View */}
+            {view === "dashboard" && (
+              <BudgetDashboardView
+                summary={summary}
+                ownershipFilter={ownershipFilter}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

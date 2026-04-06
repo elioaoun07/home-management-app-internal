@@ -2,6 +2,12 @@
 
 export type BudgetAssignment = "user" | "partner" | "both";
 
+/** Ownership filter matching the dashboard toggle */
+export type BudgetOwnershipFilter = "mine" | "all" | "partner";
+
+/** Week review labels: w0 = initial allocation, w1-w4 = weekly reviews */
+export type BudgetWeek = "w0" | "w1" | "w2" | "w3" | "w4";
+
 export interface BudgetAllocation {
   id: string;
   user_id: string;
@@ -23,6 +29,7 @@ export interface BudgetAllocation {
   account_name?: string;
 }
 
+/** Merged category view — categories merged by name across all expense accounts */
 export interface BudgetCategoryView {
   category_id: string;
   category_name: string;
@@ -47,6 +54,11 @@ export interface BudgetCategoryView {
 
   // Allocation details
   allocations: BudgetAllocation[];
+
+  /** Source category IDs when merged across accounts */
+  merged_category_ids?: string[];
+  /** Source account IDs when merged across accounts */
+  merged_account_ids?: string[];
 }
 
 export interface BudgetSubcategoryView {
@@ -63,7 +75,13 @@ export interface BudgetSubcategoryView {
   user_spent: number;
   partner_spent: number;
 
+  /** Percentage of parent category budget (0-100) */
+  percentage: number;
+
   allocations: BudgetAllocation[];
+
+  /** Source subcategory IDs when merged across accounts */
+  merged_subcategory_ids?: string[];
 }
 
 export interface CreateBudgetAllocationInput {
@@ -81,6 +99,14 @@ export interface UpdateBudgetAllocationInput {
   budget_month?: string | null;
 }
 
+/** Income balance for a single account */
+export interface IncomeAccountBalance {
+  account_id: string;
+  account_name: string;
+  user_id: string;
+  balance: number;
+}
+
 export interface BudgetSummary {
   total_budget: number;
   total_spent: number;
@@ -90,6 +116,13 @@ export interface BudgetSummary {
   partner_budget: number;
   partner_spent: number;
   shared_budget: number;
+  /** Income balance = total available budget from income accounts */
+  income_balance: number;
+  user_income_balance: number;
+  partner_income_balance: number;
+  income_accounts: IncomeAccountBalance[];
+  /** How much of income is still unallocated */
+  unallocated: number;
   categories: BudgetCategoryView[];
 }
 
@@ -104,4 +137,12 @@ export const ASSIGNMENT_COLORS: Record<BudgetAssignment, string> = {
   user: "#38bdf8", // cyan
   partner: "#f472b6", // pink
   both: "#a78bfa", // violet
+};
+
+export const BUDGET_WEEK_LABELS: Record<BudgetWeek, string> = {
+  w0: "Initial",
+  w1: "Week 1",
+  w2: "Week 2",
+  w3: "Week 3",
+  w4: "Week 4",
 };
