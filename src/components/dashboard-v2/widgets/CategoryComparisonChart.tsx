@@ -5,8 +5,8 @@ import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
 import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import {
-  Bar,
-  BarChart,
+  Area,
+  AreaChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -14,31 +14,33 @@ import {
   YAxis,
 } from "recharts";
 
-// Curated palette designed for dark backgrounds — cohesive, neon-futuristic
 const CHART_PALETTE = [
-  "#22d3ee", // cyan
-  "#a78bfa", // violet
-  "#34d399", // emerald
-  "#f472b6", // pink
-  "#fbbf24", // amber
-  "#60a5fa", // blue
-  "#fb923c", // orange
-  "#e879f9", // fuchsia
+  "#22d3ee",
+  "#a78bfa",
+  "#34d399",
+  "#f472b6",
+  "#fbbf24",
+  "#60a5fa",
+  "#fb923c",
+  "#e879f9",
 ];
 
 type Props = {
   months: MonthlyAnalytics[] | undefined;
   activeCategories?: string[];
+  onCategoryClick?: (category: string) => void;
 };
 
-export default function CategoryComparisonChart({ months, activeCategories = [] }: Props) {
-  const [showType, setShowType] = useState<"expense" | "income">("expense");
+export default function CategoryComparisonChart({
+  months,
+  activeCategories = [],
+  onCategoryClick,
+}: Props) {
+  const [hoveredCat, setHoveredCat] = useState<string | null>(null);
 
-  // Get top 6 categories across all months
   const { data, categoryColors } = useMemo(() => {
     if (!months || months.length === 0) return { data: [], categoryColors: {} };
 
-    // Aggregate category totals across all months
     const totals = new Map<string, number>();
     for (const m of months) {
       for (const c of m.categoryBreakdown) {
@@ -57,9 +59,7 @@ export default function CategoryComparisonChart({ months, activeCategories = [] 
     });
 
     const chartData = months.map((m) => {
-      const point: Record<string, any> = {
-        name: formatMonth(m.month),
-      };
+      const point: Record<string, any> = { name: formatMonth(m.month) };
       for (const catName of topCategories) {
         const cat = m.categoryBreakdown.find((c) => c.name === catName);
         point[catName] = cat?.amount || 0;
@@ -74,7 +74,7 @@ export default function CategoryComparisonChart({ months, activeCategories = [] 
 
   if (!data.length || categories.length === 0) {
     return (
-      <WidgetCard title="Spending by Category">
+      <WidgetCard title="Category Trends">
         <p className="text-white/40 text-xs text-center py-8">
           No category data yet
         </p>
@@ -83,15 +83,20 @@ export default function CategoryComparisonChart({ months, activeCategories = [] 
   }
 
   return (
-    <WidgetCard title="Spending by Category" subtitle="Monthly breakdown">
+    <WidgetCard
+      interactive
+      title="Category Trends"
+      subtitle="Monthly spending per category"
+      filterActive={activeCategories.length > 0}
+    >
       <div className="h-[220px] -ml-2">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} barCategoryGap="20%">
+          <AreaChart data={data}>
             <defs>
               {categories.map((cat) => (
                 <linearGradient
                   key={cat}
-                  id={`grad-${cat.replace(/\s+/g, "-")}`}
+                  id={`area-grad-${cat.replace(/\s+/g, "-")}`}
                   x1="0"
                   y1="0"
                   x2="0"
@@ -100,12 +105,12 @@ export default function CategoryComparisonChart({ months, activeCategories = [] 
                   <stop
                     offset="0%"
                     stopColor={categoryColors[cat]}
-                    stopOpacity={0.95}
+                    stopOpacity={0.3}
                   />
                   <stop
                     offset="100%"
                     stopColor={categoryColors[cat]}
-                    stopOpacity={0.6}
+                    stopOpacity={0.02}
                   />
                 </linearGradient>
               ))}
@@ -130,40 +135,71 @@ export default function CategoryComparisonChart({ months, activeCategories = [] 
             />
             <Tooltip
               content={<CustomTooltip categoryColors={categoryColors} />}
-              cursor={{ fill: "rgba(255,255,255,0.04)" }}
+              cursor={{ stroke: "rgba(255,255,255,0.1)" }}
             />
-            {categories.map((cat, i) => {
-              const isFiltered = activeCategories.length > 0 && !activeCategories.includes(cat);
+            {categories.map((cat) => {
+              const isFiltered =
+                activeCategories.length > 0 && !activeCategories.includes(cat);
+              const isHovered = hoveredCat === cat;
+              const dimmed = isFiltered || (hoveredCat && !isHovered);
               return (
-                <Bar
+                <Area
                   key={cat}
+                  type="monotone"
                   dataKey={cat}
-                  stackId="a"
-                  fill={`url(#grad-${cat.replace(/\s+/g, "-")})`}
-                  radius={i === categories.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
-                  opacity={isFiltered ? 0.2 : 1}
+                  stroke={categoryColors[cat]}
+                  strokeWidth={isHovered ? 2.5 : 1.5}
+                  fill={`url(#area-grad-${cat.replace(/\s+/g, "-")})`}
+                  fillOpacity={dimmed ? 0.05 : 1}
+                  strokeOpacity={dimmed ? 0.2 : 1}
+                  dot={false}
+                  activeDot={{
+                    r: 4,
+                    fill: categoryColors[cat],
+                    stroke: "rgba(0,0,0,0.5)",
+                    strokeWidth: 1,
+                  }}
                 />
               );
             })}
-          </BarChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
       <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
         {categories.map((cat) => {
-          const isFiltered = activeCategories.length > 0 && !activeCategories.includes(cat);
+          const isFiltered =
+            activeCategories.length > 0 && !activeCategories.includes(cat);
+          const isHovered = hoveredCat === cat;
           return (
-            <div key={cat} className={cn("flex items-center gap-1.5 transition-opacity", isFiltered ? "opacity-30" : "opacity-100")}>
+            <button
+              key={cat}
+              className={cn(
+                "flex items-center gap-1.5 transition-all",
+                isFiltered ? "opacity-30" : "opacity-100",
+              )}
+              onMouseEnter={() => setHoveredCat(cat)}
+              onMouseLeave={() => setHoveredCat(null)}
+              onClick={() => onCategoryClick?.(cat)}
+            >
               <div
-                className="w-2.5 h-2.5 rounded-full ring-1 ring-white/10"
+                className="w-2.5 h-2.5 rounded-full ring-1 ring-white/10 transition-transform"
                 style={{
                   backgroundColor: categoryColors[cat],
-                  boxShadow: isFiltered ? "none" : `0 0 6px ${categoryColors[cat]}50`,
+                  boxShadow: isFiltered
+                    ? "none"
+                    : `0 0 6px ${categoryColors[cat]}50`,
+                  transform: isHovered ? "scale(1.4)" : "scale(1)",
                 }}
               />
-              <span className="text-[10px] text-white/60 truncate max-w-[72px]">
+              <span
+                className={cn(
+                  "text-[11px] truncate max-w-[80px] transition-colors",
+                  isHovered ? "text-white font-medium" : "text-white/60",
+                )}
+              >
                 {cat}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>

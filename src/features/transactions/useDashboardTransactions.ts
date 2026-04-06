@@ -1219,13 +1219,19 @@ export function useUpdateTransaction() {
       }
     },
     onSuccess: (data, update, context) => {
-      // Clear _isPending flag from the updated transaction
+      // Replace the cached transaction with the full server response so that
+      // category/subcategory display names, colors, and all other fields reflect
+      // the current DB state. Spreading `data` over `t` (rather than just
+      // clearing _isPending) is what makes post-update refreshes show the
+      // correct values. For offline-queued responses, `data` only contains IDs
+      // (no display names), so the spread is a no-op for those fields — which
+      // is also correct behaviour.
       queryClient.setQueriesData<Transaction[]>(
         { queryKey: ["transactions"] },
         (old) => {
           if (!old) return old;
           return old.map((t) =>
-            t.id === update.id ? { ...t, _isPending: false } : t,
+            t.id === update.id ? { ...t, ...data, _isPending: false } : t,
           );
         },
       );
@@ -1234,7 +1240,7 @@ export function useUpdateTransaction() {
         (old) => {
           if (!old) return old;
           return old.map((t: any) =>
-            t.id === update.id ? { ...t, _isPending: false } : t,
+            t.id === update.id ? { ...t, ...data, _isPending: false } : t,
           );
         },
       );

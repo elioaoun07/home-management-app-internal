@@ -10,6 +10,7 @@ import {
 import { WidgetSkeleton } from "@/components/dashboard-v2/WidgetCard";
 import AccountBalancesWidget from "@/components/dashboard-v2/widgets/AccountBalancesWidget";
 import AnomalyDetectionWidget from "@/components/dashboard-v2/widgets/AnomalyDetectionWidget";
+import AvgTransactionByCategoryWidget from "@/components/dashboard-v2/widgets/AvgTransactionByCategoryWidget";
 import BudgetForecastWidget from "@/components/dashboard-v2/widgets/BudgetForecastWidget";
 import BudgetVsActualWidget from "@/components/dashboard-v2/widgets/BudgetVsActualWidget";
 import CashFlowWaterfallWidget from "@/components/dashboard-v2/widgets/CashFlowWaterfallWidget";
@@ -39,14 +40,17 @@ import RecurringVsVariableWidget from "@/components/dashboard-v2/widgets/Recurri
 import SavingsRateTrendWidget from "@/components/dashboard-v2/widgets/SavingsRateTrendWidget";
 import SeasonalComparisonWidget from "@/components/dashboard-v2/widgets/SeasonalComparisonWidget";
 import SmartInsightsWidget from "@/components/dashboard-v2/widgets/SmartInsightsWidget";
-import SpendingHeatmapWidget from "@/components/dashboard-v2/widgets/SpendingHeatmapWidget";
+import SpendingConcentrationWidget from "@/components/dashboard-v2/widgets/SpendingConcentrationWidget";
 import SpendingPaceWidget from "@/components/dashboard-v2/widgets/SpendingPaceWidget";
 import SpendingVelocityWidget from "@/components/dashboard-v2/widgets/SpendingVelocityWidget";
+import SubcategoryBreakdownWidget from "@/components/dashboard-v2/widgets/SubcategoryBreakdownWidget";
 import TopCategoryStatsWidget from "@/components/dashboard-v2/widgets/TopCategoryStatsWidget";
 import TopExpensesWidget from "@/components/dashboard-v2/widgets/TopExpensesWidget";
 import TopMoversWidget from "@/components/dashboard-v2/widgets/TopMoversWidget";
 import TransactionFrequencyWidget from "@/components/dashboard-v2/widgets/TransactionFrequencyWidget";
 import TransactionSizeDistributionWidget from "@/components/dashboard-v2/widgets/TransactionSizeDistributionWidget";
+import CategoryDetailView from "@/components/dashboard/CategoryDetailView";
+import TransactionDetailModal from "@/components/dashboard/TransactionDetailModal";
 import { useAccounts } from "@/features/accounts/hooks";
 import {
   useAnalytics,
@@ -58,17 +62,20 @@ import {
   getSpendingByCountry,
   getTripTimeline,
 } from "@/lib/utils/comparisonAnalytics";
+import { formatDate, getDefaultDateRange } from "@/lib/utils/date";
 import {
   calculateIncomeExpenseSummary,
   getExpenseTransactions,
   type TransactionWithAccount,
 } from "@/lib/utils/incomeExpense";
 import { differenceInDays, format, parseISO } from "date-fns";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { RotateCcw, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type V2Tab = "snapshot" | "deep-dive" | "forecast";
+type V2Tab = "overview" | "snapshot" | "deep-dive" | "forecast";
 const TABS: { id: V2Tab; label: string }[] = [
+  { id: "overview", label: "Overview" },
   { id: "snapshot", label: "Snapshot" },
   { id: "deep-dive", label: "Deep Dive" },
   { id: "forecast", label: "Forecast" },
@@ -87,6 +94,8 @@ type Props = {
   filterMinAmount?: number;
   onCategoryClick?: (category: string) => void;
   currentUserId?: string;
+  onDateRangeChange?: (start: string, end: string) => void;
+  monthStartDay?: number;
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -100,6 +109,8 @@ export default function ReviewV2Dashboard({
   filterMinAmount = 0,
   onCategoryClick,
   currentUserId,
+  onDateRangeChange,
+  monthStartDay,
 }: Props) {
   // ── Tab state ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<V2Tab>(() => {
@@ -110,11 +121,66 @@ export default function ReviewV2Dashboard({
     }
   });
 
-  const handleTabChange = useCallback((tab: V2Tab) => {
-    setActiveTab(tab);
-    try {
-      sessionStorage.setItem("reviewV2Tab", tab);
-    } catch {}
+  // Track whether a date change was programmatic (from tab switch)
+  const programmaticDateChange = useRef(false);
+  // Track manual date override while on Overview tab
+  const [overviewDateOverride, setOverviewDateOverride] = useState<{
+    start: string;
+    end: string;
+  } | null>(null);
+
+  const handleTabChange = useCallback(
+    (tab: V2Tab) => {
+      setActiveTab(tab);
+      try {
+        sessionStorage.setItem("reviewV2Tab", tab);
+      } catch {}
+
+      // Switch date ranges based on tab
+      if (onDateRangeChange) {
+        programmaticDateChange.current = true;
+        if (tab === "overview") {
+          if (overviewDateOverride) {
+            onDateRangeChange(
+              overviewDateOverride.start,
+              overviewDateOverride.end,
+            );
+          } else {
+            const now = new Date();
+            const jan1 = `${now.getFullYear()}-01-01`;
+            const today = formatDate(now);
+            onDateRangeChange(jan1, today);
+          }
+        } else {
+          const defaultRange = getDefaultDateRange(monthStartDay ?? 1);
+          onDateRangeChange(defaultRange.start, defaultRange.end);
+        }
+      }
+    },
+    [onDateRangeChange, monthStartDay, overviewDateOverride],
+  );
+
+  // Detect manual date changes while on Overview tab
+  useEffect(() => {
+    if (activeTab !== "overview") return;
+    if (programmaticDateChange.current) {
+      programmaticDateChange.current = false;
+      return;
+    }
+    // User manually changed dates — save as override
+    setOverviewDateOverride({ start: startDate, end: endDate });
+  }, [startDate, endDate, activeTab]);
+
+  // Set initial date range on mount if landing on overview
+  useEffect(() => {
+    if (activeTab === "overview" && onDateRangeChange) {
+      programmaticDateChange.current = true;
+      const now = new Date();
+      const jan1 = `${now.getFullYear()}-01-01`;
+      const today = formatDate(now);
+      onDateRangeChange(jan1, today);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Trends month count (Deep Dive tab) ─────────────────────────────────────
@@ -329,6 +395,30 @@ export default function ReviewV2Dashboard({
     [filters],
   );
 
+  // ── Category detail modal state ────────────────────────────────────────────
+  const [categoryDetailName, setCategoryDetailName] = useState<string | null>(
+    null,
+  );
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+
+  const handleCategoryDetailClick = useCallback((cat: string) => {
+    setCategoryDetailName(cat);
+  }, []);
+
+  const categoryDetailData = useMemo(() => {
+    if (!categoryDetailName) return null;
+    const txs = filteredExpenseTransactions.filter(
+      (t) => t.category === categoryDetailName,
+    );
+    const totalAmount = txs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const categoryColor = txs.find((t: any) => t.category_color) as any;
+    return {
+      transactions: txs,
+      totalAmount,
+      categoryColor: categoryColor?.category_color as string | undefined,
+    };
+  }, [categoryDetailName, filteredExpenseTransactions]);
+
   // ── Loading ─────────────────────────────────────────────────────────────────
   if (isLoading && !analytics) {
     return (
@@ -430,12 +520,29 @@ export default function ReviewV2Dashboard({
           <span className="opacity-50 hover:opacity-90 ml-0.5">×</span>
         </button>
       )}
-      {hasStoreFilters && (
+      {hasAnyFilter && (
         <button
-          onClick={() => filters.clearAll()}
-          className="ml-auto text-[10px] text-white/30 hover:text-white/60 transition-colors uppercase tracking-wider"
+          onClick={() => {
+            filters.clearAll();
+            if (onDateRangeChange) {
+              programmaticDateChange.current = true;
+              if (activeTab === "overview") {
+                setOverviewDateOverride(null);
+                const now = new Date();
+                onDateRangeChange(
+                  `${now.getFullYear()}-01-01`,
+                  formatDate(now),
+                );
+              } else {
+                const defaultRange = getDefaultDateRange(monthStartDay ?? 1);
+                onDateRangeChange(defaultRange.start, defaultRange.end);
+              }
+            }
+          }}
+          className="ml-auto p-1 rounded-md text-white/30 hover:text-white/70 hover:bg-white/10 transition-colors"
+          title="Reset all filters"
         >
-          Clear all ×
+          <RotateCcw className="w-3.5 h-3.5" />
         </button>
       )}
     </div>
@@ -445,20 +552,128 @@ export default function ReviewV2Dashboard({
     <div className="space-y-4">
       {/* ══════ TAB BAR ══════ */}
       <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/10">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => handleTabChange(tab.id)}
-            className={`flex-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-              activeTab === tab.id
-                ? "bg-white/15 text-white"
-                : "text-white/40 hover:text-white/60"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map((tab) => {
+          const isOverview = tab.id === "overview";
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id)}
+              className={`flex-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                isOverview
+                  ? isActive
+                    ? "bg-gradient-to-r from-cyan-500/25 via-purple-500/25 to-pink-500/25 text-cyan-300 ring-1 ring-cyan-500/30"
+                    : "bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 text-cyan-400/60 hover:text-cyan-300 hover:from-cyan-500/15 hover:via-purple-500/15 hover:to-pink-500/15"
+                  : isActive
+                    ? "bg-white/15 text-white"
+                    : "text-white/40 hover:text-white/60"
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          TAB 0 — OVERVIEW
+          "The big picture — yearly trends, patterns, and comparisons"
+          ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "overview" && (
+        <div className="space-y-4">
+          {filterBanner}
+
+          {/* Default filter info badge */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500/5 via-purple-500/5 to-pink-500/5 border border-white/5 text-[10px] text-white/40 uppercase tracking-wider">
+            <span>
+              {startDate.slice(0, 4)} · All Accounts · All Categories · Both
+              Users
+            </span>
+            {hasAnyFilter && onDateRangeChange && (
+              <button
+                onClick={() => {
+                  filters.clearAll();
+                  programmaticDateChange.current = true;
+                  setOverviewDateOverride(null);
+                  const now = new Date();
+                  onDateRangeChange(
+                    `${now.getFullYear()}-01-01`,
+                    formatDate(now),
+                  );
+                }}
+                className="ml-auto flex items-center gap-1 text-white/30 hover:text-white/60 transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset
+              </button>
+            )}
+          </div>
+
+          {/* Income vs Expense Trend */}
+          <IncomeVsExpenseTrendWidget
+            months={analytics?.months}
+            onMonthClick={handleMonthClick}
+          />
+
+          {/* Savings Rate Trend */}
+          <SavingsRateTrendWidget months={analytics?.months} />
+
+          {/* Daily + Monthly spending charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <DailySpendingChartWidget
+              transactions={filteredExpenseTransactions as any}
+              onDateClick={handleDateClick}
+            />
+            <MonthlySpendingChartWidget
+              transactions={filteredExpenseTransactions as any}
+              onMonthClick={handleMonthClick}
+            />
+          </div>
+
+          {/* Period comparisons (MoM, YoY, SameMonthLY, Season) */}
+          <PeriodComparisonExtendedWidget
+            transactions={filteredExpenseTransactions as any}
+          />
+
+          {/* Seasonal patterns */}
+          <SeasonalComparisonWidget
+            transactions={filteredExpenseTransactions as any}
+            onCategoryClick={handleCategoryClick}
+          />
+
+          {/* Travel map — only shown when travel data exists */}
+          {countrySpending.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2">
+                <InteractiveWorldMap
+                  spending={countrySpending}
+                  transactions={filteredExpenseTransactions as any}
+                  onCountryClick={(code) => {
+                    const countryAccounts = countrySpending
+                      .filter((c) => c.countryCode === code)
+                      .map((c) => c.accountName);
+                    for (const acc of countryAccounts) {
+                      if (!filters.accounts.includes(acc)) {
+                        filters.toggleAccount(acc);
+                      }
+                    }
+                    filters.setFilterSource("map");
+                  }}
+                  zoomToCountryRef={zoomToCountryRef}
+                />
+              </div>
+              <TripDetailsPanel
+                spending={countrySpending}
+                transactions={filteredExpenseTransactions as any}
+                onZoomToCountry={(code) =>
+                  zoomToCountryRef.current?.zoomToCountry(code)
+                }
+                onZoomOut={() => zoomToCountryRef.current?.zoomOut()}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           TAB 1 — SNAPSHOT
@@ -540,6 +755,20 @@ export default function ReviewV2Dashboard({
             periodEnd={endDate}
           />
 
+          {/* Day of week + Transaction frequency patterns */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <DayOfWeekWidget
+              transactions={filteredExpenseTransactions}
+              activeWeekdays={filters.weekdays}
+              onWeekdayClick={handleWeekdayClick}
+            />
+            <TransactionFrequencyWidget
+              transactions={filteredExpenseTransactions}
+              startDate={startDate}
+              endDate={endDate}
+            />
+          </div>
+
           {/* AI insights */}
           <SmartInsightsWidget
             months={analytics?.months}
@@ -618,41 +847,24 @@ export default function ReviewV2Dashboard({
             </div>
           </div>
 
-          {/* Heatmap + Day of week */}
-          <SpendingHeatmapWidget
+          {/* Transaction size distribution */}
+          <TransactionSizeDistributionWidget
             transactions={filteredExpenseTransactions}
-            startDate={startDate}
-            endDate={endDate}
-            onDateClick={handleDateClick}
           />
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <DayOfWeekWidget
-              transactions={filteredExpenseTransactions}
-              activeWeekdays={filters.weekdays}
-              onWeekdayClick={handleWeekdayClick}
-            />
-            <TransactionSizeDistributionWidget
-              transactions={filteredExpenseTransactions}
-            />
-          </div>
+          {/* Subcategory breakdown — expandable tree */}
+          <SubcategoryBreakdownWidget
+            transactions={filteredExpenseTransactions as any}
+            activeCategories={activeCategoryList}
+            onCategoryClick={handleCategoryClick}
+            onCategoryDetailClick={handleCategoryDetailClick}
+          />
 
-          {/* Daily + Monthly spending charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <DailySpendingChartWidget
-              transactions={filteredExpenseTransactions as any}
-              onDateClick={handleDateClick}
-            />
-            <MonthlySpendingChartWidget
-              transactions={filteredExpenseTransactions as any}
-              onMonthClick={handleMonthClick}
-            />
-          </div>
-
-          {/* Category comparison across months */}
+          {/* Category comparison across months (area chart) */}
           <CategoryComparisonChart
             months={periodMonths ?? analytics?.months}
             activeCategories={activeCategoryList}
+            onCategoryClick={handleCategoryClick}
           />
 
           {/* Category deep-dive — only when a category is filtered */}
@@ -672,10 +884,17 @@ export default function ReviewV2Dashboard({
             </div>
           )}
 
-          {/* Period comparisons (MoM, YoY, SameMonthLY, Season) */}
-          <PeriodComparisonExtendedWidget
-            transactions={filteredExpenseTransactions as any}
-          />
+          {/* Spending concentration (Pareto) + Avg transaction by category */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <SpendingConcentrationWidget
+              transactions={filteredExpenseTransactions}
+            />
+            <AvgTransactionByCategoryWidget
+              transactions={filteredExpenseTransactions}
+              activeCategories={activeCategoryList}
+              onCategoryClick={handleCategoryClick}
+            />
+          </div>
 
           {/* Trend charts using analyticsForTrends data */}
           {isTrendsLoading && !analyticsForTrends ? (
@@ -685,75 +904,25 @@ export default function ReviewV2Dashboard({
             </div>
           ) : (
             <>
-              <IncomeVsExpenseTrendWidget
-                months={analyticsForTrends?.months}
-                onMonthClick={handleMonthClick}
-              />
-
+              {/* Category ranking + Top movers */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <SavingsRateTrendWidget months={analyticsForTrends?.months} />
                 <CategoryRankingWidget
                   months={analyticsForTrends?.months}
                   onCategoryClick={handleCategoryClick}
                   activeCategories={activeCategoryList}
                 />
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <TopMoversWidget
                   months={analyticsForTrends?.months}
                   onCategoryClick={handleCategoryClick}
                 />
-                <CategoryVolatilityWidget
-                  months={analyticsForTrends?.months}
-                  onCategoryClick={handleCategoryClick}
-                />
               </div>
-            </>
-          )}
 
-          <TransactionFrequencyWidget
-            transactions={filteredExpenseTransactions}
-            startDate={startDate}
-            endDate={endDate}
-          />
-
-          {/* Seasonal patterns */}
-          <SeasonalComparisonWidget
-            transactions={filteredExpenseTransactions as any}
-            onCategoryClick={handleCategoryClick}
-          />
-
-          {/* Travel map — only shown when travel data exists */}
-          {countrySpending.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2">
-                <InteractiveWorldMap
-                  spending={countrySpending}
-                  transactions={filteredExpenseTransactions as any}
-                  onCountryClick={(code) => {
-                    const countryAccounts = countrySpending
-                      .filter((c) => c.countryCode === code)
-                      .map((c) => c.accountName);
-                    for (const acc of countryAccounts) {
-                      if (!filters.accounts.includes(acc)) {
-                        filters.toggleAccount(acc);
-                      }
-                    }
-                    filters.setFilterSource("map");
-                  }}
-                  zoomToCountryRef={zoomToCountryRef}
-                />
-              </div>
-              <TripDetailsPanel
-                spending={countrySpending}
-                transactions={filteredExpenseTransactions as any}
-                onZoomToCountry={(code) =>
-                  zoomToCountryRef.current?.zoomToCountry(code)
-                }
-                onZoomOut={() => zoomToCountryRef.current?.zoomOut()}
+              {/* Category volatility */}
+              <CategoryVolatilityWidget
+                months={analyticsForTrends?.months}
+                onCategoryClick={handleCategoryClick}
               />
-            </div>
+            </>
           )}
         </div>
       )}
@@ -847,6 +1016,55 @@ export default function ReviewV2Dashboard({
       )}
 
       <div className="h-4" />
+
+      {/* ══════ Category Detail Modal ══════ */}
+      {categoryDetailName && categoryDetailData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => {
+              setCategoryDetailName(null);
+              setSelectedTransaction(null);
+            }}
+          />
+          {/* Modal panel — clip-path prevents fixed children from escaping */}
+          <div className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-[var(--theme-bg)] shadow-2xl [contain:paint]">
+            {/* Close button */}
+            <button
+              onClick={() => {
+                setCategoryDetailName(null);
+                setSelectedTransaction(null);
+              }}
+              className="absolute top-3 right-3 z-40 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <CategoryDetailView
+              category={categoryDetailName}
+              categoryColor={categoryDetailData.categoryColor}
+              transactions={categoryDetailData.transactions as any}
+              totalAmount={categoryDetailData.totalAmount}
+              ownershipFilter={ownershipFilter as any}
+              onBack={() => {
+                setCategoryDetailName(null);
+                setSelectedTransaction(null);
+              }}
+              onTransactionClick={setSelectedTransaction}
+            />
+          </div>
+          {/* Transaction detail sub-modal */}
+          {selectedTransaction && (
+            <TransactionDetailModal
+              transaction={selectedTransaction}
+              onClose={() => setSelectedTransaction(null)}
+              onSave={() => setSelectedTransaction(null)}
+              onDelete={() => setSelectedTransaction(null)}
+              currentUserId={currentUserId}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -16,7 +16,8 @@ import {
   type OwnershipFilter,
 } from "@/lib/utils/splitBill";
 import { format } from "date-fns";
-import { useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, Heart, User, Users } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 
 type Transaction = {
   id: string;
@@ -29,6 +30,7 @@ type Transaction = {
   inserted_at: string;
   account_name?: string;
   category_color?: string;
+  subcategory_color?: string;
   is_owner?: boolean;
   // Split bill fields
   is_collaborator?: boolean;
@@ -48,12 +50,22 @@ type Props = {
   onTransactionClick: (tx: Transaction) => void;
 };
 
+const OWNERSHIP_OPTIONS: {
+  value: OwnershipFilter;
+  label: string;
+  icon: typeof User;
+}[] = [
+  { value: "mine", label: "Me", icon: User },
+  { value: "both", label: "Both", icon: Users },
+  { value: "partner", label: "Partner", icon: Heart },
+];
+
 export default function CategoryDetailView({
   category,
   categoryColor,
   transactions,
   totalAmount,
-  ownershipFilter = "both",
+  ownershipFilter: initialOwnership = "both",
   onBack,
   onTransactionClick,
 }: Props) {
@@ -61,10 +73,14 @@ export default function CategoryDetailView({
 
   // Use category color or fallback to theme color
   const iconColor = categoryColor || themeClasses.defaultAccentColor;
-  const iconGlowStyle = categoryColor
-    ? `drop-shadow(0 0 8px ${categoryColor}80)`
-    : undefined;
   const [isExiting, setIsExiting] = useState(false);
+  const [ownershipFilter, setOwnershipFilter] =
+    useState<OwnershipFilter>(initialOwnership);
+  const [activeAccount, setActiveAccount] = useState<string | null>(null);
+  const [activeSubcategory, setActiveSubcategory] = useState<string | null>(
+    null,
+  );
+  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
 
   const handleBack = () => {
     setIsExiting(true);
@@ -73,8 +89,30 @@ export default function CategoryDetailView({
     }, 400);
   };
 
+  const toggleDateCollapse = useCallback((date: string) => {
+    setCollapsedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  }, []);
+
+  // Apply ownership filter to transactions
+  const ownershipFilteredTxs = useMemo(() => {
+    if (ownershipFilter === "both") return transactions;
+    if (ownershipFilter === "mine")
+      return transactions.filter(
+        (t) => t.is_owner === true || t.is_collaborator === true,
+      );
+    return transactions.filter(
+      (t) =>
+        t.is_owner === false || (t.is_owner === true && !!t.split_completed_at),
+    );
+  }, [transactions, ownershipFilter]);
+
   const stats = useMemo(() => {
-    const bySubcategory = transactions.reduce(
+    const bySubcategory = ownershipFilteredTxs.reduce(
       (acc, t) => {
         const sub = t.subcategory || "Other";
         acc[sub] =
@@ -84,7 +122,7 @@ export default function CategoryDetailView({
       {} as Record<string, number>,
     );
 
-    const byAccount = transactions.reduce(
+    const byAccount = ownershipFilteredTxs.reduce(
       (acc, t) => {
         const acct = t.account_name || "Unknown";
         acc[acct] =
@@ -94,18 +132,59 @@ export default function CategoryDetailView({
       {} as Record<string, number>,
     );
 
-    const sortedByDate = [...transactions].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    const filteredTotal = ownershipFilteredTxs.reduce(
+      (sum, t) => sum + getTransactionDisplayAmount(t, ownershipFilter),
+      0,
     );
+
+    // Build subcategory color map from transaction data
+    const subcategoryColors: Record<string, string> = {};
+    for (const t of ownershipFilteredTxs) {
+      const sub = t.subcategory || "Other";
+      if (t.subcategory_color && !subcategoryColors[sub]) {
+        subcategoryColors[sub] = t.subcategory_color;
+      }
+    }
 
     return {
       bySubcategory,
       byAccount,
-      avgTransaction: totalAmount / transactions.length,
-      count: transactions.length,
-      recent: sortedByDate.slice(0, 5),
+      subcategoryColors,
+      avgTransaction:
+        ownershipFilteredTxs.length > 0
+          ? filteredTotal / ownershipFilteredTxs.length
+          : 0,
+      count: ownershipFilteredTxs.length,
+      total: filteredTotal,
     };
-  }, [transactions, totalAmount, ownershipFilter]);
+  }, [ownershipFilteredTxs, ownershipFilter]);
+
+  // Filter transactions by active account & subcategory
+  const visibleTransactions = useMemo(() => {
+    let txs = ownershipFilteredTxs;
+    if (activeAccount)
+      txs = txs.filter((t) => (t.account_name || "Unknown") === activeAccount);
+    if (activeSubcategory)
+      txs = txs.filter((t) => (t.subcategory || "Other") === activeSubcategory);
+    return txs;
+  }, [ownershipFilteredTxs, activeAccount, activeSubcategory]);
+
+  // Group visible transactions by date
+  const groupedByDate = useMemo(() => {
+    const sorted = [...visibleTransactions].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+    const groups: { date: string; txs: Transaction[] }[] = [];
+    for (const tx of sorted) {
+      const last = groups[groups.length - 1];
+      if (last && last.date === tx.date) {
+        last.txs.push(tx);
+      } else {
+        groups.push({ date: tx.date, txs: [tx] });
+      }
+    }
+    return groups;
+  }, [visibleTransactions]);
 
   return (
     <div
@@ -209,7 +288,28 @@ export default function CategoryDetailView({
 
       {/* Scrollable Content */}
       <div className="relative z-10 p-3 space-y-4 pb-20">
-        {/* Summary Cards with Stagger Animation */}
+        {/* Ownership Toggle */}
+        <div className="flex items-center justify-center">
+          <div className="flex items-center gap-1 p-1 rounded-xl neo-card">
+            {OWNERSHIP_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setOwnershipFilter(opt.value)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                  ownershipFilter === opt.value
+                    ? `${themeClasses.bgActive} ${themeClasses.textActive}`
+                    : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
+                )}
+              >
+                <opt.icon className="w-3.5 h-3.5" />
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Summary Cards */}
         <div className="grid grid-cols-2 gap-3">
           <Card
             className={cn(
@@ -221,7 +321,7 @@ export default function CategoryDetailView({
             <p className="text-xs mb-1 text-[#94a3b8]">Total Spent</p>
             <div className="flex items-center gap-2">
               <p className={cn("text-2xl font-bold", themeClasses.text)}>
-                <BlurredAmount>${totalAmount.toFixed(2)}</BlurredAmount>
+                <BlurredAmount>${stats.total.toFixed(2)}</BlurredAmount>
               </p>
               <ZapIcon
                 className={cn(
@@ -247,59 +347,13 @@ export default function CategoryDetailView({
           </Card>
         </div>
 
-        {/* By Subcategory */}
-        {Object.keys(stats.bySubcategory).length > 1 && (
-          <Card
-            className={cn(
-              "neo-card p-4 border backdrop-blur-sm scale-in-center bg-primary/5",
-              themeClasses.border,
-            )}
-            style={{ animationDelay: "0.3s" }}
-          >
-            <h3
-              className={cn(
-                "text-sm font-semibold mb-3 flex items-center gap-2",
-                themeClasses.text,
-              )}
-            >
-              <SparklesIcon className={cn("w-4 h-4", themeClasses.glow)} />
-              By Subcategory
-            </h3>
-            <div className="space-y-2">
-              {Object.entries(stats.bySubcategory)
-                .sort((a, b) => b[1] - a[1])
-                .map(([sub, amt], index) => (
-                  <div
-                    key={sub}
-                    className={cn(
-                      "flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 cursor-pointer bg-secondary/10 hover:bg-secondary/20 border fade-in-expand",
-                      themeClasses.border,
-                    )}
-                    style={{ animationDelay: `${0.4 + index * 0.1}s` }}
-                  >
-                    <span className="text-sm text-white font-medium">
-                      {sub}
-                    </span>
-                    <span
-                      className={cn("text-sm font-bold", themeClasses.text)}
-                    >
-                      <BlurredAmount blurIntensity="sm">
-                        ${amt.toFixed(2)}
-                      </BlurredAmount>
-                    </span>
-                  </div>
-                ))}
-            </div>
-          </Card>
-        )}
-
-        {/* By Account */}
+        {/* By Account (moved above subcategory) */}
         <Card
           className={cn(
             "neo-card p-4 border backdrop-blur-sm scale-in-center bg-primary/5",
             themeClasses.border,
           )}
-          style={{ animationDelay: "0.5s" }}
+          style={{ animationDelay: "0.3s" }}
         >
           <h3
             className={cn(
@@ -309,31 +363,136 @@ export default function CategoryDetailView({
           >
             <ZapIcon className={cn("w-4 h-4", themeClasses.glow)} />
             By Account
+            {activeAccount && (
+              <button
+                onClick={() => setActiveAccount(null)}
+                className="ml-auto text-[10px] text-white/30 hover:text-white/50 transition-colors"
+              >
+                clear ×
+              </button>
+            )}
           </h3>
           <div className="space-y-2">
             {Object.entries(stats.byAccount)
               .sort((a, b) => b[1] - a[1])
-              .map(([acct, amt], index) => (
-                <div
-                  key={acct}
-                  className={cn(
-                    "flex items-center justify-between p-3 rounded-lg transition-all hover:scale-105 bg-primary/10 hover:bg-primary/20 border fade-in-expand",
-                    themeClasses.border,
-                  )}
-                  style={{ animationDelay: `${0.6 + index * 0.1}s` }}
-                >
-                  <span className="text-sm text-white font-medium">{acct}</span>
-                  <span className={cn("text-sm font-bold", themeClasses.text)}>
-                    <BlurredAmount blurIntensity="sm">
-                      ${amt.toFixed(2)}
-                    </BlurredAmount>
-                  </span>
-                </div>
-              ))}
+              .map(([acct, amt], index) => {
+                const isActive = activeAccount === acct;
+                const isDimmed = activeAccount !== null && !isActive;
+                return (
+                  <div
+                    key={acct}
+                    onClick={() => setActiveAccount(isActive ? null : acct)}
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-lg transition-all cursor-pointer border fade-in-expand",
+                      isActive
+                        ? "bg-primary/20 ring-1 ring-white/20 scale-[1.02]"
+                        : isDimmed
+                          ? "bg-primary/5 opacity-30 grayscale scale-[0.97]"
+                          : "bg-primary/10 hover:bg-primary/20 hover:scale-105",
+                      themeClasses.border,
+                    )}
+                    style={{ animationDelay: `${0.4 + index * 0.1}s` }}
+                  >
+                    <span className="text-sm text-white font-medium">
+                      {acct}
+                    </span>
+                    <span
+                      className={cn("text-sm font-bold", themeClasses.text)}
+                    >
+                      <BlurredAmount blurIntensity="sm">
+                        ${amt.toFixed(2)}
+                      </BlurredAmount>
+                    </span>
+                  </div>
+                );
+              })}
           </div>
         </Card>
 
-        {/* All Transactions */}
+        {/* By Subcategory */}
+        {Object.keys(stats.bySubcategory).length > 1 && (
+          <Card
+            className={cn(
+              "neo-card p-4 border backdrop-blur-sm scale-in-center bg-primary/5",
+              themeClasses.border,
+            )}
+            style={{ animationDelay: "0.5s" }}
+          >
+            <h3
+              className={cn(
+                "text-sm font-semibold mb-3 flex items-center gap-2",
+                themeClasses.text,
+              )}
+            >
+              <SparklesIcon className={cn("w-4 h-4", themeClasses.glow)} />
+              By Subcategory
+              {activeSubcategory && (
+                <button
+                  onClick={() => setActiveSubcategory(null)}
+                  className="ml-auto text-[10px] text-white/30 hover:text-white/50 transition-colors"
+                >
+                  clear ×
+                </button>
+              )}
+            </h3>
+            <div className="space-y-2">
+              {Object.entries(stats.bySubcategory)
+                .sort((a, b) => b[1] - a[1])
+                .map(([sub, amt], index) => {
+                  const isActive = activeSubcategory === sub;
+                  const isDimmed = activeSubcategory !== null && !isActive;
+                  const subColor = stats.subcategoryColors[sub];
+                  return (
+                    <div
+                      key={sub}
+                      onClick={() =>
+                        setActiveSubcategory(isActive ? null : sub)
+                      }
+                      className={cn(
+                        "flex items-center justify-between p-3 rounded-lg transition-all cursor-pointer border fade-in-expand",
+                        isActive
+                          ? "bg-secondary/20 ring-1 ring-white/20 scale-[1.02]"
+                          : isDimmed
+                            ? "bg-secondary/5 opacity-30 grayscale scale-[0.97]"
+                            : "bg-secondary/10 hover:bg-secondary/20 hover:scale-105",
+                        themeClasses.border,
+                      )}
+                      style={{
+                        animationDelay: `${0.6 + index * 0.1}s`,
+                        ...(isActive && subColor
+                          ? { borderColor: `${subColor}60` }
+                          : {}),
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        {subColor && (
+                          <div
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: subColor }}
+                          />
+                        )}
+                        <span
+                          className="text-sm font-medium"
+                          style={{ color: subColor || "white" }}
+                        >
+                          {sub}
+                        </span>
+                      </div>
+                      <span
+                        className={cn("text-sm font-bold", themeClasses.text)}
+                      >
+                        <BlurredAmount blurIntensity="sm">
+                          ${amt.toFixed(2)}
+                        </BlurredAmount>
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </Card>
+        )}
+
+        {/* All Transactions — grouped by date */}
         <Card
           className={cn(
             "neo-card p-4 border backdrop-blur-sm scale-in-center bg-secondary/5",
@@ -350,106 +509,157 @@ export default function CategoryDetailView({
             <SparklesIcon
               className={cn("w-4 h-4 animate-pulse", themeClasses.glow)}
             />
-            All Transactions
+            Transactions
+            <span className="text-xs text-white/30 font-normal ml-auto">
+              {visibleTransactions.length} total
+            </span>
           </h3>
-          <div className="space-y-2">
-            {transactions
-              .sort(
-                (a, b) =>
-                  new Date(b.date).getTime() - new Date(a.date).getTime(),
-              )
-              .map((tx, index) => {
-                // Get the display amount and description based on ownership filter
-                const displayAmount = getTransactionDisplayAmount(
-                  tx,
-                  ownershipFilter,
-                );
-                const displayDescription = getTransactionDisplayDescription(
-                  tx,
-                  ownershipFilter,
-                );
-
-                // Owner-based border: current user's theme color if owner, opposite if partner
-                // For split transactions where I'm the collaborator, show as "mine"
-                const isPartner =
-                  tx.is_owner === false && tx.is_collaborator !== true;
-                const ownerBorderColor = isPartner
-                  ? themeClasses.isPink
-                    ? "rgba(6, 182, 212, 0.4)" // Cyan for partner in pink theme
-                    : "rgba(236, 72, 153, 0.4)" // Pink for partner in blue theme
-                  : themeClasses.isPink
-                    ? "rgba(236, 72, 153, 0.4)" // Pink for owner in pink theme
-                    : "rgba(6, 182, 212, 0.4)"; // Cyan for owner in blue theme
-                const ownerGlowColor = isPartner
-                  ? themeClasses.isPink
-                    ? "rgba(6, 182, 212, 0.2)"
-                    : "rgba(236, 72, 153, 0.2)"
-                  : themeClasses.isPink
-                    ? "rgba(236, 72, 153, 0.2)"
-                    : "rgba(6, 182, 212, 0.2)";
-
-                // For split transactions in "both" filter, show dual-colored border
-                const isSplitBoth =
-                  tx.split_completed_at && ownershipFilter === "both";
-
-                return (
-                  <div
-                    key={tx.id}
-                    onClick={() => onTransactionClick(tx)}
-                    className={cn(
-                      "flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:scale-105 group bg-primary/5 hover:bg-primary/15 fade-in-expand",
-                    )}
-                    style={{
-                      animationDelay: `${0.8 + index * 0.05}s`,
-                      borderColor: isSplitBoth ? undefined : ownerBorderColor,
-                      boxShadow: isSplitBoth
-                        ? undefined
-                        : `0 0 10px ${ownerGlowColor}`,
-                      ...(isSplitBoth
-                        ? {
-                            borderImage: `linear-gradient(90deg, rgba(236, 72, 153, 0.6), rgba(6, 182, 212, 0.6)) 1`,
-                            borderStyle: "solid",
-                            borderWidth: "1px",
-                          }
-                        : {}),
-                    }}
+          <div className="space-y-3">
+            {groupedByDate.map((group) => {
+              const isCollapsed = collapsedDates.has(group.date);
+              const dateTotal = group.txs.reduce(
+                (sum, t) =>
+                  sum + getTransactionDisplayAmount(t, ownershipFilter),
+                0,
+              );
+              return (
+                <div key={group.date}>
+                  {/* Date header */}
+                  <button
+                    onClick={() => toggleDateCollapse(group.date)}
+                    className="w-full flex items-center gap-2 py-1.5 px-1 text-left group/date"
                   >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">
-                        {tx.subcategory || category}
-                      </p>
-                      <div className="flex items-center gap-2 text-xs mt-1 text-[#94a3b8]">
-                        <span>{format(new Date(tx.date), "MMM d, yyyy")}</span>
-                        <span>•</span>
-                        <span>{tx.account_name}</span>
-                      </div>
-                      {displayDescription && (
-                        <p className="text-xs mt-1 truncate opacity-70 text-[#94a3b8]">
-                          {displayDescription}
-                        </p>
+                    {isCollapsed ? (
+                      <ChevronRight className="w-3.5 h-3.5 text-white/30" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 text-white/40" />
+                    )}
+                    <span className="text-xs font-semibold text-white/50 uppercase tracking-wider">
+                      {format(new Date(group.date), "EEE, MMM d, yyyy")}
+                    </span>
+                    <span className="text-[10px] text-white/25">
+                      {group.txs.length}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-xs font-semibold ml-auto tabular-nums",
+                        themeClasses.text,
                       )}
+                    >
+                      <BlurredAmount blurIntensity="sm">
+                        ${dateTotal.toFixed(2)}
+                      </BlurredAmount>
+                    </span>
+                  </button>
+
+                  {/* Transactions for this date */}
+                  {!isCollapsed && (
+                    <div className="space-y-2 mt-1.5">
+                      {group.txs.map((tx, index) => {
+                        const displayAmount = getTransactionDisplayAmount(
+                          tx,
+                          ownershipFilter,
+                        );
+                        const displayDescription =
+                          getTransactionDisplayDescription(tx, ownershipFilter);
+
+                        const isPartner =
+                          tx.is_owner === false && tx.is_collaborator !== true;
+                        const ownerBorderColor = isPartner
+                          ? themeClasses.isPink
+                            ? "rgba(6, 182, 212, 0.4)"
+                            : "rgba(236, 72, 153, 0.4)"
+                          : themeClasses.isPink
+                            ? "rgba(236, 72, 153, 0.4)"
+                            : "rgba(6, 182, 212, 0.4)";
+                        const ownerGlowColor = isPartner
+                          ? themeClasses.isPink
+                            ? "rgba(6, 182, 212, 0.2)"
+                            : "rgba(236, 72, 153, 0.2)"
+                          : themeClasses.isPink
+                            ? "rgba(236, 72, 153, 0.2)"
+                            : "rgba(6, 182, 212, 0.2)";
+                        const isSplitBoth =
+                          tx.split_completed_at && ownershipFilter === "both";
+
+                        return (
+                          <div
+                            key={tx.id}
+                            onClick={() => onTransactionClick(tx)}
+                            className={cn(
+                              "flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer hover:scale-105 group bg-primary/5 hover:bg-primary/15 fade-in-expand",
+                            )}
+                            style={{
+                              animationDelay: `${0.05 * index}s`,
+                              borderColor: isSplitBoth
+                                ? undefined
+                                : ownerBorderColor,
+                              boxShadow: isSplitBoth
+                                ? undefined
+                                : `0 0 10px ${ownerGlowColor}`,
+                              ...(isSplitBoth
+                                ? {
+                                    borderImage: `linear-gradient(90deg, rgba(236, 72, 153, 0.6), rgba(6, 182, 212, 0.6)) 1`,
+                                    borderStyle: "solid",
+                                    borderWidth: "1px",
+                                  }
+                                : {}),
+                            }}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p
+                                className="text-sm font-medium truncate"
+                                style={{
+                                  color:
+                                    tx.subcategory_color ||
+                                    stats.subcategoryColors[
+                                      tx.subcategory || "Other"
+                                    ] ||
+                                    "white",
+                                }}
+                              >
+                                {tx.subcategory || category}
+                              </p>
+                              <div className="flex items-center gap-2 text-xs mt-0.5 text-[#94a3b8]">
+                                <span>{tx.account_name}</span>
+                              </div>
+                              {displayDescription && (
+                                <p className="text-[13px] mt-1 text-white/80 leading-snug line-clamp-2">
+                                  {displayDescription}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <p
+                                className={cn(
+                                  "text-base font-bold ml-3",
+                                  themeClasses.text,
+                                )}
+                              >
+                                <BlurredAmount blurIntensity="sm">
+                                  ${displayAmount.toFixed(2)}
+                                </BlurredAmount>
+                              </p>
+                              <div
+                                className={cn(
+                                  "w-1 h-1 rounded-full transition-all group-hover:w-2 group-hover:h-2",
+                                  themeClasses.bgActive,
+                                )}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <p
-                        className={cn(
-                          "text-base font-bold ml-3",
-                          themeClasses.text,
-                        )}
-                      >
-                        <BlurredAmount blurIntensity="sm">
-                          ${displayAmount.toFixed(2)}
-                        </BlurredAmount>
-                      </p>
-                      <div
-                        className={cn(
-                          "w-1 h-1 rounded-full transition-all group-hover:w-2 group-hover:h-2",
-                          themeClasses.bgActive,
-                        )}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  )}
+                </div>
+              );
+            })}
+            {visibleTransactions.length === 0 && (
+              <p className="text-xs text-white/30 text-center py-4">
+                No transactions match the current filters
+              </p>
+            )}
           </div>
         </Card>
       </div>

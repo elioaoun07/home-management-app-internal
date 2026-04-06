@@ -11,7 +11,20 @@ type Props = {
 
 function fmtMonth(ym: string): string {
   const [, m] = ym.split("-");
-  return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(m) - 1];
+  return [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ][parseInt(m) - 1];
 }
 
 function fmtAmt(n: number): string {
@@ -27,7 +40,13 @@ export default function TopMoversWidget({ months, onCategoryClick }: Props) {
     const curr = months[months.length - 1];
     const prev = months[months.length - 2];
 
-    type Mover = { name: string; currAmt: number; prevAmt: number; delta: number; pct: number };
+    type Mover = {
+      name: string;
+      currAmt: number;
+      prevAmt: number;
+      delta: number;
+      pct: number;
+    };
     const movers: Mover[] = [];
 
     for (const cat of curr.categoryBreakdown) {
@@ -44,7 +63,13 @@ export default function TopMoversWidget({ months, onCategoryClick }: Props) {
       if (cat.amount < 5) continue;
       const inCurr = curr.categoryBreakdown.find((c) => c.name === cat.name);
       if (!inCurr) {
-        movers.push({ name: cat.name, currAmt: 0, prevAmt: cat.amount, delta: -cat.amount, pct: -100 });
+        movers.push({
+          name: cat.name,
+          currAmt: 0,
+          prevAmt: cat.amount,
+          delta: -cat.amount,
+          pct: -100,
+        });
       }
     }
 
@@ -66,7 +91,9 @@ export default function TopMoversWidget({ months, onCategoryClick }: Props) {
   if (!months || months.length < 2) {
     return (
       <WidgetCard title="Top Movers">
-        <p className="text-white/40 text-xs text-center py-8">Need 2+ months of data</p>
+        <p className="text-white/40 text-xs text-center py-8">
+          Need 2+ months of data
+        </p>
       </WidgetCard>
     );
   }
@@ -78,22 +105,25 @@ export default function TopMoversWidget({ months, onCategoryClick }: Props) {
   );
 
   return (
-    <WidgetCard
-      title="Top Movers"
-      subtitle={`${prevMonth} → ${currMonth}`}
-    >
+    <WidgetCard title="Top Movers" subtitle={`${prevMonth} → ${currMonth}`}>
       <div className="grid grid-cols-2 gap-3">
         {/* Risers */}
         <div>
-          <p className="text-[9px] text-red-400/60 uppercase tracking-widest mb-2 flex items-center gap-1">
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <p className="text-[11px] text-red-400/70 uppercase tracking-widest mb-2.5 flex items-center gap-1.5 font-semibold">
+            <svg
+              className="w-3.5 h-3.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
               <path d="M12 19V5M5 12l7-7 7 7" />
             </svg>
             Increased
           </p>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {risers.length === 0 && (
-              <p className="text-[10px] text-white/30 text-center py-2">None</p>
+              <p className="text-xs text-white/30 text-center py-2">None</p>
             )}
             {risers.map((r) => (
               <button
@@ -101,23 +131,24 @@ export default function TopMoversWidget({ months, onCategoryClick }: Props) {
                 className="w-full text-left group"
                 onClick={() => onCategoryClick?.(r.name)}
               >
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[10px] text-white/70 truncate max-w-[80px] group-hover:text-white transition-colors">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-white/80 truncate max-w-[100px] group-hover:text-white transition-colors font-medium">
                     {r.name}
                   </span>
-                  <span className="text-[10px] text-red-400 font-medium shrink-0 ml-1">
+                  <span className="text-xs text-red-400 font-semibold shrink-0 ml-2">
                     +{fmtAmt(r.delta)}
                   </span>
                 </div>
-                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-red-500/70 to-red-400/40 transition-all duration-700"
                     style={{ width: `${(r.delta / maxDelta) * 100}%` }}
                   />
                 </div>
                 {r.prevAmt > 0 && (
-                  <p className="text-[9px] text-white/25 mt-0.5">
-                    {r.pct > 0 ? "+" : ""}{r.pct.toFixed(0)}% · was {fmtAmt(r.prevAmt)}
+                  <p className="text-[10px] text-white/30 mt-0.5">
+                    {r.pct > 0 ? "+" : ""}
+                    {r.pct.toFixed(0)}% · was {fmtAmt(r.prevAmt)}
                   </p>
                 )}
               </button>
@@ -127,15 +158,21 @@ export default function TopMoversWidget({ months, onCategoryClick }: Props) {
 
         {/* Fallers */}
         <div>
-          <p className="text-[9px] text-emerald-400/60 uppercase tracking-widest mb-2 flex items-center gap-1">
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <p className="text-[11px] text-emerald-400/70 uppercase tracking-widest mb-2.5 flex items-center gap-1.5 font-semibold">
+            <svg
+              className="w-3.5 h-3.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
               <path d="M12 5v14M5 12l7 7 7-7" />
             </svg>
             Decreased
           </p>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {fallers.length === 0 && (
-              <p className="text-[10px] text-white/30 text-center py-2">None</p>
+              <p className="text-xs text-white/30 text-center py-2">None</p>
             )}
             {fallers.map((f) => (
               <button
@@ -143,22 +180,24 @@ export default function TopMoversWidget({ months, onCategoryClick }: Props) {
                 className="w-full text-left group"
                 onClick={() => onCategoryClick?.(f.name)}
               >
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[10px] text-white/70 truncate max-w-[80px] group-hover:text-white transition-colors">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-white/80 truncate max-w-[100px] group-hover:text-white transition-colors font-medium">
                     {f.name}
                   </span>
-                  <span className="text-[10px] text-emerald-400 font-medium shrink-0 ml-1">
+                  <span className="text-xs text-emerald-400 font-semibold shrink-0 ml-2">
                     -{fmtAmt(Math.abs(f.delta))}
                   </span>
                 </div>
-                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-emerald-500/70 to-emerald-400/40 transition-all duration-700"
-                    style={{ width: `${(Math.abs(f.delta) / maxDelta) * 100}%` }}
+                    style={{
+                      width: `${(Math.abs(f.delta) / maxDelta) * 100}%`,
+                    }}
                   />
                 </div>
                 {f.prevAmt > 0 && (
-                  <p className="text-[9px] text-white/25 mt-0.5">
+                  <p className="text-[10px] text-white/30 mt-0.5">
                     {f.pct.toFixed(0)}% · was {fmtAmt(f.prevAmt)}
                   </p>
                 )}

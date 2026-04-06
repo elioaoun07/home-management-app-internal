@@ -81,7 +81,9 @@ export default function CategoryRankingWidget({
   // Top 2 biggest absolute movers (by $ change)
   const biggestMoverNames = useMemo(() => {
     if (rankings.length === 0) return new Set<string>();
-    const sorted = [...rankings].sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+    const sorted = [...rankings].sort(
+      (a, b) => Math.abs(b.change) - Math.abs(a.change),
+    );
     return new Set(sorted.slice(0, 2).map((r) => r.name));
   }, [rankings]);
 
@@ -106,103 +108,130 @@ export default function CategoryRankingWidget({
           <button
             onClick={() => setSortBy("amount")}
             className={cn(
-              "text-[10px] px-1.5 py-0.5 rounded",
+              "text-[10px] px-2 py-0.5 rounded-md transition-colors",
               sortBy === "amount"
                 ? "bg-white/10 text-white/80"
                 : "text-white/30 hover:text-white/50",
             )}
           >
-            Amount
+            By Amount
           </button>
           <button
             onClick={() => setSortBy("change")}
             className={cn(
-              "text-[10px] px-1.5 py-0.5 rounded",
+              "text-[10px] px-2 py-0.5 rounded-md transition-colors",
               sortBy === "change"
                 ? "bg-white/10 text-white/80"
                 : "text-white/30 hover:text-white/50",
             )}
           >
-            Change
+            By Change
           </button>
         </div>
       }
     >
-      <div className="space-y-1">
-        {/* Header */}
-        <div className="grid grid-cols-[auto_1fr_60px_60px_50px] gap-2 text-[9px] text-white/30 uppercase tracking-wider pb-1 border-b border-white/5">
-          <span className="w-5">#</span>
-          <span>Category</span>
-          <span className="text-right">Current</span>
-          <span className="text-right">Prev</span>
-          <span className="text-right">Change</span>
-        </div>
-
+      <div className="space-y-2">
         {rankings.slice(0, 10).map((cat) => {
           const isActive =
             activeCategories.length === 0 ||
             activeCategories.includes(cat.name);
           const isBigMover = biggestMoverNames.has(cat.name);
+          const maxAmount = rankings[0]?.currentAmount || 1;
+          const barWidth = (cat.currentAmount / maxAmount) * 100;
 
           return (
             <button
               key={cat.name}
               onClick={() => onCategoryClick?.(cat.name)}
               className={cn(
-                "grid grid-cols-[auto_1fr_60px_60px_50px] gap-2 items-center w-full text-left py-1 rounded hover:bg-white/5 transition-all",
+                "w-full text-left rounded-lg p-2.5 transition-all hover:bg-white/5",
                 !isActive && "opacity-25",
-                isBigMover && "bg-white/3 ring-1 ring-white/8",
+                isBigMover && "bg-white/[0.03] ring-1 ring-white/[0.08]",
               )}
             >
-              <span className="w-5 text-center flex items-center gap-0.5">
-                <span className="text-[10px] text-white/50 font-bold tabular-nums">
-                  {cat.currentRank}
-                </span>
-                {cat.rankChange > 0 && (
-                  <ArrowUp className="w-2.5 h-2.5 text-emerald-400" />
-                )}
-                {cat.rankChange < 0 && (
-                  <ArrowDown className="w-2.5 h-2.5 text-red-400" />
-                )}
-                {cat.rankChange === 0 && (
-                  <Minus className="w-2.5 h-2.5 text-white/20" />
-                )}
-              </span>
+              {/* Top row: rank + name + amount */}
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="flex items-center gap-1 shrink-0 w-8">
+                  <span className="text-sm font-bold text-white/50 tabular-nums">
+                    {cat.currentRank}
+                  </span>
+                  {cat.rankChange > 0 && (
+                    <ArrowUp className="w-3 h-3 text-emerald-400" />
+                  )}
+                  {cat.rankChange < 0 && (
+                    <ArrowDown className="w-3 h-3 text-red-400" />
+                  )}
+                  {cat.rankChange === 0 && (
+                    <Minus className="w-3 h-3 text-white/15" />
+                  )}
+                </div>
 
-              <span className="flex items-center gap-1.5 min-w-0">
                 <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: cat.color || "#64748b" }}
+                  className="w-3 h-3 rounded-full shrink-0 ring-1 ring-white/10"
+                  style={{
+                    backgroundColor: cat.color || "#64748b",
+                    boxShadow: `0 0 6px ${cat.color || "#64748b"}40`,
+                  }}
                 />
-                <span className={cn("text-xs truncate", isBigMover ? "text-white/90 font-medium" : "text-white/70")}>
+
+                <span
+                  className={cn(
+                    "text-sm truncate min-w-0 flex-1",
+                    isBigMover
+                      ? "text-white font-semibold"
+                      : "text-white/80 font-medium",
+                  )}
+                >
                   {cat.name}
                 </span>
+
                 {isBigMover && (
-                  <span className="text-[9px] text-amber-400/70 shrink-0">★</span>
+                  <span className="text-[10px] text-amber-400 shrink-0">★</span>
                 )}
-              </span>
 
-              <span className="text-xs text-white/80 text-right tabular-nums">
-                ${cat.currentAmount.toFixed(0)}
-              </span>
+                <span className="text-sm font-bold text-white/90 tabular-nums shrink-0">
+                  $
+                  {cat.currentAmount.toLocaleString(undefined, {
+                    maximumFractionDigits: 0,
+                  })}
+                </span>
+              </div>
 
-              <span className="text-[10px] text-white/40 text-right tabular-nums">
-                ${cat.previousAmount.toFixed(0)}
-              </span>
+              {/* Bar + change info */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: `${barWidth}%`,
+                      backgroundColor: cat.color || "#64748b",
+                      opacity: 0.6,
+                    }}
+                  />
+                </div>
 
-              <span
-                className={cn(
-                  "text-[10px] text-right tabular-nums font-medium",
-                  cat.changePct > 10
-                    ? "text-red-400"
-                    : cat.changePct < -10
-                      ? "text-emerald-400"
-                      : "text-white/40",
-                )}
-              >
-                {cat.changePct > 0 ? "+" : ""}
-                {cat.changePct.toFixed(0)}%
-              </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[11px] text-white/35 tabular-nums">
+                    was $
+                    {cat.previousAmount.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[11px] font-semibold tabular-nums px-1.5 py-0.5 rounded",
+                      cat.changePct > 10
+                        ? "text-red-400 bg-red-500/10"
+                        : cat.changePct < -10
+                          ? "text-emerald-400 bg-emerald-500/10"
+                          : "text-white/40 bg-white/5",
+                    )}
+                  >
+                    {cat.changePct > 0 ? "+" : ""}
+                    {cat.changePct.toFixed(0)}%
+                  </span>
+                </div>
+              </div>
             </button>
           );
         })}

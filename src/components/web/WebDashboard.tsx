@@ -112,6 +112,7 @@ type Props = {
   currentUserId?: string;
   onDateRangeChange?: (start: string, end: string) => void;
   isRefetching?: boolean;
+  monthStartDay?: number;
 };
 
 type OwnershipFilter = "all" | "mine" | "partner";
@@ -402,6 +403,7 @@ const WebDashboard = memo(function WebDashboard({
   currentUserId,
   onDateRangeChange,
   isRefetching = false,
+  monthStartDay,
 }: Props) {
   const { theme: currentUserTheme } = useTheme();
   const themeClasses = useThemeClasses();
@@ -1315,6 +1317,8 @@ const WebDashboard = memo(function WebDashboard({
             filterAccount={filterAccount}
             filterMinAmount={filterMinAmount}
             currentUserId={currentUserId}
+            onDateRangeChange={onDateRangeChange}
+            monthStartDay={monthStartDay}
             onCategoryClick={(cat) => {
               setFilterCategories((prev) =>
                 prev.includes(cat)

@@ -353,6 +353,7 @@ export default function WebViewContainer() {
                 currentUserId={currentUserId}
                 onDateRangeChange={handleDateRangeChange}
                 isRefetching={isFetching && !isLoading}
+                monthStartDay={monthStartDay}
               />
             </div>
 
