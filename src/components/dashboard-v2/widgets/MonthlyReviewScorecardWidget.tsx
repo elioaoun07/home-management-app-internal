@@ -4,12 +4,15 @@ import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
 import { detectCategoryAnomalies } from "@/lib/utils/anomalyDetection";
 import { detectTrend } from "@/lib/utils/forecast";
+import { differenceInDays, getDaysInMonth, parseISO } from "date-fns";
 
 type Props = {
   months: MonthlyAnalytics[] | undefined;
   debts?: { totalOwed: number; totalOwedToYou: number; openCount: number };
   recurring?: { totalMonthly: number };
   healthScore: number;
+  startDate?: string;
+  endDate?: string;
 };
 
 type CheckStatus = "pass" | "fail" | "warn" | "info";
@@ -40,23 +43,55 @@ function StatusDot({ status }: { status: CheckStatus }) {
   return (
     <div
       className="w-2 h-2 rounded-full shrink-0 mt-0.5"
-      style={{ backgroundColor: STATUS_COLOR[status], boxShadow: `0 0 6px ${STATUS_COLOR[status]}60` }}
+      style={{
+        backgroundColor: STATUS_COLOR[status],
+        boxShadow: `0 0 6px ${STATUS_COLOR[status]}60`,
+      }}
     />
   );
 }
 
 function fmtMonth(ym: string): string {
   const [, m] = ym.split("-");
-  return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(m) - 1];
+  return [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ][parseInt(m) - 1];
 }
 
-export default function MonthlyReviewScorecardWidget({ months, debts, recurring, healthScore }: Props) {
-  const checks = buildChecks(months, debts, recurring, healthScore);
+export default function MonthlyReviewScorecardWidget({
+  months,
+  debts,
+  recurring,
+  healthScore,
+  startDate,
+  endDate,
+}: Props) {
+  const checks = buildChecks(
+    months,
+    debts,
+    recurring,
+    healthScore,
+    startDate,
+    endDate,
+  );
 
   if (!months || months.length < 1) {
     return (
       <WidgetCard title="Monthly Review" subtitle="Checklist">
-        <p className="text-white/40 text-xs text-center py-8">Need at least 1 month of data</p>
+        <p className="text-white/40 text-xs text-center py-8">
+          Need at least 1 month of data
+        </p>
       </WidgetCard>
     );
   }
@@ -66,7 +101,8 @@ export default function MonthlyReviewScorecardWidget({ months, debts, recurring,
   const failed = checks.filter((c) => c.status === "fail").length;
   const total = checks.length;
   const score = Math.round((passed / total) * 100);
-  const scoreColor = score >= 70 ? "#34d399" : score >= 40 ? "#fbbf24" : "#f87171";
+  const scoreColor =
+    score >= 70 ? "#34d399" : score >= 40 ? "#fbbf24" : "#f87171";
 
   return (
     <WidgetCard
@@ -84,13 +120,38 @@ export default function MonthlyReviewScorecardWidget({ months, debts, recurring,
       {/* Summary KPI bar */}
       <div className="grid grid-cols-3 gap-2 mb-3">
         {[
-          { label: "Pass", count: passed, color: "#34d399", bg: "bg-emerald-500/10" },
-          { label: "Warn", count: warned, color: "#fbbf24", bg: "bg-amber-500/10" },
-          { label: "Fail", count: failed, color: "#f87171", bg: "bg-red-500/10" },
+          {
+            label: "Pass",
+            count: passed,
+            color: "#34d399",
+            bg: "bg-emerald-500/10",
+          },
+          {
+            label: "Warn",
+            count: warned,
+            color: "#fbbf24",
+            bg: "bg-amber-500/10",
+          },
+          {
+            label: "Fail",
+            count: failed,
+            color: "#f87171",
+            bg: "bg-red-500/10",
+          },
         ].map((s) => (
           <div key={s.label} className={`rounded-xl p-2.5 text-center ${s.bg}`}>
-            <p className="text-lg font-bold tabular-nums" style={{ color: s.color }}>{s.count}</p>
-            <p className="text-[9px] uppercase tracking-wider" style={{ color: `${s.color}99` }}>{s.label}</p>
+            <p
+              className="text-lg font-bold tabular-nums"
+              style={{ color: s.color }}
+            >
+              {s.count}
+            </p>
+            <p
+              className="text-[9px] uppercase tracking-wider"
+              style={{ color: `${s.color}99` }}
+            >
+              {s.label}
+            </p>
           </div>
         ))}
       </div>
@@ -99,7 +160,11 @@ export default function MonthlyReviewScorecardWidget({ months, debts, recurring,
       <div className="h-1 bg-white/5 rounded-full overflow-hidden mb-4">
         <div
           className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${score}%`, backgroundColor: scoreColor, boxShadow: `0 0 8px ${scoreColor}50` }}
+          style={{
+            width: `${score}%`,
+            backgroundColor: scoreColor,
+            boxShadow: `0 0 8px ${scoreColor}50`,
+          }}
         />
       </div>
 
@@ -113,7 +178,9 @@ export default function MonthlyReviewScorecardWidget({ months, debts, recurring,
             <StatusDot status={check.status} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-1">
-                <p className="text-[11px] font-medium text-white/75 truncate">{check.label}</p>
+                <p className="text-[11px] font-medium text-white/75 truncate">
+                  {check.label}
+                </p>
                 <span
                   className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${STATUS_BG[check.status]}`}
                   style={{ color: STATUS_COLOR[check.status] }}
@@ -121,7 +188,10 @@ export default function MonthlyReviewScorecardWidget({ months, debts, recurring,
                   {check.value}
                 </span>
               </div>
-              <p className="text-[9px] text-white/35 mt-0.5 truncate" title={check.detail}>
+              <p
+                className="text-[9px] text-white/35 mt-0.5 truncate"
+                title={check.detail}
+              >
                 {check.detail}
               </p>
             </div>
@@ -134,9 +204,13 @@ export default function MonthlyReviewScorecardWidget({ months, debts, recurring,
 
 function buildChecks(
   months: MonthlyAnalytics[] | undefined,
-  debts: { totalOwed: number; totalOwedToYou: number; openCount: number } | undefined,
+  debts:
+    | { totalOwed: number; totalOwedToYou: number; openCount: number }
+    | undefined,
   recurring: { totalMonthly: number } | undefined,
   healthScore: number,
+  startDate?: string,
+  endDate?: string,
 ): CheckItem[] {
   if (!months || months.length < 1) return [];
 
@@ -144,24 +218,71 @@ function buildChecks(
   const current = months[months.length - 1];
   const prev = months.length >= 2 ? months[months.length - 2] : null;
 
-  // 1. Savings Rate
+  // Determine how many days have elapsed in the current period month
+  // so we can normalize comparisons against full previous months.
+  let currentDaysElapsed: number | null = null;
+  let currentTotalDays: number | null = null;
+  if (startDate && endDate) {
+    const now = new Date();
+    const end = parseISO(endDate);
+    const currentMonthDate = parseISO(current.month + "-01");
+    const monthStart = currentMonthDate;
+    const monthEnd = new Date(
+      currentMonthDate.getFullYear(),
+      currentMonthDate.getMonth() + 1,
+      0,
+    );
+    const effectiveEnd = now < end ? now : end;
+    currentTotalDays = getDaysInMonth(currentMonthDate);
+    currentDaysElapsed = Math.max(
+      1,
+      Math.min(
+        differenceInDays(effectiveEnd, monthStart) + 1,
+        currentTotalDays,
+      ),
+    );
+  }
+
+  // 1. Savings Rate — from the period's last month
   const savingsRate = current.savingsRate;
   items.push({
     id: "savings-rate",
     label: "Savings Rate",
     value: `${savingsRate.toFixed(1)}%`,
-    detail: savingsRate >= 20 ? "On target (≥20%)" : savingsRate >= 10 ? "Below target — aim for 20%" : "Critical — needs attention",
+    detail:
+      savingsRate >= 20
+        ? "On target (≥20%)"
+        : savingsRate >= 10
+          ? "Below target — aim for 20%"
+          : "Critical — needs attention",
     status: savingsRate >= 20 ? "pass" : savingsRate >= 10 ? "warn" : "fail",
   });
 
-  // 2. Spending Trend
+  // 2. Spending Trend — normalize for partial months (daily avg comparison)
   if (prev) {
-    const expChange = prev.expense > 0 ? ((current.expense - prev.expense) / prev.expense) * 100 : 0;
+    const prevDailyAvg =
+      prev.expense / getDaysInMonth(parseISO(prev.month + "-01"));
+    let currentDailyAvg: number;
+    if (currentDaysElapsed && currentDaysElapsed < (currentTotalDays ?? 30)) {
+      // Partial month — compare daily averages
+      currentDailyAvg = current.expense / currentDaysElapsed;
+    } else {
+      currentDailyAvg =
+        current.expense /
+        (currentTotalDays ?? getDaysInMonth(parseISO(current.month + "-01")));
+    }
+    const expChange =
+      prevDailyAvg > 0
+        ? ((currentDailyAvg - prevDailyAvg) / prevDailyAvg) * 100
+        : 0;
+    const isPartial =
+      currentDaysElapsed !== null &&
+      currentDaysElapsed < (currentTotalDays ?? 30);
     items.push({
       id: "spending-trend",
       label: "Spending Trend",
       value: `${expChange >= 0 ? "+" : ""}${expChange.toFixed(1)}%`,
-      detail: `vs ${fmtMonth(prev.month)} — ${expChange <= 0 ? "down" : expChange <= 10 ? "slight rise" : "review needed"}`,
+      detail: `Daily avg vs ${fmtMonth(prev.month)}${isPartial ? " (pro-rated)" : ""} — ${expChange <= 0 ? "down" : expChange <= 10 ? "slight rise" : "review needed"}`,
       status: expChange <= 0 ? "pass" : expChange <= 10 ? "warn" : "fail",
     });
   }
@@ -180,58 +301,110 @@ function buildChecks(
     items.push({
       id: "category-compliance",
       label: "Category Stability",
-      value: jumpers.length === 0 ? "Stable" : `${jumpers.length} spike${jumpers.length > 1 ? "s" : ""}`,
-      detail: jumpers.length === 0 ? "No categories up >20%" : jumpers.slice(0, 2).map((j) => `${j.name} +${j.pct.toFixed(0)}%`).join(", "),
-      status: jumpers.length === 0 ? "pass" : jumpers.length <= 2 ? "warn" : "fail",
+      value:
+        jumpers.length === 0
+          ? "Stable"
+          : `${jumpers.length} spike${jumpers.length > 1 ? "s" : ""}`,
+      detail:
+        jumpers.length === 0
+          ? "No categories up >20%"
+          : jumpers
+              .slice(0, 2)
+              .map((j) => `${j.name} +${j.pct.toFixed(0)}%`)
+              .join(", "),
+      status:
+        jumpers.length === 0 ? "pass" : jumpers.length <= 2 ? "warn" : "fail",
     });
   }
 
   // 4. Forecast
   if (months.length >= 3) {
-    const trend = detectTrend(months.map((m) => ({ month: m.month, value: m.expense })));
+    const trend = detectTrend(
+      months.map((m) => ({ month: m.month, value: m.expense })),
+    );
     const perMo = Math.abs(Math.round(trend.monthlyChange));
     items.push({
       id: "forecast",
       label: "Expense Forecast",
-      value: trend.direction === "down" ? "↓ Down" : trend.direction === "flat" ? "→ Flat" : "↑ Up",
-      detail: trend.direction === "down" ? `~$${perMo}/mo decline` : trend.direction === "flat" ? "Stable trajectory" : `~$${perMo}/mo increase`,
-      status: trend.direction === "down" ? "pass" : trend.direction === "flat" ? "warn" : "fail",
+      value:
+        trend.direction === "down"
+          ? "↓ Down"
+          : trend.direction === "flat"
+            ? "→ Flat"
+            : "↑ Up",
+      detail:
+        trend.direction === "down"
+          ? `~$${perMo}/mo decline`
+          : trend.direction === "flat"
+            ? "Stable trajectory"
+            : `~$${perMo}/mo increase`,
+      status:
+        trend.direction === "down"
+          ? "pass"
+          : trend.direction === "flat"
+            ? "warn"
+            : "fail",
     });
   }
 
   // 5. Top Categories
-  const topCats = [...current.categoryBreakdown].sort((a, b) => b.amount - a.amount).slice(0, 3);
+  const topCats = [...current.categoryBreakdown]
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 3);
   if (topCats.length > 0) {
     items.push({
       id: "top-categories",
       label: "Top Categories",
       value: topCats[0]?.name ?? "—",
-      detail: topCats.map((c) => `${c.name} $${Math.round(c.amount)}`).join(" · "),
+      detail: topCats
+        .map((c) => `${c.name} $${Math.round(c.amount)}`)
+        .join(" · "),
       status: "info",
     });
   }
 
   // 6. Fixed Costs
   if (recurring && prev) {
-    const recurringBurden = current.expense > 0 ? (recurring.totalMonthly / current.expense) * 100 : 0;
+    const recurringBurden =
+      current.expense > 0
+        ? (recurring.totalMonthly / current.expense) * 100
+        : 0;
     items.push({
       id: "recurring-stability",
       label: "Fixed Costs",
       value: `${recurringBurden.toFixed(0)}%`,
-      detail: recurringBurden <= 50 ? "Healthy ratio" : recurringBurden <= 70 ? "Watch variable spending" : "Very high — review recurring",
-      status: recurringBurden <= 50 ? "pass" : recurringBurden <= 70 ? "warn" : "fail",
+      detail:
+        recurringBurden <= 50
+          ? "Healthy ratio"
+          : recurringBurden <= 70
+            ? "Watch variable spending"
+            : "Very high — review recurring",
+      status:
+        recurringBurden <= 50
+          ? "pass"
+          : recurringBurden <= 70
+            ? "warn"
+            : "fail",
     });
   }
 
   // 7. Anomaly Check
   if (months.length >= 4) {
     const report = detectCategoryAnomalies(months);
-    const critical = report.categoryAnomalies.filter((a) => a.severity === "critical");
+    const critical = report.categoryAnomalies.filter(
+      (a) => a.severity === "critical",
+    );
     items.push({
       id: "anomalies",
       label: "Anomalies",
       value: critical.length === 0 ? "None" : `${critical.length} critical`,
-      detail: critical.length === 0 ? "No unusual spikes detected" : critical.slice(0, 2).map((a) => a.category).join(", "),
+      detail:
+        critical.length === 0
+          ? "No unusual spikes detected"
+          : critical
+              .slice(0, 2)
+              .map((a) => a.category)
+              .join(", "),
       status: critical.length === 0 ? "pass" : "fail",
     });
   }
@@ -242,8 +415,12 @@ function buildChecks(
       id: "debts",
       label: "Open Debts",
       value: debts.openCount === 0 ? "None" : `${debts.openCount}`,
-      detail: debts.openCount === 0 ? "Clean slate" : `$${Math.round(debts.totalOwed).toLocaleString()} total owed`,
-      status: debts.openCount === 0 ? "pass" : debts.openCount <= 2 ? "warn" : "fail",
+      detail:
+        debts.openCount === 0
+          ? "Clean slate"
+          : `$${Math.round(debts.totalOwed).toLocaleString()} total owed`,
+      status:
+        debts.openCount === 0 ? "pass" : debts.openCount <= 2 ? "warn" : "fail",
     });
   }
 

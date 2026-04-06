@@ -153,7 +153,6 @@ export default function ReviewV2Dashboard({
   const budgetMonth = useMemo(() => format(new Date(), "yyyy-MM"), []);
   const { data: budgetAllocations } = useBudgetAllocations(budgetMonth);
 
-  const healthScore = useHealthScore(analytics);
   const netWorthSeries = useNetWorthSeries(
     analytics?.months,
     analytics?.accounts,
@@ -216,6 +215,9 @@ export default function ReviewV2Dashboard({
     const to = endDate.slice(0, 7);
     return analytics.months.filter((m) => m.month >= from && m.month <= to);
   }, [analytics?.months, startDate, endDate]);
+
+  // Health score — computed after periodMonths so it can scope to selected period
+  const healthScore = useHealthScore(analytics, periodMonths);
 
   // ── Income / expense summary ───────────────────────────────────────────────
   const incomeExpenseSummary = useMemo(
@@ -471,12 +473,19 @@ export default function ReviewV2Dashboard({
             <HealthScoreWidget
               score={healthScore.score}
               factors={healthScore.factors}
+              periodLabel={
+                periodMonths && periodMonths.length > 0
+                  ? `${periodMonths[0].month} — ${periodMonths[periodMonths.length - 1].month}`
+                  : undefined
+              }
             />
             <MonthlyReviewScorecardWidget
-              months={analytics?.months}
+              months={periodMonths ?? analytics?.months}
               debts={analytics?.debts}
               recurring={analytics?.recurring}
               healthScore={healthScore.score}
+              startDate={startDate}
+              endDate={endDate}
             />
           </div>
 
@@ -528,6 +537,7 @@ export default function ReviewV2Dashboard({
           <AnomalyDetectionWidget
             months={analytics?.months}
             onCategoryClick={handleCategoryClick}
+            periodEnd={endDate}
           />
 
           {/* AI insights */}
@@ -540,6 +550,7 @@ export default function ReviewV2Dashboard({
             daysElapsed={daysElapsed}
             totalDays={totalDaysCount}
             onCategoryClick={handleCategoryClick}
+            periodEnd={endDate}
           />
         </div>
       )}

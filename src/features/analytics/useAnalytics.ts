@@ -183,17 +183,23 @@ export function useIncomeForecast(
 /**
  * Financial health score: 0-100
  * Based on savings rate (40%), spending trend (25%), debt ratio (20%), consistency (15%)
+ *
+ * When `periodMonths` is provided, scores are computed against those months
+ * instead of the full analytics window, making the widget period-aware.
  */
-export function useHealthScore(analytics: AnalyticsResponse | undefined): {
+export function useHealthScore(
+  analytics: AnalyticsResponse | undefined,
+  periodMonths?: MonthlyAnalytics[],
+): {
   score: number;
   factors: { label: string; score: number; weight: number; max: number }[];
 } {
   return useMemo(() => {
-    if (!analytics || analytics.months.length === 0) {
+    const months = periodMonths ?? analytics?.months;
+    if (!analytics || !months || months.length === 0) {
       return { score: 0, factors: [] };
     }
 
-    const months = analytics.months;
     const latest = months[months.length - 1];
 
     // Factor 1: Savings Rate (40 points max)
@@ -270,5 +276,5 @@ export function useHealthScore(analytics: AnalyticsResponse | undefined): {
         },
       ],
     };
-  }, [analytics]);
+  }, [analytics, periodMonths]);
 }

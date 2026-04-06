@@ -28,21 +28,35 @@ function getPeriodLabel(start: string, end: string): string {
     s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear();
   const sameYear = s.getFullYear() === e.getFullYear();
   if (sameMonth) return format(s, "MMMM yyyy");
-  if (sameYear)
-    return `${format(s, "MMM")} – ${format(e, "MMM yyyy")}`;
+  if (sameYear) return `${format(s, "MMM")} – ${format(e, "MMM yyyy")}`;
   return `${format(s, "MMM yyyy")} – ${format(e, "MMM yyyy")}`;
 }
 
-function MoMBadge({ current, previous, invert = false }: { current: number; previous: number; invert?: boolean }) {
+function MoMBadge({
+  current,
+  previous,
+  invert = false,
+}: {
+  current: number;
+  previous: number;
+  invert?: boolean;
+}) {
   if (previous <= 0 || current <= 0) return null;
   const pct = ((current - previous) / previous) * 100;
   const isGood = invert ? pct <= 0 : pct >= 0;
   const absP = Math.abs(pct);
-  if (absP < 0.5) return <span className="text-[9px] text-white/25">no change</span>;
-  const color = Math.abs(pct) < 3 ? "text-white/40" : isGood ? "text-emerald-400" : "text-red-400";
+  if (absP < 0.5)
+    return <span className="text-[9px] text-white/25">no change</span>;
+  const color =
+    Math.abs(pct) < 3
+      ? "text-white/40"
+      : isGood
+        ? "text-emerald-400"
+        : "text-red-400";
   return (
     <span className={`text-[9px] font-medium ${color}`}>
-      {pct >= 0 ? "+" : ""}{pct.toFixed(1)}% MoM
+      {pct >= 0 ? "+" : ""}
+      {pct.toFixed(1)}% MoM
     </span>
   );
 }
@@ -89,11 +103,7 @@ export default function PeriodSummaryWidget({
 
   const remainingColor = remaining >= 0 ? "#22d3ee" : "#f97316";
   const savingsColor =
-    savingsRate >= 20
-      ? "#34d399"
-      : savingsRate >= 10
-        ? "#fbbf24"
-        : "#f87171";
+    savingsRate >= 20 ? "#34d399" : savingsRate >= 10 ? "#fbbf24" : "#f87171";
 
   return (
     <WidgetCard
@@ -118,33 +128,60 @@ export default function PeriodSummaryWidget({
         {/* Income */}
         <div className="neo-card rounded-xl p-3 bg-gradient-to-br from-emerald-500/10 to-transparent text-center flex flex-col items-center gap-1">
           <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center mb-0.5">
-            <svg className="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg
+              className="w-3 h-3 text-emerald-400"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
               <path d="M12 19V5M5 12l7-7 7 7" />
             </svg>
           </div>
-          <p className="text-[9px] text-emerald-300/60 uppercase tracking-widest">Income</p>
+          <p className="text-[9px] text-emerald-300/60 uppercase tracking-widest">
+            Income
+          </p>
           <BlurredAmount>
             <p className="text-sm font-bold text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)] tabular-nums leading-tight">
               ${income.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </p>
           </BlurredAmount>
-          {momData && <MoMBadge current={momData.curr.income} previous={momData.prev.income} />}
+          {momData && (
+            <MoMBadge
+              current={momData.curr.income}
+              previous={momData.prev.income}
+            />
+          )}
         </div>
 
         {/* Spent */}
         <div className="neo-card rounded-xl p-3 bg-gradient-to-br from-red-500/10 to-transparent text-center flex flex-col items-center gap-1">
           <div className="w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center mb-0.5">
-            <svg className="w-3 h-3 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg
+              className="w-3 h-3 text-red-400"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
               <path d="M12 5v14M5 12l7 7 7-7" />
             </svg>
           </div>
-          <p className="text-[9px] text-red-300/60 uppercase tracking-widest">Spent</p>
+          <p className="text-[9px] text-red-300/60 uppercase tracking-widest">
+            Spent
+          </p>
           <BlurredAmount>
             <p className="text-sm font-bold text-red-400 drop-shadow-[0_0_10px_rgba(239,68,68,0.5)] tabular-nums leading-tight">
               ${expense.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </p>
           </BlurredAmount>
-          {momData && <MoMBadge current={momData.curr.expense} previous={momData.prev.expense} invert />}
+          {momData && (
+            <MoMBadge
+              current={momData.curr.expense}
+              previous={momData.prev.expense}
+              invert
+            />
+          )}
         </div>
 
         {/* Remaining / Over */}
@@ -158,7 +195,14 @@ export default function PeriodSummaryWidget({
             className="w-6 h-6 rounded-full flex items-center justify-center mb-0.5"
             style={{ backgroundColor: `${remainingColor}25` }}
           >
-            <svg className="w-3 h-3" style={{ color: remainingColor }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg
+              className="w-3 h-3"
+              style={{ color: remainingColor }}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
               <circle cx="12" cy="12" r="9" />
               <path d="M12 8v4l3 3" />
             </svg>
@@ -183,69 +227,119 @@ export default function PeriodSummaryWidget({
               })}
             </p>
           </BlurredAmount>
-          {momData && <MoMBadge current={momData.curr.savings} previous={momData.prev.savings} />}
-        </div>
-      </div>
-
-      {/* Dual-track progress bar */}
-      <div className="mb-3">
-        <div className="flex justify-between items-center mb-1.5">
-          <span className="text-[10px] text-white/65 font-semibold uppercase tracking-wider">Period Progress</span>
-          <span className="text-[10px] text-white/55 font-medium">
-            Day {daysElapsed} of {totalDays}
-          </span>
-        </div>
-        <div className="relative h-3 bg-white/5 rounded-full overflow-hidden">
-          {/* Time elapsed (background track) */}
-          <div
-            className="absolute h-full rounded-full transition-all duration-700 bg-white/10"
-            style={{ width: `${timePercent}%` }}
-          />
-          {/* Spend vs income (foreground) */}
-          <div
-            className="absolute h-full rounded-full transition-all duration-700"
-            style={{
-              width: `${spendPercent}%`,
-              background:
-                spendPercent > timePercent
-                  ? "linear-gradient(90deg, #f87171, #fb923c)"
-                  : "linear-gradient(90deg, #34d399, #22d3ee)",
-              boxShadow:
-                spendPercent > timePercent
-                  ? "0 0 10px rgba(248,113,113,0.5)"
-                  : "0 0 10px rgba(52,211,153,0.4)",
-            }}
-          />
-          {/* Time marker line */}
-          <div
-            className="absolute top-0 h-full w-0.5 bg-white/30"
-            style={{ left: `${timePercent}%` }}
-          />
-        </div>
-        <div className="flex justify-between mt-1.5">
-          <span className="text-[10px] text-white/50 font-medium">
-            ${dailyBurn.toFixed(0)}/day avg
-          </span>
-          {totalDays > daysElapsed && (
-            <BlurredAmount blurIntensity="sm">
-              <span className="text-[10px] text-white/50 font-medium">
-                Proj. end: ${projectedTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              </span>
-            </BlurredAmount>
+          {momData && (
+            <MoMBadge
+              current={momData.curr.savings}
+              previous={momData.prev.savings}
+            />
           )}
         </div>
       </div>
 
+      {/* Budget burn progress — spend pacing vs time elapsed */}
+      <div className="mb-3">
+        <div className="flex justify-between items-center mb-1.5">
+          <span className="text-[10px] text-white/65 font-semibold uppercase tracking-wider">
+            Spend Pacing
+          </span>
+          <span className="text-[10px] text-white/55 font-medium">
+            Day {daysElapsed} of {totalDays}
+          </span>
+        </div>
+
+        {income > 0 ? (
+          <>
+            <div className="relative h-3 bg-white/5 rounded-full overflow-hidden">
+              {/* Spend bar — how much of income has been spent */}
+              <div
+                className="absolute h-full rounded-full transition-all duration-700"
+                style={{
+                  width: `${spendPercent}%`,
+                  background:
+                    spendPercent > timePercent
+                      ? "linear-gradient(90deg, #f87171, #fb923c)"
+                      : "linear-gradient(90deg, #34d399, #22d3ee)",
+                  boxShadow:
+                    spendPercent > timePercent
+                      ? "0 0 10px rgba(248,113,113,0.5)"
+                      : "0 0 10px rgba(52,211,153,0.4)",
+                }}
+              />
+              {/* Time marker line */}
+              <div
+                className="absolute top-0 h-full w-0.5 bg-white/40 z-10"
+                style={{ left: `${timePercent}%` }}
+              />
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center justify-between mt-1.5">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <div
+                    className="w-2 h-2 rounded-full"
+                    style={{
+                      backgroundColor:
+                        spendPercent > timePercent ? "#f87171" : "#34d399",
+                    }}
+                  />
+                  <span className="text-[9px] text-white/40">
+                    Spent {spendPercent.toFixed(0)}% of income
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-0.5 bg-white/40 rounded" />
+                  <span className="text-[9px] text-white/40">
+                    {timePercent.toFixed(0)}% of period elapsed
+                  </span>
+                </div>
+              </div>
+              <span
+                className={`text-[9px] font-medium ${
+                  spendPercent > timePercent
+                    ? "text-amber-400"
+                    : "text-emerald-400"
+                }`}
+              >
+                {spendPercent > timePercent ? "Ahead of pace" : "On track"}
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* No income — just show time progress */}
+            <div className="relative h-3 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-700 bg-white/15"
+                style={{ width: `${timePercent}%` }}
+              />
+            </div>
+            <div className="flex justify-between mt-1.5">
+              <span className="text-[9px] text-white/40">
+                {timePercent.toFixed(0)}% elapsed
+              </span>
+              <span className="text-[9px] text-white/40">
+                No income recorded
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Footer stats */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/5">
+      <div className="grid grid-cols-4 gap-2 pt-2 border-t border-white/5">
         <div className="text-center">
-          <p className="text-[10px] text-white/50 mb-0.5 uppercase tracking-wider font-medium">Savings</p>
+          <p className="text-[10px] text-white/50 mb-0.5 uppercase tracking-wider font-medium">
+            Savings
+          </p>
           <p className="text-xs font-bold" style={{ color: savingsColor }}>
             {savingsRate.toFixed(1)}%
           </p>
         </div>
         <div className="text-center">
-          <p className="text-[10px] text-white/50 mb-0.5 uppercase tracking-wider font-medium">Daily Burn</p>
+          <p className="text-[10px] text-white/50 mb-0.5 uppercase tracking-wider font-medium">
+            Daily Burn
+          </p>
           <BlurredAmount blurIntensity="sm">
             <p className="text-xs font-bold text-amber-400">
               ${dailyBurn.toFixed(0)}
@@ -253,8 +347,24 @@ export default function PeriodSummaryWidget({
           </BlurredAmount>
         </div>
         <div className="text-center">
-          <p className="text-[10px] text-white/50 mb-0.5 uppercase tracking-wider font-medium">Txns</p>
-          <p className="text-xs font-bold text-white/70">{transactions.length}</p>
+          <p className="text-[10px] text-white/50 mb-0.5 uppercase tracking-wider font-medium">
+            Projected
+          </p>
+          <BlurredAmount blurIntensity="sm">
+            <p className="text-xs font-bold text-white/70">
+              {totalDays > daysElapsed
+                ? `$${projectedTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                : "—"}
+            </p>
+          </BlurredAmount>
+        </div>
+        <div className="text-center">
+          <p className="text-[10px] text-white/50 mb-0.5 uppercase tracking-wider font-medium">
+            Txns
+          </p>
+          <p className="text-xs font-bold text-white/70">
+            {transactions.length}
+          </p>
         </div>
       </div>
     </WidgetCard>

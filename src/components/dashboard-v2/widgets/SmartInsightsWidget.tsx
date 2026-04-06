@@ -29,6 +29,8 @@ type Props = {
   daysElapsed: number;
   totalDays: number;
   onCategoryClick?: (category: string) => void;
+  /** When set, scopes insight generation to months up to this yyyy-MM */
+  periodEnd?: string;
 };
 
 const severityColors: Record<string, string> = {
@@ -47,13 +49,22 @@ export default function SmartInsightsWidget({
   daysElapsed,
   totalDays,
   onCategoryClick,
+  periodEnd,
 }: Props) {
   const insights = useMemo(() => {
     if (!months || months.length < 1) return [];
 
-    const currentMonth = months[months.length - 1];
+    // Scope months to period when periodEnd is set
+    let scopedMonths = months;
+    if (periodEnd) {
+      const endYM = periodEnd.slice(0, 7);
+      scopedMonths = months.filter((m) => m.month <= endYM);
+      if (scopedMonths.length < 1) return [];
+    }
+
+    const currentMonth = scopedMonths[scopedMonths.length - 1];
     return generateInsights({
-      months,
+      months: scopedMonths,
       currentMonthExpense: currentMonth.expense,
       currentMonthIncome: currentMonth.income,
       transactions,
@@ -71,6 +82,7 @@ export default function SmartInsightsWidget({
     budgetData,
     daysElapsed,
     totalDays,
+    periodEnd,
   ]);
 
   if (insights.length === 0) {

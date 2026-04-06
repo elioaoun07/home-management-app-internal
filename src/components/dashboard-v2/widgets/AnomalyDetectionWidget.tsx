@@ -14,6 +14,8 @@ import { useMemo } from "react";
 type Props = {
   months: MonthlyAnalytics[] | undefined;
   onCategoryClick?: (category: string) => void;
+  /** When set, anomaly detection uses months up to this yyyy-MM as "current" */
+  periodEnd?: string;
 };
 
 const severityConfig: Record<
@@ -32,12 +34,24 @@ const severityConfig: Record<
 export default function AnomalyDetectionWidget({
   months,
   onCategoryClick,
+  periodEnd,
 }: Props) {
   const { report, currentMonthLabel, historyCount } = useMemo(() => {
-    if (!months || months.length < 4) return { report: null, currentMonthLabel: "", historyCount: 0 };
+    if (!months || months.length < 4)
+      return { report: null, currentMonthLabel: "", historyCount: 0 };
+
+    // When periodEnd is set, trim months to only include up to that month
+    // so "current" = last month of selected period, and history = everything before it.
+    let scopedMonths = months;
+    if (periodEnd) {
+      const endYM = periodEnd.slice(0, 7);
+      scopedMonths = months.filter((m) => m.month <= endYM);
+      if (scopedMonths.length < 4)
+        return { report: null, currentMonthLabel: "", historyCount: 0 };
+    }
 
     const r = detectCategoryAnomalies(
-      months.map((m) => ({
+      scopedMonths.map((m) => ({
         month: m.month,
         categoryBreakdown: m.categoryBreakdown.map((c) => ({
           name: c.name,
@@ -46,14 +60,18 @@ export default function AnomalyDetectionWidget({
       })),
     );
 
-    const lastMonth = months[months.length - 1].month;
+    const lastMonth = scopedMonths[scopedMonths.length - 1].month;
     let label = lastMonth;
     try {
       label = format(parse(lastMonth, "yyyy-MM", new Date()), "MMMM yyyy");
     } catch {}
 
-    return { report: r, currentMonthLabel: label, historyCount: months.length - 1 };
-  }, [months]);
+    return {
+      report: r,
+      currentMonthLabel: label,
+      historyCount: scopedMonths.length - 1,
+    };
+  }, [months, periodEnd]);
 
   const subtitle = currentMonthLabel
     ? `${currentMonthLabel} vs prior ${historyCount} months`
@@ -61,10 +79,7 @@ export default function AnomalyDetectionWidget({
 
   if (!report) {
     return (
-      <WidgetCard
-        title="Anomaly Detection"
-        subtitle={subtitle}
-      >
+      <WidgetCard title="Anomaly Detection" subtitle={subtitle}>
         <p className="text-white/40 text-xs text-center py-8">
           Need at least 4 months of data
         </p>
@@ -92,10 +107,7 @@ export default function AnomalyDetectionWidget({
 
   if (all.length === 0) {
     return (
-      <WidgetCard
-        title="Anomaly Detection"
-        subtitle={subtitle}
-      >
+      <WidgetCard title="Anomaly Detection" subtitle={subtitle}>
         <div className="flex flex-col items-center justify-center py-6 gap-2">
           <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
             <span className="text-lg">✓</span>
