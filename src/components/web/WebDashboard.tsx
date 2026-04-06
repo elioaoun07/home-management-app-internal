@@ -1314,6 +1314,7 @@ const WebDashboard = memo(function WebDashboard({
             filterCategories={filterCategories}
             filterAccount={filterAccount}
             filterMinAmount={filterMinAmount}
+            currentUserId={currentUserId}
             onCategoryClick={(cat) => {
               setFilterCategories((prev) =>
                 prev.includes(cat)

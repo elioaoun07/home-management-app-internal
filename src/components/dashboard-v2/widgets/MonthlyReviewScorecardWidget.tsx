@@ -4,7 +4,6 @@ import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
 import { detectCategoryAnomalies } from "@/lib/utils/anomalyDetection";
 import { detectTrend } from "@/lib/utils/forecast";
-import { useState } from "react";
 
 type Props = {
   months: MonthlyAnalytics[] | undefined;
@@ -18,43 +17,31 @@ type CheckStatus = "pass" | "fail" | "warn" | "info";
 type CheckItem = {
   id: string;
   label: string;
+  value: string;
   detail: string;
   status: CheckStatus;
-  discussed?: boolean;
 };
 
-function StatusIcon({ status }: { status: CheckStatus }) {
-  if (status === "pass")
-    return (
-      <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
-        <svg className="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-          <path d="M5 13l4 4L19 7" />
-        </svg>
-      </div>
-    );
-  if (status === "fail")
-    return (
-      <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
-        <svg className="w-3 h-3 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-          <path d="M18 6L6 18M6 6l12 12" />
-        </svg>
-      </div>
-    );
-  if (status === "warn")
-    return (
-      <div className="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-        <svg className="w-3 h-3 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-        </svg>
-      </div>
-    );
+const STATUS_COLOR: Record<CheckStatus, string> = {
+  pass: "#34d399",
+  fail: "#f87171",
+  warn: "#fbbf24",
+  info: "#60a5fa",
+};
+
+const STATUS_BG: Record<CheckStatus, string> = {
+  pass: "bg-emerald-500/15",
+  fail: "bg-red-500/15",
+  warn: "bg-amber-500/15",
+  info: "bg-blue-500/15",
+};
+
+function StatusDot({ status }: { status: CheckStatus }) {
   return (
-    <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
-      <svg className="w-3 h-3 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-        <circle cx="12" cy="12" r="10" />
-        <path d="M12 8v4M12 16h.01" />
-      </svg>
-    </div>
+    <div
+      className="w-2 h-2 rounded-full shrink-0 mt-0.5"
+      style={{ backgroundColor: STATUS_COLOR[status], boxShadow: `0 0 6px ${STATUS_COLOR[status]}60` }}
+    />
   );
 }
 
@@ -64,8 +51,6 @@ function fmtMonth(ym: string): string {
 }
 
 export default function MonthlyReviewScorecardWidget({ months, debts, recurring, healthScore }: Props) {
-  const [discussed, setDiscussed] = useState<Set<string>>(new Set());
-
   const checks = buildChecks(months, debts, recurring, healthScore);
 
   if (!months || months.length < 1) {
@@ -77,80 +62,72 @@ export default function MonthlyReviewScorecardWidget({ months, debts, recurring,
   }
 
   const passed = checks.filter((c) => c.status === "pass").length;
+  const warned = checks.filter((c) => c.status === "warn").length;
+  const failed = checks.filter((c) => c.status === "fail").length;
   const total = checks.length;
   const score = Math.round((passed / total) * 100);
   const scoreColor = score >= 70 ? "#34d399" : score >= 40 ? "#fbbf24" : "#f87171";
 
-  const toggleDiscussed = (id: string) =>
-    setDiscussed((prev) => {
-      const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
-
-  const discussedCount = discussed.size;
-
   return (
     <WidgetCard
       title="Monthly Review"
-      subtitle="Tap items to mark as discussed with partner"
+      subtitle="Health checklist"
       action={
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-white/30">{discussedCount}/{total} discussed</span>
-          <span
-            className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
-            style={{ backgroundColor: `${scoreColor}20`, color: scoreColor }}
-          >
-            {passed}/{total} passed
-          </span>
-        </div>
+        <span
+          className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+          style={{ backgroundColor: `${scoreColor}20`, color: scoreColor }}
+        >
+          {passed}/{total} pass
+        </span>
       }
     >
-      {/* Score bar */}
-      <div className="mb-4">
-        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+      {/* Summary KPI bar */}
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        {[
+          { label: "Pass", count: passed, color: "#34d399", bg: "bg-emerald-500/10" },
+          { label: "Warn", count: warned, color: "#fbbf24", bg: "bg-amber-500/10" },
+          { label: "Fail", count: failed, color: "#f87171", bg: "bg-red-500/10" },
+        ].map((s) => (
+          <div key={s.label} className={`rounded-xl p-2.5 text-center ${s.bg}`}>
+            <p className="text-lg font-bold tabular-nums" style={{ color: s.color }}>{s.count}</p>
+            <p className="text-[9px] uppercase tracking-wider" style={{ color: `${s.color}99` }}>{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1 bg-white/5 rounded-full overflow-hidden mb-4">
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${score}%`, backgroundColor: scoreColor, boxShadow: `0 0 8px ${scoreColor}50` }}
+        />
+      </div>
+
+      {/* Compact checklist — 2 column grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+        {checks.map((check) => (
           <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${score}%`, backgroundColor: scoreColor, boxShadow: `0 0 8px ${scoreColor}50` }}
-          />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {checks.map((check) => {
-          const isDiscussed = discussed.has(check.id);
-          return (
-            <button
-              key={check.id}
-              onClick={() => toggleDiscussed(check.id)}
-              className={`w-full flex items-start gap-2.5 p-2.5 rounded-xl text-left transition-all ${
-                isDiscussed
-                  ? "bg-white/5 opacity-60"
-                  : "bg-white/3 hover:bg-white/6"
-              }`}
-            >
-              <StatusIcon status={check.status} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <p className={`text-xs font-medium ${isDiscussed ? "line-through text-white/40" : "text-white/80"}`}>
-                    {check.label}
-                  </p>
-                  {isDiscussed && (
-                    <span className="text-[9px] text-emerald-400/60 shrink-0">✓ discussed</span>
-                  )}
-                </div>
-                <p className="text-[10px] text-white/40 mt-0.5 leading-relaxed">{check.detail}</p>
+            key={check.id}
+            className="flex items-start gap-2 px-3 py-2 rounded-xl bg-white/3"
+          >
+            <StatusDot status={check.status} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1">
+                <p className="text-[11px] font-medium text-white/75 truncate">{check.label}</p>
+                <span
+                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${STATUS_BG[check.status]}`}
+                  style={{ color: STATUS_COLOR[check.status] }}
+                >
+                  {check.value}
+                </span>
               </div>
-            </button>
-          );
-        })}
+              <p className="text-[9px] text-white/35 mt-0.5 truncate" title={check.detail}>
+                {check.detail}
+              </p>
+            </div>
+          </div>
+        ))}
       </div>
-
-      {discussedCount === total && (
-        <div className="mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
-          <p className="text-xs text-emerald-400 font-medium">Review complete! Great work.</p>
-        </div>
-      )}
     </WidgetCard>
   );
 }
@@ -171,13 +148,9 @@ function buildChecks(
   const savingsRate = current.savingsRate;
   items.push({
     id: "savings-rate",
-    label: "Savings Rate ≥ 20%",
-    detail:
-      savingsRate >= 20
-        ? `Achieved ${savingsRate.toFixed(1)}% this month — on track.`
-        : savingsRate >= 10
-          ? `${savingsRate.toFixed(1)}% saved — below target. Aim for 20%.`
-          : `Only ${savingsRate.toFixed(1)}% saved — needs immediate attention.`,
+    label: "Savings Rate",
+    value: `${savingsRate.toFixed(1)}%`,
+    detail: savingsRate >= 20 ? "On target (≥20%)" : savingsRate >= 10 ? "Below target — aim for 20%" : "Critical — needs attention",
     status: savingsRate >= 20 ? "pass" : savingsRate >= 10 ? "warn" : "fail",
   });
 
@@ -187,17 +160,13 @@ function buildChecks(
     items.push({
       id: "spending-trend",
       label: "Spending Trend",
-      detail:
-        expChange <= 0
-          ? `Expenses down ${Math.abs(expChange).toFixed(1)}% vs ${fmtMonth(prev.month)} — great control.`
-          : expChange <= 10
-            ? `Expenses up ${expChange.toFixed(1)}% vs ${fmtMonth(prev.month)} — within acceptable range.`
-            : `Expenses up ${expChange.toFixed(1)}% vs ${fmtMonth(prev.month)} — review categories below.`,
+      value: `${expChange >= 0 ? "+" : ""}${expChange.toFixed(1)}%`,
+      detail: `vs ${fmtMonth(prev.month)} — ${expChange <= 0 ? "down" : expChange <= 10 ? "slight rise" : "review needed"}`,
       status: expChange <= 0 ? "pass" : expChange <= 10 ? "warn" : "fail",
     });
   }
 
-  // 3. Category Compliance — top categories that jumped >20%
+  // 3. Category Compliance
   if (prev && prev.categoryBreakdown.length > 0) {
     const jumpers: { name: string; pct: number }[] = [];
     for (const cat of current.categoryBreakdown) {
@@ -210,64 +179,46 @@ function buildChecks(
     jumpers.sort((a, b) => b.pct - a.pct);
     items.push({
       id: "category-compliance",
-      label: "Category Spending Stable",
-      detail:
-        jumpers.length === 0
-          ? "No categories jumped more than 20% this month."
-          : `${jumpers.slice(0, 3).map((j) => `${j.name} +${j.pct.toFixed(0)}%`).join(", ")} exceeded 20% MoM.`,
+      label: "Category Stability",
+      value: jumpers.length === 0 ? "Stable" : `${jumpers.length} spike${jumpers.length > 1 ? "s" : ""}`,
+      detail: jumpers.length === 0 ? "No categories up >20%" : jumpers.slice(0, 2).map((j) => `${j.name} +${j.pct.toFixed(0)}%`).join(", "),
       status: jumpers.length === 0 ? "pass" : jumpers.length <= 2 ? "warn" : "fail",
     });
   }
 
-  // 4. Forecast Check — is expense trend going up?
+  // 4. Forecast
   if (months.length >= 3) {
     const trend = detectTrend(months.map((m) => ({ month: m.month, value: m.expense })));
     const perMo = Math.abs(Math.round(trend.monthlyChange));
     items.push({
       id: "forecast",
       label: "Expense Forecast",
-      detail:
-        trend.direction === "down"
-          ? `Expenses trending down ~$${perMo}/mo — on a good trajectory.`
-          : trend.direction === "flat"
-            ? "Expenses are stable across the forecast period."
-            : `Expenses trending up ~$${perMo}/mo — projected to increase. Review fixed costs.`,
+      value: trend.direction === "down" ? "↓ Down" : trend.direction === "flat" ? "→ Flat" : "↑ Up",
+      detail: trend.direction === "down" ? `~$${perMo}/mo decline` : trend.direction === "flat" ? "Stable trajectory" : `~$${perMo}/mo increase`,
       status: trend.direction === "down" ? "pass" : trend.direction === "flat" ? "warn" : "fail",
     });
   }
 
-  // 5. Top 3 Categories Review
-  const topCats = [...current.categoryBreakdown]
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 3);
+  // 5. Top Categories
+  const topCats = [...current.categoryBreakdown].sort((a, b) => b.amount - a.amount).slice(0, 3);
   if (topCats.length > 0) {
-    const catSummary = topCats.map((c) => {
-      if (!prev) return `${c.name}: $${Math.round(c.amount)}`;
-      const p = prev.categoryBreakdown.find((x) => x.name === c.name);
-      const delta = p ? Math.round(c.amount - p.amount) : 0;
-      const sign = delta >= 0 ? "+" : "";
-      return `${c.name}: $${Math.round(c.amount)} (${sign}$${delta})`;
-    });
     items.push({
       id: "top-categories",
-      label: "Top 3 Categories",
-      detail: catSummary.join(" · "),
+      label: "Top Categories",
+      value: topCats[0]?.name ?? "—",
+      detail: topCats.map((c) => `${c.name} $${Math.round(c.amount)}`).join(" · "),
       status: "info",
     });
   }
 
-  // 6. Recurring Cost Stability
+  // 6. Fixed Costs
   if (recurring && prev) {
     const recurringBurden = current.expense > 0 ? (recurring.totalMonthly / current.expense) * 100 : 0;
     items.push({
       id: "recurring-stability",
       label: "Fixed Costs",
-      detail:
-        recurringBurden <= 50
-          ? `Fixed costs are ${recurringBurden.toFixed(0)}% of expenses — healthy ratio.`
-          : recurringBurden <= 70
-            ? `Fixed costs are ${recurringBurden.toFixed(0)}% of expenses — watch variable spending.`
-            : `Fixed costs are ${recurringBurden.toFixed(0)}% of expenses — very high. Review recurring items.`,
+      value: `${recurringBurden.toFixed(0)}%`,
+      detail: recurringBurden <= 50 ? "Healthy ratio" : recurringBurden <= 70 ? "Watch variable spending" : "Very high — review recurring",
       status: recurringBurden <= 50 ? "pass" : recurringBurden <= 70 ? "warn" : "fail",
     });
   }
@@ -278,24 +229,20 @@ function buildChecks(
     const critical = report.categoryAnomalies.filter((a) => a.severity === "critical");
     items.push({
       id: "anomalies",
-      label: "No Critical Anomalies",
-      detail:
-        critical.length === 0
-          ? "No unusual spending spikes detected this month."
-          : `${critical.length} critical anomaly${critical.length > 1 ? "ies" : ""}: ${critical.slice(0, 2).map((a) => a.category).join(", ")}.`,
+      label: "Anomalies",
+      value: critical.length === 0 ? "None" : `${critical.length} critical`,
+      detail: critical.length === 0 ? "No unusual spikes detected" : critical.slice(0, 2).map((a) => a.category).join(", "),
       status: critical.length === 0 ? "pass" : "fail",
     });
   }
 
-  // 8. Debt Status
+  // 8. Debt
   if (debts) {
     items.push({
       id: "debts",
-      label: "Debt Status",
-      detail:
-        debts.openCount === 0
-          ? "No open debts — clean slate."
-          : `${debts.openCount} open debt${debts.openCount > 1 ? "s" : ""} totaling $${Math.round(debts.totalOwed).toLocaleString()}.`,
+      label: "Open Debts",
+      value: debts.openCount === 0 ? "None" : `${debts.openCount}`,
+      detail: debts.openCount === 0 ? "Clean slate" : `$${Math.round(debts.totalOwed).toLocaleString()} total owed`,
       status: debts.openCount === 0 ? "pass" : debts.openCount <= 2 ? "warn" : "fail",
     });
   }

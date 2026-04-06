@@ -190,8 +190,8 @@ export default function PeriodSummaryWidget({
       {/* Dual-track progress bar */}
       <div className="mb-3">
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-[10px] text-white/40 font-medium">Period Progress</span>
-          <span className="text-[10px] text-white/30">
+          <span className="text-[10px] text-white/65 font-semibold uppercase tracking-wider">Period Progress</span>
+          <span className="text-[10px] text-white/55 font-medium">
             Day {daysElapsed} of {totalDays}
           </span>
         </div>
@@ -223,12 +223,12 @@ export default function PeriodSummaryWidget({
           />
         </div>
         <div className="flex justify-between mt-1.5">
-          <span className="text-[9px] text-white/30">
-            ${dailyBurn.toFixed(0)}/day avg spend
+          <span className="text-[10px] text-white/50 font-medium">
+            ${dailyBurn.toFixed(0)}/day avg
           </span>
           {totalDays > daysElapsed && (
             <BlurredAmount blurIntensity="sm">
-              <span className="text-[9px] text-white/30">
+              <span className="text-[10px] text-white/50 font-medium">
                 Proj. end: ${projectedTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </span>
             </BlurredAmount>
@@ -239,13 +239,13 @@ export default function PeriodSummaryWidget({
       {/* Footer stats */}
       <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/5">
         <div className="text-center">
-          <p className="text-[9px] text-white/30 mb-0.5 uppercase tracking-wider">Savings</p>
+          <p className="text-[10px] text-white/50 mb-0.5 uppercase tracking-wider font-medium">Savings</p>
           <p className="text-xs font-bold" style={{ color: savingsColor }}>
             {savingsRate.toFixed(1)}%
           </p>
         </div>
         <div className="text-center">
-          <p className="text-[9px] text-white/30 mb-0.5 uppercase tracking-wider">Daily Burn</p>
+          <p className="text-[10px] text-white/50 mb-0.5 uppercase tracking-wider font-medium">Daily Burn</p>
           <BlurredAmount blurIntensity="sm">
             <p className="text-xs font-bold text-amber-400">
               ${dailyBurn.toFixed(0)}
@@ -253,8 +253,8 @@ export default function PeriodSummaryWidget({
           </BlurredAmount>
         </div>
         <div className="text-center">
-          <p className="text-[9px] text-white/30 mb-0.5 uppercase tracking-wider">Transactions</p>
-          <p className="text-xs font-bold text-white/60">{transactions.length}</p>
+          <p className="text-[10px] text-white/50 mb-0.5 uppercase tracking-wider font-medium">Txns</p>
+          <p className="text-xs font-bold text-white/70">{transactions.length}</p>
         </div>
       </div>
     </WidgetCard>

@@ -17,23 +17,24 @@ type Props = {
   accounts: AccountBalance[] | undefined;
   activeAccounts?: string[];
   onAccountClick?: (accountName: string) => void;
+  currentUserId?: string;
 };
 
 const TYPE_CONFIG: Record<
   string,
   { label: string; icon: typeof Wallet; color: string; bg: string }
 > = {
-  expense: {
-    label: "Expense",
-    icon: Banknote,
-    color: "text-red-400",
-    bg: "bg-red-500/10",
-  },
   income: {
     label: "Income",
     icon: TrendingUp,
     color: "text-emerald-400",
     bg: "bg-emerald-500/10",
+  },
+  expense: {
+    label: "Expense",
+    icon: Banknote,
+    color: "text-red-400",
+    bg: "bg-red-500/10",
   },
   saving: {
     label: "Savings",
@@ -47,7 +48,13 @@ export default function AccountBalancesWidget({
   accounts,
   activeAccounts = [],
   onAccountClick,
+  currentUserId,
 }: Props) {
+  const hasMultipleUsers = useMemo(() => {
+    if (!accounts || !currentUserId) return false;
+    return accounts.some((a) => a.userId !== currentUserId);
+  }, [accounts, currentUserId]);
+
   const grouped = useMemo(() => {
     if (!accounts) return {};
     const groups: Record<string, AccountBalance[]> = {};
@@ -59,10 +66,10 @@ export default function AccountBalancesWidget({
     return groups;
   }, [accounts]);
 
-  const totalNetWorth = useMemo(() => {
-    if (!accounts) return 0;
-    return accounts.reduce((sum, a) => sum + a.currentBalance, 0);
-  }, [accounts]);
+  const totalNetWorth = useMemo(
+    () => (accounts ?? []).reduce((sum, a) => sum + a.currentBalance, 0),
+    [accounts],
+  );
 
   if (!accounts || accounts.length === 0) return null;
 
@@ -73,7 +80,7 @@ export default function AccountBalancesWidget({
       interactive
     >
       <div className="space-y-4">
-        {(["income", "saving", "expense"] as const).map((type) => {
+        {(["income", "expense", "saving"] as const).map((type) => {
           const accs = grouped[type];
           if (!accs || accs.length === 0) return null;
           const config = TYPE_CONFIG[type] ?? TYPE_CONFIG.expense;
@@ -86,25 +93,20 @@ export default function AccountBalancesWidget({
                 <div className={cn("p-1 rounded-md", config.bg)}>
                   <Icon className={cn("w-3 h-3", config.color)} />
                 </div>
-                <span
-                  className={cn(
-                    "text-[10px] font-semibold uppercase tracking-wider",
-                    config.color,
-                  )}
-                >
+                <span className={cn("text-[10px] font-semibold uppercase tracking-wider", config.color)}>
                   {config.label}
                 </span>
                 <span className="text-[10px] text-white/30 ml-auto tabular-nums">
-                  $
-                  {groupTotal.toLocaleString("en-US", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  ${groupTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
+
               <div className="grid grid-cols-2 gap-2">
                 {accs.map((acc) => {
                   const isActive = activeAccounts.includes(acc.name);
+                  const isMe = currentUserId ? acc.userId === currentUserId : false;
+                  const ownerColor = isMe ? "#3b82f6" : "#ec4899"; // blue = me, pink = partner
+
                   return (
                     <button
                       key={acc.id}
@@ -115,16 +117,13 @@ export default function AccountBalancesWidget({
                           ? "bg-cyan-500/15 ring-1 ring-cyan-500/30"
                           : "bg-white/5 hover:bg-white/8",
                       )}
+                      style={hasMultipleUsers ? { borderLeft: `3px solid ${ownerColor}` } : undefined}
                     >
                       <span className="text-[11px] text-white/60 truncate w-full">
                         {acc.name}
                       </span>
                       <span className="text-sm font-semibold text-white tabular-nums">
-                        $
-                        {acc.currentBalance.toLocaleString("en-US", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                        ${acc.currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </button>
                   );

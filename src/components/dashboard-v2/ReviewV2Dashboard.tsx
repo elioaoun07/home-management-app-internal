@@ -86,6 +86,7 @@ type Props = {
   filterAccount?: string;
   filterMinAmount?: number;
   onCategoryClick?: (category: string) => void;
+  currentUserId?: string;
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -98,6 +99,7 @@ export default function ReviewV2Dashboard({
   filterAccount,
   filterMinAmount = 0,
   onCategoryClick,
+  currentUserId,
 }: Props) {
   // ── Tab state ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<V2Tab>(() => {
@@ -491,18 +493,20 @@ export default function ReviewV2Dashboard({
             accounts={analytics?.accounts}
             activeAccounts={filters.accounts}
             onAccountClick={handleAccountClick}
+            currentUserId={currentUserId}
           />
 
-          {/* Spending by category + Needs/Wants/Savings */}
+          {/* Spending by category + Top Expenses (swapped: was 50/30/20) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <CategoryDonutWidget
               transactions={filteredExpenseTransactions}
               activeCategories={activeCategoryList}
               onCategoryClick={handleCategoryClick}
             />
-            <NeedsWantsSavingsWidget
-              data={analytics?.needsWantsSavings}
-              totalIncome={currentMonth?.income ?? 0}
+            <TopExpensesWidget
+              transactions={filteredExpenseTransactions}
+              onCategoryClick={handleCategoryClick}
+              categoryMeans={categoryMeans}
             />
           </div>
 
@@ -514,11 +518,10 @@ export default function ReviewV2Dashboard({
             onCategoryClick={handleCategoryClick}
           />
 
-          {/* Unusual transactions */}
-          <TopExpensesWidget
-            transactions={filteredExpenseTransactions}
-            onCategoryClick={handleCategoryClick}
-            categoryMeans={categoryMeans}
+          {/* 50/30/20 (swapped: was Top Expenses) */}
+          <NeedsWantsSavingsWidget
+            data={analytics?.needsWantsSavings}
+            totalIncome={currentMonth?.income ?? 0}
           />
 
           {/* Anomaly detection — categories high/low vs pattern */}
