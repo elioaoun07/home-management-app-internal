@@ -217,7 +217,9 @@ function syncTxCacheToLocalStorage(
   });
   for (const [key, data] of allQueries) {
     if (data && key.length >= 4) {
-      writeTxCache(key[2] as string, key[3] as string, data);
+      // Filter out optimistic/pending entries so cold-start cache is always confirmed data
+      const confirmed = data.filter((t) => !t._isPending);
+      writeTxCache(key[2] as string, key[3] as string, confirmed);
     }
   }
 }
@@ -276,13 +278,14 @@ export function useDashboardTransactions({
     },
 
     // PERSISTENT DATA STRATEGY:
-    // staleTime: 10 min → cached data shown instantly, no refetch on every visit
-    // User taps refresh icon to pull latest data, or it auto-refreshes after 10 min
-    // Mutations (add/delete transaction) invalidate the cache immediately
-    staleTime: 1000 * 60 * 10, // 10 minutes — history rarely changes
+    // staleTime: 2 min → cached data shown instantly, auto-refetches after 2 min
+    // Within 2 min: cache served instantly, no network request
+    // After 2 min: background refetch on mount/focus while cached data shows immediately
+    // Mutations always actively refetch via onSettled to guarantee accuracy
+    staleTime: 1000 * 60 * 2, // 2 minutes — balances speed with freshness
     gcTime: 1000 * 60 * 60 * 24, // Keep in cache for 24 hours
-    refetchOnMount: false, // Don't refetch on every mount — use cached data
-    refetchOnWindowFocus: false, // Don't refetch on tab focus
+    refetchOnMount: true, // Refetch on mount when stale (>2min) — serves cache instantly while fetching
+    refetchOnWindowFocus: true, // Refetch on tab focus when stale — catches cross-device changes
     refetchOnReconnect: true, // Refetch when reconnecting
     retry: (failureCount) => {
       if (!isReallyOnline()) return false;
@@ -475,14 +478,14 @@ export function useDeleteTransaction() {
     onSettled: () => {
       // Sync in-memory state to localStorage so the next cold start is instant
       syncTxCacheToLocalStorage(queryClient);
-      // Mark transaction queries as stale (refetch lazily to avoid deleted item flashing back)
+      // Actively refetch transaction queries to confirm server state after mutation
       queryClient.invalidateQueries({
         queryKey: ["transactions"],
-        refetchType: "none",
+        refetchType: "active",
       });
       queryClient.invalidateQueries({
         queryKey: ["transactions-today"],
-        refetchType: "none",
+        refetchType: "active",
       });
       // Refetch balance from server to confirm optimistic update
       queryClient.invalidateQueries({
@@ -1005,14 +1008,14 @@ export function useAddTransaction() {
     onSettled: () => {
       // Sync in-memory state to localStorage so the next cold start is instant
       syncTxCacheToLocalStorage(queryClient);
-      // Transaction cache is already updated in onSuccess, mark stale for lazy refetch
+      // Actively refetch transaction queries to confirm server state after mutation
       queryClient.invalidateQueries({
         queryKey: ["transactions"],
-        refetchType: "none",
+        refetchType: "active",
       });
       queryClient.invalidateQueries({
         queryKey: ["transactions-today"],
-        refetchType: "none",
+        refetchType: "active",
       });
       // Refetch balance from server to confirm optimistic update
       queryClient.invalidateQueries({
@@ -1290,14 +1293,14 @@ export function useUpdateTransaction() {
     onSettled: () => {
       // Sync in-memory state to localStorage so the next cold start is instant
       syncTxCacheToLocalStorage(queryClient);
-      // Transaction cache updated in onSuccess, mark stale for lazy refetch
+      // Actively refetch transaction queries to confirm server state after mutation
       queryClient.invalidateQueries({
         queryKey: ["transactions"],
-        refetchType: "none",
+        refetchType: "active",
       });
       queryClient.invalidateQueries({
         queryKey: ["transactions-today"],
-        refetchType: "none",
+        refetchType: "active",
       });
       // Refetch balance from server to confirm optimistic update
       queryClient.invalidateQueries({

@@ -358,6 +358,8 @@ export function useReorderAccounts() {
       // Only refetch on error to ensure we have correct server state
       qc.invalidateQueries({ queryKey: qk.accounts(), refetchType: "active" });
     },
-    // No onSettled - we trust the optimistic update on success
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: qk.accounts(), refetchType: "active" });
+    },
   });
 }

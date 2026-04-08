@@ -905,7 +905,7 @@ export default function MobileExpenseForm() {
                     // Refresh the balance display
                     queryClient.invalidateQueries({
                       queryKey: ["account-balance"],
-                      refetchType: "none",
+                      refetchType: "active",
                     });
                     toast.success("Transaction undone", {
                       icon: ToastIcons.delete,

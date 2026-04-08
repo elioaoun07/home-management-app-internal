@@ -152,6 +152,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const staleThreads = useRef<Set<string>>(new Set());
   const allStale = useRef(false);
 
+  // Track last time transaction data was refreshed to prevent burst refetches on rapid tab switches
+  const lastTxRefreshRef = useRef<number>(Date.now());
+
   // Connection health check interval
   const healthCheckInterval = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempt = useRef(0);
@@ -382,6 +385,16 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
             if (hasAnySubscriptionDown) {
               refreshAll();
             }
+          }
+
+          // Always refresh transaction data on app resume (safety net against stale cache).
+          // Time-gated to 2 minutes to prevent burst refetches on rapid tab switches.
+          const now = Date.now();
+          if (now - lastTxRefreshRef.current > 2 * 60 * 1000) {
+            queryClient.invalidateQueries({ queryKey: ["transactions"] });
+            queryClient.invalidateQueries({ queryKey: ["transactions-today"] });
+            queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+            lastTxRefreshRef.current = now;
           }
 
           // Process both legacy and new queues
@@ -710,6 +723,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["accounts"] }),
         queryClient.invalidateQueries({ queryKey: ["account-balance"] }),
+        queryClient.invalidateQueries({ queryKey: ["transactions"] }),
+        queryClient.invalidateQueries({ queryKey: ["transactions-today"] }),
       ]);
 
       setLastSyncTime(new Date());

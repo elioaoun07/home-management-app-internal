@@ -220,7 +220,13 @@ export function useReorderCategories(accountId?: string) {
         refetchType: "active",
       });
     },
-    // No onSettled - we trust the optimistic update on success
+    onSettled: () => {
+      if (!accountId) return;
+      qc.invalidateQueries({
+        queryKey: qk.categories(accountId),
+        refetchType: "active",
+      });
+    },
   });
 }
 
