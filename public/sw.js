@@ -1,7 +1,48 @@
 // Service Worker for Push Notifications + Offline Caching
 // Handles push events, displays notifications with alarm-like behavior, and caches app shell
 
-const SW_VERSION = "5.0.0";
+const SW_VERSION = "5.1.0";
+
+// Minimal loading shell served immediately when no cached HTML is available.
+// Embedded directly in the SW bundle — never lost even when Cache Storage is cleared by iOS.
+// The shell auto-retries every 3 s and listens for the online event so the real
+// app loads as soon as the network (or the server) is ready.
+const INLINE_LOADING_SHELL = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Budget Manager</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#0a1628;min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#fff;-webkit-text-size-adjust:100%}
+.wrap{display:flex;flex-direction:column;align-items:center;gap:18px;padding:40px 24px;text-align:center}
+.spinner{width:44px;height:44px;border:3px solid rgba(99,102,241,.18);border-top-color:#6366f1;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.title{font-size:17px;font-weight:600;color:#e2e8f0;letter-spacing:.01em}
+.msg{font-size:13px;color:rgba(255,255,255,.38)}
+.btn{margin-top:4px;padding:10px 26px;border-radius:999px;background:rgba(99,102,241,.14);border:1px solid rgba(99,102,241,.28);color:#a5b4fc;font-size:13px;font-weight:500;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.btn:active{background:rgba(99,102,241,.26)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="spinner"></div>
+  <div class="title">Budget Manager</div>
+  <div class="msg" id="msg">Connecting\u2026</div>
+  <button class="btn" onclick="go()">Try Now</button>
+</div>
+<script>
+var t,n=0,max=20;
+function go(){clearInterval(t);window.location.reload();}
+function tick(){n++;if(n>=max){clearInterval(t);document.getElementById('msg').textContent='Tap \u201cTry Now\u201d to reload.';}else{document.getElementById('msg').textContent='Retrying in '+(3-((n-1)%3))+'\u2009s\u2026';if(n%3===0)go();}}
+t=setInterval(tick,1000);
+window.addEventListener('online',function(){setTimeout(go,400);});
+</script>
+</body>
+</html>`;
 
 // ============================================
 // CACHE CONFIGURATION
@@ -299,26 +340,23 @@ self.addEventListener("fetch", (event) => {
           return cachedResponse;
         }
 
-        // No cache — cold load, try network with adaptive timeout
-        const networkResponse = await fetchWithTimeout(
-          request,
-          getAdaptiveTimeout(),
-        );
-        if (networkResponse && networkResponse.ok) {
-          const clone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          return networkResponse;
-        }
+        // No cache — cold start (SW was killed by iOS or cache cleared).
+        // Serve the inline loading shell IMMEDIATELY (zero network latency) so the
+        // user sees a spinner instead of a white screen. Simultaneously kick off a
+        // background network fetch; when it succeeds the shell's auto-retry loop
+        // will pick up the freshly cached page on its next reload.
+        fetch(request)
+          .then((r) => {
+            if (r && r.ok) {
+              const clone = r.clone();
+              caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            }
+          })
+          .catch(() => {});
 
-        // Network failed — try root app shell, then offline page
-        const rootCached = await caches.match("/");
-        if (rootCached) return rootCached;
-        const offlineCached = await caches.match("/offline");
-        if (offlineCached) return offlineCached;
-
-        return new Response("Offline", {
-          status: 503,
-          statusText: "Offline",
+        return new Response(INLINE_LOADING_SHELL, {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
         });
       })(),
     );

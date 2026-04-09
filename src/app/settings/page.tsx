@@ -4,11 +4,12 @@ import SettingsPage from "./SettingsPage";
 
 export default async function SettingsRoute() {
   const supabase = await supabaseServerRSC();
+  // getSession() reads from cookies — no network call, works on slow/offline connections.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (!user) {
+  if (!session?.user) {
     redirect("/login");
   }
 

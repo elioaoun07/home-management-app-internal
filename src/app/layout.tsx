@@ -71,11 +71,14 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Fetch user data in server component
+  // Fetch user data in server component.
+  // getSession() reads from cookies — no network call, works on slow/offline connections.
+  // getUser() makes a Supabase auth network call that hangs for 60 s on slow 3G.
   const supabase = await supabaseServerRSC();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   const userName = user
     ? ((user.user_metadata?.full_name as string | undefined) ??

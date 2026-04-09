@@ -27,11 +27,13 @@ export const metadata: Metadata = {
 
 export default async function ExpensePage() {
   const supabase = await supabaseServerRSC();
+  // getSession() reads from cookies — no network call, works on slow/offline connections.
+  // getUser() makes a Supabase auth network call that hangs for 60 s on slow 3G.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (!user) {
+  if (!session?.user) {
     redirect("/login");
   }
 

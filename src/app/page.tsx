@@ -3,14 +3,15 @@ import { redirect } from "next/navigation";
 import LandingPageClient from "./LandingPageClient";
 
 export default async function Home() {
-  // Check if user is already logged in
+  // Check if user is already logged in.
+  // getSession() reads from cookies — no network call, works on slow/offline connections.
   const supabase = await supabaseServerRSC();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
   // If already authenticated, redirect to dashboard
-  if (user) {
+  if (session?.user) {
     redirect("/dashboard");
   }
 

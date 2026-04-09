@@ -144,6 +144,7 @@ export function useImportTransactions() {
       queryClient.invalidateQueries({
         queryKey: statementKeys.merchantMappings(),
       });
+      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
     },
   });
 }

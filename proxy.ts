@@ -30,8 +30,20 @@ export default async function proxy(request: NextRequest) {
     },
   );
 
-  // Refresh session if expired
-  await supabase.auth.getUser();
+  // Refresh session if expired.
+  // Cap at 3 s — on slow/flaky mobile networks this call can hang for 60 s,
+  // causing a white screen on cold iOS PWA launches. If it times out, the
+  // existing auth cookies remain valid and the client SDK refreshes later.
+  try {
+    await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("auth-timeout")), 3000)
+      ),
+    ]);
+  } catch {
+    // Timeout or network error — proceed without refreshing the session.
+  }
 
   return response;
 }

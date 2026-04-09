@@ -1,3 +1,5 @@
+import { adjustAccountBalance } from "@/lib/balance";
+import { getBalanceDelta } from "@/lib/balance-utils";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -209,6 +211,22 @@ export async function POST(
         { status: 500 },
       );
     }
+
+    // Adjust the account balance — this was missing and caused balance drift
+    const { data: accountData } = await supabase
+      .from("accounts")
+      .select("type")
+      .eq("id", finalAccountId)
+      .maybeSingle();
+
+    const accountType = ((accountData?.type) || "expense") as "expense" | "income" | "saving";
+    const delta = getBalanceDelta(finalAmount, accountType, false, "create");
+    await adjustAccountBalance(finalAccountId, delta, "transaction", {
+      userId: user.id,
+      transactionId: transaction.id,
+      reason: `Recurring payment: ${recurringPayment.name}`,
+      effectiveDate: finalDate,
+    });
 
     // Calculate next due date using the database function
     const { data: nextDueDateResult } = await supabase.rpc(
