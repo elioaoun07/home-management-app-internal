@@ -3,9 +3,11 @@
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import type {
+  AiBudgetSuggestion,
   BudgetAllocation,
   BudgetCategoryView,
   BudgetSummary,
+  BudgetWeek,
   CreateBudgetAllocationInput,
 } from "@/types/budgetAllocation";
 import type { Account } from "@/types/domain";
@@ -221,6 +223,120 @@ export function useDeleteBudgetAllocation() {
     },
     onError: () => {
       toast.error("Failed to delete budget allocation", {
+        icon: ToastIcons.error,
+      });
+    },
+  });
+}
+
+// ===== AI Budget Suggestion Hooks =====
+
+const AI_BUDGET_KEY = "ai-budget-suggestion";
+
+interface AiBudgetResponse {
+  suggestion: AiBudgetSuggestion | null;
+  weeksWithSuggestions: string[];
+}
+
+async function fetchAiBudgetSuggestion(
+  month: string,
+  week: BudgetWeek,
+): Promise<AiBudgetResponse> {
+  const params = new URLSearchParams({ month, week });
+  const res = await fetch(
+    `/api/budget-allocations/ai-suggest?${params.toString()}`,
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to fetch AI suggestion");
+  }
+  return res.json();
+}
+
+/**
+ * Fetch stored AI budget suggestion for a given month + week.
+ * Also returns which weeks have suggestions (for indicators).
+ */
+export function useAiBudgetSuggestion(month?: string, week?: BudgetWeek) {
+  return useQuery({
+    queryKey: [AI_BUDGET_KEY, month, week],
+    queryFn: () => fetchAiBudgetSuggestion(month!, week!),
+    enabled: !!month && !!week,
+    staleTime: 10 * 60 * 1000, // 10 minutes — suggestions rarely change
+    refetchOnWindowFocus: false,
+  });
+}
+
+interface GenerateAiInput {
+  month: string;
+  week: BudgetWeek;
+  force?: boolean;
+}
+
+interface GenerateAiResponse {
+  exists?: boolean;
+  suggestion: AiBudgetSuggestion;
+  generated?: boolean;
+}
+
+/**
+ * Generate (or re-generate) an AI budget suggestion for a specific month + week.
+ * Returns { exists: true } if suggestion already exists (and force wasn't set).
+ */
+export function useGenerateAiBudgetSuggestion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: GenerateAiInput): Promise<GenerateAiResponse> => {
+      const res = await safeFetch("/api/budget-allocations/ai-suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+        timeoutMs: 60_000, // Gemini AI calls can take 10-30s
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to generate AI suggestion");
+      }
+      return res.json();
+    },
+    onSuccess: (data, input) => {
+      // Invalidate the AI suggestion query for this month/week
+      queryClient.invalidateQueries({
+        queryKey: [AI_BUDGET_KEY, input.month, input.week],
+      });
+      // Also invalidate all AI queries for this month (week indicators)
+      queryClient.invalidateQueries({
+        queryKey: [AI_BUDGET_KEY, input.month],
+      });
+
+      if (data.generated) {
+        toast.success("AI budget suggestion generated", {
+          icon: ToastIcons.create,
+          duration: 4000,
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              // Delete the suggestion
+              try {
+                await safeFetch(
+                  `/api/budget-allocations/ai-suggest?id=${data.suggestion.id}`,
+                  { method: "DELETE" },
+                );
+                queryClient.invalidateQueries({
+                  queryKey: [AI_BUDGET_KEY, input.month],
+                });
+                toast.success("AI suggestion removed");
+              } catch {
+                toast.error("Failed to undo");
+              }
+            },
+          },
+        });
+      }
+    },
+    onError: () => {
+      toast.error("Failed to generate AI suggestion", {
         icon: ToastIcons.error,
       });
     },

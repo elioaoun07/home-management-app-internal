@@ -24,6 +24,9 @@ const emptySummary: BudgetSummary = {
   partner_income_balance: 0,
   income_accounts: [],
   unallocated: 0,
+  wallet_balance: 0,
+  user_wallet_balance: 0,
+  partner_wallet_balance: 0,
   categories: [],
 };
 
@@ -113,6 +116,29 @@ export async function GET(req: NextRequest) {
       .filter((b) => b.user_id === partnerId)
       .reduce((s, b) => s + b.balance, 0);
     const totalIncomeBalance = userIncomeBalance + partnerIncomeBalance;
+
+    // --- Fetch wallet (expense account named "Wallet") balances ---
+    const walletAccounts = expenseAccounts.filter((a) =>
+      a.name.toLowerCase().includes("wallet"),
+    );
+    let userWalletBalance = 0;
+    let partnerWalletBalance = 0;
+    if (walletAccounts.length > 0) {
+      const { data: walletBals } = await supabase
+        .from("account_balances")
+        .select("account_id, user_id, balance")
+        .in(
+          "account_id",
+          walletAccounts.map((a) => a.id),
+        );
+      for (const wa of walletAccounts) {
+        const bal = (walletBals || []).find((b) => b.account_id === wa.id);
+        const amount = Number(bal?.balance ?? 0);
+        if (wa.user_id === user.id) userWalletBalance += amount;
+        else if (wa.user_id === partnerId) partnerWalletBalance += amount;
+      }
+    }
+    const totalWalletBalance = userWalletBalance + partnerWalletBalance;
 
     // --- Fetch budget allocations ---
     let allocations: any[] = [];
@@ -419,6 +445,9 @@ export async function GET(req: NextRequest) {
       partner_income_balance: partnerIncomeBalance,
       income_accounts: incomeAccountBalances,
       unallocated: totalIncomeBalance - totalBudget,
+      wallet_balance: totalWalletBalance,
+      user_wallet_balance: userWalletBalance,
+      partner_wallet_balance: partnerWalletBalance,
       categories: categoryViews,
     };
 
@@ -470,11 +499,48 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Upsert: update if exists, insert if not
-  const { data, error } = await supabase
+  // Find existing allocation matching the logical key
+  // (can't use upsert because subcategory_id/budget_month can be NULL,
+  //  and Postgres treats NULL ≠ NULL for ON CONFLICT)
+  let existingQuery = supabase
     .from("budget_allocations")
-    .upsert(
-      {
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("category_id", category_id)
+    .eq("assigned_to", assigned_to);
+
+  if (subcategory_id) {
+    existingQuery = existingQuery.eq("subcategory_id", subcategory_id);
+  } else {
+    existingQuery = existingQuery.is("subcategory_id", null);
+  }
+
+  if (budget_month) {
+    existingQuery = existingQuery.eq("budget_month", budget_month);
+  } else {
+    existingQuery = existingQuery.is("budget_month", null);
+  }
+
+  const { data: existing } = await existingQuery.maybeSingle();
+
+  let data, error;
+  if (existing) {
+    // Update existing allocation
+    ({ data, error } = await supabase
+      .from("budget_allocations")
+      .update({
+        monthly_budget,
+        account_id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .select()
+      .single());
+  } else {
+    // Insert new allocation
+    ({ data, error } = await supabase
+      .from("budget_allocations")
+      .insert({
         user_id: user.id,
         category_id,
         subcategory_id,
@@ -482,16 +548,15 @@ export async function POST(req: NextRequest) {
         assigned_to,
         monthly_budget,
         budget_month,
-      },
-      {
-        onConflict:
-          "user_id,category_id,subcategory_id,assigned_to,budget_month",
-      },
-    )
-    .select()
-    .single();
+      })
+      .select()
+      .single());
+  }
 
   if (error) {
+    if ((error as any).code === "23505") {
+      return NextResponse.json({ error: "Already exists" }, { status: 409 });
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

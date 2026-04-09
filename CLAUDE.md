@@ -20,11 +20,13 @@
 1. **ALL toasts must have an Undo button** — `{ duration: 4000, action: { label: "Undo", onClick: () => undoMutation.mutate(...) } }`. Use `ToastIcons` enum from `src/lib/toastIcons.tsx`.
 2. **Single click** = open detail view · **Double click** = toggle pin/favorite
 3. **No red for individual task/item rows** — use theme colors (pink/cyan). Container headers CAN use red/amber. Overdue date labels → `text-white/40`
-4. **Futuristic icons** where available in toasts and UI elements
+4. **Futuristic SVG icons** where available in toasts and UI elements
 5. **Mobile-first** — always verify on mobile viewport
 6. **QR/NFC URLs**: never hardcode purpose-specific names (e.g., `/qr-code-oven`). Use generic reusable slugs like `/g/kitchen-1`. Behavior stored server-side.
 7. **Focus Page AI briefing**: cached 24h per user, max 2 manual refreshes/day — do not change these limits
-8. **Never use `fetch()` for mutations** — always use `safeFetch()` from `src/lib/safeFetch.ts`. It does a pre-flight online check, 3s timeout, and calls `markOffline()` on failure.
+8. **Never use `fetch()` for mutations** — always use `safeFetch()` from `src/lib/safeFetch.ts`. It does a pre-flight online check, a configurable timeout (default **3 s**), and calls `markOffline()` on any abort/network failure.
+   - The 3 s default is right for CRUD operations. **Long-running calls (AI generation, file uploads, any external API that may take >5 s) MUST pass `timeoutMs`** — e.g. `{ timeoutMs: 60_000 }` — or the request will be killed at 3 s and the app will be falsely flagged offline.
+   - `markOffline()` is triggered on **timeout** too, not only hard network failures. A missing `timeoutMs` on a slow call will light up the offline indicator and badge even when the user is fully online.
 9. **Never trust `navigator.onLine`** — use `isReallyOnline()` from `src/lib/connectivityManager.ts`. It probes `/api/health` every 30s for real connectivity.
 10. **Cron routes**: verify `Authorization: Bearer {CRON_SECRET}`, use `supabaseAdmin()` (not `supabaseServer()`), add `export const maxDuration = 60`.
 11. **Unique constraint violations** (`error.code === "23505"`) → return `409 Conflict`, not 500.
@@ -33,7 +35,12 @@
 14. **Never edit `src/components/ui/`** — shadcn/ui auto-generated primitives.
 15. **Zod schemas for all API input validation** — derive TS types with `z.infer<>`.
 16. **Household linking in API routes**: when fetching user-owned data, always check `household_links` for an active partner and include their data unless `ownOnly=true` is passed. See `src/app/api/accounts/route.ts:28-52`.
-17. **Color identity** — current user = **blue** (`blue-400/500`), partner = **pink** (`pink-400/500`). Apply consistently for all color-coded UI: assignment labels, accent bars, avatars, indicators, and any context where "me vs partner" needs visual distinction. Never swap these colors.
+17. **Color identity is person-absolute, not role-relative** — each user's identity color = their chosen theme color, consistent across **all** devices:
+    - User with **blue theme** → always `blue-400/500` (on their phone AND partner's phone)
+    - User with **pink theme** → always `pink-400/500` (on their phone AND partner's phone)
+    - **Derive from `useTheme()`**: if `theme === "pink"`, current user = pink & partner = blue; otherwise current user = blue & partner = pink. For frost/calm themes, default to current user = blue, partner = pink.
+    - Apply to: assignment labels, accent bars, avatars, indicators, transactions, tasks, debts, analytics — any "me vs partner" visual distinction.
+    - **Key principle:** A transaction that shows as blue on one phone must show as blue on the other phone too. Colors follow the **person**, not the viewer.
 18. **Floating panels (dropdowns, popovers, command palettes) must be opaque** — never use `neo-card` (which is semi-transparent glass) on panels that float above page content. Use `tc.bgPage` from `useThemeClasses()` as the background class so the panel is the same solid color as the page background per theme. `neo-card` is only for non-overlaid cards. Glass/blur on floating panels causes text bleed-through from content behind them.
 19. **Fixed/sticky headers must not overlap page content** — when using `fixed` or `sticky` positioning on headers (`h-14`, etc.), the content below **must** have matching top padding (e.g., `pt-14`) to prevent overlap. For standalone/isolated pages (NFC, guest portal, etc.) that render their own layout, ensure the root layout's `ConditionalHeader` and `MobileNav` hide on those routes — otherwise a fixed header with no content offset causes overlap. Always verify on mobile viewport.
 20. **Cache invalidation discipline — the "disconnected app" trap**: This app has many views (Dashboard, Review, Analytics, Account pages) that display the same underlying data under **different React Query keys**. A mutation that only invalidates the key it "owns" will silently leave other views stale. Rules:
@@ -151,6 +158,7 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 - **Enum/type updates**: always update DB migration + TypeScript type + API route + UI components + utilities together
 - **Standalone imports**: standalone feature dirs can't import from each other — use `src/components/`, `src/lib/`, `src/types/`
 - **Zustand in non-React modules**: use `store.getState().action()` directly — see `src/lib/stores/offlinePendingStore.ts` (`offlinePendingActions` export pattern)
+- **Mobile number inputs**: never use `type="number"` — it triggers iOS scroll-wheel issues and prevents decimal input on some keyboards. Use `type="text"` with `inputMode="decimal"` instead.
 
 ---
 

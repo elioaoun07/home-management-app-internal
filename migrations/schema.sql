@@ -157,6 +157,23 @@ CREATE TABLE public.budget_allocations (
   CONSTRAINT budget_allocations_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT budget_allocations_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
+CREATE TABLE public.ai_budget_suggestions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  budget_month text NOT NULL,
+  week text NOT NULL CHECK (week = ANY (ARRAY['w0'::text, 'w1'::text, 'w2'::text, 'w3'::text, 'w4'::text])),
+  suggestions jsonb NOT NULL DEFAULT '[]'::jsonb,
+  wallet_balance_used numeric NOT NULL DEFAULT 0,
+  total_suggested numeric NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT ai_budget_suggestions_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_budget_suggestions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT ai_budget_suggestions_unique UNIQUE (user_id, budget_month, week)
+);
+ALTER TABLE public.ai_budget_suggestions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can read own ai_budget_suggestions" ON public.ai_budget_suggestions FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own ai_budget_suggestions" ON public.ai_budget_suggestions FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own ai_budget_suggestions" ON public.ai_budget_suggestions FOR DELETE USING (auth.uid() = user_id);
 CREATE TABLE public.catalogue_categories (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,

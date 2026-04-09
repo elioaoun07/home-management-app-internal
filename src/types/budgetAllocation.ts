@@ -123,7 +123,39 @@ export interface BudgetSummary {
   income_accounts: IncomeAccountBalance[];
   /** How much of income is still unallocated */
   unallocated: number;
+  /** Wallet (expense account named "Wallet") balance — merged both users */
+  wallet_balance: number;
+  user_wallet_balance: number;
+  partner_wallet_balance: number;
   categories: BudgetCategoryView[];
+}
+
+// ===== AI Budget Suggestion Types =====
+
+export interface AiSubcategorySuggestion {
+  subcategory_id: string;
+  subcategory_name: string;
+  percentage: number;
+  suggested_amount: number;
+}
+
+export interface AiCategorySuggestion {
+  category_id: string;
+  category_name: string;
+  suggested_budget: number;
+  reasoning: string;
+  subcategories?: AiSubcategorySuggestion[];
+}
+
+export interface AiBudgetSuggestion {
+  id: string;
+  user_id: string;
+  budget_month: string;
+  week: BudgetWeek;
+  suggestions: AiCategorySuggestion[];
+  wallet_balance_used: number;
+  total_suggested: number;
+  created_at: string;
 }
 
 // Assignment display helpers

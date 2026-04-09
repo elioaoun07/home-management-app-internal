@@ -358,6 +358,31 @@ import { supabaseServer } from "@/lib/supabase/server";
 const supabase = await supabaseServer(await cookies());
 ```
 
+### 9. Color identity confusion (role-relative vs person-absolute)
+
+```ts
+// ❌ WRONG — hardcoding "current user = blue" regardless of who's logged in
+const myColor = "blue-400";
+const partnerColor = "pink-400";
+
+// ✅ CORRECT — derive from theme (person-absolute)
+// Blue-theme user is ALWAYS blue on both phones.
+// Pink-theme user is ALWAYS pink on both phones.
+const { theme } = useTheme();
+const myColor = theme === "pink" ? "pink-400" : "blue-400";
+const partnerColor = theme === "pink" ? "blue-400" : "pink-400";
+```
+
+### 10. Using `type="number"` on mobile inputs
+
+```tsx
+// ❌ WRONG — iOS scroll-wheel bug, inconsistent decimal handling
+<input type="number" value={amount} />
+
+// ✅ CORRECT — proper mobile numeric keyboard without iOS quirks
+<input type="text" inputMode="decimal" value={amount} />
+```
+
 ---
 
 ## Schema Quick Reference
