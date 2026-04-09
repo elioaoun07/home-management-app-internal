@@ -1,12 +1,12 @@
 // src/hooks/usePushNotifications.ts
 // Hook for managing Web Push notifications subscription
-// ROBUST version: Proactive sync on every foreground, unique device ID, endpoint change detection
+// KEY PRINCIPLE: Never permanently disable push from recovery code.
+// On token death: deactivate immediately, auto-heal on next app open.
 
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// The VAPID public key - must match the server's public key
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
 // LocalStorage keys
@@ -14,15 +14,17 @@ const PUSH_ENABLED_KEY = "push_notifications_enabled";
 const DEVICE_ID_KEY = "push_device_id";
 const LAST_ENDPOINT_KEY = "push_last_endpoint";
 const LAST_SYNC_KEY = "push_last_sync";
+const LAST_FORCE_RESUBSCRIBE_KEY = "push_last_force_resubscribe";
 
 // Minimum time between foreground syncs (prevent spam on rapid focus/blur)
-// Android gets a shorter window because FCM rotates tokens more aggressively
 const MIN_SYNC_INTERVAL_MS =
   typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)
     ? 15000
     : 30000;
 
-// Type for ServiceWorkerRegistration with PushManager
+// Minimum time between force-resubscribe attempts (rate-limit, not one-per-session)
+const MIN_RESUBSCRIBE_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+
 type SWRegistrationWithPush = ServiceWorkerRegistration & {
   pushManager: PushManager;
 };
@@ -46,15 +48,11 @@ export interface PushNotificationState {
 // PERSISTENT DEVICE ID
 // ============================================
 
-// Generate or retrieve a persistent device ID
-// This survives app restarts and is unique per browser/device
 function getOrCreateDeviceId(): string {
   if (typeof window === "undefined") return "unknown";
-
   try {
     let deviceId = localStorage.getItem(DEVICE_ID_KEY);
     if (!deviceId) {
-      // Generate a unique ID: timestamp + random + basic fingerprint
       const timestamp = Date.now().toString(36);
       const random = Math.random().toString(36).substring(2, 10);
       const fingerprint = navigator.userAgent.length.toString(36);
@@ -68,7 +66,6 @@ function getOrCreateDeviceId(): string {
   }
 }
 
-// Get device type for display purposes
 function getDeviceType(): string {
   const ua = navigator.userAgent;
   if (/iPhone/i.test(ua)) return "iPhone";
@@ -149,6 +146,24 @@ function setLastSyncTime(): void {
   }
 }
 
+function getLastForceResubscribeTime(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    return parseInt(localStorage.getItem(LAST_FORCE_RESUBSCRIBE_KEY) || "0", 10);
+  } catch {
+    return 0;
+  }
+}
+
+function setLastForceResubscribeTime(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LAST_FORCE_RESUBSCRIBE_KEY, Date.now().toString());
+  } catch {
+    // Ignore
+  }
+}
+
 // ============================================
 // MAIN HOOK
 // ============================================
@@ -168,18 +183,13 @@ export function usePushNotifications() {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitializing = useRef(false);
   const isSyncing = useRef(false);
-  // Prevents infinite force-resubscribe loops if Chrome keeps returning the same dead token.
-  // Resets when the component unmounts (page reload), giving one attempt per app session.
-  const hasForceResubscribedThisSession = useRef(false);
 
   // ========== CORE: Sync subscription to DB ==========
-  // This is the KEY function - called on init AND every foreground
   const syncSubscriptionToDb = useCallback(
     async (
       subscription: PushSubscription,
       force: boolean = false,
     ): Promise<{ success: boolean; needsResubscribe?: boolean }> => {
-      // Throttle syncs unless forced
       if (!force) {
         const lastSync = getLastSyncTime();
         const timeSinceLastSync = Date.now() - lastSync;
@@ -191,39 +201,26 @@ export function usePushNotifications() {
         }
       }
 
-      // Check if endpoint changed (this is critical!)
       const currentEndpoint = subscription.endpoint;
       const lastEndpoint = getLastEndpointFromStorage();
       const endpointChanged = lastEndpoint && lastEndpoint !== currentEndpoint;
 
       if (endpointChanged) {
-        console.log(
-          "[Push] ⚠️ ENDPOINT CHANGED! Old:",
-          lastEndpoint?.substring(0, 50),
-        );
-        console.log(
-          "[Push] ⚠️ ENDPOINT CHANGED! New:",
-          currentEndpoint.substring(0, 50),
-        );
+        console.log("[Push] ⚠️ ENDPOINT CHANGED! Forcing sync...");
       }
 
-      console.log(
-        "[Push] Syncing subscription to DB...",
-        force ? "(forced)" : "",
-      );
+      console.log("[Push] Syncing subscription to DB...", force ? "(forced)" : "");
 
       try {
         const result = await saveSubscriptionToApi(subscription);
         setLastEndpointInStorage(currentEndpoint);
         setLastSyncTime();
-        if (result.was_previously_inactive) {
-          console.warn(
-            "[Push] ⚠️ Server flagged endpoint as previously dead — FCM token rotation needed",
-          );
+        if (result.needs_resubscribe) {
+          console.warn("[Push] ⚠️ Server: endpoint was previously dead — will attempt fresh resubscribe");
         } else {
           console.log("[Push] ✓ Subscription synced to DB successfully");
         }
-        return { success: true, needsResubscribe: result.needs_resubscribe || result.was_previously_inactive };
+        return { success: true, needsResubscribe: result.needs_resubscribe };
       } catch (error) {
         console.error("[Push] ✗ Failed to sync subscription:", error);
         return { success: false };
@@ -233,70 +230,47 @@ export function usePushNotifications() {
   );
 
   // ========== Force fresh FCM subscription (dead token recovery) ==========
-  // Called when the server signals the current endpoint is failing (failed_at set or inactive).
-  // Chrome Android may cache a dead FCM token without firing pushsubscriptionchange.
-  // We unsubscribe and re-subscribe to force Chrome to obtain a fresh token from FCM.
+  // Called when the server signals the current endpoint was previously dead.
+  // Rate-limited to once per 10 minutes (not once per session — keeps retrying).
+  // CRITICAL: Never calls setPushEnabledInStorage(false). Push stays alive.
   const forceResubscribe = useCallback(
     async (deadSubscription: PushSubscription): Promise<void> => {
-      // Anti-loop: only attempt once per app session. If this is triggered again
-      // (e.g., the fresh token is also bad), we stop rather than looping indefinitely.
-      if (hasForceResubscribedThisSession.current) {
-        console.warn(
-          "[Push] Already attempted force-resubscribe this session — skipping to avoid loop",
-        );
+      const timeSinceLastAttempt = Date.now() - getLastForceResubscribeTime();
+      if (timeSinceLastAttempt < MIN_RESUBSCRIBE_INTERVAL_MS) {
+        const minutesLeft = Math.ceil((MIN_RESUBSCRIBE_INTERVAL_MS - timeSinceLastAttempt) / 60000);
+        console.log(`[Push] Rate-limiting force-resubscribe — try again in ${minutesLeft}m`);
         return;
       }
-      hasForceResubscribedThisSession.current = true;
+      setLastForceResubscribeTime();
 
-      const oldEndpoint = deadSubscription.endpoint;
-      console.log(
-        "[Push] 🔄 Forcing fresh FCM subscription to replace dead endpoint",
-      );
+      console.log("[Push] 🔄 Attempting fresh FCM subscription to replace dead endpoint");
 
       try {
-        const registration = (await navigator.serviceWorker
-          .ready) as SWRegistrationWithPush;
+        const registration = (await navigator.serviceWorker.ready) as SWRegistrationWithPush;
         await deadSubscription.unsubscribe();
-        console.log("[Push] Old (dead) subscription unregistered");
+        console.log("[Push] Old (dead) subscription unregistered from browser");
 
         const newSub = await createLocalPushSubscription(registration);
         if (newSub) {
-          // Safety check: if Chrome returned the exact same endpoint, the token
-          // is truly stuck. Clearing it is the only safe option — user must re-enable.
-          if (newSub.endpoint === oldEndpoint) {
-            console.error(
-              "[Push] Chrome returned the same endpoint after resubscribe — FCM token is stuck. Clearing push state.",
-            );
-            setPushEnabledInStorage(false);
-            setLastEndpointInStorage(null);
-            setState((prev) => ({
-              ...prev,
-              isSubscribed: false,
-              subscription: null,
-              error:
-                "Push subscription expired. Please disable and re-enable notifications in Settings.",
-            }));
-            return;
+          // IMPORTANT: Accept the new subscription regardless of whether the endpoint
+          // is the same string or different. Re-subscribing re-registers the token at
+          // FCM even if the URL is identical. Don't give up on same-endpoint.
+          if (newSub.endpoint === deadSubscription.endpoint) {
+            console.log("[Push] Chrome returned same endpoint — re-registered at FCM. Saving.");
+          } else {
+            console.log("[Push] ✓ New endpoint obtained:", newSub.endpoint.substring(0, 50));
           }
-
-          console.log(
-            "[Push] ✓ Fresh subscription obtained:",
-            newSub.endpoint.substring(0, 50),
-          );
           await saveSubscriptionToApi(newSub);
           setLastEndpointInStorage(newSub.endpoint);
           setLastSyncTime();
-          setState((prev) => ({ ...prev, subscription: newSub }));
+          setState((prev) => ({ ...prev, subscription: newSub, isSubscribed: true, error: null }));
         } else {
-          console.error("[Push] Failed to obtain fresh subscription");
-          setState((prev) => ({
-            ...prev,
-            error:
-              "Could not refresh push subscription. Try toggling notifications off and on in Settings.",
-          }));
+          console.error("[Push] Failed to obtain fresh subscription from Chrome");
+          // Do NOT disable push — will retry on next foreground open
         }
       } catch (err) {
         console.error("[Push] forceResubscribe error:", err);
+        // Do NOT disable push — will retry on next foreground open
       }
     },
     [],
@@ -314,11 +288,7 @@ export function usePushNotifications() {
       console.log("[Push] === initializePushState START ===");
 
       if (typeof window === "undefined") {
-        setState((prev) => ({
-          ...prev,
-          isLoading: false,
-          isSubscribed: false,
-        }));
+        setState((prev) => ({ ...prev, isLoading: false, isSubscribed: false }));
         return;
       }
 
@@ -345,7 +315,6 @@ export function usePushNotifications() {
       console.log("[Push] Permission:", permission);
       console.log("[Push] localStorage wasEnabledBefore:", wasEnabledBefore);
 
-      // If permission explicitly denied, clear everything
       if (permission === "denied") {
         console.log("[Push] Permission denied - clearing state");
         setPushEnabledInStorage(false);
@@ -361,7 +330,6 @@ export function usePushNotifications() {
         return;
       }
 
-      // Get or register service worker
       const registration = await getOrRegisterServiceWorker();
       if (!registration) {
         console.error("[Push] Failed to get service worker registration");
@@ -376,16 +344,11 @@ export function usePushNotifications() {
         return;
       }
 
-      // Check for existing local subscription
       let subscription = await registration.pushManager.getSubscription();
-      console.log(
-        "[Push] Existing subscription:",
-        subscription ? "FOUND" : "NOT FOUND",
-      );
+      console.log("[Push] Existing subscription:", subscription ? "FOUND" : "NOT FOUND");
 
       if (subscription) {
-        // We have a local subscription - sync it to DB immediately
-        const activeSub = subscription; // capture non-null for .then() closure
+        const activeSub = subscription;
         setPushEnabledInStorage(true);
         setState({
           isSupported: true,
@@ -396,7 +359,7 @@ export function usePushNotifications() {
           subscription: activeSub,
         });
 
-        // Sync to DB in background; if the endpoint was dead, force fresh re-subscription
+        // Sync to DB; if endpoint was dead before, attempt fresh resubscribe
         syncSubscriptionToDb(activeSub, false).then((result) => {
           if (result.needsResubscribe) {
             forceResubscribe(activeSub);
@@ -405,13 +368,9 @@ export function usePushNotifications() {
         return;
       }
 
-      // No local subscription - check if we should restore
+      // No local subscription — try to restore if user had it enabled
       if (wasEnabledBefore && permission === "granted") {
-        console.log(
-          "[Push] User had notifications enabled - attempting restore...",
-        );
-
-        // Show as subscribed while restoring
+        console.log("[Push] User had notifications enabled — restoring...");
         setState({
           isSupported: true,
           permission,
@@ -421,7 +380,6 @@ export function usePushNotifications() {
           subscription: null,
         });
 
-        // Try to restore subscription
         try {
           subscription = await createLocalPushSubscription(registration);
           if (subscription) {
@@ -429,8 +387,7 @@ export function usePushNotifications() {
             setState((prev) => ({ ...prev, subscription }));
             syncSubscriptionToDb(subscription, true);
           } else {
-            console.warn("[Push] Could not restore subscription");
-            // Keep showing as subscribed - will retry on next foreground
+            console.warn("[Push] Could not restore subscription — will retry on next foreground");
           }
         } catch (error) {
           console.error("[Push] Restore failed:", error);
@@ -438,7 +395,6 @@ export function usePushNotifications() {
         return;
       }
 
-      // Not subscribed - user never enabled or permission not granted
       setState({
         isSupported: true,
         permission,
@@ -453,14 +409,13 @@ export function usePushNotifications() {
     }
   }, [syncSubscriptionToDb, forceResubscribe]);
 
-  // ========== Foreground Sync (CRITICAL!) ==========
-  // This is called EVERY TIME the app comes to foreground
+  // ========== Foreground Sync (runs every time app comes to foreground) ==========
   const handleForegroundSync = useCallback(async () => {
     if (isSyncing.current) return;
     if (!getPushEnabledFromStorage()) return;
 
     isSyncing.current = true;
-    console.log("[Push] App came to foreground - checking subscription...");
+    console.log("[Push] App came to foreground — checking subscription...");
 
     try {
       const registration = (await navigator.serviceWorker?.ready) as
@@ -471,21 +426,17 @@ export function usePushNotifications() {
       const subscription = await registration.pushManager.getSubscription();
 
       if (subscription) {
-        // Check if endpoint changed
         const currentEndpoint = subscription.endpoint;
         const lastEndpoint = getLastEndpointFromStorage();
 
         if (lastEndpoint !== currentEndpoint) {
-          console.log(
-            "[Push] 🔄 Endpoint changed on foreground - forcing sync!",
-          );
+          console.log("[Push] 🔄 Endpoint changed on foreground — forcing sync!");
           const result = await syncSubscriptionToDb(subscription, true);
           setState((prev) => ({ ...prev, subscription }));
           if (result.needsResubscribe) {
             await forceResubscribe(subscription);
           }
         } else {
-          // Same endpoint - sync (throttled); if dead, force fresh subscription
           syncSubscriptionToDb(subscription, false).then((result) => {
             if (result.needsResubscribe) {
               forceResubscribe(subscription);
@@ -493,13 +444,13 @@ export function usePushNotifications() {
           });
         }
       } else if (getPushEnabledFromStorage()) {
-        // Subscription disappeared! Try to restore it
-        console.log("[Push] ⚠️ Subscription disappeared - restoring...");
+        // Subscription disappeared from browser — restore it
+        console.log("[Push] ⚠️ Subscription disappeared — restoring...");
         const restored = await createLocalPushSubscription(registration);
         if (restored) {
           console.log("[Push] ✓ Subscription restored on foreground");
           await syncSubscriptionToDb(restored, true);
-          setState((prev) => ({ ...prev, subscription: restored }));
+          setState((prev) => ({ ...prev, subscription: restored, isSubscribed: true }));
         }
       }
     } catch (error) {
@@ -516,31 +467,42 @@ export function usePushNotifications() {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        // Small delay to let auth session restore
         setTimeout(handleForegroundSync, 1000);
       }
     };
 
-    // Also sync on focus (covers more cases than visibilitychange)
     const handleFocus = () => {
       setTimeout(handleForegroundSync, 500);
     };
 
-    // Listen for SW messages about subscription changes (from pushsubscriptionchange handler)
+    // Listen for SW messages about subscription changes
     const handleSwMessage = (event: MessageEvent) => {
       if (event.data?.type === "SUBSCRIPTION_CHANGED") {
         console.log("[Push] SW reported subscription change — forcing foreground sync");
-        isSyncing.current = false; // Reset throttle so sync runs immediately
+        isSyncing.current = false;
         handleForegroundSync();
       } else if (event.data?.type === "SUBSCRIPTION_LOST") {
-        console.warn("[Push] SW reported subscription lost — prompting user to re-enable");
-        setState((prev) => ({
-          ...prev,
-          isSubscribed: false,
-          error: "Push subscription was lost. Please re-enable notifications.",
-        }));
-        setPushEnabledInStorage(false);
-        setLastEndpointInStorage(null);
+        // Don't kill push — attempt restore instead
+        console.warn("[Push] SW reported subscription lost — attempting restore");
+        (async () => {
+          try {
+            const registration = (await navigator.serviceWorker?.ready) as SWRegistrationWithPush | undefined;
+            if (!registration) return;
+            const restored = await createLocalPushSubscription(registration);
+            if (restored) {
+              console.log("[Push] ✓ Restored after SUBSCRIPTION_LOST");
+              await saveSubscriptionToApi(restored);
+              setLastEndpointInStorage(restored.endpoint);
+              setLastSyncTime();
+              setState((prev) => ({ ...prev, subscription: restored, isSubscribed: true, error: null }));
+            } else {
+              console.error("[Push] Could not restore after SUBSCRIPTION_LOST");
+              // Still don't permanently disable — user can try toggling in Settings
+            }
+          } catch (err) {
+            console.error("[Push] Restore after SUBSCRIPTION_LOST failed:", err);
+          }
+        })();
       }
     };
 
@@ -559,13 +521,9 @@ export function usePushNotifications() {
   // ========== Request Permission ==========
   const requestPermission = useCallback(async (): Promise<boolean> => {
     if (!state.isSupported) {
-      setState((prev) => ({
-        ...prev,
-        error: "Push notifications are not supported",
-      }));
+      setState((prev) => ({ ...prev, error: "Push notifications are not supported" }));
       return false;
     }
-
     try {
       const permission = await Notification.requestPermission();
       setState((prev) => ({
@@ -594,17 +552,10 @@ export function usePushNotifications() {
       }
 
       const registration = await getOrRegisterServiceWorker();
-      if (!registration) {
-        throw new Error("Service worker not available");
-      }
+      if (!registration) throw new Error("Service worker not available");
+      if (!VAPID_PUBLIC_KEY) throw new Error("VAPID key not configured");
 
-      if (!VAPID_PUBLIC_KEY) {
-        throw new Error("VAPID key not configured");
-      }
-
-      // Get or create subscription
       let subscription = await registration.pushManager.getSubscription();
-
       if (!subscription) {
         const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
         subscription = await registration.pushManager.subscribe({
@@ -613,22 +564,13 @@ export function usePushNotifications() {
         });
       }
 
-      console.log(
-        "[Push] Subscription ready:",
-        subscription.endpoint.substring(0, 50),
-      );
+      console.log("[Push] Subscription ready:", subscription.endpoint.substring(0, 50));
 
-      // Save to API (blocking - user is waiting)
       await saveSubscriptionToApi(subscription);
-
-      // Update local storage
       setPushEnabledInStorage(true);
       setLastEndpointInStorage(subscription.endpoint);
       setLastSyncTime();
 
-      // Register Periodic Background Sync so the SW can self-heal the subscription
-      // even when the app is closed (Chrome Android installed PWA only).
-      // This is the backstop against FCM token rotation going undetected.
       registerPeriodicHealthCheck(registration).catch(() => {
         // Non-critical — foreground sync is the fallback
       });
@@ -658,8 +600,7 @@ export function usePushNotifications() {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const registration = (await navigator.serviceWorker
-        .ready) as SWRegistrationWithPush;
+      const registration = (await navigator.serviceWorker.ready) as SWRegistrationWithPush;
       const subscription = await registration.pushManager.getSubscription();
 
       if (subscription) {
@@ -667,7 +608,6 @@ export function usePushNotifications() {
         await removeSubscription(subscription.endpoint);
       }
 
-      // Clear ALL local storage related to push
       setPushEnabledInStorage(false);
       setLastEndpointInStorage(null);
 
@@ -693,11 +633,8 @@ export function usePushNotifications() {
 
   // ========== Send Test Notification ==========
   const sendTestNotification = useCallback(async (): Promise<void> => {
-    if (!state.isSubscribed) {
-      throw new Error("Not subscribed to push notifications");
-    }
+    if (!state.isSubscribed) throw new Error("Not subscribed to push notifications");
 
-    // Force sync before sending test to ensure DB has current endpoint
     if (state.subscription) {
       try {
         await syncSubscriptionToDb(state.subscription, true);
@@ -720,7 +657,7 @@ export function usePushNotifications() {
   // ========== Refresh Subscription ==========
   const refreshSubscription = useCallback(async (): Promise<void> => {
     console.log("[Push] Manual refresh requested");
-    isSyncing.current = false; // Reset sync lock
+    isSyncing.current = false;
     await handleForegroundSync();
   }, [handleForegroundSync]);
 
@@ -736,10 +673,6 @@ export function usePushNotifications() {
 
 // ============================================
 // HELPER FUNCTIONS
-// ============================================
-
-// ============================================
-// VAPID KEY STORAGE (for SW pushsubscriptionchange handler)
 // ============================================
 
 async function storeVapidKeyInIdb(vapidKey: string): Promise<void> {
@@ -760,7 +693,7 @@ async function storeVapidKeyInIdb(vapidKey: string): Promise<void> {
       req.onerror = () => reject(req.error);
     });
   } catch {
-    // Non-critical — SW will prompt user to re-enable if key is missing
+    // Non-critical
   }
 }
 
@@ -768,7 +701,6 @@ async function getOrRegisterServiceWorker(): Promise<SWRegistrationWithPush | nu
   if (!("serviceWorker" in navigator)) return null;
 
   try {
-    // First try to get existing registration
     if (navigator.serviceWorker.controller) {
       return navigator.serviceWorker.ready as Promise<SWRegistrationWithPush>;
     }
@@ -776,8 +708,6 @@ async function getOrRegisterServiceWorker(): Promise<SWRegistrationWithPush | nu
     let registration = await navigator.serviceWorker.getRegistration("/");
     if (registration) return registration as SWRegistrationWithPush;
 
-    // Only register a NEW service worker in production (or when explicitly enabled).
-    // In development, a stale SW can serve cached HTML/JS causing hydration mismatches.
     const shouldRegister =
       process.env.NODE_ENV === "production" ||
       process.env.NEXT_PUBLIC_ENABLE_SW === "true";
@@ -787,11 +717,8 @@ async function getOrRegisterServiceWorker(): Promise<SWRegistrationWithPush | nu
       return null;
     }
 
-    // Register new service worker
     console.log("[Push] Registering service worker...");
-    registration = await navigator.serviceWorker.register("/sw.js", {
-      scope: "/",
-    });
+    registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
     return registration as SWRegistrationWithPush;
   } catch (error) {
     console.error("[Push] Service worker setup failed:", error);
@@ -806,7 +733,6 @@ async function createLocalPushSubscription(
     console.error("[Push] VAPID key not configured");
     return null;
   }
-
   try {
     const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
     const subscription = await registration.pushManager.subscribe({
@@ -852,17 +778,12 @@ async function saveSubscriptionToApi(
     }),
   });
 
-  if (response.status === 401) {
-    throw new Error("AUTH_NOT_READY");
-  }
-
+  if (response.status === 401) throw new Error("AUTH_NOT_READY");
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || "Failed to save subscription");
   }
 
-  // Cache VAPID public key in IndexedDB so the SW's pushsubscriptionchange
-  // handler can re-subscribe autonomously when FCM rotates the token.
   if (VAPID_PUBLIC_KEY) {
     storeVapidKeyInIdb(VAPID_PUBLIC_KEY);
   }
@@ -889,34 +810,33 @@ async function removeSubscription(endpoint: string): Promise<void> {
 // ============================================
 // PERIODIC BACKGROUND SYNC REGISTRATION
 // ============================================
-// Registers a daily background health check so the SW can detect and heal a dead
-// FCM subscription even when the app is closed (Chrome Android + installed PWA only).
-// This is the main defence against FCM token rotation going undetected.
 
 async function registerPeriodicHealthCheck(
   registration: SWRegistrationWithPush,
 ): Promise<void> {
-  const periodicSync = (registration as unknown as { periodicSync?: { register: (tag: string, options: { minInterval: number }) => Promise<void>; getTags: () => Promise<string[]> } }).periodicSync;
+  const periodicSync = (registration as unknown as {
+    periodicSync?: {
+      register: (tag: string, options: { minInterval: number }) => Promise<void>;
+      getTags: () => Promise<string[]>;
+    };
+  }).periodicSync;
 
   if (!periodicSync) {
-    console.log("[Push] Periodic Background Sync not supported on this browser — skipping");
+    console.log("[Push] Periodic Background Sync not supported — skipping");
     return;
   }
 
   try {
-    // Check if already registered to avoid duplicate registrations
     const tags = await periodicSync.getTags();
     if (tags.includes("push-health-check")) {
       console.log("[Push] Periodic health check already registered");
       return;
     }
-
     await periodicSync.register("push-health-check", {
-      minInterval: 12 * 60 * 60 * 1000, // hint: at least every 12 hours
+      minInterval: 12 * 60 * 60 * 1000,
     });
     console.log("[Push] ✓ Periodic push health check registered (12h interval)");
   } catch (err) {
-    // Fails silently on browsers/contexts that don't support it
     console.log("[Push] Could not register periodic health check:", err);
   }
 }

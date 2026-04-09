@@ -5,8 +5,8 @@
 // subscription endpoint URL (a secret only the legitimate subscriber knows).
 // Uses supabaseAdmin — same pattern as /api/notifications/subscribe/sw.
 //
-// Returns { needs_resubscribe: true } when the subscription has failed_at set,
-// signalling the SW to force a fresh FCM token rotation.
+// Returns { needs_resubscribe: true } when the subscription is inactive or missing,
+// signalling the SW to force a fresh FCM token.
 
 import { logPushEvent } from "@/lib/pushLogger";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     const { data: sub, error } = await supabase
       .from("push_subscriptions")
-      .select("id, user_id, is_active, failed_at")
+      .select("id, user_id, is_active")
       .eq("endpoint", endpoint)
       .maybeSingle();
 
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     const endpointPreview = endpoint.substring(0, 80);
 
     if (!sub) {
-      // Endpoint not in DB — cleaned up or never registered
+      // Endpoint not in DB — was deactivated and cleaned up, or never registered
       logPushEvent(supabase, {
         event_type: "health_check_failing",
         endpoint_preview: endpointPreview,
@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!sub.is_active) {
+      // Subscription was deactivated (got a 410) — need a fresh token
       logPushEvent(supabase, {
         user_id: sub.user_id,
         subscription_id: sub.id,
@@ -59,17 +60,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ needs_resubscribe: true, reason: "inactive" });
     }
 
-    if (sub.failed_at) {
-      logPushEvent(supabase, {
-        user_id: sub.user_id,
-        subscription_id: sub.id,
-        event_type: "health_check_failing",
-        endpoint_preview: endpointPreview,
-        metadata: { reason: "failing", failed_at: sub.failed_at },
-      });
-      return NextResponse.json({ needs_resubscribe: true, reason: "failing", failed_at: sub.failed_at });
-    }
-
+    // Subscription is active and healthy
     logPushEvent(supabase, {
       user_id: sub.user_id,
       subscription_id: sub.id,

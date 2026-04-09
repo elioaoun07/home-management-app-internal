@@ -1,6 +1,5 @@
 // src/app/api/notifications/subscribe/route.ts
 // API route to save push subscription to database
-// ROBUST version: Uses unique device_id for proper stale subscription cleanup
 
 import { logPushEvent } from "@/lib/pushLogger";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -37,11 +36,10 @@ export async function POST(req: NextRequest) {
     console.log(`[Subscribe] Device Name: ${device_name}`);
     console.log(`[Subscribe] Endpoint: ${endpoint.substring(0, 60)}...`);
 
-    // Step 0: Check if this exact endpoint has problems (inactive OR in failure grace period)
-    // Must happen BEFORE step 2 which deletes inactive rows
+    // Step 0: Check if this exact endpoint was previously deactivated (dead FCM token)
     const { data: existingSub } = await supabase
       .from("push_subscriptions")
-      .select("is_active, failed_at")
+      .select("is_active")
       .eq("user_id", user.id)
       .eq("endpoint", endpoint)
       .maybeSingle();
@@ -49,27 +47,15 @@ export async function POST(req: NextRequest) {
     const was_previously_inactive =
       existingSub !== null && !existingSub.is_active;
 
-    // Detect subscriptions in the grace period (is_active=true but failed_at set).
-    // These are actively failing but haven't hit the 72h deactivation threshold yet.
-    const was_failing =
-      existingSub !== null && !!existingSub.is_active && !!existingSub.failed_at;
-
     if (was_previously_inactive) {
       console.log(
-        `[Subscribe] ⚠️ Endpoint was previously marked inactive (dead FCM token) — client will be instructed to re-subscribe`,
-      );
-    }
-    if (was_failing) {
-      console.log(
-        `[Subscribe] ⚠️ Endpoint is in failure grace period (failed_at=${existingSub!.failed_at}) — preserving failed_at and instructing client to re-subscribe`,
+        `[Subscribe] ⚠️ Endpoint was previously deactivated (dead FCM token) — will re-register and tell client to resubscribe`,
       );
     }
 
     // Step 1: If device_id provided, delete ALL other subscriptions for this device
-    // This is the KEY fix - device_id is unique per browser installation
+    // This handles the case where FCM token changed (different endpoint for same device)
     if (device_id) {
-      // Delete any subscription with matching device_id but different endpoint
-      // This handles the case where FCM token changed
       const { data: deletedByDeviceId, error: deleteError } = await supabase
         .from("push_subscriptions")
         .delete()
@@ -91,21 +77,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Step 2: Also clean up any inactive subscriptions for this user
-    const { error: inactiveDeleteError } = await supabase
+    // Step 2: Clean up any inactive subscriptions for this user
+    await supabase
       .from("push_subscriptions")
       .delete()
       .eq("user_id", user.id)
       .eq("is_active", false);
 
-    if (inactiveDeleteError) {
-      console.log(
-        "[Subscribe] Note: Could not clean up inactive subscriptions:",
-        inactiveDeleteError.message,
-      );
-    }
-
-    // Step 3: Upsert the subscription (update if exists, create if not)
+    // Step 3: Upsert the subscription — always clear failed_at and mark active.
+    // The client is actively using the app; trust the fresh subscription.
     const { data, error } = await supabase
       .from("push_subscriptions")
       .upsert(
@@ -117,12 +97,7 @@ export async function POST(req: NextRequest) {
           device_name: device_name || getDeviceType(user_agent || ""),
           user_agent,
           is_active: true,
-          // CRITICAL: Do NOT clear failed_at if the subscription is actively failing.
-          // Clearing it resets the 72h grace period timer and creates a destructive loop:
-          // cron sets failed_at → foreground sync clears it → cron sets it again → repeat.
-          // Instead, keep failed_at intact so the grace period progresses, and tell the
-          // client to force-resubscribe for a fresh FCM token.
-          failed_at: was_failing ? existingSub!.failed_at : null,
+          failed_at: null, // Always clear — fresh subscription from active user
           last_used_at: new Date().toISOString(),
         },
         {
@@ -141,7 +116,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Step 4: Count active subscriptions for this user (for debugging)
+    // Count active subscriptions for debugging
     const { count } = await supabase
       .from("push_subscriptions")
       .select("id", { count: "exact", head: true })
@@ -153,37 +128,22 @@ export async function POST(req: NextRequest) {
     );
 
     const endpointPreview = endpoint.substring(0, 80);
-    if (was_failing || was_previously_inactive) {
-      logPushEvent(supabase, {
-        user_id: user.id,
-        subscription_id: data.id,
-        event_type: "subscription_failing",
-        device_name: device_name ?? null,
-        endpoint_preview: endpointPreview,
-        metadata: {
-          was_failing,
-          was_previously_inactive,
-          failed_at: was_failing ? existingSub!.failed_at : null,
-        },
-      });
-    } else {
-      logPushEvent(supabase, {
-        user_id: user.id,
-        subscription_id: data.id,
-        event_type: "subscribed",
-        device_name: device_name ?? null,
-        endpoint_preview: endpointPreview,
-        metadata: { active_subscriptions: count },
-      });
-    }
+    logPushEvent(supabase, {
+      user_id: user.id,
+      subscription_id: data.id,
+      event_type: "subscribed",
+      device_name: device_name ?? null,
+      endpoint_preview: endpointPreview,
+      metadata: { active_subscriptions: count, was_previously_inactive },
+    });
 
     return NextResponse.json({
       success: true,
       id: data.id,
       active_subscriptions: count,
       was_previously_inactive,
-      // Tell client to force-resubscribe whenever the endpoint is known-bad
-      needs_resubscribe: was_failing || was_previously_inactive,
+      // Tell client to attempt a fresh resubscribe if this endpoint was dead before
+      needs_resubscribe: was_previously_inactive,
     });
   } catch (error) {
     console.error("[Subscribe] Error in subscribe route:", error);
@@ -194,7 +154,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Helper to identify device type from user agent
 function getDeviceType(ua: string): string {
   if (/iPhone/i.test(ua)) return "iPhone";
   if (/iPad/i.test(ua)) return "iPad";

@@ -59,7 +59,7 @@ function buildSummary(logs: Array<{ event_type: string; created_at: string; noti
     counts[log.event_type] = (counts[log.event_type] ?? 0) + 1;
   }
 
-  const lastFailure410 = logs.find((l) => l.event_type === "send_failure_410");
+  const lastFailure410 = logs.find((l) => l.event_type === "send_failure_410_deactivated" || l.event_type === "send_failure_410");
   const lastSuccess = logs.find((l) => l.event_type === "send_success");
   const lastHealed = logs.find((l) =>
     l.event_type === "sw_token_rotation" || l.event_type === "force_resubscribe" || l.event_type === "health_check_healed"

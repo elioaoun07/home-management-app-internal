@@ -906,12 +906,13 @@ async function periodicPushHealthCheck() {
       return;
     }
 
+    // Accept the new subscription regardless of whether the endpoint changed.
+    // Re-subscribing re-registers the token at FCM even if the URL is the same.
     if (newSubscription.endpoint === oldEndpoint) {
-      console.warn("[SW] Periodic health check: Chrome returned same endpoint — skipping (will retry next cycle)");
-      return;
+      console.log("[SW] Periodic health check: Chrome returned same endpoint — re-registered at FCM, proceeding.");
+    } else {
+      console.log("[SW] Periodic health check: new endpoint obtained:", newSubscription.endpoint.substring(0, 50));
     }
-
-    console.log("[SW] Periodic health check: fresh endpoint obtained:", newSubscription.endpoint.substring(0, 50));
 
     // If the app is open, let the client handle the sync (normal subscribe flow with auth)
     const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });

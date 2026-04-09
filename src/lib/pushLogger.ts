@@ -6,29 +6,26 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type PushEventType =
-  | "send_success"          // push delivered successfully
-  | "send_failure_410"      // FCM returned 410/404 — token dead, grace period started
-  | "send_failure_other"    // transient error (503, network, etc.)
-  | "grace_period_retry"    // subscription in grace period, retrying hourly
-  | "grace_period_expired"  // 72h up — subscription deactivated
-  | "subscribed"            // new subscription registered from client
-  | "subscription_failing"  // foreground sync detected failed_at — told client to resubscribe
-  | "force_resubscribe"     // client force-resubscribed (fresh FCM token)
-  | "sw_token_rotation"     // pushsubscriptionchange: new token synced via SW route
-  | "health_check_ok"       // periodic background sync: subscription healthy
-  | "health_check_failing"  // periodic background sync: subscription needs renewal
-  | "health_check_healed";  // periodic background sync: subscription healed autonomously
+  | "send_success"                  // push delivered successfully
+  | "send_failure_410_deactivated"  // FCM returned 410/404 — immediately deactivated
+  | "send_failure_other"            // transient error (503, network, etc.)
+  | "subscribed"                    // subscription registered/refreshed from client
+  | "force_resubscribe"             // client force-resubscribed (fresh FCM token attempt)
+  | "sw_token_rotation"             // pushsubscriptionchange: new token synced via SW route
+  | "health_check_ok"               // periodic background sync: subscription healthy
+  | "health_check_failing"          // periodic background sync: subscription needs renewal
+  | "health_check_healed";          // periodic background sync: subscription healed autonomously
 
 export interface PushEventPayload {
   user_id?: string | null;
   subscription_id?: string | null;
   event_type: PushEventType;
   device_name?: string | null;
-  endpoint_preview?: string | null;      // first 60 chars of endpoint for identification
+  endpoint_preview?: string | null;
   error_code?: number | null;
   error_message?: string | null;
   notification_id?: string | null;
-  notification_title?: string | null;    // what notification was being sent
+  notification_title?: string | null;
   metadata?: Record<string, unknown> | null;
 }
 
