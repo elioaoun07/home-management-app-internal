@@ -18,6 +18,7 @@ import {
   getCachedBalance,
   setCachedBalance,
 } from "@/lib/queryConfig";
+import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { useOfflinePendingStore } from "@/lib/stores/offlinePendingStore";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -174,8 +175,15 @@ export default function AccountBalance({
   }, [error, isOffline]);
 
   // Update balance mutation
+  // NOTE: uses fetch() instead of safeFetch() because:
+  // (a) this component has its own offline guard via isOffline (SyncContext),
+  // (b) balance updates are NOT queued for offline sync — if offline the user
+  //     gets a clear error from the fetch itself,
+  // (c) safeFetch's 3s pre-flight timeout causes false-offline rejections on
+  //     slow connections, blocking the mutation before it even attempts a request.
   const updateBalanceMutation = useMutation({
     mutationFn: async (newBalance: number) => {
+      if (isOffline) throw new Error("You're offline — balance not updated.");
       if (!accountId) throw new Error("No account selected");
       const res = await fetch(`/api/accounts/${accountId}/balance`, {
         method: "POST",
@@ -186,15 +194,9 @@ export default function AccountBalance({
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["account-balance", accountId],
-      });
+      invalidateAccountData(queryClient, accountId);
       queryClient.invalidateQueries({
         queryKey: ["daily-summaries"],
-        refetchType: "none",
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["balance-history"],
         refetchType: "none",
       });
       toast.success("Balance updated successfully");

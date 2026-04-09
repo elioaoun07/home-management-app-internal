@@ -28,4 +28,7 @@ export const qk = {
   nfcHistory: (slug: string) => ["nfc-history", { slug }] as const,
   nfcTagItems: (slug: string) => ["nfc-tag-items", { slug }] as const,
   nfcChecklist: (slug: string) => ["nfc-checklist", { slug }] as const,
+
+  // Analytics (Review v2, dashboard charts, balance summaries)
+  analytics: () => ["analytics"] as const,
 };

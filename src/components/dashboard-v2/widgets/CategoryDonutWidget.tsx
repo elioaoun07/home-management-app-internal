@@ -35,13 +35,19 @@ type SliceData = {
   percent: number;
 };
 
-export default function CategoryDonutWidget({ transactions, onCategoryClick, activeCategories = [] }: Props) {
+export default function CategoryDonutWidget({
+  transactions,
+  onCategoryClick,
+  activeCategories = [],
+}: Props) {
   const { data: accounts } = useAccounts();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   const { slices, total } = useMemo(() => {
     const grouped = groupExpensesByCategory(transactions, accounts);
-    const entries = Object.entries(grouped).sort((a, b) => b[1].amount - a[1].amount);
+    const entries = Object.entries(grouped).sort(
+      (a, b) => b[1].amount - a[1].amount,
+    );
 
     const total = entries.reduce((s, [, d]) => s + d.amount, 0);
     if (total === 0) return { slices: [], total: 0 };
@@ -52,10 +58,9 @@ export default function CategoryDonutWidget({ transactions, onCategoryClick, act
 
     const slices: SliceData[] = top.map(([name, data], i) => {
       // Use category_color from transaction if available
-      const txColor =
-        (transactions.find(
-          (t) => t.category === name && t.category_color,
-        ) as any)?.category_color;
+      const txColor = (
+        transactions.find((t) => t.category === name && t.category_color) as any
+      )?.category_color;
       return {
         name,
         value: data.amount,
@@ -92,7 +97,7 @@ export default function CategoryDonutWidget({ transactions, onCategoryClick, act
   const titleAction =
     activeCategories.length > 0 ? (
       <div className="flex items-center gap-1 flex-wrap">
-        {activeCategories.map((cat) => (
+        {[...new Set(activeCategories)].map((cat) => (
           <button
             key={cat}
             onClick={() => onCategoryClick?.(cat)}
@@ -106,10 +111,17 @@ export default function CategoryDonutWidget({ transactions, onCategoryClick, act
     ) : undefined;
 
   return (
-    <WidgetCard title="Spending by Category" subtitle="Click a slice to filter dashboard" action={titleAction}>
+    <WidgetCard
+      title="Spending by Category"
+      subtitle="Click a slice to filter dashboard"
+      action={titleAction}
+    >
       <div className="flex items-center gap-2">
         {/* Donut */}
-        <div className="relative flex-shrink-0" style={{ width: 160, height: 160 }}>
+        <div
+          className="relative flex-shrink-0"
+          style={{ width: 160, height: 160 }}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <defs>
@@ -140,7 +152,9 @@ export default function CategoryDonutWidget({ transactions, onCategoryClick, act
                 }}
               >
                 {slices.map((s, i) => {
-                  const isActive = activeCategories.length === 0 || activeCategories.includes(s.name);
+                  const isActive =
+                    activeCategories.length === 0 ||
+                    activeCategories.includes(s.name);
                   const isHovered = activeIndex === i;
                   return (
                     <Cell
@@ -150,11 +164,17 @@ export default function CategoryDonutWidget({ transactions, onCategoryClick, act
                         isHovered
                           ? 1
                           : activeCategories.length > 0
-                            ? isActive ? 1 : 0.2
-                            : activeIndex === null ? 1 : 0.35
+                            ? isActive
+                              ? 1
+                              : 0.2
+                            : activeIndex === null
+                              ? 1
+                              : 0.35
                       }
                       style={{
-                        filter: isHovered ? `drop-shadow(0 0 8px ${s.color})` : undefined,
+                        filter: isHovered
+                          ? `drop-shadow(0 0 8px ${s.color})`
+                          : undefined,
                         cursor: "pointer",
                         transition: "opacity 0.2s, transform 0.2s",
                         transformOrigin: "center",
@@ -186,7 +206,10 @@ export default function CategoryDonutWidget({ transactions, onCategoryClick, act
                     className="text-sm font-bold tabular-nums"
                     style={{ color: active.color }}
                   >
-                    ${active.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    $
+                    {active.value.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}
                   </p>
                 </BlurredAmount>
                 <p className="text-[9px] text-white/40">
@@ -195,13 +218,20 @@ export default function CategoryDonutWidget({ transactions, onCategoryClick, act
               </>
             ) : (
               <>
-                <p className="text-[9px] text-white/40 uppercase tracking-wider">Total</p>
+                <p className="text-[9px] text-white/40 uppercase tracking-wider">
+                  Total
+                </p>
                 <BlurredAmount blurIntensity="sm">
                   <p className="text-sm font-bold text-white/80 tabular-nums">
-                    ${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    $
+                    {total.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}
                   </p>
                 </BlurredAmount>
-                <p className="text-[9px] text-white/30">{slices.length} categories</p>
+                <p className="text-[9px] text-white/30">
+                  {slices.length} categories
+                </p>
               </>
             )}
           </div>
@@ -228,7 +258,10 @@ export default function CategoryDonutWidget({ transactions, onCategoryClick, act
                     activeIndex === i || activeCategories.includes(s.name)
                       ? `0 0 8px ${s.color}, 0 0 16px ${s.color}60`
                       : `0 0 4px ${s.color}50`,
-                  transform: activeIndex === i || activeCategories.includes(s.name) ? "scale(1.4)" : "scale(1)",
+                  transform:
+                    activeIndex === i || activeCategories.includes(s.name)
+                      ? "scale(1.4)"
+                      : "scale(1)",
                 }}
               />
               <div className="flex-1 min-w-0">
@@ -237,7 +270,9 @@ export default function CategoryDonutWidget({ transactions, onCategoryClick, act
                     className="text-[10px] truncate font-medium transition-colors"
                     style={{
                       color:
-                        activeIndex === i || activeCategories.includes(s.name) || (activeIndex === null && activeCategories.length === 0)
+                        activeIndex === i ||
+                        activeCategories.includes(s.name) ||
+                        (activeIndex === null && activeCategories.length === 0)
                           ? s.color
                           : `${s.color}35`,
                     }}
@@ -256,7 +291,10 @@ export default function CategoryDonutWidget({ transactions, onCategoryClick, act
                               : "rgba(255,255,255,0.55)",
                       }}
                     >
-                      ${s.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      $
+                      {s.value.toLocaleString(undefined, {
+                        maximumFractionDigits: 0,
+                      })}
                     </span>
                   </BlurredAmount>
                 </div>
@@ -268,7 +306,9 @@ export default function CategoryDonutWidget({ transactions, onCategoryClick, act
                       width: `${s.percent}%`,
                       backgroundColor: s.color,
                       opacity:
-                        activeIndex === i || activeCategories.includes(s.name) || (activeIndex === null && activeCategories.length === 0)
+                        activeIndex === i ||
+                        activeCategories.includes(s.name) ||
+                        (activeIndex === null && activeCategories.length === 0)
                           ? 1
                           : 0.2,
                     }}

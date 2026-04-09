@@ -2,6 +2,7 @@
 "use client";
 
 import { CACHE_TIMES } from "@/lib/queryConfig";
+import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { qk } from "@/lib/queryKeys";
 import type { Account, AccountType } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -160,8 +161,7 @@ export function useCreateAccount() {
       ]);
     },
     onSettled: () => {
-      // Invalidate both queries
-      qc.invalidateQueries({ queryKey: qk.accounts(), refetchType: "active" });
+      invalidateAccountData(qc);
     },
   });
 }
@@ -257,7 +257,7 @@ export function useDeleteAccount() {
         );
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: qk.accounts(), refetchType: "active" });
+      invalidateAccountData(qc);
     },
   });
 }
@@ -284,8 +284,7 @@ export function useUnhideAccount() {
   return useMutation<void, Error, string>({
     mutationFn: unhideAccount,
     onSuccess: () => {
-      // Invalidate all account queries to refresh
-      qc.invalidateQueries({ queryKey: qk.accounts() });
+      invalidateAccountData(qc);
     },
   });
 }

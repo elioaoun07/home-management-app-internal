@@ -36,6 +36,13 @@
 17. **Color identity** — current user = **blue** (`blue-400/500`), partner = **pink** (`pink-400/500`). Apply consistently for all color-coded UI: assignment labels, accent bars, avatars, indicators, and any context where "me vs partner" needs visual distinction. Never swap these colors.
 18. **Floating panels (dropdowns, popovers, command palettes) must be opaque** — never use `neo-card` (which is semi-transparent glass) on panels that float above page content. Use `tc.bgPage` from `useThemeClasses()` as the background class so the panel is the same solid color as the page background per theme. `neo-card` is only for non-overlaid cards. Glass/blur on floating panels causes text bleed-through from content behind them.
 19. **Fixed/sticky headers must not overlap page content** — when using `fixed` or `sticky` positioning on headers (`h-14`, etc.), the content below **must** have matching top padding (e.g., `pt-14`) to prevent overlap. For standalone/isolated pages (NFC, guest portal, etc.) that render their own layout, ensure the root layout's `ConditionalHeader` and `MobileNav` hide on those routes — otherwise a fixed header with no content offset causes overlap. Always verify on mobile viewport.
+20. **Cache invalidation discipline — the "disconnected app" trap**: This app has many views (Dashboard, Review, Analytics, Account pages) that display the same underlying data under **different React Query keys**. A mutation that only invalidates the key it "owns" will silently leave other views stale. Rules:
+    - **Before writing any mutation**, list every query key that displays the mutated data. Invalidate ALL of them in `onSuccess`/`onSettled`.
+    - **Prefer `refetchType: "active"`** (the default) so live views refresh immediately. Only use `refetchType: "none"` for queries the user is unlikely to see right away (e.g. `balance-history`, `daily-summaries`).
+    - **Optimistic UI (`onMutate` cache writes) covers the PRIMARY query only.** All secondary queries (analytics, dashboards, summaries) must still be explicitly invalidated — optimistic writes do not propagate across query keys.
+    - **For any mutation that affects account balances** (direct balance edit, transaction CRUD, transfer, recurring): call `invalidateAccountData(queryClient, accountId?)` from `src/lib/queryInvalidation.ts` — it covers `accounts`, `my-accounts`, `analytics`, and `account-balance` in one call.
+    - **After adding a new feature query**, audit all mutations that could make its data stale and add the new key to their invalidation list. Never assume "nobody reads this yet."
+    - **Never rely on stale-time as a correctness guarantee.** Stale-time is a performance optimization only. Always invalidate on mutation.
 
 ---
 
