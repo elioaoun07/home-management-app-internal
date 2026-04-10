@@ -64,8 +64,10 @@ export async function GET(req: NextRequest) {
 
       if (recentTx) {
         if (!accountId && recentTx.account_id) accountId = recentTx.account_id;
-        if (!categoryId && recentTx.category_id) categoryId = recentTx.category_id;
-        if (!subcategoryId && recentTx.subcategory_id) subcategoryId = recentTx.subcategory_id;
+        if (!categoryId && recentTx.category_id)
+          categoryId = recentTx.category_id;
+        if (!subcategoryId && recentTx.subcategory_id)
+          subcategoryId = recentTx.subcategory_id;
         if (!source) source = "transaction";
       }
     }
@@ -84,7 +86,10 @@ export async function GET(req: NextRequest) {
         .ilike("name", accountName)
         .limit(1)
         .maybeSingle();
-      if (acct) { accountId = acct.id; if (!source) source = "name-match"; }
+      if (acct) {
+        accountId = acct.id;
+        if (!source) source = "name-match";
+      }
     }
 
     if (!categoryId && categoryName) {
@@ -96,7 +101,10 @@ export async function GET(req: NextRequest) {
         .ilike("name", categoryName)
         .limit(1)
         .maybeSingle();
-      if (cat) { categoryId = cat.id; if (!source) source = "name-match"; }
+      if (cat) {
+        categoryId = cat.id;
+        if (!source) source = "name-match";
+      }
     }
 
     if (!subcategoryId && subcategoryName && categoryId) {
@@ -108,7 +116,10 @@ export async function GET(req: NextRequest) {
         .ilike("name", subcategoryName)
         .limit(1)
         .maybeSingle();
-      if (sub) { subcategoryId = sub.id; if (!source) source = "name-match"; }
+      if (sub) {
+        subcategoryId = sub.id;
+        if (!source) source = "name-match";
+      }
     }
 
     return NextResponse.json({

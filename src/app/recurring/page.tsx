@@ -269,9 +269,15 @@ export default function RecurringPage() {
 
       // Partner is confirming — resolve fields by matching names client-side
       // (owner's IDs don't exist in partner's dropdowns)
-      const ownerAccountName = (payment.account?.name || payment.accounts?.name || "").toLowerCase();
+      const ownerAccountName = (
+        payment.account?.name ||
+        payment.accounts?.name ||
+        ""
+      ).toLowerCase();
       const ownerCategoryName = (payment.category?.name || "").toLowerCase();
-      const ownerSubcategoryName = (payment.subcategory?.name || "").toLowerCase();
+      const ownerSubcategoryName = (
+        payment.subcategory?.name || ""
+      ).toLowerCase();
 
       // Match account by name from partner's loaded accounts
       const matchedAccount = ownerAccountName
@@ -281,14 +287,20 @@ export default function RecurringPage() {
       // Match category by name from partner's loaded categories (top-level only)
       const topCategories = categories.filter((c: any) => !c.parent_id);
       const matchedCategory = ownerCategoryName
-        ? topCategories.find((c: any) => c.name.toLowerCase() === ownerCategoryName)
+        ? topCategories.find(
+            (c: any) => c.name.toLowerCase() === ownerCategoryName,
+          )
         : undefined;
 
       // Match subcategory by name (children of matched category)
       let matchedSubcategory: any = undefined;
       if (matchedCategory && ownerSubcategoryName) {
-        const subs = categories.filter((c: any) => c.parent_id === matchedCategory.id);
-        matchedSubcategory = subs.find((c: any) => c.name.toLowerCase() === ownerSubcategoryName);
+        const subs = categories.filter(
+          (c: any) => c.parent_id === matchedCategory.id,
+        );
+        matchedSubcategory = subs.find(
+          (c: any) => c.name.toLowerCase() === ownerSubcategoryName,
+        );
       }
 
       setConfirmFormData({
