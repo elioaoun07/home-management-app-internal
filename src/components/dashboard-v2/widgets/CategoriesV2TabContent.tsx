@@ -167,8 +167,8 @@ function ChartDefs({ id, color }: { id: string; color: string }) {
         <stop offset="20%" stopColor="#fff" stopOpacity={0.1} />
         <stop offset="50%" stopColor="#fff" stopOpacity={0} />
       </linearGradient>
-      {/* Outer glow — wider, stronger */}
-      <filter id={`${id}-glow`} x="-40%" y="-15%" width="180%" height="130%">
+      {/* Outer glow — wider, stronger + subtle drop shadow for depth */}
+      <filter id={`${id}-glow`} x="-40%" y="-15%" width="180%" height="140%">
         <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
         <feColorMatrix
           in="blur"
@@ -176,7 +176,17 @@ function ChartDefs({ id, color }: { id: string; color: string }) {
           values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.55 0"
           result="glow"
         />
+        {/* Drop shadow for bar depth */}
+        <feDropShadow
+          dx="0"
+          dy="2"
+          stdDeviation="3"
+          floodColor="#000"
+          floodOpacity="0.35"
+          result="shadow"
+        />
         <feMerge>
+          <feMergeNode in="shadow" />
           <feMergeNode in="glow" />
           <feMergeNode in="SourceGraphic" />
         </feMerge>
@@ -789,6 +799,10 @@ function CategoryWidget({
       : 0;
   }, [category.monthlyData]);
 
+  const activeMonths = category.monthlyData.filter((m) => m.amount > 0).length;
+  const groupLabel =
+    grouping === "month" ? "mo" : grouping === "quarter" ? "qtr" : "yr";
+
   // Chart data for zoomed month view (just the single bar, centered)
   const zoomedData = useMemo(() => {
     if (!zoomedMonth) return null;
@@ -874,7 +888,7 @@ function CategoryWidget({
       subtitle={
         zoomedMonth
           ? `${zoomedLabel} · $${Math.round(zoomedAmount).toLocaleString()}`
-          : `${category.count} transactions · avg ${fmtDollar(avg)}/mo`
+          : undefined
       }
       filterActive={!!zoomedMonth}
       onFilterReset={clearZoom}
@@ -889,6 +903,47 @@ function CategoryWidget({
         </BlurredAmount>
       }
     >
+      {/* Consolidated stats bar */}
+      {!zoomedMonth && (
+        <div className="flex items-center gap-2 flex-wrap px-1 mb-2 text-[11px] text-white/45 font-medium tabular-nums">
+          <BlurredAmount blurIntensity="sm">
+            <span>
+              Total:{" "}
+              <span
+                className="text-white/70 font-semibold"
+                style={{ color: category.color }}
+              >
+                {fmtDollar(category.total)}
+              </span>
+            </span>
+          </BlurredAmount>
+          <span className="text-white/20">|</span>
+          <BlurredAmount blurIntensity="sm">
+            <span>
+              Avg:{" "}
+              <span className="text-white/70 font-semibold">
+                {fmtDollar(avg)}/{groupLabel}
+              </span>
+            </span>
+          </BlurredAmount>
+          <span className="text-white/20">|</span>
+          <span>
+            <span className="text-white/70 font-semibold">{activeMonths}</span>{" "}
+            {grouping === "month"
+              ? "months"
+              : grouping === "quarter"
+                ? "quarters"
+                : "years"}
+          </span>
+          <span className="text-white/20">|</span>
+          <span>
+            <span className="text-white/70 font-semibold">
+              {category.count}
+            </span>{" "}
+            txns
+          </span>
+        </div>
+      )}
       {/* Color accent bar */}
       <div
         className="h-[3px] rounded-full mb-4"
@@ -1037,22 +1092,6 @@ function CategoryWidget({
           ))}
         </div>
       )}
-
-      {/* Footer stats */}
-      <div className="flex items-center justify-between mt-2 px-1">
-        <span className="text-xs text-white/45 font-medium">
-          Monthly avg:{" "}
-          <span className="text-white/70 tabular-nums font-semibold">
-            {fmtDollar(avg)}
-          </span>
-        </span>
-        <span className="text-xs text-white/45 font-medium">
-          <span className="text-white/70 tabular-nums font-semibold">
-            {category.monthlyData.filter((m) => m.amount > 0).length}
-          </span>{" "}
-          active months
-        </span>
-      </div>
     </WidgetCard>
   );
 }
@@ -1268,7 +1307,7 @@ function CategoryChart({
             ))}
             <CartesianGrid
               strokeDasharray="3 6"
-              stroke="rgba(255,255,255,0.06)"
+              stroke="rgba(255,255,255,0.10)"
               vertical={false}
             />
             <XAxis {...xAxisProps} />
@@ -1313,7 +1352,7 @@ function CategoryChart({
           <ChartDefs id={uid} color={category.color} />
           <CartesianGrid
             strokeDasharray="3 6"
-            stroke="rgba(255,255,255,0.06)"
+            stroke="rgba(255,255,255,0.10)"
             vertical={false}
           />
           <XAxis {...xAxisProps} />
