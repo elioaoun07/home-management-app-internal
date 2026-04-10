@@ -5,6 +5,7 @@
 
 "use client";
 
+import { safeFetch } from "@/lib/safeFetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -643,7 +644,7 @@ export function usePushNotifications() {
       }
     }
 
-    const response = await fetch("/api/notifications/test", {
+    const response = await safeFetch("/api/notifications/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
@@ -765,7 +766,7 @@ async function saveSubscriptionToApi(
   const deviceId = getOrCreateDeviceId();
   const deviceType = getDeviceType();
 
-  const response = await fetch("/api/notifications/subscribe", {
+  const response = await safeFetch("/api/notifications/subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -797,7 +798,7 @@ async function saveSubscriptionToApi(
 
 async function removeSubscription(endpoint: string): Promise<void> {
   try {
-    await fetch("/api/notifications/unsubscribe", {
+    await safeFetch("/api/notifications/unsubscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ endpoint }),

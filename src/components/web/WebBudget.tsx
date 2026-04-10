@@ -542,7 +542,8 @@ const CategoryBudgetCard = memo(function CategoryBudgetCard({
                   <span className="text-sm text-slate-400">$</span>
                   <Input
                     ref={inputRef}
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={handleCommitEdit}

@@ -150,7 +150,7 @@ export default function SplitBillModal({
                   $
                 </span>
                 <Input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
                   step="0.01"
                   min="0"
@@ -173,7 +173,7 @@ export default function SplitBillModal({
                   <SelectTrigger className="mt-1 neo-card w-full">
                     <SelectValue placeholder="Select account" />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-800">
+                  <SelectContent className={cn(themeClasses.selectContentBg, themeClasses.border)}>
                     {accounts?.map((account) => (
                       <SelectItem key={account.id} value={account.id}>
                         {account.name}

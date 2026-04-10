@@ -1,5 +1,6 @@
 "use client";
 
+import { safeFetch } from "@/lib/safeFetch";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,7 +29,7 @@ export default function LinkHouseholdDialog({ open, onOpenChange }: Props) {
     setError(null);
     setSuccess(false);
     try {
-      const res = await fetch("/api/household/claim", {
+      const res = await safeFetch("/api/household/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
@@ -48,7 +49,7 @@ export default function LinkHouseholdDialog({ open, onOpenChange }: Props) {
     setError(null);
     setSuccess(false);
     try {
-      const res = await fetch("/api/onboarding", {
+      const res = await safeFetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ account_type: "household" }),

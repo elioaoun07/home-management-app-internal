@@ -177,7 +177,8 @@ export default function QRExpensePage() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 required
-                type="number"
+                type="text"
+                inputMode="decimal"
                 min="0"
                 step="0.01"
                 autoFocus

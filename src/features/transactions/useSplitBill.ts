@@ -1,3 +1,4 @@
+import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { safeFetch } from "@/lib/safeFetch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -64,12 +65,10 @@ export function useCompleteSplitBill() {
       return res.json();
     },
     onSuccess: () => {
-      // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: ["pending-splits"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      invalidateAccountData(queryClient);
     },
   });
 }

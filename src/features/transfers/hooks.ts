@@ -1,6 +1,7 @@
 // src/features/transfers/hooks.ts
 "use client";
 
+import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import {
@@ -271,12 +272,8 @@ export function useCreateTransfer() {
     mutationFn: createTransfer,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: ["account-balance", data.from_account_id],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["account-balance", data.to_account_id],
-      });
+      invalidateAccountData(queryClient, data.from_account_id);
+      invalidateAccountData(queryClient, data.to_account_id);
 
       toast.success("Transfer completed!", {
         icon: ToastIcons.create,
@@ -377,13 +374,11 @@ export function useUpdateTransfer() {
         { icon: ToastIcons.error },
       );
     },
-    onSettled: (_data, _error, variables) => {
+    onSettled: (_data, _error, _variables) => {
       // Sync in-memory state to localStorage so the next cold start is instant
       syncTrCacheToLocalStorage(queryClient);
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
-      queryClient.invalidateQueries({
-        predicate: (query) => query.queryKey[0] === "account-balance",
-      });
+      invalidateAccountData(queryClient);
     },
   });
 }
@@ -468,9 +463,7 @@ export function useDeleteTransfer() {
       // Sync in-memory state to localStorage so the next cold start is instant
       syncTrCacheToLocalStorage(queryClient);
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
-      queryClient.invalidateQueries({
-        predicate: (query) => query.queryKey[0] === "account-balance",
-      });
+      invalidateAccountData(queryClient);
     },
   });
 }

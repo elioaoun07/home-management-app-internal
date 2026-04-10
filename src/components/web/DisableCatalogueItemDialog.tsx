@@ -13,6 +13,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { CatalogueDisableScope } from "@/types/items";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { CalendarOff, Pause, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -29,6 +30,7 @@ export function DisableCatalogueItemDialog({
   onConfirm,
   itemName,
 }: DisableCatalogueItemDialogProps) {
+  const themeClasses = useThemeClasses();
   const [selectedScope, setSelectedScope] =
     useState<CatalogueDisableScope>("pause");
 
@@ -39,7 +41,7 @@ export function DisableCatalogueItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-900/95 border-white/10 backdrop-blur-xl">
+      <DialogContent className={`${themeClasses.bgPage} ${themeClasses.border}`}>
         <DialogHeader>
           <DialogTitle className="text-white flex items-center gap-2">
             <CalendarOff className="h-5 w-5 text-amber-400" />

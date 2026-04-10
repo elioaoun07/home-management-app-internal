@@ -88,6 +88,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     console.error("Failed to save merchant mapping:", error);
+    if ((error as any).code === "23505") {
+      return NextResponse.json({ error: "Merchant mapping already exists" }, { status: 409 });
+    }
     return NextResponse.json(
       { error: "Failed to save merchant mapping" },
       { status: 500 }

@@ -6,6 +6,7 @@ import {
   useCompleteSplitBill,
   usePendingSplits,
 } from "@/features/transactions/useSplitBill";
+import { useQueryClient } from "@tanstack/react-query";
 import { ToastIcons } from "@/lib/toastIcons";
 import { ArrowLeftRight } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -28,6 +29,7 @@ export default function SplitBillHandler() {
   const completeSplit = useCompleteSplitBill();
   const { currentSplit, openSplitBillModal, closeSplitBillModal } =
     useSplitBillModal();
+  const queryClient = useQueryClient();
   const [hasShownToast, setHasShownToast] = useState(false);
 
   // Show toast when there are pending splits
@@ -73,6 +75,14 @@ export default function SplitBillHandler() {
       toast.success("Split bill completed!", {
         icon: ToastIcons.create,
         description: `Total: $${result.total_amount.toFixed(2)}`,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            queryClient.invalidateQueries({ queryKey: ["pending-splits"] });
+            queryClient.invalidateQueries({ queryKey: ["transactions"] });
+          },
+        },
       });
     } catch (error) {
       toast.error("Failed to complete split bill", {

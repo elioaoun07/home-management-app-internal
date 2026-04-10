@@ -496,7 +496,8 @@ export default function CatalogueTaskItemDialog({
               </Label>
               <Input
                 id="duration"
-                type="number"
+                type="text"
+                inputMode="numeric"
                 min="1"
                 value={durationMinutes}
                 onChange={(e) => setDurationMinutes(e.target.value)}

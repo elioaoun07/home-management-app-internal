@@ -419,7 +419,8 @@ function NestedFocusSubtaskItem({
                 (isEditingPriority ? (
                   <input
                     ref={priorityInputRef}
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     min="1"
                     value={editPriority}
                     onChange={(e) => setEditPriority(e.target.value)}

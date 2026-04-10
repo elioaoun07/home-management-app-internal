@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { safeFetch } from "@/lib/safeFetch";
 import { toast } from "sonner";
 
 export default function UpdatePasswordPage() {
@@ -45,7 +46,7 @@ export default function UpdatePasswordPage() {
       ...(refreshToken ? { refresh_token: refreshToken } : {}),
     });
 
-    const res = await fetch("/api/auth/reset", {
+    const res = await safeFetch("/api/auth/reset", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,

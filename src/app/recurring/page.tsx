@@ -800,7 +800,8 @@ export default function RecurringPage() {
                       Amount *
                     </Label>
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       placeholder="0.00"
                       value={formData.amount}
                       onChange={(e) =>
@@ -986,7 +987,8 @@ export default function RecurringPage() {
                         Day of Month
                       </Label>
                       <Input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         placeholder="1-31"
                         min="1"
                         max="31"
@@ -1172,7 +1174,8 @@ export default function RecurringPage() {
                       Amount
                     </Label>
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={confirmFormData.amount}
                       onChange={(e) =>
                         setConfirmFormData({

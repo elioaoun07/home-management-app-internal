@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useOnboarding } from "@/features/preferences/useOnboarding";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { safeFetch } from "@/lib/safeFetch";
 import { createClient } from "@supabase/supabase-js";
 import { WifiOff } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -92,7 +93,7 @@ export default function UserMenuClient({ name, email, avatarUrl }: Props) {
 
   async function handleSignOut() {
     // 1) Clear server-side cookies
-    await fetch("/api/auth/signout", { method: "POST", cache: "no-store" });
+    await safeFetch("/api/auth/signout", { method: "POST", cache: "no-store" });
 
     // 2) Also clear client-side session
     await supabase.auth.signOut();

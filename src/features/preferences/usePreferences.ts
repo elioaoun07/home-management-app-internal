@@ -1,6 +1,7 @@
 // src/features/preferences/usePreferences.ts
 "use client";
 
+import { safeFetch } from "@/lib/safeFetch";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -95,7 +96,7 @@ export function usePreferences() {
       }
       // Best-effort server sync (do not block UI). Always send effective value.
       try {
-        await fetch("/api/user-preferences", {
+        await safeFetch("/api/user-preferences", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ theme: effective }),

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useDeleteCategory } from "@/features/categories/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { qk } from "@/lib/queryKeys";
 import { ToastIcons } from "@/lib/toastIcons";
@@ -66,6 +67,7 @@ export default function NewSubcategoryDrawer({
 }: Props) {
   const themeClasses = useThemeClasses();
   const queryClient = useQueryClient();
+  const deleteCategoryMutation = useDeleteCategory(accountId);
 
   const [name, setName] = useState("");
   const [color, setColor] = useState(parentCategoryColor || "#38bdf8");
@@ -116,6 +118,11 @@ export default function NewSubcategoryDrawer({
       toast.success("Subcategory created!", {
         icon: ToastIcons.create,
         description: `Added "${name}" to ${parentCategoryName}`,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () => deleteCategoryMutation.mutate(subcategory.id),
+        },
       });
 
       resetForm();

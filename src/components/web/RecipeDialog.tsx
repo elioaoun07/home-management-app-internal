@@ -394,7 +394,8 @@ export default function RecipeDialog({
                 Prep Time (min)
               </label>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 min={0}
                 value={prepTime}
                 onChange={(e) =>
@@ -413,7 +414,8 @@ export default function RecipeDialog({
                 Cook Time (min)
               </label>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 min={0}
                 value={cookTime}
                 onChange={(e) =>
@@ -432,7 +434,8 @@ export default function RecipeDialog({
                 Servings
               </label>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 min={1}
                 value={servings}
                 onChange={(e) => setServings(parseInt(e.target.value) || 4)}

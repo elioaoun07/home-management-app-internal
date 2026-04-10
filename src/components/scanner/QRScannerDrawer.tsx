@@ -284,7 +284,7 @@ export default function QRScannerDrawer({
 
       {/* Confirmation Dialog */}
       <Dialog open={showConfirmDialog} onOpenChange={handleCloseConfirm}>
-        <DialogContent className={cn("neo-card", themeClasses.border)}>
+        <DialogContent className={cn(themeClasses.bgPage, themeClasses.border)}>
           <DialogHeader>
             <DialogTitle className={themeClasses.dialogTitle}>
               {!isReady
@@ -302,7 +302,8 @@ export default function QRScannerDrawer({
               <div>
                 <Label className={themeClasses.headerText}>Amount *</Label>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   step="0.01"
                   min="0"
                   value={amount}

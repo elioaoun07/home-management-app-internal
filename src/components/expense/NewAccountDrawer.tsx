@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCreateAccount } from "@/features/accounts/hooks";
+import { useCreateAccount, useDeleteAccount } from "@/features/accounts/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,7 @@ export default function NewAccountDrawer({
 }: Props) {
   const themeClasses = useThemeClasses();
   const createAccountMutation = useCreateAccount();
+  const deleteAccountMutation = useDeleteAccount();
 
   const [name, setName] = useState("");
   const [type, setType] = useState<AccountType>("expense");
@@ -92,6 +93,11 @@ export default function NewAccountDrawer({
           toast.success("Account created!", {
             icon: ToastIcons.create,
             description: `${account.name} (${account.type})${account.location_name ? ` - ${account.location_name}` : ""}`,
+            duration: 4000,
+            action: {
+              label: "Undo",
+              onClick: () => deleteAccountMutation.mutate(account.id),
+            },
           });
           resetForm();
           onOpenChange(false);

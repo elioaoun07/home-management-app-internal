@@ -150,6 +150,9 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error("Error creating recipe:", error);
+      if ((error as any).code === "23505") {
+        return NextResponse.json({ error: "Recipe already exists" }, { status: 409 });
+      }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 

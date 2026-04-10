@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { safeFetch } from "@/lib/safeFetch";
 import { useEffect, useState } from "react";
 
 export default function WelcomeClient() {
@@ -22,7 +23,7 @@ export default function WelcomeClient() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/onboarding", {
+      const res = await safeFetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ account_type: "individual" }),
@@ -41,7 +42,7 @@ export default function WelcomeClient() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/onboarding", {
+      const res = await safeFetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ account_type: "household" }),
@@ -60,7 +61,7 @@ export default function WelcomeClient() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/household/claim", {
+      const res = await safeFetch("/api/household/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: enterCode }),
@@ -68,7 +69,7 @@ export default function WelcomeClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to link");
       // Mark onboarding completed as household for the partner WITHOUT triggering owner code creation
-      const res2 = await fetch("/api/onboarding", {
+      const res2 = await safeFetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ account_type: "household" }),

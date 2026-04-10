@@ -22,6 +22,7 @@ import {
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNotification";
+import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import type {
@@ -376,7 +377,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
             label: "Undo",
             onClick: async () => {
               try {
-                await fetch(`/api/items/${item.id}`, { method: "DELETE" });
+                await safeFetch(`/api/items/${item.id}`, { method: "DELETE" });
                 queryClient.invalidateQueries({ queryKey: ["items"] });
                 toast.success("Reminder removed");
               } catch {
@@ -453,7 +454,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
             label: "Undo",
             onClick: async () => {
               try {
-                await fetch(`/api/items/${item.id}`, { method: "DELETE" });
+                await safeFetch(`/api/items/${item.id}`, { method: "DELETE" });
                 queryClient.invalidateQueries({ queryKey: ["items"] });
                 toast.success("Event removed");
               } catch {
@@ -501,7 +502,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
             label: "Undo",
             onClick: async () => {
               try {
-                await fetch(`/api/items/${item.id}`, { method: "DELETE" });
+                await safeFetch(`/api/items/${item.id}`, { method: "DELETE" });
                 queryClient.invalidateQueries({ queryKey: ["items"] });
                 toast.success("Task removed");
               } catch {

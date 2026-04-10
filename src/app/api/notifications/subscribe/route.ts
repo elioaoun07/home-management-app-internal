@@ -110,6 +110,9 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error("[Subscribe] Failed to save push subscription:", error);
+      if ((error as any).code === "23505") {
+        return NextResponse.json({ error: "Subscription already exists" }, { status: 409 });
+      }
       return NextResponse.json(
         { error: "Failed to save subscription" },
         { status: 500 },

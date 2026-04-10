@@ -27,6 +27,7 @@ import {
 import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { safeFetch } from "@/lib/safeFetch";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
 import {
   closestCenter,
@@ -353,7 +354,7 @@ export default function CategoryManagerDialog({
 
     setLoading({ type: "cat-del", id });
     try {
-      const res = await fetch(`/api/categories/${id}`, { method: "DELETE" });
+      const res = await safeFetch(`/api/categories/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await res.text());
       toast.success("Category deleted", {
         duration: 4000,
@@ -669,7 +670,8 @@ export default function CategoryManagerDialog({
                                   <div className="w-16">
                                     {editingPosId === cat.id ? (
                                       <Input
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
                                         min={1}
                                         value={positions[cat.id] ?? ""}
                                         onChange={(e) =>
@@ -855,7 +857,8 @@ export default function CategoryManagerDialog({
                                               <div className="w-16">
                                                 {editingPosId === sub.id ? (
                                                   <Input
-                                                    type="number"
+                                                    type="text"
+                                                    inputMode="numeric"
                                                     min={1}
                                                     value={
                                                       positions[sub.id] ?? ""

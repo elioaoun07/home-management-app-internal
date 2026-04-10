@@ -1554,7 +1554,8 @@ export default function RecipeCookingMode({
                       Prep (min)
                     </label>
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       min={0}
                       value={actualPrepMinutes}
                       onChange={(e) =>
@@ -1571,7 +1572,8 @@ export default function RecipeCookingMode({
                       Cook (min)
                     </label>
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       min={0}
                       value={actualCookMinutes}
                       onChange={(e) =>

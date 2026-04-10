@@ -198,7 +198,8 @@ export default function ReminderTemplateDialog({
           <div>
             <Label>Default Duration (minutes)</Label>
             <Input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={durationMinutes}
               onChange={(e) => setDurationMinutes(e.target.value)}
               placeholder="e.g., 90 for 1.5 hours"

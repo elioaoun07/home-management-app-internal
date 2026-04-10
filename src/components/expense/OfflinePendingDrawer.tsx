@@ -266,7 +266,8 @@ export default function OfflinePendingDrawer({
                           Amount
                         </Label>
                         <Input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           step="0.01"
                           value={editAmount}
                           onChange={(e) => setEditAmount(e.target.value)}

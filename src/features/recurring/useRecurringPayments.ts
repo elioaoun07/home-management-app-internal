@@ -1,6 +1,7 @@
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
 import { CACHE_TIMES } from "@/lib/queryConfig";
+import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -92,6 +93,7 @@ export function useCreateRecurringPayment() {
     },
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      invalidateAccountData(queryClient, created.account_id);
       toast.success("Recurring payment created", {
         icon: ToastIcons.create,
         duration: 4000,
@@ -158,6 +160,7 @@ export function useUpdateRecurringPayment() {
     },
     onSuccess: (_, variables, context) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      invalidateAccountData(queryClient);
       const prev = context?.previousItem;
       toast.success("Recurring payment updated", {
         icon: ToastIcons.update,
@@ -226,6 +229,7 @@ export function useDeleteRecurringPayment() {
     },
     onSuccess: (_, __, context) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      invalidateAccountData(queryClient);
       const deleted = context?.deleted;
       toast.success("Recurring payment deleted", {
         icon: ToastIcons.delete,
@@ -340,7 +344,7 @@ export function useConfirmPayment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+      invalidateAccountData(queryClient);
     },
     onError: () => {
       toast.error("Failed to confirm payment", { icon: ToastIcons.error });

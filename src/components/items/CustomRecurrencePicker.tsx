@@ -421,7 +421,8 @@ export function CustomRecurrencePicker({
             <Label className="text-sm text-white/70">Every</Label>
             <div className="flex items-center gap-3">
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 min={1}
                 max={99}
                 value={interval}

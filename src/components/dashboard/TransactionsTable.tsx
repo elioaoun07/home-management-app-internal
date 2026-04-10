@@ -505,7 +505,8 @@ export default function TransactionsTable({
                   >
                     {isEditing("amount") ? (
                       <Input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         min="0"
                         step="0.01"
                         value={draft}

@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { safeFetch } from "@/lib/safeFetch";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -109,7 +110,7 @@ export default function ResetConfirmPage() {
         window.location.href = "/login";
       } else {
         // Fallback to server route which supports JWT or code+email verify
-        const res = await fetch("/api/auth/reset", {
+        const res = await safeFetch("/api/auth/reset", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -140,7 +141,7 @@ export default function ResetConfirmPage() {
       return;
     }
     try {
-      const res = await fetch("/api/auth/reset-password", {
+      const res = await safeFetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email }),

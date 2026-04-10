@@ -1320,7 +1320,7 @@ export default function MobileExpenseForm() {
                     </span>
                     <input
                       autoFocus
-                      type="number"
+                      type="text"
                       inputMode="numeric"
                       placeholder="000"
                       value={lbpChangeInput}
@@ -1548,7 +1548,8 @@ export default function MobileExpenseForm() {
                         $
                       </span>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={splitBillTotal}
                         onChange={(e) => setSplitBillTotal(e.target.value)}
                         placeholder="Total bill"
@@ -1587,7 +1588,8 @@ export default function MobileExpenseForm() {
                           $
                         </span>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           value={debtAmount}
                           onChange={(e) => setDebtAmount(e.target.value)}
                           placeholder={amount || "0.00"}

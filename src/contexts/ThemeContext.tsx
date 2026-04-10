@@ -2,6 +2,7 @@
 
 import ThemeTransition from "@/components/ThemeTransition";
 import { useUserPreferences } from "@/features/preferences/useUserPreferences";
+import { safeFetch } from "@/lib/safeFetch";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
@@ -131,7 +132,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     try {
       // Save to database
-      const res = await fetch("/api/user-preferences", {
+      const res = await safeFetch("/api/user-preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ theme: newTheme }),

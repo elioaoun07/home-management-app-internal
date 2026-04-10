@@ -1,6 +1,7 @@
 // src/features/hub/messageActions.ts
 "use client";
 
+import { safeFetch } from "@/lib/safeFetch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export type MessageActionType = "transaction" | "reminder" | "forward" | "pin";
@@ -59,7 +60,7 @@ export function useCreateMessageAction() {
       transactionId?: string | null;
       metadata?: Record<string, any>;
     }) => {
-      const response = await fetch("/api/hub/message-actions", {
+      const response = await safeFetch("/api/hub/message-actions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -98,7 +99,7 @@ export function useDeleteMessageAction() {
 
   return useMutation({
     mutationFn: async (actionId: string) => {
-      const response = await fetch(`/api/hub/message-actions/${actionId}`, {
+      const response = await safeFetch(`/api/hub/message-actions/${actionId}`, {
         method: "DELETE",
       });
 

@@ -1048,7 +1048,8 @@ export default function CatalogueItemDialog({
               <Label className="text-white/70">Progress Tracking</Label>
               <div className="grid grid-cols-3 gap-2">
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={progressCurrent}
                   onChange={(e) => setProgressCurrent(e.target.value)}
                   placeholder="Current"
@@ -1058,7 +1059,8 @@ export default function CatalogueItemDialog({
                   )}
                 />
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={progressTarget}
                   onChange={(e) => setProgressTarget(e.target.value)}
                   placeholder="Target"

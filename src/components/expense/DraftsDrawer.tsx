@@ -278,7 +278,8 @@ export default function DraftsDrawer({
                       <div>
                         <Label className="text-xs text-[#64748b]">Amount</Label>
                         <Input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           step="0.01"
                           value={editForm.amount}
                           onChange={(e) =>

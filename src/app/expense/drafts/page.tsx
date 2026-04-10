@@ -74,7 +74,6 @@ export default function DraftsPage() {
       },
       {
         onSuccess: () => {
-          toast.success("Transaction confirmed!");
           cancelEditing();
         },
         onError: () => {
@@ -227,7 +226,8 @@ export default function DraftsPage() {
                         Amount
                       </Label>
                       <Input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         step="0.01"
                         value={editForm.amount}
                         onChange={(e) =>

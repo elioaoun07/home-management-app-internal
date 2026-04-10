@@ -3,6 +3,7 @@
 
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { CACHE_TIMES } from "@/lib/queryConfig";
+import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -108,7 +109,7 @@ export function useCreateDebt() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: debtKeys.all });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+      invalidateAccountData(queryClient);
     },
   });
 }
@@ -205,9 +206,8 @@ export function useSettleDebt() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: debtKeys.all });
-      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["balance-history"] });
+      invalidateAccountData(queryClient);
     },
   });
 }

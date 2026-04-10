@@ -397,7 +397,8 @@ export default function TemplateQuickEntryButton({
                   value={quickEditAmount}
                   onChange={(e) => setQuickEditAmount(e.target.value)}
                   required
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
                   autoFocus

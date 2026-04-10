@@ -13,6 +13,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { ItemEditScope } from "@/types/items";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { CalendarClock, Copy, FileEdit, RefreshCw } from "lucide-react";
 import { useState } from "react";
 
@@ -31,6 +32,7 @@ export function EditScopeDialog({
   itemTitle,
   isRecurring = false,
 }: EditScopeDialogProps) {
+  const themeClasses = useThemeClasses();
   const [selectedScope, setSelectedScope] =
     useState<ItemEditScope>("this_occurrence");
 
@@ -41,7 +43,7 @@ export function EditScopeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-900/95 border-white/10 backdrop-blur-xl">
+      <DialogContent className={`${themeClasses.bgPage} ${themeClasses.border}`}>
         <DialogHeader>
           <DialogTitle className="text-white flex items-center gap-2">
             <FileEdit className="h-5 w-5 text-cyan-400" />

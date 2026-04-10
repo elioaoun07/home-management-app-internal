@@ -15,8 +15,8 @@
  * Endpoint: GET /api/cron/daily-reminder
  */
 
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/pushSender";
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -101,21 +101,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check env vars
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey =
-      process.env.NEXT_SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error("[Daily Reminder] Missing Supabase credentials");
-      return NextResponse.json(
-        { error: "Server configuration error: Missing Supabase credentials" },
-        { status: 500 },
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = supabaseAdmin();
 
     const now = new Date();
     const todayUTC = now.toISOString().split("T")[0];

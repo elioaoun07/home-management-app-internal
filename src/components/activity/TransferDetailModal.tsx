@@ -184,7 +184,8 @@ export default function TransferDetailModal({
                   $
                 </span>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   step="0.01"
                   min="0"
                   value={formData.amount}
@@ -311,7 +312,8 @@ export default function TransferDetailModal({
                   </span>
                   {isOwner ? (
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       step="0.01"
                       min="0"
                       value={formData.fee_amount}
@@ -338,7 +340,8 @@ export default function TransferDetailModal({
                   </span>
                   {isOwner ? (
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       step="0.01"
                       min="0"
                       value={formData.returned_amount}

@@ -1200,7 +1200,8 @@ const WebDashboard = memo(function WebDashboard({
                   Amount
                 </span>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   min={0}
                   step={10}
                   value={filterMinAmount || ""}
@@ -1212,7 +1213,8 @@ const WebDashboard = memo(function WebDashboard({
                 />
                 <span className="text-white/20 text-xs">–</span>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   min={0}
                   step={10}
                   value={filterMaxAmount || ""}

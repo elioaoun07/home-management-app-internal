@@ -1379,7 +1379,8 @@ function KeywordGroupCard({
                                     $
                                   </span>
                                   <Input
-                                    type="number"
+                                    type="text"
+                                    inputMode="decimal"
                                     step="0.01"
                                     value={split.amount || ""}
                                     onChange={(e) => {

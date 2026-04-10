@@ -225,7 +225,8 @@ export function InventoryItemDialog({
             </div>
             <div className="flex items-center gap-2 mt-2">
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={customConsumption}
                 onChange={(e) => setCustomConsumption(e.target.value)}
                 placeholder="Custom days"
@@ -247,7 +248,8 @@ export function InventoryItemDialog({
                 Current Stock
               </Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 min={0}
                 value={initialQuantity}
                 onChange={(e) =>
@@ -267,7 +269,8 @@ export function InventoryItemDialog({
                 Minimum Stock
               </Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 min={0}
                 value={minimumStock}
                 onChange={(e) =>
@@ -293,7 +296,8 @@ export function InventoryItemDialog({
                   Typical Purchase Qty
                 </Label>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   min={1}
                   value={typicalPurchaseQty}
                   onChange={(e) =>

@@ -367,7 +367,7 @@ export default function MobileNav() {
             }
           }}
         >
-          <DialogContent className={cn("neo-card", themeClasses.border)}>
+          <DialogContent className={cn(themeClasses.bgPage, themeClasses.border)}>
             <DialogHeader>
               <DialogTitle className={themeClasses.dialogTitle}>
                 Confirm Transaction: {selectedTemplate?.name}
@@ -383,7 +383,8 @@ export default function MobileNav() {
               <div>
                 <Label className={themeClasses.headerText}>Amount *</Label>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   step="0.01"
                   min="0"
                   value={templateAmount}

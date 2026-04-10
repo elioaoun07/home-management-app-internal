@@ -1097,7 +1097,8 @@ export function WebEventFormDialog({
                           Or after # times
                         </Label>
                         <Input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
                           min={1}
                           max={999}
                           value={recurrenceCount ?? ""}

@@ -719,7 +719,8 @@ export default function RecipeDetailView({
                 <Minus className="w-5 h-5" />
               </Button>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 min={1}
                 max={50}
                 value={cookingServings}

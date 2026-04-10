@@ -169,7 +169,8 @@ export function RestockDialog({
                 <Minus className="w-4 h-4" />
               </Button>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 min={0}
                 value={quantity}
                 onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 0)}

@@ -199,6 +199,9 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (itemError) {
+    if ((itemError as any).code === "23505") {
+      return NextResponse.json({ error: "Item already exists" }, { status: 409 });
+    }
     return NextResponse.json({ error: itemError.message }, { status: 500 });
   }
 

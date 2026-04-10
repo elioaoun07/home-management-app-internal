@@ -1,5 +1,8 @@
 "use client";
 
+import ItemActionsSheet from "@/components/items/ItemActionsSheet";
+import ItemDetailModal from "@/components/items/ItemDetailModal";
+import { ResponsibleUserBadge } from "@/components/items/ResponsibleUserPicker";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   isOccurrenceCompleted,
@@ -12,11 +15,8 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemStatus, ItemType, ItemWithDetails } from "@/types/items";
 import { eachDayOfInterval, format, parseISO } from "date-fns";
-import { RRule } from "rrule";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import ItemActionsSheet from "@/components/items/ItemActionsSheet";
-import ItemDetailModal from "@/components/items/ItemDetailModal";
-import { ResponsibleUserBadge } from "@/components/items/ResponsibleUserPicker";
+import { RRule } from "rrule";
 
 // ─────────────────────────────────────────────
 // Inline Icons
@@ -112,6 +112,18 @@ const ChevronUpIcon = ({ className }: { className?: string }) => (
     strokeWidth="2"
   >
     <polyline points="18 15 12 9 6 15" />
+  </svg>
+);
+
+const ChevronDownIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <polyline points="6 9 12 15 18 9" />
   </svg>
 );
 
@@ -438,7 +450,11 @@ interface OccurrenceEntry {
 
 function buildRRuleString(
   dtstart: Date,
-  recurrenceRule: { rrule: string; count?: number | null; end_until?: string | null },
+  recurrenceRule: {
+    rrule: string;
+    count?: number | null;
+    end_until?: string | null;
+  },
 ): string {
   let rrulePart = recurrenceRule.rrule;
   if (recurrenceRule.count && !rrulePart.includes("COUNT=")) {
@@ -460,7 +476,8 @@ function buildRRuleString(
 function sortEntriesByTime(entries: OccurrenceEntry[]): OccurrenceEntry[] {
   return [...entries].sort(
     (a, b) =>
-      new Date(a.occurrenceDate).getTime() - new Date(b.occurrenceDate).getTime(),
+      new Date(a.occurrenceDate).getTime() -
+      new Date(b.occurrenceDate).getTime(),
   );
 }
 
@@ -576,7 +593,10 @@ export default function ItemsListView({
   const typeFilter = externalTypeFilter ?? internalTypeFilter;
   const groupBy = externalGroupMode ?? internalGroupBy;
   const recurringFilter = externalRecurringFilter ?? internalRecurringFilter;
-  const isControlled = externalTypeFilter !== undefined || externalRecurringFilter !== undefined || externalGroupMode !== undefined;
+  const isControlled =
+    externalTypeFilter !== undefined ||
+    externalRecurringFilter !== undefined ||
+    externalGroupMode !== undefined;
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
     null,
   );
@@ -598,10 +618,7 @@ export default function ItemsListView({
 
   const isSingleDay = startDate === endDate;
   const todayStr = format(new Date(), "yyyy-MM-dd");
-  const tomorrowStr = format(
-    new Date(Date.now() + 86400000),
-    "yyyy-MM-dd",
-  );
+  const tomorrowStr = format(new Date(Date.now() + 86400000), "yyyy-MM-dd");
 
   // Extract unique categories from all items
   const availableCategories = useMemo(() => {
@@ -703,8 +720,7 @@ export default function ItemsListView({
         } catch {
           // Fallback: use primary date
           const dateStr = getItemDayStr(item);
-          const occurrenceDate =
-            getItemPrimaryDateStr(item) ?? item.created_at;
+          const occurrenceDate = getItemPrimaryDateStr(item) ?? item.created_at;
           if (!dateStr) continue;
           if (dateStr < todayStr) {
             overdue.push({ item, occurrenceDate, occurrenceDateStr: dateStr });
@@ -791,6 +807,54 @@ export default function ItemsListView({
     });
   };
 
+  // Collapse/expand all for multi-day time view
+  const allGroupKeys = useMemo(() => {
+    if (timeGroups && !isSingleDay) return Object.keys(timeGroups);
+    if (categoryGroups) return Object.keys(categoryGroups);
+    return [];
+  }, [timeGroups, categoryGroups, isSingleDay]);
+
+  const allGroupsCollapsed =
+    allGroupKeys.length > 0 && allGroupKeys.every((k) => collapsed.has(k));
+
+  const toggleAllGroups = () => {
+    setCollapsed((prev) => {
+      if (allGroupsCollapsed) {
+        const next = new Set(prev);
+        allGroupKeys.forEach((k) => next.delete(k));
+        // Keep OVERDUE_KEY collapsed state untouched
+        return next;
+      }
+      const next = new Set(prev);
+      allGroupKeys.forEach((k) => next.add(k));
+      return next;
+    });
+  };
+
+  const collapseExpandAllButton =
+    allGroupKeys.length > 1 ? (
+      <button
+        onClick={toggleAllGroups}
+        className={cn(
+          "flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors ml-auto mb-1",
+          themeClasses.textMuted,
+          "hover:bg-white/5",
+        )}
+      >
+        {allGroupsCollapsed ? (
+          <>
+            <ChevronDownIcon className="w-3 h-3" />
+            Expand all
+          </>
+        ) : (
+          <>
+            <ChevronUpIcon className="w-3 h-3" />
+            Collapse all
+          </>
+        )}
+      </button>
+    ) : null;
+
   // ── Item row renderer ──
   const renderItem = (entry: OccurrenceEntry) => {
     const { item, occurrenceDate } = entry;
@@ -817,7 +881,8 @@ export default function ItemsListView({
     }
 
     const subtaskCount = item.subtasks?.length ?? 0;
-    const doneSubtasks = item.subtasks?.filter((st) => !!st.done_at).length ?? 0;
+    const doneSubtasks =
+      item.subtasks?.filter((st) => !!st.done_at).length ?? 0;
     const isRecurring = !!item.recurrence_rule?.rrule;
 
     const TypeIcon =
@@ -897,9 +962,14 @@ export default function ItemsListView({
             {!isOwner && item.responsible_user_id && (
               <div className="mt-0.5">
                 {isAllHousehold ? (
-                  <span className="text-[10px] text-amber-400/70">All Household</span>
+                  <span className="text-[10px] text-amber-400/70">
+                    All Household
+                  </span>
                 ) : (
-                  <ResponsibleUserBadge userId={item.responsible_user_id} className="text-[10px]" />
+                  <ResponsibleUserBadge
+                    userId={item.responsible_user_id}
+                    className="text-[10px]"
+                  />
                 )}
               </div>
             )}
@@ -1255,6 +1325,7 @@ export default function ItemsListView({
       <>
         {controlsBar}
         {renderOverdueSection()}
+        {collapseExpandAllButton}
         <div className="flex flex-col gap-4">
           {Object.entries(categoryGroups).map(([cat, items]) =>
             renderSection(cat, cat, "🏷", items),
@@ -1287,6 +1358,7 @@ export default function ItemsListView({
     <>
       {controlsBar}
       {renderOverdueSection()}
+      {collapseExpandAllButton}
       <div className="flex flex-col gap-4">
         {timeGroups &&
           Object.entries(timeGroups).map(([dayStr, items]) => {

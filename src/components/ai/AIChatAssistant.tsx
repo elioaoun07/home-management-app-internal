@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/sheet";
 import { useTabSafe } from "@/contexts/TabContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { isReallyOnline } from "@/lib/connectivityManager";
+import { safeFetch } from "@/lib/safeFetch";
 import { cn } from "@/lib/utils";
 import {
   Check,
@@ -116,7 +118,7 @@ export default function AIChatAssistant() {
   // Track online/offline state
   const [isOnline, setIsOnline] = useState(true);
   useEffect(() => {
-    setIsOnline(navigator.onLine);
+    setIsOnline(isReallyOnline());
     const goOnline = () => setIsOnline(true);
     const goOffline = () => setIsOnline(false);
     window.addEventListener("online", goOnline);
@@ -296,7 +298,7 @@ export default function AIChatAssistant() {
   const deleteConversation = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const response = await fetch(
+      const response = await safeFetch(
         `/api/ai-chat/conversations?sessionId=${sessionId}`,
         {
           method: "DELETE",

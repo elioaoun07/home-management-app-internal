@@ -1,6 +1,7 @@
 // src/app/g/[tag]/guest-portal-client.tsx
 "use client";
 
+import { safeFetch } from "@/lib/safeFetch";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -372,7 +373,7 @@ function WiFiCard({
     if (!tagInfo?.id || !sessionId) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/guest-portal/wifi", {
+      const res = await safeFetch("/api/guest-portal/wifi", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tag_id: tagInfo.id, session_id: sessionId }),
@@ -670,7 +671,7 @@ function AllergiesCard({
     if (!allergies.trim() || !tagInfo?.id || !session?.id) return;
     setSubmitted(true);
     try {
-      const res = await fetch("/api/guest-portal/allergies", {
+      const res = await safeFetch("/api/guest-portal/allergies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -838,7 +839,7 @@ function FeedbackCard({ tagInfo }: { tagInfo: TagInfo | null }) {
     if (!feedback.trim() || !tagInfo?.id) return;
     setSubmitted(true);
     try {
-      await fetch("/api/guest-portal/feedback", {
+      await safeFetch("/api/guest-portal/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1197,7 +1198,7 @@ function DrinksCard({
     if (!tagInfo?.id || !session?.id) return;
 
     try {
-      const res = await fetch("/api/guest-portal/drinks", {
+      const res = await safeFetch("/api/guest-portal/drinks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1487,7 +1488,7 @@ function ChatInterface({
     async (text: string, metadata?: Record<string, unknown>) => {
       if (!tagInfo?.id || !session?.id) return;
       try {
-        const res = await fetch("/api/guest-portal/chat", {
+        const res = await safeFetch("/api/guest-portal/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1531,7 +1532,7 @@ function ChatInterface({
           const data = await res.json();
           // Save bot message to DB
           if (session?.id) {
-            const botRes = await fetch("/api/guest-portal/chat", {
+            const botRes = await safeFetch("/api/guest-portal/chat", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -1979,7 +1980,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
         }
         const fingerprint = Math.abs(hash).toString(36);
 
-        const res = await fetch("/api/guest-portal/session", {
+        const res = await safeFetch("/api/guest-portal/session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2018,7 +2019,7 @@ export default function GuestPortalClient({ tag }: { tag: string }) {
       try {
         // Retrieve device ID from localStorage
         const deviceId = localStorage.getItem("guest-portal-device-id");
-        await fetch("/api/guest-portal/session", {
+        await safeFetch("/api/guest-portal/session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

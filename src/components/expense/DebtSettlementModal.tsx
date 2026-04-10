@@ -66,12 +66,6 @@ export default function DebtSettlementModal({
         { debtId, data: { amount_returned: settleAmount } },
         {
           onSuccess: () => {
-            const isFullSettlement = settleAmount >= remaining;
-            toast.success(
-              isFullSettlement
-                ? `${debtorName} has fully paid back!`
-                : `$${settleAmount.toFixed(2)} received from ${debtorName}`,
-            );
             onClose();
           },
           onError: () => {
@@ -184,7 +178,8 @@ export default function DebtSettlementModal({
                   $
                 </span>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   step="0.01"
                   min="0.01"
                   max={remaining}

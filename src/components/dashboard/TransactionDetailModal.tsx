@@ -294,7 +294,8 @@ export default function TransactionDetailModal({
                   $
                 </span>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   step="0.01"
                   value={formData.amount}
                   onChange={(e) =>

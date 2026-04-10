@@ -59,6 +59,9 @@ export async function POST(request: NextRequest) {
 
     if (itemError) {
       console.error("[items/route] Failed to create item:", itemError);
+      if ((itemError as any).code === "23505") {
+        return NextResponse.json({ error: "Item already exists" }, { status: 409 });
+      }
       return NextResponse.json({ error: itemError.message }, { status: 500 });
     }
 

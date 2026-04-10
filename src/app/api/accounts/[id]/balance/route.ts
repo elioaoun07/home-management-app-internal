@@ -213,6 +213,9 @@ export async function POST(
 
   if (error) {
     console.error("Error upserting balance:", error);
+    if ((error as any).code === "23505") {
+      return NextResponse.json({ error: "Balance record already exists for this account" }, { status: 409 });
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

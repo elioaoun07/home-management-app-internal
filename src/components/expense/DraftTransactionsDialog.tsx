@@ -102,7 +102,6 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
       },
       {
         onSuccess: () => {
-          toast.success("Transaction confirmed!");
           cancelEditing();
         },
         onError: () => {
@@ -201,7 +200,8 @@ export default function DraftTransactionsDialog({ open, onOpenChange }: Props) {
                         <div>
                           <Label className="text-xs">Amount</Label>
                           <Input
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             step="0.01"
                             value={editForm.amount}
                             onChange={(e) =>

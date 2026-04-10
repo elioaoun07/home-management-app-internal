@@ -26,6 +26,7 @@ import {
   useCatalogueModules,
 } from "@/features/catalogue";
 import { useItemCategories } from "@/features/items/useItems";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type {
   CataloguePriority,
@@ -144,6 +145,7 @@ export function PromoteToCatalogueDialog({
   item,
   onSuccess,
 }: PromoteToCatalogueDialogProps) {
+  const themeClasses = useThemeClasses();
   const { data: modules = [] } = useCatalogueModules();
   const { data: itemCategories = [] } = useItemCategories();
 
@@ -395,7 +397,7 @@ export function PromoteToCatalogueDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-900/95 border-white/10 backdrop-blur-xl max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className={cn(themeClasses.bgPage, themeClasses.border, "max-w-2xl max-h-[90vh] overflow-hidden flex flex-col")}>
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-white flex items-center gap-2">
             <BookMarked className="h-5 w-5 text-pink-400" />
@@ -505,7 +507,7 @@ export function PromoteToCatalogueDialog({
                   <SelectTrigger className="bg-white/5 border-white/10 text-white">
                     <SelectValue placeholder="Select module" />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-white/10">
+                  <SelectContent className={cn(themeClasses.selectContentBg, themeClasses.border)}>
                     {modules.map((module) => (
                       <SelectItem
                         key={module.id}
@@ -537,7 +539,7 @@ export function PromoteToCatalogueDialog({
                   <SelectTrigger className="bg-white/5 border-white/10 text-white">
                     <SelectValue placeholder="Select folder" />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-white/10">
+                  <SelectContent className={cn(themeClasses.selectContentBg, themeClasses.border)}>
                     <SelectItem
                       value="__none__"
                       className="text-white/60 hover:bg-white/10"
@@ -626,7 +628,8 @@ export function PromoteToCatalogueDialog({
                     Duration (minutes)
                   </Label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     min="5"
                     step="5"
                     value={durationMinutes}
@@ -695,7 +698,7 @@ export function PromoteToCatalogueDialog({
                   <SelectTrigger className="bg-white/5 border-white/10 text-white">
                     <SelectValue placeholder="Select period" />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-white/10">
+                  <SelectContent className={cn(themeClasses.selectContentBg, themeClasses.border)}>
                     {FLEXIBLE_PERIOD_OPTIONS.map((opt) => (
                       <SelectItem
                         key={opt.value}
@@ -729,7 +732,7 @@ export function PromoteToCatalogueDialog({
                     <SelectTrigger className="bg-white/5 border-white/10 text-white">
                       <SelectValue placeholder="No recurrence" />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-white/10">
+                    <SelectContent className={cn(themeClasses.selectContentBg, themeClasses.border)}>
                       <SelectItem
                         value="__none__"
                         className="text-white/60 hover:bg-white/10"

@@ -2,6 +2,7 @@ import { getBalanceDelta, type AccountType } from "@/lib/balance-utils";
 import { isReallyOnline, markOffline } from "@/lib/connectivityManager";
 import { sendSplitBillNotification } from "@/lib/notifications/sendSplitBillNotification";
 import { addToQueue } from "@/lib/offlineQueue";
+import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { isOfflineError, safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import {
@@ -478,6 +479,8 @@ export function useDeleteTransaction() {
     onSettled: () => {
       // Sync in-memory state to localStorage so the next cold start is instant
       syncTxCacheToLocalStorage(queryClient);
+      // Invalidate accounts list and analytics (covers views that read same data under different keys)
+      invalidateAccountData(queryClient);
       // Actively refetch transaction queries to confirm server state after mutation
       queryClient.invalidateQueries({
         queryKey: ["transactions"],
@@ -615,9 +618,7 @@ export function useAddTransaction() {
 
       // Offline-first: queue if we know we're offline (real connectivity check)
       const onlineCheck = isReallyOnline();
-      console.log(
-        `[OFFLINE] mutationFn: isReallyOnline()=${onlineCheck}, navigator.onLine=${typeof navigator !== "undefined" ? navigator.onLine : "N/A"}`,
-      );
+      console.log(`[OFFLINE] mutationFn: isReallyOnline()=${onlineCheck}`);
       if (!onlineCheck) {
         console.log(
           "[OFFLINE] mutationFn: PRE-FLIGHT OFFLINE -> queueing immediately",
@@ -1008,6 +1009,8 @@ export function useAddTransaction() {
     onSettled: () => {
       // Sync in-memory state to localStorage so the next cold start is instant
       syncTxCacheToLocalStorage(queryClient);
+      // Invalidate accounts list and analytics (covers views that read same data under different keys)
+      invalidateAccountData(queryClient);
       // Actively refetch transaction queries to confirm server state after mutation
       queryClient.invalidateQueries({
         queryKey: ["transactions"],
@@ -1293,6 +1296,8 @@ export function useUpdateTransaction() {
     onSettled: () => {
       // Sync in-memory state to localStorage so the next cold start is instant
       syncTxCacheToLocalStorage(queryClient);
+      // Invalidate accounts list and analytics (covers views that read same data under different keys)
+      invalidateAccountData(queryClient);
       // Actively refetch transaction queries to confirm server state after mutation
       queryClient.invalidateQueries({
         queryKey: ["transactions"],

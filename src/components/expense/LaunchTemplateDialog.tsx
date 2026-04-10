@@ -178,7 +178,8 @@ export default function LaunchTemplateDialog({
           <div>
             <Label>Duration (minutes)</Label>
             <Input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={durationMinutes}
               onChange={(e) => setDurationMinutes(e.target.value)}
               placeholder="60"

@@ -396,7 +396,8 @@ export default function WebFuturePurchases() {
                     $
                   </span>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={allocateAmount}
                     onChange={(e) => setAllocateAmount(e.target.value)}
                     placeholder="0.00"
@@ -770,7 +771,8 @@ function AddPurchaseModal({
                 $
               </span>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={targetAmount}
                 onChange={(e) => setTargetAmount(e.target.value)}
                 placeholder="0.00"

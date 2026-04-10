@@ -300,7 +300,8 @@ export default function AccountBalance({
           {isEditing ? (
             <div className="flex items-center gap-2 mt-1.5">
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 step="0.01"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}

@@ -53,6 +53,7 @@ import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
+import { safeFetch } from "@/lib/safeFetch";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -2133,7 +2134,7 @@ function ThreadConversation({
 
       try {
         // Soft delete the message
-        const res = await fetch("/api/hub/messages", {
+        const res = await safeFetch("/api/hub/messages", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messageIds: [messageId] }),
@@ -2158,7 +2159,7 @@ function ThreadConversation({
           action: {
             label: "Undo",
             onClick: async () => {
-              const undoRes = await fetch("/api/hub/messages", {
+              const undoRes = await safeFetch("/api/hub/messages", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -2208,7 +2209,7 @@ function ThreadConversation({
         },
       );
 
-      const res = await fetch("/api/hub/threads", {
+      const res = await safeFetch("/api/hub/threads", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2582,7 +2583,7 @@ function ThreadConversation({
           searchQuery={searchQuery}
           onUpdateItem={async (messageId: string, content: string) => {
             try {
-              const res = await fetch("/api/hub/messages", {
+              const res = await safeFetch("/api/hub/messages", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -2869,7 +2870,7 @@ function ThreadConversation({
                                       try {
                                         const isHidden = (msg as any)
                                           .is_hidden_by_me;
-                                        const response = await fetch(
+                                        const response = await safeFetch(
                                           "/api/hub/messages",
                                           {
                                             method: "PATCH",
@@ -3402,7 +3403,7 @@ function ThreadConversation({
                         <button
                           onClick={async () => {
                             try {
-                              const res = await fetch("/api/hub/messages", {
+                              const res = await safeFetch("/api/hub/messages", {
                                 method: "PATCH",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({
@@ -3445,7 +3446,7 @@ function ThreadConversation({
                           <button
                             onClick={async () => {
                               try {
-                                const res = await fetch("/api/hub/messages", {
+                                const res = await safeFetch("/api/hub/messages", {
                                   method: "DELETE",
                                   headers: {
                                     "Content-Type": "application/json",
@@ -3572,7 +3573,7 @@ function ThreadConversation({
                   );
 
                   // Fire and forget
-                  fetch("/api/hub/messages", {
+                  safeFetch("/api/hub/messages", {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -3631,7 +3632,7 @@ function ThreadConversation({
                       );
 
                       // Fire and forget
-                      fetch("/api/hub/messages", {
+                      safeFetch("/api/hub/messages", {
                         method: "DELETE",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ messageIds: idsToDelete }),
@@ -3902,7 +3903,7 @@ function ThreadSettingsModal({
         },
       );
 
-      const res = await fetch("/api/hub/threads", {
+      const res = await safeFetch("/api/hub/threads", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3958,7 +3959,7 @@ function ThreadSettingsModal({
         },
       );
 
-      const res = await fetch(`/api/hub/threads?thread_id=${thread.id}`, {
+      const res = await safeFetch(`/api/hub/threads?thread_id=${thread.id}`, {
         method: "DELETE",
       });
 
@@ -3975,7 +3976,7 @@ function ThreadSettingsModal({
         action: {
           label: "Undo",
           onClick: async () => {
-            const undoRes = await fetch(
+            const undoRes = await safeFetch(
               `/api/hub/threads?thread_id=${deletedThreadId}&undo=true`,
               { method: "DELETE" },
             );

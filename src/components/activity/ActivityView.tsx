@@ -1,9 +1,11 @@
 "use client";
 
 import { DollarSignIcon } from "@/components/icons/FuturisticIcons";
+import { useAppModeSafe } from "@/contexts/AppModeContext";
 import { usePrivacyBlur } from "@/contexts/PrivacyBlurContext";
 import { itemsKeys } from "@/features/items/useItems";
 import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { yyyyMmDd } from "@/lib/utils/date";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
@@ -18,14 +20,18 @@ import FilterBar, {
 import ItemsListView from "./ItemsListView";
 import TransactionListView from "./TransactionListView";
 import TransferListView from "./TransferListView";
-import { useAppModeSafe } from "@/contexts/AppModeContext";
-import { useThemeClasses } from "@/hooks/useThemeClasses";
 
 type ActiveSection = "transactions" | "transfers" | "items";
 
 // ─── Inline Icons ─────────────────────────────────────────────────────────────
 const TransferArrowsIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
     <polyline points="17 1 21 5 17 9" />
     <path d="M3 11V9a4 4 0 0 1 4-4h14" />
     <polyline points="7 23 3 19 7 15" />
@@ -34,15 +40,31 @@ const TransferArrowsIcon = ({ className }: { className?: string }) => (
 );
 
 const JournalIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
     <path d="M13.73 21a2 2 0 0 1-3.46 0" />
   </svg>
 );
 
 const FILTER_SECTIONS: FilterBarSection[] = [
-  { key: "transactions", label: "Spending", Icon: DollarSignIcon, variant: "budget" },
-  { key: "transfers", label: "Transfers", Icon: TransferArrowsIcon, variant: "budget" },
+  {
+    key: "transactions",
+    label: "Spending",
+    Icon: DollarSignIcon,
+    variant: "budget",
+  },
+  {
+    key: "transfers",
+    label: "Transfers",
+    Icon: TransferArrowsIcon,
+    variant: "budget",
+  },
   { key: "items", label: "Journal", Icon: JournalIcon, variant: "journal" },
 ];
 
@@ -68,18 +90,25 @@ export default function ActivityView() {
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [groupMode, setGroupMode] = useState<GroupMode>("time");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [recurringFilter, setRecurringFilter] = useState<RecurringFilter>("all");
+  const [recurringFilter, setRecurringFilter] =
+    useState<RecurringFilter>("all");
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
 
-  const todayStr = useMemo(() => yyyyMmDd(new Date()), []);
-  const [dateRange, setDateRange] = useState({ start: todayStr, end: todayStr });
+  const thisMonthRange = useMemo(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { start: yyyyMmDd(monthStart), end: yyyyMmDd(monthEnd) };
+  }, []);
+  const [dateRange, setDateRange] = useState(thisMonthRange);
 
   const isFetchingTx = useIsFetching({
     queryKey: ["transactions", "dashboard", dateRange.start, dateRange.end],
   });
   const isFetchingTr = useIsFetching({ queryKey: ["transfers"] });
   const isFetchingItems = useIsFetching({ queryKey: itemsKeys.all });
-  const isFetching = isFetchingTx > 0 || isFetchingTr > 0 || isFetchingItems > 0;
+  const isFetching =
+    isFetchingTx > 0 || isFetchingTr > 0 || isFetchingItems > 0;
 
   useEffect(() => {
     supabaseBrowser()
@@ -102,7 +131,10 @@ export default function ActivityView() {
 
   const activeIsJournal = activeSection === "items";
 
-  const { data: txData = [] } = useDashboardTransactions({ startDate: dateRange.start, endDate: dateRange.end });
+  const { data: txData = [] } = useDashboardTransactions({
+    startDate: dateRange.start,
+    endDate: dateRange.end,
+  });
   const availableCategories = useMemo(() => {
     const seen = new Map<string, string>();
     txData.forEach((tx) => {

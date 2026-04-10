@@ -7,6 +7,7 @@ import {
   startProbing,
   stopProbing,
 } from "@/lib/connectivityManager";
+import { safeFetch } from "@/lib/safeFetch";
 import {
   addToQueue,
   clearQueue as clearOfflineQueue,
@@ -686,7 +687,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     // maintenance, so it can safely wait until the app is fully loaded.
     // Extended from 30s to 60s to free bandwidth during slow-network cold loads.
     const timer = setTimeout(() => {
-      fetch("/api/accounts/reconcile", { method: "POST" })
+      safeFetch("/api/accounts/reconcile", { method: "POST" })
         .then(async (res) => {
           if (!res.ok) return;
           const data = await res.json();
