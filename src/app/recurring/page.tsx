@@ -243,53 +243,64 @@ export default function RecurringPage() {
         category_id?: string | null;
         subcategory_id?: string | null;
         user_id?: string;
+        account?: { name: string } | null;
+        accounts?: { name: string } | null;
+        category?: { name: string } | null;
+        subcategory?: { name: string } | null;
       },
       isOwner: boolean,
     ) => {
-      const base = {
-        amount: payment.amount.toString(),
-        description: payment.description || payment.name || "",
-        date: new Date().toISOString().split("T")[0],
-        account_id: payment.account_id,
-        category_id: payment.category_id || "",
-        subcategory_id: payment.subcategory_id || "",
-      };
-
       // Pre-populate LBP from the recurring payment if available
       const lbpVal = (payment as any).lbp_change_received;
       setConfirmLbpInput(lbpVal ? lbpVal.toString() : "");
       setConfirmLbpExpanded(!!lbpVal);
 
       if (isOwner) {
-        setConfirmFormData(base);
+        setConfirmFormData({
+          amount: payment.amount.toString(),
+          description: payment.description || payment.name || "",
+          date: new Date().toISOString().split("T")[0],
+          account_id: payment.account_id,
+          category_id: payment.category_id || "",
+          subcategory_id: payment.subcategory_id || "",
+        });
         return;
       }
 
-      // Partner is confirming — try to auto-populate via name matching
-      setConfirmFormData(base);
-      const name = payment.name || payment.description;
-      if (!name) return;
+      // Partner is confirming — resolve fields by matching names client-side
+      // (owner's IDs don't exist in partner's dropdowns)
+      const ownerAccountName = (payment.account?.name || payment.accounts?.name || "").toLowerCase();
+      const ownerCategoryName = (payment.category?.name || "").toLowerCase();
+      const ownerSubcategoryName = (payment.subcategory?.name || "").toLowerCase();
 
-      try {
-        const res = await fetch(
-          `/api/recurring-payments/match-fields?name=${encodeURIComponent(name)}`,
-        );
-        if (res.ok) {
-          const match = await res.json();
-          if (match.account_id || match.category_id) {
-            setConfirmFormData((prev) => ({
-              ...prev,
-              account_id: match.account_id || prev.account_id,
-              category_id: match.category_id || prev.category_id,
-              subcategory_id: match.subcategory_id || prev.subcategory_id,
-            }));
-          }
-        }
-      } catch {
-        // Silent fail — partner just manually selects
+      // Match account by name from partner's loaded accounts
+      const matchedAccount = ownerAccountName
+        ? accounts.find((a) => a.name.toLowerCase() === ownerAccountName)
+        : undefined;
+
+      // Match category by name from partner's loaded categories (top-level only)
+      const topCategories = categories.filter((c: any) => !c.parent_id);
+      const matchedCategory = ownerCategoryName
+        ? topCategories.find((c: any) => c.name.toLowerCase() === ownerCategoryName)
+        : undefined;
+
+      // Match subcategory by name (children of matched category)
+      let matchedSubcategory: any = undefined;
+      if (matchedCategory && ownerSubcategoryName) {
+        const subs = categories.filter((c: any) => c.parent_id === matchedCategory.id);
+        matchedSubcategory = subs.find((c: any) => c.name.toLowerCase() === ownerSubcategoryName);
       }
+
+      setConfirmFormData({
+        amount: payment.amount.toString(),
+        description: payment.description || payment.name || "",
+        date: new Date().toISOString().split("T")[0],
+        account_id: matchedAccount?.id || "",
+        category_id: matchedCategory?.id || "",
+        subcategory_id: matchedSubcategory?.id || "",
+      });
     },
-    [],
+    [accounts, categories],
   );
 
   useEffect(() => {

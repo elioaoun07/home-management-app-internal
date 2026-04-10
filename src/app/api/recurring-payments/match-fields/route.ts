@@ -28,6 +28,12 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Accumulate results across all strategies — fill gaps, don't return early
+    let accountId: string | null = null;
+    let categoryId: string | null = null;
+    let subcategoryId: string | null = null;
+    let source: string | null = null;
+
     // 1. Try to find an exact-name match in the user's own recurring payments
     const { data: ownRecurring } = await supabase
       .from("recurring_payments")
@@ -38,40 +44,78 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (ownRecurring) {
-      return NextResponse.json({
-        account_id: ownRecurring.account_id,
-        category_id: ownRecurring.category_id,
-        subcategory_id: ownRecurring.subcategory_id,
-        source: "recurring",
-      });
+      accountId = ownRecurring.account_id || null;
+      categoryId = ownRecurring.category_id || null;
+      subcategoryId = ownRecurring.subcategory_id || null;
+      source = "recurring";
     }
 
-    // 2. Fallback: search recent transactions with similar description (case-insensitive)
-    const { data: recentTx } = await supabase
-      .from("transactions")
-      .select("account_id, category_id, subcategory_id")
-      .eq("user_id", user.id)
-      .eq("is_draft", false)
-      .ilike("description", `%${name}%`)
-      .order("date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // 2. Fill gaps from recent transactions with similar description
+    if (!accountId || !categoryId) {
+      const { data: recentTx } = await supabase
+        .from("transactions")
+        .select("account_id, category_id, subcategory_id")
+        .eq("user_id", user.id)
+        .eq("is_draft", false)
+        .ilike("description", `%${name}%`)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (recentTx) {
-      return NextResponse.json({
-        account_id: recentTx.account_id,
-        category_id: recentTx.category_id,
-        subcategory_id: recentTx.subcategory_id,
-        source: "transaction",
-      });
+      if (recentTx) {
+        if (!accountId && recentTx.account_id) accountId = recentTx.account_id;
+        if (!categoryId && recentTx.category_id) categoryId = recentTx.category_id;
+        if (!subcategoryId && recentTx.subcategory_id) subcategoryId = recentTx.subcategory_id;
+        if (!source) source = "transaction";
+      }
     }
 
-    // 3. No match found
+    // 3. Fill remaining gaps by matching account/category/subcategory names
+    //    (partner confirms owner's payment — resolve partner's own IDs by name)
+    const accountName = req.nextUrl.searchParams.get("account_name");
+    const categoryName = req.nextUrl.searchParams.get("category_name");
+    const subcategoryName = req.nextUrl.searchParams.get("subcategory_name");
+
+    if (!accountId && accountName) {
+      const { data: acct } = await supabase
+        .from("accounts")
+        .select("id")
+        .eq("user_id", user.id)
+        .ilike("name", accountName)
+        .limit(1)
+        .maybeSingle();
+      if (acct) { accountId = acct.id; if (!source) source = "name-match"; }
+    }
+
+    if (!categoryId && categoryName) {
+      const { data: cat } = await supabase
+        .from("user_categories")
+        .select("id")
+        .eq("user_id", user.id)
+        .is("parent_id", null)
+        .ilike("name", categoryName)
+        .limit(1)
+        .maybeSingle();
+      if (cat) { categoryId = cat.id; if (!source) source = "name-match"; }
+    }
+
+    if (!subcategoryId && subcategoryName && categoryId) {
+      const { data: sub } = await supabase
+        .from("user_categories")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("parent_id", categoryId)
+        .ilike("name", subcategoryName)
+        .limit(1)
+        .maybeSingle();
+      if (sub) { subcategoryId = sub.id; if (!source) source = "name-match"; }
+    }
+
     return NextResponse.json({
-      account_id: null,
-      category_id: null,
-      subcategory_id: null,
-      source: null,
+      account_id: accountId,
+      category_id: categoryId,
+      subcategory_id: subcategoryId,
+      source,
     });
   } catch (error: any) {
     console.error("Error matching fields:", error);
