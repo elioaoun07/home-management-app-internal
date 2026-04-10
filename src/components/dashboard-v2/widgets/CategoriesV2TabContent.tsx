@@ -4,7 +4,7 @@ import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import BlurredAmount from "@/components/ui/BlurredAmount";
 import { cn } from "@/lib/utils";
 import { format, subMonths } from "date-fns";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -89,12 +89,151 @@ function build12Months(): MonthBucket[] {
 // ── Tooltip styling ─────────────────────────────────────────────────────────
 
 const TOOLTIP_STYLE = {
-  background: "rgba(15,15,25,0.95)",
-  border: "1px solid rgba(255,255,255,0.1)",
-  borderRadius: "10px",
+  background: "rgba(10,12,20,0.96)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: "12px",
   fontSize: "13px",
-  padding: "10px 14px",
+  fontWeight: 500,
+  padding: "12px 16px",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06)",
+  backdropFilter: "blur(12px)",
 } as const;
+
+/** SVG defs for outlined bars with luminous glow */
+function ChartDefs({ id, color }: { id: string; color: string }) {
+  const bright = lightenHex(color, 30);
+  return (
+    <defs>
+      {/* Inner fill: rich translucent gradient */}
+      <linearGradient id={`${id}-fill`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={bright} stopOpacity={0.45} />
+        <stop offset="50%" stopColor={color} stopOpacity={0.22} />
+        <stop offset="100%" stopColor={color} stopOpacity={0.1} />
+      </linearGradient>
+      {/* Top highlight shimmer — brighter, wider */}
+      <linearGradient id={`${id}-highlight`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#fff" stopOpacity={0.28} />
+        <stop offset="20%" stopColor="#fff" stopOpacity={0.1} />
+        <stop offset="50%" stopColor="#fff" stopOpacity={0} />
+      </linearGradient>
+      {/* Outer glow — wider, stronger */}
+      <filter id={`${id}-glow`} x="-40%" y="-15%" width="180%" height="130%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+        <feColorMatrix
+          in="blur"
+          type="matrix"
+          values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.55 0"
+          result="glow"
+        />
+        <feMerge>
+          <feMergeNode in="glow" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+    </defs>
+  );
+}
+
+/** Custom bar shape: outlined rectangle with inner glow fill + top highlight */
+function OutlinedBar({
+  x,
+  y,
+  width,
+  height,
+  fillId,
+  highlightId,
+  filterId,
+  strokeColor,
+}: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fillId: string;
+  highlightId: string;
+  filterId: string;
+  strokeColor: string;
+}) {
+  if (!height || height <= 0) return null;
+  const r = Math.min(5, width / 2, height);
+  const bright = lightenHex(strokeColor, 25);
+  return (
+    <g filter={`url(#${filterId})`}>
+      {/* Main translucent fill */}
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        rx={r}
+        ry={r}
+        fill={`url(#${fillId})`}
+      />
+      {/* Top shimmer overlay — covers upper half */}
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={Math.min(height, height * 0.55)}
+        rx={r}
+        ry={r}
+        fill={`url(#${highlightId})`}
+      />
+      {/* Inner vertical side highlights */}
+      <rect
+        x={x}
+        y={y}
+        width={2}
+        height={height}
+        rx={1}
+        fill={strokeColor}
+        fillOpacity={0.15}
+      />
+      <rect
+        x={x + width - 2}
+        y={y}
+        width={2}
+        height={height}
+        rx={1}
+        fill={strokeColor}
+        fillOpacity={0.08}
+      />
+      {/* Crisp outline — brighter */}
+      <rect
+        x={x + 0.5}
+        y={y + 0.5}
+        width={width - 1}
+        height={height - 1}
+        rx={r}
+        ry={r}
+        fill="none"
+        stroke={bright}
+        strokeWidth={1.3}
+        strokeOpacity={0.7}
+      />
+      {/* Bright top edge accent — glowing */}
+      <line
+        x1={x + r}
+        y1={y + 0.5}
+        x2={x + width - r}
+        y2={y + 0.5}
+        stroke={bright}
+        strokeWidth={2}
+        strokeOpacity={0.9}
+        strokeLinecap="round"
+      />
+    </g>
+  );
+}
+
+/** Lighten a hex color by a percentage */
+function lightenHex(hex: string, pct: number): string {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.min(255, ((num >> 16) & 0xff) + Math.round((255 * pct) / 100));
+  const g = Math.min(255, ((num >> 8) & 0xff) + Math.round((255 * pct) / 100));
+  const b = Math.min(255, (num & 0xff) + Math.round((255 * pct) / 100));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+}
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
@@ -220,7 +359,7 @@ export default function CategoriesV2TabContent({ transactions }: Props) {
   return (
     <div className="space-y-6">
       {/* Period info */}
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/5 text-[11px] text-white/40 tracking-wide">
+      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-white/60 tracking-wide font-medium">
         <span>
           {months[0].label} — {months[months.length - 1].label} · 12 months ·{" "}
           {categories.length} categories
@@ -311,11 +450,11 @@ function CategoryWidget({
       title={category.name}
       subtitle={`${category.count} transactions · avg ${fmtDollar(avg)}/mo`}
       action={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {/* Total badge */}
           <BlurredAmount blurIntensity="sm">
             <span
-              className="text-sm font-bold tabular-nums"
+              className="text-[15px] font-bold tabular-nums tracking-tight"
               style={{ color: category.color }}
             >
               {fmtDollar(category.total)}
@@ -329,10 +468,10 @@ function CategoryWidget({
               <button
                 onClick={onToggleView}
                 className={cn(
-                  "px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors",
+                  "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors",
                   showSubs
                     ? "bg-white/15 text-white"
-                    : "bg-white/5 text-white/40 hover:text-white/60 hover:bg-white/10",
+                    : "bg-white/5 text-white/50 hover:text-white/70 hover:bg-white/10",
                 )}
               >
                 {showSubs ? "Subcategories" : "Category"}
@@ -344,121 +483,193 @@ function CategoryWidget({
     >
       {/* Color accent bar */}
       <div
-        className="h-0.5 rounded-full mb-3 opacity-60"
+        className="h-[3px] rounded-full mb-4"
         style={{
-          background: `linear-gradient(90deg, ${category.color}, transparent)`,
+          background: `linear-gradient(90deg, ${category.color}cc, ${category.color}40 60%, transparent)`,
         }}
       />
 
       {/* Chart */}
-      <div className="h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          {showSubs && stackedData ? (
-            <BarChart data={stackedData} barCategoryGap="18%">
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(255,255,255,0.05)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 12 }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v: number) => fmtDollar(v)}
-                width={50}
-              />
-              <Tooltip
-                contentStyle={TOOLTIP_STYLE}
-                labelStyle={{ color: "rgba(255,255,255,0.5)", marginBottom: 4 }}
-                formatter={(value: any, name: any) => [
-                  `$${Number(value).toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
-                  name,
-                ]}
-                cursor={{ fill: "rgba(255,255,255,0.04)" }}
-              />
-              {subEntries.map((sub, idx) => (
-                <Bar
-                  key={sub.name}
-                  dataKey={sub.name}
-                  stackId="subs"
-                  fill={sub.color}
-                  radius={
-                    idx === subEntries.length - 1 ? [4, 4, 0, 0] : undefined
-                  }
-                />
-              ))}
-            </BarChart>
-          ) : (
-            <BarChart data={category.monthlyData} barCategoryGap="18%">
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(255,255,255,0.05)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 12 }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v: number) => fmtDollar(v)}
-                width={50}
-              />
-              <Tooltip
-                contentStyle={TOOLTIP_STYLE}
-                labelStyle={{ color: "rgba(255,255,255,0.5)", marginBottom: 4 }}
-                formatter={(value: any) => [
-                  `$${Number(value).toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
-                  category.name,
-                ]}
-                cursor={{ fill: "rgba(255,255,255,0.04)" }}
-              />
-              <Bar
-                dataKey="amount"
-                fill={category.color}
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          )}
-        </ResponsiveContainer>
-      </div>
+      <CategoryChart
+        category={category}
+        showSubs={showSubs}
+        stackedData={stackedData}
+        subEntries={subEntries}
+      />
 
       {/* Subcategory legend (when in subcategory view) */}
       {showSubs && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 px-1">
+        <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 px-1">
           {subEntries.map((sub) => (
-            <div key={sub.name} className="flex items-center gap-1.5">
+            <div key={sub.name} className="flex items-center gap-2">
               <div
-                className="w-2.5 h-2.5 rounded-sm shrink-0"
-                style={{ backgroundColor: sub.color }}
+                className="w-3 h-3 rounded shrink-0"
+                style={{
+                  background: `linear-gradient(135deg, ${lightenHex(sub.color, 15)}, ${sub.color})`,
+                }}
               />
-              <span className="text-[11px] text-white/50">{sub.name}</span>
+              <span className="text-xs text-white/65 font-medium">
+                {sub.name}
+              </span>
             </div>
           ))}
         </div>
       )}
 
       {/* Footer stats */}
-      <div className="flex items-center justify-between mt-2 px-1">
-        <span className="text-[11px] text-white/30">
+      <div className="flex items-center justify-between mt-3 px-1">
+        <span className="text-xs text-white/45 font-medium">
           Monthly avg:{" "}
-          <span className="text-white/50 tabular-nums">{fmtDollar(avg)}</span>
+          <span className="text-white/70 tabular-nums font-semibold">
+            {fmtDollar(avg)}
+          </span>
         </span>
-        <span className="text-[11px] text-white/30">
-          {category.monthlyData.filter((m) => m.amount > 0).length} active
-          months
+        <span className="text-xs text-white/45 font-medium">
+          <span className="text-white/70 tabular-nums font-semibold">
+            {category.monthlyData.filter((m) => m.amount > 0).length}
+          </span>{" "}
+          active months
         </span>
       </div>
     </WidgetCard>
+  );
+}
+
+// ── Chart with Outlined Glow Bars ───────────────────────────────────────────
+
+function CategoryChart({
+  category,
+  showSubs,
+  stackedData,
+  subEntries,
+}: {
+  category: CategoryMonthly;
+  showSubs: boolean;
+  stackedData: Record<string, string | number>[] | null;
+  subEntries: { name: string; color: string }[];
+}) {
+  const uid = useId().replace(/:/g, "");
+
+  const commonAxisProps = {
+    tickLine: false as const,
+    axisLine: false as const,
+  };
+
+  const tooltipProps = {
+    contentStyle: TOOLTIP_STYLE,
+    labelStyle: {
+      color: "rgba(255,255,255,0.7)",
+      fontWeight: 600,
+      marginBottom: 6,
+      fontSize: 13,
+    } as const,
+    itemStyle: { color: "rgba(255,255,255,0.85)", fontWeight: 500 } as const,
+    cursor: { fill: "rgba(255,255,255,0.04)", radius: 4 } as const,
+  };
+
+  const xAxisProps = {
+    dataKey: "label" as const,
+    tick: { fill: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 600 },
+    ...commonAxisProps,
+    tickMargin: 8,
+  };
+
+  const yAxisProps = {
+    tick: { fill: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 500 },
+    ...commonAxisProps,
+    tickFormatter: (v: number) => fmtDollar(v),
+    width: 52,
+    tickMargin: 4,
+  };
+
+  // ── Stacked subcategory view ──────────────────────────────────────────
+  if (showSubs && stackedData) {
+    return (
+      <div className="h-60">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={stackedData} barCategoryGap="20%">
+            {/* One set of defs per subcategory color */}
+            {subEntries.map((sub, i) => (
+              <ChartDefs key={sub.name} id={`${uid}-s${i}`} color={sub.color} />
+            ))}
+            <CartesianGrid
+              strokeDasharray="3 6"
+              stroke="rgba(255,255,255,0.06)"
+              vertical={false}
+            />
+            <XAxis {...xAxisProps} />
+            <YAxis {...yAxisProps} />
+            <Tooltip
+              {...tooltipProps}
+              formatter={(value: any, name: any) => [
+                `$${Number(value).toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+                name,
+              ]}
+            />
+            {subEntries.map((sub, i) => (
+              <Bar
+                key={sub.name}
+                dataKey={sub.name}
+                stackId="subs"
+                fill="transparent"
+                shape={(props: any) => (
+                  <OutlinedBar
+                    x={props.x}
+                    y={props.y}
+                    width={props.width}
+                    height={props.height}
+                    fillId={`${uid}-s${i}-fill`}
+                    highlightId={`${uid}-s${i}-highlight`}
+                    filterId={`${uid}-s${i}-glow`}
+                    strokeColor={sub.color}
+                  />
+                )}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  // ── Single category view ──────────────────────────────────────────────
+  return (
+    <div className="h-60">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={category.monthlyData} barCategoryGap="20%">
+          <ChartDefs id={uid} color={category.color} />
+          <CartesianGrid
+            strokeDasharray="3 6"
+            stroke="rgba(255,255,255,0.06)"
+            vertical={false}
+          />
+          <XAxis {...xAxisProps} />
+          <YAxis {...yAxisProps} />
+          <Tooltip
+            {...tooltipProps}
+            formatter={(value: any) => [
+              `$${Number(value).toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+              category.name,
+            ]}
+          />
+          <Bar
+            dataKey="amount"
+            fill="transparent"
+            shape={(props: any) => (
+              <OutlinedBar
+                x={props.x}
+                y={props.y}
+                width={props.width}
+                height={props.height}
+                fillId={`${uid}-fill`}
+                highlightId={`${uid}-highlight`}
+                filterId={`${uid}-glow`}
+                strokeColor={category.color}
+              />
+            )}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
