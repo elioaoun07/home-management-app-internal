@@ -7,6 +7,7 @@ import {
 } from "@/components/icons/FuturisticIcons";
 import BlurredAmount from "@/components/ui/BlurredAmount";
 import { Card } from "@/components/ui/card";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
@@ -54,10 +55,11 @@ const OWNERSHIP_OPTIONS: {
   value: OwnershipFilter;
   label: string;
   icon: typeof User;
+  colorKey: "me" | "both" | "partner";
 }[] = [
-  { value: "mine", label: "Me", icon: User },
-  { value: "both", label: "Both", icon: Users },
-  { value: "partner", label: "Partner", icon: Heart },
+  { value: "mine", label: "Me", icon: User, colorKey: "me" },
+  { value: "both", label: "Both", icon: Users, colorKey: "both" },
+  { value: "partner", label: "Partner", icon: Heart, colorKey: "partner" },
 ];
 
 export default function CategoryDetailView({
@@ -70,12 +72,21 @@ export default function CategoryDetailView({
   onTransactionClick,
 }: Props) {
   const themeClasses = useThemeClasses();
+  const { theme } = useTheme();
+
+  // Person-absolute colors per Hard Rule 17
+  const meColor = theme === "pink" ? "text-pink-400" : "text-blue-400";
+  const meBg = theme === "pink" ? "bg-pink-500/15" : "bg-blue-500/15";
+  const partnerColor = theme === "pink" ? "text-blue-400" : "text-pink-400";
+  const partnerBg = theme === "pink" ? "bg-blue-500/15" : "bg-pink-500/15";
 
   // Use category color or fallback to theme color
   const iconColor = categoryColor || themeClasses.defaultAccentColor;
   const [isExiting, setIsExiting] = useState(false);
-  const [ownershipFilter, setOwnershipFilter] =
-    useState<OwnershipFilter>(initialOwnership);
+  // Map "all" from parent dashboards to "both" for our toggle
+  const [ownershipFilter, setOwnershipFilter] = useState<OwnershipFilter>(
+    initialOwnership === "all" ? "both" : initialOwnership,
+  );
   const [activeAccount, setActiveAccount] = useState<string | null>(null);
   const [activeSubcategory, setActiveSubcategory] = useState<string | null>(
     null,
@@ -291,21 +302,30 @@ export default function CategoryDetailView({
         {/* Ownership Toggle */}
         <div className="flex items-center justify-center">
           <div className="flex items-center gap-1 p-1 rounded-xl neo-card">
-            {OWNERSHIP_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setOwnershipFilter(opt.value)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                  ownershipFilter === opt.value
-                    ? `${themeClasses.bgActive} ${themeClasses.textActive}`
-                    : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
-                )}
-              >
-                <opt.icon className="w-3.5 h-3.5" />
-                {opt.label}
-              </button>
-            ))}
+            {OWNERSHIP_OPTIONS.map((opt) => {
+              const isActive = ownershipFilter === opt.value;
+              const activeClass =
+                opt.colorKey === "me"
+                  ? `${meBg} ${meColor}`
+                  : opt.colorKey === "partner"
+                    ? `${partnerBg} ${partnerColor}`
+                    : `${themeClasses.bgActive} ${themeClasses.textActive}`;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => setOwnershipFilter(opt.value)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                    isActive
+                      ? activeClass
+                      : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
+                  )}
+                >
+                  <opt.icon className="w-3.5 h-3.5" />
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 

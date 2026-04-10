@@ -1032,24 +1032,64 @@ const WebDashboard = memo(function WebDashboard({
           <div className="flex items-center justify-center py-2 border-b border-white/5">
             <div className="flex items-center gap-1 p-1 rounded-xl neo-card">
               {[
-                { id: "mine" as const, icon: User, label: "Me" },
-                { id: "all" as const, icon: Users, label: "Both" },
-                { id: "partner" as const, icon: Heart, label: "Partner" },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setOwnershipFilter(item.id)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                    ownershipFilter === item.id
-                      ? `${themeClasses.bgActive} ${themeClasses.textActive}`
-                      : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
-                  )}
-                >
-                  <item.icon className="w-3.5 h-3.5" />
-                  {item.label}
-                </button>
-              ))}
+                {
+                  id: "mine" as const,
+                  icon: User,
+                  label: "Me",
+                  colorKey: "me" as const,
+                },
+                {
+                  id: "all" as const,
+                  icon: Users,
+                  label: "Both",
+                  colorKey: "both" as const,
+                },
+                {
+                  id: "partner" as const,
+                  icon: Heart,
+                  label: "Partner",
+                  colorKey: "partner" as const,
+                },
+              ].map((item) => {
+                const isActive = ownershipFilter === item.id;
+                const meColor =
+                  currentUserTheme === "pink"
+                    ? "text-pink-400"
+                    : "text-blue-400";
+                const meBg =
+                  currentUserTheme === "pink"
+                    ? "bg-pink-500/15"
+                    : "bg-blue-500/15";
+                const pColor =
+                  currentUserTheme === "pink"
+                    ? "text-blue-400"
+                    : "text-pink-400";
+                const pBg =
+                  currentUserTheme === "pink"
+                    ? "bg-blue-500/15"
+                    : "bg-pink-500/15";
+                const activeClass =
+                  item.colorKey === "me"
+                    ? `${meBg} ${meColor}`
+                    : item.colorKey === "partner"
+                      ? `${pBg} ${pColor}`
+                      : `${themeClasses.bgActive} ${themeClasses.textActive}`;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setOwnershipFilter(item.id)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                      isActive
+                        ? activeClass
+                        : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
+                    )}
+                  >
+                    <item.icon className="w-3.5 h-3.5" />
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -1340,6 +1380,7 @@ const WebDashboard = memo(function WebDashboard({
             currentUserId={currentUserId}
             onDateRangeChange={onDateRangeChange}
             monthStartDay={monthStartDay}
+            filtersOpen={showFilters}
             onCategoryClick={(cat) => {
               setFilterCategories((prev) =>
                 prev.includes(cat)

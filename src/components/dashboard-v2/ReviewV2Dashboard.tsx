@@ -98,6 +98,7 @@ type Props = {
   currentUserId?: string;
   onDateRangeChange?: (start: string, end: string) => void;
   monthStartDay?: number;
+  filtersOpen?: boolean;
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ export default function ReviewV2Dashboard({
   currentUserId,
   onDateRangeChange,
   monthStartDay,
+  filtersOpen,
 }: Props) {
   // ── Tab state ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<V2Tab>(() => {
@@ -410,17 +412,41 @@ export default function ReviewV2Dashboard({
   const [categoryDetailName, setCategoryDetailName] = useState<string | null>(
     null,
   );
+  const [categoryDetailMonth, setCategoryDetailMonth] = useState<string | null>(
+    null,
+  );
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
 
-  const handleCategoryDetailClick = useCallback((cat: string) => {
-    setCategoryDetailName(cat);
-  }, []);
+  const handleCategoryDetailClick = useCallback(
+    (cat: string, zoomedMonth?: string | null) => {
+      setCategoryDetailName(cat);
+      setCategoryDetailMonth(zoomedMonth ?? null);
+    },
+    [],
+  );
 
   const categoryDetailData = useMemo(() => {
     if (!categoryDetailName) return null;
-    const txs = filteredExpenseTransactions.filter(
+    let txs = filteredExpenseTransactions.filter(
       (t) => t.category === categoryDetailName,
     );
+    // If a specific period is selected, filter to that period
+    if (categoryDetailMonth) {
+      if (categoryDetailMonth.includes("-Q")) {
+        // Quarter key: e.g. "2025-Q2" → months 4,5,6 of 2025
+        const [yr, qStr] = categoryDetailMonth.split("-Q");
+        const q = parseInt(qStr, 10);
+        const startM = (q - 1) * 3 + 1;
+        const endM = q * 3;
+        txs = txs.filter((t) => {
+          const m = parseInt(t.date.slice(5, 7), 10);
+          return t.date.startsWith(yr) && m >= startM && m <= endM;
+        });
+      } else {
+        // Month key ("2025-04") or year key ("2025") — startsWith handles both
+        txs = txs.filter((t) => t.date.startsWith(categoryDetailMonth));
+      }
+    }
     const totalAmount = txs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
     const categoryColor = txs.find((t: any) => t.category_color) as any;
     return {
@@ -428,7 +454,7 @@ export default function ReviewV2Dashboard({
       totalAmount,
       categoryColor: categoryColor?.category_color as string | undefined,
     };
-  }, [categoryDetailName, filteredExpenseTransactions]);
+  }, [categoryDetailName, categoryDetailMonth, filteredExpenseTransactions]);
 
   // ── Loading ─────────────────────────────────────────────────────────────────
   if (isLoading && !analytics) {
@@ -945,7 +971,11 @@ export default function ReviewV2Dashboard({
           ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "categories" && (
         <div className="space-y-4">
-          <CategoriesV2TabContent transactions={expenseTransactions as any} />
+          <CategoriesV2TabContent
+            transactions={expenseTransactions as any}
+            filtersOpen={filtersOpen}
+            onCategoryDetailClick={handleCategoryDetailClick}
+          />
         </div>
       )}
 
@@ -1047,6 +1077,7 @@ export default function ReviewV2Dashboard({
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => {
               setCategoryDetailName(null);
+              setCategoryDetailMonth(null);
               setSelectedTransaction(null);
             }}
           />
@@ -1056,6 +1087,7 @@ export default function ReviewV2Dashboard({
             <button
               onClick={() => {
                 setCategoryDetailName(null);
+                setCategoryDetailMonth(null);
                 setSelectedTransaction(null);
               }}
               className="absolute top-3 right-3 z-40 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/60 hover:text-white transition-colors"
@@ -1070,6 +1102,7 @@ export default function ReviewV2Dashboard({
               ownershipFilter={ownershipFilter as any}
               onBack={() => {
                 setCategoryDetailName(null);
+                setCategoryDetailMonth(null);
                 setSelectedTransaction(null);
               }}
               onTransactionClick={setSelectedTransaction}
