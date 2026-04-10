@@ -141,7 +141,10 @@ function cleanupOldTxCaches() {
     const entries = keys
       .map((k) => {
         try {
-          return { key: k, ts: JSON.parse(localStorage.getItem(k)!).ts as number };
+          return {
+            key: k,
+            ts: JSON.parse(localStorage.getItem(k)!).ts as number,
+          };
         } catch {
           return { key: k, ts: 0 };
         }
@@ -247,10 +250,6 @@ export function useDashboardTransactions({
   return useQuery({
     queryKey: ["transactions", "dashboard", startDate, endDate],
     queryFn: async () => {
-      // Guard: don't even try to fetch when offline
-      if (!isReallyOnline()) {
-        throw new Error("Offline");
-      }
       const response = await fetch(
         `/api/transactions?start=${startDate}&end=${endDate}`,
       );

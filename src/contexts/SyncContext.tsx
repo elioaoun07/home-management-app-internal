@@ -7,7 +7,6 @@ import {
   startProbing,
   stopProbing,
 } from "@/lib/connectivityManager";
-import { safeFetch } from "@/lib/safeFetch";
 import {
   addToQueue,
   clearQueue as clearOfflineQueue,
@@ -24,6 +23,7 @@ import {
   type OfflineSyncEngine,
   type SyncResult,
 } from "@/lib/offlineSyncEngine";
+import { safeFetch } from "@/lib/safeFetch";
 import { offlinePendingActions } from "@/lib/stores/offlinePendingStore";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -687,7 +687,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     // maintenance, so it can safely wait until the app is fully loaded.
     // Extended from 30s to 60s to free bandwidth during slow-network cold loads.
     const timer = setTimeout(() => {
-      safeFetch("/api/accounts/reconcile", { method: "POST" })
+      safeFetch("/api/accounts/reconcile", {
+        method: "POST",
+        timeoutMs: 30_000,
+      })
         .then(async (res) => {
           if (!res.ok) return;
           const data = await res.json();

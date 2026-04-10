@@ -48,7 +48,7 @@ export class SupabaseTransactionService implements TransactionService {
   // No imperative balance updates needed on transaction create/edit/delete.
 
   async getTransactions(userId: string, filters: TransactionFilters = {}) {
-    const { start, end, limit = 200 } = filters;
+    const { start, end, limit = 10000 } = filters;
 
     // Determine if user has a household link to include partner transactions
     const { data: link } = await this.supabase

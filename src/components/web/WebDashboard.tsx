@@ -603,9 +603,19 @@ const WebDashboard = memo(function WebDashboard({
     const topCategory = Object.entries(byCategory).sort(
       (a, b) => b[1].amount - a[1].amount,
     )[0];
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const daysDiff = Math.max(1, differenceInDays(end, start) + 1);
+    let daysDiff = 1;
+    if (startDate && endDate) {
+      daysDiff = Math.max(
+        1,
+        differenceInDays(new Date(endDate), new Date(startDate)) + 1,
+      );
+    } else if (filteredTransactions.length > 0) {
+      const dates = filteredTransactions.map((t) => new Date(t.date).getTime());
+      daysDiff = Math.max(
+        1,
+        Math.round((Math.max(...dates) - Math.min(...dates)) / 86400000) + 1,
+      );
+    }
     const dailyAvg = total / daysDiff;
 
     return {
@@ -633,10 +643,19 @@ const WebDashboard = memo(function WebDashboard({
   // SPENDING VELOCITY & BURN RATE
   const spendingVelocity = useMemo(() => {
     const today = new Date();
-    const start = parseISO(startDate);
-    const end = parseISO(endDate);
+    const hasDateRange = !!startDate && !!endDate;
+    const start = hasDateRange
+      ? parseISO(startDate)
+      : (() => {
+          if (filteredTransactions.length === 0) return today;
+          const dates = filteredTransactions.map((t) =>
+            new Date(t.date).getTime(),
+          );
+          return new Date(Math.min(...dates));
+        })();
+    const end = hasDateRange ? parseISO(endDate) : today;
     const daysElapsed = Math.max(1, differenceInDays(today, start) + 1);
-    const totalDays = differenceInDays(end, start) + 1;
+    const totalDays = Math.max(1, differenceInDays(end, start) + 1);
     const daysRemaining = Math.max(0, differenceInDays(end, today));
 
     const dailyBurnRate = stats.total / daysElapsed;

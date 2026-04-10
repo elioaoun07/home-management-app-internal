@@ -115,6 +115,10 @@ const presets: DateRangePreset[] = [
       };
     },
   },
+  {
+    label: "All Time",
+    getValue: () => ({ start: "", end: "" }),
+  },
 ];
 
 interface DateRangePickerProps {
@@ -134,11 +138,12 @@ export function DateRangePicker({
   const [pendingRange, setPendingRange] = React.useState<
     DateRangeState | undefined
   >(undefined);
-  const [currentMonth, setCurrentMonth] = React.useState(
-    () => new Date(startDate)
+  const [currentMonth, setCurrentMonth] = React.useState(() =>
+    startDate ? new Date(startDate) : new Date(),
   );
   const [isDragging, setIsDragging] = React.useState(false);
   const [dragMode, setDragMode] = React.useState<"start" | "end" | null>(null);
+  const [isAllTime, setIsAllTime] = React.useState(!startDate && !endDate);
 
   // Generate calendar days for the current month
   const calendarDays = React.useMemo(() => {
@@ -181,6 +186,7 @@ export function DateRangePicker({
 
   // Handle mouse/touch events for drag selection
   const handleDayMouseDown = (date: Date) => {
+    setIsAllTime(false);
     if (!pendingRange?.from || !pendingRange?.to) {
       // No existing range, start fresh
       setIsDragging(true);
@@ -248,10 +254,18 @@ export function DateRangePicker({
   // Reset to current applied range when opening
   React.useEffect(() => {
     if (open) {
-      const fromDate = new Date(startDate);
-      setPendingRange({ from: fromDate, to: new Date(endDate) });
-      // Navigate calendar to the start date's month
-      setCurrentMonth(fromDate);
+      if (startDate && endDate) {
+        setIsAllTime(false);
+        const fromDate = new Date(startDate);
+        setPendingRange({ from: fromDate, to: new Date(endDate) });
+        // Navigate calendar to the start date's month
+        setCurrentMonth(fromDate);
+      } else {
+        // "All Time" — no range selected, show current month
+        setIsAllTime(true);
+        setPendingRange(undefined);
+        setCurrentMonth(new Date());
+      }
     }
   }, [open, startDate, endDate]);
 
@@ -269,8 +283,9 @@ export function DateRangePicker({
 
   // Check if pending matches a preset
   const isPendingPreset = (preset: DateRangePreset) => {
-    if (!pendingRange?.from || !pendingRange?.to) return false;
     const range = preset.getValue();
+    if (range.start === "" && range.end === "") return isAllTime;
+    if (!pendingRange?.from || !pendingRange?.to) return false;
     return (
       format(pendingRange.from, "yyyy-MM-dd") === range.start &&
       format(pendingRange.to, "yyyy-MM-dd") === range.end
@@ -278,16 +293,24 @@ export function DateRangePicker({
   };
 
   // Check if we can apply (have both dates and something changed)
-  const canApply = pendingRange?.from && pendingRange?.to;
-  const hasChanges =
-    canApply &&
-    pendingRange.from &&
-    pendingRange.to &&
-    (format(pendingRange.from, "yyyy-MM-dd") !== startDate ||
-      format(pendingRange.to, "yyyy-MM-dd") !== endDate);
+  const canApply = isAllTime || (pendingRange?.from && pendingRange?.to);
+  const hasChanges = isAllTime
+    ? startDate !== "" || endDate !== ""
+    : canApply &&
+      pendingRange?.from &&
+      pendingRange?.to &&
+      (format(pendingRange.from, "yyyy-MM-dd") !== startDate ||
+        format(pendingRange.to, "yyyy-MM-dd") !== endDate);
 
   const handlePresetClick = (preset: DateRangePreset) => {
     const range = preset.getValue();
+    if (range.start === "" && range.end === "") {
+      // "All Time" — clear calendar selection
+      setIsAllTime(true);
+      setPendingRange(undefined);
+      return;
+    }
+    setIsAllTime(false);
     const newFrom = new Date(range.start);
     setPendingRange({ from: newFrom, to: new Date(range.end) });
     // Navigate calendar to the start date's month
@@ -295,10 +318,15 @@ export function DateRangePicker({
   };
 
   const handleApply = () => {
+    if (isAllTime) {
+      onDateRangeChange("", "");
+      setOpen(false);
+      return;
+    }
     if (pendingRange?.from && pendingRange?.to) {
       onDateRangeChange(
         format(pendingRange.from, "yyyy-MM-dd"),
-        format(pendingRange.to, "yyyy-MM-dd")
+        format(pendingRange.to, "yyyy-MM-dd"),
       );
       setOpen(false);
     }
@@ -311,7 +339,7 @@ export function DateRangePicker({
           variant="outline"
           className={cn(
             "justify-start text-left font-medium gap-2 neo-card border-white/10 bg-slate-900/50 hover:bg-slate-800/50 text-slate-200 h-8 px-3",
-            className
+            className,
           )}
         >
           <CalendarRange className="h-4 w-4 text-cyan-400" />
@@ -336,7 +364,7 @@ export function DateRangePicker({
                     "flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all text-center",
                     isPendingPreset(preset)
                       ? "bg-cyan-500/20 text-cyan-400"
-                      : "text-slate-400 hover:bg-white/5 hover:text-white"
+                      : "text-slate-400 hover:bg-white/5 hover:text-white",
                   )}
                 >
                   {preset.label}
@@ -353,7 +381,7 @@ export function DateRangePicker({
                     "flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all text-center",
                     isPendingPreset(preset)
                       ? "bg-cyan-500/20 text-cyan-400"
-                      : "text-slate-400 hover:bg-white/5 hover:text-white"
+                      : "text-slate-400 hover:bg-white/5 hover:text-white",
                   )}
                 >
                   {preset.label}
@@ -370,7 +398,7 @@ export function DateRangePicker({
                     "flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all text-center",
                     isPendingPreset(preset)
                       ? "bg-cyan-500/20 text-cyan-400"
-                      : "text-slate-400 hover:bg-white/5 hover:text-white"
+                      : "text-slate-400 hover:bg-white/5 hover:text-white",
                   )}
                 >
                   {preset.label}
@@ -385,7 +413,7 @@ export function DateRangePicker({
                   "w-full px-2 py-1.5 rounded text-xs font-medium transition-all text-center",
                   isPendingPreset(presets[6])
                     ? "bg-cyan-500/20 text-cyan-400"
-                    : "text-slate-400 hover:bg-white/5 hover:text-white"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white",
                 )}
               >
                 {presets[6].label}
@@ -401,12 +429,26 @@ export function DateRangePicker({
                     "flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all text-center",
                     isPendingPreset(preset)
                       ? "bg-cyan-500/20 text-cyan-400"
-                      : "text-slate-400 hover:bg-white/5 hover:text-white"
+                      : "text-slate-400 hover:bg-white/5 hover:text-white",
                   )}
                 >
                   {preset.label}
                 </button>
               ))}
+            </div>
+            {/* All Time */}
+            <div>
+              <button
+                onClick={() => handlePresetClick(presets[9])}
+                className={cn(
+                  "w-full px-2 py-1.5 rounded text-xs font-medium transition-all text-center",
+                  isPendingPreset(presets[9])
+                    ? "bg-cyan-500/20 text-cyan-400"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white",
+                )}
+              >
+                {presets[9].label}
+              </button>
             </div>
           </div>
 
@@ -483,7 +525,7 @@ export function DateRangePicker({
                           !isEnd &&
                           !isMiddle &&
                           isCurrentMonth &&
-                          "hover:bg-white/10 rounded-md"
+                          "hover:bg-white/10 rounded-md",
                       )}
                       onMouseDown={() => handleDayMouseDown(day)}
                       onMouseEnter={() => handleDayMouseEnter(day)}
@@ -492,7 +534,7 @@ export function DateRangePicker({
                         const touch = e.touches[0];
                         const element = document.elementFromPoint(
                           touch.clientX,
-                          touch.clientY
+                          touch.clientY,
                         );
                         const dateAttr = element?.getAttribute("data-date");
                         if (dateAttr) {
@@ -511,11 +553,13 @@ export function DateRangePicker({
             {/* Footer */}
             <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between">
               <span className="text-xs text-slate-500">
-                {pendingRange?.from && pendingRange?.to
-                  ? `${format(pendingRange.from, "MMM d")} → ${format(pendingRange.to, "MMM d")}`
-                  : pendingRange?.from
-                    ? `${format(pendingRange.from, "MMM d")} → ?`
-                    : "Select dates"}
+                {isAllTime
+                  ? "All Time"
+                  : pendingRange?.from && pendingRange?.to
+                    ? `${format(pendingRange.from, "MMM d")} → ${format(pendingRange.to, "MMM d")}`
+                    : pendingRange?.from
+                      ? `${format(pendingRange.from, "MMM d")} → ?`
+                      : "Select dates"}
               </span>
               <Button
                 size="sm"
@@ -525,7 +569,7 @@ export function DateRangePicker({
                   "h-7 text-xs gap-1",
                   hasChanges
                     ? "bg-cyan-500 hover:bg-cyan-600 text-white"
-                    : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                    : "bg-slate-700 text-slate-300 hover:bg-slate-600",
                 )}
               >
                 <Check className="w-3 h-3" />

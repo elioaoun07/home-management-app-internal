@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const start = searchParams.get("start") || undefined;
     const end = searchParams.get("end") || undefined;
-    const limit = parseInt(searchParams.get("limit") || "200");
+    const limit = parseInt(searchParams.get("limit") || "10000");
 
     const service = new SupabaseTransactionService(supabase);
     const transactions = await service.getTransactions(user.id, {
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     console.error("Failed to fetch transactions:", error);
     return NextResponse.json(
       { error: "Failed to fetch transactions" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
