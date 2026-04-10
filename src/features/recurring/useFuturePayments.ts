@@ -51,6 +51,7 @@ export function useConfirmFuturePayment() {
       account_id,
       category_id,
       subcategory_id,
+      lbp_change_received,
     }: {
       id: string;
       amount?: number;
@@ -59,6 +60,7 @@ export function useConfirmFuturePayment() {
       account_id?: string;
       category_id?: string | null;
       subcategory_id?: string | null;
+      lbp_change_received?: number | null;
     }) => {
       const res = await safeFetch(`/api/future-payments/${id}/confirm`, {
         method: "POST",
@@ -70,6 +72,7 @@ export function useConfirmFuturePayment() {
           account_id,
           category_id,
           subcategory_id,
+          lbp_change_received,
         }),
       });
       if (!res.ok) throw new Error("Failed to confirm future payment");

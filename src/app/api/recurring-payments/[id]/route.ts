@@ -25,6 +25,7 @@ export async function PATCH(
       "name",
       "amount",
       "description",
+      "lbp_change_received",
       "category_id",
       "subcategory_id",
       "recurrence_type",
@@ -188,6 +189,10 @@ export async function POST(
       body.subcategory_id !== undefined
         ? body.subcategory_id
         : recurringPayment.subcategory_id;
+    const finalLbpChange =
+      body.lbp_change_received !== undefined
+        ? body.lbp_change_received
+        : recurringPayment.lbp_change_received;
 
     // Create the transaction under the CURRENT user (whoever confirms it)
     const { data: transaction, error: transactionError } = await supabase
@@ -200,6 +205,7 @@ export async function POST(
         amount: finalAmount,
         description: finalDescription || recurringPayment.name,
         date: finalDate,
+        lbp_change_received: finalLbpChange ?? null,
       })
       .select()
       .single();
@@ -219,7 +225,10 @@ export async function POST(
       .eq("id", finalAccountId)
       .maybeSingle();
 
-    const accountType = ((accountData?.type) || "expense") as "expense" | "income" | "saving";
+    const accountType = (accountData?.type || "expense") as
+      | "expense"
+      | "income"
+      | "saving";
     const delta = getBalanceDelta(finalAmount, accountType, false, "create");
     await adjustAccountBalance(finalAccountId, delta, "transaction", {
       userId: user.id,

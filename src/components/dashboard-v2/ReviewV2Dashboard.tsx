@@ -14,7 +14,7 @@ import AvgTransactionByCategoryWidget from "@/components/dashboard-v2/widgets/Av
 import BudgetForecastWidget from "@/components/dashboard-v2/widgets/BudgetForecastWidget";
 import BudgetVsActualWidget from "@/components/dashboard-v2/widgets/BudgetVsActualWidget";
 import CashFlowWaterfallWidget from "@/components/dashboard-v2/widgets/CashFlowWaterfallWidget";
-import CategoryAnalysisWidget from "@/components/dashboard-v2/widgets/CategoryAnalysisWidget";
+import CategoriesV2TabContent from "@/components/dashboard-v2/widgets/CategoriesV2TabContent";
 import CategoryComparisonChart from "@/components/dashboard-v2/widgets/CategoryComparisonChart";
 import CategoryDonutWidget from "@/components/dashboard-v2/widgets/CategoryDonutWidget";
 import CategoryForecastWidget from "@/components/dashboard-v2/widgets/CategoryForecastWidget";
@@ -153,6 +153,15 @@ export default function ReviewV2Dashboard({
             const today = formatDate(now);
             onDateRangeChange(jan1, today);
           }
+        } else if (tab === "categories") {
+          // Fixed 12-month window for Categories V2
+          const now = new Date();
+          const twelveMonthsAgo = new Date(
+            now.getFullYear(),
+            now.getMonth() - 11,
+            1,
+          );
+          onDateRangeChange(formatDate(twelveMonthsAgo), formatDate(now));
         } else {
           const defaultRange = getDefaultDateRange(monthStartDay ?? 1);
           onDateRangeChange(defaultRange.start, defaultRange.end);
@@ -862,9 +871,10 @@ export default function ReviewV2Dashboard({
             onCategoryDetailClick={handleCategoryDetailClick}
           />
 
-          {/* Category comparison across months (area chart) */}
+          {/* Category comparison across months (grouped bar chart) */}
           <CategoryComparisonChart
             months={periodMonths ?? analytics?.months}
+            transactions={filteredExpenseTransactions as any}
             activeCategories={activeCategoryList}
             onCategoryClick={handleCategoryClick}
           />
@@ -930,17 +940,12 @@ export default function ReviewV2Dashboard({
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TAB 3 — CATEGORIES
-          "Deep category & subcategory analysis with distribution patterns"
+          TAB 3 — CATEGORIES V2
+          "12-month per-category bar charts with subcategory toggle"
           ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "categories" && (
         <div className="space-y-4">
-          {filterBanner}
-          <CategoryAnalysisWidget
-            transactions={filteredExpenseTransactions as any}
-            startDate={startDate}
-            endDate={endDate}
-          />
+          <CategoriesV2TabContent transactions={expenseTransactions as any} />
         </div>
       )}
 

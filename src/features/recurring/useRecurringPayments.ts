@@ -16,6 +16,7 @@ export type RecurringPayment = {
   name: string;
   amount: number;
   description: string | null;
+  lbp_change_received: number | null;
   recurrence_type: "daily" | "weekly" | "monthly" | "yearly";
   recurrence_day: number | null;
   next_due_date: string;
@@ -77,6 +78,7 @@ export function useCreateRecurringPayment() {
       name: string;
       amount: number;
       description?: string | null;
+      lbp_change_received?: number | null;
       recurrence_type: "daily" | "weekly" | "monthly" | "yearly";
       recurrence_day?: number | null;
       next_due_date: string;
@@ -135,6 +137,7 @@ export function useUpdateRecurringPayment() {
       name?: string;
       amount?: number;
       description?: string | null;
+      lbp_change_received?: number | null;
       category_id?: string | null;
       subcategory_id?: string | null;
       recurrence_type?: "daily" | "weekly" | "monthly" | "yearly";
@@ -177,6 +180,7 @@ export function useUpdateRecurringPayment() {
                   name: prev.name,
                   amount: prev.amount,
                   description: prev.description,
+                  lbp_change_received: prev.lbp_change_received,
                   category_id: prev.category_id,
                   subcategory_id: prev.subcategory_id,
                   recurrence_type: prev.recurrence_type,
@@ -249,6 +253,7 @@ export function useDeleteRecurringPayment() {
                   name: deleted.name,
                   amount: deleted.amount,
                   description: deleted.description,
+                  lbp_change_received: deleted.lbp_change_received,
                   recurrence_type: deleted.recurrence_type,
                   recurrence_day: deleted.recurrence_day,
                   next_due_date: deleted.next_due_date,
@@ -294,6 +299,7 @@ export function useConfirmPayment() {
       account_id,
       category_id,
       subcategory_id,
+      lbp_change_received,
     }: {
       id: string;
       amount?: number;
@@ -302,6 +308,7 @@ export function useConfirmPayment() {
       account_id?: string;
       category_id?: string | null;
       subcategory_id?: string | null;
+      lbp_change_received?: number | null;
     }) => {
       // Check real connectivity (not just navigator.onLine which can lie after WiFi toggle)
       const offline = !isReallyOnline();
@@ -319,6 +326,7 @@ export function useConfirmPayment() {
             account_id,
             category_id,
             subcategory_id,
+            lbp_change_received,
           },
           metadata: {
             label: `Confirm payment${description ? ` "${description}"` : ""}`,
@@ -336,6 +344,7 @@ export function useConfirmPayment() {
           account_id,
           category_id,
           subcategory_id,
+          lbp_change_received,
         }),
       });
       if (!res.ok) throw new Error("Failed to confirm payment");

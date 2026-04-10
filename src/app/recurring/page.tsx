@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
+import { useLbpSettings } from "@/features/preferences/useLbpSettings";
 import {
   type FuturePayment,
   useConfirmFuturePayment,
@@ -93,6 +94,13 @@ export default function RecurringPage() {
     useState<RecurringPayment | null>(null);
   const [confirmingFuture, setConfirmingFuture] =
     useState<FuturePayment | null>(null);
+
+  // LBP settings
+  const { lbpRate, calculateActualValue } = useLbpSettings();
+  const [lbpChangeInput, setLbpChangeInput] = useState("");
+  const [lbpExpanded, setLbpExpanded] = useState(false);
+  const [confirmLbpInput, setConfirmLbpInput] = useState("");
+  const [confirmLbpExpanded, setConfirmLbpExpanded] = useState(false);
 
   const createMutation = useCreateRecurringPayment();
   const updateMutation = useUpdateRecurringPayment();
@@ -214,6 +222,12 @@ export default function RecurringPage() {
         payment_method: editingPayment.payment_method || "manual",
         is_private: editingPayment.is_private ?? false,
       });
+      setLbpChangeInput(
+        editingPayment.lbp_change_received
+          ? editingPayment.lbp_change_received.toString()
+          : "",
+      );
+      setLbpExpanded(!!editingPayment.lbp_change_received);
       setShowAddDrawer(true);
     }
   }, [editingPayment]);
@@ -240,6 +254,11 @@ export default function RecurringPage() {
         category_id: payment.category_id || "",
         subcategory_id: payment.subcategory_id || "",
       };
+
+      // Pre-populate LBP from the recurring payment if available
+      const lbpVal = (payment as any).lbp_change_received;
+      setConfirmLbpInput(lbpVal ? lbpVal.toString() : "");
+      setConfirmLbpExpanded(!!lbpVal);
 
       if (isOwner) {
         setConfirmFormData(base);
@@ -309,6 +328,8 @@ export default function RecurringPage() {
       payment_method: "manual",
       is_private: false,
     });
+    setLbpChangeInput("");
+    setLbpExpanded(false);
   };
 
   const handleSubmit = async () => {
@@ -322,12 +343,16 @@ export default function RecurringPage() {
       return;
     }
     try {
+      const parsedLbpChange = lbpChangeInput
+        ? parseFloat(lbpChangeInput)
+        : null;
       if (editingPayment) {
         await updateMutation.mutateAsync({
           id: editingPayment.id,
           name: formData.name,
           amount: parseFloat(formData.amount),
           description: formData.description || null,
+          lbp_change_received: parsedLbpChange,
           category_id: formData.category_id || null,
           subcategory_id: formData.subcategory_id || null,
           recurrence_type: formData.recurrence_type,
@@ -346,6 +371,7 @@ export default function RecurringPage() {
           name: formData.name,
           amount: parseFloat(formData.amount),
           description: formData.description || null,
+          lbp_change_received: parsedLbpChange,
           recurrence_type: formData.recurrence_type,
           recurrence_day: formData.recurrence_day
             ? parseInt(formData.recurrence_day)
@@ -375,6 +401,9 @@ export default function RecurringPage() {
   const handleConfirmRecurring = async () => {
     if (!confirmingRecurring) return;
     try {
+      const parsedConfirmLbp = confirmLbpInput
+        ? parseFloat(confirmLbpInput)
+        : null;
       const result = await confirmRecurringMutation.mutateAsync({
         id: confirmingRecurring.id,
         amount: parseFloat(confirmFormData.amount),
@@ -383,6 +412,7 @@ export default function RecurringPage() {
         account_id: confirmFormData.account_id || undefined,
         category_id: confirmFormData.category_id || null,
         subcategory_id: confirmFormData.subcategory_id || null,
+        lbp_change_received: parsedConfirmLbp,
       });
       const transactionId: string | undefined =
         result?.transaction?.id ?? result?.id;
@@ -420,6 +450,9 @@ export default function RecurringPage() {
   const handleConfirmFuture = async () => {
     if (!confirmingFuture) return;
     try {
+      const parsedConfirmLbp = confirmLbpInput
+        ? parseFloat(confirmLbpInput)
+        : null;
       const result = await confirmFutureMutation.mutateAsync({
         id: confirmingFuture.id,
         amount: parseFloat(confirmFormData.amount),
@@ -428,6 +461,7 @@ export default function RecurringPage() {
         account_id: confirmFormData.account_id || undefined,
         category_id: confirmFormData.category_id || null,
         subcategory_id: confirmFormData.subcategory_id || null,
+        lbp_change_received: parsedConfirmLbp,
       });
       const transactionId: string | undefined = result?.transaction?.id;
       toast.success("Future payment confirmed!", {
@@ -857,6 +891,91 @@ export default function RecurringPage() {
                     />
                   </div>
 
+                  {/* LBP Change */}
+                  {lbpRate && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Label className={`text-sm ${tc.textMuted}`}>
+                          LBP Change
+                        </Label>
+                        {!lbpExpanded && (
+                          <button
+                            type="button"
+                            onClick={() => setLbpExpanded(true)}
+                            className={cn(
+                              "h-6 px-2 rounded-full text-[10px] font-bold border transition-all active:scale-95",
+                              lbpChangeInput && parseFloat(lbpChangeInput) > 0
+                                ? `${tc.bgActive} ${tc.borderActive} ${tc.text}`
+                                : `${tc.bgSurface} ${tc.border} ${tc.textMuted}`,
+                            )}
+                          >
+                            LBP
+                          </button>
+                        )}
+                      </div>
+                      {lbpExpanded && (
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={cn(
+                              "flex-1 flex items-center gap-1 h-10 px-3 rounded-md border",
+                              tc.inputBg,
+                              tc.border,
+                            )}
+                          >
+                            <span
+                              className={`text-xs ${tc.textFaint} shrink-0`}
+                            >
+                              LBP
+                            </span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="000"
+                              value={lbpChangeInput}
+                              onChange={(e) =>
+                                setLbpChangeInput(e.target.value)
+                              }
+                              className="flex-1 bg-transparent border-none outline-none text-right text-sm text-white placeholder:opacity-30"
+                            />
+                            {lbpChangeInput && (
+                              <span
+                                className={`text-xs ${tc.textFaint} shrink-0`}
+                              >
+                                ,000
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLbpExpanded(false);
+                              setLbpChangeInput("");
+                            }}
+                            className={`p-2 rounded-md ${tc.bgSurface} ${tc.bgHover}`}
+                          >
+                            <XIcon className={`w-4 h-4 ${tc.textMuted}`} />
+                          </button>
+                        </div>
+                      )}
+                      {lbpExpanded &&
+                        formData.amount &&
+                        parseFloat(formData.amount) > 0 &&
+                        lbpChangeInput &&
+                        parseFloat(lbpChangeInput) > 0 && (
+                          <p className={`text-xs mt-1 ${tc.textFaint}`}>
+                            ≈{" "}
+                            <span className={`font-semibold ${tc.text}`}>
+                              $
+                              {calculateActualValue(
+                                parseFloat(formData.amount),
+                                parseFloat(lbpChangeInput),
+                              )?.toFixed(2) ?? "—"}
+                            </span>
+                          </p>
+                        )}
+                    </div>
+                  )}
+
                   {/* Payment Method Toggle */}
                   <div>
                     <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
@@ -1168,6 +1287,12 @@ export default function RecurringPage() {
               setConfirmingRecurring(null);
               setConfirmingFuture(null);
             }}
+            lbpRate={lbpRate}
+            calculateActualValue={calculateActualValue}
+            lbpChangeInput={confirmLbpInput}
+            setLbpChangeInput={setConfirmLbpInput}
+            lbpExpanded={confirmLbpExpanded}
+            setLbpExpanded={setConfirmLbpExpanded}
           />
         )}
       </div>
@@ -1221,17 +1346,21 @@ function RecurringSection({
           payment.recurrence_day ?? new Date(payment.next_due_date).getDate();
         const isManual = (payment.payment_method ?? "manual") === "manual";
         const isOwner = !currentUserId || payment.user_id === currentUserId;
-        // Own auto subscriptions: info-only, no overdue styling
-        // Partner auto payments (e.g. bills): show overdue + confirm
-        const isAutoOwn = isAutoSection && isOwner;
-        const isAutoPartner = isAutoSection && !isOwner;
+        // Auto subscriptions: toggle on/off (no overdue styling)
+        // Auto bills: confirm as transaction (show overdue + confirm)
+        const catSlug = payment.category?.slug?.toLowerCase() ?? "";
+        const catName = payment.category?.name?.toLowerCase() ?? "";
+        const isSubscriptionCategory =
+          catSlug === "subscription" || catName === "subscription";
+        const isAutoSubscription = isAutoSection && isSubscriptionCategory;
+        const isAutoBills = isAutoSection && !isAutoSubscription;
 
         return (
           <div
             key={payment.id}
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all border",
-              isAutoOwn
+              isAutoSubscription
                 ? "border-transparent hover:bg-white/5"
                 : dueDateInfo.isOverdue
                   ? "border-red-500/40 bg-red-500/5"
@@ -1244,7 +1373,7 @@ function RecurringSection({
             <span
               className={cn(
                 "w-8 text-center text-sm font-bold tabular-nums",
-                isAutoOwn
+                isAutoSubscription
                   ? "text-white/60"
                   : dueDateInfo.isOverdue
                     ? "text-red-400"
@@ -1262,7 +1391,7 @@ function RecurringSection({
               onClick={() =>
                 isManual
                   ? onConfirm(payment)
-                  : isAutoPartner
+                  : isAutoBills
                     ? onConfirm(payment)
                     : isOwner
                       ? onEdit(payment)
@@ -1293,7 +1422,7 @@ function RecurringSection({
             <span
               className={cn(
                 "w-16 text-right text-sm font-semibold tabular-nums",
-                isAutoOwn
+                isAutoSubscription
                   ? tc.textHighlight
                   : dueDateInfo.isOverdue
                     ? "text-red-400"
@@ -1328,7 +1457,7 @@ function RecurringSection({
                     )}
                   />
                 </button>
-              ) : isAutoOwn ? (
+              ) : isAutoSubscription ? (
                 <button
                   onClick={() => onToggle?.(payment)}
                   className={cn(
@@ -1338,7 +1467,7 @@ function RecurringSection({
                 >
                   <Power className={cn("w-3.5 h-3.5 text-blue-400/60")} />
                 </button>
-              ) : isAutoPartner ? (
+              ) : isAutoBills ? (
                 <button
                   onClick={() => onConfirm(payment)}
                   className={cn(
@@ -1537,6 +1666,12 @@ function ConfirmDrawer({
   isPending,
   onConfirm,
   onClose,
+  lbpRate,
+  calculateActualValue,
+  lbpChangeInput,
+  setLbpChangeInput,
+  lbpExpanded,
+  setLbpExpanded,
 }: {
   title: string;
   tc: ReturnType<typeof useThemeClasses>;
@@ -1564,6 +1699,15 @@ function ConfirmDrawer({
   isPending: boolean;
   onConfirm: () => void;
   onClose: () => void;
+  lbpRate: number | null;
+  calculateActualValue: (
+    amountPaid: number,
+    lbpChangeReceived: number | null,
+  ) => number | null;
+  lbpChangeInput: string;
+  setLbpChangeInput: (v: string) => void;
+  lbpExpanded: boolean;
+  setLbpExpanded: (v: boolean) => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end">
@@ -1603,6 +1747,86 @@ function ConfirmDrawer({
                 className={`${tc.inputBg} text-white`}
               />
             </div>
+
+            {/* LBP Change */}
+            {lbpRate && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Label className={`text-sm ${tc.textMuted}`}>
+                    LBP Change
+                  </Label>
+                  {!lbpExpanded && (
+                    <button
+                      type="button"
+                      onClick={() => setLbpExpanded(true)}
+                      className={cn(
+                        "h-6 px-2 rounded-full text-[10px] font-bold border transition-all active:scale-95",
+                        lbpChangeInput && parseFloat(lbpChangeInput) > 0
+                          ? `${tc.bgActive} ${tc.borderActive} ${tc.text}`
+                          : `${tc.bgSurface} ${tc.border} ${tc.textMuted}`,
+                      )}
+                    >
+                      LBP
+                    </button>
+                  )}
+                </div>
+                {lbpExpanded && (
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={cn(
+                        "flex-1 flex items-center gap-1 h-10 px-3 rounded-md border",
+                        tc.inputBg,
+                        tc.border,
+                      )}
+                    >
+                      <span className={`text-xs ${tc.textFaint} shrink-0`}>
+                        LBP
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="000"
+                        value={lbpChangeInput}
+                        onChange={(e) => setLbpChangeInput(e.target.value)}
+                        className="flex-1 bg-transparent border-none outline-none text-right text-sm text-white placeholder:opacity-30"
+                      />
+                      {lbpChangeInput && (
+                        <span className={`text-xs ${tc.textFaint} shrink-0`}>
+                          ,000
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLbpExpanded(false);
+                        setLbpChangeInput("");
+                      }}
+                      className={`p-2 rounded-md ${tc.bgSurface} ${tc.bgHover}`}
+                    >
+                      <XIcon className={`w-4 h-4 ${tc.textMuted}`} />
+                    </button>
+                  </div>
+                )}
+                {lbpExpanded &&
+                  formData.amount &&
+                  parseFloat(formData.amount) > 0 &&
+                  lbpChangeInput &&
+                  parseFloat(lbpChangeInput) > 0 && (
+                    <p className={`text-xs mt-1 ${tc.textFaint}`}>
+                      ≈{" "}
+                      <span className={`font-semibold ${tc.text}`}>
+                        $
+                        {calculateActualValue(
+                          parseFloat(formData.amount),
+                          parseFloat(lbpChangeInput),
+                        )?.toFixed(2) ?? "—"}
+                      </span>
+                    </p>
+                  )}
+              </div>
+            )}
+
             <div>
               <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                 Account

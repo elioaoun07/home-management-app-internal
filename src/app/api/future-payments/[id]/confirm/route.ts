@@ -75,6 +75,10 @@ export async function POST(
       body.subcategory_id !== undefined
         ? body.subcategory_id
         : draft.subcategory_id;
+    const finalLbpChange =
+      body.lbp_change_received !== undefined
+        ? body.lbp_change_received
+        : draft.lbp_change_received;
 
     // Convert to real transaction: set is_draft=false, clear scheduled_date
     // The confirming user becomes the transaction owner
@@ -89,6 +93,7 @@ export async function POST(
         account_id: finalAccountId,
         category_id: finalCategoryId,
         subcategory_id: finalSubcategoryId,
+        lbp_change_received: finalLbpChange ?? null,
         user_id: user.id, // Transaction belongs to whoever confirms it
       })
       .eq("id", id)

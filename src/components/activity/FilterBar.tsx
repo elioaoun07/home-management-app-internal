@@ -203,6 +203,7 @@ function getDatePresets() {
       start: yyyyMmDd(lastMonthStart),
       end: yyyyMmDd(lastMonthEnd),
     },
+    { label: "All Time", start: "", end: "" },
   ];
 }
 

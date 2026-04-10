@@ -3,304 +3,502 @@
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
 import { cn } from "@/lib/utils";
+import type { TransactionWithAccount } from "@/lib/utils/incomeExpense";
+import { format, parseISO } from "date-fns";
+import { ChevronDown, Layers, LayoutGrid } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
-const CHART_PALETTE = [
-  "#22d3ee",
-  "#a78bfa",
-  "#34d399",
-  "#f472b6",
-  "#fbbf24",
-  "#60a5fa",
-  "#fb923c",
-  "#e879f9",
+// ── Palette ───────────────────────────────────────────────────────────────────
+const PALETTE = [
+  "#22d3ee", // cyan
+  "#a78bfa", // violet
+  "#34d399", // emerald
+  "#f472b6", // pink
+  "#fbbf24", // amber
+  "#60a5fa", // blue
+  "#fb923c", // orange
+  "#e879f9", // fuchsia
+  "#4ade80", // green
+  "#f43f5e", // rose
 ];
 
-type BarData = {
-  month: string;
-  categories: { name: string; amount: number; color: string }[];
-};
+const OTHER_COLOR = "#64748b";
+
+// ── Config ────────────────────────────────────────────────────────────────────
+type Mode = "categories" | "subcategories";
+type TopN = 5 | 8 | 10 | 999;
+const TOP_N_OPTIONS: { value: TopN; label: string }[] = [
+  { value: 5, label: "Top 5" },
+  { value: 8, label: "Top 8" },
+  { value: 10, label: "Top 10" },
+  { value: 999, label: "All" },
+];
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+type ChartRow = Record<string, string | number>;
 
 type Props = {
   months: MonthlyAnalytics[] | undefined;
+  transactions?: TransactionWithAccount[];
   activeCategories?: string[];
   onCategoryClick?: (category: string) => void;
 };
 
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function CategoryComparisonChart({
   months,
+  transactions,
   activeCategories = [],
   onCategoryClick,
 }: Props) {
-  const [hoveredCat, setHoveredCat] = useState<string | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
-  const [tooltipPos, setTooltipPos] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<Mode>("categories");
+  const [topN, setTopN] = useState<TopN>(8);
+  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
+  const [selectedParent, setSelectedParent] = useState<string | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const { barData, categoryColors, maxValue, categories } = useMemo(() => {
-    if (!months || months.length === 0)
-      return {
-        barData: [],
-        categoryColors: {} as Record<string, string>,
-        maxValue: 0,
-        categories: [] as string[],
-      };
-
+  // ── Derive available parent categories (for subcategory dropdown) ──────────
+  const parentCategories = useMemo(() => {
+    if (!months) return [];
     const totals = new Map<string, number>();
     for (const m of months) {
       for (const c of m.categoryBreakdown) {
         totals.set(c.name, (totals.get(c.name) || 0) + c.amount);
       }
     }
-
-    const topCategories = Array.from(totals.entries())
+    return Array.from(totals.entries())
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
       .map(([name]) => name);
-
-    const colors: Record<string, string> = {};
-    topCategories.forEach((name, i) => {
-      colors[name] = CHART_PALETTE[i % CHART_PALETTE.length];
-    });
-
-    let peak = 0;
-    const bars: BarData[] = months.map((m) => {
-      const cats = topCategories.map((catName) => {
-        const cat = m.categoryBreakdown.find((c) => c.name === catName);
-        const amount = cat?.amount || 0;
-        if (amount > peak) peak = amount;
-        return { name: catName, amount, color: colors[catName] };
-      });
-      return { month: formatMonth(m.month), categories: cats };
-    });
-
-    return {
-      barData: bars,
-      categoryColors: colors,
-      maxValue: peak,
-      categories: topCategories,
-    };
   }, [months]);
 
-  const handleBarHover = useCallback(
-    (e: React.MouseEvent, month: string, cat: string) => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      setTooltipPos({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top - 10,
-      });
-      setHoveredCat(cat);
-      setSelectedMonth(month);
-    },
-    [],
+  // Auto-select first active category or first parent when switching to subcategory mode
+  const effectiveParent = useMemo(() => {
+    if (mode !== "subcategories") return null;
+    if (selectedParent) return selectedParent;
+    if (activeCategories.length > 0) return activeCategories[0];
+    return parentCategories[0] ?? null;
+  }, [mode, selectedParent, activeCategories, parentCategories]);
+
+  // ── Categories mode: build chart data from months ──────────────────────────
+  const categoriesData = useMemo(() => {
+    if (!months || months.length === 0 || mode !== "categories") {
+      return {
+        chartData: [] as ChartRow[],
+        series: [] as string[],
+        colorMap: {} as Record<string, string>,
+      };
+    }
+
+    // Aggregate totals across all months
+    const totals = new Map<string, number>();
+    const colorFromData = new Map<string, string>();
+    for (const m of months) {
+      for (const c of m.categoryBreakdown) {
+        totals.set(c.name, (totals.get(c.name) || 0) + c.amount);
+        if (c.color && !colorFromData.has(c.name))
+          colorFromData.set(c.name, c.color);
+      }
+    }
+
+    // Sort by total, apply topN
+    const sorted = Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
+    const limit = topN === 999 ? sorted.length : topN;
+    const topNames = sorted.slice(0, limit).map(([n]) => n);
+    const hasOther = sorted.length > limit;
+
+    // Assign colors
+    const colorMap: Record<string, string> = {};
+    topNames.forEach((name, i) => {
+      colorMap[name] = colorFromData.get(name) || PALETTE[i % PALETTE.length];
+    });
+    if (hasOther) colorMap["Other"] = OTHER_COLOR;
+
+    const series = hasOther ? [...topNames, "Other"] : topNames;
+
+    // Build per-month rows
+    const chartData: ChartRow[] = months.map((m) => {
+      const row: ChartRow = { month: fmtMonth(m.month) };
+      const breakdown = new Map(
+        m.categoryBreakdown.map((c) => [c.name, c.amount]),
+      );
+
+      let otherSum = 0;
+      for (const [name, amount] of breakdown) {
+        if (topNames.includes(name)) {
+          row[name] = amount;
+        } else {
+          otherSum += amount;
+        }
+      }
+      for (const name of topNames) {
+        if (!(name in row)) row[name] = 0;
+      }
+      if (hasOther) row["Other"] = otherSum;
+
+      return row;
+    });
+
+    return { chartData, series, colorMap };
+  }, [months, mode, topN]);
+
+  // ── Subcategories mode: build chart data from transactions ─────────────────
+  const subcategoriesData = useMemo(() => {
+    if (mode !== "subcategories" || !transactions || !effectiveParent) {
+      return {
+        chartData: [] as ChartRow[],
+        series: [] as string[],
+        colorMap: {} as Record<string, string>,
+      };
+    }
+
+    const filtered = transactions.filter(
+      (t) => t.category === effectiveParent && Math.abs(t.amount) > 0,
+    );
+
+    if (filtered.length === 0) {
+      return {
+        chartData: [] as ChartRow[],
+        series: [] as string[],
+        colorMap: {} as Record<string, string>,
+      };
+    }
+
+    // Group by month + subcategory
+    const monthMap = new Map<string, Map<string, number>>();
+    const subTotals = new Map<string, number>();
+
+    for (const t of filtered) {
+      const ym = t.date.slice(0, 7);
+      const sub = t.subcategory || "(No subcategory)";
+      const amount = Math.abs(t.amount);
+
+      if (!monthMap.has(ym)) monthMap.set(ym, new Map());
+      const mMap = monthMap.get(ym)!;
+      mMap.set(sub, (mMap.get(sub) || 0) + amount);
+      subTotals.set(sub, (subTotals.get(sub) || 0) + amount);
+    }
+
+    // Sort subcategories by total, apply topN
+    const sorted = Array.from(subTotals.entries()).sort((a, b) => b[1] - a[1]);
+    const limit = topN === 999 ? sorted.length : topN;
+    const topSubs = sorted.slice(0, limit).map(([n]) => n);
+    const hasOther = sorted.length > limit;
+
+    const colorMap: Record<string, string> = {};
+    topSubs.forEach((name, i) => {
+      colorMap[name] = PALETTE[i % PALETTE.length];
+    });
+    if (hasOther) colorMap["Other"] = OTHER_COLOR;
+
+    const series = hasOther ? [...topSubs, "Other"] : topSubs;
+
+    const sortedMonths = Array.from(monthMap.keys()).sort();
+    const chartData: ChartRow[] = sortedMonths.map((ym) => {
+      const mMap = monthMap.get(ym)!;
+      const row: ChartRow = { month: fmtMonth(ym) };
+
+      let otherSum = 0;
+      for (const [sub, amount] of mMap) {
+        if (topSubs.includes(sub)) {
+          row[sub] = amount;
+        } else {
+          otherSum += amount;
+        }
+      }
+      for (const sub of topSubs) {
+        if (!(sub in row)) row[sub] = 0;
+      }
+      if (hasOther) row["Other"] = otherSum;
+
+      return row;
+    });
+
+    return { chartData, series, colorMap };
+  }, [mode, transactions, effectiveParent, topN]);
+
+  // ── Active data ────────────────────────────────────────────────────────────
+  const { chartData, series, colorMap } =
+    mode === "categories" ? categoriesData : subcategoriesData;
+
+  const visibleSeries = useMemo(
+    () => series.filter((s) => !hiddenSeries.has(s)),
+    [series, hiddenSeries],
   );
 
-  const handleBarLeave = useCallback(() => {
-    setTooltipPos(null);
-    setHoveredCat(null);
-    setSelectedMonth(null);
+  // ── Legend toggle ──────────────────────────────────────────────────────────
+  const toggleSeries = useCallback((name: string) => {
+    setHiddenSeries((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
   }, []);
 
-  if (!barData.length || categories.length === 0) {
+  // ── Mode switch ────────────────────────────────────────────────────────────
+  const switchMode = useCallback(
+    (m: Mode) => {
+      setMode(m);
+      setHiddenSeries(new Set());
+      if (m === "subcategories" && !selectedParent) {
+        setSelectedParent(activeCategories[0] || parentCategories[0] || null);
+      }
+    },
+    [activeCategories, parentCategories, selectedParent],
+  );
+
+  // ── Empty state ────────────────────────────────────────────────────────────
+  if (!chartData.length || series.length === 0) {
     return (
-      <WidgetCard title="Category Trends">
+      <WidgetCard title="Category Comparison">
         <p className="text-white/40 text-xs text-center py-8">
-          No category data yet
+          {mode === "subcategories" && effectiveParent
+            ? `No subcategory data for "${effectiveParent}"`
+            : "No category data yet"}
         </p>
       </WidgetCard>
     );
   }
 
-  // Y-axis ticks
-  const yTicks = getYTicks(maxValue);
-  const chartMax = yTicks[yTicks.length - 1] || maxValue || 1;
-
-  const tooltipData =
-    selectedMonth && hoveredCat
-      ? barData
-          .find((b) => b.month === selectedMonth)
-          ?.categories.find((c) => c.name === hoveredCat)
-      : null;
+  // ── Compute dynamic bar sizing ─────────────────────────────────────────────
+  const monthCount = chartData.length;
+  const barCount = visibleSeries.length;
+  const minGroupWidth = Math.max(80, barCount * 16 + 24);
+  const chartMinWidth = monthCount * minGroupWidth;
+  const needsScroll = monthCount > 6 && barCount > 4;
 
   return (
     <WidgetCard
       interactive
-      title="Category Trends"
-      subtitle="Monthly spending per category"
+      title="Category Comparison"
+      subtitle={
+        mode === "subcategories" && effectiveParent
+          ? `Subcategories of "${effectiveParent}" across months`
+          : "Category spending side-by-side across months"
+      }
       filterActive={activeCategories.length > 0}
-    >
-      <div ref={containerRef} className="relative">
-        {/* Chart area */}
-        <div className="flex">
-          {/* Y-axis labels */}
-          <div className="flex flex-col justify-between pr-2 py-1 shrink-0 w-10">
-            {[...yTicks].reverse().map((tick) => (
-              <span
-                key={tick}
-                className="text-[10px] text-white/35 tabular-nums text-right leading-none"
-              >
-                {formatAmount(tick)}
-              </span>
-            ))}
-          </div>
-
-          {/* Bar groups */}
-          <div className="flex-1 overflow-x-auto">
-            <div
-              className="flex gap-1 min-w-0"
-              style={{ minWidth: barData.length * 60 }}
+      action={
+        <div className="flex items-center gap-1.5">
+          {TOP_N_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => {
+                setTopN(opt.value);
+                setHiddenSeries(new Set());
+              }}
+              className={cn(
+                "px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                topN === opt.value
+                  ? "bg-white/15 text-white"
+                  : "text-white/30 hover:text-white/50",
+              )}
             >
-              {barData.map((group) => (
-                <div key={group.month} className="flex-1 min-w-[50px]">
-                  {/* Bars container */}
-                  <div
-                    className="flex items-end gap-[3px] h-[200px] px-0.5"
-                    style={{
-                      backgroundImage:
-                        "repeating-linear-gradient(to top, transparent, transparent calc(25% - 1px), rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.04) calc(25% + 1px))",
-                    }}
-                  >
-                    {group.categories.map((cat) => {
-                      const heightPct =
-                        chartMax > 0
-                          ? Math.max((cat.amount / chartMax) * 100, 0.5)
-                          : 0;
-                      const isFiltered =
-                        activeCategories.length > 0 &&
-                        !activeCategories.includes(cat.name);
-                      const isHovered =
-                        hoveredCat === cat.name &&
-                        selectedMonth === group.month;
-                      const isDimmed =
-                        isFiltered ||
-                        (hoveredCat !== null && hoveredCat !== cat.name);
-
-                      return (
-                        <button
-                          key={cat.name}
-                          className="flex-1 relative rounded-t-md cursor-pointer group"
-                          style={{
-                            height: `${heightPct}%`,
-                            transition:
-                              "height 0.4s cubic-bezier(0.22,1,0.36,1), opacity 0.2s, transform 0.2s",
-                            opacity: isDimmed ? 0.25 : 1,
-                            transform: isHovered ? "scaleY(1.03)" : "scaleY(1)",
-                            transformOrigin: "bottom",
-                          }}
-                          onMouseEnter={(e) =>
-                            handleBarHover(e, group.month, cat.name)
-                          }
-                          onMouseMove={(e) =>
-                            handleBarHover(e, group.month, cat.name)
-                          }
-                          onMouseLeave={handleBarLeave}
-                          onClick={() => onCategoryClick?.(cat.name)}
-                        >
-                          {/* Bar face */}
-                          <div
-                            className="absolute inset-0 rounded-t-md"
-                            style={{
-                              background: `linear-gradient(to top, ${cat.color}CC, ${cat.color}90)`,
-                              boxShadow: isHovered
-                                ? `4px 4px 0 0 ${cat.color}40, inset 0 1px 0 ${cat.color}60, 0 0 12px ${cat.color}30`
-                                : `3px 3px 0 0 ${cat.color}25, inset 0 1px 0 ${cat.color}40`,
-                              borderRight: `1px solid ${cat.color}20`,
-                              borderTop: `1px solid ${cat.color}50`,
-                            }}
-                          />
-                          {/* Top highlight */}
-                          <div
-                            className="absolute top-0 left-0 right-0 h-[2px] rounded-t-md"
-                            style={{
-                              background: `linear-gradient(to right, ${cat.color}80, ${cat.color}30)`,
-                            }}
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {/* Month label */}
-                  <div className="text-center mt-1.5">
-                    <span className="text-[10px] text-white/40">
-                      {group.month}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      }
+    >
+      {/* ── Controls: Mode toggle + Parent dropdown ────────────────────────── */}
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        {/* Mode toggle */}
+        <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5">
+          <button
+            onClick={() => switchMode("categories")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+              mode === "categories"
+                ? "bg-white/15 text-white shadow-sm"
+                : "text-white/40 hover:text-white/60",
+            )}
+          >
+            <LayoutGrid className="w-3 h-3" />
+            Categories
+          </button>
+          <button
+            onClick={() => switchMode("subcategories")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+              mode === "subcategories"
+                ? "bg-white/15 text-white shadow-sm"
+                : "text-white/40 hover:text-white/60",
+            )}
+          >
+            <Layers className="w-3 h-3" />
+            Subcategories
+          </button>
         </div>
 
-        {/* Tooltip */}
-        {tooltipPos && tooltipData && (
-          <div
-            ref={tooltipRef}
-            className="absolute z-30 pointer-events-none px-3 py-2 rounded-xl border border-white/10 bg-[var(--theme-bg)] shadow-xl shadow-black/40"
-            style={{
-              left: tooltipPos.x,
-              top: tooltipPos.y,
-              transform: "translate(-50%, -100%)",
-            }}
-          >
-            <div className="flex items-center gap-2 text-xs">
-              <div
-                className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{
-                  backgroundColor: tooltipData.color,
-                  boxShadow: `0 0 6px ${tooltipData.color}60`,
-                }}
+        {/* Parent category dropdown (subcategory mode only) */}
+        {mode === "subcategories" && (
+          <div ref={dropdownRef} className="relative">
+            <button
+              onClick={() => setDropdownOpen((p) => !p)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white/70 hover:bg-white/10 transition-colors min-w-[140px]"
+            >
+              <span className="truncate">
+                {effectiveParent || "Select category"}
+              </span>
+              <ChevronDown
+                className={cn(
+                  "w-3 h-3 shrink-0 transition-transform",
+                  dropdownOpen && "rotate-180",
+                )}
               />
-              <span className="text-white/70 truncate max-w-[100px]">
-                {tooltipData.name}
-              </span>
-              <span className="font-semibold text-white tabular-nums ml-1">
-                ${tooltipData.amount.toLocaleString()}
-              </span>
-            </div>
-            <p className="text-[10px] text-white/40 mt-0.5">{selectedMonth}</p>
+            </button>
+            {dropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 z-40 w-56 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-[var(--theme-bg)] shadow-2xl shadow-black/50 py-1">
+                {parentCategories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => {
+                      setSelectedParent(cat);
+                      setHiddenSeries(new Set());
+                      setDropdownOpen(false);
+                    }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 text-xs transition-colors",
+                      effectiveParent === cat
+                        ? "bg-white/10 text-white font-medium"
+                        : "text-white/60 hover:bg-white/5 hover:text-white/80",
+                    )}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3">
-        {categories.map((cat) => {
-          const isFiltered =
-            activeCategories.length > 0 && !activeCategories.includes(cat);
-          const isHovered = hoveredCat === cat;
+      {/* ── Chart ──────────────────────────────────────────────────────────── */}
+      <div
+        className={cn("relative", needsScroll && "overflow-x-auto pb-2")}
+        style={needsScroll ? { WebkitOverflowScrolling: "touch" } : undefined}
+      >
+        <div
+          className="h-[320px]"
+          style={needsScroll ? { minWidth: chartMinWidth } : undefined}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              margin={{ top: 8, right: 8, bottom: 4, left: -8 }}
+              barCategoryGap="18%"
+              barGap={2}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="rgba(255,255,255,0.04)"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="month"
+                tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                interval={0}
+              />
+              <YAxis
+                tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={fmtAmount}
+                width={48}
+              />
+              <Tooltip
+                content={
+                  <CustomTooltip
+                    colorMap={colorMap}
+                    hiddenSeries={hiddenSeries}
+                  />
+                }
+                cursor={{ fill: "rgba(255,255,255,0.03)" }}
+              />
+              {visibleSeries.map((name) => {
+                const isDimmed =
+                  activeCategories.length > 0 &&
+                  !activeCategories.includes(name) &&
+                  name !== "Other";
+
+                return (
+                  <Bar
+                    key={name}
+                    dataKey={name}
+                    fill={colorMap[name] || PALETTE[0]}
+                    radius={[4, 4, 0, 0]}
+                    opacity={isDimmed ? 0.2 : 0.85}
+                    animationDuration={600}
+                    animationEasing="ease-out"
+                    cursor="pointer"
+                    onClick={() => {
+                      if (name !== "Other") onCategoryClick?.(name);
+                    }}
+                  />
+                );
+              })}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ── Legend ──────────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap justify-center gap-x-3 gap-y-2 mt-3 pt-2 border-t border-white/5">
+        {series.map((name) => {
+          const isHidden = hiddenSeries.has(name);
+          const isDimmed =
+            activeCategories.length > 0 &&
+            !activeCategories.includes(name) &&
+            name !== "Other";
+
           return (
             <button
-              key={cat}
+              key={name}
+              onClick={() => toggleSeries(name)}
+              onDoubleClick={() => {
+                if (name !== "Other") onCategoryClick?.(name);
+              }}
               className={cn(
-                "flex items-center gap-1.5 transition-all",
-                isFiltered ? "opacity-30" : "opacity-100",
+                "flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-xs",
+                isHidden
+                  ? "opacity-30 line-through"
+                  : isDimmed
+                    ? "opacity-40"
+                    : "opacity-100 hover:bg-white/5",
               )}
-              onMouseEnter={() => setHoveredCat(cat)}
-              onMouseLeave={() => setHoveredCat(null)}
-              onClick={() => onCategoryClick?.(cat)}
+              title={
+                isHidden
+                  ? `Show ${name}`
+                  : `Hide ${name} · Double-click to filter`
+              }
             >
-              <div
-                className="w-2.5 h-2.5 rounded-full ring-1 ring-white/10 transition-transform"
+              <span
+                className="w-2.5 h-2.5 rounded-sm shrink-0 transition-transform"
                 style={{
-                  backgroundColor: categoryColors[cat],
-                  boxShadow: isFiltered
-                    ? "none"
-                    : `0 0 6px ${categoryColors[cat]}50`,
-                  transform: isHovered ? "scale(1.4)" : "scale(1)",
+                  backgroundColor: isHidden
+                    ? "rgba(255,255,255,0.15)"
+                    : colorMap[name],
+                  boxShadow: isHidden ? "none" : `0 0 6px ${colorMap[name]}40`,
                 }}
               />
               <span
                 className={cn(
-                  "text-[11px] truncate max-w-[80px] transition-colors",
-                  isHovered ? "text-white font-medium" : "text-white/60",
+                  "truncate max-w-[100px]",
+                  isHidden ? "text-white/30" : "text-white/70",
                 )}
               >
-                {cat}
+                {name}
               </span>
             </button>
           );
@@ -310,40 +508,80 @@ export default function CategoryComparisonChart({
   );
 }
 
-function formatMonth(ym: string): string {
-  const [y, m] = ym.split("-");
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  return `${months[parseInt(m) - 1]} ${y.slice(2)}`;
+// ── Custom Tooltip ────────────────────────────────────────────────────────────
+function CustomTooltip({
+  active,
+  payload,
+  label,
+  colorMap,
+  hiddenSeries,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; dataKey: string }>;
+  label?: string;
+  colorMap: Record<string, string>;
+  hiddenSeries: Set<string>;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const items = [...payload]
+    .filter((p) => !hiddenSeries.has(p.dataKey) && (p.value as number) > 0)
+    .sort((a, b) => (b.value as number) - (a.value as number));
+
+  if (items.length === 0) return null;
+
+  const total = items.reduce((sum, p) => sum + (p.value as number), 0);
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-[var(--theme-bg)] shadow-xl shadow-black/40 px-3 py-2.5 min-w-[180px] max-w-[260px]">
+      <p className="text-[10px] text-white/40 uppercase tracking-wider mb-2 font-medium">
+        {label}
+      </p>
+      <div className="space-y-1.5">
+        {items.map((item) => (
+          <div key={item.dataKey} className="flex items-center gap-2 text-xs">
+            <span
+              className="w-2 h-2 rounded-sm shrink-0"
+              style={{
+                backgroundColor: colorMap[item.dataKey] || PALETTE[0],
+                boxShadow: `0 0 4px ${colorMap[item.dataKey] || PALETTE[0]}40`,
+              }}
+            />
+            <span className="text-white/60 truncate flex-1">
+              {item.dataKey}
+            </span>
+            <span className="text-white font-semibold tabular-nums">
+              $
+              {(item.value as number).toLocaleString("en-US", {
+                maximumFractionDigits: 0,
+              })}
+            </span>
+          </div>
+        ))}
+      </div>
+      {items.length > 1 && (
+        <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-white/10 text-xs">
+          <span className="text-white/40">Total</span>
+          <span className="text-white font-bold tabular-nums">
+            ${total.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function formatAmount(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(Math.round(n));
-}
-
-function getYTicks(max: number): number[] {
-  if (max <= 0) return [0];
-  const raw = max / 4;
-  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
-  const nice = [1, 2, 2.5, 5, 10].find((n) => n * mag >= raw) ?? 10;
-  const step = nice * mag;
-  const ticks: number[] = [];
-  for (let v = 0; v <= max + step * 0.5; v += step) {
-    ticks.push(Math.round(v));
-    if (ticks.length >= 6) break;
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtMonth(ym: string): string {
+  try {
+    return format(parseISO(`${ym}-01`), "MMM yy");
+  } catch {
+    return ym;
   }
-  return ticks;
+}
+
+function fmtAmount(n: number): string {
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+  if (n > 0) return `$${Math.round(n)}`;
+  return "$0";
 }
