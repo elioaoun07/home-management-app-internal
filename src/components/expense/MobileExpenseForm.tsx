@@ -76,6 +76,7 @@ import {
   MinusCircle,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import {
   useCallback,
   useEffect,
@@ -85,7 +86,6 @@ import {
   type CSSProperties,
 } from "react";
 import { toast } from "sonner";
-import dynamic from "next/dynamic";
 import AccountBalance from "./AccountBalance";
 import { useExpenseForm } from "./ExpenseFormContext";
 import VoiceEntryButton from "./VoiceEntryButton";
@@ -699,8 +699,7 @@ export default function MobileExpenseForm() {
     const el = headerRef.current;
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
-      if (entry)
-        setHeaderHeight(entry.target.getBoundingClientRect().bottom);
+      if (entry) setHeaderHeight(entry.target.getBoundingClientRect().bottom);
     });
     // Set initial height
     setHeaderHeight(el.getBoundingClientRect().bottom);
@@ -1001,9 +1000,7 @@ export default function MobileExpenseForm() {
     return null;
   };
 
-  const contentAreaStyles: CSSProperties = {
-    bottom: `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT}px)`,
-  };
+  const contentAreaBottomPadding = `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT}px)`;
 
   // Quick-amount presets for the amount step
   const QUICK_AMOUNTS = ["5", "10", "20", "50"];
@@ -1028,12 +1025,12 @@ export default function MobileExpenseForm() {
   const progressWidth = isInitialized ? progress() : 0;
 
   return (
-    <div className="fixed inset-0 top-14 bg-bg-dark flex flex-col">
+    <div className="fixed inset-x-0 top-0 bottom-0 bg-bg-dark flex flex-col">
       <>
         {/* HEADER - TOP DELIMITER - Must be above all other UI elements */}
         <div
           ref={headerRef}
-          className={`fixed top-0 left-0 right-0 z-[100] bg-gradient-to-b from-bg-card-custom to-bg-medium border-b ${themeClasses.border} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top`}
+          className={`shrink-0 relative z-[100] bg-gradient-to-b from-bg-card-custom to-bg-medium border-b ${themeClasses.border} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top`}
         >
           <div className="flex items-center justify-between mb-2 pt-16">
             {showBackButton ? (
@@ -1207,8 +1204,13 @@ export default function MobileExpenseForm() {
         </div>
 
         <div
-          className="fixed left-0 right-0 overflow-y-auto px-3 py-3 bg-bg-dark z-[45]"
-          style={{ ...contentAreaStyles, top: `${headerHeight}px` }}
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 bg-bg-dark z-[45]"
+          style={
+            {
+              paddingBottom: contentAreaBottomPadding,
+              WebkitOverflowScrolling: "touch",
+            } as CSSProperties
+          }
           onTouchStart={(e) => {
             touchStartX.current = e.touches[0].clientX;
           }}

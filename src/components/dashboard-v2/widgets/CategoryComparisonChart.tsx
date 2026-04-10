@@ -3,16 +3,7 @@
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
 import { cn } from "@/lib/utils";
-import { useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 const CHART_PALETTE = [
   "#22d3ee",
@@ -24,6 +15,11 @@ const CHART_PALETTE = [
   "#fb923c",
   "#e879f9",
 ];
+
+type BarData = {
+  month: string;
+  categories: { name: string; amount: number; color: string }[];
+};
 
 type Props = {
   months: MonthlyAnalytics[] | undefined;
@@ -37,9 +33,22 @@ export default function CategoryComparisonChart({
   onCategoryClick,
 }: Props) {
   const [hoveredCat, setHoveredCat] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [tooltipPos, setTooltipPos] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const { data, categoryColors } = useMemo(() => {
-    if (!months || months.length === 0) return { data: [], categoryColors: {} };
+  const { barData, categoryColors, maxValue, categories } = useMemo(() => {
+    if (!months || months.length === 0)
+      return {
+        barData: [],
+        categoryColors: {} as Record<string, string>,
+        maxValue: 0,
+        categories: [] as string[],
+      };
 
     const totals = new Map<string, number>();
     for (const m of months) {
@@ -58,21 +67,46 @@ export default function CategoryComparisonChart({
       colors[name] = CHART_PALETTE[i % CHART_PALETTE.length];
     });
 
-    const chartData = months.map((m) => {
-      const point: Record<string, any> = { name: formatMonth(m.month) };
-      for (const catName of topCategories) {
+    let peak = 0;
+    const bars: BarData[] = months.map((m) => {
+      const cats = topCategories.map((catName) => {
         const cat = m.categoryBreakdown.find((c) => c.name === catName);
-        point[catName] = cat?.amount || 0;
-      }
-      return point;
+        const amount = cat?.amount || 0;
+        if (amount > peak) peak = amount;
+        return { name: catName, amount, color: colors[catName] };
+      });
+      return { month: formatMonth(m.month), categories: cats };
     });
 
-    return { data: chartData, categoryColors: colors };
+    return {
+      barData: bars,
+      categoryColors: colors,
+      maxValue: peak,
+      categories: topCategories,
+    };
   }, [months]);
 
-  const categories = Object.keys(categoryColors);
+  const handleBarHover = useCallback(
+    (e: React.MouseEvent, month: string, cat: string) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      setTooltipPos({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top - 10,
+      });
+      setHoveredCat(cat);
+      setSelectedMonth(month);
+    },
+    [],
+  );
 
-  if (!data.length || categories.length === 0) {
+  const handleBarLeave = useCallback(() => {
+    setTooltipPos(null);
+    setHoveredCat(null);
+    setSelectedMonth(null);
+  }, []);
+
+  if (!barData.length || categories.length === 0) {
     return (
       <WidgetCard title="Category Trends">
         <p className="text-white/40 text-xs text-center py-8">
@@ -82,6 +116,17 @@ export default function CategoryComparisonChart({
     );
   }
 
+  // Y-axis ticks
+  const yTicks = getYTicks(maxValue);
+  const chartMax = yTicks[yTicks.length - 1] || maxValue || 1;
+
+  const tooltipData =
+    selectedMonth && hoveredCat
+      ? barData
+          .find((b) => b.month === selectedMonth)
+          ?.categories.find((c) => c.name === hoveredCat)
+      : null;
+
   return (
     <WidgetCard
       interactive
@@ -89,83 +134,141 @@ export default function CategoryComparisonChart({
       subtitle="Monthly spending per category"
       filterActive={activeCategories.length > 0}
     >
-      <div className="h-[220px] -ml-2">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data}>
-            <defs>
-              {categories.map((cat) => (
-                <linearGradient
-                  key={cat}
-                  id={`area-grad-${cat.replace(/\s+/g, "-")}`}
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop
-                    offset="0%"
-                    stopColor={categoryColors[cat]}
-                    stopOpacity={0.3}
-                  />
-                  <stop
-                    offset="100%"
-                    stopColor={categoryColors[cat]}
-                    stopOpacity={0.02}
-                  />
-                </linearGradient>
+      <div ref={containerRef} className="relative">
+        {/* Chart area */}
+        <div className="flex">
+          {/* Y-axis labels */}
+          <div className="flex flex-col justify-between pr-2 py-1 shrink-0 w-10">
+            {[...yTicks].reverse().map((tick) => (
+              <span
+                key={tick}
+                className="text-[10px] text-white/35 tabular-nums text-right leading-none"
+              >
+                {formatAmount(tick)}
+              </span>
+            ))}
+          </div>
+
+          {/* Bar groups */}
+          <div className="flex-1 overflow-x-auto">
+            <div
+              className="flex gap-1 min-w-0"
+              style={{ minWidth: barData.length * 60 }}
+            >
+              {barData.map((group) => (
+                <div key={group.month} className="flex-1 min-w-[50px]">
+                  {/* Bars container */}
+                  <div
+                    className="flex items-end gap-[3px] h-[200px] px-0.5"
+                    style={{
+                      backgroundImage:
+                        "repeating-linear-gradient(to top, transparent, transparent calc(25% - 1px), rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.04) calc(25% + 1px))",
+                    }}
+                  >
+                    {group.categories.map((cat) => {
+                      const heightPct =
+                        chartMax > 0
+                          ? Math.max((cat.amount / chartMax) * 100, 0.5)
+                          : 0;
+                      const isFiltered =
+                        activeCategories.length > 0 &&
+                        !activeCategories.includes(cat.name);
+                      const isHovered =
+                        hoveredCat === cat.name &&
+                        selectedMonth === group.month;
+                      const isDimmed =
+                        isFiltered ||
+                        (hoveredCat !== null && hoveredCat !== cat.name);
+
+                      return (
+                        <button
+                          key={cat.name}
+                          className="flex-1 relative rounded-t-md cursor-pointer group"
+                          style={{
+                            height: `${heightPct}%`,
+                            transition:
+                              "height 0.4s cubic-bezier(0.22,1,0.36,1), opacity 0.2s, transform 0.2s",
+                            opacity: isDimmed ? 0.25 : 1,
+                            transform: isHovered ? "scaleY(1.03)" : "scaleY(1)",
+                            transformOrigin: "bottom",
+                          }}
+                          onMouseEnter={(e) =>
+                            handleBarHover(e, group.month, cat.name)
+                          }
+                          onMouseMove={(e) =>
+                            handleBarHover(e, group.month, cat.name)
+                          }
+                          onMouseLeave={handleBarLeave}
+                          onClick={() => onCategoryClick?.(cat.name)}
+                        >
+                          {/* Bar face */}
+                          <div
+                            className="absolute inset-0 rounded-t-md"
+                            style={{
+                              background: `linear-gradient(to top, ${cat.color}CC, ${cat.color}90)`,
+                              boxShadow: isHovered
+                                ? `4px 4px 0 0 ${cat.color}40, inset 0 1px 0 ${cat.color}60, 0 0 12px ${cat.color}30`
+                                : `3px 3px 0 0 ${cat.color}25, inset 0 1px 0 ${cat.color}40`,
+                              borderRight: `1px solid ${cat.color}20`,
+                              borderTop: `1px solid ${cat.color}50`,
+                            }}
+                          />
+                          {/* Top highlight */}
+                          <div
+                            className="absolute top-0 left-0 right-0 h-[2px] rounded-t-md"
+                            style={{
+                              background: `linear-gradient(to right, ${cat.color}80, ${cat.color}30)`,
+                            }}
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Month label */}
+                  <div className="text-center mt-1.5">
+                    <span className="text-[10px] text-white/40">
+                      {group.month}
+                    </span>
+                  </div>
+                </div>
               ))}
-            </defs>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="rgba(255,255,255,0.05)"
-              vertical={false}
-            />
-            <XAxis
-              dataKey="name"
-              tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fontSize: 10, fill: "rgba(255,255,255,0.4)" }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={formatAmount}
-              width={45}
-            />
-            <Tooltip
-              content={<CustomTooltip categoryColors={categoryColors} />}
-              cursor={{ stroke: "rgba(255,255,255,0.1)" }}
-            />
-            {categories.map((cat) => {
-              const isFiltered =
-                activeCategories.length > 0 && !activeCategories.includes(cat);
-              const isHovered = hoveredCat === cat;
-              const dimmed = isFiltered || (hoveredCat && !isHovered);
-              return (
-                <Area
-                  key={cat}
-                  type="monotone"
-                  dataKey={cat}
-                  stroke={categoryColors[cat]}
-                  strokeWidth={isHovered ? 2.5 : 1.5}
-                  fill={`url(#area-grad-${cat.replace(/\s+/g, "-")})`}
-                  fillOpacity={dimmed ? 0.05 : 1}
-                  strokeOpacity={dimmed ? 0.2 : 1}
-                  dot={false}
-                  activeDot={{
-                    r: 4,
-                    fill: categoryColors[cat],
-                    stroke: "rgba(0,0,0,0.5)",
-                    strokeWidth: 1,
-                  }}
-                />
-              );
-            })}
-          </AreaChart>
-        </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* Tooltip */}
+        {tooltipPos && tooltipData && (
+          <div
+            ref={tooltipRef}
+            className="absolute z-30 pointer-events-none px-3 py-2 rounded-xl border border-white/10 bg-[var(--theme-bg)] shadow-xl shadow-black/40"
+            style={{
+              left: tooltipPos.x,
+              top: tooltipPos.y,
+              transform: "translate(-50%, -100%)",
+            }}
+          >
+            <div className="flex items-center gap-2 text-xs">
+              <div
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{
+                  backgroundColor: tooltipData.color,
+                  boxShadow: `0 0 6px ${tooltipData.color}60`,
+                }}
+              />
+              <span className="text-white/70 truncate max-w-[100px]">
+                {tooltipData.name}
+              </span>
+              <span className="font-semibold text-white tabular-nums ml-1">
+                ${tooltipData.amount.toLocaleString()}
+              </span>
+            </div>
+            <p className="text-[10px] text-white/40 mt-0.5">{selectedMonth}</p>
+          </div>
+        )}
       </div>
-      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
+
+      {/* Legend */}
+      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3">
         {categories.map((cat) => {
           const isFiltered =
             activeCategories.length > 0 && !activeCategories.includes(cat);
@@ -207,47 +310,6 @@ export default function CategoryComparisonChart({
   );
 }
 
-function CustomTooltip({ active, payload, label, categoryColors }: any) {
-  if (!active || !payload?.length) return null;
-  const items = payload.filter((p: any) => p.value > 0);
-  const total = items.reduce((sum: number, p: any) => sum + Number(p.value), 0);
-  return (
-    <div className="neo-card rounded-xl px-3.5 py-2.5 text-xs border border-white/10 backdrop-blur-md shadow-lg shadow-black/30">
-      <p className="text-white/70 font-medium mb-1.5 text-[11px]">{label}</p>
-      <div className="space-y-1">
-        {items.map((p: any) => (
-          <div
-            key={p.dataKey}
-            className="flex items-center justify-between gap-4"
-          >
-            <div className="flex items-center gap-1.5">
-              <div
-                className="w-2 h-2 rounded-full"
-                style={{
-                  backgroundColor: categoryColors?.[p.dataKey] || p.fill,
-                  boxShadow: `0 0 4px ${categoryColors?.[p.dataKey] || p.fill}60`,
-                }}
-              />
-              <span className="text-white/80">{p.dataKey}</span>
-            </div>
-            <span className="font-semibold text-white/90 tabular-nums">
-              ${Number(p.value).toLocaleString()}
-            </span>
-          </div>
-        ))}
-      </div>
-      {items.length > 1 && (
-        <div className="border-t border-white/10 mt-1.5 pt-1.5 flex justify-between">
-          <span className="text-white/50">Total</span>
-          <span className="font-semibold text-white/80 tabular-nums">
-            ${total.toLocaleString()}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function formatMonth(ym: string): string {
   const [y, m] = ym.split("-");
   const months = [
@@ -270,4 +332,18 @@ function formatMonth(ym: string): string {
 function formatAmount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(Math.round(n));
+}
+
+function getYTicks(max: number): number[] {
+  if (max <= 0) return [0];
+  const raw = max / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const nice = [1, 2, 2.5, 5, 10].find((n) => n * mag >= raw) ?? 10;
+  const step = nice * mag;
+  const ticks: number[] = [];
+  for (let v = 0; v <= max + step * 0.5; v += step) {
+    ticks.push(Math.round(v));
+    if (ticks.length >= 6) break;
+  }
+  return ticks;
 }

@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 // POST /api/future-payments/[id]/confirm - Convert a future payment draft into a real transaction
+// Supports household: partner can confirm non-private future payments
+// Supports editing: body can override amount, description, account_id, category_id, subcategory_id, date
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -22,13 +24,13 @@ export async function POST(
     }
 
     const { id } = await params;
+    const body = await req.json().catch(() => ({}));
 
-    // Get the draft
+    // Get the draft (no user_id filter — we check authorization below)
     const { data: draft, error: fetchError } = await supabase
       .from("transactions")
       .select("*")
       .eq("id", id)
-      .eq("user_id", user.id)
       .eq("is_draft", true)
       .single();
 
@@ -39,16 +41,57 @@ export async function POST(
       );
     }
 
-    // Convert to real transaction: set is_draft=false, clear scheduled_date, use today's date
+    const isOwner = draft.user_id === user.id;
+
+    // Authorization: owner can always confirm. Partner can confirm non-private items.
+    if (!isOwner) {
+      if (draft.is_private) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
+      // Verify current user and draft owner share an active household link
+      const ownerId = draft.user_id;
+      const { data: link } = await supabase
+        .from("household_links")
+        .select("id")
+        .or(
+          `and(owner_user_id.eq.${user.id},partner_user_id.eq.${ownerId}),and(partner_user_id.eq.${user.id},owner_user_id.eq.${ownerId})`,
+        )
+        .eq("active", true)
+        .maybeSingle();
+
+      if (!link) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
+    }
+
+    // Allow overriding values at confirm time
+    const finalAmount = body.amount ?? draft.amount;
+    const finalDescription = body.description ?? draft.description;
+    const finalDate = body.date ?? new Date().toISOString().split("T")[0];
+    const finalAccountId = body.account_id ?? draft.account_id;
+    const finalCategoryId =
+      body.category_id !== undefined ? body.category_id : draft.category_id;
+    const finalSubcategoryId =
+      body.subcategory_id !== undefined
+        ? body.subcategory_id
+        : draft.subcategory_id;
+
+    // Convert to real transaction: set is_draft=false, clear scheduled_date
+    // The confirming user becomes the transaction owner
     const { data: confirmed, error: updateError } = await supabase
       .from("transactions")
       .update({
         is_draft: false,
         scheduled_date: null,
-        date: new Date().toISOString().split("T")[0], // Today
+        date: finalDate,
+        amount: finalAmount,
+        description: finalDescription,
+        account_id: finalAccountId,
+        category_id: finalCategoryId,
+        subcategory_id: finalSubcategoryId,
+        user_id: user.id, // Transaction belongs to whoever confirms it
       })
       .eq("id", id)
-      .eq("user_id", user.id)
       .select()
       .single();
 
@@ -61,7 +104,7 @@ export async function POST(
     const { data: account } = await supabase
       .from("accounts")
       .select("type")
-      .eq("id", draft.account_id)
+      .eq("id", finalAccountId)
       .single();
 
     const accountType = (account?.type || "expense") as
@@ -69,18 +112,18 @@ export async function POST(
       | "income"
       | "saving";
     const delta = getBalanceDelta(
-      Number(draft.amount),
+      Number(finalAmount),
       accountType,
       false,
       "create",
     );
-    await adjustAccountBalance(draft.account_id, delta, "future_payment", {
+    await adjustAccountBalance(finalAccountId, delta, "future_payment", {
       userId: user.id,
       transactionId: id,
-      reason: `Future payment confirmed: ${draft.description || "Scheduled payment"}`,
+      reason: `Future payment confirmed: ${finalDescription || "Scheduled payment"}`,
     });
 
-    return NextResponse.json(confirmed);
+    return NextResponse.json({ transaction: confirmed });
   } catch (error: any) {
     console.error("Error confirming future payment:", error);
     return NextResponse.json(

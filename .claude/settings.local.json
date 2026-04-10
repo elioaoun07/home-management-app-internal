@@ -34,7 +34,8 @@
       "Bash(npx tsc:*)",
       "Bash(git log:*)",
       "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && head -20 {}')",
-      "Bash(xargs -I {} basename {})"
+      "Bash(xargs -I {} basename {})",
+      "Skill(update-config)"
     ]
   }
 }

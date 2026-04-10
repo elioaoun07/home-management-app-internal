@@ -14,6 +14,7 @@ import AvgTransactionByCategoryWidget from "@/components/dashboard-v2/widgets/Av
 import BudgetForecastWidget from "@/components/dashboard-v2/widgets/BudgetForecastWidget";
 import BudgetVsActualWidget from "@/components/dashboard-v2/widgets/BudgetVsActualWidget";
 import CashFlowWaterfallWidget from "@/components/dashboard-v2/widgets/CashFlowWaterfallWidget";
+import CategoryAnalysisWidget from "@/components/dashboard-v2/widgets/CategoryAnalysisWidget";
 import CategoryComparisonChart from "@/components/dashboard-v2/widgets/CategoryComparisonChart";
 import CategoryDonutWidget from "@/components/dashboard-v2/widgets/CategoryDonutWidget";
 import CategoryForecastWidget from "@/components/dashboard-v2/widgets/CategoryForecastWidget";
@@ -73,11 +74,12 @@ import { RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type V2Tab = "overview" | "snapshot" | "deep-dive" | "forecast";
+type V2Tab = "overview" | "snapshot" | "deep-dive" | "categories" | "forecast";
 const TABS: { id: V2Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "snapshot", label: "Snapshot" },
   { id: "deep-dive", label: "Deep Dive" },
+  { id: "categories", label: "Categories" },
   { id: "forecast", label: "Forecast" },
 ];
 
@@ -928,7 +930,22 @@ export default function ReviewV2Dashboard({
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TAB 3 — FORECAST
+          TAB 3 — CATEGORIES
+          "Deep category & subcategory analysis with distribution patterns"
+          ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "categories" && (
+        <div className="space-y-4">
+          {filterBanner}
+          <CategoryAnalysisWidget
+            transactions={filteredExpenseTransactions as any}
+            startDate={startDate}
+            endDate={endDate}
+          />
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          TAB 4 — FORECAST
           "What's coming? Forward-looking projections"
           ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "forecast" && (

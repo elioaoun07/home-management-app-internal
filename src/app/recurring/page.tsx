@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  CalendarClockIcon,
-  CheckIcon,
-  Edit2Icon,
-  ListIcon,
-  LockIcon,
-  PlusIcon,
-  Trash2Icon,
-  XIcon,
-} from "@/components/icons/FuturisticIcons";
+import { CheckIcon, PlusIcon, XIcon } from "@/components/icons/FuturisticIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +14,12 @@ import {
 import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import {
+  type FuturePayment,
+  useConfirmFuturePayment,
+  useDeleteFuturePayment,
+  useFuturePayments,
+} from "@/features/recurring/useFuturePayments";
+import {
   type RecurringPayment,
   useConfirmPayment,
   useCreateRecurringPayment,
@@ -30,17 +27,32 @@ import {
   useRecurringPayments,
   useUpdateRecurringPayment,
 } from "@/features/recurring/useRecurringPayments";
-import { useThemeClasses } from "@/hooks/useThemeClasses";
 import {
   getMemberDisplayName,
   useHouseholdMembers,
 } from "@/hooks/useHouseholdMembers";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
-import { getCategoryIcon } from "@/lib/utils/getCategoryIcon";
-import { format, formatDistanceToNow, isPast, isToday } from "date-fns";
-import { useEffect, useMemo, useState } from "react";
+import {
+  format,
+  formatDistanceToNow,
+  isPast,
+  isToday,
+  isTomorrow,
+} from "date-fns";
+import {
+  Banknote,
+  Calendar,
+  CalendarClock,
+  Edit2,
+  Lock,
+  Power,
+  Trash2,
+  Zap,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 function getOrdinalSuffix(day: number) {
@@ -57,9 +69,14 @@ function getOrdinalSuffix(day: number) {
   }
 }
 
+type TabMode = "recurring" | "future";
+
 export default function RecurringPage() {
-  const themeClasses = useThemeClasses();
-  const { data: recurringPayments = [], isLoading } = useRecurringPayments();
+  const tc = useThemeClasses();
+  const { data: recurringPayments = [], isLoading: isLoadingRecurring } =
+    useRecurringPayments();
+  const { data: futurePayments = [], isLoading: isLoadingFuture } =
+    useFuturePayments();
   const { data: accounts = [] } = useMyAccounts();
   const defaultAccount = accounts.find((a) => a.is_default) || accounts[0];
   const { data: categories = [] } = useCategories(defaultAccount?.id);
@@ -67,20 +84,24 @@ export default function RecurringPage() {
   const currentUserId = householdData?.currentUserId ?? null;
   const members = householdData?.members ?? [];
 
+  const [activeTab, setActiveTab] = useState<TabMode>("recurring");
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [editingPayment, setEditingPayment] = useState<RecurringPayment | null>(
     null,
   );
-  const [confirmingPayment, setConfirmingPayment] =
+  const [confirmingRecurring, setConfirmingRecurring] =
     useState<RecurringPayment | null>(null);
-  const [viewMode, setViewMode] = useState<"comfort" | "compact">("comfort");
+  const [confirmingFuture, setConfirmingFuture] =
+    useState<FuturePayment | null>(null);
 
   const createMutation = useCreateRecurringPayment();
   const updateMutation = useUpdateRecurringPayment();
   const deleteMutation = useDeleteRecurringPayment();
-  const confirmMutation = useConfirmPayment();
+  const confirmRecurringMutation = useConfirmPayment();
+  const confirmFutureMutation = useConfirmFuturePayment();
+  const deleteFutureMutation = useDeleteFuturePayment();
 
-  // Form state
+  // Form state for Add/Edit recurring
   const [formData, setFormData] = useState({
     account_id: "",
     category_id: "",
@@ -95,7 +116,7 @@ export default function RecurringPage() {
     is_private: false,
   });
 
-  // Confirm payment form state
+  // Confirm form state (shared for both recurring and future payment confirmation)
   const [confirmFormData, setConfirmFormData] = useState({
     amount: "",
     description: "",
@@ -105,25 +126,72 @@ export default function RecurringPage() {
     subcategory_id: "",
   });
 
-  // Sort by recurrence_day (day of month) for chronological monthly order
-  const sortedPayments = useMemo(() => {
-    return [...recurringPayments].sort((a, b) => {
-      const dayA = a.recurrence_day ?? new Date(a.next_due_date).getDate();
-      const dayB = b.recurrence_day ?? new Date(b.next_due_date).getDate();
-      return dayA - dayB;
-    });
+  // Recurring: separate Cash vs Auto, ordered by day
+  const activePayments = useMemo(
+    () => recurringPayments.filter((p) => p.is_active !== false),
+    [recurringPayments],
+  );
+
+  const cashPayments = useMemo(() => {
+    return activePayments
+      .filter((p) => (p.payment_method ?? "manual") === "manual")
+      .sort((a, b) => {
+        const dayA = a.recurrence_day ?? new Date(a.next_due_date).getDate();
+        const dayB = b.recurrence_day ?? new Date(b.next_due_date).getDate();
+        return dayA - dayB;
+      });
+  }, [activePayments]);
+
+  const autoPayments = useMemo(() => {
+    return activePayments
+      .filter((p) => p.payment_method === "auto")
+      .sort((a, b) => {
+        const dayA = a.recurrence_day ?? new Date(a.next_due_date).getDate();
+        const dayB = b.recurrence_day ?? new Date(b.next_due_date).getDate();
+        return dayA - dayB;
+      });
+  }, [activePayments]);
+
+  const disabledPayments = useMemo(() => {
+    return recurringPayments
+      .filter((p) => !p.is_active)
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [recurringPayments]);
 
-  // Monthly total
+  // Monthly total (active only)
   const monthlyTotal = useMemo(() => {
-    return recurringPayments.reduce((sum, p) => {
+    return activePayments.reduce((sum, p) => {
       if (p.recurrence_type === "monthly") return sum + p.amount;
       if (p.recurrence_type === "weekly") return sum + p.amount * 4.33;
       if (p.recurrence_type === "daily") return sum + p.amount * 30;
       if (p.recurrence_type === "yearly") return sum + p.amount / 12;
       return sum;
     }, 0);
-  }, [recurringPayments]);
+  }, [activePayments]);
+
+  // Future payments: separate due/overdue vs upcoming
+  const dueFuturePayments = useMemo(
+    () =>
+      futurePayments.filter(
+        (p) =>
+          isPast(new Date(p.scheduled_date)) ||
+          isToday(new Date(p.scheduled_date)),
+      ),
+    [futurePayments],
+  );
+  const upcomingFuturePayments = useMemo(
+    () =>
+      futurePayments.filter(
+        (p) =>
+          !isPast(new Date(p.scheduled_date)) &&
+          !isToday(new Date(p.scheduled_date)),
+      ),
+    [futurePayments],
+  );
+  const futureTotal = useMemo(
+    () => futurePayments.reduce((s, p) => s + p.amount, 0),
+    [futurePayments],
+  );
 
   useEffect(() => {
     if (defaultAccount) {
@@ -150,18 +218,82 @@ export default function RecurringPage() {
     }
   }, [editingPayment]);
 
-  useEffect(() => {
-    if (confirmingPayment) {
-      setConfirmFormData({
-        amount: confirmingPayment.amount.toString(),
-        description: confirmingPayment.description || confirmingPayment.name,
+  // Auto-populate confirm form + name-match for partner
+  const populateConfirmForm = useCallback(
+    async (
+      payment: {
+        name?: string;
+        amount: number;
+        description?: string | null;
+        account_id: string;
+        category_id?: string | null;
+        subcategory_id?: string | null;
+        user_id?: string;
+      },
+      isOwner: boolean,
+    ) => {
+      const base = {
+        amount: payment.amount.toString(),
+        description: payment.description || payment.name || "",
         date: new Date().toISOString().split("T")[0],
-        account_id: confirmingPayment.account_id,
-        category_id: confirmingPayment.category_id || "",
-        subcategory_id: confirmingPayment.subcategory_id || "",
-      });
+        account_id: payment.account_id,
+        category_id: payment.category_id || "",
+        subcategory_id: payment.subcategory_id || "",
+      };
+
+      if (isOwner) {
+        setConfirmFormData(base);
+        return;
+      }
+
+      // Partner is confirming — try to auto-populate via name matching
+      setConfirmFormData(base);
+      const name = payment.name || payment.description;
+      if (!name) return;
+
+      try {
+        const res = await fetch(
+          `/api/recurring-payments/match-fields?name=${encodeURIComponent(name)}`,
+        );
+        if (res.ok) {
+          const match = await res.json();
+          if (match.account_id || match.category_id) {
+            setConfirmFormData((prev) => ({
+              ...prev,
+              account_id: match.account_id || prev.account_id,
+              category_id: match.category_id || prev.category_id,
+              subcategory_id: match.subcategory_id || prev.subcategory_id,
+            }));
+          }
+        }
+      } catch {
+        // Silent fail — partner just manually selects
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (confirmingRecurring) {
+      const isOwner =
+        !currentUserId || confirmingRecurring.user_id === currentUserId;
+      populateConfirmForm(confirmingRecurring, isOwner);
     }
-  }, [confirmingPayment]);
+  }, [confirmingRecurring, currentUserId, populateConfirmForm]);
+
+  useEffect(() => {
+    if (confirmingFuture) {
+      const isOwner =
+        !currentUserId || confirmingFuture.user_id === currentUserId;
+      populateConfirmForm(
+        {
+          ...confirmingFuture,
+          name: confirmingFuture.description,
+        },
+        isOwner,
+      );
+    }
+  }, [confirmingFuture, currentUserId, populateConfirmForm]);
 
   const resetForm = () => {
     setFormData({
@@ -189,7 +321,6 @@ export default function RecurringPage() {
       toast.error("Please fill in all required fields");
       return;
     }
-
     try {
       if (editingPayment) {
         await updateMutation.mutateAsync({
@@ -207,7 +338,6 @@ export default function RecurringPage() {
           payment_method: formData.payment_method,
           is_private: formData.is_private,
         });
-        // Toast with undo shown by hook
       } else {
         await createMutation.mutateAsync({
           account_id: formData.account_id,
@@ -224,9 +354,7 @@ export default function RecurringPage() {
           payment_method: formData.payment_method,
           is_private: formData.is_private,
         });
-        // Toast with undo shown by hook
       }
-
       resetForm();
       setShowAddDrawer(false);
       setEditingPayment(null);
@@ -238,18 +366,17 @@ export default function RecurringPage() {
   const handleDelete = async (id: string) => {
     try {
       await deleteMutation.mutateAsync(id);
-      // Toast with undo shown by hook
     } catch {
       // Error toast shown by hook
     }
   };
 
-  const handleConfirmPayment = async () => {
-    if (!confirmingPayment) return;
-
+  // Confirm Recurring Payment
+  const handleConfirmRecurring = async () => {
+    if (!confirmingRecurring) return;
     try {
-      const result = await confirmMutation.mutateAsync({
-        id: confirmingPayment.id,
+      const result = await confirmRecurringMutation.mutateAsync({
+        id: confirmingRecurring.id,
         amount: parseFloat(confirmFormData.amount),
         description: confirmFormData.description,
         date: confirmFormData.date,
@@ -257,14 +384,12 @@ export default function RecurringPage() {
         category_id: confirmFormData.category_id || null,
         subcategory_id: confirmFormData.subcategory_id || null,
       });
-
       const transactionId: string | undefined =
         result?.transaction?.id ?? result?.id;
-
       toast.success("Payment confirmed!", {
         icon: ToastIcons.success,
         description: result?.next_due_date
-          ? `Next payment due: ${format(new Date(result.next_due_date), "MMM d, yyyy")}`
+          ? `Next due: ${format(new Date(result.next_due_date), "MMM d, yyyy")}`
           : undefined,
         duration: 4000,
         action: {
@@ -285,8 +410,48 @@ export default function RecurringPage() {
           },
         },
       });
+      setConfirmingRecurring(null);
+    } catch {
+      // Error toast shown by hook
+    }
+  };
 
-      setConfirmingPayment(null);
+  // Confirm Future Payment
+  const handleConfirmFuture = async () => {
+    if (!confirmingFuture) return;
+    try {
+      const result = await confirmFutureMutation.mutateAsync({
+        id: confirmingFuture.id,
+        amount: parseFloat(confirmFormData.amount),
+        description: confirmFormData.description,
+        date: confirmFormData.date,
+        account_id: confirmFormData.account_id || undefined,
+        category_id: confirmFormData.category_id || null,
+        subcategory_id: confirmFormData.subcategory_id || null,
+      });
+      const transactionId: string | undefined = result?.transaction?.id;
+      toast.success("Future payment confirmed!", {
+        icon: ToastIcons.success,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            if (!transactionId) {
+              toast.error("Cannot undo — transaction ID unavailable");
+              return;
+            }
+            try {
+              await safeFetch(`/api/transactions/${transactionId}`, {
+                method: "DELETE",
+              });
+              toast.success("Transaction removed", { icon: ToastIcons.delete });
+            } catch {
+              toast.error("Failed to undo");
+            }
+          },
+        },
+      });
+      setConfirmingFuture(null);
     } catch {
       // Error toast shown by hook
     }
@@ -297,90 +462,62 @@ export default function RecurringPage() {
     const isDueToday = isToday(dueDate);
     const isOverdue = isPast(dueDate) && !isDueToday;
     const isDue = isDueToday || isOverdue;
-    const isUpcoming = !isDue; // future — payment is up to date
-
     return {
       isDue,
       isDueToday,
       isOverdue,
-      isUpcoming,
       formatted: isDueToday
         ? "Due Today"
         : isOverdue
           ? `Overdue by ${formatDistanceToNow(dueDate)}`
           : `Due ${formatDistanceToNow(dueDate, { addSuffix: true })}`,
-      date: format(dueDate, "MMM d, yyyy"),
     };
   };
 
   const subcategories = formData.category_id
     ? categories.filter((c: any) => c.parent_id === formData.category_id)
     : [];
-
   const confirmSubcategories = confirmFormData.category_id
     ? categories.filter((c: any) => c.parent_id === confirmFormData.category_id)
     : [];
+
+  const isLoading =
+    activeTab === "recurring" ? isLoadingRecurring : isLoadingFuture;
 
   if (isLoading) {
     return (
       <div
         className={cn(
           "min-h-screen flex items-center justify-center",
-          themeClasses.bgPage,
+          tc.bgPage,
         )}
       >
-        <div className={themeClasses.text}>Loading...</div>
+        <div className={tc.text}>Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className={cn("min-h-screen pb-32", themeClasses.bgPage)}>
+    <div className={cn("min-h-screen pb-32", tc.bgPage)}>
       <div className="max-w-2xl mx-auto p-4">
         {/* Sticky Header */}
         <div
           className={cn(
             "sticky top-14 z-30 pb-3 mb-3 -mx-4 px-4 pt-3 border-b backdrop-blur-md",
             "bg-[hsl(var(--header-bg)/0.95)]",
-            themeClasses.border,
+            tc.border,
           )}
         >
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h1 className={cn("text-2xl font-bold", themeClasses.text)}>
-                Recurring Payments
-              </h1>
-              <p className={cn("text-sm", themeClasses.textMuted)}>
-                {recurringPayments.length} active &middot; $
-                {monthlyTotal.toFixed(0)}/mo
+              <h1 className={cn("text-2xl font-bold", tc.text)}>Payments</h1>
+              <p className={cn("text-sm", tc.textMuted)}>
+                {activeTab === "recurring"
+                  ? `${activePayments.length} active · $${monthlyTotal.toFixed(0)}/mo`
+                  : `${futurePayments.length} scheduled · $${futureTotal.toFixed(0)} total`}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              {/* View toggle */}
-              <button
-                onClick={() =>
-                  setViewMode((v) => (v === "comfort" ? "compact" : "comfort"))
-                }
-                className={cn(
-                  "p-2 rounded-lg active:scale-95 transition-all",
-                  themeClasses.bgSurface,
-                  themeClasses.bgHover,
-                )}
-                title={
-                  viewMode === "comfort"
-                    ? "Switch to compact view"
-                    : "Switch to comfort view"
-                }
-              >
-                <ListIcon
-                  className={cn(
-                    "w-4 h-4",
-                    viewMode === "compact"
-                      ? themeClasses.textHighlight
-                      : themeClasses.text,
-                  )}
-                />
-              </button>
+            {activeTab === "recurring" && (
               <button
                 onClick={() => {
                   setEditingPayment(null);
@@ -392,375 +529,291 @@ export default function RecurringPage() {
                 <PlusIcon className="w-4 h-4" />
                 <span className="text-sm font-semibold">Add</span>
               </button>
-            </div>
+            )}
+          </div>
+
+          {/* Tab toggle */}
+          <div className="flex gap-1 p-1 rounded-xl bg-white/5">
+            <button
+              onClick={() => setActiveTab("recurring")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
+                activeTab === "recurring"
+                  ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
+                  : "text-white/40 hover:text-white/60",
+              )}
+            >
+              <CalendarClock className="w-4 h-4" />
+              Recurring
+            </button>
+            <button
+              onClick={() => setActiveTab("future")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
+                activeTab === "future"
+                  ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
+                  : "text-white/40 hover:text-white/60",
+              )}
+            >
+              <Calendar className="w-4 h-4" />
+              Future
+              {dueFuturePayments.length > 0 && (
+                <span className="w-5 h-5 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold">
+                  {dueFuturePayments.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
-        {/* List */}
-        {sortedPayments.length === 0 ? (
-          <div className="neo-card p-8 text-center">
-            <CalendarClockIcon
-              className={cn("w-16 h-16 mx-auto mb-4", themeClasses.textFaint)}
-            />
-            <p className={cn("mb-2", themeClasses.textMuted)}>
-              No recurring payments yet
-            </p>
-            <p className={cn("text-sm", themeClasses.textFaint)}>
-              Tap the + button to add your first recurring payment
-            </p>
-          </div>
-        ) : viewMode === "compact" ? (
-          /* ── Compact List View ── */
-          <div className="space-y-0.5">
-            {/* Column header */}
-            <div className="flex items-center gap-3 px-3 py-2 text-[10px] uppercase tracking-wider text-white/30">
-              <span className="w-8 text-center">Day</span>
-              <span className="flex-1">Name</span>
-              <span className="w-16 text-right">Amount</span>
-              <span className="w-12 text-center">Type</span>
-              <span className="w-8" />
-            </div>
-            {sortedPayments.map((payment) => {
-              const dueDateInfo = getDueDateInfo(payment);
-              const day =
-                payment.recurrence_day ??
-                new Date(payment.next_due_date).getDate();
-              const isManual =
-                (payment.payment_method ?? "manual") === "manual";
-              const isOwner =
-                !currentUserId || payment.user_id === currentUserId;
-
-              return (
-                <div
-                  key={payment.id}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all border",
-                    dueDateInfo.isOverdue
-                      ? "border-red-500/40 bg-red-500/5"
-                      : dueDateInfo.isDueToday
-                        ? cn(
-                            themeClasses.bgActive,
-                            themeClasses.borderActive,
-                            "neo-glow",
-                          )
-                        : "border-transparent hover:bg-white/5",
-                  )}
-                >
-                  {/* Day */}
-                  <span
-                    className={cn(
-                      "w-8 text-center text-sm font-bold tabular-nums",
-                      dueDateInfo.isOverdue
-                        ? "text-red-400"
-                        : dueDateInfo.isDueToday
-                          ? themeClasses.textHighlight
-                          : "text-white/60",
-                    )}
-                  >
-                    {day}
-                  </span>
-
-                  {/* Name + category */}
-                  <div
-                    className="flex-1 min-w-0 cursor-pointer"
-                    onClick={() =>
-                      isManual
-                        ? setConfirmingPayment(payment)
-                        : isOwner
-                          ? setEditingPayment(payment)
-                          : undefined
-                    }
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-medium text-white truncate">
-                        {payment.name}
-                      </p>
-                      {payment.is_private && isOwner && (
-                        <LockIcon className="w-3 h-3 text-white/30 flex-shrink-0" />
-                      )}
+        {/* ═══ RECURRING PAYMENTS TAB ═══ */}
+        {activeTab === "recurring" && (
+          <>
+            {activePayments.length === 0 && disabledPayments.length === 0 ? (
+              <div className="neo-card p-8 text-center">
+                <CalendarClock
+                  className={cn("w-16 h-16 mx-auto mb-4", tc.textFaint)}
+                />
+                <p className={cn("mb-2", tc.textMuted)}>
+                  No recurring payments yet
+                </p>
+                <p className={cn("text-sm", tc.textFaint)}>
+                  Tap the + button to add your first recurring payment
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Cash / Manual Section */}
+                {cashPayments.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1">
+                        <Banknote className="w-3 h-3" /> Cash / Manual
+                      </span>
+                      <span className="text-[10px] text-white/25">
+                        ({cashPayments.length})
+                      </span>
                     </div>
-                    {!isOwner && (
-                      <p className="text-[10px] text-purple-400/70 truncate">
-                        {getMemberDisplayName(members, payment.user_id)}
-                      </p>
-                    )}
-                    {payment.category && isOwner && (
-                      <p className="text-[10px] text-white/30 truncate">
-                        {payment.category.name}
-                      </p>
-                    )}
+                    <RecurringSection
+                      payments={cashPayments}
+                      tc={tc}
+                      currentUserId={currentUserId}
+                      members={members}
+                      getDueDateInfo={getDueDateInfo}
+                      onConfirm={setConfirmingRecurring}
+                      onEdit={setEditingPayment}
+                      onDelete={handleDelete}
+                    />
                   </div>
-
-                  {/* Amount */}
-                  <span
-                    className={cn(
-                      "w-16 text-right text-sm font-semibold tabular-nums",
-                      dueDateInfo.isOverdue
-                        ? "text-red-400"
-                        : themeClasses.textHighlight,
-                    )}
-                  >
-                    ${payment.amount.toFixed(0)}
-                  </span>
-
-                  {/* Method badge */}
-                  <span
-                    className={cn(
-                      "w-12 text-center text-[10px] px-1.5 py-0.5 rounded-full font-medium",
-                      isManual
-                        ? "bg-amber-500/15 text-amber-400"
-                        : "bg-blue-500/15 text-blue-400",
-                    )}
-                  >
-                    {isManual ? "Cash" : "Auto"}
-                  </span>
-
-                  {/* Log transaction button */}
-                  <div className="w-8 flex justify-center">
-                    {isManual ? (
-                      <button
-                        onClick={() => setConfirmingPayment(payment)}
-                        className={cn(
-                          "p-1.5 rounded-md active:scale-95 transition-all",
-                          dueDateInfo.isOverdue
-                            ? "bg-red-500/20"
-                            : dueDateInfo.isDueToday
-                              ? themeClasses.bgActive
-                              : themeClasses.bgSurface,
-                        )}
-                      >
-                        <CheckIcon
-                          className={cn(
-                            "w-3.5 h-3.5",
-                            dueDateInfo.isOverdue
-                              ? "text-red-400"
-                              : dueDateInfo.isDueToday
-                                ? themeClasses.textHighlight
-                                : themeClasses.text,
-                          )}
-                        />
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Compact total row */}
-            <div
-              className={cn(
-                "flex items-center gap-3 px-3 py-3 mt-2 rounded-lg border",
-                themeClasses.border,
-                themeClasses.bgSurface,
-              )}
-            >
-              <span className="w-8" />
-              <span className="flex-1 text-sm font-semibold text-white/60">
-                Monthly Total
-              </span>
-              <span
-                className={cn(
-                  "w-16 text-right text-sm font-bold tabular-nums",
-                  themeClasses.textHighlight,
                 )}
-              >
-                ${monthlyTotal.toFixed(0)}
-              </span>
-              <span className="w-12" />
-              <span className="w-8" />
-            </div>
-          </div>
-        ) : (
-          /* ── Comfort Card View ── */
-          <div className="space-y-3">
-            {sortedPayments.map((payment) => {
-              const dueDateInfo = getDueDateInfo(payment);
-              const IconComponent = payment.category
-                ? getCategoryIcon(payment.category.name, payment.category.slug)
-                : CalendarClockIcon;
-              const isManual =
-                (payment.payment_method ?? "manual") === "manual";
-              const day =
-                payment.recurrence_day ??
-                new Date(payment.next_due_date).getDate();
-              const isOwner =
-                !currentUserId || payment.user_id === currentUserId;
 
-              return (
-                <div
-                  key={payment.id}
-                  className={cn(
-                    "neo-card p-4 transition-all border",
-                    dueDateInfo.isOverdue
-                      ? "border-red-500/50 bg-red-500/5 neo-glow"
-                      : dueDateInfo.isDueToday
-                        ? cn(
-                            "neo-glow",
-                            themeClasses.borderActive,
-                            themeClasses.bgActive,
-                          )
-                        : "border-green-500/20 bg-green-500/5",
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 flex-1">
-                      <div
-                        className={cn(
-                          "w-10 h-10 rounded-lg flex items-center justify-center",
-                          dueDateInfo.isOverdue
-                            ? "bg-red-500/15"
-                            : dueDateInfo.isDueToday
-                              ? themeClasses.bgActive
-                              : themeClasses.bgSurface,
-                        )}
-                      >
-                        <IconComponent
-                          className={cn(
-                            "w-5 h-5",
-                            dueDateInfo.isOverdue
-                              ? "text-red-400"
-                              : dueDateInfo.isDueToday
-                                ? themeClasses.textHighlight
-                                : themeClasses.text,
-                          )}
-                        />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <h3 className="font-semibold text-white">
-                            {payment.name}
-                          </h3>
-                          <span
-                            className={cn(
-                              "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
-                              isManual
-                                ? "bg-amber-500/15 text-amber-400"
-                                : "bg-blue-500/15 text-blue-400",
-                            )}
-                          >
-                            {isManual ? "Cash" : "Auto"}
-                          </span>
-                          {payment.is_private && isOwner && (
-                            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-white/8 text-white/40 font-medium">
-                              <LockIcon className="w-2.5 h-2.5" />
-                              Private
-                            </span>
-                          )}
-                          {!isOwner && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 font-medium">
-                              {getMemberDisplayName(members, payment.user_id)}
-                            </span>
-                          )}
-                        </div>
-                        <p
-                          className={cn(
-                            "text-2xl font-bold mb-2",
-                            dueDateInfo.isOverdue
-                              ? "text-red-400"
-                              : themeClasses.textHighlight,
-                          )}
-                        >
-                          ${payment.amount.toFixed(2)}
-                        </p>
-
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          <span
-                            className={cn(
-                              "px-2 py-1 rounded-full font-medium",
-                              dueDateInfo.isOverdue
-                                ? "bg-red-500/15 text-red-400"
-                                : dueDateInfo.isDueToday
-                                  ? cn(
-                                      themeClasses.bgActive,
-                                      themeClasses.textHighlight,
-                                    )
-                                  : "bg-green-500/15 text-green-400",
-                            )}
-                          >
-                            {dueDateInfo.formatted}
-                          </span>
-                          <span className={themeClasses.textMuted}>
-                            {day}
-                            {getOrdinalSuffix(day)} of each month
-                          </span>
-                          {payment.category && (
-                            <span className={themeClasses.textMuted}>
-                              {payment.category.name}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                {/* Auto / Online Section */}
+                {autoPayments.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest flex items-center gap-1">
+                        <Zap className="w-3 h-3" /> Auto / Online
+                      </span>
+                      <span className="text-[10px] text-white/25">
+                        ({autoPayments.length})
+                      </span>
                     </div>
+                    <RecurringSection
+                      payments={autoPayments}
+                      tc={tc}
+                      currentUserId={currentUserId}
+                      members={members}
+                      getDueDateInfo={getDueDateInfo}
+                      onConfirm={setConfirmingRecurring}
+                      onEdit={setEditingPayment}
+                      onDelete={handleDelete}
+                      onToggle={(p) =>
+                        updateMutation.mutate({
+                          id: p.id,
+                          is_active: false,
+                        })
+                      }
+                      isAutoSection
+                    />
+                  </div>
+                )}
 
-                    <div className="flex gap-1">
-                      {/* Log transaction (manual payments — visible to owner and partner) */}
-                      {isManual && (
-                        <button
-                          onClick={() => setConfirmingPayment(payment)}
-                          className={cn(
-                            "p-2 rounded-lg active:scale-95 transition-all",
-                            dueDateInfo.isOverdue
-                              ? "bg-red-500/15 hover:bg-red-500/25"
-                              : dueDateInfo.isDueToday
-                                ? cn(themeClasses.bgActive, themeClasses.bgHover)
-                                : cn(themeClasses.bgSurface, themeClasses.bgHover),
-                          )}
-                        >
-                          <CheckIcon
-                            className={cn(
-                              "w-4 h-4",
-                              dueDateInfo.isOverdue
-                                ? "text-red-400"
-                                : dueDateInfo.isDueToday
-                                  ? themeClasses.textHighlight
-                                  : themeClasses.text,
-                            )}
-                          />
-                        </button>
-                      )}
-                      {/* Edit/Delete — owner only */}
-                      {isOwner && (
-                        <>
-                          <button
-                            onClick={() => setEditingPayment(payment)}
-                            className={cn(
-                              "p-2 rounded-lg active:scale-95 transition-all",
-                              themeClasses.bgSurface,
-                              themeClasses.bgHover,
-                            )}
+                {/* Disabled Subscriptions */}
+                {disabledPayments.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest flex items-center gap-1">
+                        <Power className="w-3 h-3" /> Disabled
+                      </span>
+                      <span className="text-[10px] text-white/20">
+                        ({disabledPayments.length})
+                      </span>
+                    </div>
+                    <div className="space-y-0.5 opacity-50">
+                      {disabledPayments.map((payment) => {
+                        const day =
+                          payment.recurrence_day ??
+                          new Date(payment.next_due_date).getDate();
+                        return (
+                          <div
+                            key={payment.id}
+                            className="flex items-center gap-3 px-3 py-2 rounded-lg border border-transparent hover:bg-white/5"
                           >
-                            <Edit2Icon
-                              className={cn("w-4 h-4", themeClasses.text)}
-                            />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(payment.id)}
-                            className="p-2 rounded-lg bg-[#ef4444]/10 hover:bg-[#ef4444]/20 active:scale-95 transition-all"
-                          >
-                            <Trash2Icon className="w-4 h-4 text-[#ef4444]" />
-                          </button>
-                        </>
-                      )}
+                            <span className="w-8 text-center text-sm font-bold tabular-nums text-white/30">
+                              {day}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-white/40 truncate line-through">
+                                {payment.name}
+                              </p>
+                              {payment.category && (
+                                <p className="text-[10px] text-white/20 truncate">
+                                  {payment.category.name}
+                                </p>
+                              )}
+                            </div>
+                            <span className="w-16 text-right text-sm font-semibold tabular-nums text-white/30">
+                              ${payment.amount.toFixed(0)}
+                            </span>
+                            <div className="w-8 flex justify-center">
+                              <button
+                                onClick={() =>
+                                  updateMutation.mutate({
+                                    id: payment.id,
+                                    is_active: true,
+                                  })
+                                }
+                                className="p-1.5 rounded-md bg-white/5 hover:bg-white/10 active:scale-95 transition-all"
+                              >
+                                <Power className="w-3.5 h-3.5 text-white/40" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
+                )}
+
+                {/* Total row */}
+                <div
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-3 rounded-lg border",
+                    tc.border,
+                    tc.bgSurface,
+                  )}
+                >
+                  <span className="w-8" />
+                  <span className="flex-1 text-sm font-semibold text-white/60">
+                    Monthly Total
+                  </span>
+                  <span
+                    className={cn(
+                      "text-sm font-bold tabular-nums",
+                      tc.textHighlight,
+                    )}
+                  >
+                    ${monthlyTotal.toFixed(0)}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            )}
+          </>
         )}
 
-        {/* Add/Edit Drawer */}
+        {/* ═══ FUTURE PAYMENTS TAB ═══ */}
+        {activeTab === "future" && (
+          <>
+            {futurePayments.length === 0 ? (
+              <div className="neo-card p-8 text-center">
+                <Calendar
+                  className={cn("w-16 h-16 mx-auto mb-4", tc.textFaint)}
+                />
+                <p className={cn("mb-2", tc.textMuted)}>No future payments</p>
+                <p className={cn("text-sm", tc.textFaint)}>
+                  Schedule a future payment from the New Expense form by picking
+                  a future date
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Due Now */}
+                {dueFuturePayments.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                      <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">
+                        Due Now
+                      </span>
+                    </div>
+                    <FutureSection
+                      payments={dueFuturePayments}
+                      tc={tc}
+                      currentUserId={currentUserId}
+                      members={members}
+                      onConfirm={setConfirmingFuture}
+                      onDelete={(id) => deleteFutureMutation.mutate(id)}
+                      isDue
+                    />
+                  </div>
+                )}
+
+                {/* Upcoming */}
+                {upcomingFuturePayments.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">
+                        Upcoming
+                      </span>
+                    </div>
+                    <FutureSection
+                      payments={upcomingFuturePayments}
+                      tc={tc}
+                      currentUserId={currentUserId}
+                      members={members}
+                      onConfirm={setConfirmingFuture}
+                      onDelete={(id) => deleteFutureMutation.mutate(id)}
+                      isDue={false}
+                    />
+                  </div>
+                )}
+
+                {/* Total row */}
+                <div
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-3 rounded-lg border",
+                    tc.border,
+                    tc.bgSurface,
+                  )}
+                >
+                  <span className="flex-1 text-sm font-semibold text-white/60">
+                    Total Scheduled
+                  </span>
+                  <span
+                    className={cn(
+                      "text-sm font-bold tabular-nums",
+                      tc.textHighlight,
+                    )}
+                  >
+                    ${futureTotal.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ═══ ADD/EDIT RECURRING DRAWER ═══ */}
         {showAddDrawer && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end">
             <div
-              className={`w-full ${themeClasses.surfaceBg} rounded-t-3xl h-[92vh] flex flex-col`}
+              className={`w-full ${tc.bgSurface} rounded-t-3xl h-[92vh] flex flex-col`}
             >
-              {/* Fixed Header */}
               <div
-                className={`flex items-center justify-between p-6 pb-4 border-b ${themeClasses.border} flex-shrink-0`}
+                className={`flex items-center justify-between p-6 pb-4 border-b ${tc.border} flex-shrink-0`}
               >
-                <h2 className={`text-xl font-bold ${themeClasses.headerText}`}>
+                <h2 className={`text-xl font-bold ${tc.text}`}>
                   {editingPayment ? "Edit Payment" : "Add Recurring Payment"}
                 </h2>
                 <button
@@ -768,19 +821,15 @@ export default function RecurringPage() {
                     setShowAddDrawer(false);
                     setEditingPayment(null);
                   }}
-                  className={`p-2 rounded-lg ${themeClasses.bgSurface} ${themeClasses.bgHover}`}
+                  className={`p-2 rounded-lg ${tc.bgSurface} ${tc.bgHover}`}
                 >
-                  <XIcon className={`w-5 h-5 ${themeClasses.headerText}`} />
+                  <XIcon className={`w-5 h-5 ${tc.text}`} />
                 </button>
               </div>
-
-              {/* Scrollable Content */}
               <div className="overflow-y-auto flex-1 p-6 pt-4">
                 <div className="space-y-4 pb-32">
                   <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
+                    <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                       Name *
                     </Label>
                     <Input
@@ -789,14 +838,11 @@ export default function RecurringPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, name: e.target.value })
                       }
-                      className={`${themeClasses.formControlBg} text-white`}
+                      className={`${tc.inputBg} text-white`}
                     />
                   </div>
-
                   <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
+                    <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                       Amount *
                     </Label>
                     <Input
@@ -807,15 +853,13 @@ export default function RecurringPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, amount: e.target.value })
                       }
-                      className={`${themeClasses.formControlBg} text-white`}
+                      className={`${tc.inputBg} text-white`}
                     />
                   </div>
 
                   {/* Payment Method Toggle */}
                   <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
+                    <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                       Payment Method
                     </Label>
                     <div className="grid grid-cols-2 gap-2">
@@ -828,13 +872,10 @@ export default function RecurringPage() {
                           "px-4 py-3 rounded-xl text-sm font-medium transition-all border",
                           formData.payment_method === "manual"
                             ? "bg-amber-500/20 border-amber-500/50 text-amber-400"
-                            : cn(
-                                "border-white/10 text-white/50",
-                                themeClasses.bgSurface,
-                              ),
+                            : cn("border-white/10 text-white/50", tc.bgSurface),
                         )}
                       >
-                        <div className="text-base mb-0.5">💵</div>
+                        <Banknote className="w-5 h-5 mx-auto mb-0.5" />
                         <div>Cash / Manual</div>
                         <div className="text-[10px] text-white/30 mt-0.5">
                           Log via confirm
@@ -849,13 +890,10 @@ export default function RecurringPage() {
                           "px-4 py-3 rounded-xl text-sm font-medium transition-all border",
                           formData.payment_method === "auto"
                             ? "bg-blue-500/20 border-blue-500/50 text-blue-400"
-                            : cn(
-                                "border-white/10 text-white/50",
-                                themeClasses.bgSurface,
-                              ),
+                            : cn("border-white/10 text-white/50", tc.bgSurface),
                         )}
                       >
-                        <div className="text-base mb-0.5">🏦</div>
+                        <Zap className="w-5 h-5 mx-auto mb-0.5" />
                         <div>Auto / Online</div>
                         <div className="text-[10px] text-white/30 mt-0.5">
                           Info only (via statement)
@@ -865,26 +903,22 @@ export default function RecurringPage() {
                   </div>
 
                   <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
+                    <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                       Account *
                     </Label>
                     <Select
                       value={formData.account_id}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, account_id: value })
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, account_id: v })
                       }
                     >
-                      <SelectTrigger
-                        className={`${themeClasses.formControlBg} text-white`}
-                      >
+                      <SelectTrigger className={`${tc.inputBg} text-white`}>
                         <SelectValue placeholder="Select account" />
                       </SelectTrigger>
                       <SelectContent>
-                        {accounts.map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {account.name}
+                        {accounts.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -892,32 +926,28 @@ export default function RecurringPage() {
                   </div>
 
                   <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
+                    <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                       Category
                     </Label>
                     <Select
                       value={formData.category_id}
-                      onValueChange={(value) =>
+                      onValueChange={(v) =>
                         setFormData({
                           ...formData,
-                          category_id: value,
+                          category_id: v,
                           subcategory_id: "",
                         })
                       }
                     >
-                      <SelectTrigger
-                        className={`${themeClasses.formControlBg} text-white`}
-                      >
+                      <SelectTrigger className={`${tc.inputBg} text-white`}>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
                         {categories
                           .filter((c: any) => !c.parent_id)
-                          .map((category: any) => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.name}
+                          .map((c: any) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
                             </SelectItem>
                           ))}
                       </SelectContent>
@@ -926,26 +956,22 @@ export default function RecurringPage() {
 
                   {subcategories.length > 0 && (
                     <div>
-                      <Label
-                        className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                      >
+                      <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                         Subcategory
                       </Label>
                       <Select
                         value={formData.subcategory_id}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, subcategory_id: value })
+                        onValueChange={(v) =>
+                          setFormData({ ...formData, subcategory_id: v })
                         }
                       >
-                        <SelectTrigger
-                          className={`${themeClasses.formControlBg} text-white`}
-                        >
+                        <SelectTrigger className={`${tc.inputBg} text-white`}>
                           <SelectValue placeholder="Select subcategory" />
                         </SelectTrigger>
                         <SelectContent>
-                          {subcategories.map((sub: any) => (
-                            <SelectItem key={sub.id} value={sub.id}>
-                              {sub.name}
+                          {subcategories.map((s: any) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -954,20 +980,16 @@ export default function RecurringPage() {
                   )}
 
                   <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
+                    <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                       Repeat *
                     </Label>
                     <Select
                       value={formData.recurrence_type}
-                      onValueChange={(value: any) =>
-                        setFormData({ ...formData, recurrence_type: value })
+                      onValueChange={(v: any) =>
+                        setFormData({ ...formData, recurrence_type: v })
                       }
                     >
-                      <SelectTrigger
-                        className={`${themeClasses.formControlBg} text-white`}
-                      >
+                      <SelectTrigger className={`${tc.inputBg} text-white`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -981,17 +1003,13 @@ export default function RecurringPage() {
 
                   {formData.recurrence_type === "monthly" && (
                     <div>
-                      <Label
-                        className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                      >
+                      <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                         Day of Month
                       </Label>
                       <Input
                         type="text"
                         inputMode="numeric"
                         placeholder="1-31"
-                        min="1"
-                        max="31"
                         value={formData.recurrence_day}
                         onChange={(e) =>
                           setFormData({
@@ -999,27 +1017,23 @@ export default function RecurringPage() {
                             recurrence_day: e.target.value,
                           })
                         }
-                        className={`${themeClasses.formControlBg} text-white`}
+                        className={`${tc.inputBg} text-white`}
                       />
                     </div>
                   )}
 
                   {formData.recurrence_type === "weekly" && (
                     <div>
-                      <Label
-                        className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                      >
+                      <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                         Day of Week
                       </Label>
                       <Select
                         value={formData.recurrence_day}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, recurrence_day: value })
+                        onValueChange={(v) =>
+                          setFormData({ ...formData, recurrence_day: v })
                         }
                       >
-                        <SelectTrigger
-                          className={`${themeClasses.formControlBg} text-white`}
-                        >
+                        <SelectTrigger className={`${tc.inputBg} text-white`}>
                           <SelectValue placeholder="Select day" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1036,9 +1050,7 @@ export default function RecurringPage() {
                   )}
 
                   <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
+                    <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                       Next Due Date *
                     </Label>
                     <Input
@@ -1050,14 +1062,12 @@ export default function RecurringPage() {
                           next_due_date: e.target.value,
                         })
                       }
-                      className={`${themeClasses.formControlBg} text-white`}
+                      className={`${tc.inputBg} text-white`}
                     />
                   </div>
 
                   <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
+                    <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
                       Description
                     </Label>
                     <Input
@@ -1069,7 +1079,7 @@ export default function RecurringPage() {
                           description: e.target.value,
                         })
                       }
-                      className={`${themeClasses.formControlBg} text-white`}
+                      className={`${tc.inputBg} text-white`}
                     />
                   </div>
 
@@ -1087,11 +1097,11 @@ export default function RecurringPage() {
                       formData.is_private
                         ? "bg-white/8 border-white/20 text-white"
                         : "border-white/8 text-white/40",
-                      themeClasses.bgSurface,
+                      tc.bgSurface,
                     )}
                   >
                     <div className="flex items-center gap-3">
-                      <LockIcon className="w-4 h-4" />
+                      <Lock className="w-4 h-4" />
                       <div className="text-left">
                         <div className="text-sm font-medium">Private</div>
                         <div className="text-[10px] text-white/30">
@@ -1102,9 +1112,7 @@ export default function RecurringPage() {
                     <div
                       className={cn(
                         "w-9 h-5 rounded-full transition-all relative",
-                        formData.is_private
-                          ? "bg-white/30"
-                          : "bg-white/10",
+                        formData.is_private ? "bg-white/30" : "bg-white/10",
                       )}
                     >
                       <div
@@ -1135,218 +1143,588 @@ export default function RecurringPage() {
           </div>
         )}
 
-        {/* Confirm Payment — Log as Transaction */}
-        {confirmingPayment && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end">
-            <div
-              className={`w-full ${themeClasses.surfaceBg} rounded-t-3xl h-[85vh] flex flex-col`}
+        {/* ═══ CONFIRM DRAWER (shared for recurring + future) ═══ */}
+        {(confirmingRecurring || confirmingFuture) && (
+          <ConfirmDrawer
+            title={
+              confirmingRecurring
+                ? confirmingRecurring.name
+                : confirmingFuture!.description || "Future Payment"
+            }
+            tc={tc}
+            formData={confirmFormData}
+            setFormData={setConfirmFormData}
+            accounts={accounts}
+            categories={categories}
+            subcategories={confirmSubcategories}
+            isPending={
+              confirmRecurringMutation.isPending ||
+              confirmFutureMutation.isPending
+            }
+            onConfirm={
+              confirmingRecurring ? handleConfirmRecurring : handleConfirmFuture
+            }
+            onClose={() => {
+              setConfirmingRecurring(null);
+              setConfirmingFuture(null);
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   RECURRING SECTION (compact rows)
+   ═══════════════════════════════════════════════════ */
+function RecurringSection({
+  payments,
+  tc,
+  currentUserId,
+  members,
+  getDueDateInfo,
+  onConfirm,
+  onEdit,
+  onDelete,
+  onToggle,
+  isAutoSection,
+}: {
+  payments: RecurringPayment[];
+  tc: ReturnType<typeof useThemeClasses>;
+  currentUserId: string | null;
+  members: any[];
+  getDueDateInfo: (p: RecurringPayment) => {
+    isDue: boolean;
+    isDueToday: boolean;
+    isOverdue: boolean;
+    formatted: string;
+  };
+  onConfirm: (p: RecurringPayment) => void;
+  onEdit: (p: RecurringPayment) => void;
+  onDelete: (id: string) => void;
+  onToggle?: (p: RecurringPayment) => void;
+  isAutoSection?: boolean;
+}) {
+  return (
+    <div className="space-y-0.5">
+      {/* Column header */}
+      <div className="flex items-center gap-3 px-3 py-2 text-[10px] uppercase tracking-wider text-white/30">
+        <span className="w-8 text-center">Day</span>
+        <span className="flex-1">Name</span>
+        <span className="w-16 text-right">Amount</span>
+        <span className="w-8" />
+      </div>
+      {payments.map((payment) => {
+        const dueDateInfo = getDueDateInfo(payment);
+        const day =
+          payment.recurrence_day ?? new Date(payment.next_due_date).getDate();
+        const isManual = (payment.payment_method ?? "manual") === "manual";
+        const isOwner = !currentUserId || payment.user_id === currentUserId;
+        // Own auto subscriptions: info-only, no overdue styling
+        // Partner auto payments (e.g. bills): show overdue + confirm
+        const isAutoOwn = isAutoSection && isOwner;
+        const isAutoPartner = isAutoSection && !isOwner;
+
+        return (
+          <div
+            key={payment.id}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all border",
+              isAutoOwn
+                ? "border-transparent hover:bg-white/5"
+                : dueDateInfo.isOverdue
+                  ? "border-red-500/40 bg-red-500/5"
+                  : dueDateInfo.isDueToday
+                    ? cn(tc.bgActive, tc.borderActive, "neo-glow")
+                    : "border-transparent hover:bg-white/5",
+            )}
+          >
+            {/* Day */}
+            <span
+              className={cn(
+                "w-8 text-center text-sm font-bold tabular-nums",
+                isAutoOwn
+                  ? "text-white/60"
+                  : dueDateInfo.isOverdue
+                    ? "text-red-400"
+                    : dueDateInfo.isDueToday
+                      ? tc.textHighlight
+                      : "text-white/60",
+              )}
             >
-              {/* Fixed Header */}
-              <div
-                className={`flex items-center justify-between p-6 pb-4 border-b ${themeClasses.border} flex-shrink-0`}
-              >
-                <div>
-                  <h2
-                    className={`text-xl font-bold ${themeClasses.headerText}`}
-                  >
-                    Log Transaction
-                  </h2>
-                  <p className={`text-sm ${themeClasses.headerTextMuted}`}>
-                    {confirmingPayment.name}
-                  </p>
-                </div>
+              {day}
+            </span>
+
+            {/* Name + category */}
+            <div
+              className="flex-1 min-w-0 cursor-pointer"
+              onClick={() =>
+                isManual
+                  ? onConfirm(payment)
+                  : isAutoPartner
+                    ? onConfirm(payment)
+                    : isOwner
+                      ? onEdit(payment)
+                      : undefined
+              }
+            >
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium text-white truncate">
+                  {payment.name}
+                </p>
+                {payment.is_private && isOwner && (
+                  <Lock className="w-3 h-3 text-white/30 flex-shrink-0" />
+                )}
+              </div>
+              {!isOwner && (
+                <p className="text-[10px] text-purple-400/70 truncate">
+                  {getMemberDisplayName(members, payment.user_id)}
+                </p>
+              )}
+              {payment.category && (
+                <p className="text-[10px] text-white/30 truncate">
+                  {payment.category.name}
+                </p>
+              )}
+            </div>
+
+            {/* Amount */}
+            <span
+              className={cn(
+                "w-16 text-right text-sm font-semibold tabular-nums",
+                isAutoOwn
+                  ? tc.textHighlight
+                  : dueDateInfo.isOverdue
+                    ? "text-red-400"
+                    : tc.textHighlight,
+              )}
+            >
+              ${payment.amount.toFixed(0)}
+            </span>
+
+            {/* Actions */}
+            <div className="w-8 flex justify-center">
+              {isManual ? (
                 <button
-                  onClick={() => setConfirmingPayment(null)}
-                  className={`p-2 rounded-lg ${themeClasses.bgSurface} ${themeClasses.bgHover}`}
-                >
-                  <XIcon className={`w-5 h-5 ${themeClasses.headerText}`} />
-                </button>
-              </div>
-
-              {/* Scrollable Content */}
-              <div className="overflow-y-auto flex-1 p-6 pt-4">
-                <div className="space-y-4 pb-32">
-                  {/* Amount */}
-                  <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
-                      Amount
-                    </Label>
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      value={confirmFormData.amount}
-                      onChange={(e) =>
-                        setConfirmFormData({
-                          ...confirmFormData,
-                          amount: e.target.value,
-                        })
-                      }
-                      className={`${themeClasses.formControlBg} text-white`}
-                    />
-                  </div>
-
-                  {/* Account */}
-                  <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
-                      Account
-                    </Label>
-                    <Select
-                      value={confirmFormData.account_id}
-                      onValueChange={(value) =>
-                        setConfirmFormData({
-                          ...confirmFormData,
-                          account_id: value,
-                        })
-                      }
-                    >
-                      <SelectTrigger
-                        className={`${themeClasses.formControlBg} text-white`}
-                      >
-                        <SelectValue placeholder="Select account" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {accounts.map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {account.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Category */}
-                  <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
-                      Category
-                    </Label>
-                    <Select
-                      value={confirmFormData.category_id}
-                      onValueChange={(value) =>
-                        setConfirmFormData({
-                          ...confirmFormData,
-                          category_id: value,
-                          subcategory_id: "",
-                        })
-                      }
-                    >
-                      <SelectTrigger
-                        className={`${themeClasses.formControlBg} text-white`}
-                      >
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories
-                          .filter((c: any) => !c.parent_id)
-                          .map((category: any) => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Subcategory */}
-                  {confirmSubcategories.length > 0 && (
-                    <div>
-                      <Label
-                        className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                      >
-                        Subcategory
-                      </Label>
-                      <Select
-                        value={confirmFormData.subcategory_id}
-                        onValueChange={(value) =>
-                          setConfirmFormData({
-                            ...confirmFormData,
-                            subcategory_id: value,
-                          })
-                        }
-                      >
-                        <SelectTrigger
-                          className={`${themeClasses.formControlBg} text-white`}
-                        >
-                          <SelectValue placeholder="Select subcategory" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {confirmSubcategories.map((sub: any) => (
-                            <SelectItem key={sub.id} value={sub.id}>
-                              {sub.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  onClick={() => onConfirm(payment)}
+                  className={cn(
+                    "p-1.5 rounded-md active:scale-95 transition-all",
+                    dueDateInfo.isOverdue
+                      ? "bg-red-500/20"
+                      : dueDateInfo.isDueToday
+                        ? tc.bgActive
+                        : tc.bgSurface,
                   )}
-
-                  {/* Description */}
-                  <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
-                      Description
-                    </Label>
-                    <Input
-                      value={confirmFormData.description}
-                      onChange={(e) =>
-                        setConfirmFormData({
-                          ...confirmFormData,
-                          description: e.target.value,
-                        })
-                      }
-                      className={`${themeClasses.formControlBg} text-white`}
-                    />
-                  </div>
-
-                  {/* Date */}
-                  <div>
-                    <Label
-                      className={`text-sm ${themeClasses.labelText} mb-2 block`}
-                    >
-                      Date
-                    </Label>
-                    <Input
-                      type="date"
-                      value={confirmFormData.date}
-                      onChange={(e) =>
-                        setConfirmFormData({
-                          ...confirmFormData,
-                          date: e.target.value,
-                        })
-                      }
-                      className={`${themeClasses.formControlBg} text-white`}
-                    />
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <Button
-                      onClick={() => setConfirmingPayment(null)}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleConfirmPayment}
-                      disabled={confirmMutation.isPending}
-                      className="flex-1 neo-gradient text-white"
-                    >
-                      {confirmMutation.isPending
-                        ? "Logging..."
-                        : "Log Transaction"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                >
+                  <CheckIcon
+                    className={cn(
+                      "w-3.5 h-3.5",
+                      dueDateInfo.isOverdue
+                        ? "text-red-400"
+                        : dueDateInfo.isDueToday
+                          ? tc.textHighlight
+                          : tc.text,
+                    )}
+                  />
+                </button>
+              ) : isAutoOwn ? (
+                <button
+                  onClick={() => onToggle?.(payment)}
+                  className={cn(
+                    "p-1.5 rounded-md active:scale-95 transition-all",
+                    tc.bgSurface,
+                  )}
+                >
+                  <Power className={cn("w-3.5 h-3.5 text-blue-400/60")} />
+                </button>
+              ) : isAutoPartner ? (
+                <button
+                  onClick={() => onConfirm(payment)}
+                  className={cn(
+                    "p-1.5 rounded-md active:scale-95 transition-all",
+                    dueDateInfo.isOverdue
+                      ? "bg-red-500/20"
+                      : dueDateInfo.isDueToday
+                        ? tc.bgActive
+                        : tc.bgSurface,
+                  )}
+                >
+                  <CheckIcon
+                    className={cn(
+                      "w-3.5 h-3.5",
+                      dueDateInfo.isOverdue
+                        ? "text-red-400"
+                        : dueDateInfo.isDueToday
+                          ? tc.textHighlight
+                          : tc.text,
+                    )}
+                  />
+                </button>
+              ) : isOwner ? (
+                <button
+                  onClick={() => onEdit(payment)}
+                  className={cn(
+                    "p-1.5 rounded-md active:scale-95 transition-all",
+                    tc.bgSurface,
+                  )}
+                >
+                  <Edit2 className={cn("w-3.5 h-3.5", tc.text)} />
+                </button>
+              ) : null}
             </div>
           </div>
-        )}
+        );
+      })}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   FUTURE PAYMENTS SECTION (compact rows)
+   ═══════════════════════════════════════════════════ */
+function FutureSection({
+  payments,
+  tc,
+  currentUserId,
+  members,
+  onConfirm,
+  onDelete,
+  isDue,
+}: {
+  payments: FuturePayment[];
+  tc: ReturnType<typeof useThemeClasses>;
+  currentUserId: string | null;
+  members: any[];
+  onConfirm: (p: FuturePayment) => void;
+  onDelete: (id: string) => void;
+  isDue: boolean;
+}) {
+  return (
+    <div className="space-y-0.5">
+      {payments.map((payment) => {
+        const scheduledDate = new Date(payment.scheduled_date);
+        const isOwner = !currentUserId || payment.user_id === currentUserId;
+        const overdue = isPast(scheduledDate) && !isToday(scheduledDate);
+
+        const getTimeLabel = () => {
+          if (isToday(scheduledDate)) return "Today";
+          if (isTomorrow(scheduledDate)) return "Tomorrow";
+          if (overdue) return `${formatDistanceToNow(scheduledDate)} overdue`;
+          return `in ${formatDistanceToNow(scheduledDate)}`;
+        };
+
+        return (
+          <div
+            key={payment.id}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all border",
+              isDue
+                ? overdue
+                  ? "border-red-500/40 bg-red-500/5"
+                  : cn(tc.bgActive, tc.borderActive, "neo-glow")
+                : "border-transparent hover:bg-white/5",
+            )}
+          >
+            {/* Date */}
+            <span
+              className={cn(
+                "w-14 text-center text-[11px] font-bold",
+                overdue
+                  ? "text-red-400"
+                  : isDue
+                    ? tc.textHighlight
+                    : "text-white/50",
+              )}
+            >
+              {format(scheduledDate, "MMM d")}
+            </span>
+
+            {/* Description */}
+            <div
+              className="flex-1 min-w-0 cursor-pointer"
+              onClick={() => onConfirm(payment)}
+            >
+              <p className="text-sm font-medium text-white truncate">
+                {payment.description || "Scheduled payment"}
+              </p>
+              <div className="flex items-center gap-2 text-[10px] text-white/30">
+                {!isOwner && (
+                  <span className="text-purple-400/70">
+                    {getMemberDisplayName(members, payment.user_id)}
+                  </span>
+                )}
+                {payment.category && <span>{payment.category.name}</span>}
+                {payment.accounts && <span>{payment.accounts.name}</span>}
+              </div>
+            </div>
+
+            {/* Time label */}
+            <span
+              className={cn(
+                "text-[10px] font-semibold shrink-0",
+                overdue
+                  ? "text-red-400"
+                  : isDue
+                    ? tc.textHighlight
+                    : "text-blue-400",
+              )}
+            >
+              {getTimeLabel()}
+            </span>
+
+            {/* Amount */}
+            <span
+              className={cn(
+                "w-16 text-right text-sm font-semibold tabular-nums",
+                overdue ? "text-red-400" : tc.textHighlight,
+              )}
+            >
+              ${payment.amount.toFixed(0)}
+            </span>
+
+            {/* Actions */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => onConfirm(payment)}
+                className={cn(
+                  "p-1.5 rounded-md active:scale-95 transition-all",
+                  overdue
+                    ? "bg-red-500/20"
+                    : isDue
+                      ? tc.bgActive
+                      : tc.bgSurface,
+                )}
+              >
+                <CheckIcon
+                  className={cn(
+                    "w-3.5 h-3.5",
+                    overdue
+                      ? "text-red-400"
+                      : isDue
+                        ? tc.textHighlight
+                        : tc.text,
+                  )}
+                />
+              </button>
+              {isOwner && (
+                <button
+                  onClick={() => onDelete(payment.id)}
+                  className="p-1.5 rounded-md bg-[#ef4444]/10 hover:bg-[#ef4444]/20 active:scale-95 transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-[#ef4444]" />
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   CONFIRM DRAWER — Log as Transaction (shared)
+   ═══════════════════════════════════════════════════ */
+function ConfirmDrawer({
+  title,
+  tc,
+  formData,
+  setFormData,
+  accounts,
+  categories,
+  subcategories,
+  isPending,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  tc: ReturnType<typeof useThemeClasses>;
+  formData: {
+    amount: string;
+    description: string;
+    date: string;
+    account_id: string;
+    category_id: string;
+    subcategory_id: string;
+  };
+  setFormData: React.Dispatch<
+    React.SetStateAction<{
+      amount: string;
+      description: string;
+      date: string;
+      account_id: string;
+      category_id: string;
+      subcategory_id: string;
+    }>
+  >;
+  accounts: any[];
+  categories: any[];
+  subcategories: any[];
+  isPending: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end">
+      <div
+        className={`w-full ${tc.bgSurface} rounded-t-3xl h-[85vh] flex flex-col`}
+      >
+        <div
+          className={`flex items-center justify-between p-6 pb-4 border-b ${tc.border} flex-shrink-0`}
+        >
+          <div>
+            <h2 className={`text-xl font-bold ${tc.text}`}>Log Transaction</h2>
+            <p className={`text-sm ${tc.textMuted}`}>{title}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className={`p-2 rounded-lg ${tc.bgSurface} ${tc.bgHover}`}
+          >
+            <XIcon className={`w-5 h-5 ${tc.text}`} />
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-6 pt-4">
+          <div className="space-y-4 pb-32">
+            <div>
+              <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
+                Amount
+              </Label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={formData.amount}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    amount: e.target.value,
+                  }))
+                }
+                className={`${tc.inputBg} text-white`}
+              />
+            </div>
+            <div>
+              <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
+                Account
+              </Label>
+              <Select
+                value={formData.account_id}
+                onValueChange={(v) =>
+                  setFormData((prev) => ({ ...prev, account_id: v }))
+                }
+              >
+                <SelectTrigger className={`${tc.inputBg} text-white`}>
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((a: any) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
+                Category
+              </Label>
+              <Select
+                value={formData.category_id}
+                onValueChange={(v) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    category_id: v,
+                    subcategory_id: "",
+                  }))
+                }
+              >
+                <SelectTrigger className={`${tc.inputBg} text-white`}>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories
+                    .filter((c: any) => !c.parent_id)
+                    .map((c: any) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {subcategories.length > 0 && (
+              <div>
+                <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
+                  Subcategory
+                </Label>
+                <Select
+                  value={formData.subcategory_id}
+                  onValueChange={(v) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      subcategory_id: v,
+                    }))
+                  }
+                >
+                  <SelectTrigger className={`${tc.inputBg} text-white`}>
+                    <SelectValue placeholder="Select subcategory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subcategories.map((s: any) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
+                Description
+              </Label>
+              <Input
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
+                }
+                className={`${tc.inputBg} text-white`}
+              />
+            </div>
+            <div>
+              <Label className={`text-sm ${tc.textMuted} mb-2 block`}>
+                Date
+              </Label>
+              <Input
+                type="date"
+                value={formData.date}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    date: e.target.value,
+                  }))
+                }
+                className={`${tc.inputBg} text-white`}
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button onClick={onClose} variant="outline" className="flex-1">
+                Cancel
+              </Button>
+              <Button
+                onClick={onConfirm}
+                disabled={isPending}
+                className="flex-1 neo-gradient text-white"
+              >
+                {isPending ? "Logging..." : "Log Transaction"}
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

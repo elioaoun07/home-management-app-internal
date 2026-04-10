@@ -28,18 +28,15 @@ export async function GET(request: Request) {
         : link.owner_user_id
       : null;
 
-    // Build query: own items + partner's non-private items
-    let query = supabase
-      .from("recurring_payments")
-      .select(
-        `
+    // Build query: own items + partner's non-private items (include inactive for toggle UI)
+    let query = supabase.from("recurring_payments").select(
+      `
         *,
         account:accounts(id, name, type),
         category:user_categories!recurring_payments_category_id_fkey(id, name, slug, color),
         subcategory:user_categories!recurring_payments_subcategory_id_fkey(id, name, slug)
       `,
-      )
-      .eq("is_active", true);
+    );
 
     if (partnerId) {
       // Own items + partner's non-private items
