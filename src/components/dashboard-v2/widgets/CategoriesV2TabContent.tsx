@@ -2,7 +2,9 @@
 
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import BlurredAmount from "@/components/ui/BlurredAmount";
+import { useBudgetAllocations } from "@/features/budget/hooks";
 import { cn } from "@/lib/utils";
+import type { BudgetCategoryView } from "@/types/budgetAllocation";
 import { format, subMonths } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -13,12 +15,15 @@ import {
   EyeOff,
   Focus,
   RotateCcw,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -330,21 +335,22 @@ function CategorySidebar({
   const hasSolo = Array.from(visibility.values()).some((v) => v === "solo");
   const hasHidden = Array.from(visibility.values()).some((v) => v === "hidden");
   const hasFilters = hasSolo || hasHidden;
+  const grandTotal = categories.reduce((s, c) => s + c.total, 0);
 
   return (
     <div
-      className={`fixed left-4 z-40 w-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent transition-all duration-300 ${filtersOpen ? "top-[28rem] max-h-[calc(100vh-29rem)]" : "top-[15.5rem] max-h-[calc(100vh-16rem)]"}`}
+      className={`fixed left-4 z-40 w-100 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent transition-all duration-300 ${filtersOpen ? "top-[28rem] max-h-[calc(100vh-29rem)]" : "top-[15.5rem] max-h-[calc(100vh-16rem)]"}`}
     >
       <div className="neo-card rounded-2xl overflow-hidden border border-white/[0.06] shadow-2xl shadow-black/30">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-white/50">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <span className="text-[15px] font-bold uppercase tracking-widest text-white/50">
             Categories
           </span>
           {hasFilters && (
             <button
               onClick={onResetAll}
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold text-white/40 hover:text-white/70 hover:bg-white/10 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-white/40 hover:text-white/70 hover:bg-white/10 transition-colors"
               title="Reset all filters"
             >
               <RotateCcw className="w-2.5 h-2.5" />
@@ -354,7 +360,7 @@ function CategorySidebar({
         </div>
 
         {/* Category list */}
-        <div className="px-2 pb-2.5 space-y-0.5">
+        <div className="px-3 pb-3 space-y-1">
           {categories.map((cat) => {
             const mode = visibility.get(cat.name) ?? "visible";
             const isVisible =
@@ -366,7 +372,7 @@ function CategorySidebar({
                 {/* Category row */}
                 <div
                   className={cn(
-                    "group flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all duration-200 cursor-pointer",
+                    "group flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all duration-200 cursor-pointer",
                     isVisible
                       ? "hover:bg-white/[0.06]"
                       : "opacity-40 hover:opacity-60",
@@ -379,9 +385,9 @@ function CategorySidebar({
                   {cat.subcategories.length > 0 ? (
                     <div className="p-0.5 shrink-0">
                       {isExpanded ? (
-                        <ChevronDown className="w-3 h-3 text-white/40" />
+                        <ChevronDown className="w-3.5 h-3.5 text-white/40" />
                       ) : (
-                        <ChevronRight className="w-3 h-3 text-white/40" />
+                        <ChevronRight className="w-3.5 h-3.5 text-white/40" />
                       )}
                     </div>
                   ) : (
@@ -390,21 +396,28 @@ function CategorySidebar({
 
                   {/* Color dot */}
                   <div
-                    className="w-3 h-3 rounded-full shrink-0 ring-1 ring-white/10"
+                    className="w-3.5 h-3.5 rounded-full shrink-0 ring-1 ring-white/10"
                     style={{ backgroundColor: cat.color }}
                   />
 
                   {/* Name */}
-                  <span className="text-[12px] font-medium text-white/80 truncate flex-1 min-w-0">
+                  <span className="text-[13px] font-medium text-white/80 truncate flex-1 min-w-0">
                     {cat.name}
                   </span>
 
-                  {/* Amount */}
-                  <span
-                    className="text-[11px] tabular-nums font-semibold shrink-0 mr-1"
-                    style={{ color: isVisible ? cat.color : undefined }}
-                  >
-                    {fmtDollar(cat.total)}
+                  {/* % + Amount */}
+                  <span className="flex items-center gap-2.5 shrink-0 mr-1">
+                    <span className="text-[11px] tabular-nums text-white/35 font-medium min-w-[36px] text-right">
+                      {grandTotal > 0
+                        ? `${((cat.total / grandTotal) * 100).toFixed(1)}%`
+                        : "—"}
+                    </span>
+                    <span
+                      className="text-[13px] tabular-nums font-semibold min-w-[42px] text-right"
+                      style={{ color: isVisible ? cat.color : undefined }}
+                    >
+                      {fmtDollar(cat.total)}
+                    </span>
                   </span>
 
                   {/* Action buttons (show on hover) */}
@@ -468,21 +481,28 @@ function CategorySidebar({
                       transition={{ duration: 0.2, ease: "easeInOut" }}
                       className="overflow-hidden"
                     >
-                      <div className="ml-8 pl-2.5 border-l border-white/[0.06] space-y-0.5 py-0.5">
+                      <div className="ml-9 pl-3 border-l border-white/[0.06] space-y-0.5 py-1">
                         {cat.subcategories.map((sub) => (
                           <div
                             key={sub.name}
-                            className="flex items-center gap-2 px-2 py-1 rounded-md"
+                            className="flex items-center gap-2.5 px-2 py-1.5 rounded-md"
                           >
                             <div
-                              className="w-2 h-2 rounded-sm shrink-0"
+                              className="w-2.5 h-2.5 rounded-sm shrink-0"
                               style={{ backgroundColor: sub.color }}
                             />
-                            <span className="text-[11px] text-white/55 truncate flex-1 min-w-0">
+                            <span className="text-[12px] text-white/55 truncate flex-1 min-w-0">
                               {sub.name}
                             </span>
-                            <span className="text-[10px] tabular-nums text-white/35 font-medium shrink-0">
-                              {fmtDollar(sub.total)}
+                            <span className="flex items-center gap-2.5 shrink-0">
+                              <span className="text-[11px] tabular-nums text-white/30 font-medium min-w-[36px] text-right">
+                                {cat.total > 0
+                                  ? `${((sub.total / cat.total) * 100).toFixed(1)}%`
+                                  : "—"}
+                              </span>
+                              <span className="text-[12px] tabular-nums text-white/40 font-medium min-w-[42px] text-right">
+                                {fmtDollar(sub.total)}
+                              </span>
                             </span>
                           </div>
                         ))}
@@ -496,11 +516,11 @@ function CategorySidebar({
         </div>
 
         {/* Summary footer */}
-        <div className="px-4 py-2.5 border-t border-white/[0.06]">
+        <div className="px-5 py-3 border-t border-white/[0.06]">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-white/40 font-medium">Total</span>
+            <span className="text-[13px] text-white/40 font-medium">Total</span>
             <BlurredAmount blurIntensity="sm">
-              <span className="text-[12px] text-white/70 font-bold tabular-nums">
+              <span className="text-[14px] text-white/70 font-bold tabular-nums">
                 {fmtDollar(categories.reduce((s, c) => s + c.total, 0))}
               </span>
             </BlurredAmount>
@@ -524,6 +544,23 @@ export default function CategoriesV2TabContent({
     () => new Set(buckets.map((b) => b.key)),
     [buckets],
   );
+
+  // Budget line toggle (controls the reference line on charts)
+  const [showBudgetLine, setShowBudgetLine] = useState(true);
+
+  // Always fetch current month budget allocations
+  const currentMonth = useMemo(() => format(new Date(), "yyyy-MM"), []);
+  const { data: budgetData } = useBudgetAllocations(currentMonth);
+
+  // Build category name → BudgetCategoryView lookup
+  const budgetByCategory = useMemo(() => {
+    const map = new Map<string, BudgetCategoryView>();
+    if (!budgetData?.summary?.categories) return map;
+    for (const cat of budgetData.summary.categories) {
+      map.set(cat.category_name, cat);
+    }
+    return map;
+  }, [budgetData]);
 
   // Toggle state: which categories are in "subcategory" view
   const [subcatView, setSubcatView] = useState<Set<string>>(new Set());
@@ -716,6 +753,20 @@ export default function CategoriesV2TabContent({
                 : "years"}{" "}
             · {visibleCategories.length}/{categories.length} categories
           </span>
+          {/* Budget line toggle */}
+          <button
+            onClick={() => setShowBudgetLine((v) => !v)}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0",
+              showBudgetLine
+                ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20"
+                : "text-white/40 hover:text-white/60 hover:bg-white/[0.06]",
+            )}
+            title={showBudgetLine ? "Hide budget line" : "Show budget line"}
+          >
+            <TrendingDown className="w-3.5 h-3.5" />
+            Budget
+          </button>
           <div className="flex rounded-lg bg-white/[0.08] p-0.5 shrink-0">
             {(["month", "quarter", "year"] as Grouping[]).map((g) => (
               <button
@@ -751,6 +802,9 @@ export default function CategoriesV2TabContent({
                 onToggleView={() => toggleView(cat.name)}
                 onDetailClick={onCategoryDetailClick}
                 grouping={grouping}
+                budgetInfo={budgetByCategory.get(cat.name)}
+                showBudgetLine={showBudgetLine}
+                currentMonth={currentMonth}
               />
             </motion.div>
           ))}
@@ -774,12 +828,18 @@ function CategoryWidget({
   onToggleView,
   onDetailClick,
   grouping,
+  budgetInfo,
+  showBudgetLine,
+  currentMonth,
 }: {
   category: CategoryMonthly;
   isSubcatView: boolean;
   onDetailClick?: (category: string, zoomedMonth: string | null) => void;
   onToggleView: () => void;
   grouping: Grouping;
+  budgetInfo?: BudgetCategoryView;
+  showBudgetLine: boolean;
+  currentMonth: string;
 }) {
   const hasSubs = category.subcategories.length > 0;
   const showSubs = isSubcatView && hasSubs;
@@ -882,6 +942,22 @@ function CategoryWidget({
 
   const clearZoom = useCallback(() => setZoomedMonth(null), []);
 
+  // ── Budget calculations ────────────────────────────────────────────
+  const budgetStatus = useMemo(() => {
+    if (!budgetInfo || budgetInfo.total_budget <= 0) return null;
+    // Current month's spending from the monthly data
+    const thisMonthData = category.monthlyData.find(
+      (m) => m.month === currentMonth,
+    );
+    const spent = thisMonthData?.amount ?? 0;
+    const budget = budgetInfo.total_budget;
+    const remaining = budget - spent;
+    const pct = Math.min((spent / budget) * 100, 100);
+    const overPct = spent > budget ? ((spent - budget) / budget) * 100 : 0;
+    const isOver = spent > budget;
+    return { spent, budget, remaining, pct, overPct, isOver };
+  }, [budgetInfo, category.monthlyData, currentMonth]);
+
   return (
     <WidgetCard
       title={category.name}
@@ -893,14 +969,47 @@ function CategoryWidget({
       filterActive={!!zoomedMonth}
       onFilterReset={clearZoom}
       action={
-        <BlurredAmount blurIntensity="sm">
-          <span
-            className="text-[15px] font-bold tabular-nums tracking-tight"
-            style={{ color: category.color }}
-          >
-            {fmtDollar(category.total)}
-          </span>
-        </BlurredAmount>
+        <div className="flex items-center gap-2.5">
+          {/* Budget status badge — always visible when budget exists */}
+          {budgetStatus && (
+            <BlurredAmount blurIntensity="sm">
+              <div
+                className={cn(
+                  "flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold tabular-nums border",
+                  budgetStatus.isOver
+                    ? "bg-amber-500/8 border-amber-500/15 text-amber-400"
+                    : budgetStatus.pct >= 80
+                      ? "bg-yellow-500/8 border-yellow-500/12 text-yellow-400/90"
+                      : "bg-emerald-500/8 border-emerald-500/12 text-emerald-400",
+                )}
+              >
+                {budgetStatus.isOver ? (
+                  <TrendingUp className="w-3 h-3 shrink-0" />
+                ) : (
+                  <TrendingDown className="w-3 h-3 shrink-0" />
+                )}
+                <span className="whitespace-nowrap">
+                  {fmtDollar(budgetStatus.spent)}
+                  <span className="text-white/30 mx-0.5">/</span>
+                  {fmtDollar(budgetStatus.budget)}
+                </span>
+                <span className="text-[9px] opacity-70">
+                  {budgetStatus.isOver
+                    ? `+${fmtDollar(Math.abs(budgetStatus.remaining))}`
+                    : `−${fmtDollar(budgetStatus.remaining)}`}
+                </span>
+              </div>
+            </BlurredAmount>
+          )}
+          <BlurredAmount blurIntensity="sm">
+            <span
+              className="text-[15px] font-bold tabular-nums tracking-tight"
+              style={{ color: category.color }}
+            >
+              {fmtDollar(category.total)}
+            </span>
+          </BlurredAmount>
+        </div>
       }
     >
       {/* Consolidated stats bar */}
@@ -976,6 +1085,9 @@ function CategoryWidget({
             subEntries={subEntries}
             zoomedMonth={zoomedMonth}
             onBarClick={handleBarClick}
+            budgetAmount={
+              showBudgetLine && budgetStatus ? budgetStatus.budget : undefined
+            }
           />
         </motion.div>
       </AnimatePresence>
@@ -1105,6 +1217,7 @@ function CategoryChart({
   subEntries,
   zoomedMonth,
   onBarClick,
+  budgetAmount,
 }: {
   category: CategoryMonthly;
   showSubs: boolean;
@@ -1112,6 +1225,7 @@ function CategoryChart({
   subEntries: { name: string; color: string }[];
   zoomedMonth: string | null;
   onBarClick: (monthKey: string) => void;
+  budgetAmount?: number;
 }) {
   const uid = useId().replace(/:/g, "");
 
@@ -1147,7 +1261,7 @@ function CategoryChart({
     return map;
   }, [category]);
 
-  // Custom tooltip that always shows subcategory breakdown
+  // Custom tooltip that always shows subcategory breakdown + budget comparison
   const renderTooltip = useCallback(
     ({ active, label }: { active?: boolean; label?: string }) => {
       if (!active || !label) return null;
@@ -1261,10 +1375,59 @@ function CategoryChart({
               ${Math.round(total).toLocaleString("en-US")}
             </div>
           )}
+          {/* Budget comparison row */}
+          {budgetAmount != null && budgetAmount > 0 && (
+            <div
+              style={{
+                borderTop: "1px solid rgba(52,211,153,0.15)",
+                marginTop: 6,
+                paddingTop: 6,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <span
+                style={{
+                  color: "rgba(52,211,153,0.6)",
+                  fontSize: 11,
+                  fontWeight: 600,
+                }}
+              >
+                Budget
+              </span>
+              <span
+                style={{
+                  color: "rgba(52,211,153,0.8)",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                ${Math.round(budgetAmount).toLocaleString("en-US")}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  fontVariantNumeric: "tabular-nums",
+                  color:
+                    total > budgetAmount
+                      ? "rgba(251,191,36,0.9)"
+                      : "rgba(52,211,153,0.9)",
+                }}
+              >
+                {total > budgetAmount
+                  ? `+$${Math.round(total - budgetAmount).toLocaleString("en-US")} over`
+                  : `$${Math.round(budgetAmount - total).toLocaleString("en-US")} left`}
+              </span>
+            </div>
+          )}
         </div>
       );
     },
-    [category, subBreakdownByMonth],
+    [category, subBreakdownByMonth, budgetAmount],
   );
 
   const tooltipProps = {
@@ -1313,6 +1476,22 @@ function CategoryChart({
             <XAxis {...xAxisProps} />
             <YAxis {...yAxisProps} />
             <Tooltip {...tooltipProps} />
+            {budgetAmount != null && (
+              <ReferenceLine
+                y={budgetAmount}
+                stroke="#34d399"
+                strokeDasharray="6 4"
+                strokeWidth={1.5}
+                strokeOpacity={0.7}
+                label={{
+                  value: `Budget ${fmtDollar(budgetAmount)}`,
+                  position: "insideTopRight" as const,
+                  fill: "rgba(52,211,153,0.7)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                }}
+              />
+            )}
             {subEntries.map((sub, i) => (
               <Bar
                 key={sub.name}
@@ -1358,6 +1537,22 @@ function CategoryChart({
           <XAxis {...xAxisProps} />
           <YAxis {...yAxisProps} />
           <Tooltip {...tooltipProps} />
+          {budgetAmount != null && (
+            <ReferenceLine
+              y={budgetAmount}
+              stroke="#34d399"
+              strokeDasharray="6 4"
+              strokeWidth={1.5}
+              strokeOpacity={0.7}
+              label={{
+                value: `Budget ${fmtDollar(budgetAmount)}`,
+                position: "insideTopRight" as const,
+                fill: "rgba(52,211,153,0.7)",
+                fontSize: 10,
+                fontWeight: 700,
+              }}
+            />
+          )}
           <Bar
             dataKey="amount"
             fill="transparent"

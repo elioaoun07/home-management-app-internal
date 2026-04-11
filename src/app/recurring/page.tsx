@@ -245,8 +245,8 @@ export default function RecurringPage() {
         user_id?: string;
         account?: { name: string } | null;
         accounts?: { name: string } | null;
-        category?: { name: string } | null;
-        subcategory?: { name: string } | null;
+        category?: { name: string; slug?: string | null } | null;
+        subcategory?: { name: string; slug?: string | null } | null;
       },
       isOwner: boolean,
     ) => {
@@ -267,40 +267,47 @@ export default function RecurringPage() {
         return;
       }
 
-      // Partner is confirming — resolve fields by matching names client-side
-      // (owner's IDs don't exist in partner's dropdowns)
+      // Partner is confirming — resolve fields by matching slugs client-side
+      // (owner's IDs don't exist in partner's dropdowns; slug is the canonical cross-user key)
       const ownerAccountName = (
         payment.account?.name ||
         payment.accounts?.name ||
         ""
       ).toLowerCase();
+      const ownerCategorySlug = payment.category?.slug || "";
+      const ownerSubcategorySlug = payment.subcategory?.slug || "";
+      // Name fallbacks for categories that pre-date slug generation
       const ownerCategoryName = (payment.category?.name || "").toLowerCase();
       const ownerSubcategoryName = (
         payment.subcategory?.name || ""
       ).toLowerCase();
 
-      // Match account by name from partner's loaded accounts
+      // Match account by name (accounts have no slug column)
       const matchedAccount = ownerAccountName
         ? accounts.find((a) => a.name.toLowerCase() === ownerAccountName)
         : undefined;
 
-      // Match category by name from partner's loaded categories (top-level only)
+      // Match category by slug (preferred) or name fallback
       const topCategories = categories.filter((c: any) => !c.parent_id);
-      const matchedCategory = ownerCategoryName
-        ? topCategories.find(
-            (c: any) => c.name.toLowerCase() === ownerCategoryName,
-          )
-        : undefined;
+      const matchedCategory = ownerCategorySlug
+        ? topCategories.find((c: any) => c.slug === ownerCategorySlug)
+        : ownerCategoryName
+          ? topCategories.find(
+              (c: any) => c.name.toLowerCase() === ownerCategoryName,
+            )
+          : undefined;
 
-      // Match subcategory by name (children of matched category)
+      // Match subcategory by slug (preferred) or name fallback
       let matchedSubcategory: any = undefined;
-      if (matchedCategory && ownerSubcategoryName) {
+      if (matchedCategory && (ownerSubcategorySlug || ownerSubcategoryName)) {
         const subs = categories.filter(
           (c: any) => c.parent_id === matchedCategory.id,
         );
-        matchedSubcategory = subs.find(
-          (c: any) => c.name.toLowerCase() === ownerSubcategoryName,
-        );
+        matchedSubcategory = ownerSubcategorySlug
+          ? subs.find((c: any) => c.slug === ownerSubcategorySlug)
+          : subs.find(
+              (c: any) => c.name.toLowerCase() === ownerSubcategoryName,
+            );
       }
 
       setConfirmFormData({

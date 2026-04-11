@@ -72,10 +72,14 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 3. Fill remaining gaps by matching account/category/subcategory names
-    //    (partner confirms owner's payment — resolve partner's own IDs by name)
+    // 3. Fill remaining gaps by matching account/category/subcategory fields
+    //    (partner confirms owner's payment — resolve partner's own IDs)
+    //    Categories: prefer slug (canonical cross-user key), fall back to name ilike
+    //    Accounts: name ilike only (accounts have no slug column)
     const accountName = req.nextUrl.searchParams.get("account_name");
+    const categorySlug = req.nextUrl.searchParams.get("category_slug");
     const categoryName = req.nextUrl.searchParams.get("category_name");
+    const subcategorySlug = req.nextUrl.searchParams.get("subcategory_slug");
     const subcategoryName = req.nextUrl.searchParams.get("subcategory_name");
 
     if (!accountId && accountName) {
@@ -92,33 +96,35 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (!categoryId && categoryName) {
-      const { data: cat } = await supabase
+    if (!categoryId && (categorySlug || categoryName)) {
+      let catQuery = supabase
         .from("user_categories")
         .select("id")
         .eq("user_id", user.id)
-        .is("parent_id", null)
-        .ilike("name", categoryName)
-        .limit(1)
-        .maybeSingle();
+        .is("parent_id", null);
+      catQuery = categorySlug
+        ? catQuery.eq("slug", categorySlug)
+        : catQuery.ilike("name", categoryName!);
+      const { data: cat } = await catQuery.limit(1).maybeSingle();
       if (cat) {
         categoryId = cat.id;
-        if (!source) source = "name-match";
+        if (!source) source = categorySlug ? "slug-match" : "name-match";
       }
     }
 
-    if (!subcategoryId && subcategoryName && categoryId) {
-      const { data: sub } = await supabase
+    if (!subcategoryId && (subcategorySlug || subcategoryName) && categoryId) {
+      let subQuery = supabase
         .from("user_categories")
         .select("id")
         .eq("user_id", user.id)
-        .eq("parent_id", categoryId)
-        .ilike("name", subcategoryName)
-        .limit(1)
-        .maybeSingle();
+        .eq("parent_id", categoryId);
+      subQuery = subcategorySlug
+        ? subQuery.eq("slug", subcategorySlug)
+        : subQuery.ilike("name", subcategoryName!);
+      const { data: sub } = await subQuery.limit(1).maybeSingle();
       if (sub) {
         subcategoryId = sub.id;
-        if (!source) source = "name-match";
+        if (!source) source = subcategorySlug ? "slug-match" : "name-match";
       }
     }
 

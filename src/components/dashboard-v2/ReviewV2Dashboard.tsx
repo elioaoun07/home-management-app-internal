@@ -69,7 +69,7 @@ import {
   getExpenseTransactions,
   type TransactionWithAccount,
 } from "@/lib/utils/incomeExpense";
-import { differenceInDays, format, parseISO } from "date-fns";
+import { differenceInDays, format, parseISO, subMonths } from "date-fns";
 import { RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -156,14 +156,10 @@ export default function ReviewV2Dashboard({
             onDateRangeChange(jan1, today);
           }
         } else if (tab === "categories") {
-          // Fixed 12-month window for Categories V2
+          // 12 months back → today (matches CategoriesV2TabContent's build12Months buckets)
           const now = new Date();
-          const twelveMonthsAgo = new Date(
-            now.getFullYear(),
-            now.getMonth() - 11,
-            1,
-          );
-          onDateRangeChange(formatDate(twelveMonthsAgo), formatDate(now));
+          const twelveMonthsAgo = format(subMonths(now, 11), "yyyy-MM-01");
+          onDateRangeChange(twelveMonthsAgo, formatDate(now));
         } else {
           const defaultRange = getDefaultDateRange(monthStartDay ?? 1);
           onDateRangeChange(defaultRange.start, defaultRange.end);
@@ -184,14 +180,21 @@ export default function ReviewV2Dashboard({
     setOverviewDateOverride({ start: startDate, end: endDate });
   }, [startDate, endDate, activeTab]);
 
-  // Set initial date range on mount if landing on overview
+  // Set initial date range on mount if landing on overview or categories
   useEffect(() => {
-    if (activeTab === "overview" && onDateRangeChange) {
-      programmaticDateChange.current = true;
-      const now = new Date();
-      const jan1 = `${now.getFullYear()}-01-01`;
-      const today = formatDate(now);
-      onDateRangeChange(jan1, today);
+    if (onDateRangeChange) {
+      if (activeTab === "overview") {
+        programmaticDateChange.current = true;
+        const now = new Date();
+        const jan1 = `${now.getFullYear()}-01-01`;
+        const today = formatDate(now);
+        onDateRangeChange(jan1, today);
+      } else if (activeTab === "categories") {
+        programmaticDateChange.current = true;
+        const now = new Date();
+        const twelveMonthsAgo = format(subMonths(now, 11), "yyyy-MM-01");
+        onDateRangeChange(twelveMonthsAgo, formatDate(now));
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

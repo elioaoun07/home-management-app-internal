@@ -44,7 +44,7 @@ export async function GET(_req: NextRequest) {
 
   let query = supabase
     .from("user_categories")
-    .select("id,name,color,parent_id,position,visible,account_id")
+    .select("id,name,slug,color,parent_id,position,visible,account_id")
     .eq("user_id", user.id)
     .eq("account_id", accountId);
 
@@ -76,6 +76,7 @@ export async function GET(_req: NextRequest) {
   const categories = data.map((c) => ({
     id: c.id,
     name: c.name,
+    slug: c.slug,
     color: c.color,
     parent_id: c.parent_id,
     position: c.position ?? 0,

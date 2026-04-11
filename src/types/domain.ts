@@ -21,6 +21,7 @@ export interface Category {
   user_id: UUID;
   account_id?: UUID | null;
   name: string;
+  slug?: string | null;
   parent_id?: UUID | null;
   color?: string | null;
   position?: number | null;

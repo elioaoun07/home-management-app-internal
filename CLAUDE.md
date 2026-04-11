@@ -50,6 +50,7 @@
     - **For any mutation that affects account balances** (direct balance edit, transaction CRUD, transfer, recurring): call `invalidateAccountData(queryClient, accountId?)` from `src/lib/queryInvalidation.ts` — it covers `accounts`, `my-accounts`, `analytics`, and `account-balance` in one call.
     - **After adding a new feature query**, audit all mutations that could make its data stale and add the new key to their invalidation list. Never assume "nobody reads this yet."
     - **Never rely on stale-time as a correctness guarantee.** Stale-time is a performance optimization only. Always invalidate on mutation.
+21. **Cross-user category matching must use `slug`, never `name`** — `user_categories` has a `slug` column (auto-generated deterministic kebab from `name`, e.g. `"Food & Groceries"` → `"food-groceries"`). When resolving one user's category/subcategory in the context of another user's data (e.g. partner confirms a recurring payment, budget allocation merging), always match on `slug`. Name is display text and is cosmetic; slug is the stable canonical cross-user key. Fall back to name matching only when slug is null/absent (pre-existing data). Accounts have no slug column — name-based matching there is acceptable.
 
 ---
 

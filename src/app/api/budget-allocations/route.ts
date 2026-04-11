@@ -178,7 +178,7 @@ export async function GET(req: NextRequest) {
     // --- Fetch ALL categories for expense accounts ---
     let categoriesQuery = supabase
       .from("user_categories")
-      .select("id, name, color, parent_id, account_id, position")
+      .select("id, name, slug, color, parent_id, account_id, position")
       .in("user_id", userIds)
       .eq("visible", true)
       .order("position", { ascending: true });
@@ -213,39 +213,25 @@ export async function GET(req: NextRequest) {
       .gte("date", startDate)
       .lte("date", endDate);
 
-    // Build spending map by category/subcategory name (for merging)
-    const spendingByName: Record<string, { user: number; partner: number }> =
-      {};
     const spendingById: Record<string, { user: number; partner: number }> = {};
-
-    // Map category IDs to names for merging
-    const catIdToName: Record<string, string> = {};
-    for (const c of allCategories || []) {
-      catIdToName[c.id] = c.name;
-    }
 
     (transactions || []).forEach((tx) => {
       const catId = tx.subcategory_id || tx.category_id;
       if (!catId) return;
 
-      // Track by ID
       if (!spendingById[catId]) spendingById[catId] = { user: 0, partner: 0 };
       if (tx.user_id === user.id) spendingById[catId].user += tx.amount;
       else if (tx.user_id === partnerId)
         spendingById[catId].partner += tx.amount;
-
-      // Track by name (for merged view)
-      const name = catIdToName[catId];
-      if (name) {
-        if (!spendingByName[name])
-          spendingByName[name] = { user: 0, partner: 0 };
-        if (tx.user_id === user.id) spendingByName[name].user += tx.amount;
-        else if (tx.user_id === partnerId)
-          spendingByName[name].partner += tx.amount;
-      }
     });
 
-    // --- Merge categories by name across accounts ---
+    // --- Merge categories by slug across accounts (slug is the canonical cross-user key) ---
+    // Map category IDs to their merge key (slug preferred, name fallback)
+    const catIdToMergeKey: Record<string, string> = {};
+    for (const c of allCategories || []) {
+      catIdToMergeKey[c.id] = c.slug || c.name;
+    }
+
     const mergedMap = new Map<
       string,
       {
@@ -261,13 +247,14 @@ export async function GET(req: NextRequest) {
     >();
 
     for (const cat of rootCategories) {
-      const existing = mergedMap.get(cat.name);
+      const mergeKey = cat.slug || cat.name;
+      const existing = mergedMap.get(mergeKey);
       if (existing) {
         existing.ids.push(cat.id);
         if (!existing.accountIds.includes(cat.account_id))
           existing.accountIds.push(cat.account_id);
       } else {
-        mergedMap.set(cat.name, {
+        mergedMap.set(mergeKey, {
           name: cat.name,
           color: cat.color || "#38bdf8",
           ids: [cat.id],
@@ -277,19 +264,20 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Merge subcategories by name under their parent
+    // Merge subcategories by slug under their parent
     for (const sub of subcategories) {
-      const parentName = catIdToName[sub.parent_id!];
-      if (!parentName) continue;
-      const parent = mergedMap.get(parentName);
+      const parentKey = catIdToMergeKey[sub.parent_id!];
+      if (!parentKey) continue;
+      const parent = mergedMap.get(parentKey);
       if (!parent) continue;
 
-      const existingSub = parent.subcategoryMap.get(sub.name);
+      const subMergeKey = sub.slug || sub.name;
+      const existingSub = parent.subcategoryMap.get(subMergeKey);
       if (existingSub) {
         existingSub.ids.push(sub.id);
         existingSub.parentIds.push(sub.parent_id!);
       } else {
-        parent.subcategoryMap.set(sub.name, {
+        parent.subcategoryMap.set(subMergeKey, {
           name: sub.name,
           ids: [sub.id],
           parentIds: [sub.parent_id!],
@@ -300,7 +288,7 @@ export async function GET(req: NextRequest) {
     // Build merged category views
     const categoryViews: BudgetCategoryView[] = [];
 
-    for (const [catName, merged] of mergedMap) {
+    for (const [, merged] of mergedMap) {
       // Aggregate allocations for all merged IDs
       const catAllocations = allocations.filter(
         (a) => merged.ids.includes(a.category_id) && !a.subcategory_id,
@@ -331,7 +319,7 @@ export async function GET(req: NextRequest) {
       let totalSubSpentUser = 0;
       let totalSubSpentPartner = 0;
 
-      for (const [subName, mergedSub] of merged.subcategoryMap) {
+      for (const [, mergedSub] of merged.subcategoryMap) {
         const subAllocations = allocations.filter((a) =>
           mergedSub.ids.includes(a.subcategory_id),
         );
@@ -361,7 +349,7 @@ export async function GET(req: NextRequest) {
 
         subcategoryViews.push({
           subcategory_id: mergedSub.ids[0],
-          subcategory_name: subName,
+          subcategory_name: mergedSub.name,
           subcategory_icon: null,
           total_budget: subUserBudget + subPartnerBudget + subSharedBudget,
           user_budget: subUserBudget,
@@ -373,10 +361,10 @@ export async function GET(req: NextRequest) {
           percentage: 0, // Client computes this
           allocations: subAllocations.map((a) => ({
             ...a,
-            category_name: catName,
+            category_name: merged.name,
             category_icon: null,
             category_color: merged.color,
-            subcategory_name: subName,
+            subcategory_name: mergedSub.name,
             subcategory_icon: null,
             account_name: a.account?.name,
           })),
@@ -394,7 +382,7 @@ export async function GET(req: NextRequest) {
 
       categoryViews.push({
         category_id: merged.ids[0],
-        category_name: catName,
+        category_name: merged.name,
         category_icon: null,
         category_color: merged.color,
         account_id: primaryAccountId,
@@ -410,7 +398,7 @@ export async function GET(req: NextRequest) {
           subcategoryViews.length > 0 ? subcategoryViews : undefined,
         allocations: catAllocations.map((a) => ({
           ...a,
-          category_name: catName,
+          category_name: merged.name,
           category_icon: null,
           category_color: merged.color,
           account_name: a.account?.name,
