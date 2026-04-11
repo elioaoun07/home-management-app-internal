@@ -33,11 +33,20 @@ import {
   ChevronRight,
   Clock,
   ListTodo,
+  MoreHorizontal,
   Plus,
+  RefreshCw,
   Target,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { RRule } from "rrule";
 
 // ============================================
@@ -162,25 +171,283 @@ function expandRecurringItems(
 }
 
 // ============================================
+// SWIPEABLE ITEM (Right → Complete, Left → Options)
+// ============================================
+const DEAD_ZONE = 20;
+const CONFIRM_ZONE = 70;
+const MAX_DRAG = 100;
+
+interface SwipeableItemProps {
+  onComplete: () => void;
+  onOptions: () => void;
+  onClick: () => void;
+  children: ReactNode;
+}
+
+function SwipeableItem({
+  onComplete,
+  onOptions,
+  onClick,
+  children,
+}: SwipeableItemProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [offsetX, setOffsetX] = useState(0);
+  const offsetRef = useRef(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const touchStateRef = useRef<{
+    startX: number;
+    startY: number;
+    direction: "horizontal" | "vertical" | null;
+    dragging: boolean;
+    didSwipe: boolean;
+  } | null>(null);
+
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+  const onOptionsRef = useRef(onOptions);
+  onOptionsRef.current = onOptions;
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      touchStateRef.current = {
+        startX: touch.clientX,
+        startY: touch.clientY,
+        direction: null,
+        dragging: false,
+        didSwipe: false,
+      };
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const state = touchStateRef.current;
+      if (!state) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - state.startX;
+      const dy = touch.clientY - state.startY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      if (!state.direction) {
+        if (absDx < 8 && absDy < 8) return;
+        state.direction = absDx > absDy ? "horizontal" : "vertical";
+      }
+      if (state.direction === "vertical") return;
+
+      e.preventDefault();
+
+      if (!state.dragging && absDx > DEAD_ZONE) {
+        state.dragging = true;
+        state.didSwipe = true;
+        setIsDragging(true);
+      }
+
+      if (absDx <= DEAD_ZONE) {
+        offsetRef.current = 0;
+        setOffsetX(0);
+        return;
+      }
+
+      const sign = dx > 0 ? 1 : -1;
+      const activeDist = absDx - DEAD_ZONE;
+      const confirmDist = CONFIRM_ZONE - DEAD_ZONE;
+      const mapped =
+        activeDist <= confirmDist
+          ? activeDist
+          : confirmDist + (activeDist - confirmDist) * 0.3;
+      const val = sign * Math.min(mapped, MAX_DRAG);
+      offsetRef.current = val;
+      setOffsetX(val);
+    };
+
+    const onTouchEnd = () => {
+      const state = touchStateRef.current;
+      if (!state) return;
+      const currentOffset = offsetRef.current;
+      const absOff = Math.abs(currentOffset);
+      const confirmDist = CONFIRM_ZONE - DEAD_ZONE;
+
+      offsetRef.current = 0;
+      setOffsetX(0);
+
+      if (absOff >= confirmDist) {
+        if (navigator.vibrate) navigator.vibrate(15);
+        if (currentOffset > 0) {
+          onCompleteRef.current();
+        } else {
+          onOptionsRef.current();
+        }
+      }
+
+      setIsDragging(false);
+      setTimeout(() => {
+        if (touchStateRef.current) touchStateRef.current = null;
+      }, 50);
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
+
+  const absOffset = Math.abs(offsetX);
+  const confirmedThreshold = CONFIRM_ZONE - DEAD_ZONE;
+  const isConfirmed = absOffset >= confirmedThreshold;
+  const previewOpacity = isDragging
+    ? Math.min(absOffset / confirmedThreshold, 1)
+    : 0;
+
+  const handleClick = () => {
+    if (touchStateRef.current?.didSwipe) return;
+    onClick();
+  };
+
+  return (
+    <div className="relative overflow-hidden rounded-xl">
+      {/* Right reveal — Complete */}
+      {isDragging && offsetX > 0 && (
+        <div
+          className={cn(
+            "absolute inset-y-0 left-0 flex items-center justify-start px-4 rounded-xl z-0",
+            isConfirmed ? "bg-emerald-500/30" : "bg-emerald-500/10",
+          )}
+          style={{ width: `${absOffset + 16}px`, opacity: previewOpacity }}
+        >
+          <div className="flex items-center gap-1.5">
+            <Check
+              className={cn(
+                "w-4 h-4",
+                isConfirmed ? "text-emerald-300" : "text-emerald-400/60",
+              )}
+            />
+            <span
+              className={cn(
+                "text-xs font-medium whitespace-nowrap",
+                isConfirmed ? "text-emerald-300" : "text-emerald-400/60",
+              )}
+            >
+              Done
+            </span>
+          </div>
+        </div>
+      )}
+      {/* Left reveal — Options */}
+      {isDragging && offsetX < 0 && (
+        <div
+          className={cn(
+            "absolute inset-y-0 right-0 flex items-center justify-end px-4 rounded-xl z-0",
+            isConfirmed ? "bg-orange-500/30" : "bg-orange-500/10",
+          )}
+          style={{ width: `${absOffset + 16}px`, opacity: previewOpacity }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "text-xs font-medium whitespace-nowrap",
+                isConfirmed ? "text-orange-300" : "text-orange-400/60",
+              )}
+            >
+              Options
+            </span>
+            <MoreHorizontal
+              className={cn(
+                "w-4 h-4",
+                isConfirmed ? "text-orange-300" : "text-orange-400/60",
+              )}
+            />
+          </div>
+        </div>
+      )}
+      {/* Content */}
+      <div
+        ref={contentRef}
+        onClick={handleClick}
+        className="relative z-10"
+        style={{
+          transform: `translateX(${offsetX}px)`,
+          transition: isDragging ? "none" : "transform 0.25s ease-out",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ============================================
 // COMPONENT
 // ============================================
-export default function StandaloneRemindersPage() {
+import type { UserFilter } from "@/components/activity/FilterBar";
+import ItemActionsSheet from "@/components/items/ItemActionsSheet";
+import ItemDetailModal from "@/components/items/ItemDetailModal";
+import type { PostponeType } from "@/features/items/useItemActions";
+
+type TypeFilter = "all" | "reminder" | "task" | "event";
+type RecurringFilter = "all" | "recurring" | "one-time";
+
+interface StandaloneRemindersPageProps {
+  userFilter?: UserFilter;
+  currentUserId?: string;
+  typeFilter?: TypeFilter;
+  recurringFilter?: RecurringFilter;
+}
+
+export default function StandaloneRemindersPage({
+  userFilter = "all",
+  currentUserId,
+  typeFilter = "all",
+  recurringFilter = "all",
+}: StandaloneRemindersPageProps) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
   const { data: allItems = [], isLoading } = useItems();
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
   const itemActions = useItemActionsWithToast();
   const [selectedSection, setSelectedSection] = useState<Section | null>(null);
+  const [actionsState, setActionsState] = useState<{
+    item: ItemWithDetails;
+    occurrenceDate: string;
+  } | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
+    null,
+  );
 
-  // Filter active items
+  // Filter items by ownership
+  const ownershipFiltered = useMemo(() => {
+    if (!currentUserId || userFilter === "all") return allItems;
+    return allItems.filter((item) => {
+      const isOwnedByMe =
+        item.user_id === currentUserId ||
+        item.responsible_user_id === currentUserId;
+      return userFilter === "mine" ? isOwnedByMe : !isOwnedByMe;
+    });
+  }, [allItems, currentUserId, userFilter]);
+
+  // Filter active items + apply type/recurring filters
   const activeItems = useMemo(() => {
-    return allItems.filter(
-      (item) =>
-        item.status !== "archived" &&
-        item.status !== "cancelled" &&
-        !item.archived_at,
-    );
-  }, [allItems]);
+    return ownershipFiltered.filter((item) => {
+      if (
+        item.status === "archived" ||
+        item.status === "cancelled" ||
+        item.archived_at
+      )
+        return false;
+      if (typeFilter !== "all" && item.type !== typeFilter) return false;
+      if (recurringFilter === "recurring" && !item.recurrence_rule?.rrule)
+        return false;
+      if (recurringFilter === "one-time" && item.recurrence_rule?.rrule)
+        return false;
+      return true;
+    });
+  }, [ownershipFiltered, typeFilter, recurringFilter]);
 
   // Process items into occurrences
   const { overdueItems, todayItems, upcomingItems, stats } = useMemo(() => {
@@ -259,76 +526,116 @@ export default function StandaloneRemindersPage() {
     return null;
   };
 
-  // Render a single item
+  // Open actions sheet for an occurrence
+  const openActions = useCallback((occ: ExpandedOccurrence) => {
+    setActionsState({
+      item: occ.item,
+      occurrenceDate: occ.occurrenceDate.toISOString(),
+    });
+  }, []);
+
+  // Render a single item with swipe support
   const renderItem = (occ: ExpandedOccurrence, showDate = false) => {
     const Icon = typeIcons[occ.item.type];
     const timeStr = getItemTime(occ.item);
+    const isRecurring = !!occ.item.recurrence_rule?.rrule;
 
     return (
-      <div
+      <SwipeableItem
         key={`${occ.item.id}-${occ.occurrenceDate.getTime()}`}
-        className={cn(
-          "flex items-center gap-3 p-3 rounded-xl transition-all",
-          "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
-          occ.isCompleted && "opacity-50",
-        )}
+        onComplete={() => {
+          if (!occ.isCompleted) {
+            itemActions.handleComplete(
+              occ.item,
+              occ.occurrenceDate.toISOString(),
+            );
+          }
+        }}
+        onOptions={() => openActions(occ)}
+        onClick={() => setSelectedItem(occ.item)}
       >
-        {/* Completion checkbox */}
-        <button
-          type="button"
-          onClick={() => handleToggleComplete(occ)}
-          className={cn(
-            "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
-            occ.isCompleted
-              ? isPink
-                ? "bg-pink-500 border-pink-500"
-                : "bg-cyan-500 border-cyan-500"
-              : "border-white/30 hover:border-white/50",
-          )}
-        >
-          {occ.isCompleted && <Check className="w-4 h-4 text-white" />}
-        </button>
-
-        {/* Icon */}
         <div
           className={cn(
-            "w-8 h-8 rounded-lg flex items-center justify-center",
-            occ.item.type === "event" && "bg-pink-500/20 text-pink-400",
-            occ.item.type === "reminder" && "bg-cyan-500/20 text-cyan-400",
-            occ.item.type === "task" && "bg-purple-500/20 text-purple-400",
+            "flex items-center gap-3 p-3 rounded-xl transition-all",
+            "bg-white/5 hover:bg-white/10",
+            occ.isCompleted && "opacity-50",
           )}
         >
-          <Icon className="w-4 h-4" />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <p
+          {/* Completion checkbox */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleComplete(occ);
+            }}
             className={cn(
-              "font-medium truncate",
-              occ.isCompleted ? "text-white/40 line-through" : "text-white",
+              "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all flex-shrink-0",
+              occ.isCompleted
+                ? isPink
+                  ? "bg-pink-500 border-pink-500"
+                  : "bg-cyan-500 border-cyan-500"
+                : "border-white/30 hover:border-white/50",
             )}
           >
-            {occ.item.title}
-          </p>
-          <div className="flex items-center gap-2 text-xs text-white/40">
-            {showDate && (
-              <span>{format(occ.occurrenceDate, "EEE, MMM d")}</span>
-            )}
-            {timeStr && (
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {timeStr}
-              </span>
-            )}
-            {occ.isPostponed && (
-              <span className="text-amber-400">Postponed</span>
-            )}
-          </div>
-        </div>
+            {occ.isCompleted && <Check className="w-4 h-4 text-white" />}
+          </button>
 
-        <ChevronRight className="w-4 h-4 text-white/20" />
-      </div>
+          {/* Icon */}
+          <div
+            className={cn(
+              "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+              occ.item.type === "event" && "bg-pink-500/20 text-pink-400",
+              occ.item.type === "reminder" && "bg-cyan-500/20 text-cyan-400",
+              occ.item.type === "task" && "bg-purple-500/20 text-purple-400",
+            )}
+          >
+            <Icon className="w-4 h-4" />
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <p
+                className={cn(
+                  "font-medium truncate",
+                  occ.isCompleted ? "text-white/40 line-through" : "text-white",
+                )}
+              >
+                {occ.item.title}
+              </p>
+              {isRecurring && (
+                <RefreshCw className="w-3 h-3 text-white/30 flex-shrink-0" />
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-white/40">
+              {showDate && (
+                <span>{format(occ.occurrenceDate, "EEE, MMM d")}</span>
+              )}
+              {timeStr && (
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {timeStr}
+                </span>
+              )}
+              {occ.isPostponed && (
+                <span className="text-amber-400">Postponed</span>
+              )}
+            </div>
+          </div>
+
+          {/* Actions button (fallback for non-swipe / desktop) */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              openActions(occ);
+            }}
+            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0"
+          >
+            <MoreHorizontal className="w-4 h-4 text-white/40" />
+          </button>
+        </div>
+      </SwipeableItem>
     );
   };
 
@@ -533,6 +840,59 @@ export default function StandaloneRemindersPage() {
       >
         <Plus className="w-6 h-6 text-white" />
       </Link>
+
+      {/* Item Detail Modal */}
+      {selectedItem && (
+        <ItemDetailModal
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onEdit={() => setSelectedItem(null)}
+          onDelete={() => {
+            itemActions.handleDelete(selectedItem);
+            setSelectedItem(null);
+          }}
+          currentUserId={currentUserId}
+        />
+      )}
+
+      {/* Item Actions Sheet (Complete, Postpone, Cancel, Delete) */}
+      {actionsState && (
+        <ItemActionsSheet
+          item={actionsState.item}
+          occurrenceDate={actionsState.occurrenceDate}
+          isOpen={!!actionsState}
+          onClose={() => setActionsState(null)}
+          onComplete={(reason) => {
+            itemActions.handleComplete(
+              actionsState.item,
+              actionsState.occurrenceDate,
+              reason,
+            );
+            setActionsState(null);
+          }}
+          onPostpone={(type: PostponeType, reason?: string) => {
+            itemActions.handlePostpone(
+              actionsState.item,
+              actionsState.occurrenceDate,
+              type,
+              reason,
+            );
+            setActionsState(null);
+          }}
+          onCancel={(reason) => {
+            itemActions.handleCancel(
+              actionsState.item,
+              actionsState.occurrenceDate,
+              reason,
+            );
+            setActionsState(null);
+          }}
+          onDelete={() => {
+            itemActions.handleDelete(actionsState.item);
+            setActionsState(null);
+          }}
+        />
+      )}
     </div>
   );
 }
