@@ -3664,3 +3664,33 @@ body.theme-loaded {
 .animate-sparkle-4 {
   animation: sparkle-4 0.8s ease-out 0.15s forwards;
 }
+
+/* Sparkle checkbox animations */
+@keyframes sparkle-fly-xy {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1.2);
+  }
+  60% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--tx), var(--ty)) scale(0);
+  }
+}
+
+@keyframes bounce-check {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  70% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1.1);
+  }
+}

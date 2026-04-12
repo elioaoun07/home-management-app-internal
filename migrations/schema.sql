@@ -1276,6 +1276,108 @@ CREATE TABLE public.nfc_checklist_completions (
 );
 
 -- ============================================
+-- RLS POLICIES — ITEMS (household sharing)
+-- ============================================
+ALTER TABLE public.items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.item_occurrence_actions ENABLE ROW LEVEL SECURITY;
+
+-- items: own items + items assigned to me + partner's public items
+CREATE POLICY "items_select" ON public.items FOR SELECT USING (
+  user_id = auth.uid()
+  OR responsible_user_id = auth.uid()
+  OR (
+    is_public = true
+    AND EXISTS (
+      SELECT 1 FROM public.household_links
+      WHERE active = true
+      AND (
+        (owner_user_id = auth.uid() AND partner_user_id = items.user_id)
+        OR (partner_user_id = auth.uid() AND owner_user_id = items.user_id)
+      )
+    )
+  )
+);
+CREATE POLICY "items_insert" ON public.items FOR INSERT WITH CHECK (user_id = auth.uid());
+CREATE POLICY "items_update" ON public.items FOR UPDATE USING (
+  user_id = auth.uid()
+  OR responsible_user_id = auth.uid()
+  OR (
+    notify_all_household = true
+    AND is_public = true
+    AND EXISTS (
+      SELECT 1 FROM public.household_links
+      WHERE active = true
+      AND (
+        (owner_user_id = auth.uid() AND partner_user_id = items.user_id)
+        OR (partner_user_id = auth.uid() AND owner_user_id = items.user_id)
+      )
+    )
+  )
+);
+CREATE POLICY "items_delete" ON public.items FOR DELETE USING (
+  user_id = auth.uid()
+  OR (
+    notify_all_household = true
+    AND is_public = true
+    AND EXISTS (
+      SELECT 1 FROM public.household_links
+      WHERE active = true
+      AND (
+        (owner_user_id = auth.uid() AND partner_user_id = items.user_id)
+        OR (partner_user_id = auth.uid() AND owner_user_id = items.user_id)
+      )
+    )
+  )
+);
+
+-- item_occurrence_actions: read/write for items you can access
+CREATE POLICY "item_occurrence_actions_select" ON public.item_occurrence_actions FOR SELECT USING (
+  created_by = auth.uid()
+  OR EXISTS (
+    SELECT 1 FROM public.items i
+    WHERE i.id = item_occurrence_actions.item_id
+    AND (
+      i.user_id = auth.uid()
+      OR i.responsible_user_id = auth.uid()
+      OR (
+        i.is_public = true
+        AND EXISTS (
+          SELECT 1 FROM public.household_links
+          WHERE active = true
+          AND (
+            (owner_user_id = auth.uid() AND partner_user_id = i.user_id)
+            OR (partner_user_id = auth.uid() AND owner_user_id = i.user_id)
+          )
+        )
+      )
+    )
+  )
+);
+CREATE POLICY "item_occurrence_actions_insert" ON public.item_occurrence_actions FOR INSERT WITH CHECK (
+  created_by = auth.uid()
+  AND EXISTS (
+    SELECT 1 FROM public.items i
+    WHERE i.id = item_occurrence_actions.item_id
+    AND (
+      i.user_id = auth.uid()
+      OR i.responsible_user_id = auth.uid()
+      OR (
+        i.notify_all_household = true
+        AND i.is_public = true
+        AND EXISTS (
+          SELECT 1 FROM public.household_links
+          WHERE active = true
+          AND (
+            (owner_user_id = auth.uid() AND partner_user_id = i.user_id)
+            OR (partner_user_id = auth.uid() AND owner_user_id = i.user_id)
+          )
+        )
+      )
+    )
+  )
+);
+
+-- ============================================
 -- RLS POLICIES — NFC TAGS (household sharing)
 -- ============================================
 ALTER TABLE public.nfc_tags ENABLE ROW LEVEL SECURITY;

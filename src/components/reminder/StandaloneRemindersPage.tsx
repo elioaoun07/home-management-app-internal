@@ -32,11 +32,14 @@ import {
   Check,
   ChevronRight,
   Clock,
+  FastForward,
   ListTodo,
   MoreHorizontal,
   Plus,
   RefreshCw,
+  SkipForward,
   Target,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -48,6 +51,70 @@ import {
   type ReactNode,
 } from "react";
 import { RRule } from "rrule";
+
+// ============================================
+// SPARKLE CHECKBOX
+// ============================================
+function SparkleCheckbox({
+  checked,
+  justCompleted,
+  onToggle,
+}: {
+  checked: boolean;
+  justCompleted: boolean;
+  onToggle: () => void;
+  themeColor?: string;
+}) {
+  const showGreen = checked || justCompleted;
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      className="relative w-6 h-6 flex-shrink-0"
+    >
+      {/* Sparkle particles */}
+      {justCompleted && (
+        <span className="absolute inset-0 pointer-events-none">
+          {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => {
+            const rad = (deg * Math.PI) / 180;
+            const tx = Math.cos(rad) * 14;
+            const ty = Math.sin(rad) * 14;
+            return (
+              <span
+                key={deg}
+                className="absolute left-1/2 top-1/2 w-1 h-1 rounded-full"
+                style={{
+                  marginLeft: -2,
+                  marginTop: -2,
+                  backgroundColor: i % 2 === 0 ? "#34d399" : "#6ee7b7",
+                  animation: `sparkle-fly-xy 0.45s ease-out ${i * 0.02}s forwards`,
+                  ["--tx" as string]: `${tx}px`,
+                  ["--ty" as string]: `${ty}px`,
+                }}
+              />
+            );
+          })}
+        </span>
+      )}
+      {/* Checkbox */}
+      <span
+        className={cn(
+          "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all duration-200",
+          showGreen
+            ? "bg-emerald-500 border-emerald-500 scale-110"
+            : "border-white/30 hover:border-white/50",
+          justCompleted && "animate-[bounce-check_0.35s_ease-out]",
+        )}
+      >
+        {showGreen && <Check className="w-4 h-4 text-white" />}
+      </span>
+    </button>
+  );
+}
 
 // ============================================
 // TYPES
@@ -419,6 +486,65 @@ export default function StandaloneRemindersPage({
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
     null,
   );
+  const [skipPrompt, setSkipPrompt] = useState<{
+    item: ItemWithDetails;
+    occurrenceDate: string;
+  } | null>(null);
+  const [skipReason, setSkipReason] = useState("");
+
+  // Optimistic completions: Set<"itemId-timestamp"> for instant UI feedback
+  const [optimisticCompleted, setOptimisticCompleted] = useState<Set<string>>(
+    new Set(),
+  );
+  const [justCompleted, setJustCompleted] = useState<Set<string>>(new Set());
+
+  const occKey = useCallback(
+    (occ: ExpandedOccurrence) =>
+      `${occ.item.id}-${occ.occurrenceDate.getTime()}`,
+    [],
+  );
+
+  const handleOptimisticComplete = useCallback(
+    (occ: ExpandedOccurrence) => {
+      const key = `${occ.item.id}-${occ.occurrenceDate.getTime()}`;
+      if (occ.isCompleted || optimisticCompleted.has(key)) {
+        // Uncomplete
+        setOptimisticCompleted((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        itemActions.handleUncomplete(
+          occ.item,
+          occ.occurrenceDate.toISOString(),
+        );
+      } else {
+        // Optimistically mark complete + trigger sparkle
+        setOptimisticCompleted((prev) => new Set(prev).add(key));
+        setJustCompleted((prev) => new Set(prev).add(key));
+        setTimeout(() => {
+          setJustCompleted((prev) => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          });
+        }, 600);
+        itemActions.handleComplete(
+          occ.item,
+          occ.occurrenceDate.toISOString(),
+        );
+      }
+    },
+    [itemActions, optimisticCompleted],
+  );
+
+  // Clear optimistic state once real data arrives
+  useEffect(() => {
+    if (optimisticCompleted.size > 0) {
+      setOptimisticCompleted(new Set());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [occurrenceActions]);
 
   // Filter items by ownership
   const ownershipFiltered = useMemo(() => {
@@ -491,20 +617,8 @@ export default function StandaloneRemindersPage({
     };
   }, [activeItems, occurrenceActions]);
 
-  // Handle item completion toggle
-  const handleToggleComplete = useCallback(
-    (occ: ExpandedOccurrence) => {
-      if (occ.isCompleted) {
-        itemActions.handleUncomplete(
-          occ.item,
-          occ.occurrenceDate.toISOString(),
-        );
-      } else {
-        itemActions.handleComplete(occ.item, occ.occurrenceDate.toISOString());
-      }
-    },
-    [itemActions],
-  );
+  // Handle item completion toggle (delegated to optimistic handler)
+  const handleToggleComplete = handleOptimisticComplete;
 
   // Get item time string
   const getItemTime = (item: ItemWithDetails): string | null => {
@@ -539,16 +653,17 @@ export default function StandaloneRemindersPage({
     const Icon = typeIcons[occ.item.type];
     const timeStr = getItemTime(occ.item);
     const isRecurring = !!occ.item.recurrence_rule?.rrule;
+    const key = occKey(occ);
+    const isOptimistic = optimisticCompleted.has(key);
+    const isVisuallyCompleted = occ.isCompleted || isOptimistic;
+    const isSparkle = justCompleted.has(key);
 
     return (
       <SwipeableItem
-        key={`${occ.item.id}-${occ.occurrenceDate.getTime()}`}
+        key={key}
         onComplete={() => {
-          if (!occ.isCompleted) {
-            itemActions.handleComplete(
-              occ.item,
-              occ.occurrenceDate.toISOString(),
-            );
+          if (!isVisuallyCompleted) {
+            handleOptimisticComplete(occ);
           }
         }}
         onOptions={() => openActions(occ)}
@@ -558,27 +673,15 @@ export default function StandaloneRemindersPage({
           className={cn(
             "flex items-center gap-3 p-3 rounded-xl transition-all",
             "bg-white/5 hover:bg-white/10",
-            occ.isCompleted && "opacity-50",
+            isVisuallyCompleted && "opacity-50",
           )}
         >
           {/* Completion checkbox */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleToggleComplete(occ);
-            }}
-            className={cn(
-              "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all flex-shrink-0",
-              occ.isCompleted
-                ? isPink
-                  ? "bg-pink-500 border-pink-500"
-                  : "bg-cyan-500 border-cyan-500"
-                : "border-white/30 hover:border-white/50",
-            )}
-          >
-            {occ.isCompleted && <Check className="w-4 h-4 text-white" />}
-          </button>
+          <SparkleCheckbox
+            checked={isVisuallyCompleted}
+            justCompleted={isSparkle}
+            onToggle={() => handleOptimisticComplete(occ)}
+          />
 
           {/* Icon */}
           <div
@@ -598,7 +701,9 @@ export default function StandaloneRemindersPage({
               <p
                 className={cn(
                   "font-medium truncate",
-                  occ.isCompleted ? "text-white/40 line-through" : "text-white",
+                  isVisuallyCompleted
+                    ? "text-white/40 line-through"
+                    : "text-white",
                 )}
               >
                 {occ.item.title}
@@ -731,38 +836,151 @@ export default function StandaloneRemindersPage({
       </div>
 
       {/* Focus Card - Next Item */}
-      {nextTask && (
-        <div
-          className={cn(
-            "p-6 rounded-2xl text-center",
-            isPink
-              ? "bg-pink-500/10 border border-pink-500/20"
-              : "bg-cyan-500/10 border border-cyan-500/20",
-          )}
-        >
-          <p className="text-xs uppercase tracking-widest text-white/40 mb-2">
-            Up Next
-          </p>
-          <h2 className="text-xl font-bold text-white mb-1">
-            {nextTask.item.title}
-          </h2>
-          {getItemTime(nextTask.item) && (
-            <p className="text-white/60">{getItemTime(nextTask.item)}</p>
-          )}
-          <button
-            type="button"
-            onClick={() => handleToggleComplete(nextTask)}
-            className={cn(
-              "mt-4 px-6 py-2 rounded-xl font-medium transition-all",
-              isPink
-                ? "bg-pink-500 hover:bg-pink-600 text-white"
-                : "bg-cyan-500 hover:bg-cyan-600 text-white",
-            )}
-          >
-            Mark Complete
-          </button>
-        </div>
-      )}
+      {nextTask &&
+        (() => {
+          const isRecurring = !!nextTask.item.recurrence_rule?.rrule;
+          const occDateStr = nextTask.occurrenceDate.toISOString();
+          return (
+            <div
+              className={cn(
+                "relative p-6 rounded-2xl",
+                isPink
+                  ? "bg-pink-500/10 border border-pink-500/20"
+                  : "bg-cyan-500/10 border border-cyan-500/20",
+              )}
+            >
+              {/* Top-right actions: delete + more */}
+              <div className="absolute top-3 right-3 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => itemActions.handleDelete(nextTask.item)}
+                  className="p-1.5 rounded-lg hover:bg-red-500/15 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4 text-red-400/60 hover:text-red-400" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openActions(nextTask)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                >
+                  <MoreHorizontal className="w-4 h-4 text-white/40" />
+                </button>
+              </div>
+
+              <div className="text-center">
+                <p className="text-xs uppercase tracking-widest text-white/40 mb-2">
+                  Up Next
+                </p>
+                <h2 className="text-xl font-bold text-white mb-1">
+                  {nextTask.item.title}
+                </h2>
+                {getItemTime(nextTask.item) && (
+                  <p className="text-white/60">{getItemTime(nextTask.item)}</p>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              {skipPrompt && skipPrompt.item.id === nextTask.item.id ? (
+                <div className="mt-5 space-y-2">
+                  <p className="text-xs text-white/50 text-center">
+                    Why are you skipping?
+                  </p>
+                  <input
+                    type="text"
+                    value={skipReason}
+                    onChange={(e) => setSkipReason(e.target.value)}
+                    placeholder="Reason (optional)"
+                    autoFocus
+                    className="w-full px-3 py-2 rounded-xl bg-white/10 border border-white/10 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/40"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        itemActions.handleCancel(
+                          skipPrompt.item,
+                          skipPrompt.occurrenceDate,
+                          skipReason || undefined,
+                        );
+                        setSkipPrompt(null);
+                        setSkipReason("");
+                      }
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSkipPrompt(null);
+                        setSkipReason("");
+                      }}
+                      className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/5 hover:bg-white/10 text-white/50 transition-colors"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        itemActions.handleCancel(
+                          skipPrompt.item,
+                          skipPrompt.occurrenceDate,
+                          skipReason || undefined,
+                        );
+                        setSkipPrompt(null);
+                        setSkipReason("");
+                      }}
+                      className="flex-1 py-2 rounded-xl text-sm font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition-colors"
+                    >
+                      Confirm Skip
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleComplete(nextTask)}
+                    className={cn(
+                      "w-full mt-5 py-2.5 rounded-xl font-medium transition-all flex items-center justify-center gap-2",
+                      isPink
+                        ? "bg-pink-500 hover:bg-pink-600 text-white"
+                        : "bg-cyan-500 hover:bg-cyan-600 text-white",
+                    )}
+                  >
+                    <Check className="w-4 h-4" />
+                    Mark Complete
+                  </button>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        itemActions.handlePostpone(
+                          nextTask.item,
+                          occDateStr,
+                          "tomorrow",
+                        )
+                      }
+                      className="flex-1 py-2 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-1.5 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400"
+                    >
+                      <FastForward className="w-3.5 h-3.5" />
+                      Tomorrow
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSkipPrompt({
+                          item: nextTask.item,
+                          occurrenceDate: occDateStr,
+                        })
+                      }
+                      className="flex-1 py-2 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400"
+                    >
+                      <SkipForward className="w-3.5 h-3.5" />
+                      {isRecurring ? "Skip" : "Cancel"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
 
       {/* Sections */}
       <div className="space-y-3">
