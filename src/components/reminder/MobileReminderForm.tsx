@@ -41,6 +41,7 @@ import {
   parseSmartText,
   type ParsedItem,
 } from "@/lib/smartTextParser";
+import { localToISO } from "@/lib/utils/date";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import type {
@@ -626,10 +627,8 @@ export default function MobileReminderForm() {
           return;
         }
 
-        const startAtIso = new Date(
-          `${startDate}T${startTime}:00`,
-        ).toISOString();
-        const endAtIso = new Date(`${endDate}T${endTime}:00`).toISOString();
+        const startAtIso = localToISO(startDate, startTime);
+        const endAtIso = localToISO(endDate, endTime);
 
         let recurrence_rule: CreateRecurrenceInput | undefined;
         if (recurrenceRule) {
@@ -676,9 +675,9 @@ export default function MobileReminderForm() {
 
         let dueAtIso: string | undefined;
         if (dueDate && dueTime) {
-          dueAtIso = new Date(`${dueDate}T${dueTime}:00`).toISOString();
+          dueAtIso = localToISO(dueDate, dueTime);
         } else if (dueDate) {
-          dueAtIso = new Date(`${dueDate}T12:00:00`).toISOString();
+          dueAtIso = localToISO(dueDate, "12:00");
         }
 
         let recurrence_rule: CreateRecurrenceInput | undefined;
@@ -729,9 +728,9 @@ export default function MobileReminderForm() {
 
         let dueAtIso: string | undefined;
         if (dueDate && dueTime) {
-          dueAtIso = new Date(`${dueDate}T${dueTime}:00`).toISOString();
+          dueAtIso = localToISO(dueDate, dueTime);
         } else if (dueDate) {
-          dueAtIso = new Date(`${dueDate}T12:00:00`).toISOString();
+          dueAtIso = localToISO(dueDate, "12:00");
         }
 
         let recurrence_rule: CreateRecurrenceInput | undefined;

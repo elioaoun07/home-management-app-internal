@@ -9,7 +9,12 @@ import {
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
 import { useItems } from "@/features/items/useItems";
+import { useBriefingTTS } from "@/hooks/useBriefingTTS";
 import { cn } from "@/lib/utils";
+import {
+  adjustOccurrenceToWallClock,
+  buildFullRRuleString,
+} from "@/lib/utils/date";
 import type { ItemType, ItemWithDetails } from "@/types/items";
 import {
   addDays,
@@ -33,6 +38,7 @@ import {
   Clock,
   Layers,
   ListTodo,
+  Loader2,
   Moon,
   Sparkles,
   Star,
@@ -43,8 +49,8 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RRule } from "rrule";
 
 // ============================================
@@ -159,11 +165,30 @@ const getCategoryGroup = (item: ItemWithDetails): string => {
 
 // Morning greetings based on time
 const getGreeting = (hour: number): { emoji: ReactNode; text: string } => {
-  if (hour < 5) return { emoji: <Moon className="w-5 h-5 text-indigo-400" />, text: "Working late?" };
-  if (hour < 12) return { emoji: <Sun className="w-5 h-5 text-yellow-400" />, text: "Good Morning!" };
-  if (hour < 17) return { emoji: <Sun className="w-5 h-5 text-orange-400" />, text: "Good Afternoon!" };
-  if (hour < 21) return { emoji: <Moon className="w-5 h-5 text-purple-400" />, text: "Good Evening!" };
-  return { emoji: <Moon className="w-5 h-5 text-indigo-400" />, text: "Winding Down" };
+  if (hour < 5)
+    return {
+      emoji: <Moon className="w-5 h-5 text-indigo-400" />,
+      text: "Working late?",
+    };
+  if (hour < 12)
+    return {
+      emoji: <Sun className="w-5 h-5 text-yellow-400" />,
+      text: "Good Morning!",
+    };
+  if (hour < 17)
+    return {
+      emoji: <Sun className="w-5 h-5 text-orange-400" />,
+      text: "Good Afternoon!",
+    };
+  if (hour < 21)
+    return {
+      emoji: <Moon className="w-5 h-5 text-purple-400" />,
+      text: "Good Evening!",
+    };
+  return {
+    emoji: <Moon className="w-5 h-5 text-indigo-400" />,
+    text: "Winding Down",
+  };
 };
 
 // ============================================
@@ -179,16 +204,7 @@ function getItemDate(item: ItemWithDetails): Date | null {
   return dateStr ? parseISO(dateStr) : null;
 }
 
-function buildFullRRuleString(
-  startDate: Date,
-  recurrenceRule: { rrule: string },
-): string {
-  const dtstart = `DTSTART:${format(startDate, "yyyyMMdd'T'HHmmss")}`;
-  const rrule = recurrenceRule.rrule.startsWith("RRULE:")
-    ? recurrenceRule.rrule
-    : `RRULE:${recurrenceRule.rrule}`;
-  return `${dtstart}\n${rrule}`;
-}
+// buildFullRRuleString imported from @/lib/utils/date
 
 function expandRecurringItems(
   items: ItemWithDetails[],
@@ -212,10 +228,11 @@ function expandRecurringItems(
         const occurrences = rule.between(startDate, endDate, true);
 
         for (const occ of occurrences) {
+          const adjusted = adjustOccurrenceToWallClock(occ, itemDate);
           const isCompleted = isOccurrenceCompleted(item.id, occ, actions);
           result.push({
             item,
-            occurrenceDate: occ,
+            occurrenceDate: adjusted,
             isCompleted,
           });
         }
@@ -282,189 +299,15 @@ export default function WebTodayView() {
   const [showOverdue, setShowOverdue] = useState(false);
   const [showNarrative, setShowNarrative] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const speechQueueRef = useRef<SpeechSynthesisUtterance[]>([]);
-  const currentUtteranceIndexRef = useRef(0);
+  const tts = useBriefingTTS();
 
-  // Get the best available US English voice
-  const getPreferredVoice = useCallback(() => {
-    if (!("speechSynthesis" in window)) return null;
-
-    const voices = window.speechSynthesis.getVoices();
-
-    // Prioritize high-quality natural US English voices
-    const preferredVoices = [
-      "Samantha", // macOS - very natural US female
-      "Allison", // macOS - US female
-      "Ava", // macOS - US female
-      "Google US English", // Chrome - good quality
-      "Microsoft Jenny", // Windows 11 - US conversational
-      "Microsoft Aria", // Windows 11 - US natural
-      "Microsoft Zira", // Windows - US clear female
-    ];
-
-    for (const pv of preferredVoices) {
-      const found = voices.find((v) => v.name.includes(pv));
-      if (found) return found;
-    }
-
-    // Fallback to first US English voice, then any English
-    return (
-      voices.find((v) => v.lang === "en-US") ||
-      voices.find((v) => v.lang.startsWith("en")) ||
-      null
-    );
-  }, []);
-
-  // Transform text into natural, human-like conversational speech
-  const prepareTextForSpeech = useCallback((text: string): string => {
-    // Step 1: Remove all emojis completely
-    const emojiRegex =
-      /[\p{Emoji_Presentation}\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu;
-    let speech = text.replace(emojiRegex, "");
-
-    // Step 2: Handle quoted task names - replace quotes with spoken emphasis
-    // "test 7" becomes: the task called test 7
-    speech = speech.replace(/"([^"]+)"/g, (_, taskName) => {
-      return taskName; // Just use the task name without quotes
-    });
-
-    // Step 3: Clean up formatting
-    speech = speech.replace(/[•●▸▹►]/g, "");
-    speech = speech.replace(/\s*[–—]\s*/g, ", ");
-
-    // Step 4: Handle times naturally
-    // 7:00 PM -> 7 PM, 11:01 PM -> 11 oh 1 PM
-    speech = speech.replace(/(\d+):00\s*(AM|PM)/gi, "$1 $2");
-    speech = speech.replace(/(\d+):0(\d)\s*(AM|PM)/gi, "$1 oh $2 $3"); // 11:01 -> 11 oh 1
-    speech = speech.replace(/(\d+):(\d{2})\s*(AM|PM)/gi, "$1 $2 $3");
-
-    // Step 5: Handle the "at X:XX PM:" pattern - remove the trailing colon
-    speech = speech.replace(/at (\d+(?::\d+)?\s*(?:AM|PM)):/gi, "at $1,");
-
-    // Step 6: Transform numbered lists into flowing speech
-    // "1. test\n2. test 2\n3. test 3" -> "test, then test 2, and finally test 3"
-    speech = speech.replace(/\n\s*1\.\s*/g, "\n");
-    speech = speech.replace(/\n\s*2\.\s*/g, ", then ");
-    speech = speech.replace(/\n\s*3\.\s*/g, ", and ");
-    speech = speech.replace(/\n\s*(\d+)\.\s*/g, ", also ");
-
-    // Step 7: Clean up newlines into natural pauses (commas)
-    speech = speech.replace(/\n+/g, ", ");
-
-    // Step 8: Make phrases conversational and warm
-    const conversationalMap: [RegExp, string][] = [
-      // Opening/status
-      [
-        /(\d+) items? remains? for the rest of today/gi,
-        "you've got $1 more things to get through today",
-      ],
-      [/(\d+) items? remain/gi, "$1 things left to go"],
-      [/You have (\d+) items?/gi, "you've got $1 things"],
-      [/No scheduled/gi, "nothing scheduled"],
-      [/Your schedule is clear/gi, "you're all clear"],
-
-      // Current/Next indicators
-      [/Currently:\s*/gi, "Right now you're on "],
-      [/Next up at/gi, "After that, at"],
-      [/Next up/gi, "Up next is"],
-
-      // Priority section
-      [/Key priorities for today:\s*/gi, "And your top priorities are: "],
-      [/Top priorities:\s*/gi, "The main things are: "],
-
-      // Reminders
-      [/Don't forget/gi, "Oh and don't forget"],
-      [/Heads up/gi, "Just a heads up"],
-
-      // Polish
-      [/First up at/gi, "First thing at"],
-      [/Starting at/gi, "kicking off at"],
-    ];
-
-    for (const [pattern, replacement] of conversationalMap) {
-      speech = speech.replace(pattern, replacement);
-    }
-
-    // Step 9: Clean up multiple spaces and punctuation
-    speech = speech.replace(/,\s*,/g, ",");
-    speech = speech.replace(/\.\s*\./g, ".");
-    speech = speech.replace(/,\s*\./g, ".");
-    speech = speech.replace(/\s+/g, " ");
-    speech = speech.replace(/^\s*,\s*/g, "");
-    speech = speech.replace(/\s*,\s*$/g, "");
-
-    // Step 10: Add natural breathing points (longer pauses) at key transitions
-    // These will create natural paragraph-like breaks
-    speech = speech.replace(
-      /(today|tonight|this morning)[.,]\s*/gi,
-      "$1. ... ",
-    );
-    speech = speech.replace(/(And your top priorities are:)/gi, "... $1");
-    speech = speech.replace(/(Up next is)/gi, "... $1");
-    speech = speech.replace(/(After that)/gi, "... $1");
-
-    return speech.trim();
-  }, []);
-
-  // Speak the briefing naturally as one flowing conversation
-  const speakBriefing = useCallback(
-    (text: string) => {
-      if (!("speechSynthesis" in window)) {
-        console.warn("Text-to-speech not supported in this browser");
-        return;
-      }
-
-      // Stop any ongoing speech
-      window.speechSynthesis.cancel();
-
-      if (isSpeaking) {
-        setIsSpeaking(false);
-        return;
-      }
-
-      const speechText = prepareTextForSpeech(text);
-      const voice = getPreferredVoice();
-
-      const utterance = new SpeechSynthesisUtterance(speechText);
-
-      if (voice) {
-        utterance.voice = voice;
-      }
-
-      // Natural, warm, conversational settings
-      // Like a friendly assistant chatting with you
-      utterance.rate = 1.0; // Natural speaking pace
-      utterance.pitch = 1.0; // Natural pitch
-      utterance.volume = 1.0;
-
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-
-      window.speechSynthesis.speak(utterance);
-    },
-    [isSpeaking, prepareTextForSpeech, getPreferredVoice],
-  );
-
-  // Stop speaking when component unmounts or view changes
+  // Stop TTS when view mode changes
   useEffect(() => {
     return () => {
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
+      tts.stop();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode]);
-
-  // Load voices (needed for some browsers)
-  useEffect(() => {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.getVoices();
-      window.speechSynthesis.onvoiceschanged = () => {
-        window.speechSynthesis.getVoices();
-      };
-    }
-  }, []);
 
   // Update time every minute for live updates
   useEffect(() => {
@@ -506,15 +349,16 @@ export default function WebTodayView() {
       occurrenceActions,
     );
 
+    // Expand past 30 days + today so items past their due time today are caught
     const pastStart = addDays(today, -30);
     const allPastOccs = expandRecurringItems(
       activeItems,
       pastStart,
-      today,
+      todayEnd,
       occurrenceActions,
     );
     const overdueOccs = allPastOccs.filter(
-      (occ) => isBefore(occ.occurrenceDate, today) && !occ.isCompleted,
+      (occ) => isBefore(occ.occurrenceDate, currentTime) && !occ.isCompleted,
     );
 
     // Sort based on selected mode
@@ -546,7 +390,7 @@ export default function WebTodayView() {
       weekStart: wStart,
       weekEnd: wEnd,
     };
-  }, [activeItems, occurrenceActions, today, timeScope, sortMode]);
+  }, [activeItems, occurrenceActions, today, currentTime, timeScope, sortMode]);
 
   // Alias for backward compatibility with existing views
   const todayTasks = scopedTasks;
@@ -796,7 +640,9 @@ export default function WebTodayView() {
               isFrost ? "text-slate-700" : "text-white/90",
             )}
           >
-            <span className="inline-flex items-center gap-2">{greeting.emoji} {greeting.text}</span>
+            <span className="inline-flex items-center gap-2">
+              {greeting.emoji} {greeting.text}
+            </span>
           </p>
           <h1
             className={cn(
@@ -1096,10 +942,14 @@ export default function WebTodayView() {
             {/* Speak Button */}
             <button
               type="button"
-              onClick={() => speakBriefing(narrative)}
+              onClick={() =>
+                tts.isPlaying || tts.isLoading
+                  ? tts.stop()
+                  : tts.play(narrative)
+              }
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                isSpeaking
+                tts.isPlaying || tts.isLoading
                   ? isFrost
                     ? "bg-indigo-100 text-indigo-600"
                     : isPink
@@ -1110,7 +960,12 @@ export default function WebTodayView() {
                     : "bg-white/[0.05] text-white/60 hover:bg-white/[0.1]",
               )}
             >
-              {isSpeaking ? (
+              {tts.isLoading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Loading...</span>
+                </>
+              ) : tts.isPlaying ? (
                 <>
                   <VolumeX className="w-3.5 h-3.5" />
                   <span>Stop</span>

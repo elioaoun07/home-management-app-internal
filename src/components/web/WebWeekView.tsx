@@ -9,6 +9,10 @@ import {
 } from "@/features/items/useItemActions";
 import { type SubtaskCompletion } from "@/features/items/useItems";
 import { cn } from "@/lib/utils";
+import {
+  adjustOccurrenceToWallClock,
+  buildFullRRuleString,
+} from "@/lib/utils/date";
 import type { ItemWithDetails } from "@/types/items";
 import {
   addDays,
@@ -88,36 +92,7 @@ const typeColors: Record<
   },
 };
 
-// Build a full RRULE string including COUNT and UNTIL from recurrence_rule
-function buildFullRRuleString(
-  dtstart: Date,
-  recurrenceRule: {
-    rrule: string;
-    count?: number | null;
-    end_until?: string | null;
-  },
-): string {
-  let rrulePart = recurrenceRule.rrule;
-
-  // Add COUNT if specified
-  if (recurrenceRule.count && !rrulePart.includes("COUNT=")) {
-    rrulePart += `;COUNT=${recurrenceRule.count}`;
-  }
-
-  // Add UNTIL if specified (and no COUNT)
-  if (
-    recurrenceRule.end_until &&
-    !recurrenceRule.count &&
-    !rrulePart.includes("UNTIL=")
-  ) {
-    const untilDate = parseISO(recurrenceRule.end_until);
-    const untilStr =
-      untilDate.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-    rrulePart += `;UNTIL=${untilStr}`;
-  }
-
-  return `DTSTART:${dtstart.toISOString().replace(/[-:]/g, "").split(".")[0]}Z\nRRULE:${rrulePart}`;
-}
+// buildFullRRuleString imported from @/lib/utils/date
 
 export function WebWeekView({
   items,
@@ -170,7 +145,7 @@ export function WebWeekView({
 
         const occurrences = rule.between(dayStart, dayEnd, true);
         if (occurrences.length > 0) {
-          return occurrences[0];
+          return adjustOccurrenceToWallClock(occurrences[0], itemDate);
         }
       } catch (error) {
         console.error("Error getting occurrence datetime:", error);
@@ -507,7 +482,10 @@ export function WebWeekView({
                 "text-white",
               )}
             >
-              <span className="flex items-center gap-1"><Sparkles className="w-3.5 h-3.5 text-pink-400 inline" />Today</span>
+              <span className="flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-pink-400 inline" />
+                Today
+              </span>
             </motion.button>
           </div>
 

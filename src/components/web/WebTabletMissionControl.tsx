@@ -30,6 +30,10 @@ import {
   type SubtaskCompletion,
 } from "@/features/items/useItems";
 import { cn } from "@/lib/utils";
+import {
+  adjustOccurrenceToWallClock,
+  buildFullRRuleString,
+} from "@/lib/utils/date";
 import type { ItemType, ItemWithDetails, Subtask } from "@/types/items";
 import {
   addDays,
@@ -129,36 +133,7 @@ const priorityColors: Record<string, string> = {
 // HELPER FUNCTIONS
 // ============================================
 
-// Build a full RRULE string including COUNT and UNTIL from recurrence_rule
-function buildFullRRuleString(
-  dtstart: Date,
-  recurrenceRule: {
-    rrule: string;
-    count?: number | null;
-    end_until?: string | null;
-  },
-): string {
-  let rrulePart = recurrenceRule.rrule;
-
-  // Add COUNT if specified
-  if (recurrenceRule.count && !rrulePart.includes("COUNT=")) {
-    rrulePart += `;COUNT=${recurrenceRule.count}`;
-  }
-
-  // Add UNTIL if specified (and no COUNT)
-  if (
-    recurrenceRule.end_until &&
-    !recurrenceRule.count &&
-    !rrulePart.includes("UNTIL=")
-  ) {
-    const untilDate = parseISO(recurrenceRule.end_until);
-    const untilStr =
-      untilDate.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-    rrulePart += `;UNTIL=${untilStr}`;
-  }
-
-  return `DTSTART:${dtstart.toISOString().replace(/[-:]/g, "").split(".")[0]}Z\nRRULE:${rrulePart}`;
-}
+// buildFullRRuleString imported from @/lib/utils/date
 
 function getItemDate(item: ItemWithDetails): Date | null {
   const dateStr =
@@ -192,11 +167,12 @@ function expandRecurringItems(
         const occurrences = rule.between(startDate, endDate, true);
 
         for (const occ of occurrences) {
+          const adjusted = adjustOccurrenceToWallClock(occ, itemDate);
           const isCompleted = isOccurrenceCompleted(item.id, occ, actions);
           // Include completed items but mark them as completed
           result.push({
             item,
-            occurrenceDate: occ,
+            occurrenceDate: adjusted,
             isCompleted,
           });
         }

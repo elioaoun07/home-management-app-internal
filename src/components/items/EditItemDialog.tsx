@@ -28,6 +28,7 @@ import type {
   ItemPrerequisite,
 } from "@/types/prerequisites";
 import { format, parseISO } from "date-fns";
+import { localToISO } from "@/lib/utils/date";
 import {
   Bell,
   MapPin,
@@ -301,7 +302,7 @@ export default function EditItemDialog({
       // Update type-specific details
       if (item.type === "reminder" || item.type === "task") {
         if (startDate && startTime) {
-          const dueAt = new Date(`${startDate}T${startTime}:00`).toISOString();
+          const dueAt = localToISO(startDate, startTime);
           await updateReminderDetails.mutateAsync({
             itemId: item.id,
             due_at: dueAt,
@@ -310,12 +311,12 @@ export default function EditItemDialog({
       } else if (item.type === "event") {
         if (startDate && startTime) {
           const startAtIso = allDay
-            ? new Date(`${startDate}T00:00:00`).toISOString()
-            : new Date(`${startDate}T${startTime}:00`).toISOString();
+            ? localToISO(startDate, "00:00")
+            : localToISO(startDate, startTime);
 
           let endAtIso: string;
           if (allDay) {
-            endAtIso = new Date(`${endDate}T23:59:59`).toISOString();
+            endAtIso = localToISO(endDate, "23:59");
           } else {
             const startDateTime = new Date(`${startDate}T${startTime}:00`);
             let endDateTime = new Date(`${endDate}T${endTime}:00`);
@@ -347,7 +348,7 @@ export default function EditItemDialog({
         if (recurrenceRule !== originalRrule) {
           const startAnchor =
             startDate && startTime
-              ? new Date(`${startDate}T${startTime}:00`).toISOString()
+              ? localToISO(startDate, startTime)
               : new Date().toISOString();
 
           await updateRecurrenceRule.mutateAsync({

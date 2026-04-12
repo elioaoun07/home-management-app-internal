@@ -18,6 +18,10 @@ import {
 } from "@/features/items/useItemActions";
 import { useItems } from "@/features/items/useItems";
 import { cn } from "@/lib/utils";
+import {
+  adjustOccurrenceToWallClock,
+  buildFullRRuleString,
+} from "@/lib/utils/date";
 import type { ItemType, ItemWithDetails } from "@/types/items";
 import {
   addDays,
@@ -224,16 +228,7 @@ function getItemDate(item: ItemWithDetails): Date | null {
   return dateStr ? parseISO(dateStr) : null;
 }
 
-function buildFullRRuleString(
-  startDate: Date,
-  recurrenceRule: { rrule: string },
-): string {
-  const dtstart = `DTSTART:${format(startDate, "yyyyMMdd'T'HHmmss")}`;
-  const rrule = recurrenceRule.rrule.startsWith("RRULE:")
-    ? recurrenceRule.rrule
-    : `RRULE:${recurrenceRule.rrule}`;
-  return `${dtstart}\n${rrule}`;
-}
+// buildFullRRuleString imported from @/lib/utils/date
 
 /** Find the specific action type for an occurrence */
 function getOccurrenceActionType(
@@ -272,13 +267,14 @@ function expandRecurringItems(
         const occurrences = rule.between(startDate, endDate, true);
 
         for (const occ of occurrences) {
+          const adjusted = adjustOccurrenceToWallClock(occ, itemDate);
           const isCompleted = isOccurrenceCompleted(item.id, occ, actions);
           const actionType = isCompleted
             ? getOccurrenceActionType(item.id, occ, actions)
             : undefined;
           result.push({
             item,
-            occurrenceDate: occ,
+            occurrenceDate: adjusted,
             isCompleted,
             actionType,
           });
@@ -685,6 +681,7 @@ export default function StandaloneRemindersPage({
   // Process items into occurrences
   const { overdueItems, todayItems, upcomingItems, stats } = useMemo(() => {
     const today = startOfDay(new Date());
+    const now = new Date();
     const tomorrow = addDays(today, 1);
     const weekFromNow = addDays(today, 7);
     const pastStart = addDays(today, -30);
@@ -693,15 +690,18 @@ export default function StandaloneRemindersPage({
     const overdueOccs = expandRecurringItems(
       activeItems,
       pastStart,
-      today,
+      tomorrow,
       occurrenceActions,
-    ).filter((occ) => isBefore(occ.occurrenceDate, today) && !occ.isCompleted);
+    ).filter((occ) => isBefore(occ.occurrenceDate, now) && !occ.isCompleted);
 
     const todayOccs = expandRecurringItems(
       activeItems,
       today,
       tomorrow,
       occurrenceActions,
+    ).filter(
+      // Exclude items already counted as overdue (past their due time today)
+      (occ) => !isBefore(occ.occurrenceDate, now) || occ.isCompleted,
     );
 
     const upcomingOccs = expandRecurringItems(
@@ -727,8 +727,21 @@ export default function StandaloneRemindersPage({
   // Handle item completion toggle (delegated to optimistic handler)
   const handleToggleComplete = handleOptimisticComplete;
 
-  // Get item time string
-  const getItemTime = (item: ItemWithDetails): string | null => {
+  // Get item time string — use occurrence date for recurring items to avoid DST drift
+  const getItemTime = (
+    item: ItemWithDetails,
+    occurrenceDate?: Date,
+  ): string | null => {
+    // For recurring items, use the occurrence date (which has DST-correct local time)
+    if (occurrenceDate && item.recurrence_rule?.rrule) {
+      if (
+        occurrenceDate.getHours() !== 0 ||
+        occurrenceDate.getMinutes() !== 0
+      ) {
+        return format(occurrenceDate, "h:mm a");
+      }
+      return null;
+    }
     if (item.type === "reminder" || item.type === "task") {
       const dueAt = item.reminder_details?.due_at;
       if (dueAt) {
@@ -758,7 +771,7 @@ export default function StandaloneRemindersPage({
   // Render a single item with swipe support
   const renderItem = (occ: ExpandedOccurrence, showDate = false) => {
     const Icon = typeIcons[occ.item.type];
-    const timeStr = getItemTime(occ.item);
+    const timeStr = getItemTime(occ.item, occ.occurrenceDate);
     const isRecurring = !!occ.item.recurrence_rule?.rrule;
     const key = occKey(occ);
     const isOptimistic = optimisticCompleted.has(key);
@@ -997,8 +1010,10 @@ export default function StandaloneRemindersPage({
                 <h2 className="text-xl font-bold text-white mb-1">
                   {nextTask.item.title}
                 </h2>
-                {getItemTime(nextTask.item) && (
-                  <p className="text-white/60">{getItemTime(nextTask.item)}</p>
+                {getItemTime(nextTask.item, nextTask.occurrenceDate) && (
+                  <p className="text-white/60">
+                    {getItemTime(nextTask.item, nextTask.occurrenceDate)}
+                  </p>
                 )}
               </div>
 

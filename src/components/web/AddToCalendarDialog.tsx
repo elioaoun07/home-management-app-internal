@@ -27,6 +27,7 @@ import {
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useTheme } from "@/contexts/ThemeContext";
+import { localToISO } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import type { CatalogueItem, RecurrencePattern } from "@/types/catalogue";
 import { RECURRENCE_PATTERN_LABELS } from "@/types/catalogue";
@@ -263,10 +264,8 @@ export default function AddToCalendarDialog({
         return;
       }
 
-      const startAt = startDateTime.toISOString();
-      const endAt = new Date(
-        `${startDate}T${normalizedEndTime}:00`,
-      ).toISOString();
+      const startAt = localToISO(startDate, normalizedStartTime);
+      const endAt = localToISO(startDate, normalizedEndTime);
 
       // Build recurrence rule if pattern is set
       let recurrenceRule: CreateRecurrenceInput | undefined;
@@ -283,7 +282,7 @@ export default function AddToCalendarDialog({
             start_anchor: startAt,
             end_until:
               hasEndDate && endDate
-                ? new Date(`${endDate}T23:59:59`).toISOString()
+                ? localToISO(endDate, "23:59")
                 : undefined,
             // Pass flexible routine settings from catalogue item
             is_flexible: catalogueItem.is_flexible_routine || false,

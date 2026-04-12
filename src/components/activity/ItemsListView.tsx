@@ -13,6 +13,10 @@ import {
 import { useItems } from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
+import {
+  adjustOccurrenceToWallClock,
+  buildFullRRuleString,
+} from "@/lib/utils/date";
 import type { ItemStatus, ItemType, ItemWithDetails } from "@/types/items";
 import { eachDayOfInterval, format, parseISO } from "date-fns";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -448,30 +452,7 @@ interface OccurrenceEntry {
   occurrenceDateStr: string; // YYYY-MM-DD
 }
 
-function buildRRuleString(
-  dtstart: Date,
-  recurrenceRule: {
-    rrule: string;
-    count?: number | null;
-    end_until?: string | null;
-  },
-): string {
-  let rrulePart = recurrenceRule.rrule;
-  if (recurrenceRule.count && !rrulePart.includes("COUNT=")) {
-    rrulePart += `;COUNT=${recurrenceRule.count}`;
-  }
-  if (
-    recurrenceRule.end_until &&
-    !recurrenceRule.count &&
-    !rrulePart.includes("UNTIL=")
-  ) {
-    const untilDate = parseISO(recurrenceRule.end_until);
-    const untilStr =
-      untilDate.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-    rrulePart += `;UNTIL=${untilStr}`;
-  }
-  return `DTSTART:${dtstart.toISOString().replace(/[-:]/g, "").split(".")[0]}Z\nRRULE:${rrulePart}`;
-}
+// buildRRuleString replaced by centralized buildFullRRuleString from @/lib/utils/date
 
 function sortEntriesByTime(entries: OccurrenceEntry[]): OccurrenceEntry[] {
   return [...entries].sort(
@@ -687,7 +668,7 @@ export default function ItemsListView({
         const rule = item.recurrence_rule;
         const startAnchor = parseISO(rule.start_anchor);
         try {
-          const rruleString = buildRRuleString(startAnchor, rule);
+          const rruleString = buildFullRRuleString(startAnchor, rule);
           const rruleObj = RRule.fromString(rruleString);
           const exceptionSet = new Set(
             rule.exceptions?.map((e) =>
@@ -702,7 +683,8 @@ export default function ItemsListView({
           for (const occ of occurrences) {
             const occDateStr = normalizeToLocalDateString(occ);
             if (exceptionSet.has(occDateStr)) continue;
-            const occIso = occ.toISOString();
+            const adjusted = adjustOccurrenceToWallClock(occ, startAnchor);
+            const occIso = adjusted.toISOString();
             if (occDateStr < todayStr) {
               overdue.push({
                 item,

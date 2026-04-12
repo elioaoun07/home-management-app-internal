@@ -33,6 +33,10 @@ import {
 import { useItems } from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
+import {
+  adjustOccurrenceToWallClock,
+  buildFullRRuleString,
+} from "@/lib/utils/date";
 import type { ItemWithDetails } from "@/types/items";
 import {
   addDays,
@@ -101,16 +105,7 @@ function getItemDate(item: ItemWithDetails): Date | null {
   return dateStr ? parseISO(dateStr) : null;
 }
 
-function buildFullRRuleString(
-  startDate: Date,
-  recurrenceRule: { rrule: string },
-): string {
-  const dtstart = `DTSTART:${format(startDate, "yyyyMMdd'T'HHmmss")}`;
-  const rrule = recurrenceRule.rrule.startsWith("RRULE:")
-    ? recurrenceRule.rrule
-    : `RRULE:${recurrenceRule.rrule}`;
-  return `${dtstart}\n${rrule}`;
-}
+// buildFullRRuleString imported from @/lib/utils/date
 
 function expandRecurringItems(
   items: ItemWithDetails[],
@@ -143,8 +138,13 @@ function expandRecurringItems(
         for (const occ of occurrences) {
           const occDateKey = format(occ, "yyyy-MM-dd");
           if (exceptions.has(occDateKey)) continue;
+          const adjusted = adjustOccurrenceToWallClock(occ, itemDate);
           const completed = isOccurrenceCompleted(item.id, occ, actions);
-          result.push({ item, occurrenceDate: occ, isCompleted: completed });
+          result.push({
+            item,
+            occurrenceDate: adjusted,
+            isCompleted: completed,
+          });
         }
       } catch {
         if (isWithinInterval(itemDate, { start: startDate, end: endDate })) {
@@ -954,6 +954,13 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
     return () => clearTimeout(timeout);
   }, []);
 
+  // Update current time every minute so overdue detection stays fresh
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
   const { data: allItems = [], isLoading } = useItems();
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
   const itemActions = useItemActionsWithToast();
@@ -1008,7 +1015,8 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
         continue;
       }
 
-      if (isBefore(occ.occurrenceDate, today)) {
+      // Compare against current time so today's past-due items are overdue
+      if (isBefore(occ.occurrenceDate, now)) {
         overdue.push(occ);
       } else if (
         isToday(occ.occurrenceDate) ||
@@ -1019,7 +1027,15 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
     }
 
     return { overdue, upcoming, completed };
-  }, [activeItems, occurrenceActions, today, weekStart, weekEnd, timeScope]);
+  }, [
+    activeItems,
+    occurrenceActions,
+    today,
+    now,
+    weekStart,
+    weekEnd,
+    timeScope,
+  ]);
 
   // Convert to FocusItems for AI
   const focusItemsForAI = useMemo(() => {
@@ -1028,8 +1044,8 @@ export default function FocusPage({ standalone = false }: FocusPageProps) {
       ...organizedTasks.upcoming,
       ...organizedTasks.completed,
     ];
-    return all.map((occ) => toFocusItem(occ, today));
-  }, [organizedTasks, today]);
+    return all.map((occ) => toFocusItem(occ, now));
+  }, [organizedTasks, now]);
 
   // AI Insights hook
   const {

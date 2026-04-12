@@ -36,6 +36,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNotification";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
+import { localToISO } from "@/lib/utils/date";
 import type {
   CreateAlertInput,
   CreateEventInput,
@@ -374,12 +375,12 @@ export function WebEventFormDialog({
         // Update type-specific details
         if (editItem.type === "event") {
           const startAtIso = allDay
-            ? new Date(`${startDate}T00:00:00`).toISOString()
-            : new Date(`${startDate}T${startTime}:00`).toISOString();
+            ? localToISO(startDate, "00:00")
+            : localToISO(startDate, startTime);
 
           let endAtIso: string;
           if (allDay) {
-            endAtIso = new Date(`${endDate}T23:59:59`).toISOString();
+            endAtIso = localToISO(endDate, "23:59");
           } else {
             // Check if end time is before start time on the same date
             const startDateTime = new Date(`${startDate}T${startTime}:00`);
@@ -413,7 +414,7 @@ export function WebEventFormDialog({
         } else if (editItem.type === "reminder" && editItem.reminder_details) {
           const dueAtIso =
             startDate && startTime
-              ? new Date(`${startDate}T${startTime}:00`).toISOString()
+              ? localToISO(startDate, startTime)
               : undefined;
 
           await updateReminderDetails.mutateAsync({
@@ -440,7 +441,7 @@ export function WebEventFormDialog({
         } else if (editItem.type === "task") {
           const dueAtIso =
             startDate && startTime
-              ? new Date(`${startDate}T${startTime}:00`).toISOString()
+              ? localToISO(startDate, startTime)
               : undefined;
 
           await updateReminderDetails.mutateAsync({
@@ -486,14 +487,14 @@ export function WebEventFormDialog({
           // Convert local date/time to ISO string (properly handles timezone)
           const dueAtIso =
             startDate && startTime
-              ? new Date(`${startDate}T${startTime}:00`).toISOString()
+              ? localToISO(startDate, startTime)
               : undefined;
 
           // Build recurrence rule if set
           let recurrence_rule: CreateRecurrenceInput | undefined;
           if (recurrenceRule && dueAtIso) {
             const endUntilIso = recurrenceEndDate
-              ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString()
+              ? localToISO(recurrenceEndDate, "23:59")
               : undefined;
             recurrence_rule = {
               rrule: recurrenceRule,
@@ -553,12 +554,12 @@ export function WebEventFormDialog({
         } else if (itemType === "event") {
           // Convert local date/time to ISO strings (properly handles timezone)
           const startAtIso = allDay
-            ? new Date(`${startDate}T00:00:00`).toISOString()
-            : new Date(`${startDate}T${startTime}:00`).toISOString();
+            ? localToISO(startDate, "00:00")
+            : localToISO(startDate, startTime);
 
           let endAtIso: string;
           if (allDay) {
-            endAtIso = new Date(`${endDate}T23:59:59`).toISOString();
+            endAtIso = localToISO(endDate, "23:59");
           } else {
             // Check if end time is before start time on the same date
             const startDateTime = new Date(`${startDate}T${startTime}:00`);
@@ -575,7 +576,7 @@ export function WebEventFormDialog({
           }
 
           const endUntilIso = recurrenceEndDate
-            ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString()
+            ? localToISO(recurrenceEndDate, "23:59")
             : undefined;
 
           // Build recurrence rule if set
@@ -641,11 +642,9 @@ export function WebEventFormDialog({
           });
         } else if (itemType === "task") {
           // Convert local date/time to ISO string (properly handles timezone)
-          const dueAtIso = new Date(
-            `${startDate}T${startTime}:00`,
-          ).toISOString();
+          const dueAtIso = localToISO(startDate, startTime);
           const endUntilIso = recurrenceEndDate
-            ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString()
+            ? localToISO(recurrenceEndDate, "23:59")
             : undefined;
 
           // Build recurrence rule if set

@@ -25,6 +25,7 @@ import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNoti
 import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
+import { localToISO } from "@/lib/utils/date";
 import type {
   CreateAlertInput,
   CreateEventInput,
@@ -334,7 +335,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
         if (recurrenceRule && dueDate && dueTime) {
           recurrence_rule = {
             rrule: recurrenceRule,
-            start_anchor: `${dueDate}T${dueTime}:00`,
+            start_anchor: localToISO(dueDate, dueTime),
           };
         }
 
@@ -343,7 +344,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           title: title.trim(),
           description: description.trim() || undefined,
           priority,
-          due_at: dueDate && dueTime ? `${dueDate}T${dueTime}:00` : undefined,
+          due_at: dueDate && dueTime ? localToISO(dueDate, dueTime) : undefined,
           alerts: alerts.length > 0 ? alerts : undefined,
           recurrence_rule,
           is_public: isPublic,
@@ -402,8 +403,8 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
         let recurrence_rule: CreateRecurrenceInput | undefined;
         if (recurrenceRule) {
           const startAnchor = allDay
-            ? `${startDate}T00:00:00`
-            : `${startDate}T${startTime}:00`;
+            ? localToISO(startDate, "00:00")
+            : localToISO(startDate, startTime);
           recurrence_rule = {
             rrule: recurrenceRule,
             start_anchor: startAnchor,
@@ -416,9 +417,11 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           description: description.trim() || undefined,
           priority,
           start_at: allDay
-            ? `${startDate}T00:00:00`
-            : `${startDate}T${startTime}:00`,
-          end_at: allDay ? `${endDate}T23:59:59` : `${endDate}T${endTime}:00`,
+            ? localToISO(startDate, "00:00")
+            : localToISO(startDate, startTime),
+          end_at: allDay
+            ? localToISO(endDate, "23:59")
+            : localToISO(endDate, endTime),
           all_day: allDay,
           location_text: location.trim() || undefined,
           alerts: alerts.length > 0 ? alerts : undefined,
@@ -469,7 +472,7 @@ export default function MobileItemForm({ className }: MobileItemFormProps) {
           title: title.trim(),
           description: description.trim() || undefined,
           priority,
-          due_at: `${dueDate}T${dueTime}:00`,
+          due_at: localToISO(dueDate, dueTime),
           estimate_minutes: undefined,
           is_public: isPublic,
           responsible_user_id: responsibleUserId,

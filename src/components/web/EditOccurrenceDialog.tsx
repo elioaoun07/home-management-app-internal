@@ -22,6 +22,7 @@ import {
   useUpdateRecurrenceException,
 } from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { localToISO } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
 import { format, isSameDay, parseISO } from "date-fns";
@@ -159,16 +160,16 @@ export default function EditOccurrenceDialog({
     if (modifiedFields.includes("rescheduled_date")) {
       override_payload_json.rescheduled_to = targetDateStr;
       // Always include the times with the new date when rescheduling
-      override_payload_json.start_at = `${targetDateStr}T${startTime}:00`;
-      override_payload_json.end_at = `${targetDateStr}T${endTime}:00`;
+      override_payload_json.start_at = localToISO(targetDateStr, startTime);
+      override_payload_json.end_at = localToISO(targetDateStr, endTime);
     } else {
       // Not rescheduled, use original occurrence date for times
       const originalDateStr = format(occurrenceDate, "yyyy-MM-dd");
       if (modifiedFields.includes("start_at")) {
-        override_payload_json.start_at = `${originalDateStr}T${startTime}:00`;
+        override_payload_json.start_at = localToISO(originalDateStr, startTime);
       }
       if (modifiedFields.includes("end_at")) {
-        override_payload_json.end_at = `${originalDateStr}T${endTime}:00`;
+        override_payload_json.end_at = localToISO(originalDateStr, endTime);
       }
     }
     if (modifiedFields.includes("location_text")) {

@@ -1,4 +1,4 @@
-<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->
+<!-- AUTO-GENERATED FROM CLAUDE.md -- DO NOT EDIT DIRECTLY -->
 
 # CLAUDE.md
 
@@ -53,6 +53,14 @@
     - **After adding a new feature query**, audit all mutations that could make its data stale and add the new key to their invalidation list. Never assume "nobody reads this yet."
     - **Never rely on stale-time as a correctness guarantee.** Stale-time is a performance optimization only. Always invalidate on mutation.
 21. **Cross-user category matching must use `slug`, never `name`** — `user_categories` has a `slug` column (auto-generated deterministic kebab from `name`, e.g. `"Food & Groceries"` → `"food-groceries"`). When resolving one user's category/subcategory in the context of another user's data (e.g. partner confirms a recurring payment, budget allocation merging), always match on `slug`. Name is display text and is cosmetic; slug is the stable canonical cross-user key. Fall back to name matching only when slug is null/absent (pre-existing data). Accounts have no slug column — name-based matching there is acceptable.
+22. **Timezone consistency — all dates must be stored and transmitted as UTC ISO 8601 strings.** Supabase's default session timezone is UTC. A naive datetime like `"2026-04-12T21:00:00"` (no `Z`, no offset) inserted into a `timestamptz` column is interpreted as **UTC**, silently shifting local times by the user's UTC offset (e.g. 9 PM local in UTC+3 → stored as 9 PM UTC → displayed as 12 AM local). Rules:
+    - **Never send a naive datetime string to the DB.** Always convert local date+time to a proper ISO string first: use `localToISO(date, time)` from `src/lib/utils/date.ts`, which does `new Date(\`${date}T${time}:00\`).toISOString()`. JavaScript's `Date`constructor parses`YYYY-MM-DDTHH:mm:ss`(no`Z`) as **local time**, then `.toISOString()`converts to UTC with`Z` suffix.
+    - **`parseISO()` from date-fns correctly handles the `Z`/offset** in retrieved values, converting back to local-time Date objects. This is safe for display.
+    - **Never build RRule DTSTART with `format(date, "yyyyMMdd'T'HHmmss")`** — `format()` outputs local-time digits but rrule.js interprets them as UTC, causing a timezone-offset shift on every occurrence. Use `buildFullRRuleString(startDate, recurrenceRule)` from `src/lib/utils/date.ts` — it formats DTSTART in UTC with `Z` suffix using `getUTC*()` methods.
+    - **`buildFullRRuleString` is the single canonical implementation** — never define a local copy. It handles DTSTART, COUNT, and UNTIL in UTC.
+    - **Overdue detection must compare against `new Date()` (current time), not `startOfDay(new Date())` (midnight).** A 9 PM item should be overdue at 10:30 PM the same day. Use a `currentTime` state updated every 60 s (via `setInterval`) so the comparison stays live.
+    - **Daylight Saving Time (DST) — wall-clock preservation**: The DB stores UTC. The same local time (e.g. 10 AM) maps to **different UTC values** depending on DST at creation time (10 AM UTC+2 → 08:00Z in winter, 10 AM UTC+3 → 07:00Z in summer). This is correct — **never "fix" DB values when DST changes**. JavaScript's `Date.getHours()` returns local hours using the DST rules of **the date inside the object**, not the current date. So `parseISO("2026-01-15T08:00:00Z").getHours()` always returns 10 (winter UTC+2) even when called in summer. For **recurring items**, rrule.js generates occurrences at a fixed UTC instant, which shifts local time across DST. Use `adjustOccurrenceToWallClock(occurrence, originalItemDate)` from `src/lib/utils/date.ts` — it extracts the original local hours via `getHours()` and applies them to the occurrence via `setHours()`, which respects the occurrence date's own DST context. **Never manually calculate UTC offsets or hardcode +2/+3.** All DST handling is automatic through JavaScript `Date` + `localToISO` + `adjustOccurrenceToWallClock`.
+    - **Household sharing across timezones**: each user sees times in their own browser timezone. The underlying UTC values are identical. No server-side timezone conversion is needed.
 
 ---
 
@@ -313,6 +321,8 @@ SUPABASE_SERVICE_ROLE_KEY=         # admin ops (cron, batch)
 GOOGLE_AI_API_KEY=                 # Gemini AI
 CRON_SECRET=                       # cron job auth (Bearer token)
 VOICE_SECRET=                      # voice endpoint JWT
+AZURE_TTS_KEY=                     # Azure Cognitive Services TTS key
+AZURE_TTS_REGION=                  # Azure TTS region (e.g. eastus)
 
 # Push Notifications
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=

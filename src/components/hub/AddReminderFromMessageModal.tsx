@@ -10,6 +10,7 @@ import {
   useCreateReminder,
   useCreateTask,
 } from "@/features/items/useItems";
+import { localToISO } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import type {
   CreateEventInput,
@@ -210,10 +211,8 @@ export default function AddReminderFromMessageModal({
       let createdItemId: string | undefined;
 
       if (itemType === "event") {
-        const startAtIso = new Date(
-          `${startDate}T${startTime}:00`,
-        ).toISOString();
-        const endAtIso = new Date(`${endDate}T${endTime}:00`).toISOString();
+        const startAtIso = localToISO(startDate, startTime);
+        const endAtIso = localToISO(endDate, endTime);
 
         const input: CreateEventInput = {
           type: "event",
@@ -231,7 +230,7 @@ export default function AddReminderFromMessageModal({
         createdItemId = result?.id;
         toast.success("Event created!", { description: title });
       } else if (itemType === "task") {
-        const dueAtIso = new Date(`${dueDate}T${dueTime}:00`).toISOString();
+        const dueAtIso = localToISO(dueDate, dueTime);
 
         const input: CreateTaskInput = {
           type: "task",
@@ -248,7 +247,7 @@ export default function AddReminderFromMessageModal({
         createdItemId = result?.id;
         toast.success("Task created!", { description: title });
       } else {
-        const dueAtIso = new Date(`${dueDate}T${dueTime}:00`).toISOString();
+        const dueAtIso = localToISO(dueDate, dueTime);
 
         const input: CreateReminderInput = {
           type: "reminder",
