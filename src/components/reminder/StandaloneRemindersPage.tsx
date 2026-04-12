@@ -9,8 +9,11 @@ import { useTheme } from "@/contexts/ThemeContext";
 import {
   getPostponedOccurrencesForDate,
   isOccurrenceCompleted,
+  normalizeToLocalDateString,
+  parseDbDateToLocalString,
   useAllOccurrenceActions,
   useItemActionsWithToast,
+  type ActionType,
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
 import { useItems } from "@/features/items/useItems";
@@ -39,6 +42,7 @@ import {
   RefreshCw,
   SkipForward,
   Target,
+  TimerOff,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
@@ -125,6 +129,8 @@ interface ExpandedOccurrence {
   isCompleted: boolean;
   isPostponed?: boolean;
   originalDate?: Date;
+  /** The specific action type if this occurrence was acted upon */
+  actionType?: ActionType;
 }
 
 // Type icons
@@ -161,6 +167,21 @@ function buildFullRRuleString(
   return `${dtstart}\n${rrule}`;
 }
 
+/** Find the specific action type for an occurrence */
+function getOccurrenceActionType(
+  itemId: string,
+  occurrenceDate: Date,
+  actions: ItemOccurrenceAction[],
+): ActionType | undefined {
+  const targetDate = normalizeToLocalDateString(occurrenceDate);
+  const action = actions.find((a) => {
+    if (a.item_id !== itemId) return false;
+    const actionDate = parseDbDateToLocalString(a.occurrence_date);
+    return actionDate === targetDate;
+  });
+  return action?.action_type;
+}
+
 function expandRecurringItems(
   items: ItemWithDetails[],
   startDate: Date,
@@ -184,10 +205,14 @@ function expandRecurringItems(
 
         for (const occ of occurrences) {
           const isCompleted = isOccurrenceCompleted(item.id, occ, actions);
+          const actionType = isCompleted
+            ? getOccurrenceActionType(item.id, occ, actions)
+            : undefined;
           result.push({
             item,
             occurrenceDate: occ,
             isCompleted,
+            actionType,
           });
         }
       } catch (error) {
@@ -197,10 +222,15 @@ function expandRecurringItems(
       const isCompleted =
         item.status === "completed" ||
         isOccurrenceCompleted(item.id, itemDate, actions);
+      const actionType = isCompleted
+        ? (getOccurrenceActionType(item.id, itemDate, actions) ??
+          (item.status === "completed" ? "completed" : undefined))
+        : undefined;
       result.push({
         item,
         occurrenceDate: itemDate,
         isCompleted,
+        actionType,
       });
     }
   }
@@ -654,6 +684,10 @@ export default function StandaloneRemindersPage({
     const isOptimistic = optimisticCompleted.has(key);
     const isVisuallyCompleted = occ.isCompleted || isOptimistic;
     const isSparkle = justCompleted.has(key);
+    const isDimmed =
+      isVisuallyCompleted ||
+      occ.actionType === "postponed" ||
+      occ.actionType === "skipped";
 
     return (
       <SwipeableItem
@@ -670,15 +704,25 @@ export default function StandaloneRemindersPage({
           className={cn(
             "flex items-center gap-3 p-3 rounded-xl transition-all",
             "bg-white/5 hover:bg-white/10",
-            isVisuallyCompleted && "opacity-50",
+            isDimmed && "opacity-50",
           )}
         >
-          {/* Completion checkbox */}
-          <SparkleCheckbox
-            checked={isVisuallyCompleted}
-            justCompleted={isSparkle}
-            onToggle={() => handleOptimisticComplete(occ)}
-          />
+          {/* Status indicator: checkbox for normal/completed, icon for postponed/skipped */}
+          {occ.actionType === "postponed" ? (
+            <div className="w-6 h-6 rounded-lg bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center flex-shrink-0">
+              <TimerOff className="w-3.5 h-3.5 text-blue-400" />
+            </div>
+          ) : occ.actionType === "skipped" || occ.actionType === "cancelled" ? (
+            <div className="w-6 h-6 rounded-lg bg-yellow-500/20 border-2 border-yellow-500 flex items-center justify-center flex-shrink-0">
+              <SkipForward className="w-3.5 h-3.5 text-yellow-400" />
+            </div>
+          ) : (
+            <SparkleCheckbox
+              checked={isVisuallyCompleted}
+              justCompleted={isSparkle}
+              onToggle={() => handleOptimisticComplete(occ)}
+            />
+          )}
 
           {/* Icon */}
           <div
@@ -698,9 +742,7 @@ export default function StandaloneRemindersPage({
               <p
                 className={cn(
                   "font-medium truncate",
-                  isVisuallyCompleted
-                    ? "text-white/40 line-through"
-                    : "text-white",
+                  isDimmed ? "text-white/40 line-through" : "text-white",
                 )}
               >
                 {occ.item.title}
@@ -719,8 +761,12 @@ export default function StandaloneRemindersPage({
                   {timeStr}
                 </span>
               )}
-              {occ.isPostponed && (
-                <span className="text-amber-400">Postponed</span>
+              {(occ.isPostponed || occ.actionType === "postponed") && (
+                <span className="text-blue-400">Postponed</span>
+              )}
+              {(occ.actionType === "skipped" ||
+                occ.actionType === "cancelled") && (
+                <span className="text-yellow-400">Skipped</span>
               )}
             </div>
           </div>

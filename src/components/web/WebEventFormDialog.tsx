@@ -359,7 +359,7 @@ export function WebEventFormDialog({
           m.supabaseBrowser(),
         );
 
-        // Update base fields (title, description, priority, visibility)
+        // Update base fields (title, description, priority, visibility, responsible)
         await updateItem.mutateAsync({
           id: editItem.id,
           title: title.trim(),
@@ -367,6 +367,8 @@ export function WebEventFormDialog({
           priority,
           is_public: isPublic,
           categories: selectedCategories,
+          responsible_user_id: responsibleUserId,
+          notify_all_household: notifyAllHousehold,
         });
 
         // Update type-specific details
@@ -1402,8 +1404,12 @@ export function WebEventFormDialog({
                   onChange={(userId, allHousehold) => {
                     setResponsibleUserId(userId);
                     setNotifyAllHousehold(allHousehold);
-                    // If assigning to someone else, ensure item is public
-                    if (userId !== householdData.currentUserId && !isPublic) {
+                    // If assigning to someone else or all household, ensure item is public
+                    if (
+                      (allHousehold ||
+                        userId !== householdData.currentUserId) &&
+                      !isPublic
+                    ) {
                       setIsPublic(true);
                     }
                   }}

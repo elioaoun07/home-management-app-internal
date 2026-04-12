@@ -338,7 +338,11 @@ export default function EditItemDialog({
       }
 
       // Update recurrence rule if changed (for reminders, events, and tasks)
-      if (item.type === "reminder" || item.type === "event" || item.type === "task") {
+      if (
+        item.type === "reminder" ||
+        item.type === "event" ||
+        item.type === "task"
+      ) {
         const originalRrule = item.recurrence_rule?.rrule || "";
         if (recurrenceRule !== originalRrule) {
           const startAnchor =
@@ -643,7 +647,9 @@ export default function EditItemDialog({
           </div>
 
           {/* Recurrence - for events, reminders, and tasks */}
-          {(item.type === "event" || item.type === "reminder" || item.type === "task") && (
+          {(item.type === "event" ||
+            item.type === "reminder" ||
+            item.type === "task") && (
             <div className="space-y-2">
               <Label className="text-white/70 flex items-center gap-2">
                 <Repeat className="w-4 h-4" />
@@ -803,8 +809,11 @@ export default function EditItemDialog({
                 onChange={(userId, allHousehold) => {
                   setResponsibleUserId(userId);
                   setNotifyAllHousehold(allHousehold);
-                  // If assigning to someone else, ensure item is public
-                  if (userId !== householdData.currentUserId && !isPublic) {
+                  // If assigning to someone else or all household, ensure item is public
+                  if (
+                    (allHousehold || userId !== householdData.currentUserId) &&
+                    !isPublic
+                  ) {
                     setIsPublic(true);
                   }
                 }}
