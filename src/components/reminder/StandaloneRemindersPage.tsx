@@ -37,10 +37,14 @@ import {
   Clock,
   FastForward,
   ListTodo,
+  Moon,
   MoreHorizontal,
   Plus,
   RefreshCw,
   SkipForward,
+  Sun,
+  Sunrise,
+  Sunset,
   Target,
   TimerOff,
   Trash2,
@@ -143,6 +147,70 @@ const typeIcons: Record<ItemType, typeof Calendar> = {
 // Section types
 type Section = "overdue" | "today" | "upcoming";
 
+// Time-of-day grouping
+type TimeOfDay = "all-day" | "morning" | "afternoon" | "evening" | "night";
+
+const timeOfDayConfig: Record<
+  TimeOfDay,
+  { label: string; icon: typeof Sun; color: string }
+> = {
+  "all-day": { label: "All Day", icon: Calendar, color: "text-white/50" },
+  morning: { label: "Morning", icon: Sunrise, color: "text-amber-400" },
+  afternoon: { label: "Afternoon", icon: Sun, color: "text-yellow-400" },
+  evening: { label: "Evening", icon: Sunset, color: "text-orange-400" },
+  night: { label: "Night", icon: Moon, color: "text-indigo-400" },
+};
+
+function getTimeOfDay(occ: ExpandedOccurrence): TimeOfDay {
+  const hour = occ.occurrenceDate.getHours();
+  const minute = occ.occurrenceDate.getMinutes();
+  if (hour === 0 && minute === 0) return "all-day";
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 17) return "afternoon";
+  if (hour >= 17 && hour < 21) return "evening";
+  return "night";
+}
+
+function groupByTimeOfDay(
+  items: ExpandedOccurrence[],
+): { period: TimeOfDay; items: ExpandedOccurrence[] }[] {
+  const order: TimeOfDay[] = [
+    "all-day",
+    "morning",
+    "afternoon",
+    "evening",
+    "night",
+  ];
+  const groups = new Map<TimeOfDay, ExpandedOccurrence[]>();
+  for (const item of items) {
+    const period = getTimeOfDay(item);
+    if (!groups.has(period)) groups.set(period, []);
+    groups.get(period)!.push(item);
+  }
+  return order
+    .filter((p) => groups.has(p))
+    .map((p) => ({ period: p, items: groups.get(p)! }));
+}
+
+function groupByDay(
+  items: ExpandedOccurrence[],
+): { dateKey: string; label: string; items: ExpandedOccurrence[] }[] {
+  const groups = new Map<string, { date: Date; items: ExpandedOccurrence[] }>();
+  for (const item of items) {
+    const key = format(item.occurrenceDate, "yyyy-MM-dd");
+    if (!groups.has(key))
+      groups.set(key, { date: startOfDay(item.occurrenceDate), items: [] });
+    groups.get(key)!.items.push(item);
+  }
+  return Array.from(groups.entries())
+    .sort(([, a], [, b]) => a.date.getTime() - b.date.getTime())
+    .map(([key, g]) => ({
+      dateKey: key,
+      label: format(g.date, "EEEE, MMM d"),
+      items: g.items,
+    }));
+}
+
 // ============================================
 // HELPERS
 // ============================================
@@ -235,9 +303,9 @@ function expandRecurringItems(
     }
   }
 
-  // Add postponed occurrences
+  // Add postponed occurrences (use < endDate to avoid bleeding into the next section's range)
   let currentDate = new Date(startDate);
-  while (currentDate <= endDate) {
+  while (isBefore(currentDate, endDate)) {
     const dayPostponed = getPostponedOccurrencesForDate(
       items,
       currentDate,
@@ -521,6 +589,18 @@ export default function StandaloneRemindersPage({
     occurrenceDate: string;
   } | null>(null);
   const [skipReason, setSkipReason] = useState("");
+  const [collapsedSubSections, setCollapsedSubSections] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const toggleSubSection = useCallback((key: string) => {
+    setCollapsedSubSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   // Optimistic completions: Set<"itemId-timestamp"> for instant UI feedback
   const [optimisticCompleted, setOptimisticCompleted] = useState<Set<string>>(
@@ -1053,9 +1133,44 @@ export default function StandaloneRemindersPage({
             "bg-amber-500/20 text-amber-400",
           )}
           {selectedSection === "today" && (
-            <div className="space-y-2 pl-2">
+            <div className="space-y-1 pl-2">
               {todayItems.length > 0 ? (
-                todayItems.map((occ) => renderItem(occ))
+                groupByTimeOfDay(todayItems).map(({ period, items }) => {
+                  const config = timeOfDayConfig[period];
+                  const PeriodIcon = config.icon;
+                  const key = `today-${period}`;
+                  const isExpanded = !collapsedSubSections.has(key);
+                  return (
+                    <div key={period} className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleSubSection(key)}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                      >
+                        <PeriodIcon
+                          className={cn("w-3.5 h-3.5", config.color)}
+                        />
+                        <span className="text-xs font-medium text-white/60">
+                          {config.label}
+                        </span>
+                        <span className="text-xs text-white/30">
+                          {items.length}
+                        </span>
+                        <ChevronRight
+                          className={cn(
+                            "w-3 h-3 text-white/30 ml-auto transition-transform",
+                            isExpanded && "rotate-90",
+                          )}
+                        />
+                      </button>
+                      {isExpanded && (
+                        <div className="space-y-1.5 pl-1">
+                          {items.map((occ) => renderItem(occ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               ) : (
                 <p className="text-white/40 text-sm p-3">
                   No tasks scheduled for today
@@ -1076,9 +1191,40 @@ export default function StandaloneRemindersPage({
               : "bg-cyan-500/20 text-cyan-400",
           )}
           {selectedSection === "upcoming" && (
-            <div className="space-y-2 pl-2">
+            <div className="space-y-1 pl-2">
               {upcomingItems.length > 0 ? (
-                upcomingItems.map((occ) => renderItem(occ, true))
+                groupByDay(upcomingItems).map(({ dateKey, label, items }) => {
+                  const key = `upcoming-${dateKey}`;
+                  const isExpanded = !collapsedSubSections.has(key);
+                  return (
+                    <div key={key} className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleSubSection(key)}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-white/40" />
+                        <span className="text-xs font-medium text-white/60">
+                          {label}
+                        </span>
+                        <span className="text-xs text-white/30">
+                          {items.length}
+                        </span>
+                        <ChevronRight
+                          className={cn(
+                            "w-3 h-3 text-white/30 ml-auto transition-transform",
+                            isExpanded && "rotate-90",
+                          )}
+                        />
+                      </button>
+                      {isExpanded && (
+                        <div className="space-y-1.5 pl-1">
+                          {items.map((occ) => renderItem(occ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               ) : (
                 <p className="text-white/40 text-sm p-3">
                   No upcoming tasks this week
