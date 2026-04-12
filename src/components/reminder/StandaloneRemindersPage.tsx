@@ -529,10 +529,7 @@ export default function StandaloneRemindersPage({
             return next;
           });
         }, 600);
-        itemActions.handleComplete(
-          occ.item,
-          occ.occurrenceDate.toISOString(),
-        );
+        itemActions.handleComplete(occ.item, occ.occurrenceDate.toISOString());
       }
     },
     [itemActions, optimisticCompleted],
