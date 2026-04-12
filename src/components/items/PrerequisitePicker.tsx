@@ -5,7 +5,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { CreatePrerequisiteInput } from "@/types/prerequisites";
 import { ChevronDown, Nfc, Plus, Trash2, Zap } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // Supported condition types with labels
 const CONDITION_TYPES = [
@@ -51,7 +51,8 @@ export function PrerequisitePicker({
 }: PrerequisitePickerProps) {
   const themeClasses = useThemeClasses();
   const { data: nfcTags = [] } = useNfcTags();
-  const [expanded, setExpanded] = useState(value.length > 0);
+  const [expanded, setExpanded] = useState(value.length > 0 || compact);
+  const autoAddedRef = useRef(false);
 
   const addPrerequisite = useCallback(() => {
     // Default to nfc_state_change if tags exist, otherwise first available
@@ -87,6 +88,20 @@ export function PrerequisitePicker({
     },
     [value, onChange],
   );
+
+  // In compact mode (mobile form), auto-add a default condition on mount
+  // so user goes from "enable triggers" → "configure condition" in 2 steps
+  useEffect(() => {
+    if (
+      compact &&
+      value.length === 0 &&
+      nfcTags.length > 0 &&
+      !autoAddedRef.current
+    ) {
+      autoAddedRef.current = true;
+      addPrerequisite();
+    }
+  }, [compact, value.length, nfcTags.length, addPrerequisite]);
 
   if (!expanded && value.length === 0) {
     return (

@@ -751,157 +751,129 @@ export function WebEventFormDialog({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className={cn(
-          "sm:max-w-[600px] neo-card border",
-          isPink ? "border-pink-500/30" : "border-cyan-500/30",
-        )}
+    <>
+      <Dialog
+        open={isOpen && !customRecurrenceOpen}
+        onOpenChange={(open) => !open && !customRecurrenceOpen && onClose()}
       >
-        <DialogHeader>
-          <DialogTitle
-            className={cn(
-              "flex items-center gap-3 text-xl font-bold",
-              isPink ? "text-pink-300" : "text-cyan-300",
-            )}
-          >
-            <div
+        <DialogContent
+          className={cn(
+            "sm:max-w-[600px] neo-card border",
+            isPink ? "border-pink-500/30" : "border-cyan-500/30",
+          )}
+        >
+          <DialogHeader>
+            <DialogTitle
               className={cn(
-                "p-2 rounded-xl",
-                isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                "flex items-center gap-3 text-xl font-bold",
+                isPink ? "text-pink-300" : "text-cyan-300",
               )}
             >
-              <Sparkles className="w-5 h-5" />
-            </div>
-            {isEditing ? "Edit Item" : "Create New Item"}
-          </DialogTitle>
-        </DialogHeader>
+              <div
+                className={cn(
+                  "p-2 rounded-xl",
+                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                )}
+              >
+                <Sparkles className="w-5 h-5" />
+              </div>
+              {isEditing ? "Edit Item" : "Create New Item"}
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-4 py-4 max-h-[65vh] overflow-y-auto pr-2">
-          {/* Item Type Selector */}
-          {!isEditing && (
-            <div className="space-y-3">
+          <div className="space-y-4 py-4 max-h-[65vh] overflow-y-auto pr-2">
+            {/* Item Type Selector */}
+            {!isEditing && (
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold text-white/80">
+                  Type
+                </Label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(Object.keys(typeConfig) as ItemType[]).map((type) => {
+                    const config = typeConfig[type];
+                    const isSelected = itemType === type;
+                    return (
+                      <motion.button
+                        key={type}
+                        type="button"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setItemType(type)}
+                        className={cn(
+                          "flex items-center justify-center gap-2 p-3.5 rounded-xl border transition-all",
+                          isSelected
+                            ? cn(config.color, "shadow-lg")
+                            : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10",
+                        )}
+                      >
+                        {config.icon}
+                        <span className="font-semibold">{config.label}</span>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Title */}
+            <div className="space-y-2">
               <Label className="text-sm font-semibold text-white/80">
-                Type
+                Title
               </Label>
-              <div className="grid grid-cols-3 gap-3">
-                {(Object.keys(typeConfig) as ItemType[]).map((type) => {
-                  const config = typeConfig[type];
-                  const isSelected = itemType === type;
-                  return (
-                    <motion.button
-                      key={type}
-                      type="button"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setItemType(type)}
-                      className={cn(
-                        "flex items-center justify-center gap-2 p-3.5 rounded-xl border transition-all",
-                        isSelected
-                          ? cn(config.color, "shadow-lg")
-                          : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10",
-                      )}
-                    >
-                      {config.icon}
-                      <span className="font-semibold">{config.label}</span>
-                    </motion.button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Title */}
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold text-white/80">Title</Label>
-            <Input
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={
-                itemType === "event"
-                  ? "Meeting with team..."
-                  : itemType === "reminder"
-                    ? "Pay electricity bill..."
-                    : "Complete task..."
-              }
-              className={cn(
-                "h-12 text-lg rounded-xl",
-                themeClasses.inputBg,
-                themeClasses.inputBorder,
-                "text-white placeholder:text-white/40",
-                "focus:ring-2",
-                isPink ? "focus:ring-pink-500/30" : "focus:ring-cyan-500/30",
-              )}
-            />
-          </div>
-
-          {/* Date & Time */}
-          <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium text-white/70">
-                Date & Time
-              </Label>
-              {itemType === "event" && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={allDay}
-                    onChange={(e) => setAllDay(e.target.checked)}
-                    className="rounded border-white/20 bg-white/10 text-cyan-500 focus:ring-cyan-500"
-                  />
-                  <span className="text-sm text-white/60">All day</span>
-                </label>
-              )}
+              <Input
+                autoFocus
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={
+                  itemType === "event"
+                    ? "Meeting with team..."
+                    : itemType === "reminder"
+                      ? "Pay electricity bill..."
+                      : "Complete task..."
+                }
+                className={cn(
+                  "h-12 text-lg rounded-xl",
+                  themeClasses.inputBg,
+                  themeClasses.inputBorder,
+                  "text-white placeholder:text-white/40",
+                  "focus:ring-2",
+                  isPink ? "focus:ring-pink-500/30" : "focus:ring-cyan-500/30",
+                )}
+              />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-white/60">
-                  <Calendar className="w-4 h-4" />
-                  <span className="text-xs">
-                    {itemType === "event" ? "Start" : "Due Date"}
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className={cn(
-                      "flex-1",
-                      themeClasses.inputBg,
-                      themeClasses.inputBorder,
-                      "text-white",
-                    )}
-                  />
-                  {!allDay && (
-                    <Input
-                      type="time"
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                      className={cn(
-                        "w-32",
-                        themeClasses.inputBg,
-                        themeClasses.inputBorder,
-                        "text-white",
-                      )}
+            {/* Date & Time */}
+            <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium text-white/70">
+                  Date & Time
+                </Label>
+                {itemType === "event" && (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allDay}
+                      onChange={(e) => setAllDay(e.target.checked)}
+                      className="rounded border-white/20 bg-white/10 text-cyan-500 focus:ring-cyan-500"
                     />
-                  )}
-                </div>
+                    <span className="text-sm text-white/60">All day</span>
+                  </label>
+                )}
               </div>
 
-              {itemType === "event" && (
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-white/60">
-                    <Clock className="w-4 h-4" />
-                    <span className="text-xs">End</span>
+                    <Calendar className="w-4 h-4" />
+                    <span className="text-xs">
+                      {itemType === "event" ? "Start" : "Due Date"}
+                    </span>
                   </div>
                   <div className="flex gap-2">
                     <Input
                       type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
                       className={cn(
                         "flex-1",
                         themeClasses.inputBg,
@@ -912,8 +884,8 @@ export function WebEventFormDialog({
                     {!allDay && (
                       <Input
                         type="time"
-                        value={endTime}
-                        onChange={(e) => setEndTime(e.target.value)}
+                        value={startTime}
+                        onChange={(e) => setStartTime(e.target.value)}
                         className={cn(
                           "w-32",
                           themeClasses.inputBg,
@@ -924,208 +896,307 @@ export function WebEventFormDialog({
                     )}
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
 
-          {/* Recurrence (Events, Reminders, and Tasks) */}
-          {
-            <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-              <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "p-1.5 rounded-lg",
-                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
-                  )}
-                >
-                  <Repeat
-                    className={cn(
-                      "w-4 h-4",
-                      isPink ? "text-pink-400" : "text-cyan-400",
-                    )}
-                  />
-                </div>
-                <Label className="text-sm font-semibold text-white">
-                  Repeat
-                </Label>
+                {itemType === "event" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-white/60">
+                      <Clock className="w-4 h-4" />
+                      <span className="text-xs">End</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className={cn(
+                          "flex-1",
+                          themeClasses.inputBg,
+                          themeClasses.inputBorder,
+                          "text-white",
+                        )}
+                      />
+                      {!allDay && (
+                        <Input
+                          type="time"
+                          value={endTime}
+                          onChange={(e) => setEndTime(e.target.value)}
+                          className={cn(
+                            "w-32",
+                            themeClasses.inputBg,
+                            themeClasses.inputBorder,
+                            "text-white",
+                          )}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {recurrencePresets.map((preset) => (
+            </div>
+
+            {/* Recurrence (Events, Reminders, and Tasks) */}
+            {
+              <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "p-1.5 rounded-lg",
+                      isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                    )}
+                  >
+                    <Repeat
+                      className={cn(
+                        "w-4 h-4",
+                        isPink ? "text-pink-400" : "text-cyan-400",
+                      )}
+                    />
+                  </div>
+                  <Label className="text-sm font-semibold text-white">
+                    Repeat
+                  </Label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {recurrencePresets.map((preset) => (
+                    <motion.button
+                      key={preset.label}
+                      type="button"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setRecurrenceRule(preset.value)}
+                      className={cn(
+                        "px-4 py-2 rounded-xl border text-sm font-medium transition-all",
+                        recurrenceRule === preset.value
+                          ? isPink
+                            ? "bg-gradient-to-r from-pink-500/30 to-pink-600/20 border-pink-500/50 text-pink-200 shadow-lg shadow-pink-500/20"
+                            : "bg-gradient-to-r from-cyan-500/30 to-cyan-600/20 border-cyan-500/50 text-cyan-200 shadow-lg shadow-cyan-500/20"
+                          : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:border-white/20",
+                      )}
+                    >
+                      {preset.label}
+                    </motion.button>
+                  ))}
+                  {/* Custom recurrence button */}
                   <motion.button
-                    key={preset.label}
                     type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setRecurrenceRule(preset.value)}
+                    onClick={() => setCustomRecurrenceOpen(true)}
                     className={cn(
                       "px-4 py-2 rounded-xl border text-sm font-medium transition-all",
-                      recurrenceRule === preset.value
+                      recurrenceRule &&
+                        !recurrencePresets.some(
+                          (p) => p.value === recurrenceRule,
+                        )
                         ? isPink
                           ? "bg-gradient-to-r from-pink-500/30 to-pink-600/20 border-pink-500/50 text-pink-200 shadow-lg shadow-pink-500/20"
                           : "bg-gradient-to-r from-cyan-500/30 to-cyan-600/20 border-cyan-500/50 text-cyan-200 shadow-lg shadow-cyan-500/20"
                         : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:border-white/20",
                     )}
                   >
-                    {preset.label}
+                    Custom...
                   </motion.button>
-                ))}
-                {/* Custom recurrence button */}
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setCustomRecurrenceOpen(true)}
-                  className={cn(
-                    "px-4 py-2 rounded-xl border text-sm font-medium transition-all",
-                    recurrenceRule &&
-                      !recurrencePresets.some((p) => p.value === recurrenceRule)
-                      ? isPink
-                        ? "bg-gradient-to-r from-pink-500/30 to-pink-600/20 border-pink-500/50 text-pink-200 shadow-lg shadow-pink-500/20"
-                        : "bg-gradient-to-r from-cyan-500/30 to-cyan-600/20 border-cyan-500/50 text-cyan-200 shadow-lg shadow-cyan-500/20"
-                      : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:border-white/20",
-                  )}
-                >
-                  Custom...
-                </motion.button>
-              </div>
+                </div>
 
-              {/* Show description for custom rules */}
-              {recurrenceRule &&
-                !recurrencePresets.some((p) => p.value === recurrenceRule) && (
-                  <p
-                    className={cn(
-                      "text-sm mt-1",
-                      isPink ? "text-pink-300/80" : "text-cyan-300/80",
-                    )}
-                  >
-                    {describeRRule(recurrenceRule)}
-                  </p>
-                )}
-
-              {/* Custom Recurrence Picker */}
-              <CustomRecurrencePicker
-                open={customRecurrenceOpen}
-                onOpenChange={setCustomRecurrenceOpen}
-                value={recurrenceRule}
-                onChange={setRecurrenceRule}
-                referenceDate={
-                  startDate
-                    ? new Date(`${startDate}T12:00:00`)
-                    : initialDate || new Date()
-                }
-              />
-
-              {/* Recurrence end options - only show when recurrence is set */}
-              {recurrenceRule && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  className="pt-3 mt-3 border-t border-white/10 space-y-3"
-                >
-                  {/* Forever toggle */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <InfinityIcon
-                        className={cn(
-                          "w-4 h-4",
-                          isPink ? "text-pink-400" : "text-cyan-400",
-                        )}
-                      />
-                      <span className="text-sm text-white/80">
-                        Repeat forever
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRecurrenceForever(!recurrenceForever);
-                        if (!recurrenceForever) {
-                          setRecurrenceEndDate("");
-                          setRecurrenceCount(undefined);
-                        }
-                      }}
+                {/* Show description for custom rules */}
+                {recurrenceRule &&
+                  !recurrencePresets.some(
+                    (p) => p.value === recurrenceRule,
+                  ) && (
+                    <p
                       className={cn(
-                        "w-12 h-6 rounded-full transition-all relative",
-                        recurrenceForever
-                          ? isPink
-                            ? "bg-gradient-to-r from-pink-500 to-pink-600 shadow-lg shadow-pink-500/30"
-                            : "bg-gradient-to-r from-cyan-500 to-cyan-600 shadow-lg shadow-cyan-500/30"
-                          : "bg-white/20",
+                        "text-sm mt-1",
+                        isPink ? "text-pink-300/80" : "text-cyan-300/80",
                       )}
                     >
-                      <motion.div
-                        className="absolute top-1 w-4 h-4 rounded-full bg-white shadow-md"
-                        animate={{
-                          left: recurrenceForever ? "calc(100% - 20px)" : "4px",
-                        }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 30,
-                        }}
-                      />
-                    </button>
-                  </div>
-
-                  {/* End options - only show when not forever */}
-                  {!recurrenceForever && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="grid grid-cols-2 gap-4"
-                    >
-                      <div className="space-y-2">
-                        <Label className="text-xs text-white/50">
-                          End by date
-                        </Label>
-                        <Input
-                          type="date"
-                          value={recurrenceEndDate}
-                          onChange={(e) => {
-                            setRecurrenceEndDate(e.target.value);
-                            if (e.target.value) setRecurrenceCount(undefined);
-                          }}
-                          className={cn(
-                            themeClasses.inputBg,
-                            themeClasses.inputBorder,
-                            "text-white",
-                          )}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs text-white/50">
-                          Or after # times
-                        </Label>
-                        <Input
-                          type="text"
-                          inputMode="numeric"
-                          min={1}
-                          max={999}
-                          value={recurrenceCount ?? ""}
-                          onChange={(e) => {
-                            const val = e.target.value
-                              ? parseInt(e.target.value)
-                              : undefined;
-                            setRecurrenceCount(val);
-                            if (val) setRecurrenceEndDate("");
-                          }}
-                          placeholder="e.g. 10"
-                          className={cn(
-                            themeClasses.inputBg,
-                            themeClasses.inputBorder,
-                            "text-white placeholder:text-white/40",
-                          )}
-                        />
-                      </div>
-                    </motion.div>
+                      {describeRRule(recurrenceRule)}
+                    </p>
                   )}
-                </motion.div>
-              )}
-            </div>
-          }
 
-          {/* Categories */}
-          {
+                {/* CustomRecurrencePicker rendered outside DialogContent to avoid z-index stacking issues */}
+
+                {/* Recurrence end options - only show when recurrence is set */}
+                {recurrenceRule && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="pt-3 mt-3 border-t border-white/10 space-y-3"
+                  >
+                    {/* Forever toggle */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <InfinityIcon
+                          className={cn(
+                            "w-4 h-4",
+                            isPink ? "text-pink-400" : "text-cyan-400",
+                          )}
+                        />
+                        <span className="text-sm text-white/80">
+                          Repeat forever
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRecurrenceForever(!recurrenceForever);
+                          if (!recurrenceForever) {
+                            setRecurrenceEndDate("");
+                            setRecurrenceCount(undefined);
+                          }
+                        }}
+                        className={cn(
+                          "w-12 h-6 rounded-full transition-all relative",
+                          recurrenceForever
+                            ? isPink
+                              ? "bg-gradient-to-r from-pink-500 to-pink-600 shadow-lg shadow-pink-500/30"
+                              : "bg-gradient-to-r from-cyan-500 to-cyan-600 shadow-lg shadow-cyan-500/30"
+                            : "bg-white/20",
+                        )}
+                      >
+                        <motion.div
+                          className="absolute top-1 w-4 h-4 rounded-full bg-white shadow-md"
+                          animate={{
+                            left: recurrenceForever
+                              ? "calc(100% - 20px)"
+                              : "4px",
+                          }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 500,
+                            damping: 30,
+                          }}
+                        />
+                      </button>
+                    </div>
+
+                    {/* End options - only show when not forever */}
+                    {!recurrenceForever && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="grid grid-cols-2 gap-4"
+                      >
+                        <div className="space-y-2">
+                          <Label className="text-xs text-white/50">
+                            End by date
+                          </Label>
+                          <Input
+                            type="date"
+                            value={recurrenceEndDate}
+                            onChange={(e) => {
+                              setRecurrenceEndDate(e.target.value);
+                              if (e.target.value) setRecurrenceCount(undefined);
+                            }}
+                            className={cn(
+                              themeClasses.inputBg,
+                              themeClasses.inputBorder,
+                              "text-white",
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs text-white/50">
+                            Or after # times
+                          </Label>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            min={1}
+                            max={999}
+                            value={recurrenceCount ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value
+                                ? parseInt(e.target.value)
+                                : undefined;
+                              setRecurrenceCount(val);
+                              if (val) setRecurrenceEndDate("");
+                            }}
+                            placeholder="e.g. 10"
+                            className={cn(
+                              themeClasses.inputBg,
+                              themeClasses.inputBorder,
+                              "text-white placeholder:text-white/40",
+                            )}
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+                  </motion.div>
+                )}
+              </div>
+            }
+
+            {/* Categories */}
+            {
+              <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "p-1.5 rounded-lg",
+                      isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                    )}
+                  >
+                    <Tag
+                      className={cn(
+                        "w-4 h-4",
+                        isPink ? "text-pink-400" : "text-cyan-400",
+                      )}
+                    />
+                  </div>
+                  <Label className="text-sm font-semibold text-white">
+                    Categories
+                  </Label>
+                  <span className="text-xs text-white/40 ml-1">
+                    ({selectedCategories.length} selected)
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {CATEGORIES.map((category) => {
+                    const isSelected = selectedCategories.includes(category.id);
+                    const IconComponent = category.icon;
+                    return (
+                      <motion.button
+                        key={category.id}
+                        type="button"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                          setSelectedCategories((prev) =>
+                            isSelected
+                              ? prev.filter((id) => id !== category.id)
+                              : [...prev, category.id],
+                          );
+                        }}
+                        className={cn(
+                          "flex items-center gap-2 p-3 rounded-xl border transition-all",
+                          isSelected
+                            ? "border-opacity-50 shadow-lg"
+                            : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10",
+                        )}
+                        style={{
+                          backgroundColor: isSelected
+                            ? `${category.color}20`
+                            : undefined,
+                          borderColor: isSelected
+                            ? `${category.color}50`
+                            : undefined,
+                          color: isSelected ? category.color : undefined,
+                          boxShadow: isSelected
+                            ? `0 4px 15px ${category.color}20`
+                            : undefined,
+                        }}
+                      >
+                        <IconComponent className="w-4 h-4" />
+                        <span className="text-sm font-medium">
+                          {category.name}
+                        </span>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
+            }
+
+            {/* Priority */}
             <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
               <div className="flex items-center gap-2">
                 <div
@@ -1134,7 +1205,7 @@ export function WebEventFormDialog({
                     isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                   )}
                 >
-                  <Tag
+                  <AlertCircle
                     className={cn(
                       "w-4 h-4",
                       isPink ? "text-pink-400" : "text-cyan-400",
@@ -1142,238 +1213,248 @@ export function WebEventFormDialog({
                   />
                 </div>
                 <Label className="text-sm font-semibold text-white">
-                  Categories
+                  Priority
                 </Label>
-                <span className="text-xs text-white/40 ml-1">
-                  ({selectedCategories.length} selected)
-                </span>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {CATEGORIES.map((category) => {
-                  const isSelected = selectedCategories.includes(category.id);
-                  const IconComponent = category.icon;
+              <div className="grid grid-cols-4 gap-2">
+                {(Object.keys(priorityConfig) as ItemPriority[]).map((p) => {
+                  const config = priorityConfig[p];
+                  const isSelected = priority === p;
                   return (
                     <motion.button
-                      key={category.id}
+                      key={p}
                       type="button"
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        setSelectedCategories((prev) =>
-                          isSelected
-                            ? prev.filter((id) => id !== category.id)
-                            : [...prev, category.id],
-                        );
-                      }}
+                      onClick={() => setPriority(p)}
                       className={cn(
-                        "flex items-center gap-2 p-3 rounded-xl border transition-all",
+                        "flex items-center justify-center gap-2 p-2.5 rounded-xl border transition-all",
                         isSelected
-                          ? "border-opacity-50 shadow-lg"
+                          ? cn(config.color, "shadow-lg")
                           : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10",
                       )}
-                      style={{
-                        backgroundColor: isSelected
-                          ? `${category.color}20`
-                          : undefined,
-                        borderColor: isSelected
-                          ? `${category.color}50`
-                          : undefined,
-                        color: isSelected ? category.color : undefined,
-                        boxShadow: isSelected
-                          ? `0 4px 15px ${category.color}20`
-                          : undefined,
-                      }}
                     >
-                      <IconComponent className="w-4 h-4" />
+                      {config.icon}
                       <span className="text-sm font-medium">
-                        {category.name}
+                        {config.label}
                       </span>
                     </motion.button>
                   );
                 })}
               </div>
             </div>
-          }
 
-          {/* Priority */}
-          <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-            <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "p-1.5 rounded-lg",
-                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
-                )}
-              >
-                <AlertCircle
-                  className={cn(
-                    "w-4 h-4",
-                    isPink ? "text-pink-400" : "text-cyan-400",
-                  )}
-                />
-              </div>
-              <Label className="text-sm font-semibold text-white">
-                Priority
-              </Label>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {(Object.keys(priorityConfig) as ItemPriority[]).map((p) => {
-                const config = priorityConfig[p];
-                const isSelected = priority === p;
-                return (
-                  <motion.button
-                    key={p}
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setPriority(p)}
+            {/* Alert — hidden for reminders (they notify at due time by default) */}
+            {itemType !== "reminder" && (
+              <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+                <div className="flex items-center gap-2">
+                  <div
                     className={cn(
-                      "flex items-center justify-center gap-2 p-2.5 rounded-xl border transition-all",
-                      isSelected
-                        ? cn(config.color, "shadow-lg")
-                        : "border-white/10 bg-white/5 text-white/60 hover:bg-white/10",
+                      "p-1.5 rounded-lg",
+                      isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                     )}
                   >
-                    {config.icon}
-                    <span className="text-sm font-medium">{config.label}</span>
-                  </motion.button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Alert */}
-          {
-            <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-              <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "p-1.5 rounded-lg",
-                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
-                  )}
-                >
-                  <Bell
-                    className={cn(
-                      "w-4 h-4",
-                      isPink ? "text-pink-400" : "text-cyan-400",
-                    )}
-                  />
-                </div>
-                <Label className="text-sm font-semibold text-white">
-                  Alert
-                </Label>
-              </div>
-              <SmartAlertPicker
-                value={alertValue}
-                onChange={setAlertValue}
-                eventTime={itemType === "event" ? startTime : startTime}
-              />
-            </div>
-          }
-
-          {/* Location (Events only) */}
-          {itemType === "event" && (
-            <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-              <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "p-1.5 rounded-lg",
-                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
-                  )}
-                >
-                  <MapPin
-                    className={cn(
-                      "w-4 h-4",
-                      isPink ? "text-pink-400" : "text-cyan-400",
-                    )}
-                  />
-                </div>
-                <Label className="text-sm font-semibold text-white">
-                  Location
-                </Label>
-              </div>
-              <Input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Add location..."
-                className={cn(
-                  "rounded-xl",
-                  themeClasses.inputBg,
-                  themeClasses.inputBorder,
-                  "text-white placeholder:text-white/40",
-                )}
-              />
-            </div>
-          )}
-
-          {/* Visibility (Public/Private) */}
-          <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "p-1.5 rounded-lg",
-                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
-                  )}
-                >
-                  {isPublic ? (
-                    <Users
+                    <Bell
                       className={cn(
                         "w-4 h-4",
                         isPink ? "text-pink-400" : "text-cyan-400",
                       )}
                     />
-                  ) : (
+                  </div>
+                  <Label className="text-sm font-semibold text-white">
+                    Alert
+                  </Label>
+                </div>
+                <SmartAlertPicker
+                  value={alertValue}
+                  onChange={setAlertValue}
+                  eventTime={startTime}
+                />
+              </div>
+            )}
+
+            {/* Location (Events only) */}
+            {itemType === "event" && (
+              <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "p-1.5 rounded-lg",
+                      isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                    )}
+                  >
+                    <MapPin
+                      className={cn(
+                        "w-4 h-4",
+                        isPink ? "text-pink-400" : "text-cyan-400",
+                      )}
+                    />
+                  </div>
+                  <Label className="text-sm font-semibold text-white">
+                    Location
+                  </Label>
+                </div>
+                <Input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Add location..."
+                  className={cn(
+                    "rounded-xl",
+                    themeClasses.inputBg,
+                    themeClasses.inputBorder,
+                    "text-white placeholder:text-white/40",
+                  )}
+                />
+              </div>
+            )}
+
+            {/* Visibility (Public/Private) */}
+            <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "p-1.5 rounded-lg",
+                      isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                    )}
+                  >
+                    {isPublic ? (
+                      <Users
+                        className={cn(
+                          "w-4 h-4",
+                          isPink ? "text-pink-400" : "text-cyan-400",
+                        )}
+                      />
+                    ) : (
+                      <User
+                        className={cn(
+                          "w-4 h-4",
+                          isPink ? "text-pink-400" : "text-cyan-400",
+                        )}
+                      />
+                    )}
+                  </div>
+                  <Label className="text-sm font-semibold text-white">
+                    Visibility
+                  </Label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-white/50">
+                    {isPublic ? "Public" : "Private"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsPublic(!isPublic)}
+                    className={cn(
+                      "relative w-11 h-6 rounded-full transition-colors",
+                      isPublic
+                        ? isPink
+                          ? "bg-pink-500/50"
+                          : "bg-cyan-500/50"
+                        : "bg-white/20",
+                    )}
+                  >
+                    <motion.div
+                      className="absolute top-1 w-4 h-4 rounded-full bg-white shadow-md"
+                      animate={{
+                        left: isPublic ? "calc(100% - 20px)" : "4px",
+                      }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 500,
+                        damping: 30,
+                      }}
+                    />
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-white/40">
+                {isPublic
+                  ? "Visible to all household members"
+                  : "Only visible to you"}
+              </p>
+            </div>
+
+            {/* Responsible User Picker */}
+            {householdData?.hasPartner && (
+              <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "p-1.5 rounded-lg",
+                      isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                    )}
+                  >
                     <User
                       className={cn(
                         "w-4 h-4",
                         isPink ? "text-pink-400" : "text-cyan-400",
                       )}
                     />
-                  )}
+                  </div>
+                  <Label className="text-sm font-semibold text-white">
+                    Responsible
+                  </Label>
                 </div>
-                <Label className="text-sm font-semibold text-white">
-                  Visibility
-                </Label>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-white/50">
-                  {isPublic ? "Public" : "Private"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setIsPublic(!isPublic)}
-                  className={cn(
-                    "relative w-11 h-6 rounded-full transition-colors",
-                    isPublic
-                      ? isPink
-                        ? "bg-pink-500/50"
-                        : "bg-cyan-500/50"
-                      : "bg-white/20",
+                <ResponsibleUserPicker
+                  value={responsibleUserId}
+                  notifyAllHousehold={notifyAllHousehold}
+                  onChange={(userId, allHousehold) => {
+                    setResponsibleUserId(userId);
+                    setNotifyAllHousehold(allHousehold);
+                    // If assigning to someone else, ensure item is public
+                    if (userId !== householdData.currentUserId && !isPublic) {
+                      setIsPublic(true);
+                    }
+                  }}
+                  isPublic={isPublic}
+                  disabled={!isPublic}
+                />
+                {isPublic && notifyAllHousehold && (
+                  <p className="text-xs text-amber-300/70 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" />
+                    Both household members will be notified
+                  </p>
+                )}
+                {isPublic &&
+                  !notifyAllHousehold &&
+                  responsibleUserId &&
+                  responsibleUserId !== householdData.currentUserId && (
+                    <p className="text-xs text-pink-300/70 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      {
+                        householdData.members.find(
+                          (m) => m.id === responsibleUserId,
+                        )?.displayName
+                      }{" "}
+                      will be notified
+                    </p>
                   )}
-                >
-                  <motion.div
-                    className="absolute top-1 w-4 h-4 rounded-full bg-white shadow-md"
-                    animate={{
-                      left: isPublic ? "calc(100% - 20px)" : "4px",
-                    }}
-                    transition={{
-                      type: "spring",
-                      stiffness: 500,
-                      damping: 30,
-                    }}
-                  />
-                </button>
+                {!isPublic && (
+                  <p className="text-xs text-white/40">
+                    Make item public to assign to your partner
+                  </p>
+                )}
               </div>
-            </div>
-            <p className="text-xs text-white/40">
-              {isPublic
-                ? "Visible to all household members"
-                : "Only visible to you"}
-            </p>
-          </div>
+            )}
 
-          {/* Responsible User Picker */}
-          {householdData?.hasPartner && (
+            {/* Trigger Conditions (Prerequisites) */}
+            {!isEditing && (
+              <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+                <PrerequisitePicker
+                  value={prerequisites}
+                  onChange={setPrerequisites}
+                />
+                {prerequisites.length > 0 && (
+                  <p className="text-xs text-amber-300/60">
+                    Item will start as dormant and activate when conditions are
+                    met.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Description */}
             <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
               <div className="flex items-center gap-2">
                 <div
@@ -1382,7 +1463,7 @@ export function WebEventFormDialog({
                     isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                   )}
                 >
-                  <User
+                  <Sparkles
                     className={cn(
                       "w-4 h-4",
                       isPink ? "text-pink-400" : "text-cyan-400",
@@ -1390,151 +1471,91 @@ export function WebEventFormDialog({
                   />
                 </div>
                 <Label className="text-sm font-semibold text-white">
-                  Responsible
+                  Description
                 </Label>
               </div>
-              <ResponsibleUserPicker
-                value={responsibleUserId}
-                notifyAllHousehold={notifyAllHousehold}
-                onChange={(userId, allHousehold) => {
-                  setResponsibleUserId(userId);
-                  setNotifyAllHousehold(allHousehold);
-                  // If assigning to someone else, ensure item is public
-                  if (userId !== householdData.currentUserId && !isPublic) {
-                    setIsPublic(true);
-                  }
-                }}
-                isPublic={isPublic}
-                disabled={!isPublic}
-              />
-              {isPublic && notifyAllHousehold && (
-                <p className="text-xs text-amber-300/70 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" />
-                  Both household members will be notified
-                </p>
-              )}
-              {isPublic &&
-                !notifyAllHousehold &&
-                responsibleUserId &&
-                responsibleUserId !== householdData.currentUserId && (
-                  <p className="text-xs text-pink-300/70 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" />
-                    {
-                      householdData.members.find(
-                        (m) => m.id === responsibleUserId,
-                      )?.displayName
-                    }{" "}
-                    will be notified
-                  </p>
-                )}
-              {!isPublic && (
-                <p className="text-xs text-white/40">
-                  Make item public to assign to your partner
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Trigger Conditions (Prerequisites) */}
-          {!isEditing && (
-            <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-              <PrerequisitePicker
-                value={prerequisites}
-                onChange={setPrerequisites}
-              />
-              {prerequisites.length > 0 && (
-                <p className="text-xs text-amber-300/60">
-                  Item will start as dormant and activate when conditions are
-                  met.
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Description */}
-          <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-            <div className="flex items-center gap-2">
-              <div
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Add notes or details..."
+                rows={3}
                 className={cn(
-                  "p-1.5 rounded-lg",
-                  isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                  "rounded-xl",
+                  themeClasses.inputBg,
+                  themeClasses.inputBorder,
+                  "text-white placeholder:text-white/40 resize-none",
                 )}
-              >
-                <Sparkles
-                  className={cn(
-                    "w-4 h-4",
-                    isPink ? "text-pink-400" : "text-cyan-400",
-                  )}
-                />
-              </div>
-              <Label className="text-sm font-semibold text-white">
-                Description
-              </Label>
+              />
             </div>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add notes or details..."
-              rows={3}
-              className={cn(
-                "rounded-xl",
-                themeClasses.inputBg,
-                themeClasses.inputBorder,
-                "text-white placeholder:text-white/40 resize-none",
-              )}
-            />
           </div>
-        </div>
 
-        <DialogFooter className="gap-3 pt-2 border-t border-white/10">
-          {isEditing && (
+          <DialogFooter className="gap-3 pt-2 border-t border-white/10">
+            {isEditing && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDelete}
+                disabled={isPending}
+                className="mr-auto border-red-500/30 text-red-400 hover:bg-red-500/10 px-6"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
-              onClick={handleDelete}
-              disabled={isPending}
-              className="mr-auto border-red-500/30 text-red-400 hover:bg-red-500/10 px-6"
+              onClick={onClose}
+              className="border-white/20 text-white/70 hover:bg-white/10 px-6"
             >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
+              Cancel
             </Button>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            className="border-white/20 text-white/70 hover:bg-white/10 px-6"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isPending || !title.trim()}
-            className={cn(
-              "neo-gradient text-white px-8 shadow-lg",
-              isPink ? "shadow-pink-500/20" : "shadow-cyan-500/20",
-              isPending && "opacity-50 cursor-not-allowed",
-            )}
-          >
-            {isPending ? (
-              <>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full"
-                />
-                {isEditing ? "Saving..." : "Creating..."}
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                {isEditing ? "Save Changes" : "Create"}
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isPending || !title.trim()}
+              className={cn(
+                "neo-gradient text-white px-8 shadow-lg",
+                isPink ? "shadow-pink-500/20" : "shadow-cyan-500/20",
+                isPending && "opacity-50 cursor-not-allowed",
+              )}
+            >
+              {isPending ? (
+                <>
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{
+                      duration: 1,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
+                    className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full"
+                  />
+                  {isEditing ? "Saving..." : "Creating..."}
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  {isEditing ? "Save Changes" : "Create"}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Custom Recurrence Picker — rendered outside Dialog to avoid z-index stacking issues (Dialog z-[10050] > Drawer z-50) */}
+      <CustomRecurrencePicker
+        open={customRecurrenceOpen}
+        onOpenChange={setCustomRecurrenceOpen}
+        value={recurrenceRule}
+        onChange={setRecurrenceRule}
+        referenceDate={
+          startDate
+            ? new Date(`${startDate}T12:00:00`)
+            : initialDate || new Date()
+        }
+      />
+    </>
   );
 }

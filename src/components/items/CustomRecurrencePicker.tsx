@@ -638,28 +638,28 @@ export function CustomRecurrencePicker({
                     className="space-y-2"
                   >
                     <Label className="text-sm text-white/60">
-                      Select day of month
+                      Day of month
                     </Label>
-                    <div className="grid grid-cols-7 gap-1.5">
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map(
-                        (day) => (
-                          <button
-                            key={day}
-                            type="button"
-                            onClick={() => setDayOfMonth(day)}
-                            className={cn(
-                              "w-9 h-9 rounded-lg text-xs font-medium transition-all",
-                              dayOfMonth === day
-                                ? isPink
-                                  ? "bg-pink-500/40 text-pink-200 border border-pink-400"
-                                  : "bg-cyan-500/40 text-cyan-200 border border-cyan-400"
-                                : "bg-white/10 text-white/50 hover:bg-white/20",
-                            )}
-                          >
-                            {day}
-                          </button>
-                        ),
-                      )}
+                    <div className="flex items-center gap-3">
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={dayOfMonth}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v) && v >= 1 && v <= 31) setDayOfMonth(v);
+                          else if (e.target.value === "") setDayOfMonth(1);
+                        }}
+                        className={cn(
+                          "w-20 text-center bg-white/10 border",
+                          isPink
+                            ? "border-pink-500/30 focus:border-pink-400"
+                            : "border-cyan-500/30 focus:border-cyan-400",
+                        )}
+                        min={1}
+                        max={31}
+                      />
+                      <span className="text-sm text-white/40">(1–31)</span>
                     </div>
                     <p className="text-xs text-white/40">
                       If a month has fewer days, it will repeat on the last day
