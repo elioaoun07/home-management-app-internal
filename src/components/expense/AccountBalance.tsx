@@ -343,7 +343,7 @@ export default function AccountBalance({
                 <button
                   onClick={() => setShowHistory(true)}
                   className={cn(
-                    "text-xl font-bold tabular-nums bg-gradient-to-r bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition-opacity",
+                    "text-2xl font-bold tabular-nums bg-gradient-to-r bg-clip-text text-transparent cursor-pointer hover:opacity-80 transition-opacity",
                     isOffline
                       ? "from-white/30 to-white/20" // Greyed out gradient when offline
                       : themeClasses.titleGradient,
@@ -472,11 +472,40 @@ export default function AccountBalance({
             </div>
           )}
         </div>
-        {!isEditing && balance?.balance_set_at && (
-          <div className="text-[10px] text-[hsl(var(--text-muted-light)/0.5)] text-right">
-            <span className="font-medium">Set on</span>
-            <br />
-            <span>{new Date(balance.balance_set_at).toLocaleString()}</span>
+        {!isEditing && (
+          <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+            {/* Circular dollar icon — ERA design system balance card */}
+            <div
+              className={cn(
+                "w-9 h-9 rounded-full flex items-center justify-center",
+                themeClasses.bgSurface,
+                themeClasses.inputBorder,
+                isOffline && "opacity-40",
+              )}
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={cn(
+                  themeClasses.text,
+                  themeClasses.iconGlowMuted,
+                )}
+              >
+                <line x1="12" y1="1" x2="12" y2="23" />
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+              </svg>
+            </div>
+            {balance?.balance_set_at && (
+              <div className="text-[9px] text-white/15 text-right leading-none">
+                {new Date(balance.balance_set_at).toLocaleDateString()}
+              </div>
+            )}
           </div>
         )}
       </div>

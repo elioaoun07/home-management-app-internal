@@ -1,0 +1,22 @@
+<!doctype html>
+<html data-theme="blue"><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin:0; padding: 24px; }
+  .row { display: flex; gap: 20px; align-items: center; }
+  .box {
+    width: 110px; height: 78px;
+    background: var(--era-bg-card);
+    border-radius: 12px;
+    display:flex; align-items: center; justify-content: center;
+    font: 500 11px var(--era-font-mono); color: var(--era-fg-2);
+    text-align: center;
+  }
+</style></head>
+<body>
+  <div class="row">
+    <div class="box" style="box-shadow: 0 0 0 1px rgba(6,182,212,0.3) inset">ring<br/>inset</div>
+    <div class="box" style="box-shadow: 0 0 0 1px rgba(6,182,212,0.3) inset, 0 0 20px rgba(59,130,246,0.2)">card<br/>soft glow</div>
+    <div class="box" style="box-shadow: 0 0 0 2px rgba(6,182,212,0.6) inset, 0 0 20px rgba(6,182,212,0.3)">focus<br/>glow</div>
+    <div class="box" style="box-shadow: 0 0 30px rgba(59,130,246,0.5); background: linear-gradient(90deg,#3b82f6,#06b6d4); color:#fff">btn<br/>hover glow</div>
+  </div>
+</body></html>

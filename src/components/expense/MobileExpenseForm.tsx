@@ -23,7 +23,6 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
@@ -1003,7 +1002,7 @@ export default function MobileExpenseForm() {
   const contentAreaBottomPadding = `calc(env(safe-area-inset-bottom) + ${MOBILE_NAV_HEIGHT}px)`;
 
   // Quick-amount presets for the amount step
-  const QUICK_AMOUNTS = ["5", "10", "20", "50"];
+  const QUICK_AMOUNTS = ["5", "10", "25", "50", "100"];
 
   // Contextual next step label helper
   const getNextStepLabel = (next: Step | null): string => {
@@ -1025,7 +1024,18 @@ export default function MobileExpenseForm() {
   const progressWidth = isInitialized ? progress() : 0;
 
   return (
-    <div className="fixed inset-x-0 top-0 bottom-0 bg-bg-dark flex flex-col">
+    <div
+      className="fixed inset-x-0 top-0 bottom-0 bg-bg-dark flex flex-col"
+      style={{
+        backgroundImage: themeClasses.isCalm
+          ? undefined
+          : themeClasses.isFrost
+            ? "radial-gradient(ellipse at top, rgba(99,102,241,0.05), transparent 60%), radial-gradient(ellipse at bottom, rgba(139,92,246,0.04), transparent 55%)"
+            : themeClasses.isPink
+              ? "radial-gradient(ellipse at top, rgba(236,72,153,0.08), transparent 60%), radial-gradient(ellipse at bottom, rgba(251,191,36,0.06), transparent 55%)"
+              : "radial-gradient(ellipse at top, rgba(6,182,212,0.08), transparent 60%), radial-gradient(ellipse at bottom, rgba(59,130,246,0.06), transparent 55%)",
+      }}
+    >
       <>
         {/* HEADER - TOP DELIMITER - Must be above all other UI elements */}
         <div
@@ -1077,12 +1087,28 @@ export default function MobileExpenseForm() {
               <XIcon className={`w-5 h-5 ${themeClasses.text}`} />
             </button>
           </div>
-          <div className="h-1 bg-bg-card-custom/60 rounded-full overflow-hidden relative">
-            <div
-              className={`h-full bg-gradient-to-r ${themeClasses.activeItemGradient} transition-all duration-500 ease-out neo-glow-sm glow-pulse-primary`}
-              style={{ width: `${progressWidth}%` }}
-            />
-          </div>
+          {/* Status line — thin progress indicator */}
+          {(() => {
+            let visibleSteps = [...stepFlow];
+            if (defaultAccount && visibleSteps.includes("account")) {
+              visibleSteps = visibleSteps.filter((s) => s !== "account");
+            }
+            const currentIdx = isInitialized
+              ? visibleSteps.indexOf(step as Step)
+              : -1;
+            const progress =
+              visibleSteps.length > 0
+                ? ((currentIdx + 1) / visibleSteps.length) * 100
+                : 0;
+            return (
+              <div className="mt-1.5 h-[5px] w-full rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full neo-gradient transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            );
+          })()}
           {/* Inline Tags Row — shows current selections, tap to jump to step */}
           <div className="mt-2 -mx-1 overflow-x-auto scrollbar-none">
             <div className="flex items-center gap-1.5 px-1 min-w-max">
@@ -1242,7 +1268,13 @@ export default function MobileExpenseForm() {
 
                 {/* Amount input */}
                 <div className="relative flex items-center">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-[hsl(var(--text-muted-light)/0.4)] pointer-events-none z-10">
+                  <span
+                    className={cn(
+                      "absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold pointer-events-none z-10",
+                      themeClasses.text,
+                      themeClasses.iconGlow,
+                    )}
+                  >
                     $
                   </span>
                   <Input
@@ -1305,6 +1337,25 @@ export default function MobileExpenseForm() {
                       )}
                     />
                   </div>
+                </div>
+
+                {/* Quick amount chips */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {QUICK_AMOUNTS.map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setAmount(v)}
+                      suppressHydrationWarning
+                      className={cn(
+                        "h-8 px-3.5 rounded-full text-xs font-semibold tabular-nums transition-all active:scale-95",
+                        amount === v
+                          ? `${themeClasses.bgActive} ${themeClasses.borderActive} border ${themeClasses.text}`
+                          : `${themeClasses.pillBg} border ${themeClasses.border} ${themeClasses.textMuted} hover:${themeClasses.text}`,
+                      )}
+                    >
+                      ${v}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -1639,11 +1690,14 @@ export default function MobileExpenseForm() {
           {step === "account" && (
             <div key="account-step" className="space-y-3 step-slide-in">
               <div className="flex items-center justify-between">
-                <Label
-                  className={`text-base font-semibold ${themeClasses.text}`}
+                <p
+                  className={cn(
+                    "text-[10px] font-medium uppercase tracking-wider",
+                    themeClasses.textFaint,
+                  )}
                 >
-                  Which account?
-                </Label>
+                  Account
+                </p>
                 {editModeAccount && (
                   <button
                     onClick={exitEditModeAccount}
@@ -1901,11 +1955,14 @@ export default function MobileExpenseForm() {
           {step === "category" && (
             <div key="category-step" className="space-y-3 step-slide-in">
               <div className="flex items-center justify-between">
-                <Label
-                  className={`text-base font-semibold ${themeClasses.text}`}
+                <p
+                  className={cn(
+                    "text-[10px] font-medium uppercase tracking-wider",
+                    themeClasses.textFaint,
+                  )}
                 >
-                  What category?
-                </Label>
+                  Category
+                </p>
                 {editModeCategory && (
                   <button
                     onClick={exitEditModeCategory}
@@ -2165,7 +2222,7 @@ export default function MobileExpenseForm() {
                                       "opacity-50 cursor-not-allowed",
                                   )}
                                 >
-                                  <div className="flex flex-col items-center justify-center gap-1 h-full">
+                                  <div className="flex flex-col items-center justify-center gap-1.5 h-full">
                                     {(() => {
                                       const IconComponent = getCategoryIcon(
                                         category.name,
@@ -2173,12 +2230,16 @@ export default function MobileExpenseForm() {
                                       );
                                       return (
                                         <div
+                                          className="flex items-center justify-center w-8 h-8 rounded-full flex-shrink-0 transition-all"
                                           style={{
-                                            color: color,
-                                            filter: `drop-shadow(0 0 8px ${color}80)`,
+                                            backgroundColor: color,
+                                            color: "#fff",
+                                            boxShadow: active
+                                              ? `0 0 14px ${color}60`
+                                              : `0 0 6px ${color}30`,
                                           }}
                                         >
-                                          <IconComponent className="w-7 h-7" />
+                                          <IconComponent className="w-4 h-4" />
                                         </div>
                                       );
                                     })()}
@@ -2233,11 +2294,14 @@ export default function MobileExpenseForm() {
               {orderedSubcategories.length > 0 && (
                 <>
                   <div className="flex items-center justify-between">
-                    <Label
-                      className={`text-base font-semibold ${themeClasses.text}`}
+                    <p
+                      className={cn(
+                        "text-[10px] font-medium uppercase tracking-wider",
+                        themeClasses.textFaint,
+                      )}
                     >
-                      More specific?
-                    </Label>
+                      Subcategory
+                    </p>
                     {editModeSubcategory && (
                       <button
                         onClick={exitEditModeSubcategory}
@@ -2505,12 +2569,16 @@ export default function MobileExpenseForm() {
                                       );
                                       return (
                                         <div
+                                          className="flex items-center justify-center w-7 h-7 rounded-full flex-shrink-0 transition-all"
                                           style={{
-                                            color: color,
-                                            filter: `drop-shadow(0 0 6px ${color}80)`,
+                                            backgroundColor: color,
+                                            color: "#fff",
+                                            boxShadow: active
+                                              ? `0 0 12px ${color}60`
+                                              : `0 0 5px ${color}30`,
                                           }}
                                         >
-                                          <IconComponent className="w-5 h-5" />
+                                          <IconComponent className="w-3.5 h-3.5" />
                                         </div>
                                       );
                                     })()}
@@ -2558,11 +2626,14 @@ export default function MobileExpenseForm() {
               {/* Show add button when no subcategories exist */}
               {orderedSubcategories.length === 0 && (
                 <div className="space-y-3">
-                  <Label
-                    className={`text-base font-semibold ${themeClasses.text}`}
+                  <p
+                    className={cn(
+                      "text-[10px] font-medium uppercase tracking-wider",
+                      themeClasses.textFaint,
+                    )}
                   >
-                    More specific?
-                  </Label>
+                    Subcategory
+                  </p>
                   <button
                     onClick={() => setShowNewSubcategoryDrawer(true)}
                     className={`w-full p-4 rounded-lg border-2 border-dashed ${themeClasses.dashedBorder} ${themeClasses.dashedBorderHover} text-center transition-all active:scale-95 bg-transparent ${themeClasses.dashedBgHover} flex flex-col items-center justify-center gap-2`}
@@ -2578,16 +2649,27 @@ export default function MobileExpenseForm() {
                 </div>
               )}
 
-              <div className="space-y-2 pt-2">
-                <Label className="text-sm font-medium text-secondary/80">
-                  Add a note
-                </Label>
+              {/* Note field — description for this transaction */}
+              <div>
+                <p
+                  className={cn(
+                    "text-[10px] font-medium uppercase tracking-wider mb-1.5",
+                    themeClasses.textFaint,
+                  )}
+                >
+                  Note (optional)
+                </p>
                 <Input
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="What was this for?"
-                  className={`!bg-bg-card-custom ${themeClasses.border} ${themeClasses.textHighlight} ${themeClasses.placeholder} ${themeClasses.focusBorder} focus:ring-2 ${themeClasses.focusRing} h-11`}
+                  placeholder="e.g. Groceries at Carrefour"
+                  suppressHydrationWarning
+                  className={cn(
+                    "h-10 text-sm",
+                    themeClasses.formInput,
+                    themeClasses.placeholder,
+                  )}
                 />
               </div>
 

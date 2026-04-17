@@ -1,0 +1,135 @@
+<!doctype html>
+<html data-theme="blue">
+<head>
+  <meta charset="utf-8">
+  <title>ERA.AI · New Expense Form</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <style>
+    html, body {
+      margin: 0; min-height: 100vh;
+      background: radial-gradient(ellipse at 20% 10%, #132441, #0a1628 60%);
+      font-family: var(--era-font-body);
+      color: var(--era-fg);
+    }
+    .stage {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 40px 20px;
+      gap: 40px;
+    }
+    .theme-switcher {
+      position: fixed; top: 20px; left: 20px; z-index: 100;
+      display: flex; gap: 8px;
+      padding: 8px;
+      background: rgba(26, 41, 66, 0.6);
+      border-radius: 9999px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 0 0 1px rgba(6,182,212,0.3) inset;
+    }
+    .theme-switcher button {
+      width: 28px; height: 28px; border-radius: 9999px;
+      border: none; cursor: pointer; padding: 0;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.15) inset;
+    }
+    .theme-switcher button.active { box-shadow: 0 0 0 2px #fff inset, 0 0 12px rgba(255,255,255,0.3); }
+    .brand {
+      position: fixed; top: 24px; right: 24px; z-index: 100;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .brand img { width: 32px; height: 32px; border-radius: 8px; }
+    .brand .n { font-size: 14px; font-weight: 700;
+      background: linear-gradient(90deg,#22d3ee,#14b8a6,#67e8f9);
+      -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .brand .s { font: 500 10px var(--era-font-mono); color: var(--era-fg-3); text-transform: uppercase; letter-spacing: 0.15em; }
+  </style>
+</head>
+<body>
+  <div class="brand">
+    <img src="../../assets/appicon-192.png">
+    <div>
+      <div class="n">ERA.AI</div>
+      <div class="s">expense form</div>
+    </div>
+  </div>
+
+  <div class="theme-switcher" id="themeSwitcher">
+    <button data-theme="blue" style="background:#3b82f6" class="active" title="Blue"></button>
+    <button data-theme="pink" style="background:#ec4899" title="Pink"></button>
+    <button data-theme="frost" style="background:#6366f1" title="Frost"></button>
+    <button data-theme="calm" style="background:#78716c" title="Calm"></button>
+  </div>
+
+  <div class="stage">
+    <div id="phone"></div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <script type="text/babel" src="ExpenseComponents.jsx"></script>
+  <script type="text/babel" src="ExpenseFormApp.jsx"></script>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    function PhoneHost() {
+      const [theme, setTheme] = useState('blue');
+
+      React.useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        document.querySelectorAll('#themeSwitcher button').forEach(b => {
+          b.classList.toggle('active', b.dataset.theme === theme);
+          b.onclick = () => setTheme(b.dataset.theme);
+        });
+      }, [theme]);
+
+      return (
+        <div data-screen-label="New Expense Form" style={{
+          width: 390, height: 800, borderRadius: 48, overflow: 'hidden',
+          position: 'relative',
+          boxShadow: '0 40px 100px rgba(6,182,212,0.15), 0 0 0 10px #111 inset, 0 0 0 11px rgba(255,255,255,0.05) inset',
+          background: 'var(--era-bg)',
+        }}>
+          {/* dynamic island */}
+          <div style={{
+            position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
+            width: 110, height: 32, borderRadius: 24, background: '#000', zIndex: 100,
+          }}/>
+          {/* status bar */}
+          <div style={{
+            position:'absolute', top:0, left:0, right:0, height: 54, zIndex: 99,
+            display:'flex', justifyContent:'space-between', alignItems:'center',
+            padding: '18px 28px 0', color: '#fff',
+            fontFamily: '-apple-system, SF Pro, system-ui',
+            fontSize: 15, fontWeight: 600,
+            pointerEvents: 'none',
+          }}>
+            <span>9:41</span>
+            <span style={{ display:'flex', gap:6, alignItems:'center' }}>
+              <svg width="17" height="11" viewBox="0 0 17 11" fill="#fff"><rect x="0" y="7" width="3" height="4" rx="0.5"/><rect x="4.5" y="5" width="3" height="6" rx="0.5"/><rect x="9" y="3" width="3" height="8" rx="0.5"/><rect x="13.5" y="0" width="3" height="11" rx="0.5"/></svg>
+              <svg width="24" height="11" viewBox="0 0 24 11" fill="none"><rect x="0.5" y="0.5" width="20" height="10" rx="2.5" stroke="#fff" strokeOpacity="0.4"/><rect x="2" y="2" width="17" height="7" rx="1" fill="#fff"/><path d="M22 3v5c0.8-.3 1.5-1 1.5-2.5S22.8 3.3 22 3z" fill="#fff" fillOpacity="0.4"/></svg>
+            </span>
+          </div>
+
+          {/* app content pushed below island */}
+          <div style={{ position:'absolute', inset:0, paddingTop: 54 }}>
+            <ExpenseFormApp theme={theme} />
+          </div>
+
+          {/* home indicator */}
+          <div style={{
+            position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+            width: 130, height: 4, borderRadius: 9999,
+            background: 'rgba(255,255,255,0.6)', zIndex: 100,
+          }}/>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('phone')).render(<PhoneHost />);
+  </script>
+</body>
+</html>

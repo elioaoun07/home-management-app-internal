@@ -1,0 +1,23 @@
+<!doctype html>
+<html data-theme="blue"><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin:0; padding: 20px; background: var(--era-bg); }
+  .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; align-items: center; justify-items: center; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .icn { width: 56px; height: 56px; display:flex; align-items:center; justify-content:center;
+    background: rgba(6,182,212,0.08); border-radius: 14px;
+    box-shadow: 0 0 0 1px rgba(6,182,212,0.3) inset;
+  }
+  .icn img { width: 40px; height: 40px; }
+  .l { font: 500 10px var(--era-font-mono); color: var(--era-fg-3); }
+</style></head>
+<body>
+  <div class="grid">
+    <div class="cell"><div class="icn"><img src="../assets/appicon.svg"></div><div class="l">app</div></div>
+    <div class="cell"><div class="icn"><img src="../assets/expense-icon.svg"></div><div class="l">expense</div></div>
+    <div class="cell"><div class="icn"><img src="../assets/dashboard-icon.svg"></div><div class="l">dashboard</div></div>
+    <div class="cell"><div class="icn"><img src="../assets/chat-icon.svg"></div><div class="l">chat</div></div>
+    <div class="cell"><div class="icn"><img src="../assets/catalogue-icon.svg"></div><div class="l">catalogue</div></div>
+    <div class="cell"><div class="icn"><img src="../assets/reminders-icon.svg"></div><div class="l">reminders</div></div>
+  </div>
+</body></html>

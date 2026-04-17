@@ -1,0 +1,29 @@
+<!doctype html>
+<html data-theme="blue"><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin:0; padding: 24px; }
+  .col { display: flex; flex-direction: column; gap: 12px; }
+  .lbl { font: 500 12px var(--era-font-mono); color: var(--era-fg-3); margin-bottom: 4px; }
+  .grp { }
+  .pref {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: var(--era-fg-2); font-weight: 600;
+  }
+  .field { position: relative; }
+  .field .era-input { padding-left: 32px; font-weight: 600; font-size: 18px; }
+</style></head>
+<body>
+  <div class="col">
+    <div class="grp">
+      <div class="lbl">amount · focused</div>
+      <div class="field">
+        <span class="pref">$</span>
+        <input class="era-input" value="12.50" style="box-shadow: 0 0 0 2px rgba(6,182,212,0.6) inset, 0 0 20px rgba(6,182,212,0.3);">
+      </div>
+    </div>
+    <div class="grp">
+      <div class="lbl">description · placeholder</div>
+      <input class="era-input" placeholder="Groceries at Carrefour">
+    </div>
+  </div>
+</body></html>

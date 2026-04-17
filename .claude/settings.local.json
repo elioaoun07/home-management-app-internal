@@ -36,7 +36,8 @@
       "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && head -20 {}')",
       "Bash(xargs -I {} basename {})",
       "Skill(update-config)",
-      "Bash(head:*)"
+      "Bash(head:*)",
+      "WebFetch(domain:api.anthropic.com)"
     ]
   }
 }

@@ -1,0 +1,51 @@
+<!doctype html>
+<html data-theme="blue"><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin:0; padding: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 420px; }
+  .cat {
+    padding: 14px 10px;
+    border-radius: 12px;
+    background: var(--era-bg-card);
+    box-shadow: 0 0 0 1px rgba(6,182,212,0.3) inset;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    color: var(--era-fg-1);
+    font-size: 12px; font-weight: 500;
+    transition: all 0.3s var(--era-ease-default);
+    cursor: pointer;
+  }
+  .cat.selected {
+    box-shadow: 0 0 0 2px rgba(6,182,212,0.6) inset, 0 0 20px rgba(6,182,212,0.3);
+    background: color-mix(in srgb, var(--era-secondary) 10%, var(--era-bg-card));
+  }
+  .dot { width: 28px; height: 28px; border-radius: 9999px; display:flex; align-items:center; justify-content:center; color:#fff; }
+  .dot svg { width: 16px; height: 16px; }
+</style></head>
+<body>
+  <div class="grid">
+    <div class="cat selected">
+      <div class="dot" style="background:#10b981"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18l-2 13H5L3 7z"/><path d="M8 7V5a4 4 0 0 1 8 0v2"/></svg></div>
+      Groceries
+    </div>
+    <div class="cat">
+      <div class="dot" style="background:#f59e0b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/></svg></div>
+      Dining
+    </div>
+    <div class="cat">
+      <div class="dot" style="background:#3b82f6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg></div>
+      Transport
+    </div>
+    <div class="cat">
+      <div class="dot" style="background:#8b5cf6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+      Rent
+    </div>
+    <div class="cat">
+      <div class="dot" style="background:#ef4444"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+      Health
+    </div>
+    <div class="cat">
+      <div class="dot" style="background:#06b6d4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg></div>
+      Utilities
+    </div>
+  </div>
+</body></html>

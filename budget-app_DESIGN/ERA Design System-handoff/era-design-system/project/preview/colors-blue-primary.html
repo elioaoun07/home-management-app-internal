@@ -1,0 +1,26 @@
+<!doctype html>
+<html data-theme="blue"><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin:0; background: var(--era-bg); padding: 20px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .sw { width: 128px; }
+  .chip {
+    height: 72px; border-radius: 12px;
+    box-shadow: var(--era-ring-inset), 0 2px 8px rgba(0,0,0,0.3);
+    display: flex; align-items: flex-end; padding: 8px;
+    font: 600 10px var(--era-font-mono);
+    letter-spacing: 0.05em;
+    color: rgba(255,255,255,0.85);
+  }
+  .lbl { display:flex; justify-content: space-between; margin-top: 6px; font: 500 11px var(--era-font-mono); color: var(--era-fg-3); }
+  .lbl b { color: var(--era-fg-1); font-weight: 600; }
+</style></head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:#3b82f6">primary</div><div class="lbl"><b>Primary</b><span>#3b82f6</span></div></div>
+    <div class="sw"><div class="chip" style="background:#06b6d4">secondary</div><div class="lbl"><b>Secondary</b><span>#06b6d4</span></div></div>
+    <div class="sw"><div class="chip" style="background:#38bdf8">accent</div><div class="lbl"><b>Accent</b><span>#38bdf8</span></div></div>
+    <div class="sw"><div class="chip" style="background:#14b8a6">teal</div><div class="lbl"><b>Teal</b><span>#14b8a6</span></div></div>
+    <div class="sw"><div class="chip" style="background:#fbbf24; color:#1a0a00">amber</div><div class="lbl"><b>Amber</b><span>#fbbf24</span></div></div>
+  </div>
+</body></html>

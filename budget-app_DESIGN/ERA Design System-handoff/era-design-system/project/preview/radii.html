@@ -1,0 +1,24 @@
+<!doctype html>
+<html data-theme="blue"><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin:0; padding: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .box {
+    background: color-mix(in srgb, var(--era-secondary) 25%, transparent);
+    box-shadow: 0 0 0 1px rgba(6,182,212,0.4) inset;
+  }
+  .tag { font: 500 10px var(--era-font-mono); color: var(--era-fg-3); }
+</style></head>
+<body>
+  <div class="grid">
+    <div class="item"><div class="box" style="width:40px; height:40px; border-radius:6px;"></div><div class="tag">sm · 6</div></div>
+    <div class="item"><div class="box" style="width:56px; height:40px; border-radius:8px;"></div><div class="tag">md · 8</div></div>
+    <div class="item"><div class="box" style="width:72px; height:48px; border-radius:12px;"></div><div class="tag">lg · 12</div></div>
+    <div class="item"><div class="box" style="width:88px; height:56px; border-radius:16px;"></div><div class="tag">xl · 16</div></div>
+    <div class="item"><div class="box" style="width:40px; height:40px; border-radius:9999px;"></div><div class="tag">full · pill</div></div>
+    <div class="item"><div class="box" style="width:48px; height:48px; border-radius:9999px;"></div><div class="tag">icon btn</div></div>
+    <div class="item"><div class="box" style="width:56px; height:28px; border-radius:9999px;"></div><div class="tag">chip</div></div>
+    <div class="item"><div class="box" style="width:88px; height:28px; border-radius:9999px;"></div><div class="tag">pill lg</div></div>
+  </div>
+</body></html>

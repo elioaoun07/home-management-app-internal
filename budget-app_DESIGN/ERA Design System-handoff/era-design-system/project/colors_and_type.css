@@ -1,0 +1,353 @@
+/*
+ * ERA.AI Design System — colors_and_type.css
+ *
+ * Import this file first. All tokens are CSS custom properties scoped
+ * to :root for the default (blue) theme and overridden under
+ * [data-theme="pink|frost|calm"] on <html> or any ancestor.
+ *
+ * Derived from: budget-app/src/lib/theme-colors.ts
+ *              budget-app/src/hooks/useThemeClasses.ts
+ *              budget-app/src/app/globals.css
+ */
+
+/* --- Fonts ------------------------------------------------------------- */
+/* Geist + Geist Mono are the Next.js default fonts used in the app.
+ * Caveat + Handlee are used for handwritten/notebook flourishes. */
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Caveat:wght@400;500;600;700&family=Handlee&display=swap");
+
+:root {
+  /* ============ BRAND / THEME (default = blue) ============ */
+  --era-primary: #3b82f6;        /* cta primary */
+  --era-secondary: #06b6d4;      /* cyan — most brand moments */
+  --era-accent: #38bdf8;         /* sky — highlights, labels */
+  --era-teal: #14b8a6;           /* success / balance positive */
+  --era-amber: #fbbf24;          /* draft / warning */
+  --era-danger: #ef4444;
+  --era-offline: #f59e0b;        /* pending / cached */
+
+  /* ============ SURFACES ============ */
+  --era-bg: #0a1628;             /* body */
+  --era-bg-medium: #0f1d2e;      /* raised card */
+  --era-bg-card: #1a2942;        /* solid card */
+  --era-surface: #1a2942;        /* sticky header, drawer */
+  --era-surface-muted: rgba(26, 41, 66, 0.6);
+  --era-border: rgba(6, 182, 212, 0.3);
+  --era-border-strong: #06b6d4;
+
+  /* ============ TEXT ============ */
+  --era-fg: #ffffff;
+  --era-fg-1: #ffffff;
+  --era-fg-2: #38bdf8;           /* secondary / label */
+  --era-fg-3: rgba(56, 189, 248, 0.7);  /* muted */
+  --era-fg-4: rgba(56, 189, 248, 0.6);  /* faint */
+  --era-fg-placeholder: rgba(6, 182, 212, 0.45);
+
+  /* ============ GRADIENTS ============ */
+  --era-gradient-title: linear-gradient(90deg, #22d3ee, #14b8a6, #67e8f9);
+  --era-gradient-primary: linear-gradient(90deg, #3b82f6, #06b6d4);
+  --era-gradient-hero-card: linear-gradient(165deg, rgba(15,29,46,0.6), rgba(10,22,40,0.4), transparent);
+
+  /* ============ GLOWS & SHADOWS ============ */
+  --era-glow-sm: 0 0 6px rgba(6, 182, 212, 0.5);
+  --era-glow-md: 0 0 8px rgba(6, 182, 212, 0.4);
+  --era-glow-lg: 0 0 20px rgba(6, 182, 212, 0.3);
+  --era-glow-xl: 0 0 30px rgba(59, 130, 246, 0.5);
+  --era-shadow-card: 0 0 20px rgba(59, 130, 246, 0.2);
+  --era-shadow-card-hover: 0 0 0 1px rgba(6, 182, 212, 0.4) inset, 0 0 20px rgba(59, 130, 246, 0.3);
+  --era-ring-inset: 0 0 0 1px rgba(6, 182, 212, 0.3) inset;
+  --era-ring-inset-focus: 0 0 0 2px rgba(6, 182, 212, 0.6) inset, 0 0 20px rgba(6, 182, 212, 0.3);
+
+  /* ============ SPACING ============ */
+  --era-space-1: 4px;
+  --era-space-2: 8px;
+  --era-space-3: 12px;
+  --era-space-4: 16px;  /* page padding / card padding */
+  --era-space-5: 20px;
+  --era-space-6: 24px;
+  --era-space-8: 32px;
+
+  /* ============ RADII ============ */
+  --era-radius-sm: 6px;    /* inputs */
+  --era-radius-md: 8px;    /* buttons, chips */
+  --era-radius-lg: 12px;   /* cards */
+  --era-radius-xl: 16px;   /* large cards, drawers */
+  --era-radius-full: 9999px;
+
+  /* ============ SIZING ============ */
+  --era-tap-primary: 48px;   /* h-12 — primary action */
+  --era-tap-secondary: 44px; /* h-11 — input / secondary */
+  --era-tap-icon: 32px;      /* h-8 — icon button */
+  --era-tap-icon-sm: 28px;   /* h-7 — tight icon */
+
+  /* ============ TYPE (semantic) ============ */
+  --era-font-body: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --era-font-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+  --era-font-handwriting: "Caveat", "Handlee", cursive;
+
+  --era-font-size-xs: 10px;  /* ALL-CAPS micro labels */
+  --era-font-size-sm: 12px;
+  --era-font-size-base: 14px;
+  --era-font-size-md: 16px;  /* body / label */
+  --era-font-size-lg: 18px;  /* input */
+  --era-font-size-xl: 20px;
+  --era-font-size-2xl: 24px; /* hero number */
+  --era-font-size-3xl: 32px;
+
+  --era-leading-tight: 1.1;
+  --era-leading-snug: 1.3;
+  --era-leading-normal: 1.5;
+
+  --era-tracking-tight: -0.01em;
+  --era-tracking-wide: 0.05em;
+  --era-tracking-wider: 0.1em;
+
+  /* ============ MOTION ============ */
+  --era-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --era-ease-spring: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --era-dur-fast: 150ms;
+  --era-dur-base: 200ms;
+  --era-dur-slow: 300ms;
+}
+
+/* ============ THEME: PINK ============ */
+[data-theme="pink"] {
+  --era-primary: #ec4899;
+  --era-secondary: #f472b6;
+  --era-accent: #f9a8d4;
+  --era-teal: #fbbf24;
+  --era-bg: #1a0a14;
+  --era-bg-medium: #2d1b29;
+  --era-bg-card: #3d2435;
+  --era-surface: #2d1b29;
+  --era-surface-muted: rgba(45, 27, 41, 0.6);
+  --era-border: rgba(236, 72, 153, 0.3);
+  --era-border-strong: #ec4899;
+  --era-fg-2: #f472b6;
+  --era-fg-3: rgba(244, 114, 182, 0.7);
+  --era-fg-4: rgba(244, 114, 182, 0.6);
+  --era-fg-placeholder: rgba(236, 72, 153, 0.45);
+  --era-gradient-title: linear-gradient(90deg, #f472b6, #fbbf24, #f9a8d4);
+  --era-gradient-primary: linear-gradient(90deg, #ec4899, #fbbf24);
+  --era-glow-sm: 0 0 6px rgba(236, 72, 153, 0.4);
+  --era-glow-md: 0 0 8px rgba(236, 72, 153, 0.5);
+  --era-glow-lg: 0 0 20px rgba(236, 72, 153, 0.3);
+  --era-glow-xl: 0 0 30px rgba(236, 72, 153, 0.5);
+  --era-shadow-card: 0 8px 32px rgba(236, 72, 153, 0.15);
+  --era-shadow-card-hover: 0 0 0 1px rgba(236, 72, 153, 0.4) inset, 0 0 30px rgba(236, 72, 153, 0.3);
+  --era-ring-inset: 0 0 0 1px rgba(236, 72, 153, 0.3) inset;
+  --era-ring-inset-focus: 0 0 0 2px rgba(236, 72, 153, 0.6) inset, 0 0 20px rgba(236, 72, 153, 0.3);
+}
+
+/* ============ THEME: FROST (light) ============ */
+[data-theme="frost"] {
+  --era-primary: #6366f1;
+  --era-secondary: #8b5cf6;
+  --era-accent: #a78bfa;
+  --era-teal: #14b8a6;
+  --era-bg: #f8fafc;
+  --era-bg-medium: #f1f5f9;
+  --era-bg-card: #ffffff;
+  --era-surface: #ffffff;
+  --era-surface-muted: #f8fafc;
+  --era-border: rgba(99, 102, 241, 0.15);
+  --era-border-strong: #6366f1;
+  --era-fg: #0f172a;
+  --era-fg-1: #0f172a;
+  --era-fg-2: #6366f1;
+  --era-fg-3: #64748b;
+  --era-fg-4: #94a3b8;
+  --era-fg-placeholder: #94a3b8;
+  --era-gradient-title: linear-gradient(90deg, #6366f1, #8b5cf6, #6366f1);
+  --era-gradient-primary: linear-gradient(90deg, #6366f1, #8b5cf6);
+  --era-glow-sm: 0 1px 2px rgba(99, 102, 241, 0.15);
+  --era-glow-md: 0 1px 3px rgba(99, 102, 241, 0.2);
+  --era-glow-lg: 0 2px 12px rgba(99, 102, 241, 0.15);
+  --era-glow-xl: 0 4px 16px rgba(99, 102, 241, 0.35);
+  --era-shadow-card: 0 1px 3px rgba(15, 23, 42, 0.05), 0 2px 8px rgba(99, 102, 241, 0.04);
+  --era-shadow-card-hover: 0 4px 16px rgba(99, 102, 241, 0.08);
+  --era-ring-inset: 0 0 0 1px rgba(99, 102, 241, 0.15) inset;
+  --era-ring-inset-focus: 0 0 0 2px rgba(99, 102, 241, 0.3) inset, 0 0 0 4px rgba(99, 102, 241, 0.1);
+}
+
+/* ============ THEME: CALM (warm stone, glow-free) ============ */
+[data-theme="calm"] {
+  --era-primary: #78716c;
+  --era-secondary: #a8a29e;
+  --era-accent: #d6cfc7;
+  --era-teal: #84a98c;
+  --era-bg: #1c1917;
+  --era-bg-medium: #292524;
+  --era-bg-card: #44403c;
+  --era-surface: #44403c;
+  --era-surface-muted: rgba(68, 64, 60, 0.6);
+  --era-border: rgba(120, 113, 108, 0.3);
+  --era-border-strong: #78716c;
+  --era-fg-1: #e7e5e4;
+  --era-fg-2: #d6d3d1;
+  --era-fg-3: #a8a29e;
+  --era-fg-4: #78716c;
+  --era-fg-placeholder: rgba(120, 113, 108, 0.6);
+  --era-gradient-title: linear-gradient(90deg, #d6d3d1, #a8a29e, #84a98c);
+  --era-gradient-primary: linear-gradient(90deg, #78716c, #a8a29e);
+  --era-glow-sm: none;
+  --era-glow-md: none;
+  --era-glow-lg: 0 2px 8px rgba(28, 25, 23, 0.3);
+  --era-glow-xl: 0 4px 12px rgba(28, 25, 23, 0.5);
+  --era-shadow-card: 0 2px 8px rgba(28, 25, 23, 0.4);
+  --era-shadow-card-hover: 0 4px 12px rgba(28, 25, 23, 0.5);
+  --era-ring-inset: 0 0 0 1px rgba(120, 113, 108, 0.3) inset;
+  --era-ring-inset-focus: 0 0 0 2px rgba(120, 113, 108, 0.5) inset;
+}
+
+/* ============ BASE ============ */
+html,
+body {
+  background-color: var(--era-bg);
+  color: var(--era-fg);
+  font-family: var(--era-font-body);
+  font-size: var(--era-font-size-md);
+  line-height: var(--era-leading-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+}
+
+/* ============ SEMANTIC TYPE ============ */
+.era-h1 {
+  font-size: var(--era-font-size-3xl);
+  font-weight: 700;
+  line-height: var(--era-leading-tight);
+  letter-spacing: var(--era-tracking-tight);
+  color: var(--era-fg-1);
+}
+.era-h2 {
+  font-size: var(--era-font-size-2xl);
+  font-weight: 700;
+  line-height: var(--era-leading-tight);
+  color: var(--era-fg-1);
+}
+.era-h3 {
+  font-size: var(--era-font-size-lg);
+  font-weight: 600;
+  line-height: var(--era-leading-snug);
+  color: var(--era-fg-1);
+}
+.era-label {
+  font-size: var(--era-font-size-md);
+  font-weight: 600;
+  color: var(--era-fg-1);
+}
+.era-label-muted {
+  font-size: var(--era-font-size-md);
+  font-weight: 500;
+  color: var(--era-fg-2);
+}
+.era-micro {
+  font-size: var(--era-font-size-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--era-tracking-wider);
+  color: var(--era-fg-2);
+}
+.era-p {
+  font-size: var(--era-font-size-md);
+  color: var(--era-fg-1);
+  line-height: var(--era-leading-normal);
+}
+.era-muted {
+  color: var(--era-fg-3);
+}
+.era-faint {
+  color: var(--era-fg-4);
+}
+.era-mono {
+  font-family: var(--era-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.era-money {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.era-hero-money {
+  font-size: var(--era-font-size-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--era-gradient-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(var(--era-glow-sm));
+}
+.era-handwritten {
+  font-family: var(--era-font-handwriting);
+  font-weight: 600;
+}
+
+/* ============ PRIMITIVES ============ */
+.era-card {
+  background: var(--era-bg-card);
+  border-radius: var(--era-radius-lg);
+  box-shadow: var(--era-ring-inset), var(--era-shadow-card);
+  padding: var(--era-space-4);
+}
+.era-input {
+  height: var(--era-tap-secondary);
+  padding: 0 var(--era-space-3);
+  border-radius: var(--era-radius-sm);
+  background: color-mix(in srgb, var(--era-bg) 50%, transparent);
+  color: var(--era-fg-1);
+  font-size: var(--era-font-size-md);
+  box-shadow: var(--era-ring-inset);
+  border: none;
+  outline: none;
+  width: 100%;
+  transition: box-shadow var(--era-dur-base) var(--era-ease-default);
+}
+.era-input::placeholder { color: var(--era-fg-placeholder); }
+.era-input:focus { box-shadow: var(--era-ring-inset-focus); }
+
+.era-btn-primary {
+  height: var(--era-tap-primary);
+  padding: 0 var(--era-space-5);
+  border-radius: var(--era-radius-md);
+  background: var(--era-gradient-primary);
+  color: white;
+  font-weight: 600;
+  box-shadow: var(--era-glow-lg);
+  transition: box-shadow var(--era-dur-base) var(--era-ease-default), transform var(--era-dur-fast) var(--era-ease-default);
+  border: none;
+  cursor: pointer;
+}
+.era-btn-primary:hover { box-shadow: var(--era-glow-xl); }
+.era-btn-primary:active { transform: scale(0.97); }
+
+.era-btn-outline {
+  height: var(--era-tap-secondary);
+  padding: 0 var(--era-space-4);
+  border-radius: var(--era-radius-md);
+  background: transparent;
+  color: var(--era-secondary);
+  box-shadow: 0 0 0 2px var(--era-border) inset;
+  transition: box-shadow var(--era-dur-base) var(--era-ease-default);
+  border: none;
+  cursor: pointer;
+}
+.era-btn-outline:hover { box-shadow: 0 0 0 2px var(--era-border-strong) inset, var(--era-glow-lg); }
+
+/* Shimmer for loading */
+@keyframes era-shimmer {
+  100% { transform: translateX(100%); }
+}
+.era-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--era-surface-muted);
+  border-radius: var(--era-radius-sm);
+}
+.era-skeleton::after {
+  content: "";
+  position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0, rgba(6,182,212,0.08) 50%, transparent);
+  animation: era-shimmer 2.5s infinite;
+}
