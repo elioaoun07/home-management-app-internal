@@ -11,26 +11,29 @@ tags:
 
 ERA is a **living being**. The landing page is not a menu — it is a moment of **metamorphosis**.
 
-When a user selects a module, the central ERA Mark (in its resting Chat form) does not navigate away. It **transforms** — receiving the soul of the chosen module, metamorphosing visibly, then expanding into a portal that swallows the screen. The dashboard exists *inside* that void. The user doesn't navigate *to* a view; they *enter through* ERA.
+When a user selects a module, the central ERA Mark (in its resting Chat form) does not navigate away. It **transforms** — receiving the soul of the chosen module, metamorphosing visibly, then expanding into a portal that swallows the screen. The dashboard exists _inside_ that void. The user doesn't navigate _to_ a view; they _enter through_ ERA.
 
 > Every animation must be heading somewhere. Nothing moves without purpose.
 
 ---
 
-## Animation Sequence (~3.8s total)
+## Animation Sequence (~4.0s total)
 
 ### Phase 0 — Idle
+
 The ERA Mark Chat breathes gently (built-in `era-breathe` CSS animation, 4.2s loop). Four module cards are arranged below it in a 2×2 grid.
 
 ### Phase 1 — Gathering (T=0 → T=700ms)
+
 User clicks a module card.
 
 - **Cards**: the three non-clicked cards drift outward in their corner directions, fading to 0 opacity over 850ms.
 - **Clicked card**: the whole button — border, background, label, ERAMark — dissolves as a unit (opacity → 0, scale → 0.6) over 500ms with a 180ms delay, so the ghost visibly "lifts off" the card before the source dissolves. No lingering border frame.
-- **Ghost clone — FLIP-aligned flight**: the ghost is mounted at the **target** center at the **target** size (128px), then started offset+scaled-down at the source (68px). It animates `x/y → 0` and `scale → 1` over 700ms with bezier `[0.22, 1, 0.36, 1]`. On arrival it is a pixel-perfect twin of the center mark (same size → same aura/ring/core proportions → zero visual drift). Opacity fades at the 82% mark of the flight as the absorption recoil begins.
+- **Ghost clone — Pure translation flight**: the ghost is mounted at its source position and kept at source size (68px) the entire flight. It animates only `x/y` deltas (no scale) over 700ms with bezier `[0.22, 1, 0.36, 1]`. This eliminates scale-induced stutter from running CSS keyframes. On arrival the 68px ghost sits inside the 128px center mark — reading as a merge. Opacity fades at 82% mark as absorption recoil begins.
 - **Background**: black overlay dims slowly (opacity 0 → 0.55 over 2s). Sets the mood without washing out the mark's color transform.
 
 ### Phase 2 — Absorption (T=700ms)
+
 The ghost arrives at the center, pixel-aligned.
 
 - The ghost dissolves into the central ERA Mark.
@@ -38,71 +41,78 @@ The ghost arrives at the center, pixel-aligned.
 - Simultaneously: `module` prop changes → **CSS `@property` transition fires** (1.8s on `--hue`, `--sat`, `--lum`). The aura, core, and ring shift from Chat's hue to the selected module's hue. The old cue fades out as the new cue fades in — both over 1.8s.
 
 ### Phase 3 — Transformation (T=700ms → T=2700ms)
+
 ERA is metamorphosing. CSS transitions handle the visuals. The mark's `era-breathe` animation continues throughout.
 
 At T=2200ms, ERA takes a **pre-zoom breath**: scale `1 → 1.08 → 1` over 500ms with bezier `[0.45, 0, 0.55, 1]`. The last inhale before the leap.
 
-### Phase 4 — Portal (T=2700ms → T=3800ms)
-The transformation is complete. ERA opens the portal.
+### Phase 4 — Portal (T=2700ms → T=3750ms)
 
-**Two synchronized layers**, deliberately separated so the viewer *watches pixels get replaced* rather than *watches a crossfade*:
+The transformation is complete. ERA opens the portal by revealing the void that lives at its heart.
 
-1. **Mark warp** (T=2700ms → T=3800ms): the central ERA Mark scales from `1 → 38` over 1100ms with aggressive easeIn `[0.55, 0, 0.78, 0]`. Deliberate start → explosive acceleration. The mark accelerates *into* the viewer.
-2. **Void disk emergence** (T=2850ms → T=3800ms): a **dedicated pure-black circle** sits above the mark at `z-[40]` (the mark is `z-[30]`). Base 56px, animates `scale 0 → 70` (final size 3920px, edge-to-edge solid black at any viewport). Delay 150ms after the mark's warp begins, then grows with decisive easeOut `[0.22, 1, 0.36, 1]` over 950ms — fast start, gentle finish. The void decelerates *around* the viewer. **No opacity crossfade**; it appears and grows, full stop.
+**Two synchronized layers** that work in concert:
 
-The curves are deliberately opposed. The mark's easeIn and the void's easeOut meet at the **swallow**: the void's leading edge moves faster than the mark's expansion for most of the animation, so it overtakes the mark and locks the viewport to solid black before onNavigate fires.
+1. **Mark warp with fade** (T=2700ms → T=3750ms): the central ERA Mark scales from `1 → 8 → 40` and fades `opacity: 1 → 1 → 0` over 1200ms with easeIn `[0.55, 0, 0.78, 0]`. The mark expands massively while staying solid for 60% of the animation, then fades only in the final 40%. This makes ERA feel like it's pulling you through itself.
+2. **Soft portal disk emergence** (T=2780ms → T=3750ms): a soft-edged radial gradient (solid black core, transparent edges) locked to the mark's center grows from 48px base to 5280px (scale 110). The gradient transitions: solid black 0–45%, darkening 45–65%, semi-transparent 65–85%, transparent 85–100%. Because edges are transparent, the mark's aura and ring remain visible AROUND the darkening core — the central dot literally opens into the void. The portal plateaus at 70% of duration, ensuring final 30% is unambiguous solid black.
 
-The void disk **replaces pixels**. When its leading edge sweeps past each part of the viewport, that region becomes unambiguously, permanently black. There is no translucent middle state.
+The magic: the portal is absolutely-positioned inside the mark's wrapper, so it follows the mark's center perfectly as both grow together. The viewer experiences one continuous pull through the core, not a separate disk cutting in. The mark stays alive and solid the whole way down.
 
-### Phase 5 — Dashboard Reveal (T=3450ms → T=3800ms)
-`onNavigate()` is called at T=3450ms — the moment the void disk has reached full viewport coverage.
+### Phase 5 — Dashboard Reveal (T=3750ms onward)
+
+`onNavigate()` is called at T=3750ms — the moment the portal has fully plateaued and the mark has completely faded, leaving solid black.
 
 - `setShowLanding(false)` in `WebViewContainer` triggers the landing overlay's exit
-- The landing page overlay fades from opacity 1 → 0 over **350ms** (reduced from 600ms). Because the landing at this instant is already pure solid black (the void disk fills the viewport), the short fade is an emergence from the void, not a fade-out of the old view.
+- The landing page overlay fades from opacity 1 → 0 over **350ms**. Because the landing at this instant is already pure solid black (the portal fills the viewport and the mark is invisible), the short fade is an emergence _from_ the void, not a fade-out of the old view.
 - The dashboard (already mounted beneath) is revealed into the gap.
 
 ---
 
 ## Why This Works
 
-| Element | Purpose |
-|---|---|
-| FLIP-aligned ghost (mounted at target, scaled from source) | Pixel-perfect landing — ghost renders identically to the center mark on arrival. No drift, no size-proportion mismatch. |
-| Whole-card dissolve (opacity + scale with 180ms delay) | No lingering border frame after the ghost leaves. Ghost visibly lifts off the card. |
-| Ghost clone flight | Visible narrative: the module soul travels to ERA |
-| Absorption recoil | ERA is a living body receiving impact — organic, not mechanical |
-| CSS variable transition (1.8s) | Color transformation is gradual, not a snap |
-| Cue crossfade (1.8s) | The old identity fades, new one emerges — metamorphosis |
-| Natural breathing during transform | ERA lives during the transformation, not frozen |
-| Pre-zoom breath | Tension before the leap — the universe holding its breath |
-| easeIn warp zoom to scale 38 | Deliberate start → explosive acceleration — warp jump energy |
-| Dedicated void disk above mark (z-40) | Pure black replaces pixels. Not a crossfade. Makes it feel like entering a void, not fading. |
-| Void scale 70 (3920px) | Edge-to-edge guarantee at any viewport size — no colored aura peeking at corners at peak |
-| Dashboard already mounted | No load delay — the world exists inside ERA's void |
-| Short 350ms landing exit from solid-black state | Dashboard emerges *from* the void rather than the old view fading *to* the new one |
+| Element                                                | Purpose                                                                                                                                                               |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pure-translation ghost (fixed-position, no scale)      | GPU-composited smooth flight. Eliminates stutter from scaling a mark with running keyframes. Smaller ghost lands inside bigger center mark — reads as merge.          |
+| Whole-card dissolve (opacity + scale with 180ms delay) | No lingering border frame after the ghost leaves. Ghost visibly lifts off the card.                                                                                   |
+| Ghost clone flight                                     | Visible narrative: the module soul travels to ERA                                                                                                                     |
+| Absorption recoil                                      | ERA is a living body receiving impact — organic, not mechanical                                                                                                       |
+| CSS variable transition (1.8s)                         | Color transformation is gradual, not a snap                                                                                                                           |
+| Cue crossfade (1.8s)                                   | The old identity fades, new one emerges — metamorphosis                                                                                                               |
+| Natural breathing during transform                     | ERA lives during the transformation, not frozen                                                                                                                       |
+| Pre-zoom breath                                        | Tension before the leap — the universe holding its breath                                                                                                             |
+| Mark warp with late fade                               | The mark expands massively and stays solid for 60%, fades only at the tail. Feels like being pulled through ERA, not watching it fade.                                |
+| Soft-edged portal gradient locked to mark              | Radial gradient with transparent edges, positioned inside mark's wrapper. Mark's aura/ring stay visible around darkening core. Central dot literally opens into void. |
+| Portal plateaus at 70%                                 | Final 30% is unambiguous solid black. No transparent tail.                                                                                                            |
+| Dashboard already mounted                              | No load delay — the world exists inside ERA's void                                                                                                                    |
+| Short 350ms landing exit from solid-black state        | Dashboard emerges _from_ the void rather than the old view fading _to_ the new one                                                                                    |
 
 ---
 
 ## Visual Structure During Zoom
 
-At peak (T≈3790ms) with `overflow-hidden` on the page wrapper:
+At peak (T≈3700ms) with `overflow-hidden` on the page wrapper:
 
 ```
 Viewport
 │
-├── era-mark (z-30, scale 38, still zooming)
-│   ├── era-aura: 128 × 38 = 4864px — extends far off-screen
-│   ├── era-ring (inset 10%): 128 × 0.8 × 38 = 3891px — off-screen
-│   └── era-core (30% of mark): 128 × 0.3 × 38 = 1459px — fills center
-│
-└── void disk (z-40, scale 70) — 56 × 70 = 3920px of PURE BLACK
-    Sits ABOVE the mark. Replaces pixels. Guarantees edge-to-edge solid.
-    THIS is the void the user enters.
+├── era-mark (z-30, scale 30–40, opacity fading 1→0)
+│   ├── era-aura: 128 × 35 = 4480px — extends far off-screen, STILL COLORED
+│   ├── era-ring: 128 × 0.8 × 35 = 3584px — off-screen, STILL VISIBLE
+│   └── portal disk (z-[5] inside mark wrapper)
+│       48 × 100 = 4800px soft-edged radial gradient
+│       Solid black center → transparent edges
+│       LOCKS to mark's center via absolute positioning
 ```
 
-The user sees, in order: the mark gets huge → a dark disk emerges from its center → the disk accelerates outward and swallows everything → solid black → dashboard emerges.
+User's subjective experience:
 
-The void disk is what made the biggest difference. Before: the mark's own colored aura reached the edges while a black overlay crossfaded over it at 0.96 opacity — a translucent blend that read as a "fade out". After: the void disk is an opaque element that *replaces* the viewport pixels as it grows, reading as a "swallow".
+1. Mark zooms with full color (aura glowing)
+2. Dark veil grows from mark's center outward
+3. Mark's aura/ring remain visible AROUND expanding darkness
+4. Feel like standing inside ERA's core watching void open
+5. Mark fades at tail — dissolves into void it opened
+6. Viewport goes solid black → dashboard emerges
+
+The soft-edged portal made the biggest difference. Before: pure-black disk cut in from above, feeling like a separate object eclipsing the mark. After: radial gradient locked to mark's center with transparent edges — mark's own aura frames the void. Central dot literally _opens_. Feels like entering _through_ ERA, not _past_ it.
 
 ---
 
@@ -110,25 +120,27 @@ The void disk is what made the biggest difference. Before: the mark's own colore
 
 - `@property` declarations for `--hue`, `--sat`, `--lum` exist in `globals.css` — CSS variable transitions work
 - `era-breathe` (4.2s) and `era-breathe-aura` run throughout — do not interrupt them
-- Three `useAnimation` controls orchestrate the phases: `centerControls` (mark scale), `overlayControls` (atmospheric dim), `voidControls` (portal disk).
-- `overflow-hidden` on the landing page wrapper clips the zoomed mark and void naturally.
+- Three `useAnimation` controls: `centerControls` (mark scale + opacity), `overlayControls` (atmospheric dim), `portalControls` (portal scale).
+- `overflow-hidden` on the landing page wrapper clips zoomed mark and portal naturally.
+- **DOM structure**: Portal disk is absolutely-positioned child inside mark's scale-animated wrapper, so it follows mark's center perfectly.
 - **Z-index stack** (bottom → top):
   - `z-[10]` — cards, greeting, watermark
   - `z-[20]` — atmospheric dim overlay (dims to 0.55, non-opaque)
-  - `z-[30]` — center ERA mark
-  - `z-[40]` — **void disk (pure black, opaque) — sits above the mark to replace pixels**
+  - `z-[30]` — center ERA mark wrapper (contains both mark and portal disk)
+  - `z-[5]` (within mark wrapper) — **portal gradient disk (soft-edged, transparent edges)**
   - `z-[60]` — in-flight ghost (above everything while flying)
-- **FLIP ghost**: positioned at the target center at target size (128px), with `initial={{ x: from-to, y: from-to, scale: from/to }}`. Arrival = zero-drift render of the center mark.
-- `onNavigate` fires at T=3450ms — the moment the void disk dominates the viewport. The landing exit is short (350ms) and begins from an already-solid-black state, so the dashboard emerges *from* the void instead of the old view fading *to* the new one.
-- `willChange: "transform, opacity"` on the ghost and `willChange: "transform"` on the void disk — keeps them on the compositor for smooth acceleration at large scale values.
+- **Ghost animation**: uses `position: fixed` with viewport-coords from `getBoundingClientRect()`. Animates only `x/y` deltas (no scale). Pure translation → GPU-composited → zero stutter. Source 68px merges into 128px center mark.
+- **Portal gradient**: `radial-gradient(circle, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 45%, rgba(0,0,0,0.85) 65%, rgba(0,0,0,0.4) 85%, rgba(0,0,0,0) 100%)`. Reaches full scale at 70% of duration, then plateaus.
+- `onNavigate` fires at T=3750ms — when portal has plateaued and mark has faded to opacity 0. Landing exit (350ms) begins from already-solid-black state, so dashboard emerges _from_ void.
+- `willChange: "transform, opacity"` on ghost and `willChange: "transform"` on portal disk — keeps compositor fast at large scale values.
 
 ---
 
 ## Files
 
-| File | Role |
-|---|---|
-| `src/components/web/WebLandingPage.tsx` | Full animation implementation |
-| `src/components/web/WebViewContainer.tsx` | Exit overlay timing (`duration: 0.6`) |
-| `src/components/shared/ERAMark.tsx` | ERA mark component — read-only |
-| `src/app/globals.css` | CSS transitions, `@property` declarations, `era-breathe` keyframes |
+| File                                      | Role                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------ |
+| `src/components/web/WebLandingPage.tsx`   | Full animation implementation                                      |
+| `src/components/web/WebViewContainer.tsx` | Exit overlay timing (`duration: 0.6`)                              |
+| `src/components/shared/ERAMark.tsx`       | ERA mark component — read-only                                     |
+| `src/app/globals.css`                     | CSS transitions, `@property` declarations, `era-breathe` keyframes |
