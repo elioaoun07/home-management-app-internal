@@ -6,6 +6,7 @@ import WebCatalogue from "@/components/web/WebCatalogue";
 import WebDashboard from "@/components/web/WebDashboard";
 import WebEvents from "@/components/web/WebEvents";
 import WebFuturePurchases from "@/components/web/WebFuturePurchases";
+import WebLandingPage from "@/components/web/WebLandingPage";
 import WebMealPlanner from "@/components/web/WebMealPlanner";
 import WebRecipes from "@/components/web/WebRecipes";
 import { ERAMark, type ERAModuleKey } from "@/components/shared/ERAMark";
@@ -23,6 +24,7 @@ import {
   Rocket,
   Wallet,
 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 
 // Top-level view modes - Budget, Events, Catalogue, or Recipes
@@ -58,7 +60,8 @@ export type RecipesTab = "recipes" | "planner";
 
 export default function WebViewContainer() {
   const themeClasses = useThemeClasses();
-  const userData = useUser(); // Get user data from context (server-side)
+  const userData = useUser();
+  const [showLanding, setShowLanding] = useState(true);
   const [viewMode, setViewMode] = useState<WebViewMode>("events");
   const [activeTab, setActiveTab] = useState<WebTab>("dashboard");
   const [recipesTab, setRecipesTab] = useState<RecipesTab>("recipes");
@@ -75,7 +78,6 @@ export default function WebViewContainer() {
 
   const [dateRange, setDateRange] = useState(defaultRange);
 
-  // Fetch current user ID from Supabase auth (only need ID for transactions)
   useEffect(() => {
     const fetchUserId = async () => {
       const supabase = supabaseBrowser();
@@ -89,7 +91,6 @@ export default function WebViewContainer() {
     fetchUserId();
   }, []);
 
-  // Update month start day from preferences
   useEffect(() => {
     if (preferences?.date_start) {
       const dateStart = preferences.date_start;
@@ -116,159 +117,44 @@ export default function WebViewContainer() {
     endDate: dateRange.end,
   });
 
-  // Only show skeleton on initial load, not on refetch/date change
+  const handleLandingNav = (mode: WebViewMode) => {
+    setViewMode(mode);
+    setShowLanding(false);
+  };
+
   const showSkeleton = isLoading && transactions.length === 0;
 
   const handleDateRangeChange = (start: string, end: string) => {
     setDateRange({ start, end });
   };
 
-  // Loading state - only show skeleton on initial load, not date range changes
-  if (showSkeleton) {
-    return (
-      <div className="h-screen flex flex-col">
-        <header
-          className={`flex-shrink-0 w-full ${themeClasses.headerGradient} backdrop-blur-xl border-b ${themeClasses.border}`}
-        >
-          <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-            <div
-              className={`text-xl font-bold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
-            >
-              Budget Manager
-            </div>
-            <UserMenuClient
-              name={userData?.name ?? "User"}
-              email={userData?.email ?? ""}
-              avatarUrl={userData?.avatarUrl}
-            />
-          </div>
-        </header>
-        <main className={`flex-1 overflow-y-auto ${themeClasses.pageBg} p-8`}>
-          <div className="max-w-7xl mx-auto space-y-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  className={`h-28 ${themeClasses.surfaceBg} rounded-xl animate-pulse`}
-                />
-              ))}
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div
-                className={`h-96 ${themeClasses.surfaceBg} rounded-xl animate-pulse`}
-              />
-              <div
-                className={`h-96 ${themeClasses.surfaceBg} rounded-xl animate-pulse`}
-              />
-            </div>
-          </div>
-        </main>
-        <nav
-          className={`flex-shrink-0 w-full bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-xl border-t ${themeClasses.border}`}
-        >
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-center gap-4 px-6 h-16">
-              <div
-                className={`neo-gradient text-white shadow-lg px-6 py-3 rounded-xl flex items-center gap-3`}
-              >
-                <BarChart3 className="w-5 h-5" />
-                <span className="text-sm font-semibold">Dashboard</span>
-              </div>
-              <div
-                className={`neo-card ${themeClasses.text} px-6 py-3 rounded-xl flex items-center gap-3`}
-              >
-                <Wallet className="w-5 h-5" />
-                <span className="text-sm font-semibold">Budget</span>
-              </div>
-              <div
-                className={`neo-card ${themeClasses.text} px-6 py-3 rounded-xl flex items-center gap-3`}
-              >
-                <Rocket className="w-5 h-5" />
-                <span className="text-sm font-semibold">Goals</span>
-              </div>
-            </div>
-          </div>
-        </nav>
-      </div>
-    );
-  }
-
-  // Error state
-  if (isError) {
-    return (
-      <div className="h-screen flex flex-col">
-        <header
-          className={`flex-shrink-0 w-full ${themeClasses.headerGradient} backdrop-blur-xl border-b ${themeClasses.border}`}
-        >
-          <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-            <div
-              className={`text-xl font-bold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
-            >
-              Budget Manager
-            </div>
-            <UserMenuClient
-              name={userData?.name ?? "User"}
-              email={userData?.email ?? ""}
-              avatarUrl={userData?.avatarUrl}
-            />
-          </div>
-        </header>
-        <main
-          className={`flex-1 overflow-y-auto ${themeClasses.pageBg} flex items-center justify-center p-4`}
-        >
-          <div className="neo-card p-8 text-center max-w-md">
-            <div className="text-red-400 text-lg mb-4">Failed to load data</div>
-            <div className={`${themeClasses.headerText} text-sm mb-4`}>
-              {error instanceof Error ? error.message : "Unknown error"}
-            </div>
-          </div>
-        </main>
-        <nav
-          className={`flex-shrink-0 w-full bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-xl border-t ${themeClasses.border}`}
-        >
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-center gap-4 px-6 h-16">
-              <div
-                className={`neo-gradient text-white shadow-lg px-6 py-3 rounded-xl flex items-center gap-3`}
-              >
-                <BarChart3 className="w-5 h-5" />
-                <span className="text-sm font-semibold">Dashboard</span>
-              </div>
-              <div
-                className={`neo-card ${themeClasses.text} px-6 py-3 rounded-xl flex items-center gap-3`}
-              >
-                <Wallet className="w-5 h-5" />
-                <span className="text-sm font-semibold">Budget</span>
-              </div>
-              <div
-                className={`neo-card ${themeClasses.text} px-6 py-3 rounded-xl flex items-center gap-3`}
-              >
-                <Rocket className="w-5 h-5" />
-                <span className="text-sm font-semibold">Goals</span>
-              </div>
-            </div>
-          </div>
-        </nav>
-      </div>
-    );
-  }
-
   return (
-    <div className="h-screen flex flex-col animate-in fade-in duration-500">
-      {/* Web Header with User Menu - Fixed at top */}
+    <div className="h-screen flex flex-col relative overflow-hidden">
+      {/* Dashboard — always rendered underneath the landing overlay */}
       <header
         className={`flex-shrink-0 w-full ${themeClasses.headerGradient} backdrop-blur-xl border-b ${themeClasses.border}`}
       >
         <div className="max-w-7xl mx-auto px-6 py-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-          {/* Left: ERA Mark + Title */}
+          {/* Left: ERA Mark + Title — key re-mounts on viewMode change for entrance animation */}
           <div className="flex items-center gap-3">
-            <ERAMark module={VIEW_CONFIG[viewMode].module} size={44} />
+            <motion.div
+              key={viewMode}
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1] }}
+            >
+              <ERAMark module={VIEW_CONFIG[viewMode].module} size={44} />
+            </motion.div>
             <div className="flex flex-col leading-tight">
-              <span
+              <motion.span
+                key={`title-${viewMode}`}
                 className={`text-[17px] font-bold leading-tight bg-gradient-to-r ${VIEW_CONFIG[viewMode].gradient} bg-clip-text text-transparent`}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.35, ease: "easeOut", delay: 0.05 }}
               >
                 {VIEW_CONFIG[viewMode].title}
-              </span>
+              </motion.span>
               <span className="text-[11px] text-white/40 leading-tight">
                 {VIEW_CONFIG[viewMode].role}
               </span>
@@ -315,52 +201,73 @@ export default function WebViewContainer() {
 
       {/* Scrollable Content Area */}
       <main className="flex-1 overflow-y-auto">
-        {/* Events View */}
-        {viewMode === "events" && <WebEvents />}
-
-        {/* Catalogue View */}
-        {viewMode === "catalogue" && <WebCatalogue />}
-
-        {/* Recipes & Meal Planner View */}
-        {viewMode === "recipes" && (
+        {showSkeleton ? (
+          <div className={`p-8 ${themeClasses.pageBg} h-full`}>
+            <div className="max-w-7xl mx-auto space-y-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div
+                    key={i}
+                    className={`h-28 ${themeClasses.surfaceBg} rounded-xl animate-pulse`}
+                  />
+                ))}
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div
+                  className={`h-96 ${themeClasses.surfaceBg} rounded-xl animate-pulse`}
+                />
+                <div
+                  className={`h-96 ${themeClasses.surfaceBg} rounded-xl animate-pulse`}
+                />
+              </div>
+            </div>
+          </div>
+        ) : isError ? (
+          <div
+            className={`flex items-center justify-center h-full ${themeClasses.pageBg} p-4`}
+          >
+            <div className="neo-card p-8 text-center max-w-md">
+              <div className="text-red-400 text-lg mb-4">Failed to load data</div>
+              <div className={`${themeClasses.headerText} text-sm`}>
+                {error instanceof Error ? error.message : "Unknown error"}
+              </div>
+            </div>
+          </div>
+        ) : (
           <>
-            {/* Recipes List */}
-            <div className={recipesTab === "recipes" ? "block" : "hidden"}>
-              <WebRecipes />
-            </div>
-
-            {/* Meal Planner */}
-            <div className={recipesTab === "planner" ? "block" : "hidden"}>
-              <WebMealPlanner />
-            </div>
-          </>
-        )}
-
-        {/* Budget Views */}
-        {viewMode === "budget" && (
-          <>
-            {/* Dashboard View */}
-            <div className={activeTab === "dashboard" ? "block" : "hidden"}>
-              <WebDashboard
-                transactions={transactions}
-                startDate={dateRange.start}
-                endDate={dateRange.end}
-                currentUserId={currentUserId}
-                onDateRangeChange={handleDateRangeChange}
-                isRefetching={isFetching && !isLoading}
-                monthStartDay={monthStartDay}
-              />
-            </div>
-
-            {/* Budget View */}
-            <div className={activeTab === "budget" ? "block" : "hidden"}>
-              <WebBudget />
-            </div>
-
-            {/* Future Purchases / Goals View */}
-            <div className={activeTab === "goals" ? "block" : "hidden"}>
-              <WebFuturePurchases />
-            </div>
+            {viewMode === "events" && <WebEvents />}
+            {viewMode === "catalogue" && <WebCatalogue />}
+            {viewMode === "recipes" && (
+              <>
+                <div className={recipesTab === "recipes" ? "block" : "hidden"}>
+                  <WebRecipes />
+                </div>
+                <div className={recipesTab === "planner" ? "block" : "hidden"}>
+                  <WebMealPlanner />
+                </div>
+              </>
+            )}
+            {viewMode === "budget" && (
+              <>
+                <div className={activeTab === "dashboard" ? "block" : "hidden"}>
+                  <WebDashboard
+                    transactions={transactions}
+                    startDate={dateRange.start}
+                    endDate={dateRange.end}
+                    currentUserId={currentUserId}
+                    onDateRangeChange={handleDateRangeChange}
+                    isRefetching={isFetching && !isLoading}
+                    monthStartDay={monthStartDay}
+                  />
+                </div>
+                <div className={activeTab === "budget" ? "block" : "hidden"}>
+                  <WebBudget />
+                </div>
+                <div className={activeTab === "goals" ? "block" : "hidden"}>
+                  <WebFuturePurchases />
+                </div>
+              </>
+            )}
           </>
         )}
       </main>
@@ -421,7 +328,7 @@ export default function WebViewContainer() {
         </nav>
       )}
 
-      {/* Bottom Navigation - Only show for Budget mode */}
+      {/* Bottom Navigation - Budget mode */}
       {viewMode === "budget" && (
         <nav
           className={`flex-shrink-0 w-full bg-[hsl(var(--header-bg)/0.95)] backdrop-blur-xl border-t ${themeClasses.border}`}
@@ -498,6 +405,21 @@ export default function WebViewContainer() {
           </div>
         </nav>
       )}
+
+      {/* Landing page overlay — at the moment of unmount, the landing is already
+          solid black (its void disk covers the viewport), so a short crossfade is
+          enough to emerge into the dashboard without any flash or fade-out feel. */}
+      <AnimatePresence>
+        {showLanding && (
+          <motion.div
+            className="absolute inset-0 z-50"
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <WebLandingPage onNavigate={handleLandingNav} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
