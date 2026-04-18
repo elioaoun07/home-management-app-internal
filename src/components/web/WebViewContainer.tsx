@@ -8,6 +8,7 @@ import WebEvents from "@/components/web/WebEvents";
 import WebFuturePurchases from "@/components/web/WebFuturePurchases";
 import WebMealPlanner from "@/components/web/WebMealPlanner";
 import WebRecipes from "@/components/web/WebRecipes";
+import { ERAMark, type ERAModuleKey } from "@/components/shared/ERAMark";
 import { useUser } from "@/contexts/UserContext";
 import { useUserPreferences } from "@/features/preferences/useUserPreferences";
 import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
@@ -20,13 +21,34 @@ import {
   BookOpen,
   CalendarDays,
   Rocket,
-  UtensilsCrossed,
   Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 // Top-level view modes - Budget, Events, Catalogue, or Recipes
 export type WebViewMode = "budget" | "events" | "catalogue" | "recipes";
+
+type ViewConfig = {
+  module: ERAModuleKey;
+  title: string;
+  role: string;
+  gradient: string;    // title text gradient
+  activeClass: string; // active tab button class
+};
+
+const VIEW_CONFIG: Record<WebViewMode, ViewConfig> = {
+  events:    { module: "schedule",  title: "Events & Reminders", role: "Schedule Hub",  gradient: "from-violet-400 to-purple-400",  activeClass: "neo-gradient" },
+  budget:    { module: "financial", title: "Budget Manager",     role: "Financial",     gradient: "from-cyan-400 to-teal-400",      activeClass: "neo-gradient" },
+  catalogue: { module: "memory",    title: "Life Catalogue",     role: "Archive",       gradient: "from-blue-400 to-indigo-400",    activeClass: "bg-gradient-to-r from-violet-600 to-cyan-600" },
+  recipes:   { module: "recipe",    title: "Recipes & Meals",    role: "Culinary",      gradient: "from-orange-400 to-amber-400",   activeClass: "bg-gradient-to-r from-emerald-600 to-teal-600" },
+};
+
+const NAV_ITEMS: Array<{ mode: WebViewMode; label: string; eraModule: ERAModuleKey }> = [
+  { mode: "events",    label: "Events",    eraModule: "schedule"  },
+  { mode: "budget",    label: "Budget",    eraModule: "financial" },
+  { mode: "catalogue", label: "Catalogue", eraModule: "memory"    },
+  { mode: "recipes",   label: "Recipes",   eraModule: "recipe"    },
+];
 
 // Tabs within Budget view
 export type WebTab = "dashboard" | "budget" | "goals";
@@ -237,84 +259,57 @@ export default function WebViewContainer() {
       <header
         className={`flex-shrink-0 w-full ${themeClasses.headerGradient} backdrop-blur-xl border-b ${themeClasses.border}`}
       >
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          {/* Logo/Title with View Mode Toggle */}
-          <div className="flex items-center gap-6">
-            <div
-              className={`text-xl font-bold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent`}
-            >
-              {viewMode === "budget"
-                ? "Budget Manager"
-                : viewMode === "catalogue"
-                  ? "Life Catalogue"
-                  : viewMode === "recipes"
-                    ? "Recipes & Meals"
-                    : "Events & Reminders"}
-            </div>
-
-            {/* View Mode Toggle */}
-            <div className="flex items-center p-1 rounded-xl bg-black/20 border border-white/10">
-              <button
-                type="button"
-                onClick={() => setViewMode("events")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                  viewMode === "events"
-                    ? "neo-gradient text-white shadow-lg"
-                    : "text-white/60 hover:text-white hover:bg-white/10",
-                )}
+        <div className="max-w-7xl mx-auto px-6 py-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+          {/* Left: ERA Mark + Title */}
+          <div className="flex items-center gap-3">
+            <ERAMark module={VIEW_CONFIG[viewMode].module} size={44} />
+            <div className="flex flex-col leading-tight">
+              <span
+                className={`text-[17px] font-bold leading-tight bg-gradient-to-r ${VIEW_CONFIG[viewMode].gradient} bg-clip-text text-transparent`}
               >
-                <CalendarDays className="w-4 h-4" />
-                Events
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("budget")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                  viewMode === "budget"
-                    ? "neo-gradient text-white shadow-lg"
-                    : "text-white/60 hover:text-white hover:bg-white/10",
-                )}
-              >
-                <Wallet className="w-4 h-4" />
-                Budget
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("catalogue")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                  viewMode === "catalogue"
-                    ? "bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-lg"
-                    : "text-white/60 hover:text-white hover:bg-white/10",
-                )}
-              >
-                <BookOpen className="w-4 h-4" />
-                Catalogue
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("recipes")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                  viewMode === "recipes"
-                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg"
-                    : "text-white/60 hover:text-white hover:bg-white/10",
-                )}
-              >
-                <UtensilsCrossed className="w-4 h-4" />
-                Recipes
-              </button>
+                {VIEW_CONFIG[viewMode].title}
+              </span>
+              <span className="text-[11px] text-white/40 leading-tight">
+                {VIEW_CONFIG[viewMode].role}
+              </span>
             </div>
           </div>
 
-          {/* User Menu - Always show, with loading state */}
-          <UserMenuClient
-            name={userData?.name ?? "User"}
-            email={userData?.email ?? ""}
-            avatarUrl={userData?.avatarUrl}
-          />
+          {/* Center: View Mode Tabs */}
+          <div className="flex items-center p-1 rounded-xl bg-black/20 border border-white/10">
+            {NAV_ITEMS.map(({ mode, label, eraModule }) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setViewMode(mode)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  viewMode === mode
+                    ? `${VIEW_CONFIG[mode].activeClass} text-white shadow-lg`
+                    : "text-white/60 hover:text-white hover:bg-white/10",
+                )}
+              >
+                <div
+                  className={cn(
+                    "transition-opacity duration-300",
+                    viewMode === mode ? "opacity-100" : "opacity-35",
+                  )}
+                >
+                  <ERAMark module={eraModule} size={22} />
+                </div>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Right: Avatar */}
+          <div className="flex items-center justify-end">
+            <UserMenuClient
+              name={userData?.name ?? "User"}
+              email={userData?.email ?? ""}
+              avatarUrl={userData?.avatarUrl}
+            />
+          </div>
         </div>
       </header>
 
