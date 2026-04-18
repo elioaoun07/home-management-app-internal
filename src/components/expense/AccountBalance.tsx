@@ -2,7 +2,9 @@
 
 import {
   ArrowRightIcon,
+  CalendarIcon,
   Edit2Icon,
+  FileTextIcon,
   RefreshIcon,
   SaveIcon,
   XIcon,
@@ -27,6 +29,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import BalanceHistoryDrawer from "./BalanceHistoryDrawer";
 import DebtsDrawer from "./DebtsDrawer";
+import DraftsDrawer from "./DraftsDrawer";
 import FuturePaymentsDrawer from "./FuturePaymentsDrawer";
 import OfflinePendingDrawer from "./OfflinePendingDrawer";
 import TransferDialog from "./TransferDialog";
@@ -66,6 +69,7 @@ export default function AccountBalance({
   const [editValue, setEditValue] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const [showDebts, setShowDebts] = useState(false);
+  const [showDrafts, setShowDrafts] = useState(false);
   const [showFuturePayments, setShowFuturePayments] = useState(false);
   const [showOfflinePending, setShowOfflinePending] = useState(false);
 
@@ -409,19 +413,11 @@ export default function AccountBalance({
                   />
                 )}
               </div>
-              <span
-                className={
-                  balance?.pending_drafts && balance.pending_drafts > 0
-                    ? "text-xs font-medium text-amber-400/90 drop-shadow-[0_0_6px_rgba(251,191,36,0.3)]"
-                    : `text-xs ${themeClasses.textFaint} font-medium`
-                }
-              >
-                {String(balance?.draft_count ?? 0)} pending draft
-                {Number(balance?.draft_count ?? 0) !== 1 ? "s" : ""}
-                {balance?.pending_drafts && balance.pending_drafts > 0
-                  ? ` ($${balance.pending_drafts.toFixed(2)})`
-                  : ""}
-              </span>
+              {balance?.balance_set_at && (
+                <div className="text-[9px] text-white/25 leading-none mt-0.5">
+                  {new Date(balance.balance_set_at).toLocaleDateString()}
+                </div>
+              )}
               {/* Offline pending transactions — always visible like drafts */}
               {isOffline && (
                 <button
@@ -446,18 +442,6 @@ export default function AccountBalance({
                   {offlinePendingCount === 1 ? "transaction" : "transactions"}
                 </button>
               )}
-              {/* Future payments info */}
-              {balance?.future_payment_count &&
-              balance.future_payment_count > 0 ? (
-                <button
-                  onClick={() => setShowFuturePayments(true)}
-                  className="text-xs font-medium text-blue-400/90 drop-shadow-[0_0_6px_rgba(96,165,250,0.3)] hover:text-blue-300 transition-colors text-left"
-                >
-                  {balance.future_payment_count} future payment
-                  {balance.future_payment_count !== 1 ? "s" : ""}
-                  {` ($${(balance.future_payment_total ?? 0).toFixed(2)})`}
-                </button>
-              ) : null}
               {/* Open debts info */}
               {balance?.debt_count && balance.debt_count > 0 ? (
                 <button
@@ -474,37 +458,53 @@ export default function AccountBalance({
         </div>
         {!isEditing && (
           <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-            {/* Circular dollar icon — ERA design system balance card */}
-            <div
-              className={cn(
-                "w-9 h-9 rounded-full flex items-center justify-center",
-                themeClasses.bgSurface,
-                themeClasses.inputBorder,
-                isOffline && "opacity-40",
-              )}
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={cn(
-                  themeClasses.text,
-                  themeClasses.iconGlowMuted,
-                )}
+            {/* Drafts icon pill — amber, only when drafts > 0 */}
+            {(balance?.draft_count ?? 0) > 0 && (
+              <button
+                onClick={() => setShowDrafts(true)}
+                className="relative active:scale-95 transition-transform"
+                title="View pending drafts"
               >
-                <line x1="12" y1="1" x2="12" y2="23" />
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
-            </div>
-            {balance?.balance_set_at && (
-              <div className="text-[9px] text-white/15 text-right leading-none">
-                {new Date(balance.balance_set_at).toLocaleDateString()}
-              </div>
+                <div
+                  className={cn(
+                    "w-7 h-7 rounded-full flex items-center justify-center",
+                    "bg-amber-500/15 border border-amber-500/30",
+                    isOffline && "opacity-40",
+                  )}
+                >
+                  <FileTextIcon
+                    size={13}
+                    className="text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.4)]"
+                  />
+                </div>
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-black leading-none px-0.5">
+                  {balance!.draft_count}
+                </span>
+              </button>
+            )}
+            {/* Future payments icon pill — blue, only when count > 0 */}
+            {(balance?.future_payment_count ?? 0) > 0 && (
+              <button
+                onClick={() => setShowFuturePayments(true)}
+                className="relative active:scale-95 transition-transform"
+                title="View future payments"
+              >
+                <div
+                  className={cn(
+                    "w-7 h-7 rounded-full flex items-center justify-center",
+                    "bg-blue-500/15 border border-blue-500/30",
+                    isOffline && "opacity-40",
+                  )}
+                >
+                  <CalendarIcon
+                    size={13}
+                    className="text-blue-400 drop-shadow-[0_0_5px_rgba(96,165,250,0.4)]"
+                  />
+                </div>
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-blue-500 text-[8px] font-bold text-white leading-none px-0.5">
+                  {balance!.future_payment_count}
+                </span>
+              </button>
             )}
           </div>
         )}
@@ -522,6 +522,9 @@ export default function AccountBalance({
 
       {/* Debts Drawer */}
       <DebtsDrawer open={showDebts} onOpenChange={setShowDebts} />
+
+      {/* Drafts Drawer */}
+      <DraftsDrawer open={showDrafts} onOpenChange={setShowDrafts} />
 
       {/* Future Payments Drawer */}
       <FuturePaymentsDrawer

@@ -1,6 +1,11 @@
 "use client";
 
-import { Trash2Icon, XIcon } from "@/components/icons/FuturisticIcons";
+import {
+  CheckIcon,
+  PencilIcon,
+  Trash2Icon,
+  XIcon,
+} from "@/components/icons/FuturisticIcons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +14,19 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useAccounts } from "@/features/accounts/hooks";
+import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { safeFetch } from "@/lib/safeFetch";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -20,6 +37,7 @@ import {
   isToday,
   isTomorrow,
 } from "date-fns";
+import { useState } from "react";
 import { toast } from "sonner";
 
 interface FuturePaymentsDrawerProps {
@@ -35,6 +53,7 @@ interface FuturePayment {
   amount: number;
   description: string;
   category_id: string | null;
+  subcategory_id: string | null;
   account_id: string;
   accounts?: { name: string };
   category?: { name: string } | null;
@@ -258,6 +277,65 @@ function PaymentCard({
   onDelete: () => void;
   isConfirming: boolean;
 }) {
+  const themeClasses = useThemeClasses();
+  const queryClient = useQueryClient();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    amount: "",
+    description: "",
+    category_id: "",
+    subcategory_id: "",
+    scheduled_date: "",
+  });
+
+  const { data: accounts = [] } = useAccounts();
+  const { data: categories = [] } = useCategories(
+    isEditing ? payment.account_id : undefined,
+  );
+  const parentCategories = (categories as any[]).filter((c) => !c.parent_id);
+  const subcategories = editForm.category_id
+    ? (categories as any[]).filter((c) => c.parent_id === editForm.category_id)
+    : [];
+
+  const updateMutation = useMutation({
+    mutationFn: async (values: typeof editForm) => {
+      const res = await safeFetch(`/api/future-payments/${payment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: parseFloat(values.amount),
+          description: values.description || null,
+          category_id: values.category_id || null,
+          subcategory_id: values.subcategory_id || null,
+          scheduled_date: values.scheduled_date,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update payment");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["future-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
+      setIsEditing(false);
+    },
+    onError: () => toast.error("Failed to update payment"),
+  });
+
+  const startEditing = () => {
+    setEditForm({
+      amount: payment.amount.toString(),
+      description: payment.description || "",
+      category_id: payment.category_id || "",
+      subcategory_id: payment.subcategory_id || "",
+      scheduled_date: payment.scheduled_date
+        ? payment.scheduled_date.split("T")[0]
+        : "",
+    });
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => setIsEditing(false);
+
   const scheduledDate = new Date(payment.scheduled_date);
   const daysAway = differenceInDays(scheduledDate, new Date());
 
@@ -322,74 +400,211 @@ function PaymentCard({
             </div>
           </div>
 
-          {/* Right: time label */}
-          <div className="text-right shrink-0">
-            <p
-              className={cn(
-                "text-xs font-semibold",
-                isDue ? "text-red-400" : "text-blue-400",
-              )}
-            >
-              {getTimeLabel()}
-            </p>
+          {/* Right: time label + edit/close button */}
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={isEditing ? cancelEditing : startEditing}
+                className="p-1 rounded-md hover:bg-white/10 transition-colors"
+                title={isEditing ? "Cancel edit" : "Edit payment"}
+              >
+                {isEditing ? (
+                  <XIcon className="w-3.5 h-3.5 text-white/40" />
+                ) : (
+                  <PencilIcon className="w-3.5 h-3.5 text-white/40 hover:text-white/70" />
+                )}
+              </button>
+            </div>
+            {!isEditing && (
+              <p
+                className={cn(
+                  "text-xs font-semibold",
+                  isDue ? "text-red-400" : "text-blue-400",
+                )}
+              >
+                {getTimeLabel()}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2 mt-2.5">
-          <Button
-            onClick={onConfirm}
-            size="sm"
-            disabled={isConfirming}
-            className={cn(
-              "flex-1 h-8 text-xs font-semibold rounded-lg transition-all",
-              isDue
-                ? "bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-400/20"
-                : "bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-400/20",
-            )}
-          >
-            {isConfirming ? (
-              <svg
-                className="w-3.5 h-3.5 animate-spin mr-1"
-                fill="none"
-                viewBox="0 0 24 24"
+        {/* Edit form */}
+        {isEditing ? (
+          <div className="mt-3 pt-3 border-t border-white/10 space-y-2.5">
+            {/* Amount */}
+            <div>
+              <Label className="text-[11px] text-white/40">Amount</Label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={editForm.amount}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, amount: e.target.value })
+                }
+                className="h-8 text-sm bg-white/5 border-white/15 text-white mt-0.5"
+              />
+            </div>
+
+            {/* Scheduled date */}
+            <div>
+              <Label className="text-[11px] text-white/40">
+                Scheduled Date
+              </Label>
+              <Input
+                type="date"
+                value={editForm.scheduled_date}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, scheduled_date: e.target.value })
+                }
+                className="h-8 text-sm bg-white/5 border-white/15 text-white mt-0.5"
+              />
+            </div>
+
+            {/* Category */}
+            <div>
+              <Label className="text-[11px] text-white/40">Category</Label>
+              <Select
+                value={editForm.category_id}
+                onValueChange={(v) =>
+                  setEditForm({
+                    ...editForm,
+                    category_id: v,
+                    subcategory_id: "",
+                  })
+                }
               >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
+                <SelectTrigger className="h-8 text-sm bg-white/5 border-white/15 text-white mt-0.5">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {parentCategories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Subcategory */}
+            {subcategories.length > 0 && (
+              <div>
+                <Label className="text-[11px] text-white/40">Subcategory</Label>
+                <Select
+                  value={editForm.subcategory_id}
+                  onValueChange={(v) =>
+                    setEditForm({ ...editForm, subcategory_id: v })
+                  }
+                >
+                  <SelectTrigger className="h-8 text-sm bg-white/5 border-white/15 text-white mt-0.5">
+                    <SelectValue placeholder="Select subcategory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subcategories.map((sub) => (
+                      <SelectItem key={sub.id} value={sub.id}>
+                        {sub.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Description */}
+            <div>
+              <Label className="text-[11px] text-white/40">Description</Label>
+              <Input
+                value={editForm.description}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, description: e.target.value })
+                }
+                placeholder="Optional description"
+                className="h-8 text-sm bg-white/5 border-white/15 text-white mt-0.5"
+              />
+            </div>
+
+            {/* Save button */}
+            <Button
+              onClick={() => updateMutation.mutate(editForm)}
+              disabled={
+                updateMutation.isPending ||
+                !editForm.amount ||
+                !editForm.scheduled_date
+              }
+              className={cn(
+                "w-full h-8 text-xs font-semibold rounded-lg transition-all",
+                isDue
+                  ? "bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-400/20"
+                  : "bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-400/20",
+              )}
+            >
+              {updateMutation.isPending ? (
+                <div className="w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+              ) : (
+                <>
+                  <CheckIcon className="w-3.5 h-3.5 mr-1" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </div>
+        ) : (
+          /* Action buttons */
+          <div className="flex gap-2 mt-2.5">
+            <Button
+              onClick={onConfirm}
+              size="sm"
+              disabled={isConfirming}
+              className={cn(
+                "flex-1 h-8 text-xs font-semibold rounded-lg transition-all",
+                isDue
+                  ? "bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-400/20"
+                  : "bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-400/20",
+              )}
+            >
+              {isConfirming ? (
+                <svg
+                  className="w-3.5 h-3.5 animate-spin mr-1"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  className="w-3.5 h-3.5 mr-1"
+                  fill="none"
+                  viewBox="0 0 24 24"
                   stroke="currentColor"
-                  strokeWidth="3"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="w-3.5 h-3.5 mr-1"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path d="M5 13l4 4L19 7" />
-              </svg>
-            )}
-            {isConfirming ? "Confirming..." : "Confirm"}
-          </Button>
-          <Button
-            onClick={onDelete}
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 p-0 text-red-400/40 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
-          >
-            <Trash2Icon className="w-3.5 h-3.5" />
-          </Button>
-        </div>
+                  strokeWidth={2}
+                >
+                  <path d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+              {isConfirming ? "Confirming..." : "Confirm"}
+            </Button>
+            <Button
+              onClick={onDelete}
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 text-red-400/40 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+            >
+              <Trash2Icon className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

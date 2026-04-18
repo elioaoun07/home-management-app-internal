@@ -12,7 +12,7 @@ export default function AlertsPage() {
   useEffect(() => setMounted(true), []);
 
   return (
-    <div className={cn("min-h-screen pt-14", themeClasses.bgPage)}>
+    <div className={cn("min-h-screen pt-16", themeClasses.bgPage)}>
       {/* HubPage with only Alerts/Feed views */}
       {mounted && (
         <HubPage

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ERA Mark — header integration demo</title>
+<link rel="stylesheet" href="ERAMark.css">
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; background: #0b0d12; color: #e7e9ee;
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { padding: 40px; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .lede { color: #8a90a0; margin: 0 0 32px; }
+
+  /* Mock app header — exactly how it should look in the product */
+  .app-header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 20px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    margin-bottom: 24px;
+  }
+  .app-header .title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .app-header .crumb { color: #8a90a0; font-size: 13px; }
+  .app-header .spacer { flex: 1; }
+  .app-header .actions { display: flex; gap: 8px; }
+  .app-header button {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #cfd4e0; padding: 6px 12px; border-radius: 8px;
+    font-size: 12px; cursor: pointer;
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 24px 0 10px; }
+  .chip {
+    padding: 8px 14px; border-radius: 9999px; cursor: pointer;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #cfd4e0; font-size: 12.5px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .chip:hover { background: rgba(255,255,255,0.08); }
+  .chip.active {
+    background: hsla(var(--hue, 190), 60%, 50%, 0.22);
+    border-color: hsla(var(--hue, 190), 80%, 60%, 0.5);
+    color: #fff;
+  }
+
+  .panel {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 20px 22px;
+    color: #a9b0be; font-size: 13px;
+  }
+  code { color: #fde68a; background: rgba(251,191,36,0.08); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; }
+
+  .sizes { display: flex; gap: 28px; align-items: center; margin: 20px 0 0; }
+  .sizes .cell { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #8a90a0; font-size: 11px; }
+</style>
+</head>
+<body>
+  <h1>ERA Mark — in the app header</h1>
+  <p class="lede">Click a module below. The mark animates: core color bleeds + cues cross-fade over 1.8s.</p>
+
+  <!-- This is how the header should look in the real app -->
+  <div class="app-header" id="header">
+    <!-- ERA Mark -->
+    <div class="era-mark" id="mark" style="--hue: 175; --sat: 72%; --lum: 55%; width: 40px; height: 40px;">
+      <div class="era-aura"></div>
+      <div class="era-ring"></div>
+
+      <div class="era-cue era-cue-fin"><svg viewBox="0 0 260 260" preserveAspectRatio="none">
+        <path class="trail-ghost" d="M40 190 Q 98 180 122 138 T 220 70"/>
+        <path class="trail" d="M40 190 Q 98 180 122 138 T 220 70"/>
+        <circle class="dot d1" cx="40" cy="190" r="4"/>
+        <circle class="dot d2" cx="220" cy="70" r="4"/>
+      </svg></div>
+      <div class="era-cue era-cue-rec"><svg viewBox="0 0 128 128" preserveAspectRatio="none">
+        <path class="v1" d="M56 108 Q 52 94 58 80 T 54 54"/>
+        <path class="v2" d="M64 116 Q 60 98 66 82 T 62 52"/>
+        <path class="v3" d="M72 110 Q 76 96 70 82 T 74 58"/>
+      </svg></div>
+      <div class="era-cue era-cue-sch"><div class="hand"></div><div class="hand short"></div></div>
+      <div class="era-cue era-cue-hlt">
+        <svg viewBox="0 0 260 48" preserveAspectRatio="none">
+          <path d="M0 24 L70 24 L82 24 L90 10 L100 38 L108 4 L118 44 L128 24 L260 24"/>
+        </svg>
+        <div class="beat b1"></div><div class="beat b2"></div>
+      </div>
+      <div class="era-cue era-cue-hom"><svg viewBox="0 0 260 260"><path d="M80 140 L130 92 L180 140"/></svg></div>
+      <div class="era-cue era-cue-trp"><div class="dotring"></div><div class="needle"></div></div>
+      <div class="era-cue era-cue-fit">
+        <div class="pulse p-left"></div><div class="pulse p-right"></div>
+        <div class="pulse p-top"></div><div class="pulse p-bottom"></div>
+      </div>
+      <div class="era-cue era-cue-ofi"></div>
+      <div class="era-cue era-cue-chat"><div class="hum h1"></div><div class="hum h2"></div></div>
+      <div class="era-cue era-cue-mem"><div class="recall m1"></div><div class="recall m2"></div><div class="recall m3"></div></div>
+      <div class="era-core"></div>
+    </div>
+
+    <!-- Title & crumb -->
+    <div>
+      <div class="title" id="title">Financial</div>
+      <div class="crumb">ERA · <span id="crumb">Overview</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="actions">
+      <button>Search</button>
+      <button>Profile</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <b>How to drop this into your app:</b>
+    &nbsp;&nbsp;<code>&lt;ERAMark module={currentModule} size={40} /&gt;</code>
+    <br>
+    Keep one instance mounted in your app shell. Change <code>module</code> when the user navigates. See <b>README.md</b> for full integration notes.
+  </div>
+
+  <div class="chips" id="chips"></div>
+
+  <div class="panel">
+    <b>Multiple sizes:</b> same component, different <code>size</code> prop.
+    <div class="sizes" id="sizeRow"></div>
+  </div>
+
+  <script>
+    const modules = [
+      { id: 'financial', cue: 'fin',  name: 'Financial', hue: 175, sat: 72, lum: 55 },
+      { id: 'recipe',    cue: 'rec',  name: 'Recipe',    hue:  28, sat: 85, lum: 58 },
+      { id: 'schedule',  cue: 'sch',  name: 'Schedule',  hue: 256, sat: 78, lum: 68 },
+      { id: 'health',    cue: 'hlt',  name: 'Health',    hue: 352, sat: 82, lum: 62 },
+      { id: 'home',      cue: 'hom',  name: 'Home',      hue: 205, sat: 75, lum: 62 },
+      { id: 'trip',      cue: 'trp',  name: 'Trip',      hue: 155, sat: 72, lum: 58 },
+      { id: 'fitness',   cue: 'fit',  name: 'Fitness',   hue:  40, sat: 92, lum: 62 },
+      { id: 'outfit',    cue: 'ofi',  name: 'Outfit',    hue: 325, sat: 78, lum: 68 },
+      { id: 'chat',      cue: 'chat', name: 'Chat',      hue: 190, sat: 85, lum: 62 },
+      { id: 'memory',    cue: 'mem',  name: 'Memory',    hue: 220, sat: 65, lum: 68 },
+    ];
+
+    const mark = document.getElementById('mark');
+    const title = document.getElementById('title');
+    const chipsEl = document.getElementById('chips');
+    const sizeRow = document.getElementById('sizeRow');
+    let currentId = localStorage.getItem('era-hm-mod') || 'financial';
+
+    function setActive(id) {
+      const m = modules.find(x => x.id === id); if (!m) return;
+      mark.style.setProperty('--hue', m.hue);
+      mark.style.setProperty('--sat', m.sat + '%');
+      mark.style.setProperty('--lum', m.lum + '%');
+      document.querySelectorAll('#mark .era-cue').forEach(el => el.classList.remove('active'));
+      const inc = mark.querySelector('.era-cue-' + m.cue); if (inc) inc.classList.add('active');
+      document.querySelectorAll('.chip').forEach(c => {
+        c.classList.toggle('active', c.dataset.id === id);
+        if (c.dataset.id === id) c.style.setProperty('--hue', m.hue);
+      });
+      title.textContent = m.name;
+      currentId = id; localStorage.setItem('era-hm-mod', id);
+      // Sync all "size" previews too
+      document.querySelectorAll('.sizes .era-mark').forEach(node => {
+        node.style.setProperty('--hue', m.hue);
+        node.style.setProperty('--sat', m.sat + '%');
+        node.style.setProperty('--lum', m.lum + '%');
+        node.querySelectorAll('.era-cue').forEach(el => el.classList.remove('active'));
+        const n = node.querySelector('.era-cue-' + m.cue); if (n) n.classList.add('active');
+      });
+    }
+
+    // Build chips
+    modules.forEach(m => {
+      const b = document.createElement('div');
+      b.className = 'chip'; b.dataset.id = m.id; b.textContent = m.name;
+      b.addEventListener('click', () => setActive(m.id));
+      chipsEl.appendChild(b);
+    });
+
+    // Build size previews (all share the current module)
+    [32, 40, 56, 96].forEach(sz => {
+      const cell = document.createElement('div'); cell.className = 'cell';
+      const tmpl = mark.cloneNode(true);
+      tmpl.removeAttribute('id');
+      tmpl.style.width = sz + 'px'; tmpl.style.height = sz + 'px';
+      cell.appendChild(tmpl);
+      const lbl = document.createElement('div'); lbl.textContent = sz + 'px'; cell.appendChild(lbl);
+      sizeRow.appendChild(cell);
+    });
+
+    setActive(currentId);
+  </script>
+</body>
+</html>

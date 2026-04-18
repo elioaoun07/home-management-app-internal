@@ -92,7 +92,7 @@ export default function RemindersStandalonePage() {
 
   if (!mounted) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-14">
+      <main className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-16">
         <div className="min-h-full p-4 pb-8 space-y-4">
           <div className="grid grid-cols-3 gap-3">
             {[1, 2, 3].map((i) => (
@@ -116,7 +116,7 @@ export default function RemindersStandalonePage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-14">
+    <main className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-16">
       <FilterBar
         userFilter={userFilter}
         onUserFilterChange={setUserFilter}

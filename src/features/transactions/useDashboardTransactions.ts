@@ -631,6 +631,11 @@ export function useAddTransaction() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(serverTransaction),
+          // createTransaction does 7-9 sequential DB queries (validation, insert,
+          // balance adjustment, name lookups). The 3s default kills the request
+          // after the INSERT already committed server-side, causing the client to
+          // queue it offline → duplicate on sync. 30s gives ample headroom.
+          timeoutMs: 30_000,
         });
 
         if (!response.ok) {

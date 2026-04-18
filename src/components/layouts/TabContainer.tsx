@@ -77,7 +77,7 @@ export default function TabContainer() {
           <MobileReminderForm />
         </main>
       </div>
-      <div className={activeTab === "recurring" ? "block pt-14" : "hidden"}>
+      <div className={activeTab === "recurring" ? "block pt-16" : "hidden"}>
         <RecurringPage />
       </div>
     </div>

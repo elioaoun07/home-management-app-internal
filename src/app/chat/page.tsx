@@ -25,7 +25,7 @@ export default function ChatStandalonePage() {
   if (!mounted) {
     // Return a loading skeleton that matches the server render
     return (
-      <main className="h-screen bg-background pt-14 overflow-hidden">
+      <main className="h-screen bg-background pt-16 overflow-hidden">
         <div className="h-full overflow-y-auto">
           <div className="divide-y divide-white/5">
             {[1, 2, 3, 4, 5].map((i) => (
@@ -46,7 +46,7 @@ export default function ChatStandalonePage() {
   }
 
   return (
-    <main className="h-screen bg-background pt-14 overflow-hidden">
+    <main className="h-screen bg-background pt-16 overflow-hidden">
       <HubPage standalone initialThreadId={threadParam || undefined} />
     </main>
   );

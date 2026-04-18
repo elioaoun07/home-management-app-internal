@@ -86,6 +86,12 @@ export default function ActivityView() {
       setActiveSection("transactions");
     }
   }, [appModeCtx?.isItemsMode, appModeCtx?.isBudgetMode]);
+
+  // Reverse sync: when user manually switches section, update appMode so the header follows
+  const setAppModeFn = appModeCtx?.setAppMode;
+  useEffect(() => {
+    setAppModeFn?.(activeSection === "items" ? "items" : "budget");
+  }, [activeSection, setAppModeFn]);
   const [userFilter, setUserFilter] = useState<UserFilter>("all");
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [groupMode, setGroupMode] = useState<GroupMode>("time");
@@ -146,7 +152,7 @@ export default function ActivityView() {
   }, [txData]);
 
   return (
-    <div className={`min-h-screen ${themeClasses.pageBg} pt-14 pb-24`}>
+    <div className={`min-h-screen ${themeClasses.pageBg} pt-16 pb-24`}>
       <FilterBar
         userFilter={userFilter}
         onUserFilterChange={setUserFilter}

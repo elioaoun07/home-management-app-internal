@@ -1042,76 +1042,10 @@ export default function MobileExpenseForm() {
           ref={headerRef}
           className={`shrink-0 relative z-[100] bg-gradient-to-b from-bg-card-custom to-bg-medium border-b ${themeClasses.border} px-3 pb-2 shadow-2xl shadow-black/10 backdrop-blur-xl slide-in-top`}
         >
-          <div className="flex items-center justify-between mb-2 pt-16">
-            {showBackButton ? (
-              <button
-                onClick={() => {
-                  if (navigator.vibrate) navigator.vibrate(5);
-                  goBack();
-                }}
-                className={`p-2.5 -ml-2 rounded-lg ${themeClasses.bgSurface} hover:bg-opacity-30 active:scale-95 transition-all duration-200 ${themeClasses.border} hover:shadow-md`}
-              >
-                <ChevronLeftIcon
-                  className={`w-5 h-5 ${themeClasses.text} ${themeClasses.iconGlow}`}
-                />
-              </button>
-            ) : (
-              <div className="w-8" />
-            )}
-            <h1
-              className={`text-base font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`}
-            >
-              New {getTransactionLabel(selectedAccount?.type)}
-            </h1>
-            <button
-              onClick={
-                closeDisabled
-                  ? undefined
-                  : () => {
-                      setAmount("");
-                      setSelectedCategoryId(undefined);
-                      setSelectedSubcategoryId(undefined);
-                      setDescription("");
-                      setStep(firstValidStep);
-                    }
-              }
-              suppressHydrationWarning
-              disabled={closeDisabled}
-              className={cn(
-                "p-1.5 -mr-2 rounded-lg",
-                closeDisabled
-                  ? `${themeClasses.bgSurface} ${themeClasses.border} opacity-50 cursor-not-allowed`
-                  : `${themeClasses.bgSurface} hover:bg-opacity-30 active:scale-95 transition-all ${themeClasses.border}`,
-              )}
-            >
-              <XIcon className={`w-5 h-5 ${themeClasses.text}`} />
-            </button>
-          </div>
-          {/* Status line — thin progress indicator */}
-          {(() => {
-            let visibleSteps = [...stepFlow];
-            if (defaultAccount && visibleSteps.includes("account")) {
-              visibleSteps = visibleSteps.filter((s) => s !== "account");
-            }
-            const currentIdx = isInitialized
-              ? visibleSteps.indexOf(step as Step)
-              : -1;
-            const progress =
-              visibleSteps.length > 0
-                ? ((currentIdx + 1) / visibleSteps.length) * 100
-                : 0;
-            return (
-              <div className="mt-1.5 h-[5px] w-full rounded-full bg-white/10 overflow-hidden">
-                <div
-                  className="h-full rounded-full neo-gradient transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            );
-          })()}
-          {/* Inline Tags Row — shows current selections, tap to jump to step */}
-          <div className="mt-2 -mx-1 overflow-x-auto scrollbar-none">
-            <div className="flex items-center gap-1.5 px-1 min-w-max">
+          {/* Context chip row + close */}
+          <div className="pt-16 flex items-center gap-1.5">
+            <div className="flex-1 min-w-0 -mx-1 overflow-x-auto scrollbar-none">
+              <div className="flex items-center gap-1.5 px-1 min-w-max">
               {selectedAccount && (
                 <button
                   onClick={() => setStep("account")}
@@ -1216,7 +1150,31 @@ export default function MobileExpenseForm() {
                   />
                 </PopoverContent>
               </Popover>
+              </div>
             </div>
+            <button
+              onClick={
+                closeDisabled
+                  ? undefined
+                  : () => {
+                      setAmount("");
+                      setSelectedCategoryId(undefined);
+                      setSelectedSubcategoryId(undefined);
+                      setDescription("");
+                      setStep(firstValidStep);
+                    }
+              }
+              suppressHydrationWarning
+              disabled={closeDisabled}
+              className={cn(
+                "shrink-0 p-1.5 rounded-lg",
+                closeDisabled
+                  ? `${themeClasses.bgSurface} ${themeClasses.border} opacity-50 cursor-not-allowed`
+                  : `${themeClasses.bgSurface} hover:bg-opacity-30 active:scale-95 transition-all ${themeClasses.border}`,
+              )}
+            >
+              <XIcon className={`w-5 h-5 ${themeClasses.text}`} />
+            </button>
           </div>
 
           {selectedAccountId && step === "amount" && (

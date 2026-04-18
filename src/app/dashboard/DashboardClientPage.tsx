@@ -266,7 +266,7 @@ export default function DashboardClientPage() {
   };
 
   return (
-    <div className="pt-14">
+    <div className="pt-16">
       <FilterBar
         userFilter={ownershipFilter}
         onUserFilterChange={setOwnershipFilter}

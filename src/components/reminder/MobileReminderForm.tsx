@@ -869,7 +869,7 @@ export default function MobileReminderForm() {
 
   return (
     <>
-      <div className="fixed inset-0 top-14 bg-bg-dark flex flex-col">
+      <div className="fixed inset-0 top-16 bg-bg-dark flex flex-col">
         {/* HEADER */}
         <div
           ref={headerRef}
@@ -878,45 +878,9 @@ export default function MobileReminderForm() {
             themeClasses.border,
           )}
         >
-          <div className="flex items-center justify-between mb-2 pt-16">
-            <div className="w-8" />
-            <div className="flex items-center gap-2">
-              <SparklesIcon
-                className={cn("w-4 h-4", themeClasses.textActive)}
-              />
-              <h1
-                className={`text-base font-semibold bg-gradient-to-r ${themeClasses.titleGradient} bg-clip-text text-transparent ${themeClasses.glow}`}
-              >
-                New Item
-              </h1>
-            </div>
-            <button
-              type="button"
-              onClick={resetForm}
-              className={cn(
-                "w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-95",
-                themeClasses.bgSurface,
-                themeClasses.border,
-                "hover:bg-opacity-30",
-              )}
-            >
-              <svg
-                className={cn("w-5 h-5", themeClasses.text)}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-
-          <div className="h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent mb-2" />
-
-          {/* ── Inline Tags Row ── */}
-          <div className="relative -mx-1">
+          {/* ── Context chip row + close ── */}
+          <div className="pt-16 flex items-center gap-1.5">
+          <div className="relative flex-1 min-w-0 -mx-1">
             <div ref={tagsScrollRef} className="overflow-x-auto scrollbar-none">
               <div className="flex items-center gap-1.5 px-1 min-w-max pb-1">
                 {/* 1. Priority Tag — only when non-default */}
@@ -1376,6 +1340,28 @@ export default function MobileReminderForm() {
               style={{ opacity: canScrollRight ? 1 : 0 }}
             />
           </div>
+          <button
+            type="button"
+            onClick={resetForm}
+            className={cn(
+              "shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-95",
+              themeClasses.bgSurface,
+              themeClasses.border,
+              "hover:bg-opacity-30",
+            )}
+          >
+            <svg
+              className={cn("w-5 h-5", themeClasses.text)}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+          </div>
         </div>
 
         {/* CONTENT */}
@@ -1803,6 +1789,69 @@ export default function MobileReminderForm() {
                     </svg>
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* ── List Selector Card ── */}
+            <div className="relative rounded-2xl bg-gradient-to-b from-slate-800/60 via-slate-900/40 to-transparent border border-slate-700/40 p-4 overflow-hidden">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-violet-500/5 to-transparent rounded-bl-full pointer-events-none" />
+              <div className="grid grid-cols-3 gap-2">
+                {CATEGORIES.map((cat) => {
+                  const CatIcon = categoryIcons[cat.id];
+                  const isSelected = selectedCategoryIds.includes(cat.id);
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategoryIds(
+                          isSelected
+                            ? selectedCategoryIds.filter((id) => id !== cat.id)
+                            : [...selectedCategoryIds, cat.id],
+                        );
+                        setManualOverrides((prev) => ({
+                          ...prev,
+                          categories: true,
+                        }));
+                      }}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border transition-all active:scale-95",
+                        isSelected
+                          ? "border-transparent"
+                          : `bg-bg-dark/40 border-slate-700/30 ${themeClasses.textMuted} hover:bg-white/5`,
+                      )}
+                      style={
+                        isSelected
+                          ? {
+                              background: `${cat.color_hex}18`,
+                              borderColor: `${cat.color_hex}60`,
+                              boxShadow: `0 0 12px ${cat.color_hex}20`,
+                            }
+                          : undefined
+                      }
+                    >
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center"
+                        style={{
+                          background: `${cat.color_hex}20`,
+                          border: `1px solid ${cat.color_hex}40`,
+                        }}
+                      >
+                        {CatIcon && (
+                          <span style={{ color: cat.color_hex }}>
+                            <CatIcon className="w-4 h-4" />
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className="text-[11px] font-medium"
+                        style={isSelected ? { color: cat.color_hex } : undefined}
+                      >
+                        {cat.name}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

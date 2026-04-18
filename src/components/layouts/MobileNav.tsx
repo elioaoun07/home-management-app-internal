@@ -11,7 +11,6 @@ import TemplateDrawer from "@/components/expense/TemplateDrawer";
 import {
   CalendarClockIcon,
   ListIcon,
-  MicIcon,
 } from "@/components/icons/FuturisticIcons";
 import SemiDonutFAB, {
   type FABSelection,
@@ -28,7 +27,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MOBILE_NAV_HEIGHT } from "@/constants/layout";
 import { useTab } from "@/contexts/TabContext";
-import { useDraftCount } from "@/features/drafts/useDrafts";
 import {
   prefetchAllTabs,
   prefetchExpenseData,
@@ -93,9 +91,6 @@ export default function MobileNav() {
   // SSR/client mismatch when PWA service worker serves cached HTML from a different route.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-
-  // Draft transactions count for floating badge
-  const draftCount = useDraftCount();
 
   // Track online/offline status via connectivity manager events
   const [isOnline, setIsOnline] = useState(true);
@@ -252,23 +247,6 @@ export default function MobileNav() {
       {/* QR Scanner Drawer */}
       <QRScannerDrawer open={showQRScanner} onOpenChange={setShowQRScanner} />
 
-      {/* Floating Draft Transactions Badge */}
-      {mounted && draftCount > 0 && (
-        <button
-          type="button"
-          onClick={() => setShowDraftsDrawer(true)}
-          className="fixed bottom-24 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-full bg-amber-500/90 text-white shadow-lg hover:bg-amber-600 active:scale-95 transition-all animate-in slide-in-from-right-5 duration-300"
-          style={{
-            boxShadow: "0 4px 20px rgba(245, 158, 11, 0.4)",
-          }}
-        >
-          <MicIcon className="w-4 h-4" />
-          <span className="text-sm font-semibold">
-            {draftCount} Draft{draftCount > 1 ? "s" : ""}
-          </span>
-        </button>
-      )}
-
       {/* Drafts Drawer */}
       <DraftsDrawer
         open={showDraftsDrawer}
@@ -367,7 +345,9 @@ export default function MobileNav() {
             }
           }}
         >
-          <DialogContent className={cn(themeClasses.bgPage, themeClasses.border)}>
+          <DialogContent
+            className={cn(themeClasses.bgPage, themeClasses.border)}
+          >
             <DialogHeader>
               <DialogTitle className={themeClasses.dialogTitle}>
                 Confirm Transaction: {selectedTemplate?.name}
