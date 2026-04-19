@@ -1,0 +1,37 @@
+{
+  "id": "/ai-usage-app",
+  "name": "AI Usage • Home Manager",
+  "short_name": "AI Usage",
+  "description": "Track AI token consumption, pace, and forecast upcoming sessions",
+  "start_url": "/ai-usage",
+  "scope": "/ai-usage",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#0a1628",
+  "theme_color": "#a78bfa",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/ai-usage-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/ai-usage-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/ai-usage-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [],
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

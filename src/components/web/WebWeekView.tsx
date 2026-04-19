@@ -2,6 +2,7 @@
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { getBirthdayDisplayName, getBirthdaysForDate } from "@/data/birthdays";
+import { useFlexibleRoutines } from "@/features/items/useFlexibleRoutines";
 import {
   getPostponedOccurrencesForDate,
   isOccurrenceCompleted,
@@ -56,6 +57,7 @@ interface WebWeekViewProps {
   ) => void;
   selectedDate?: Date | null;
   showBirthdays?: boolean;
+  onOpenCataloguePicker?: (initialItemId?: string) => void;
 }
 
 // Item type colors with gradients for more visual appeal
@@ -103,6 +105,7 @@ export function WebWeekView({
   onBirthdayClick,
   selectedDate,
   showBirthdays = true,
+  onOpenCataloguePicker,
 }: WebWeekViewProps) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
@@ -111,9 +114,15 @@ export function WebWeekView({
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Monday
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-
-  // Hours to display (6 AM to 12 AM) - 18 time slots showing ranges
   const hours = Array.from({ length: 18 }, (_, i) => i + 6);
+
+  // Flexible routines — surface items that are unscheduled for the current week
+  const { data: flexibleRoutines } = useFlexibleRoutines(
+    items,
+    occurrenceActions,
+    weekStart,
+  );
+  const unscheduledFlexible = flexibleRoutines?.unscheduled ?? [];
 
   /**
    * Get the actual occurrence datetime for an item on a specific date
@@ -517,6 +526,49 @@ export function WebWeekView({
             </motion.button>
           </div>
         </div>
+
+        {/* Flexible this week strip */}
+        {unscheduledFlexible.length > 0 && (
+          <div
+            className={cn(
+              "mb-3 p-2.5 rounded-xl border flex items-center gap-2 overflow-x-auto",
+              isPink
+                ? "bg-pink-500/5 border-pink-500/20"
+                : "bg-amber-500/5 border-amber-500/20",
+            )}
+          >
+            <div className="flex items-center gap-1.5 flex-shrink-0 pr-2 border-r border-white/10">
+              <Sparkles
+                className={cn(
+                  "w-3.5 h-3.5",
+                  isPink ? "text-pink-300" : "text-amber-300",
+                )}
+              />
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                Flexible this week
+              </span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/60">
+                {unscheduledFlexible.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {unscheduledFlexible.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onOpenCataloguePicker?.(item.id)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all",
+                    "bg-white/5 hover:bg-white/10 text-white/80 ring-1 ring-white/10 hover:ring-white/20",
+                  )}
+                  title="Schedule for a day this week"
+                >
+                  {item.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Week Grid */}
         <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">

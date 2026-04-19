@@ -30,7 +30,7 @@ import {
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemType, ItemWithDetails } from "@/types/items";
-import { format, parseISO } from "date-fns";
+import { endOfWeek, format, parseISO, startOfWeek } from "date-fns";
 import { motion } from "framer-motion";
 import {
   Bell,
@@ -62,6 +62,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { AddFlexibleFromCatalogueDialog } from "./AddFlexibleFromCatalogueDialog";
 import EditOccurrenceDialog from "./EditOccurrenceDialog";
 import { ItemSubtasksList } from "./ItemSubtasks";
 import { WebCalendar } from "./WebCalendar";
@@ -153,6 +154,11 @@ export default function WebEvents() {
   const [showEditOccurrenceDialog, setShowEditOccurrenceDialog] =
     useState(false);
   const [showPromoteDialog, setShowPromoteDialog] = useState(false);
+
+  // Add-from-catalogue dialog (week view only)
+  const [isCatalogueDialogOpen, setIsCatalogueDialogOpen] = useState(false);
+  const [catalogueDialogInitialItemId, setCatalogueDialogInitialItemId] =
+    useState<string | null>(null);
 
   // Track if screen is mobile size for modal positioning
   const [isMobileScreen, setIsMobileScreen] = useState(false);
@@ -678,8 +684,8 @@ export default function WebEvents() {
 
       {/* Calendar View */}
       {mainView === "calendar" && (
-        <div className="px-3 pt-2 pb-1">
-          <div className="max-w-[1600px] mx-auto">
+        <div className="px-3 lg:px-6 pt-2 pb-1">
+          <div className="w-full">
             {/* Modern toolbar with clear visual hierarchy */}
             <div
               className={cn(
@@ -771,108 +777,131 @@ export default function WebEvents() {
               </div>
 
               {/* Right: Category filter - action button style */}
-              <Popover>
-                <PopoverTrigger asChild>
+              <div className="flex items-center gap-1.5">
+                {view === "week" && (
                   <button
                     type="button"
+                    onClick={() => {
+                      setCatalogueDialogInitialItemId(null);
+                      setIsCatalogueDialogOpen(true);
+                    }}
                     className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all duration-200",
-                      selectedCategories.length > 0
-                        ? isFrost
-                          ? "bg-indigo-100 text-indigo-600"
-                          : isPink
-                            ? "bg-pink-500/20 text-pink-300 ring-1 ring-pink-500/40"
-                            : "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40"
-                        : isFrost
-                          ? "bg-slate-100 text-slate-500 hover:text-slate-700"
-                          : "bg-white/[0.03] text-white/50 hover:text-white/70 ring-1 ring-white/[0.06]",
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all duration-200 text-xs font-medium",
+                      isFrost
+                        ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-700 ring-1 ring-indigo-200"
+                        : isPink
+                          ? "bg-pink-500/15 hover:bg-pink-500/25 text-pink-200 ring-1 ring-pink-500/40"
+                          : "bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 ring-1 ring-cyan-500/40",
                     )}
-                    title="Filter by category"
+                    title="Add from Catalogue (flexible routines)"
                   >
-                    <Filter className="w-4 h-4" />
-                    {selectedCategories.length > 0 ? (
-                      <span className="text-xs font-semibold bg-current/20 px-1.5 py-0.5 rounded">
-                        {selectedCategories.length}
-                      </span>
-                    ) : (
-                      <span className="hidden sm:inline text-xs font-medium">
-                        Filter
-                      </span>
-                    )}
+                    <BookMarked className="w-4 h-4" />
+                    <span className="hidden sm:inline">From Catalogue</span>
                   </button>
-                </PopoverTrigger>
-                <PopoverContent
-                  className={cn(
-                    "w-52 p-2 backdrop-blur-xl border",
-                    isFrost
-                      ? "bg-white/95 border-slate-200"
-                      : "bg-gray-900/95 border-white/10",
-                  )}
-                  align="end"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between mb-2 px-1">
-                      <span
-                        className={cn(
-                          "text-xs font-semibold",
-                          isFrost ? "text-slate-600" : "text-white/70",
-                        )}
-                      >
-                        Categories
-                      </span>
-                      {selectedCategories.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCategories([])}
-                          className={cn(
-                            "text-[10px] font-medium",
-                            isFrost
-                              ? "text-slate-400 hover:text-slate-600"
-                              : "text-white/50 hover:text-white",
-                          )}
-                        >
-                          Clear all
-                        </button>
+                )}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all duration-200",
+                        selectedCategories.length > 0
+                          ? isFrost
+                            ? "bg-indigo-100 text-indigo-600"
+                            : isPink
+                              ? "bg-pink-500/20 text-pink-300 ring-1 ring-pink-500/40"
+                              : "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40"
+                          : isFrost
+                            ? "bg-slate-100 text-slate-500 hover:text-slate-700"
+                            : "bg-white/[0.03] text-white/50 hover:text-white/70 ring-1 ring-white/[0.06]",
                       )}
-                    </div>
-                    {CATEGORIES.map((category) => {
-                      const Icon = category.icon;
-                      const isSelected = selectedCategories.includes(
-                        category.id,
-                      );
-                      return (
-                        <button
-                          key={category.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedCategories((prev) =>
-                              isSelected
-                                ? prev.filter((id) => id !== category.id)
-                                : [...prev, category.id],
-                            );
-                          }}
+                      title="Filter by category"
+                    >
+                      <Filter className="w-4 h-4" />
+                      {selectedCategories.length > 0 ? (
+                        <span className="text-xs font-semibold bg-current/20 px-1.5 py-0.5 rounded">
+                          {selectedCategories.length}
+                        </span>
+                      ) : (
+                        <span className="hidden sm:inline text-xs font-medium">
+                          Filter
+                        </span>
+                      )}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className={cn(
+                      "w-52 p-2 backdrop-blur-xl border",
+                      isFrost
+                        ? "bg-white/95 border-slate-200"
+                        : "bg-gray-900/95 border-white/10",
+                    )}
+                    align="end"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between mb-2 px-1">
+                        <span
                           className={cn(
-                            "flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-xs font-medium transition-all",
-                            isSelected
-                              ? "text-white shadow-sm"
-                              : isFrost
-                                ? "text-slate-600 hover:bg-slate-100"
-                                : "text-white/60 hover:text-white hover:bg-white/5",
+                            "text-xs font-semibold",
+                            isFrost ? "text-slate-600" : "text-white/70",
                           )}
-                          style={{
-                            backgroundColor: isSelected
-                              ? category.color
-                              : undefined,
-                          }}
                         >
-                          <Icon className="w-3.5 h-3.5" />
-                          {category.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </PopoverContent>
-              </Popover>
+                          Categories
+                        </span>
+                        {selectedCategories.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCategories([])}
+                            className={cn(
+                              "text-[10px] font-medium",
+                              isFrost
+                                ? "text-slate-400 hover:text-slate-600"
+                                : "text-white/50 hover:text-white",
+                            )}
+                          >
+                            Clear all
+                          </button>
+                        )}
+                      </div>
+                      {CATEGORIES.map((category) => {
+                        const Icon = category.icon;
+                        const isSelected = selectedCategories.includes(
+                          category.id,
+                        );
+                        return (
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCategories((prev) =>
+                                isSelected
+                                  ? prev.filter((id) => id !== category.id)
+                                  : [...prev, category.id],
+                              );
+                            }}
+                            className={cn(
+                              "flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-xs font-medium transition-all",
+                              isSelected
+                                ? "text-white shadow-sm"
+                                : isFrost
+                                  ? "text-slate-600 hover:bg-slate-100"
+                                  : "text-white/60 hover:text-white hover:bg-white/5",
+                            )}
+                            style={{
+                              backgroundColor: isSelected
+                                ? category.color
+                                : undefined,
+                            }}
+                          >
+                            <Icon className="w-3.5 h-3.5" />
+                            {category.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
 
             {/* Loading State - Modern skeleton-inspired design */}
@@ -978,6 +1007,10 @@ export default function WebEvents() {
                 onItemClick={handleItemClick}
                 onAddEvent={handleAddEvent}
                 onBirthdayClick={handleBirthdayClick}
+                onOpenCataloguePicker={(itemId) => {
+                  setCatalogueDialogInitialItemId(itemId ?? null);
+                  setIsCatalogueDialogOpen(true);
+                }}
                 showBirthdays={showBirthdays}
               />
             )}
@@ -1405,6 +1438,22 @@ export default function WebEvents() {
               prefillTitle={prefillTitle}
               prefillCategory={prefillCategory}
             />
+
+            {/* Add from Catalogue Dialog (week view) */}
+            {isCatalogueDialogOpen && (
+              <AddFlexibleFromCatalogueDialog
+                isOpen={isCatalogueDialogOpen}
+                onClose={() => setIsCatalogueDialogOpen(false)}
+                weekStart={startOfWeek(selectedDate ?? new Date(), {
+                  weekStartsOn: 1,
+                })}
+                weekEnd={endOfWeek(selectedDate ?? new Date(), {
+                  weekStartsOn: 1,
+                })}
+                defaultDate={selectedDate ?? new Date()}
+                initialItemId={catalogueDialogInitialItemId}
+              />
+            )}
 
             {/* Recurring Event Edit Dialog */}
             {showRecurringDialog && pendingEditItem && (

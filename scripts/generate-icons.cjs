@@ -60,6 +60,14 @@ const expenseOutputs = [
   { size: 512, file: "expense-maskable-512.png" },
 ];
 
+// AI Usage app icon outputs
+const aiUsageOutputs = [
+  { size: 180, file: "ai-usage-180.png" },
+  { size: 192, file: "ai-usage-192.png" },
+  { size: 512, file: "ai-usage-512.png" },
+  { size: 512, file: "ai-usage-maskable-512.png" },
+];
+
 async function generateIcons(srcSvgPath, outputs, label) {
   if (!fs.existsSync(srcSvgPath)) {
     console.log(
@@ -147,6 +155,13 @@ async function main() {
     path.join(publicDir, "expense-icon.svg"),
     expenseOutputs,
     "Expense App",
+  );
+
+  // Generate AI Usage app icons (if SVG exists)
+  await generateIcons(
+    path.join(publicDir, "ai-usage-icon.svg"),
+    aiUsageOutputs,
+    "AI Usage App",
   );
 
   console.log("\nIcon generation complete.");

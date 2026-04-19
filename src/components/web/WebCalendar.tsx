@@ -42,8 +42,10 @@ import {
   EyeOff,
   FastForward,
   MapPin,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RRule } from "rrule";
 import { DayExpansionModal } from "./DayExpansionModal";
 import { ItemSubtasksList } from "./ItemSubtasks";
@@ -159,6 +161,30 @@ export function WebCalendar({
     new Date(),
   );
   const [showCompleted, setShowCompleted] = useState(true);
+
+  // Collapsible right-side details panel (desktop only)
+  const DETAILS_PANEL_STORAGE_KEY = "era.calendar.detailsPanelCollapsed";
+  const [isDetailsPanelCollapsed, setIsDetailsPanelCollapsed] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem(DETAILS_PANEL_STORAGE_KEY);
+      if (stored === "true") setIsDetailsPanelCollapsed(true);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+  const toggleDetailsPanel = useCallback(() => {
+    setIsDetailsPanelCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(DETAILS_PANEL_STORAGE_KEY, String(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  }, []);
 
   // 3D Day Expansion Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -659,25 +685,48 @@ export function WebCalendar({
                 <span className="hidden sm:inline">Add Event</span>
               </button>
             )}
+
+            {/* Details panel collapse toggle — clean inline button */}
+            <button
+              type="button"
+              onClick={toggleDetailsPanel}
+              className={cn(
+                "hidden lg:flex p-1 lg:p-2 rounded-lg transition-all duration-200 items-center justify-center",
+                isFrost
+                  ? "bg-white hover:bg-slate-50 border border-slate-200 shadow-sm text-slate-600"
+                  : "bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white",
+              )}
+              title={
+                isDetailsPanelCollapsed
+                  ? "Show details panel"
+                  : "Hide details panel"
+              }
+            >
+              {isDetailsPanelCollapsed ? (
+                <PanelRightOpen className="w-3 h-3 lg:w-4 lg:h-4" />
+              ) : (
+                <PanelRightClose className="w-3 h-3 lg:w-4 lg:h-4" />
+              )}
+            </button>
           </div>
         </div>
 
         {/* Weekday Headers */}
-        <div className="grid grid-cols-7 gap-0.5 lg:gap-1">
+        <div className="grid grid-cols-7 gap-1 lg:gap-1.5 mb-1.5">
           {weekDays.map((day, idx) => (
             <div
               key={day}
               className={cn(
-                "text-center text-[9px] lg:text-xs font-semibold py-1 lg:py-2 rounded-lg",
+                "text-center text-[10px] lg:text-xs font-semibold uppercase tracking-wider py-1.5 lg:py-2 rounded-lg",
                 idx >= 5
                   ? isFrost
-                    ? "text-indigo-500"
+                    ? "text-indigo-500/90"
                     : isPink
-                      ? "text-pink-400/80"
-                      : "text-cyan-400/80"
+                      ? "text-pink-300/80"
+                      : "text-cyan-300/80"
                   : isFrost
-                    ? "text-slate-600"
-                    : "text-white/60",
+                    ? "text-slate-500"
+                    : "text-white/50",
               )}
             >
               {day}
@@ -695,7 +744,7 @@ export function WebCalendar({
             animate="center"
             exit="exit"
             transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="grid grid-cols-7 gap-0.5 lg:gap-1 flex-1"
+            className="grid grid-cols-7 gap-1 lg:gap-1.5 flex-1"
           >
             {calendarDays.map((date, index) => {
               const dayItems = getItemsForDate(date);
@@ -734,16 +783,16 @@ export function WebCalendar({
                     handleDateClick(date, target);
                   }}
                   className={cn(
-                    "relative rounded-md lg:rounded-xl transition-all duration-200 min-h-[56px] lg:min-h-[100px] p-0.5 lg:p-2 cursor-pointer",
-                    "flex flex-col border overflow-hidden group",
+                    "relative rounded-lg lg:rounded-xl transition-all duration-300 min-h-[90px] lg:min-h-[120px] p-1 lg:p-1.5 cursor-pointer",
+                    "flex flex-col border overflow-hidden group hover:shadow-md",
                     // Base styles - frost vs dark
                     isFrost
                       ? isCurrentMonth
                         ? "bg-white"
-                        : "bg-slate-50 opacity-60"
+                        : "bg-slate-50/50 opacity-40"
                       : isCurrentMonth
                         ? "bg-white/[0.03]"
-                        : "bg-white/[0.01] opacity-50",
+                        : "bg-white/[0.01] opacity-30",
                     // Border styles
                     isFrost
                       ? isTodayDate
@@ -838,11 +887,11 @@ export function WebCalendar({
                         initial={{ opacity: 0, x: -5 }}
                         animate={{ opacity: 1, x: 0 }}
                         className={cn(
-                          "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate pointer-events-none",
-                          "border-l lg:border-l-2 transition-all duration-200",
+                          "px-1 lg:px-1.5 py-0.5 lg:py-1 mt-0.5 rounded-md text-[9px] lg:text-[11px] truncate pointer-events-none",
+                          "border-l-2 transition-all duration-200 shadow-sm",
                           isFrost
                             ? "bg-amber-100 border-l-amber-400 text-amber-700"
-                            : "bg-amber-500/20 border-l-amber-400 text-amber-200",
+                            : "bg-amber-500/15 border-l-amber-400 text-amber-200",
                         )}
                       >
                         <div className="flex items-center gap-0.5">
@@ -859,9 +908,9 @@ export function WebCalendar({
                       </motion.div>
                     ))}
 
-                    {/* Show regular items - limit to 2 on tablet */}
+                    {/* Show regular items - limit to 4 on tablet */}
                     {dayItems
-                      .slice(0, 2 - Math.min(birthdays.length, 1))
+                      .slice(0, 4 - Math.min(birthdays.length, 2))
                       .map((item) => {
                         const colors = typeColors[item.type] || typeColors.task;
                         const time =
@@ -875,8 +924,8 @@ export function WebCalendar({
                             initial={{ opacity: 0, x: -5 }}
                             animate={{ opacity: 1, x: 0 }}
                             className={cn(
-                              "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate pointer-events-none",
-                              "border-l lg:border-l-2 transition-all duration-200",
+                              "px-1 lg:px-1.5 py-0.5 lg:py-1 mt-0.5 rounded-md text-[9px] lg:text-[11px] truncate pointer-events-none",
+                              "border-l-2 transition-all duration-200 shadow-sm",
                               isFrost ? colors.frostBg : colors.bg,
                               isFrost ? colors.frostBorder : colors.border,
                               isFrost ? colors.frostText : colors.text,
@@ -902,7 +951,7 @@ export function WebCalendar({
                         0,
                         Math.max(
                           0,
-                          2 - dayItems.length - Math.min(birthdays.length, 1),
+                          4 - dayItems.length - Math.min(birthdays.length, 2),
                         ),
                       )
                       .map((completed) => {
@@ -918,11 +967,11 @@ export function WebCalendar({
                             initial={{ opacity: 0, x: -5 }}
                             animate={{ opacity: 1, x: 0 }}
                             className={cn(
-                              "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate pointer-events-none",
-                              "border lg:border-2 transition-all duration-200 opacity-60",
+                              "px-1 lg:px-1.5 py-0.5 lg:py-1 mt-0.5 rounded-md text-[9px] lg:text-[11px] truncate pointer-events-none",
+                              "border transition-all duration-200 opacity-55",
                               isFrost
                                 ? "bg-green-100 border-green-300 text-green-600"
-                                : "bg-green-500/10 border-green-500/50 text-green-300/70",
+                                : "bg-green-500/10 border-green-500/40 text-green-300/70",
                             )}
                           >
                             <div className="flex items-center gap-0.5">
@@ -945,10 +994,10 @@ export function WebCalendar({
                         0,
                         Math.max(
                           0,
-                          2 -
+                          4 -
                             dayItems.length -
                             completedItems.length -
-                            Math.min(birthdays.length, 1),
+                            Math.min(birthdays.length, 2),
                         ),
                       )
                       .map((postponed) => {
@@ -964,11 +1013,11 @@ export function WebCalendar({
                             initial={{ opacity: 0, x: -5 }}
                             animate={{ opacity: 1, x: 0 }}
                             className={cn(
-                              "px-0.5 lg:px-1.5 py-px lg:py-0.5 rounded text-[8px] lg:text-[10px] truncate pointer-events-none",
-                              "border lg:border-2 transition-all duration-200 opacity-70",
+                              "px-1 lg:px-1.5 py-0.5 lg:py-1 mt-0.5 rounded-md text-[9px] lg:text-[11px] truncate pointer-events-none",
+                              "border transition-all duration-200 opacity-65",
                               isFrost
                                 ? "bg-amber-100 border-amber-300 text-amber-600"
-                                : "bg-amber-500/10 border-amber-500/50 text-amber-300/80",
+                                : "bg-amber-500/10 border-amber-500/40 text-amber-300/80",
                             )}
                           >
                             <div className="flex items-center gap-0.5">
@@ -985,7 +1034,7 @@ export function WebCalendar({
                       birthdays.length +
                       completedItems.length +
                       postponedItems.length >
-                      2 && (
+                      4 && (
                       <div
                         className={cn(
                           "text-[7px] lg:text-[10px] font-medium px-0.5",
@@ -1013,575 +1062,597 @@ export function WebCalendar({
       </div>
 
       {/* Selected Date Details Panel - Right side on large screens, hidden on tablet */}
-      <div className="hidden lg:block lg:w-72 flex-shrink-0">
-        <div
-          className={cn(
-            "sticky top-2 rounded-xl backdrop-blur-xl border p-3",
-            "h-fit max-h-[calc(100vh-100px)] overflow-y-auto",
-            isFrost
-              ? "bg-white/80 border-indigo-200 shadow-lg"
-              : isPink
-                ? "bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-transparent border-pink-500/20"
-                : "bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-500/20",
-          )}
-        >
-          {selectedDate ? (
-            <>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3
-                    className={cn(
-                      "text-lg font-bold",
-                      isFrost
-                        ? "text-indigo-600"
-                        : isPink
-                          ? "text-pink-300"
-                          : "text-cyan-300",
-                    )}
-                  >
-                    {format(selectedDate, "EEEE")}
-                  </h3>
-                  <p
-                    className={cn(
-                      "text-sm",
-                      isFrost ? "text-slate-500" : "text-white/60",
-                    )}
-                  >
-                    {format(selectedDate, "MMMM d, yyyy")}
-                  </p>
-                </div>
-                {onAddEvent && (
-                  <button
-                    type="button"
-                    onClick={() => onAddEvent(selectedDate)}
-                    className={cn(
-                      "p-2 rounded-lg transition-all",
-                      isFrost
-                        ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-600 hover:text-indigo-700"
-                        : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white",
-                    )}
-                  >
-                    <CalendarPlus className="w-5 h-5" />
-                  </button>
-                )}
-              </div>
-
-              {selectedDateItems.length > 0 ||
-              selectedDateBirthdays.length > 0 ||
-              selectedDateCompletedItems.length > 0 ||
-              selectedDatePostponedItems.length > 0 ? (
-                <div className="space-y-2">
-                  {/* Show birthdays first */}
-                  {selectedDateBirthdays.map((birthday) => (
-                    <motion.div
-                      key={birthday.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onBirthdayClick?.(birthday, selectedDate);
-                      }}
+      <motion.aside
+        initial={false}
+        animate={{
+          width: isDetailsPanelCollapsed ? 0 : 288,
+          marginLeft: isDetailsPanelCollapsed ? 0 : undefined,
+          opacity: isDetailsPanelCollapsed ? 0 : 1,
+        }}
+        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+        className="hidden lg:block flex-shrink-0 overflow-hidden relative"
+      >
+        {!isDetailsPanelCollapsed && (
+          <div
+            className={cn(
+              "sticky top-2 rounded-2xl backdrop-blur-xl border p-4",
+              "h-fit max-h-[calc(100vh-100px)] overflow-y-auto shadow-lg",
+              isFrost
+                ? "bg-white/80 border-indigo-100 shadow-indigo-100/50"
+                : isPink
+                  ? "bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-transparent border-pink-500/20"
+                  : "bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-500/20",
+            )}
+            style={{ width: 288 }}
+          >
+            {selectedDate ? (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3
                       className={cn(
-                        "p-3 rounded-xl cursor-pointer relative overflow-hidden",
-                        "border-l-4 border-l-amber-400 transition-all duration-200",
+                        "text-lg font-bold",
                         isFrost
-                          ? "bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 hover:from-amber-200 hover:via-yellow-100 hover:to-amber-200 ring-1 ring-amber-300"
-                          : "bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-600/20 hover:from-amber-500/30 hover:via-yellow-500/25 hover:to-amber-600/30 hover:shadow-lg hover:shadow-amber-500/20 ring-1 ring-amber-400/30",
+                          ? "text-indigo-600"
+                          : isPink
+                            ? "text-pink-300"
+                            : "text-cyan-300",
                       )}
                     >
-                      <div
+                      {format(selectedDate, "EEEE")}
+                    </h3>
+                    <p
+                      className={cn(
+                        "text-sm",
+                        isFrost ? "text-slate-500" : "text-white/60",
+                      )}
+                    >
+                      {format(selectedDate, "MMMM d, yyyy")}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {onAddEvent && (
+                      <button
+                        type="button"
+                        onClick={() => onAddEvent(selectedDate)}
                         className={cn(
-                          "absolute inset-0 bg-gradient-to-r from-transparent via-amber-300/10 to-transparent",
-                          !isFrost && "animate-pulse",
+                          "p-2 rounded-lg transition-all",
+                          isFrost
+                            ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-600 hover:text-indigo-700"
+                            : "bg-white/10 hover:bg-white/20 text-white/60 hover:text-white",
                         )}
-                      />
-                      <div className="flex items-start justify-between gap-2 relative">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <Cake
-                              className={cn(
-                                "w-4 h-4",
-                                isFrost ? "text-amber-600" : "text-amber-300",
-                              )}
-                            />
-                            <h4
-                              className={cn(
-                                "font-semibold truncate",
-                                isFrost ? "text-amber-800" : "text-amber-200",
-                              )}
-                            >
-                              {getBirthdayDisplayName(birthday, selectedDate)}
-                            </h4>
-                          </div>
-                          {birthday.category && (
-                            <p
-                              className={cn(
-                                "text-sm mt-1 capitalize",
-                                isFrost
-                                  ? "text-amber-600"
-                                  : "text-amber-300/70",
-                              )}
-                            >
-                              {birthday.category}
-                            </p>
-                          )}
-                        </div>
-                        <span
-                          className={cn(
-                            "px-2 py-0.5 rounded text-xs font-medium border",
-                            isFrost
-                              ? "bg-amber-200 text-amber-800 border-amber-300"
-                              : "bg-amber-500/30 text-amber-200 border-amber-400/30",
-                          )}
-                        >
-                          Birthday
-                        </span>
-                      </div>
-                    </motion.div>
-                  ))}
+                      >
+                        <CalendarPlus className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-                  {/* Show regular items */}
-                  {selectedDateItems.map((item) => {
-                    const colors = typeColors[item.type] || typeColors.task;
-                    const priorityColor =
-                      priorityColors[item.priority] || priorityColors.normal;
-                    const time =
-                      item.type === "event"
-                        ? item.event_details?.start_at
-                        : item.reminder_details?.due_at;
-                    const endTime =
-                      item.type === "event" ? item.event_details?.end_at : null;
-                    const location =
-                      item.type === "event"
-                        ? item.event_details?.location_text
-                        : null;
-
-                    return (
+                {selectedDateItems.length > 0 ||
+                selectedDateBirthdays.length > 0 ||
+                selectedDateCompletedItems.length > 0 ||
+                selectedDatePostponedItems.length > 0 ? (
+                  <div className="space-y-2">
+                    {/* Show birthdays first */}
+                    {selectedDateBirthdays.map((birthday) => (
                       <motion.div
-                        key={item.id}
+                        key={birthday.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onBirthdayClick?.(birthday, selectedDate);
+                        }}
                         className={cn(
-                          "p-3 rounded-xl",
-                          "border-l-4 transition-all duration-200",
+                          "p-3 rounded-xl cursor-pointer relative overflow-hidden",
+                          "border-l-4 border-l-amber-400 transition-all duration-200",
                           isFrost
-                            ? "bg-slate-50 hover:bg-slate-100"
-                            : "bg-white/5 hover:bg-white/10",
-                          isFrost ? colors.frostBorder : colors.border,
+                            ? "bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 hover:from-amber-200 hover:via-yellow-100 hover:to-amber-200 ring-1 ring-amber-300"
+                            : "bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-600/20 hover:from-amber-500/30 hover:via-yellow-500/25 hover:to-amber-600/30 hover:shadow-lg hover:shadow-amber-500/20 ring-1 ring-amber-400/30",
                         )}
                       >
                         <div
-                          onClick={(e) => {
-                            // Pass the actual occurrence datetime
-                            const occurrenceDateTime = selectedDate
-                              ? getOccurrenceDateTimeForItem(item, selectedDate)
-                              : undefined;
-                            onItemClick?.(item, e, occurrenceDateTime);
-                          }}
-                          className="cursor-pointer"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
+                          className={cn(
+                            "absolute inset-0 bg-gradient-to-r from-transparent via-amber-300/10 to-transparent",
+                            !isFrost && "animate-pulse",
+                          )}
+                        />
+                        <div className="flex items-start justify-between gap-2 relative">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Cake
+                                className={cn(
+                                  "w-4 h-4",
+                                  isFrost ? "text-amber-600" : "text-amber-300",
+                                )}
+                              />
                               <h4
                                 className={cn(
-                                  "font-medium truncate",
-                                  isFrost ? "text-slate-900" : "text-white",
+                                  "font-semibold truncate",
+                                  isFrost ? "text-amber-800" : "text-amber-200",
                                 )}
                               >
-                                {item.title}
+                                {getBirthdayDisplayName(birthday, selectedDate)}
                               </h4>
-
-                              {time && (
-                                <div
-                                  className={cn(
-                                    "flex items-center gap-1 mt-1 text-sm",
-                                    isFrost
-                                      ? "text-slate-500"
-                                      : "text-white/60",
-                                  )}
-                                >
-                                  <Clock className="w-3 h-3" />
-                                  <span>
-                                    {format(parseISO(time), "h:mm a")}
-                                    {endTime &&
-                                      ` - ${format(parseISO(endTime), "h:mm a")}`}
-                                  </span>
-                                </div>
-                              )}
-
-                              {location && (
-                                <div
-                                  className={cn(
-                                    "flex items-center gap-1 mt-1 text-sm",
-                                    isFrost
-                                      ? "text-slate-500"
-                                      : "text-white/60",
-                                  )}
-                                >
-                                  <MapPin className="w-3 h-3" />
-                                  <span className="truncate">{location}</span>
-                                </div>
-                              )}
-
-                              {item.description && (
-                                <p className="text-sm text-white/50 mt-2 line-clamp-2">
-                                  {item.description}
-                                </p>
-                              )}
                             </div>
-
-                            <div className="flex flex-col items-end gap-1">
-                              <span
+                            {birthday.category && (
+                              <p
                                 className={cn(
-                                  "px-2 py-0.5 rounded text-xs capitalize",
-                                  isFrost ? colors.frostBg : colors.bg,
-                                  isFrost ? colors.frostText : colors.text,
+                                  "text-sm mt-1 capitalize",
+                                  isFrost
+                                    ? "text-amber-600"
+                                    : "text-amber-300/70",
                                 )}
                               >
-                                {item.type}
-                              </span>
-                              {item.priority !== "normal" && (
-                                <span
-                                  className={cn(
-                                    "px-2 py-0.5 rounded text-xs capitalize",
-                                    isFrost
-                                      ? priorityColor.frostBg
-                                      : priorityColor.bg,
-                                    isFrost
-                                      ? priorityColor.frostText
-                                      : priorityColor.text,
-                                  )}
-                                >
-                                  {item.priority}
-                                </span>
-                              )}
-                            </div>
+                                {birthday.category}
+                              </p>
+                            )}
                           </div>
+                          <span
+                            className={cn(
+                              "px-2 py-0.5 rounded text-xs font-medium border",
+                              isFrost
+                                ? "bg-amber-200 text-amber-800 border-amber-300"
+                                : "bg-amber-500/30 text-amber-200 border-amber-400/30",
+                            )}
+                          >
+                            Birthday
+                          </span>
                         </div>
+                      </motion.div>
+                    ))}
 
-                        {/* Subtasks Section */}
-                        <div
+                    {/* Show regular items */}
+                    {selectedDateItems.map((item) => {
+                      const colors = typeColors[item.type] || typeColors.task;
+                      const priorityColor =
+                        priorityColors[item.priority] || priorityColors.normal;
+                      const time =
+                        item.type === "event"
+                          ? item.event_details?.start_at
+                          : item.reminder_details?.due_at;
+                      const endTime =
+                        item.type === "event"
+                          ? item.event_details?.end_at
+                          : null;
+                      const location =
+                        item.type === "event"
+                          ? item.event_details?.location_text
+                          : null;
+
+                      return (
+                        <motion.div
+                          key={item.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
                           className={cn(
-                            "mt-3 pt-2 border-t",
-                            isFrost ? "border-slate-200" : "border-white/10",
+                            "p-3 rounded-xl",
+                            "border-l-4 transition-all duration-200",
+                            isFrost
+                              ? "bg-slate-50 hover:bg-slate-100"
+                              : "bg-white/5 hover:bg-white/10",
+                            isFrost ? colors.frostBorder : colors.border,
                           )}
                         >
-                          <ItemSubtasksList
-                            itemId={item.id}
-                            subtasks={item.subtasks || []}
-                            isRecurring={!!item.recurrence_rule}
-                            occurrenceDate={
-                              selectedDate
+                          <div
+                            onClick={(e) => {
+                              // Pass the actual occurrence datetime
+                              const occurrenceDateTime = selectedDate
                                 ? getOccurrenceDateTimeForItem(
                                     item,
                                     selectedDate,
-                                  ) || selectedDate
-                                : new Date()
-                            }
-                            subtaskCompletions={subtaskCompletions}
-                          />
-                        </div>
-                      </motion.div>
-                    );
-                  })}
+                                  )
+                                : undefined;
+                              onItemClick?.(item, e, occurrenceDateTime);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <h4
+                                  className={cn(
+                                    "font-medium truncate",
+                                    isFrost ? "text-slate-900" : "text-white",
+                                  )}
+                                >
+                                  {item.title}
+                                </h4>
 
-                  {/* Postponed Items Section */}
-                  {selectedDatePostponedItems.length > 0 && (
-                    <div
-                      className={cn(
-                        "mt-4 pt-4 border-t",
-                        isFrost ? "border-slate-200" : "border-white/10",
-                      )}
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <FastForward
-                          className={cn(
-                            "w-4 h-4",
-                            isFrost ? "text-amber-600" : "text-amber-400",
-                          )}
-                        />
-                        <h4
-                          className={cn(
-                            "text-sm font-medium",
-                            isFrost ? "text-amber-700" : "text-amber-400",
-                          )}
-                        >
-                          Postponed to this day
-                        </h4>
-                        <span
-                          className={cn(
-                            "text-xs",
-                            isFrost ? "text-amber-500" : "text-amber-400/60",
-                          )}
-                        >
-                          ({selectedDatePostponedItems.length})
-                        </span>
-                      </div>
-                      <div className="space-y-2">
-                        {selectedDatePostponedItems.map((postponed) => {
-                          const item = postponed.item;
-                          const colors =
-                            typeColors[item.type] || typeColors.task;
-                          const time =
-                            item.type === "event"
-                              ? item.event_details?.start_at
-                              : item.reminder_details?.due_at;
-
-                          return (
-                            <motion.div
-                              key={`postponed-${item.id}`}
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              onClick={(e) => {
-                                onItemClick?.(
-                                  item,
-                                  e,
-                                  postponed.occurrenceDate,
-                                );
-                              }}
-                              className={cn(
-                                "p-3 rounded-xl cursor-pointer",
-                                "border-2 transition-all duration-200",
-                                isFrost
-                                  ? "border-amber-300 bg-amber-50 hover:bg-amber-100"
-                                  : "border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15",
-                              )}
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <FastForward
-                                      className={cn(
-                                        "w-4 h-4 flex-shrink-0",
-                                        isFrost
-                                          ? "text-amber-600"
-                                          : "text-amber-400",
-                                      )}
-                                    />
-                                    <h4
-                                      className={cn(
-                                        "font-medium truncate",
-                                        isFrost
-                                          ? "text-amber-800"
-                                          : "text-amber-300",
-                                      )}
-                                    >
-                                      {item.title}
-                                    </h4>
-                                  </div>
+                                {time && (
                                   <div
                                     className={cn(
-                                      "flex items-center gap-1 mt-1 text-sm ml-6",
+                                      "flex items-center gap-1 mt-1 text-sm",
                                       isFrost
-                                        ? "text-amber-600"
-                                        : "text-amber-300/60",
+                                        ? "text-slate-500"
+                                        : "text-white/60",
                                     )}
                                   >
+                                    <Clock className="w-3 h-3" />
                                     <span>
-                                      from{" "}
-                                      {format(postponed.originalDate, "MMM d")}
+                                      {format(parseISO(time), "h:mm a")}
+                                      {endTime &&
+                                        ` - ${format(parseISO(endTime), "h:mm a")}`}
                                     </span>
                                   </div>
-                                </div>
+                                )}
+
+                                {location && (
+                                  <div
+                                    className={cn(
+                                      "flex items-center gap-1 mt-1 text-sm",
+                                      isFrost
+                                        ? "text-slate-500"
+                                        : "text-white/60",
+                                    )}
+                                  >
+                                    <MapPin className="w-3 h-3" />
+                                    <span className="truncate">{location}</span>
+                                  </div>
+                                )}
+
+                                {item.description && (
+                                  <p className="text-sm text-white/50 mt-2 line-clamp-2">
+                                    {item.description}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="flex flex-col items-end gap-1">
                                 <span
                                   className={cn(
                                     "px-2 py-0.5 rounded text-xs capitalize",
-                                    isFrost
-                                      ? "bg-amber-200 text-amber-800"
-                                      : "bg-amber-500/20 text-amber-300",
+                                    isFrost ? colors.frostBg : colors.bg,
+                                    isFrost ? colors.frostText : colors.text,
                                   )}
                                 >
                                   {item.type}
                                 </span>
+                                {item.priority !== "normal" && (
+                                  <span
+                                    className={cn(
+                                      "px-2 py-0.5 rounded text-xs capitalize",
+                                      isFrost
+                                        ? priorityColor.frostBg
+                                        : priorityColor.bg,
+                                      isFrost
+                                        ? priorityColor.frostText
+                                        : priorityColor.text,
+                                    )}
+                                  >
+                                    {item.priority}
+                                  </span>
+                                )}
                               </div>
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                            </div>
+                          </div>
 
-                  {/* Completed Items Section */}
-                  {selectedDateCompletedItems.length > 0 && (
-                    <div
-                      className={cn(
-                        "mt-4 pt-4 border-t",
-                        isFrost ? "border-slate-200" : "border-white/10",
-                      )}
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <CheckCircle2
-                          className={cn(
-                            "w-4 h-4",
-                            isFrost ? "text-green-600" : "text-green-400",
-                          )}
-                        />
-                        <h4
-                          className={cn(
-                            "text-sm font-medium",
-                            isFrost ? "text-green-700" : "text-green-400",
-                          )}
-                        >
-                          Completed
-                        </h4>
-                        <span
-                          className={cn(
-                            "text-xs",
-                            isFrost ? "text-green-500" : "text-green-400/60",
-                          )}
-                        >
-                          ({selectedDateCompletedItems.length})
-                        </span>
-                      </div>
-                      <div className="space-y-2">
-                        {selectedDateCompletedItems.map((completed) => {
-                          const item = completed.item;
-                          const colors =
-                            typeColors[item.type] || typeColors.task;
-                          const time =
-                            item.type === "event"
-                              ? item.event_details?.start_at
-                              : item.reminder_details?.due_at;
+                          {/* Subtasks Section */}
+                          <div
+                            className={cn(
+                              "mt-3 pt-2 border-t",
+                              isFrost ? "border-slate-200" : "border-white/10",
+                            )}
+                          >
+                            <ItemSubtasksList
+                              itemId={item.id}
+                              subtasks={item.subtasks || []}
+                              isRecurring={!!item.recurrence_rule}
+                              occurrenceDate={
+                                selectedDate
+                                  ? getOccurrenceDateTimeForItem(
+                                      item,
+                                      selectedDate,
+                                    ) || selectedDate
+                                  : new Date()
+                              }
+                              subtaskCompletions={subtaskCompletions}
+                            />
+                          </div>
+                        </motion.div>
+                      );
+                    })}
 
-                          return (
-                            <motion.div
-                              key={`completed-${item.id}`}
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              onClick={(e) => {
-                                onItemClick?.(
-                                  item,
-                                  e,
-                                  completed.occurrenceDate,
-                                );
-                              }}
-                              className={cn(
-                                "p-3 rounded-xl cursor-pointer",
-                                "border-2 transition-all duration-200 opacity-70",
-                                isFrost
-                                  ? "border-green-300 bg-green-50 hover:bg-green-100"
-                                  : "border-green-500/30 bg-green-500/10 hover:bg-green-500/15",
-                              )}
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <CheckCircle2
-                                      className={cn(
-                                        "w-4 h-4 flex-shrink-0",
-                                        isFrost
-                                          ? "text-green-600"
-                                          : "text-green-400",
-                                      )}
-                                    />
-                                    <h4
-                                      className={cn(
-                                        "font-medium truncate line-through",
-                                        isFrost
-                                          ? "text-green-700"
-                                          : "text-green-300",
-                                      )}
-                                    >
-                                      {item.title}
-                                    </h4>
-                                  </div>
-                                  <div className="flex flex-col gap-0.5 mt-1 ml-6">
-                                    {time && (
-                                      <div
+                    {/* Postponed Items Section */}
+                    {selectedDatePostponedItems.length > 0 && (
+                      <div
+                        className={cn(
+                          "mt-4 pt-4 border-t",
+                          isFrost ? "border-slate-200" : "border-white/10",
+                        )}
+                      >
+                        <div className="flex items-center gap-2 mb-3">
+                          <FastForward
+                            className={cn(
+                              "w-4 h-4",
+                              isFrost ? "text-amber-600" : "text-amber-400",
+                            )}
+                          />
+                          <h4
+                            className={cn(
+                              "text-sm font-medium",
+                              isFrost ? "text-amber-700" : "text-amber-400",
+                            )}
+                          >
+                            Postponed to this day
+                          </h4>
+                          <span
+                            className={cn(
+                              "text-xs",
+                              isFrost ? "text-amber-500" : "text-amber-400/60",
+                            )}
+                          >
+                            ({selectedDatePostponedItems.length})
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {selectedDatePostponedItems.map((postponed) => {
+                            const item = postponed.item;
+                            const colors =
+                              typeColors[item.type] || typeColors.task;
+                            const time =
+                              item.type === "event"
+                                ? item.event_details?.start_at
+                                : item.reminder_details?.due_at;
+
+                            return (
+                              <motion.div
+                                key={`postponed-${item.id}`}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                onClick={(e) => {
+                                  onItemClick?.(
+                                    item,
+                                    e,
+                                    postponed.occurrenceDate,
+                                  );
+                                }}
+                                className={cn(
+                                  "p-3 rounded-xl cursor-pointer",
+                                  "border-2 transition-all duration-200",
+                                  isFrost
+                                    ? "border-amber-300 bg-amber-50 hover:bg-amber-100"
+                                    : "border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15",
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <FastForward
                                         className={cn(
-                                          "flex items-center gap-1 text-sm",
+                                          "w-4 h-4 flex-shrink-0",
                                           isFrost
-                                            ? "text-green-600"
-                                            : "text-green-300/60",
+                                            ? "text-amber-600"
+                                            : "text-amber-400",
+                                        )}
+                                      />
+                                      <h4
+                                        className={cn(
+                                          "font-medium truncate",
+                                          isFrost
+                                            ? "text-amber-800"
+                                            : "text-amber-300",
                                         )}
                                       >
-                                        <Clock className="w-3 h-3" />
-                                        <span>
-                                          {format(parseISO(time), "h:mm a")}
-                                        </span>
-                                      </div>
-                                    )}
+                                        {item.title}
+                                      </h4>
+                                    </div>
                                     <div
                                       className={cn(
-                                        "text-xs",
+                                        "flex items-center gap-1 mt-1 text-sm ml-6",
                                         isFrost
-                                          ? "text-green-500"
-                                          : "text-green-400/50",
+                                          ? "text-amber-600"
+                                          : "text-amber-300/60",
                                       )}
                                     >
-                                      Completed{" "}
-                                      {formatDistanceToNow(
-                                        completed.completedAt,
-                                        { addSuffix: true },
-                                      )}
+                                      <span>
+                                        from{" "}
+                                        {format(
+                                          postponed.originalDate,
+                                          "MMM d",
+                                        )}
+                                      </span>
                                     </div>
                                   </div>
+                                  <span
+                                    className={cn(
+                                      "px-2 py-0.5 rounded text-xs capitalize",
+                                      isFrost
+                                        ? "bg-amber-200 text-amber-800"
+                                        : "bg-amber-500/20 text-amber-300",
+                                    )}
+                                  >
+                                    {item.type}
+                                  </span>
                                 </div>
-                                <span
-                                  className={cn(
-                                    "px-2 py-0.5 rounded text-xs capitalize",
-                                    isFrost
-                                      ? "bg-green-200 text-green-800"
-                                      : "bg-green-500/20 text-green-300",
-                                  )}
-                                >
-                                  {item.type}
-                                </span>
-                              </div>
-                            </motion.div>
-                          );
-                        })}
+                              </motion.div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <CalendarPlus
-                    className={cn(
-                      "w-12 h-12 mx-auto mb-3",
-                      isFrost ? "text-slate-300" : "text-white/20",
                     )}
-                  />
-                  <p
-                    className={cn(
-                      "text-sm",
-                      isFrost ? "text-slate-400" : "text-white/40",
+
+                    {/* Completed Items Section */}
+                    {selectedDateCompletedItems.length > 0 && (
+                      <div
+                        className={cn(
+                          "mt-4 pt-4 border-t",
+                          isFrost ? "border-slate-200" : "border-white/10",
+                        )}
+                      >
+                        <div className="flex items-center gap-2 mb-3">
+                          <CheckCircle2
+                            className={cn(
+                              "w-4 h-4",
+                              isFrost ? "text-green-600" : "text-green-400",
+                            )}
+                          />
+                          <h4
+                            className={cn(
+                              "text-sm font-medium",
+                              isFrost ? "text-green-700" : "text-green-400",
+                            )}
+                          >
+                            Completed
+                          </h4>
+                          <span
+                            className={cn(
+                              "text-xs",
+                              isFrost ? "text-green-500" : "text-green-400/60",
+                            )}
+                          >
+                            ({selectedDateCompletedItems.length})
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {selectedDateCompletedItems.map((completed) => {
+                            const item = completed.item;
+                            const colors =
+                              typeColors[item.type] || typeColors.task;
+                            const time =
+                              item.type === "event"
+                                ? item.event_details?.start_at
+                                : item.reminder_details?.due_at;
+
+                            return (
+                              <motion.div
+                                key={`completed-${item.id}`}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                onClick={(e) => {
+                                  onItemClick?.(
+                                    item,
+                                    e,
+                                    completed.occurrenceDate,
+                                  );
+                                }}
+                                className={cn(
+                                  "p-3 rounded-xl cursor-pointer",
+                                  "border-2 transition-all duration-200 opacity-70",
+                                  isFrost
+                                    ? "border-green-300 bg-green-50 hover:bg-green-100"
+                                    : "border-green-500/30 bg-green-500/10 hover:bg-green-500/15",
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <CheckCircle2
+                                        className={cn(
+                                          "w-4 h-4 flex-shrink-0",
+                                          isFrost
+                                            ? "text-green-600"
+                                            : "text-green-400",
+                                        )}
+                                      />
+                                      <h4
+                                        className={cn(
+                                          "font-medium truncate line-through",
+                                          isFrost
+                                            ? "text-green-700"
+                                            : "text-green-300",
+                                        )}
+                                      >
+                                        {item.title}
+                                      </h4>
+                                    </div>
+                                    <div className="flex flex-col gap-0.5 mt-1 ml-6">
+                                      {time && (
+                                        <div
+                                          className={cn(
+                                            "flex items-center gap-1 text-sm",
+                                            isFrost
+                                              ? "text-green-600"
+                                              : "text-green-300/60",
+                                          )}
+                                        >
+                                          <Clock className="w-3 h-3" />
+                                          <span>
+                                            {format(parseISO(time), "h:mm a")}
+                                          </span>
+                                        </div>
+                                      )}
+                                      <div
+                                        className={cn(
+                                          "text-xs",
+                                          isFrost
+                                            ? "text-green-500"
+                                            : "text-green-400/50",
+                                        )}
+                                      >
+                                        Completed{" "}
+                                        {formatDistanceToNow(
+                                          completed.completedAt,
+                                          { addSuffix: true },
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <span
+                                    className={cn(
+                                      "px-2 py-0.5 rounded text-xs capitalize",
+                                      isFrost
+                                        ? "bg-green-200 text-green-800"
+                                        : "bg-green-500/20 text-green-300",
+                                    )}
+                                  >
+                                    {item.type}
+                                  </span>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
-                  >
-                    No events scheduled
-                  </p>
-                  {onAddEvent && (
-                    <button
-                      type="button"
-                      onClick={() => onAddEvent(selectedDate)}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <CalendarPlus
                       className={cn(
-                        "mt-3 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                        isFrost
-                          ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-600 hover:text-indigo-700"
-                          : "bg-white/10 hover:bg-white/20 text-white/70 hover:text-white",
+                        "w-12 h-12 mx-auto mb-3",
+                        isFrost ? "text-slate-300" : "text-white/20",
+                      )}
+                    />
+                    <p
+                      className={cn(
+                        "text-sm",
+                        isFrost ? "text-slate-400" : "text-white/40",
                       )}
                     >
-                      Add an event
-                    </button>
-                  )}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="text-center py-8">
-              <p
-                className={cn(
-                  "text-sm",
-                  isFrost ? "text-slate-400" : "text-white/40",
+                      No events scheduled
+                    </p>
+                    {onAddEvent && (
+                      <button
+                        type="button"
+                        onClick={() => onAddEvent(selectedDate)}
+                        className={cn(
+                          "mt-3 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                          isFrost
+                            ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-600 hover:text-indigo-700"
+                            : "bg-white/10 hover:bg-white/20 text-white/70 hover:text-white",
+                        )}
+                      >
+                        Add an event
+                      </button>
+                    )}
+                  </div>
                 )}
-              >
-                Select a date to view details
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <p
+                  className={cn(
+                    "text-sm",
+                    isFrost ? "text-slate-400" : "text-white/40",
+                  )}
+                >
+                  Select a date to view details
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </motion.aside>
 
       {/* 3D Day Expansion Modal */}
       <DayExpansionModal

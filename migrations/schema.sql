@@ -1522,3 +1522,61 @@ CREATE POLICY "nfc_checklist_completions_select" ON public.nfc_checklist_complet
 );
 CREATE POLICY "nfc_checklist_completions_insert" ON public.nfc_checklist_completions FOR INSERT WITH CHECK (completed_by = auth.uid());
 CREATE POLICY "nfc_checklist_completions_delete" ON public.nfc_checklist_completions FOR DELETE USING (completed_by = auth.uid());
+
+-- =====================================================================
+-- AI Usage module
+-- Personal AI-model token-consumption tracker.
+-- Data in ai_usage_models is OVERWRITTEN on each refresh cycle rollover
+-- (current_usage_pct reset to 0, cycle_start_date advanced). No history
+-- is stored on purpose. Session types survive as templates.
+-- =====================================================================
+
+CREATE TABLE public.ai_usage_models (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  refresh_frequency text NOT NULL CHECK (refresh_frequency = ANY (ARRAY['weekly'::text, 'monthly'::text])),
+  cycle_start_date date NOT NULL DEFAULT CURRENT_DATE,
+  cycle_start_day integer CHECK (cycle_start_day IS NULL OR (cycle_start_day >= 1 AND cycle_start_day <= 31)),
+  -- Optional immutable anchor date. When set, cycles roll forward from this date
+  -- (by 7 days for weekly, 1 calendar month for monthly), ignoring cycle_start_day.
+  cycle_anchor_date date,
+  current_usage_pct numeric(6,3) NOT NULL DEFAULT 0 CHECK (current_usage_pct >= 0::numeric),
+  last_updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  position integer NOT NULL DEFAULT 0,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT ai_usage_models_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_usage_models_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
+  CONSTRAINT ai_usage_models_user_name_unique UNIQUE (user_id, name)
+);
+CREATE INDEX ai_usage_models_user_idx ON public.ai_usage_models (user_id, position);
+
+CREATE TABLE public.ai_session_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  model_id uuid NOT NULL,
+  name text NOT NULL,
+  estimated_usage_pct numeric(6,3) NOT NULL CHECK (estimated_usage_pct >= 0::numeric),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT ai_session_types_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_session_types_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
+  CONSTRAINT ai_session_types_model_id_fkey FOREIGN KEY (model_id) REFERENCES public.ai_usage_models(id) ON DELETE CASCADE,
+  CONSTRAINT ai_session_types_model_name_unique UNIQUE (model_id, name)
+);
+CREATE INDEX ai_session_types_model_idx ON public.ai_session_types (model_id);
+
+ALTER TABLE public.ai_usage_models ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_session_types ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "ai_usage_models_select_own" ON public.ai_usage_models FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "ai_usage_models_insert_own" ON public.ai_usage_models FOR INSERT WITH CHECK (user_id = auth.uid());
+CREATE POLICY "ai_usage_models_update_own" ON public.ai_usage_models FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "ai_usage_models_delete_own" ON public.ai_usage_models FOR DELETE USING (user_id = auth.uid());
+
+CREATE POLICY "ai_session_types_select_own" ON public.ai_session_types FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "ai_session_types_insert_own" ON public.ai_session_types FOR INSERT WITH CHECK (user_id = auth.uid());
+CREATE POLICY "ai_session_types_update_own" ON public.ai_session_types FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "ai_session_types_delete_own" ON public.ai_session_types FOR DELETE USING (user_id = auth.uid());
