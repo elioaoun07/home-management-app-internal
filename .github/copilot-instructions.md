@@ -1,4 +1,4 @@
-<!-- AUTO-GENERATED FROM CLAUDE.md -- DO NOT EDIT DIRECTLY -->
+<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->
 
 # CLAUDE.md
 
@@ -19,48 +19,29 @@
 
 ## Hard Rules (Non-Negotiable)
 
+> These are **universal** rules — they apply to every module. Module-specific rules live in the module's `ERA Notes/` Overview doc and are loaded via Mandatory Checklist step 3. Modules with their own Hard Rules: **NFC Tags** (slug URLs), **Guest Portal** (slug URLs), **Preferences** (LBP in thousands), **AI Assistant** (Focus briefing cache), **Categories** (cross-user slug matching).
+
 1. **ALL toasts must have an Undo button** — `{ duration: 4000, action: { label: "Undo", onClick: () => undoMutation.mutate(...) } }`. Use `ToastIcons` enum from `src/lib/toastIcons.tsx`.
 2. **Single click** = open detail view · **Double click** = toggle pin/favorite
 3. **No red for individual task/item rows** — use theme colors (pink/cyan). Container headers CAN use red/amber. Overdue date labels → `text-white/40`
 4. **Futuristic SVG icons** where available in toasts and UI elements
 5. **Mobile-first** — always verify on mobile viewport
-6. **QR/NFC URLs**: never hardcode purpose-specific names (e.g., `/qr-code-oven`). Use generic reusable slugs like `/g/kitchen-1`. Behavior stored server-side.
-7. **Focus Page AI briefing**: cached 24h per user, max 2 manual refreshes/day — do not change these limits
-8. **Never use `fetch()` for mutations** — always use `safeFetch()` from `src/lib/safeFetch.ts`. It does a pre-flight online check, a configurable timeout (default **3 s**), and calls `markOffline()` on any abort/network failure.
+6. **Never use `fetch()` for mutations** — always use `safeFetch()` from `src/lib/safeFetch.ts`. It does a pre-flight online check, a configurable timeout (default **3 s**), and calls `markOffline()` on any abort/network failure.
    - The 3 s default is right for CRUD operations. **Long-running calls (AI generation, file uploads, any external API that may take >5 s) MUST pass `timeoutMs`** — e.g. `{ timeoutMs: 60_000 }` — or the request will be killed at 3 s and the app will be falsely flagged offline.
    - `markOffline()` is triggered on **timeout** too, not only hard network failures. A missing `timeoutMs` on a slow call will light up the offline indicator and badge even when the user is fully online.
-9. **Never trust `navigator.onLine`** — use `isReallyOnline()` from `src/lib/connectivityManager.ts`. It probes `/api/health` every 30s for real connectivity.
-10. **Cron routes**: verify `Authorization: Bearer {CRON_SECRET}`, use `supabaseAdmin()` (not `supabaseServer()`), add `export const maxDuration = 60`.
-11. **Unique constraint violations** (`error.code === "23505"`) → return `409 Conflict`, not 500.
-12. **LBP exchange rate** is stored in thousands (e.g., 90 = 90,000 LBP/USD) — see `src/features/preferences/useLbpSettings.ts`.
-13. **Theme changes invalidate ALL queries** — use `--theme-bg` CSS variable and `data-theme` attribute, never hardcode background colors.
-14. **Never edit `src/components/ui/`** — shadcn/ui auto-generated primitives.
-15. **Zod schemas for all API input validation** — derive TS types with `z.infer<>`.
-16. **Household linking in API routes**: when fetching user-owned data, always check `household_links` for an active partner and include their data unless `ownOnly=true` is passed. See `src/app/api/accounts/route.ts:28-52`.
-17. **Color identity is person-absolute, not role-relative** — each user's identity color = their chosen theme color, consistent across **all** devices:
-    - User with **blue theme** → always `blue-400/500` (on their phone AND partner's phone)
-    - User with **pink theme** → always `pink-400/500` (on their phone AND partner's phone)
-    - **Derive from `useTheme()`**: if `theme === "pink"`, current user = pink & partner = blue; otherwise current user = blue & partner = pink. For frost/calm themes, default to current user = blue, partner = pink.
-    - Apply to: assignment labels, accent bars, avatars, indicators, transactions, tasks, debts, analytics — any "me vs partner" visual distinction.
-    - **Key principle:** A transaction that shows as blue on one phone must show as blue on the other phone too. Colors follow the **person**, not the viewer.
-18. **Floating panels (dropdowns, popovers, command palettes) must be opaque** — never use `neo-card` (which is semi-transparent glass) on panels that float above page content. Use `tc.bgPage` from `useThemeClasses()` as the background class so the panel is the same solid color as the page background per theme. `neo-card` is only for non-overlaid cards. Glass/blur on floating panels causes text bleed-through from content behind them.
-19. **Fixed/sticky headers must not overlap page content** — when using `fixed` or `sticky` positioning on headers (`h-14`, etc.), the content below **must** have matching top padding (e.g., `pt-14`) to prevent overlap. For standalone/isolated pages (NFC, guest portal, etc.) that render their own layout, ensure the root layout's `ConditionalHeader` and `MobileNav` hide on those routes — otherwise a fixed header with no content offset causes overlap. Always verify on mobile viewport.
-20. **Cache invalidation discipline — the "disconnected app" trap**: This app has many views (Dashboard, Review, Analytics, Account pages) that display the same underlying data under **different React Query keys**. A mutation that only invalidates the key it "owns" will silently leave other views stale. Rules:
-    - **Before writing any mutation**, list every query key that displays the mutated data. Invalidate ALL of them in `onSuccess`/`onSettled`.
-    - **Prefer `refetchType: "active"`** (the default) so live views refresh immediately. Only use `refetchType: "none"` for queries the user is unlikely to see right away (e.g. `balance-history`, `daily-summaries`).
-    - **Optimistic UI (`onMutate` cache writes) covers the PRIMARY query only.** All secondary queries (analytics, dashboards, summaries) must still be explicitly invalidated — optimistic writes do not propagate across query keys.
-    - **For any mutation that affects account balances** (direct balance edit, transaction CRUD, transfer, recurring): call `invalidateAccountData(queryClient, accountId?)` from `src/lib/queryInvalidation.ts` — it covers `accounts`, `my-accounts`, `analytics`, and `account-balance` in one call.
-    - **After adding a new feature query**, audit all mutations that could make its data stale and add the new key to their invalidation list. Never assume "nobody reads this yet."
-    - **Never rely on stale-time as a correctness guarantee.** Stale-time is a performance optimization only. Always invalidate on mutation.
-21. **Cross-user category matching must use `slug`, never `name`** — `user_categories` has a `slug` column (auto-generated deterministic kebab from `name`, e.g. `"Food & Groceries"` → `"food-groceries"`). When resolving one user's category/subcategory in the context of another user's data (e.g. partner confirms a recurring payment, budget allocation merging), always match on `slug`. Name is display text and is cosmetic; slug is the stable canonical cross-user key. Fall back to name matching only when slug is null/absent (pre-existing data). Accounts have no slug column — name-based matching there is acceptable.
-22. **Timezone consistency — all dates must be stored and transmitted as UTC ISO 8601 strings.** Supabase's default session timezone is UTC. A naive datetime like `"2026-04-12T21:00:00"` (no `Z`, no offset) inserted into a `timestamptz` column is interpreted as **UTC**, silently shifting local times by the user's UTC offset (e.g. 9 PM local in UTC+3 → stored as 9 PM UTC → displayed as 12 AM local). Rules:
-    - **Never send a naive datetime string to the DB.** Always convert local date+time to a proper ISO string first: use `localToISO(date, time)` from `src/lib/utils/date.ts`, which does `new Date(\`${date}T${time}:00\`).toISOString()`. JavaScript's `Date`constructor parses`YYYY-MM-DDTHH:mm:ss`(no`Z`) as **local time**, then `.toISOString()`converts to UTC with`Z` suffix.
-    - **`parseISO()` from date-fns correctly handles the `Z`/offset** in retrieved values, converting back to local-time Date objects. This is safe for display.
-    - **Never build RRule DTSTART with `format(date, "yyyyMMdd'T'HHmmss")`** — `format()` outputs local-time digits but rrule.js interprets them as UTC, causing a timezone-offset shift on every occurrence. Use `buildFullRRuleString(startDate, recurrenceRule)` from `src/lib/utils/date.ts` — it formats DTSTART in UTC with `Z` suffix using `getUTC*()` methods.
-    - **`buildFullRRuleString` is the single canonical implementation** — never define a local copy. It handles DTSTART, COUNT, and UNTIL in UTC.
-    - **Overdue detection must compare against `new Date()` (current time), not `startOfDay(new Date())` (midnight).** A 9 PM item should be overdue at 10:30 PM the same day. Use a `currentTime` state updated every 60 s (via `setInterval`) so the comparison stays live.
-    - **Daylight Saving Time (DST) — wall-clock preservation**: The DB stores UTC. The same local time (e.g. 10 AM) maps to **different UTC values** depending on DST at creation time (10 AM UTC+2 → 08:00Z in winter, 10 AM UTC+3 → 07:00Z in summer). This is correct — **never "fix" DB values when DST changes**. JavaScript's `Date.getHours()` returns local hours using the DST rules of **the date inside the object**, not the current date. So `parseISO("2026-01-15T08:00:00Z").getHours()` always returns 10 (winter UTC+2) even when called in summer. For **recurring items**, rrule.js generates occurrences at a fixed UTC instant, which shifts local time across DST. Use `adjustOccurrenceToWallClock(occurrence, originalItemDate)` from `src/lib/utils/date.ts` — it extracts the original local hours via `getHours()` and applies them to the occurrence via `setHours()`, which respects the occurrence date's own DST context. **Never manually calculate UTC offsets or hardcode +2/+3.** All DST handling is automatic through JavaScript `Date` + `localToISO` + `adjustOccurrenceToWallClock`.
-    - **Household sharing across timezones**: each user sees times in their own browser timezone. The underlying UTC values are identical. No server-side timezone conversion is needed.
+7. **Never trust `navigator.onLine`** — use `isReallyOnline()` from `src/lib/connectivityManager.ts`. It probes `/api/health` every 30s for real connectivity.
+8. **Cron routes**: verify `Authorization: Bearer {CRON_SECRET}`, use `supabaseAdmin()` (not `supabaseServer()`), add `export const maxDuration = 60`.
+9. **Unique constraint violations** (`error.code === "23505"`) → return `409 Conflict`, not 500.
+10. **Theme changes invalidate ALL queries** — use `--theme-bg` CSS variable and `data-theme` attribute, never hardcode background colors.
+11. **Never edit `src/components/ui/`** — shadcn/ui auto-generated primitives.
+12. **Zod schemas for all API input validation** — derive TS types with `z.infer<>`.
+13. **Household linking in API routes**: when fetching user-owned data, always check `household_links` for an active partner and include their data unless `ownOnly=true` is passed. See `src/app/api/accounts/route.ts:28-52`.
+14. **Color identity is person-absolute, not role-relative** — blue-theme user = `blue-400/500` on both phones always; pink-theme user = `pink-400/500` on both phones always. Derive from `useTheme()`: `theme === "pink"` → current user = pink, partner = blue; otherwise reverse. Colors follow the **person**, not the viewer. See `ERA Notes/01 - Architecture/Color Identity.md`.
+15. **Floating panels (dropdowns, popovers, command palettes) must be opaque** — never use `neo-card` (which is semi-transparent glass) on panels that float above page content. Use `tc.bgPage` from `useThemeClasses()` as the background class so the panel is the same solid color as the page background per theme. `neo-card` is only for non-overlaid cards. Glass/blur on floating panels causes text bleed-through from content behind them.
+16. **Fixed/sticky headers must not overlap page content** — when using `fixed` or `sticky` positioning on headers (`h-14`, etc.), the content below **must** have matching top padding (e.g., `pt-14`) to prevent overlap. For standalone/isolated pages (NFC, guest portal, etc.) that render their own layout, ensure the root layout's `ConditionalHeader` and `MobileNav` hide on those routes — otherwise a fixed header with no content offset causes overlap. Always verify on mobile viewport.
+17. **Cache invalidation discipline** — invalidate every query key that shows the mutated data, not just the one the mutation "owns". For balance-affecting mutations use `invalidateAccountData(queryClient, accountId?)` from `src/lib/queryInvalidation.ts`. Never use stale-time as a correctness guarantee. See `ERA Notes/01 - Architecture/Cache Invalidation.md` for full rules.
+18. **Timezone consistency** — always store/transmit dates as UTC ISO 8601 (`Z` suffix). Use `localToISO(date, time)` to convert local input, `buildFullRRuleString(startDate, rule)` for RRule DTSTART, `adjustOccurrenceToWallClock(occ, original)` for DST on recurring items — all from `src/lib/utils/date.ts`. Never send naive datetime strings to the DB. See `ERA Notes/01 - Architecture/Timezone Handling.md` for full rules.
+19. **Mobile number inputs** — never use `type="number"`. Use `type="text"` with `inputMode="decimal"`. Prevents iOS scroll-wheel bug and inconsistent decimal handling.
 
 ---
 

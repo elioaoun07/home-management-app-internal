@@ -19,7 +19,7 @@ const PrivacyBlurContext = createContext<PrivacyBlurContextType | undefined>(
 );
 
 export function PrivacyBlurProvider({ children }: { children: ReactNode }) {
-  const [isBlurred, setIsBlurred] = useState(false);
+  const [isBlurred, setIsBlurred] = useState(true);
 
   const toggleBlur = useCallback(() => {
     setIsBlurred((prev) => !prev);

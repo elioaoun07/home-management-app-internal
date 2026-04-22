@@ -442,10 +442,6 @@ const partnerColor = theme === "pink" ? "blue-400" : "pink-400";
 
 ---
 
-## LBP Exchange Rate
-
-Stored in thousands: value `90` means 90,000 LBP/USD. See `src/features/preferences/useLbpSettings.ts`.
-
 ## Custom Month Start
 
 Users set a billing cycle start day (1–31). Use `startOfCustomMonth(date, monthStartDay)` from `src/lib/utils/date.ts`, not calendar months.
