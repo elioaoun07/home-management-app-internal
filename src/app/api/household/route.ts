@@ -1,8 +1,18 @@
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+function extractDisplayName(authUser: any): string | null {
+  const meta = authUser?.user_metadata ?? {};
+  return (
+    (meta.full_name as string | undefined) ||
+    (meta.name as string | undefined) ||
+    null
+  );
+}
 
 export async function GET() {
   const supabase = await supabaseServer(await cookies());
@@ -25,8 +35,27 @@ export async function GET() {
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
 
+  if (!link) return NextResponse.json({ link: null });
+
+  const admin = supabaseAdmin();
+
+  const [ownerRes, partnerRes] = await Promise.all([
+    admin.auth.admin.getUserById(link.owner_user_id),
+    link.partner_user_id
+      ? admin.auth.admin.getUserById(link.partner_user_id)
+      : Promise.resolve({ data: { user: null }, error: null }),
+  ]);
+
+  const enriched = {
+    ...link,
+    owner_name: extractDisplayName(ownerRes.data.user) ?? link.owner_email,
+    partner_name: link.partner_user_id
+      ? (extractDisplayName(partnerRes.data.user) ?? link.partner_email)
+      : null,
+  };
+
   return NextResponse.json(
-    { link: link ?? null },
+    { link: enriched },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

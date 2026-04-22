@@ -2644,8 +2644,52 @@ body.theme-loaded {
   } */
 
   [data-slot="dialog-overlay"] {
-    background-color: rgba(0, 0, 0, 0.7) !important;
-    opacity: 1 !important;
+    background-color: rgba(0, 0, 0, 0.7);
+    animation-duration: 220ms;
+    animation-timing-function: ease-out;
+  }
+
+  /*
+   * Dialog content — no opacity fade (prevents black flash while overlay darkens).
+   * Content starts fully visible at 96% scale, springs up to 100%.
+   * --tw-enter-opacity: 1 overrides the fade-in-0 class so opacity stays at 1
+   * throughout; only scale animates.
+   */
+  [data-slot="dialog-content"] {
+    --tw-enter-opacity: 1;
+    --tw-exit-opacity: 0;
+    --tw-enter-scale: 0.96;
+    --tw-exit-scale: 0.96;
+    animation-duration: 240ms !important;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  /* Dropdown — subtle fade + slide-down */
+  [data-slot="dropdown-menu-content"][data-state="open"] {
+    animation: dropdownEnter 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  [data-slot="dropdown-menu-content"][data-state="closed"] {
+    animation: dropdownLeave 0.12s ease-in both;
+  }
+  @keyframes dropdownEnter {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  @keyframes dropdownLeave {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.97);
+    }
   }
 
   /* Ensure all text elements across the app use theme colors */

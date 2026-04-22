@@ -47,6 +47,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SortableItem } from "./SortableItem";
@@ -596,38 +597,42 @@ function AccountsPanel() {
   );
 }
 
+const HOUSEHOLD_LS_KEY = "household_link_cache";
+
 function HouseholdPanel() {
-  const [loading, setLoading] = useState(true);
-  const [link, setLink] = useState<any | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const themeClasses = useThemeClasses();
 
-  useEffect(() => {
-    let ignore = false;
-    (async () => {
+  const {
+    data: link,
+    error: fetchError,
+    refetch,
+  } = useQuery({
+    queryKey: ["household-link-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/household", { cache: "no-store" });
+      const data = await res.json();
+      const result = data?.link ?? null;
       try {
-        const res = await fetch("/api/household", { cache: "no-store" });
-        const data = await res.json();
-        if (!ignore) setLink(data?.link ?? null);
-      } catch (e: any) {
-        if (!ignore) setError(e?.message || "Failed to load");
-      } finally {
-        if (!ignore) setLoading(false);
+        localStorage.setItem(HOUSEHOLD_LS_KEY, JSON.stringify(result));
+      } catch {}
+      return result;
+    },
+    initialData: () => {
+      try {
+        const raw = localStorage.getItem(HOUSEHOLD_LS_KEY);
+        return raw ? JSON.parse(raw) : undefined;
+      } catch {
+        return undefined;
       }
-    })();
-    return () => {
-      ignore = true;
-    };
-  }, []);
+    },
+    staleTime: 10 * 60 * 1000,
+  });
 
-  if (loading)
-    return (
-      <div
-        className={`flex items-center justify-center py-20 ${themeClasses.textFaint}`}
-      >
-        Loading...
-      </div>
-    );
+  const error = fetchError
+    ? (fetchError as Error).message || "Failed to load"
+    : createError;
 
   if (error)
     return (
@@ -658,9 +663,10 @@ function HouseholdPanel() {
             No household link created yet
           </p>
           <Button
+            disabled={creating}
             onClick={async () => {
-              setError(null);
-              setLoading(true);
+              setCreateError(null);
+              setCreating(true);
               try {
                 const res = await fetch("/api/onboarding", {
                   method: "POST",
@@ -669,17 +675,13 @@ function HouseholdPanel() {
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(data?.error || "Failed");
-                const res2 = await fetch("/api/household", {
-                  cache: "no-store",
-                });
-                const d2 = await res2.json();
-                setLink(d2?.link ?? { code: data?.code });
+                await refetch();
                 toast.success("Household code created!");
               } catch (e: any) {
-                setError(e?.message || "Failed to generate code");
+                setCreateError(e?.message || "Failed to generate code");
                 toast.error("Failed to create code");
               } finally {
-                setLoading(false);
+                setCreating(false);
               }
             }}
             className={`neo-gradient ${themeClasses.textButton} font-semibold`}
@@ -728,7 +730,7 @@ function HouseholdPanel() {
             <span
               className={`text-sm font-medium ${themeClasses.textHighlight} truncate ml-4`}
             >
-              {link.owner_email || link.owner_user_id}
+              {link.owner_name || link.owner_user_id}
             </span>
           </div>
           <div className="flex items-center justify-between">
@@ -736,7 +738,7 @@ function HouseholdPanel() {
             <span
               className={`text-sm font-medium ${themeClasses.textHighlight} truncate ml-4`}
             >
-              {link.partner_email || link.partner_user_id || "—"}
+              {link.partner_name || link.partner_user_id || "—"}
             </span>
           </div>
         </div>
