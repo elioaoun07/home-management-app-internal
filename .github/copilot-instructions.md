@@ -4,6 +4,8 @@
 
 > **Reactive + Proactive AI Personal Assistant** — a multi-module PWA covering budget tracking, reminders/tasks, meal planning, recipes, catalogues, household chat, dashboards, and an AI assistant. Modules are architecturally independent but share a single household ecosystem. The app is both reactive (responds to user input) and proactive (AI-driven briefings, alerts, and scheduled actions).
 
+CLAUDE.md auto-syncs to `.github/copilot-instructions.md` via PostToolUse hook.
+
 ---
 
 ## Before You Code — Mandatory Checklist
@@ -13,7 +15,6 @@
 3. **Read that doc first** — it contains architecture, DB tables, and gotchas
 4. **Read `migrations/schema.sql`** before any DB work — it is the authoritative schema source
 5. **Read `ERA Notes/01 - Architecture/Common Patterns.md`** if touching state, mutations, or modals
-6. After any change, run `pnpm typecheck` before considering work complete
 
 ---
 
@@ -33,14 +34,14 @@
 8. **Cron routes**: verify `Authorization: Bearer {CRON_SECRET}`, use `supabaseAdmin()` (not `supabaseServer()`), add `export const maxDuration = 60`.
 9. **Unique constraint violations** (`error.code === "23505"`) → return `409 Conflict`, not 500.
 10. **Theme changes invalidate ALL queries** — use `--theme-bg` CSS variable and `data-theme` attribute, never hardcode background colors.
-11. **Never edit `src/components/ui/`** — shadcn/ui auto-generated primitives.
+11. **Never edit `src/components/ui/`** — enforced by PreToolUse hook.
 12. **Zod schemas for all API input validation** — derive TS types with `z.infer<>`.
 13. **Household linking in API routes**: when fetching user-owned data, always check `household_links` for an active partner and include their data unless `ownOnly=true` is passed. See `src/app/api/accounts/route.ts:28-52`.
 14. **Color identity is person-absolute, not role-relative** — blue-theme user = `blue-400/500` on both phones always; pink-theme user = `pink-400/500` on both phones always. Derive from `useTheme()`: `theme === "pink"` → current user = pink, partner = blue; otherwise reverse. Colors follow the **person**, not the viewer. See `ERA Notes/01 - Architecture/Color Identity.md`.
 15. **Floating panels (dropdowns, popovers, command palettes) must be opaque** — never use `neo-card` (which is semi-transparent glass) on panels that float above page content. Use `tc.bgPage` from `useThemeClasses()` as the background class so the panel is the same solid color as the page background per theme. `neo-card` is only for non-overlaid cards. Glass/blur on floating panels causes text bleed-through from content behind them.
 16. **Fixed/sticky headers must not overlap page content** — when using `fixed` or `sticky` positioning on headers (`h-14`, etc.), the content below **must** have matching top padding (e.g., `pt-14`) to prevent overlap. For standalone/isolated pages (NFC, guest portal, etc.) that render their own layout, ensure the root layout's `ConditionalHeader` and `MobileNav` hide on those routes — otherwise a fixed header with no content offset causes overlap. Always verify on mobile viewport.
-17. **Cache invalidation discipline** — invalidate every query key that shows the mutated data, not just the one the mutation "owns". For balance-affecting mutations use `invalidateAccountData(queryClient, accountId?)` from `src/lib/queryInvalidation.ts`. Never use stale-time as a correctness guarantee. See `ERA Notes/01 - Architecture/Cache Invalidation.md` for full rules.
-18. **Timezone consistency** — always store/transmit dates as UTC ISO 8601 (`Z` suffix). Use `localToISO(date, time)` to convert local input, `buildFullRRuleString(startDate, rule)` for RRule DTSTART, `adjustOccurrenceToWallClock(occ, original)` for DST on recurring items — all from `src/lib/utils/date.ts`. Never send naive datetime strings to the DB. See `ERA Notes/01 - Architecture/Timezone Handling.md` for full rules.
+17. **Cache invalidation** — see `.claude/skills/cache-invalidation/SKILL.md` and `ERA Notes/01 - Architecture/Cache Invalidation.md`.
+18. **Timezone consistency** — see `.claude/skills/timezone-handling/SKILL.md` and `ERA Notes/01 - Architecture/Timezone Handling.md`.
 19. **Mobile number inputs** — never use `type="number"`. Use `type="text"` with `inputMode="decimal"`. Prevents iOS scroll-wheel bug and inconsistent decimal handling.
 
 ---
@@ -105,6 +106,8 @@ Bridge between Standalone modules. May import from any standalone feature direct
 - **Path alias**: `@/*` → `src/*`
 - **Offline queue**: new code uses IndexedDB via `src/lib/offlineQueue.ts`. The legacy localStorage queue in `SyncContext` is for hub shopping list only — don't add to it.
 - **Custom month start**: billing cycle uses day 1–31 set by user. Use `startOfCustomMonth(date, monthStartDay)` from `src/lib/utils/date.ts`, not calendar months.
+- **Environment variables**: see `docs/ENV.md`
+- **Project docs** live in `ERA Notes/`. See `ERA Notes/06 - Setup & Onboarding/Vault Setup.md` for vault structure.
 
 ---
 
@@ -150,7 +153,6 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 - **Enum/type updates**: always update DB migration + TypeScript type + API route + UI components + utilities together
 - **Standalone imports**: standalone feature dirs can't import from each other — use `src/components/`, `src/lib/`, `src/types/`
 - **Zustand in non-React modules**: use `store.getState().action()` directly — see `src/lib/stores/offlinePendingStore.ts` (`offlinePendingActions` export pattern)
-- **Mobile number inputs**: never use `type="number"` — it triggers iOS scroll-wheel issues and prevents decimal input on some keyboards. Use `type="text"` with `inputMode="decimal"` instead.
 
 ---
 
@@ -210,108 +212,3 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Session notes (personal)     | `ERA Notes/08 - Sessions/{Features\|Bug Fixes\|Refactors}/` |
 | Reusable patterns (personal) | `ERA Notes/09 - Patterns & Lessons/`                        |
 | Root-level only              | `CLAUDE.md`, `README.md`                                    |
-
----
-
-## Obsidian Vault
-
-All project documentation lives in the **`ERA Notes/`** Obsidian vault at the project root. The vault mirrors the Standalone/Junction module model.
-
-### Vault Structure
-
-```
-ERA Notes/
-├── 00 - Home/          ← Dashboard MOC + Module Index (Dataview)
-├── 01 - Architecture/  ← cross-cutting system docs
-├── 02 - Standalone Modules/  ← one folder per standalone module
-├── 03 - Junction Modules/    ← one folder per junction module
-├── 04 - UI & Design/
-├── 05 - Performance/
-├── 06 - Setup & Onboarding/
-├── 07 - Backlog & Ideas/
-├── 08 - Sessions/      ← per-work-block notes (gitignored)
-│   ├── Features/
-│   ├── Bug Fixes/
-│   └── Refactors/
-├── 09 - Patterns & Lessons/  ← reusable patterns (gitignored)
-└── Templates/          ← Obsidian templates for new notes
-```
-
-### Session Workflow
-
-1. Before starting a work block, create a new note from the appropriate template:
-   - Feature work → `Templates/Session - Feature.md`
-   - Bug fix → `Templates/Session - Bug Fix.md`
-   - Refactor → `Templates/Session - Refactor.md`
-2. File it in `08 - Sessions/{Features|Bug Fixes|Refactors}/`
-3. Set the `module` frontmatter to the module slug (e.g., `accounts`, `hub-chat`)
-4. Tag with `session/<type>` + `module/<name>`
-5. Link to the module's Overview page with `[[Overview]]`
-
-### Tagging Conventions
-
-| Tag prefix | Purpose             | Examples                                                 |
-| ---------- | ------------------- | -------------------------------------------------------- |
-| `module/`  | Which module        | `module/accounts`, `module/hub-chat`                     |
-| `type/`    | Doc type            | `type/feature-doc`, `type/architecture`, `type/ui`       |
-| `session/` | Session type        | `session/feature`, `session/bug-fix`, `session/refactor` |
-| `scope/`   | Cross-cutting scope | `scope/cross-cutting`, `scope/auth`, `scope/pwa`         |
-| `pattern/` | Code pattern        | `pattern/react-hook`, `pattern/zustand-store`            |
-| `status/`  | Work status         | `status/active`, `status/completed`, `status/archived`   |
-
-### Git Tracking (Hybrid)
-
-- **Tracked**: `01–07` folders (feature docs, architecture, etc.) — shared project knowledge
-- **Gitignored**: `08 - Sessions/`, `09 - Patterns & Lessons/` — personal working notes
-- **Gitignored**: `.obsidian/workspace.json` — personal layout state
-
-### Recommended Plugins
-
-Install via Obsidian → Settings → Community plugins:
-
-- **Dataview** — query notes as database tables (powers Module Index)
-- **Templater** — auto-populate `{{date}}`, `{{title}}` in templates
-- **Calendar** — visualize sessions on a calendar sidebar
-
----
-
-## Multi-Agent Sync
-
-This project uses **two AI coding agents**: Claude Code (reads `CLAUDE.md`) and GitHub Copilot (reads `.github/copilot-instructions.md`). To keep them in sync:
-
-- **`CLAUDE.md` is the single source of truth.** All rule changes go here.
-- **`.github/copilot-instructions.md` is auto-generated.** Whenever you modify `CLAUDE.md`, immediately overwrite `.github/copilot-instructions.md` with the full contents of `CLAUDE.md`, prefixed with this header:
-  ```
-  <!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->
-  ```
-- **`AGENTS.md` is a separate condensed quick-reference** with code templates. When updating Hard Rules, Module Model tables, or Common Mistakes in `CLAUDE.md`, also review `AGENTS.md` and update any overlapping sections there.
-- **`.github/instructions/*.instructions.md`** are Copilot-only scoped deep-dives (API routes, components, feature modules). They are additive — not duplicates. Update them independently when their specific domain changes.
-- A **CI workflow** (`.github/workflows/check-docs-sync.yml`) validates that `CLAUDE.md` and `.github/copilot-instructions.md` are in sync on every PR.
-
----
-
-## Environment Variables
-
-```env
-# Required
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-
-# Backend
-SUPABASE_SERVICE_ROLE_KEY=         # admin ops (cron, batch)
-GOOGLE_AI_API_KEY=                 # Gemini AI
-CRON_SECRET=                       # cron job auth (Bearer token)
-VOICE_SECRET=                      # voice endpoint JWT
-AZURE_TTS_KEY=                     # Azure Cognitive Services TTS key
-AZURE_TTS_REGION=                  # Azure TTS region (e.g. eastus)
-
-# Push Notifications
-NEXT_PUBLIC_VAPID_PUBLIC_KEY=
-VAPID_PRIVATE_KEY=
-VAPID_SUBJECT=mailto:your@email.com
-
-# Optional / Dev
-NEXT_PUBLIC_APP_URL=               # app root URL (used in push notification links)
-NEXT_PUBLIC_ENABLE_SW=             # set to "false" to disable service worker during debugging
-DEV_USER_ID=                       # override auth user in local development
-```

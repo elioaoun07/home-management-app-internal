@@ -16,7 +16,8 @@
       "Bash(npx tsc:*)",
       "Read(/tmp/**)",
       "Skill(update-config)",
-      "WebFetch(domain:api.anthropic.com)"
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(bash .claude/hooks/block-ui-dir.sh)"
     ]
   }
 }
