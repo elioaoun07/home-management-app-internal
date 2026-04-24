@@ -254,6 +254,7 @@ CREATE TABLE public.catalogue_items (
   linked_item_id uuid,
   item_category_ids ARRAY DEFAULT '{}'::text[],
   is_public boolean DEFAULT false,
+  is_flexible_routine boolean NOT NULL DEFAULT false,
   CONSTRAINT catalogue_items_pkey PRIMARY KEY (id),
   CONSTRAINT catalogue_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT catalogue_items_module_id_fkey FOREIGN KEY (module_id) REFERENCES public.catalogue_modules(id),

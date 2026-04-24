@@ -26,7 +26,6 @@ import { cn } from "@/lib/utils";
 import type {
   CatalogueItem,
   CataloguePriority,
-  FlexiblePeriod,
   LocationContext,
   RecurrencePattern,
 } from "@/types/catalogue";
@@ -171,9 +170,6 @@ export default function CatalogueTaskItemDialog({
   const [tagInput, setTagInput] = useState("");
   // Flexible routine state
   const [isFlexibleRoutine, setIsFlexibleRoutine] = useState(false);
-  const [flexiblePeriod, setFlexiblePeriod] = useState<FlexiblePeriod | null>(
-    null,
-  );
   // New fields: categories and visibility
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
@@ -213,9 +209,6 @@ export default function CatalogueTaskItemDialog({
         );
         // Flexible routine state
         setIsFlexibleRoutine(editingItem.is_flexible_routine || false);
-        setFlexiblePeriod(
-          (editingItem.flexible_period as FlexiblePeriod) || null,
-        );
       } else {
         // Reset to defaults
         setName("");
@@ -238,7 +231,6 @@ export default function CatalogueTaskItemDialog({
         setTriggerConditions([]);
         // Reset flexible routine state
         setIsFlexibleRoutine(false);
-        setFlexiblePeriod(null);
       }
     }
   }, [open, editingItem]);
@@ -310,9 +302,6 @@ export default function CatalogueTaskItemDialog({
             : undefined,
         // Flexible routine fields
         is_flexible_routine: isFlexibleRoutine,
-        flexible_period: isFlexibleRoutine
-          ? flexiblePeriod || (recurrencePattern as FlexiblePeriod)
-          : undefined,
       };
 
       let result: CatalogueItem;
@@ -589,16 +578,7 @@ export default function CatalogueTaskItemDialog({
                   onCheckedChange={(checked) => {
                     setIsFlexibleRoutine(checked);
                     if (checked) {
-                      // Clear specific days when enabling flexible
                       setRecurrenceDays([]);
-                      // Set flexible period based on recurrence pattern
-                      if (
-                        recurrencePattern === "weekly" ||
-                        recurrencePattern === "biweekly" ||
-                        recurrencePattern === "monthly"
-                      ) {
-                        setFlexiblePeriod(recurrencePattern as FlexiblePeriod);
-                      }
                     }
                   }}
                 />

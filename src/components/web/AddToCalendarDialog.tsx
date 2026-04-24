@@ -31,7 +31,7 @@ import { localToISO } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import type { CatalogueItem, RecurrencePattern } from "@/types/catalogue";
 import { RECURRENCE_PATTERN_LABELS } from "@/types/catalogue";
-import type { CreateRecurrenceInput, CreateSubtaskInput } from "@/types/items";
+import type { CreateRecurrenceInput, CreateSubtaskInput, FlexiblePeriod } from "@/types/items";
 import { addDays, format, setHours, setMinutes } from "date-fns";
 import {
   AlertTriangle,
@@ -286,7 +286,9 @@ export default function AddToCalendarDialog({
                 : undefined,
             // Pass flexible routine settings from catalogue item
             is_flexible: catalogueItem.is_flexible_routine || false,
-            flexible_period: catalogueItem.flexible_period || null,
+            flexible_period: catalogueItem.is_flexible_routine
+              ? catalogueItem.recurrence_pattern as FlexiblePeriod
+              : null,
           };
         }
       }

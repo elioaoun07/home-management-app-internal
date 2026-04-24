@@ -12,7 +12,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useCatalogueItems, useCatalogueModules } from "@/features/catalogue";
-import type { CatalogueItem } from "@/types/catalogue";
+import type { CatalogueItem, FlexiblePeriod } from "@/types/catalogue";
 import {
   FLEXIBLE_PERIOD_LABELS,
   RECURRENCE_PATTERN_LABELS,
@@ -287,13 +287,13 @@ function TemplateCard({ item, icon, onSelect, variant }: TemplateCardProps) {
             </p>
           )}
           <div className="flex items-center gap-2 mt-2">
-            {item.is_flexible_routine && item.flexible_period && (
+            {item.is_flexible_routine && item.recurrence_pattern && (
               <Badge
                 variant="outline"
                 className="text-xs border-amber-500/30 text-amber-400"
               >
                 <Sparkles className="h-3 w-3 mr-1" />
-                {FLEXIBLE_PERIOD_LABELS[item.flexible_period]}
+                {FLEXIBLE_PERIOD_LABELS[item.recurrence_pattern as FlexiblePeriod]}
               </Badge>
             )}
             {item.recurrence_pattern && !item.is_flexible_routine && (

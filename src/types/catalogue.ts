@@ -259,7 +259,6 @@ export interface CatalogueItem {
   is_public: boolean;
   // Flexible routine fields
   is_flexible_routine: boolean;
-  flexible_period: FlexiblePeriod | null;
   // Virtual fields
   sub_items?: CatalogueSubItem[];
   category?: CatalogueCategory;
@@ -364,7 +363,6 @@ export interface CreateItemInput {
   is_public?: boolean;
   // Flexible routine fields
   is_flexible_routine?: boolean;
-  flexible_period?: FlexiblePeriod;
 }
 
 export interface UpdateItemInput {
@@ -406,7 +404,6 @@ export interface UpdateItemInput {
   is_public?: boolean;
   // Flexible routine fields
   is_flexible_routine?: boolean;
-  flexible_period?: FlexiblePeriod;
 }
 
 export interface CreateSubItemInput {

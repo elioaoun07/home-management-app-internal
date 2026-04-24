@@ -11,9 +11,12 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useCatalogueItems, useCatalogueModules } from "@/features/catalogue";
 import { useUpdateItem as useUpdateCatalogueItem } from "@/features/catalogue/hooks";
 import {
+  formatPeriodLabel,
+  getPeriodBoundaries,
   useFlexibleRoutines,
   useScheduleRoutine,
   useUnscheduleRoutine,
+  type FlexibleRoutineItem,
 } from "@/features/items/useFlexibleRoutines";
 import { useAllOccurrenceActions } from "@/features/items/useItemActions";
 import {
@@ -25,6 +28,7 @@ import {
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { CatalogueItem } from "@/types/catalogue";
+import type { FlexiblePeriod } from "@/types/items";
 import type { CreateSubtaskInput } from "@/types/items";
 import { addDays, format, isSameDay } from "date-fns";
 import {
@@ -40,14 +44,29 @@ import {
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-interface AddFlexibleFromCatalogueDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  weekStart: Date;
-  weekEnd: Date;
-  defaultDate?: Date;
-  initialItemId?: string | null;
-}
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PERIOD_ORDER: FlexiblePeriod[] = ["weekly", "biweekly", "monthly"];
+
+const PERIOD_LABELS: Record<FlexiblePeriod, string> = {
+  weekly: "Weekly",
+  biweekly: "Biweekly",
+  monthly: "Monthly",
+};
+
+const PERIOD_RRULE: Record<FlexiblePeriod, string> = {
+  weekly: "RRULE:FREQ=WEEKLY",
+  biweekly: "RRULE:FREQ=WEEKLY;INTERVAL=2",
+  monthly: "RRULE:FREQ=MONTHLY",
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type UnscheduledEntry =
+  | { kind: "existing"; item: FlexibleRoutineItem }
+  | { kind: "dormant"; tpl: CatalogueItem };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseSubtasks(text: string | null | undefined): CreateSubtaskInput[] {
   if (!text) return [];
@@ -62,6 +81,19 @@ function parseSubtasks(text: string | null | undefined): CreateSubtaskInput[] {
     .filter((s) => s.title.length > 0);
 }
 
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface AddFlexibleFromCatalogueDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  weekStart: Date;
+  weekEnd: Date;
+  defaultDate?: Date;
+  initialItemId?: string | null;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export function AddFlexibleFromCatalogueDialog({
   isOpen,
   onClose,
@@ -75,13 +107,30 @@ export function AddFlexibleFromCatalogueDialog({
   const isPink = theme === "pink";
   const isFrost = theme === "frost";
 
+  // ── Period boundaries (computed relative to viewed week) ──────────────────
+  const periodInfo = useMemo(() => {
+    const result = {} as Record<
+      FlexiblePeriod,
+      { start: Date; end: Date; startStr: string; label: string }
+    >;
+    for (const p of PERIOD_ORDER) {
+      const { start, end } = getPeriodBoundaries(weekStart, p);
+      result[p] = {
+        start,
+        end,
+        startStr: format(start, "yyyy-MM-dd"),
+        label: formatPeriodLabel(p, weekStart),
+      };
+    }
+    return result;
+  }, [weekStart]);
+
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart],
   );
-  const weekNumber = format(weekStart, "w");
-  const periodStartStr = format(weekStart, "yyyy-MM-dd");
 
+  // ── Data ──────────────────────────────────────────────────────────────────
   const { data: items = [] } = useItems();
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
   const { data: routines } = useFlexibleRoutines(
@@ -97,28 +146,54 @@ export function AddFlexibleFromCatalogueDialog({
     [catalogueModules],
   );
 
-  // Dormant weekly-flexible catalogue templates
+  // Dormant catalogue templates — all flexible periods
   const dormantTemplates = useMemo(() => {
     return catalogueItemsData.filter(
       (it) =>
         it.module_id === tasksModuleId &&
         it.is_flexible_routine === true &&
-        it.flexible_period === "weekly" &&
+        it.recurrence_pattern !== null &&
         it.is_active_on_calendar === false,
     );
   }, [catalogueItemsData, tasksModuleId]);
 
   const unscheduled = routines?.unscheduled ?? [];
 
-  const scheduleRoutine = useScheduleRoutine();
-  const unscheduleRoutine = useUnscheduleRoutine();
-  const createTask = useCreateTask();
-  const createReminder = useCreateReminder();
-  const updateCatalogueItem = useUpdateCatalogueItem();
-  const deleteItem = useDeleteItem();
+  // ── Group all entries by period ───────────────────────────────────────────
+  const entriesByPeriod = useMemo<
+    Partial<Record<FlexiblePeriod, UnscheduledEntry[]>>
+  >(() => {
+    const map: Partial<Record<FlexiblePeriod, UnscheduledEntry[]>> = {};
+    for (const item of unscheduled) {
+      const p = (
+        (item.recurrence_rule?.flexible_period as FlexiblePeriod) ?? "weekly"
+      ) as FlexiblePeriod;
+      (map[p] ??= []).push({ kind: "existing", item });
+    }
+    for (const tpl of dormantTemplates) {
+      const p = (tpl.recurrence_pattern ?? "weekly") as FlexiblePeriod;
+      (map[p] ??= []).push({ kind: "dormant", tpl });
+    }
+    return map;
+  }, [unscheduled, dormantTemplates]);
 
-  // Per-row state: selected day index (0-6) and time
+  const availablePeriods = PERIOD_ORDER.filter(
+    (p) => (entriesByPeriod[p]?.length ?? 0) > 0,
+  );
+
+  // ── Tab state ─────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<FlexiblePeriod | null>(null);
+  const currentTab =
+    activeTab && availablePeriods.includes(activeTab)
+      ? activeTab
+      : (availablePeriods[0] ?? "weekly");
+  const activeEntries = entriesByPeriod[currentTab] ?? [];
+
+  // ── Selection state ───────────────────────────────────────────────────────
+  // weekly items: day index (0–6)
   const [daySel, setDaySel] = useState<Record<string, number>>({});
+  // biweekly/monthly items: explicit date string yyyy-MM-dd
+  const [dateSel, setDateSel] = useState<Record<string, string>>({});
   const [timeSel, setTimeSel] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<string | null>(null);
 
@@ -132,20 +207,42 @@ export function AddFlexibleFromCatalogueDialog({
   const getTime = (key: string, fallback?: string | null) =>
     timeSel[key] ?? fallback ?? "09:00";
 
-  async function handleScheduleExisting(itemId: string) {
-    const dayIdx = getDay(`item-${itemId}`);
-    const time = getTime(`item-${itemId}`);
-    const day = weekDays[dayIdx];
-    setPending(`item-${itemId}`);
+  function getScheduledDate(key: string, period: FlexiblePeriod): string {
+    if (period === "weekly") {
+      return format(weekDays[getDay(key)] ?? weekDays[0], "yyyy-MM-dd");
+    }
+    return dateSel[key] ?? format(periodInfo[period].start, "yyyy-MM-dd");
+  }
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+  const scheduleRoutine = useScheduleRoutine();
+  const unscheduleRoutine = useUnscheduleRoutine();
+  const createTask = useCreateTask();
+  const createReminder = useCreateReminder();
+  const updateCatalogueItem = useUpdateCatalogueItem();
+  const deleteItem = useDeleteItem();
+
+  async function handleScheduleExisting(item: FlexibleRoutineItem) {
+    const period = (
+      (item.recurrence_rule?.flexible_period as FlexiblePeriod) ?? "weekly"
+    ) as FlexiblePeriod;
+    const key = `item-${item.id}`;
+    const time = getTime(key);
+    const dayStr = getScheduledDate(key, period);
+    // Each FlexibleRoutineItem already has the correct period start computed
+    const periodStartDate = item.periodStart;
+
+    setPending(key);
     try {
       await scheduleRoutine.mutateAsync({
-        itemId,
-        periodStartDate: periodStartStr,
-        scheduledForDate: format(day, "yyyy-MM-dd"),
+        itemId: item.id,
+        periodStartDate,
+        scheduledForDate: dayStr,
         scheduledForTime: time || null,
       });
+      const dayLabel = format(new Date(`${dayStr}T12:00:00`), "EEE MMM d");
       toast.success(
-        `Scheduled for ${format(day, "EEE MMM d")}${time ? ` at ${time}` : ""}`,
+        `Scheduled for ${dayLabel}${time ? ` at ${time}` : ""}`,
         {
           icon: <CheckCircle2 className="w-4 h-4 text-green-400" />,
           duration: 4000,
@@ -154,8 +251,8 @@ export function AddFlexibleFromCatalogueDialog({
             onClick: async () => {
               try {
                 await unscheduleRoutine.mutateAsync({
-                  itemId,
-                  periodStartDate: periodStartStr,
+                  itemId: item.id,
+                  periodStartDate,
                 });
                 toast.success("Schedule removed", {
                   icon: <Undo2 className="w-4 h-4" />,
@@ -175,15 +272,16 @@ export function AddFlexibleFromCatalogueDialog({
   }
 
   async function handleActivateAndSchedule(template: CatalogueItem) {
+    const period = (template.recurrence_pattern ?? "weekly") as FlexiblePeriod;
     const key = `tpl-${template.id}`;
-    const dayIdx = getDay(key);
     const time = getTime(key, template.preferred_time);
-    const day = weekDays[dayIdx];
-    const dayStr = format(day, "yyyy-MM-dd");
-    const weekStartAnchorISO = new Date(
-      weekStart.getFullYear(),
-      weekStart.getMonth(),
-      weekStart.getDate(),
+    const dayStr = getScheduledDate(key, period);
+    const thisPeriodInfo = periodInfo[period];
+    const thisPeriodStartStr = thisPeriodInfo.startStr;
+    const startAnchorISO = new Date(
+      thisPeriodInfo.start.getFullYear(),
+      thisPeriodInfo.start.getMonth(),
+      thisPeriodInfo.start.getDate(),
       0,
       0,
       0,
@@ -200,10 +298,10 @@ export function AddFlexibleFromCatalogueDialog({
           : (template.priority as "low" | "normal" | "high" | "urgent");
 
       const recurrence_rule = {
-        rrule: "RRULE:FREQ=WEEKLY",
-        start_anchor: weekStartAnchorISO,
+        rrule: PERIOD_RRULE[period],
+        start_anchor: startAnchorISO,
         is_flexible: true,
-        flexible_period: "weekly" as const,
+        flexible_period: period,
       };
 
       let createdItemId: string | undefined;
@@ -246,13 +344,14 @@ export function AddFlexibleFromCatalogueDialog({
 
       await scheduleRoutine.mutateAsync({
         itemId: newItemId,
-        periodStartDate: periodStartStr,
+        periodStartDate: thisPeriodStartStr,
         scheduledForDate: dayStr,
         scheduledForTime: time || null,
       });
 
+      const dayLabel = format(new Date(`${dayStr}T12:00:00`), "EEE MMM d");
       toast.success(
-        `"${template.name}" scheduled for ${format(day, "EEE MMM d")}${time ? ` at ${time}` : ""}`,
+        `"${template.name}" scheduled for ${dayLabel}${time ? ` at ${time}` : ""}`,
         {
           icon: <Sparkles className="w-4 h-4 text-amber-400" />,
           duration: 4000,
@@ -262,7 +361,7 @@ export function AddFlexibleFromCatalogueDialog({
               try {
                 await unscheduleRoutine.mutateAsync({
                   itemId: newItemId,
-                  periodStartDate: periodStartStr,
+                  periodStartDate: thisPeriodStartStr,
                 });
                 await updateCatalogueItem.mutateAsync({
                   id: template.id,
@@ -289,19 +388,51 @@ export function AddFlexibleFromCatalogueDialog({
     }
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const accentClass = isFrost
+    ? "text-indigo-600"
+    : isPink
+      ? "text-pink-400"
+      : "text-cyan-400";
+
+  const borderClass = isFrost
+    ? "border-indigo-200"
+    : isPink
+      ? "border-pink-500/30"
+      : "border-cyan-500/30";
+
+  const activeTabClass = isFrost
+    ? "bg-indigo-600 text-white"
+    : isPink
+      ? "bg-pink-500/30 text-pink-100 ring-1 ring-pink-400/60"
+      : "bg-cyan-500/30 text-cyan-100 ring-1 ring-cyan-400/60";
+
+  const inactiveTabClass = isFrost
+    ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
+    : "bg-white/5 text-white/60 hover:bg-white/10";
+
+  const btnClass = isFrost
+    ? "bg-indigo-600 text-white hover:bg-indigo-700"
+    : isPink
+      ? "bg-pink-500/20 text-pink-200 hover:bg-pink-500/30 ring-1 ring-pink-500/40"
+      : "bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/30 ring-1 ring-cyan-500/40";
+
+  const totalUnscheduled = availablePeriods.reduce(
+    (acc, p) => acc + (entriesByPeriod[p]?.length ?? 0),
+    0,
+  );
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(
           "max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0",
           tc.bgPage,
-          isFrost
-            ? "border-indigo-200"
-            : isPink
-              ? "border-pink-500/30"
-              : "border-cyan-500/30",
+          borderClass,
         )}
       >
+        {/* ── Header ── */}
         <DialogHeader className="p-4 pb-3 border-b border-white/10">
           <DialogTitle
             className={cn(
@@ -309,16 +440,7 @@ export function AddFlexibleFromCatalogueDialog({
               isFrost ? "text-slate-900" : "text-white",
             )}
           >
-            <CalendarPlus
-              className={cn(
-                "w-5 h-5",
-                isFrost
-                  ? "text-indigo-600"
-                  : isPink
-                    ? "text-pink-400"
-                    : "text-cyan-400",
-              )}
-            />
+            <CalendarPlus className={cn("w-5 h-5", accentClass)} />
             Add from Catalogue
           </DialogTitle>
           <div
@@ -329,15 +451,52 @@ export function AddFlexibleFromCatalogueDialog({
           >
             <Calendar className="w-3.5 h-3.5" />
             <span>
-              Week {weekNumber} · {format(weekStart, "MMM d")} –{" "}
-              {format(weekEnd, "MMM d, yyyy")}
+              {availablePeriods.length > 0
+                ? periodInfo[currentTab]?.label
+                : `Week ${format(weekStart, "w")} · ${format(weekStart, "MMM d")} – ${format(weekEnd, "MMM d, yyyy")}`}
             </span>
           </div>
         </DialogHeader>
 
         <ScrollArea className="flex-1 overflow-y-auto">
-          <div className="p-4 space-y-5">
-            {/* Section A: Unscheduled this week */}
+          <div className="p-4 space-y-4">
+            {/* ── Period tabs (only shown when >1 period has items) ── */}
+            {availablePeriods.length > 1 && (
+              <div className="flex gap-1.5">
+                {availablePeriods.map((period) => {
+                  const count = entriesByPeriod[period]?.length ?? 0;
+                  const isActive = period === currentTab;
+                  return (
+                    <button
+                      key={period}
+                      type="button"
+                      onClick={() => setActiveTab(period)}
+                      className={cn(
+                        "relative px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5",
+                        isActive ? activeTabClass : inactiveTabClass,
+                      )}
+                    >
+                      {PERIOD_LABELS[period]}
+                      {/* count badge — amber when inactive, muted when active */}
+                      <span
+                        className={cn(
+                          "text-[10px] min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center",
+                          isActive
+                            ? isFrost
+                              ? "bg-white/20 text-white"
+                              : "bg-white/15 text-white/80"
+                            : "bg-amber-400/25 text-amber-400",
+                        )}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── Unscheduled items for active period ── */}
             <section>
               <div className="flex items-center justify-between mb-2">
                 <h3
@@ -347,21 +506,25 @@ export function AddFlexibleFromCatalogueDialog({
                   )}
                 >
                   <Inbox className="w-4 h-4" />
-                  Unscheduled this week
+                  {availablePeriods.length > 1
+                    ? `Unscheduled — ${PERIOD_LABELS[currentTab]}`
+                    : "Unscheduled this period"}
                 </h3>
-                <span
-                  className={cn(
-                    "text-xs px-2 py-0.5 rounded-full",
-                    isFrost
-                      ? "bg-slate-100 text-slate-500"
-                      : "bg-white/5 text-white/50",
-                  )}
-                >
-                  {unscheduled.length}
-                </span>
+                {availablePeriods.length <= 1 && (
+                  <span
+                    className={cn(
+                      "text-xs px-2 py-0.5 rounded-full",
+                      isFrost
+                        ? "bg-slate-100 text-slate-500"
+                        : "bg-white/5 text-white/50",
+                    )}
+                  >
+                    {totalUnscheduled}
+                  </span>
+                )}
               </div>
 
-              {unscheduled.length === 0 ? (
+              {activeEntries.length === 0 ? (
                 <p
                   className={cn(
                     "text-xs py-3 text-center rounded-lg",
@@ -374,130 +537,120 @@ export function AddFlexibleFromCatalogueDialog({
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {unscheduled.map((item) => {
-                    const key = `item-${item.id}`;
-                    const initialItemMatch =
-                      initialItemId && initialItemId === item.id;
-                    return (
-                      <li
-                        key={item.id}
-                        className={cn(
-                          "p-3 rounded-xl border",
-                          initialItemMatch
-                            ? isPink
-                              ? "border-pink-400/60 bg-pink-500/10"
-                              : "border-cyan-400/60 bg-cyan-500/10"
-                            : isFrost
-                              ? "border-slate-200 bg-white"
-                              : "border-white/10 bg-white/[0.03]",
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="min-w-0">
-                            <div
-                              className={cn(
-                                "text-sm font-medium truncate",
-                                isFrost ? "text-slate-900" : "text-white",
-                              )}
-                            >
-                              {item.title}
-                            </div>
-                            {item.subtasks && item.subtasks.length > 0 && (
+                  {activeEntries.map((entry) => {
+                    if (entry.kind === "existing") {
+                      const { item } = entry;
+                      const period = (
+                        (item.recurrence_rule
+                          ?.flexible_period as FlexiblePeriod) ?? "weekly"
+                      ) as FlexiblePeriod;
+                      const key = `item-${item.id}`;
+                      const isHighlighted =
+                        initialItemId && initialItemId === item.id;
+                      return (
+                        <li
+                          key={item.id}
+                          className={cn(
+                            "p-3 rounded-xl border",
+                            isHighlighted
+                              ? isPink
+                                ? "border-pink-400/60 bg-pink-500/10"
+                                : "border-cyan-400/60 bg-cyan-500/10"
+                              : isFrost
+                                ? "border-slate-200 bg-white"
+                                : "border-white/10 bg-white/[0.03]",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="min-w-0">
                               <div
                                 className={cn(
-                                  "text-[11px] mt-0.5",
-                                  isFrost ? "text-slate-500" : "text-white/50",
+                                  "text-sm font-medium truncate",
+                                  isFrost ? "text-slate-900" : "text-white",
                                 )}
                               >
-                                {item.subtasks.length} subtask
-                                {item.subtasks.length !== 1 ? "s" : ""}
+                                {item.title}
                               </div>
-                            )}
+                              {item.subtasks && item.subtasks.length > 0 && (
+                                <div
+                                  className={cn(
+                                    "text-[11px] mt-0.5",
+                                    isFrost
+                                      ? "text-slate-500"
+                                      : "text-white/50",
+                                  )}
+                                >
+                                  {item.subtasks.length} subtask
+                                  {item.subtasks.length !== 1 ? "s" : ""}
+                                </div>
+                              )}
+                            </div>
+                            <span
+                              className={cn(
+                                "shrink-0 text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider",
+                                isFrost
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-amber-500/15 text-amber-300",
+                              )}
+                            >
+                              Flexible
+                            </span>
                           </div>
-                          <span
-                            className={cn(
-                              "text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider",
-                              isFrost
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-amber-500/15 text-amber-300",
-                            )}
-                          >
-                            Flexible
-                          </span>
-                        </div>
-                        <DayTimePicker
-                          weekDays={weekDays}
-                          dayIndex={getDay(key)}
-                          time={getTime(key)}
-                          onDayChange={(i) =>
-                            setDaySel((s) => ({ ...s, [key]: i }))
-                          }
-                          onTimeChange={(t) =>
-                            setTimeSel((s) => ({ ...s, [key]: t }))
-                          }
-                        />
-                        <div className="flex justify-end mt-2">
-                          <button
-                            type="button"
-                            disabled={pending === key}
-                            onClick={() => handleScheduleExisting(item.id)}
-                            className={cn(
-                              "px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-50",
-                              isFrost
-                                ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                                : isPink
-                                  ? "bg-pink-500/20 text-pink-200 hover:bg-pink-500/30 ring-1 ring-pink-500/40"
-                                  : "bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/30 ring-1 ring-cyan-500/40",
-                            )}
-                          >
-                            {pending === key ? "Scheduling…" : "Schedule"}
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
+                          {period === "weekly" ? (
+                            <DayTimePicker
+                              weekDays={weekDays}
+                              dayIndex={getDay(key)}
+                              time={getTime(key)}
+                              onDayChange={(i) =>
+                                setDaySel((s) => ({ ...s, [key]: i }))
+                              }
+                              onTimeChange={(t) =>
+                                setTimeSel((s) => ({ ...s, [key]: t }))
+                              }
+                            />
+                          ) : (
+                            <DateTimePicker
+                              minDate={format(
+                                periodInfo[period].start,
+                                "yyyy-MM-dd",
+                              )}
+                              maxDate={format(
+                                periodInfo[period].end,
+                                "yyyy-MM-dd",
+                              )}
+                              value={
+                                dateSel[key] ??
+                                format(periodInfo[period].start, "yyyy-MM-dd")
+                              }
+                              time={getTime(key)}
+                              onChange={(d) =>
+                                setDateSel((s) => ({ ...s, [key]: d }))
+                              }
+                              onTimeChange={(t) =>
+                                setTimeSel((s) => ({ ...s, [key]: t }))
+                              }
+                            />
+                          )}
+                          <div className="flex justify-end mt-2">
+                            <button
+                              type="button"
+                              disabled={pending === key}
+                              onClick={() => handleScheduleExisting(item)}
+                              className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-50",
+                                btnClass,
+                              )}
+                            >
+                              {pending === key ? "Scheduling…" : "Schedule"}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    }
 
-            {/* Section B: From Catalogue (dormant templates) */}
-            <section>
-              <div className="flex items-center justify-between mb-2">
-                <h3
-                  className={cn(
-                    "text-sm font-semibold flex items-center gap-1.5",
-                    isFrost ? "text-slate-700" : "text-white/80",
-                  )}
-                >
-                  <Sparkles className="w-4 h-4" />
-                  From Catalogue
-                </h3>
-                <span
-                  className={cn(
-                    "text-xs px-2 py-0.5 rounded-full",
-                    isFrost
-                      ? "bg-slate-100 text-slate-500"
-                      : "bg-white/5 text-white/50",
-                  )}
-                >
-                  {dormantTemplates.length}
-                </span>
-              </div>
-
-              {dormantTemplates.length === 0 ? (
-                <p
-                  className={cn(
-                    "text-xs py-3 text-center rounded-lg",
-                    isFrost
-                      ? "bg-slate-50 text-slate-400"
-                      : "bg-white/[0.02] text-white/40",
-                  )}
-                >
-                  No dormant weekly-flexible templates in the Tasks catalogue.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {dormantTemplates.map((tpl) => {
+                    // dormant catalogue template
+                    const { tpl } = entry;
+                    const period = (tpl.recurrence_pattern ?? "weekly") as FlexiblePeriod;
                     const key = `tpl-${tpl.id}`;
                     return (
                       <li
@@ -523,7 +676,9 @@ export function AddFlexibleFromCatalogueDialog({
                               <div
                                 className={cn(
                                   "text-[11px] mt-0.5 line-clamp-1",
-                                  isFrost ? "text-slate-500" : "text-white/50",
+                                  isFrost
+                                    ? "text-slate-500"
+                                    : "text-white/50",
                                 )}
                               >
                                 {tpl.description}
@@ -532,26 +687,50 @@ export function AddFlexibleFromCatalogueDialog({
                           </div>
                           <span
                             className={cn(
-                              "text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider",
+                              "shrink-0 text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider",
                               isFrost
-                                ? "bg-slate-100 text-slate-600"
-                                : "bg-white/5 text-white/50",
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-amber-500/15 text-amber-300",
                             )}
                           >
-                            Dormant
+                            Flexible
                           </span>
                         </div>
-                        <DayTimePicker
-                          weekDays={weekDays}
-                          dayIndex={getDay(key)}
-                          time={getTime(key, tpl.preferred_time)}
-                          onDayChange={(i) =>
-                            setDaySel((s) => ({ ...s, [key]: i }))
-                          }
-                          onTimeChange={(t) =>
-                            setTimeSel((s) => ({ ...s, [key]: t }))
-                          }
-                        />
+                        {period === "weekly" ? (
+                          <DayTimePicker
+                            weekDays={weekDays}
+                            dayIndex={getDay(key)}
+                            time={getTime(key, tpl.preferred_time)}
+                            onDayChange={(i) =>
+                              setDaySel((s) => ({ ...s, [key]: i }))
+                            }
+                            onTimeChange={(t) =>
+                              setTimeSel((s) => ({ ...s, [key]: t }))
+                            }
+                          />
+                        ) : (
+                          <DateTimePicker
+                            minDate={format(
+                              periodInfo[period].start,
+                              "yyyy-MM-dd",
+                            )}
+                            maxDate={format(
+                              periodInfo[period].end,
+                              "yyyy-MM-dd",
+                            )}
+                            value={
+                              dateSel[key] ??
+                              format(periodInfo[period].start, "yyyy-MM-dd")
+                            }
+                            time={getTime(key, tpl.preferred_time)}
+                            onChange={(d) =>
+                              setDateSel((s) => ({ ...s, [key]: d }))
+                            }
+                            onTimeChange={(t) =>
+                              setTimeSel((s) => ({ ...s, [key]: t }))
+                            }
+                          />
+                        )}
                         <div className="flex justify-end mt-2">
                           <button
                             type="button"
@@ -559,11 +738,7 @@ export function AddFlexibleFromCatalogueDialog({
                             onClick={() => handleActivateAndSchedule(tpl)}
                             className={cn(
                               "px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-50",
-                              isFrost
-                                ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                                : isPink
-                                  ? "bg-pink-500/20 text-pink-200 hover:bg-pink-500/30 ring-1 ring-pink-500/40"
-                                  : "bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/30 ring-1 ring-cyan-500/40",
+                              btnClass,
                             )}
                           >
                             {pending === key
@@ -580,6 +755,7 @@ export function AddFlexibleFromCatalogueDialog({
           </div>
         </ScrollArea>
 
+        {/* ── Footer ── */}
         <div className="p-3 border-t border-white/10 flex justify-end">
           <button
             type="button"
@@ -602,8 +778,9 @@ export function AddFlexibleFromCatalogueDialog({
   );
 }
 
-// Helper re-exported for default export consumers; primary export above.
 export default AddFlexibleFromCatalogueDialog;
+
+// ─── DayTimePicker (weekly: 7-day button grid + time) ─────────────────────────
 
 interface DayTimePickerProps {
   weekDays: Date[];
@@ -673,6 +850,63 @@ function DayTimePicker({
               ? "bg-white border-slate-200 text-slate-700"
               : "bg-white/5 border-white/10 text-white/80",
           )}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── DateTimePicker (biweekly/monthly: date input + time) ────────────────────
+
+interface DateTimePickerProps {
+  minDate: string;
+  maxDate: string;
+  value: string;
+  time: string;
+  onChange: (date: string) => void;
+  onTimeChange: (time: string) => void;
+}
+
+function DateTimePicker({
+  minDate,
+  maxDate,
+  value,
+  time,
+  onChange,
+  onTimeChange,
+}: DateTimePickerProps) {
+  const { theme } = useTheme();
+  const isFrost = theme === "frost";
+  const inputClass = cn(
+    "px-2 py-1 rounded-md text-xs border outline-none",
+    isFrost
+      ? "bg-white border-slate-200 text-slate-700"
+      : "bg-white/5 border-white/10 text-white/80",
+  );
+  const iconClass = cn(
+    "w-3.5 h-3.5",
+    isFrost ? "text-slate-400" : "text-white/40",
+  );
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-1">
+        <Calendar className={iconClass} />
+        <input
+          type="date"
+          min={minDate}
+          max={maxDate}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={inputClass}
+        />
+      </div>
+      <div className="flex items-center gap-1">
+        <Clock className={iconClass} />
+        <input
+          type="time"
+          value={time}
+          onChange={(e) => onTimeChange(e.target.value)}
+          className={inputClass}
         />
       </div>
     </div>

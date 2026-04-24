@@ -136,6 +136,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (body.item_category_ids !== undefined)
       updates.item_category_ids = body.item_category_ids;
     if (body.is_public !== undefined) updates.is_public = body.is_public;
+    if (body.is_flexible_routine !== undefined)
+      updates.is_flexible_routine = body.is_flexible_routine;
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(

@@ -145,6 +145,7 @@ export async function POST(req: NextRequest) {
       subtasks_text,
       item_category_ids,
       is_public,
+      is_flexible_routine,
     } = body;
 
     if (!module_id || !name?.trim()) {
@@ -235,6 +236,7 @@ export async function POST(req: NextRequest) {
         subtasks_text: subtasks_text || null,
         item_category_ids: item_category_ids || [],
         is_public: is_public ?? false,
+        is_flexible_routine: is_flexible_routine ?? false,
       })
       .select(
         `

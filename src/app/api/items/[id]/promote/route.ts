@@ -20,7 +20,6 @@ interface PromoteRequestBody {
   priority?: string;
   tags?: string[];
   is_flexible_routine?: boolean;
-  flexible_period?: string | null;
   item_category_ids?: string[];
   is_public?: boolean;
 }
@@ -59,7 +58,6 @@ export async function POST(
       priority = "normal",
       tags = [],
       is_flexible_routine = false,
-      flexible_period,
       item_category_ids = [],
       is_public = false,
     } = body;
@@ -126,7 +124,6 @@ export async function POST(
         subtasks_text: subtasks_text || null,
         // Flexible routine
         is_flexible_routine,
-        flexible_period: is_flexible_routine ? flexible_period : null,
         // Tags and categories
         tags: tags.length > 0 ? tags : [],
         item_category_ids:

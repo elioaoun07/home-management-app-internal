@@ -354,7 +354,7 @@ export function PromoteToCatalogueDialog({
           preferred_duration_minutes: durationMinutes
             ? parseInt(durationMinutes, 10)
             : null,
-          recurrence_pattern: recurrencePattern,
+          recurrence_pattern: isFlexibleRoutine ? flexiblePeriod : recurrencePattern,
           recurrence_days_of_week:
             recurrenceDays.length > 0 && !isFlexibleRoutine
               ? recurrenceDays
@@ -363,7 +363,6 @@ export function PromoteToCatalogueDialog({
           priority,
           tags: tags.length > 0 ? tags : [],
           is_flexible_routine: isFlexibleRoutine,
-          flexible_period: isFlexibleRoutine ? flexiblePeriod : null,
           item_category_ids:
             selectedCategoryIds.length > 0 ? selectedCategoryIds : [],
           is_public: isPublic,
