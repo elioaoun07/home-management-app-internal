@@ -434,27 +434,10 @@ export function useCompleteItem() {
         if (error) throw error;
         return { action: data, type: "occurrence" };
       } else {
-        // For non-recurring: determine if should be archived (if before this week)
-        const occurrenceDateObj = parseISO(occurrenceDate);
-        const now = new Date();
-        const weekStart = new Date(now);
-        const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const daysFromMonday = (dayOfWeek + 6) % 7; // Convert to Monday-based (0 = Monday)
-        weekStart.setDate(now.getDate() - daysFromMonday);
-        weekStart.setHours(0, 0, 0, 0);
-
-        // Archive if the item's date is before the start of this week
-        const shouldArchive = occurrenceDateObj < weekStart;
-        const status = "completed";
-
         const updatePayload: any = {
-          status,
+          status: "completed",
           updated_at: new Date().toISOString(),
         };
-
-        if (shouldArchive) {
-          updatePayload.archived_at = new Date().toISOString();
-        }
 
         // For non-recurring: update item status + record action
         const [itemResult, actionResult] = await Promise.all([
@@ -476,7 +459,7 @@ export function useCompleteItem() {
           .update({ completed_at: new Date().toISOString() })
           .eq("item_id", itemId);
 
-        return { type: "item", itemId, archived: shouldArchive };
+        return { type: "item", itemId };
       }
     },
     onSuccess: () => {

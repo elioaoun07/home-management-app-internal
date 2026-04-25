@@ -433,11 +433,9 @@ export function WebCalendar({
       } else {
         // Non-recurring item
         if (isSameDay(itemDate, date)) {
-          const isHandled = isOccurrenceCompleted(
-            item.id,
-            itemDate,
-            occurrenceActions,
-          );
+          const isHandled =
+            isOccurrenceCompleted(item.id, itemDate, occurrenceActions) ||
+            item.status === "completed";
           if (!isHandled) {
             result.push(item);
           }
@@ -453,7 +451,46 @@ export function WebCalendar({
 
   // Get completed items for a specific date
   const getCompletedItemsForDate = (date: Date) => {
-    return getCompletedOccurrencesForDate(items, date, occurrenceActions);
+    const occurrenceCompleted = getCompletedOccurrencesForDate(
+      items,
+      date,
+      occurrenceActions,
+    );
+
+    // Also include non-recurring items whose status is "completed" on this date
+    const nonRecurringCompleted = items
+      .filter((item) => {
+        if (item.recurrence_rule?.rrule) return false;
+        if (item.status !== "completed") return false;
+        const dateStr =
+          item.type === "reminder" || item.type === "task"
+            ? item.reminder_details?.due_at
+            : item.type === "event"
+              ? item.event_details?.start_at
+              : null;
+        if (!dateStr) return false;
+        return isSameDay(parseISO(dateStr), date);
+      })
+      .map((item) => ({
+        item,
+        occurrenceDate: parseISO(
+          (item.type === "reminder" || item.type === "task"
+            ? item.reminder_details?.due_at
+            : item.event_details?.start_at) ?? item.created_at,
+        ),
+        completedAt: parseISO(item.updated_at),
+        isCompleted: true as const,
+        actionId: `status-${item.id}`,
+      }));
+
+    const seen = new Set<string>();
+    return [...occurrenceCompleted, ...nonRecurringCompleted].filter(
+      ({ item }) => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      },
+    );
   };
 
   // Get postponed items for a specific date (items postponed TO this date)
