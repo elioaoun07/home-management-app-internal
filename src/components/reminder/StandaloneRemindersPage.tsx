@@ -16,11 +16,14 @@ import {
   type ActionType,
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
-import { useItems } from "@/features/items/useItems";
+import { useItems, useUpdateRecurrenceRule } from "@/features/items/useItems";
+import { ToastIcons } from "@/lib/toastIcons";
+import { firstBiweeklyFlippedAnchor } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
   buildFullRRuleString,
+  getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemType, ItemWithDetails } from "@/types/items";
 import {
@@ -32,6 +35,7 @@ import {
   parseISO,
   startOfDay,
 } from "date-fns";
+import { toast } from "sonner";
 import {
   AlertCircle,
   Bell,
@@ -259,12 +263,12 @@ function expandRecurringItems(
 
     if (item.recurrence_rule?.rrule) {
       try {
-        const rruleString = buildFullRRuleString(
-          itemDate,
+        const occurrences = getOccurrencesInRange(
           item.recurrence_rule,
+          itemDate,
+          startDate,
+          endDate,
         );
-        const rule = RRule.fromString(rruleString);
-        const occurrences = rule.between(startDate, endDate, true);
 
         for (const occ of occurrences) {
           const adjusted = adjustOccurrenceToWallClock(occ, itemDate);
@@ -572,6 +576,42 @@ export default function StandaloneRemindersPage({
   const { data: allItems = [], isLoading } = useItems();
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
   const itemActions = useItemActionsWithToast();
+  const updateRecurrence = useUpdateRecurrenceRule();
+
+  const handleReverseRecurrence = (item: ItemWithDetails) => {
+    if (!item.recurrence_rule?.start_anchor || !item.recurrence_rule.rrule) return;
+    const current = parseISO(item.recurrence_rule.start_anchor);
+    const newAnchor = firstBiweeklyFlippedAnchor(current).toISOString();
+    const flipTime = new Date().toISOString();
+    updateRecurrence.mutate(
+      {
+        itemId: item.id,
+        rrule: item.recurrence_rule.rrule,
+        start_anchor: newAnchor,
+        phase_changed_at: flipTime,
+        previous_start_anchor: current.toISOString(),
+      },
+      {
+        onSuccess: () =>
+          toast.success("Bi-weekly phase flipped", {
+            duration: 4000,
+            icon: ToastIcons.update,
+            action: {
+              label: "Undo",
+              onClick: () =>
+                updateRecurrence.mutate({
+                  itemId: item.id,
+                  rrule: item.recurrence_rule!.rrule,
+                  start_anchor: current.toISOString(),
+                  phase_changed_at: null,
+                  previous_start_anchor: null,
+                }),
+            },
+          }),
+      },
+    );
+  };
+
   const [selectedSection, setSelectedSection] = useState<Section | null>(null);
   const [actionsState, setActionsState] = useState<{
     item: ItemWithDetails;
@@ -1311,6 +1351,10 @@ export default function StandaloneRemindersPage({
           }}
           onDelete={() => {
             itemActions.handleDelete(actionsState.item);
+            setActionsState(null);
+          }}
+          onReverseRecurrence={() => {
+            handleReverseRecurrence(actionsState.item);
             setActionsState(null);
           }}
         />

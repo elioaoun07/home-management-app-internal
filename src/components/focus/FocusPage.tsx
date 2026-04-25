@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
   buildFullRRuleString,
+  getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemWithDetails } from "@/types/items";
 import {
@@ -124,17 +125,17 @@ function expandRecurringItems(
 
     if (isRecurring) {
       try {
-        const fullRruleStr = buildFullRRuleString(
-          itemDate,
-          item.recurrence_rule!,
-        );
-        const rule = RRule.fromString(fullRruleStr);
         const exceptions = new Set(
           (item.recurrence_rule?.exceptions || []).map((e: any) =>
             format(parseISO(e.exception_date), "yyyy-MM-dd"),
           ),
         );
-        const occurrences = rule.between(startDate, endDate, true);
+        const occurrences = getOccurrencesInRange(
+          item.recurrence_rule!,
+          itemDate,
+          startDate,
+          endDate,
+        );
         for (const occ of occurrences) {
           const occDateKey = format(occ, "yyyy-MM-dd");
           if (exceptions.has(occDateKey)) continue;

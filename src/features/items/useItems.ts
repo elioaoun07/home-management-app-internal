@@ -2320,12 +2320,16 @@ export function useUpdateRecurrenceRule() {
       start_anchor,
       end_until,
       count,
+      phase_changed_at,
+      previous_start_anchor,
     }: {
       itemId: string;
       rrule: string | null; // null to delete the rule
       start_anchor?: string;
       end_until?: string | null;
       count?: number | null;
+      phase_changed_at?: string | null;
+      previous_start_anchor?: string | null;
     }) => {
       const supabase = supabaseBrowser();
       const {
@@ -2360,6 +2364,8 @@ export function useUpdateRecurrenceRule() {
             start_anchor: start_anchor || new Date().toISOString(),
             end_until,
             count,
+            ...(phase_changed_at !== undefined && { phase_changed_at }),
+            ...(previous_start_anchor !== undefined && { previous_start_anchor }),
           })
           .eq("id", existingRule.id)
           .select()

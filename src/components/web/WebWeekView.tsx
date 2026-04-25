@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
   buildFullRRuleString,
+  getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemWithDetails } from "@/types/items";
 import {
@@ -141,18 +142,17 @@ export function WebWeekView({
     // For recurring items, find the specific occurrence on this date
     if (item.recurrence_rule?.rrule) {
       try {
-        const rruleString = buildFullRRuleString(
-          itemDate,
-          item.recurrence_rule,
-        );
-        const rule = RRule.fromString(rruleString);
-
         const dayStart = new Date(calendarDate);
         dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(calendarDate);
         dayEnd.setHours(23, 59, 59, 999);
 
-        const occurrences = rule.between(dayStart, dayEnd, true);
+        const occurrences = getOccurrencesInRange(
+          item.recurrence_rule,
+          itemDate,
+          dayStart,
+          dayEnd,
+        );
         if (occurrences.length > 0) {
           return adjustOccurrenceToWallClock(occurrences[0], itemDate);
         }
@@ -186,22 +186,21 @@ export function WebWeekView({
 
         if (item.recurrence_rule?.rrule) {
           try {
-            const rruleString = buildFullRRuleString(
-              parsedDate,
-              item.recurrence_rule,
-            );
-            const rule = RRule.fromString(rruleString);
-
             const startOfDay = new Date(date);
             startOfDay.setHours(0, 0, 0, 0);
             const endOfDay = new Date(date);
             endOfDay.setHours(23, 59, 59, 999);
 
-            // Also check wider range to catch rescheduled items
+            // Wide range to catch rescheduled items
             const maxDate = item.recurrence_rule.end_until
               ? parseISO(item.recurrence_rule.end_until)
               : new Date(parsedDate.getTime() + 365 * 24 * 60 * 60 * 1000);
-            const allOccurrences = rule.between(parsedDate, maxDate, true);
+            const allOccurrences = getOccurrencesInRange(
+              item.recurrence_rule,
+              parsedDate,
+              parsedDate,
+              maxDate,
+            );
             const exceptions = item.recurrence_rule.exceptions || [];
 
             // First, check if any exception has been rescheduled TO this date
@@ -253,7 +252,12 @@ export function WebWeekView({
               }
             }
 
-            const occurrences = rule.between(startOfDay, endOfDay, true);
+            const occurrences = getOccurrencesInRange(
+              item.recurrence_rule,
+              parsedDate,
+              startOfDay,
+              endOfDay,
+            );
 
             for (const occ of occurrences) {
               // Check if this occurrence has an exception

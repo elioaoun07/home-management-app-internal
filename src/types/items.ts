@@ -156,13 +156,16 @@ export interface RecurrenceRule {
   id: UUID;
   item_id: UUID;
   rrule: string; // iCal RRULE format
-  start_anchor: string; // ISO timestamp
+  start_anchor: string; // ISO timestamp — DTSTART for the current phase
   end_until?: string | null; // ISO timestamp
   count?: number | null;
   exceptions?: RecurrenceException[]; // Exceptions for this rule
   // Flexible routine fields
   is_flexible?: boolean; // If true, no fixed day - user schedules within period
   flexible_period?: FlexiblePeriod | null; // Period within which task must be done
+  // Phase-flip fields — set when the bi-weekly phase is reversed mid-series
+  phase_changed_at?: string | null; // ISO timestamp — when the flip happened
+  previous_start_anchor?: string | null; // ISO timestamp — anchor used before the flip
 }
 
 /** Schedule for a flexible routine within a specific period */

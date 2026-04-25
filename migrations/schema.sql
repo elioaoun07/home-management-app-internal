@@ -705,6 +705,8 @@ CREATE TABLE public.item_recurrence_rules (
   start_anchor timestamp with time zone NOT NULL,
   end_until timestamp with time zone,
   count integer,
+  phase_changed_at timestamp with time zone,
+  previous_start_anchor timestamp with time zone,
   CONSTRAINT item_recurrence_rules_pkey PRIMARY KEY (id),
   CONSTRAINT item_recurrence_rules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );

@@ -133,6 +133,8 @@ export function formatDateToUTCRRule(date: Date): string {
   return `${y}${m}${d}T${h}${min}${s}Z`;
 }
 
+import { RRule } from "rrule";
+
 /**
  * Build a full RRule string with DTSTART in UTC.
  * Centralised to avoid the timezone-stripping bug across 6+ files.
@@ -169,4 +171,95 @@ export function buildFullRRuleString(
 
   const dtstart = `DTSTART:${formatDateToUTCRRule(startDate)}`;
   return `${dtstart}\n${rrulePart}`;
+}
+
+/**
+ * Generate all RRule occurrences in [rangeStart, rangeEnd], respecting a
+ * bi-weekly phase flip if one has been recorded on the rule.
+ *
+ * Without a flip: uses start_anchor (falls back to itemDate) as DTSTART.
+ * With a flip (phase_changed_at + previous_start_anchor set):
+ *   - dates before phase_changed_at → previous_start_anchor (old phase)
+ *   - dates on/after phase_changed_at → start_anchor (new phase)
+ *
+ * This is the single source of truth for occurrence generation. All views
+ * should call this instead of building the RRule string inline.
+ */
+export function getOccurrencesInRange(
+  rule: {
+    rrule: string;
+    start_anchor: string;
+    end_until?: string | null;
+    count?: number | null;
+    phase_changed_at?: string | null;
+    previous_start_anchor?: string | null;
+  },
+  itemDate: Date,
+  rangeStart: Date,
+  rangeEnd: Date,
+): Date[] {
+  if (!rule.phase_changed_at || !rule.previous_start_anchor) {
+    // Simple case: no flip recorded
+    const anchor = rule.start_anchor ? new Date(rule.start_anchor) : itemDate;
+    const rruleStr = buildFullRRuleString(anchor, rule);
+    return RRule.fromString(rruleStr).between(rangeStart, rangeEnd, true);
+  }
+
+  const changeDate = new Date(rule.phase_changed_at);
+  const results: Date[] = [];
+
+  // Pre-flip: use previous_start_anchor, capped at changeDate
+  if (rangeStart < changeDate) {
+    const preAnchor = new Date(rule.previous_start_anchor);
+    const preEnd = rangeEnd < changeDate ? rangeEnd : new Date(changeDate.getTime() - 1);
+    const preRRule = RRule.fromString(buildFullRRuleString(preAnchor, rule));
+    results.push(...preRRule.between(rangeStart, preEnd, true));
+  }
+
+  // Post-flip: use start_anchor from changeDate onward
+  if (rangeEnd >= changeDate) {
+    const postAnchor = new Date(rule.start_anchor);
+    const postStart = rangeStart >= changeDate ? rangeStart : changeDate;
+    const postRRule = RRule.fromString(buildFullRRuleString(postAnchor, rule));
+    results.push(...postRRule.between(postStart, rangeEnd, true));
+  }
+
+  return results;
+}
+
+/**
+ * Compute the new start_anchor for a bi-weekly "flip" that only affects
+ * the current occurrence and future ones.
+ *
+ * Instead of shifting the anchor backward (which would rewrite all past
+ * occurrence dates), this finds the first occurrence in the flipped phase
+ * that falls on or after today. Past occurrence records are untouched.
+ */
+export function firstBiweeklyFlippedAnchor(currentAnchor: Date): Date {
+  // Theoretical flipped base = shift the anchor by one week
+  const flippedBase = new Date(currentAnchor);
+  flippedBase.setDate(flippedBase.getDate() + 7);
+
+  // Compare calendar days only (strip time for the comparison, preserve time in result)
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+
+  const flippedBaseMidnight = new Date(flippedBase);
+  flippedBaseMidnight.setHours(0, 0, 0, 0);
+
+  const daysSince = Math.floor(
+    (todayMidnight.getTime() - flippedBaseMidnight.getTime()) /
+      (1000 * 60 * 60 * 24),
+  );
+
+  if (daysSince <= 0) {
+    // Flipped base is today or in the future — use it directly
+    return flippedBase;
+  }
+
+  // Advance by whole bi-weekly periods until we're on or after today
+  const periodsElapsed = Math.ceil(daysSince / 14);
+  const result = new Date(flippedBase);
+  result.setDate(result.getDate() + periodsElapsed * 14);
+  return result;
 }

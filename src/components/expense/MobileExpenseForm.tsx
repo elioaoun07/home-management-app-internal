@@ -1097,16 +1097,17 @@ export default function MobileExpenseForm() {
                 (() => {
                   const TagSubIcon = getCategoryIcon(selectedSubcategory.name);
                   return (
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${themeClasses.pillBg} shrink-0`}
+                    <button
+                      onClick={() => setStep("subcategory")}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150 shrink-0`}
                     >
                       <TagSubIcon
-                        className={`w-2.5 h-2.5 ${themeClasses.textFaint}`}
+                        className={`w-3 h-3 ${themeClasses.textMuted}`}
                       />
-                      <span className={`text-[10px] ${themeClasses.textMuted}`}>
+                      <span className={`font-semibold text-[11px] ${themeClasses.textMuted}`}>
                         {selectedSubcategory.name}
                       </span>
-                    </span>
+                    </button>
                   );
                 })()}
 

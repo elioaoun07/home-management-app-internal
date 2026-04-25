@@ -10,15 +10,19 @@ import {
   useAllOccurrenceActions,
   useItemActionsWithToast,
 } from "@/features/items/useItemActions";
-import { useItems } from "@/features/items/useItems";
+import { useItems, useUpdateRecurrenceRule } from "@/features/items/useItems";
+import { ToastIcons } from "@/lib/toastIcons";
+import { firstBiweeklyFlippedAnchor } from "@/lib/utils/date";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
   buildFullRRuleString,
+  getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemStatus, ItemType, ItemWithDetails } from "@/types/items";
 import { eachDayOfInterval, format, parseISO } from "date-fns";
+import { toast } from "sonner";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RRule } from "rrule";
 
@@ -596,6 +600,41 @@ export default function ItemsListView({
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
   const { handleComplete, handlePostpone, handleCancel, handleDelete } =
     useItemActionsWithToast();
+  const updateRecurrence = useUpdateRecurrenceRule();
+
+  const handleReverseRecurrence = (item: ItemWithDetails) => {
+    if (!item.recurrence_rule?.start_anchor || !item.recurrence_rule.rrule) return;
+    const current = parseISO(item.recurrence_rule.start_anchor);
+    const newAnchor = firstBiweeklyFlippedAnchor(current).toISOString();
+    const flipTime = new Date().toISOString();
+    updateRecurrence.mutate(
+      {
+        itemId: item.id,
+        rrule: item.recurrence_rule.rrule,
+        start_anchor: newAnchor,
+        phase_changed_at: flipTime,
+        previous_start_anchor: current.toISOString(),
+      },
+      {
+        onSuccess: () =>
+          toast.success("Bi-weekly phase flipped", {
+            duration: 4000,
+            icon: ToastIcons.update,
+            action: {
+              label: "Undo",
+              onClick: () =>
+                updateRecurrence.mutate({
+                  itemId: item.id,
+                  rrule: item.recurrence_rule!.rrule,
+                  start_anchor: current.toISOString(),
+                  phase_changed_at: null,
+                  previous_start_anchor: null,
+                }),
+            },
+          }),
+      },
+    );
+  };
 
   const isSingleDay = startDate === endDate;
   const todayStr = format(new Date(), "yyyy-MM-dd");
@@ -668,17 +707,16 @@ export default function ItemsListView({
         const rule = item.recurrence_rule;
         const startAnchor = parseISO(rule.start_anchor);
         try {
-          const rruleString = buildFullRRuleString(startAnchor, rule);
-          const rruleObj = RRule.fromString(rruleString);
           const exceptionSet = new Set(
             rule.exceptions?.map((e) =>
               normalizeToLocalDateString(new Date(e.exdate)),
             ) ?? [],
           );
-          const occurrences = rruleObj.between(
+          const occurrences = getOccurrencesInRange(
+            rule,
+            startAnchor,
             new Date(rangeStart.getTime() - 1),
             new Date(rangeEnd.getTime() + 1),
-            true,
           );
           for (const occ of occurrences) {
             const occDateStr = normalizeToLocalDateString(occ);
@@ -1294,6 +1332,10 @@ export default function ItemsListView({
           }}
           onDelete={() => {
             handleDelete(actionsState.item);
+            setActionsState(null);
+          }}
+          onReverseRecurrence={() => {
+            handleReverseRecurrence(actionsState.item);
             setActionsState(null);
           }}
         />

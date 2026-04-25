@@ -5,7 +5,6 @@ import {
   getPostponedOccurrencesForDate,
   isOccurrenceCompleted,
   useAllOccurrenceActions,
-  useItemActionsWithToast,
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
 import { useItems } from "@/features/items/useItems";
@@ -14,48 +13,34 @@ import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
   buildFullRRuleString,
+  getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemType, ItemWithDetails } from "@/types/items";
 import {
   addDays,
-  endOfWeek,
   format,
   isBefore,
   isSameDay,
-  isToday,
   isWithinInterval,
   parseISO,
   startOfDay,
-  startOfWeek,
 } from "date-fns";
 import {
   AlertCircle,
-  ArrowRight,
   Bell,
   Calendar,
-  CalendarDays,
-  ChevronRight,
-  Clock,
-  Layers,
   ListTodo,
   Loader2,
   Moon,
   Sparkles,
-  Star,
   Sun,
-  Target,
   Volume2,
   VolumeX,
-  X,
-  Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { RRule } from "rrule";
 
-// ============================================
-// TYPES
-// ============================================
 interface ExpandedOccurrence {
   item: ItemWithDetails;
   occurrenceDate: Date;
@@ -64,136 +49,30 @@ interface ExpandedOccurrence {
   originalDate?: Date;
 }
 
-// Type icons
+interface BriefingBullet {
+  text: string;
+  sub?: string;
+  type?: "now" | "next" | "warn" | "default";
+}
+
 const typeIcons: Record<ItemType, typeof Calendar> = {
   reminder: Bell,
   event: Calendar,
   task: ListTodo,
 };
 
-// Time scope for Today/This Week
-type TimeScope = "today" | "week";
-
-const timeScopeLabels: Record<TimeScope, string> = {
-  today: "Today",
-  week: "This Week",
-};
-
-// Sort modes
-type SortMode = "time" | "priority" | "category";
-
-// View modes for testing
-type ViewMode =
-  | "briefing"
-  | "timeline"
-  | "cards"
-  | "editorial"
-  | "minimal"
-  | "grid"
-  | "agenda"
-  | "list"
-  | "focus"
-  | "kanban";
-
-const viewModeLabels: Record<ViewMode, string> = {
-  briefing: "Briefing",
-  timeline: "Timeline",
-  cards: "Cards",
-  editorial: "Editorial",
-  minimal: "Minimal",
-  grid: "Grid",
-  agenda: "Agenda",
-  list: "List",
-  focus: "Focus",
-  kanban: "Kanban",
-};
-
-// Priority levels (inferred from keywords)
-const getPriorityLevel = (item: ItemWithDetails): number => {
-  const title = item.title.toLowerCase();
-  const desc = (item.description || "").toLowerCase();
-  const combined = `${title} ${desc}`;
-
-  // High priority indicators
-  if (
-    combined.includes("urgent") ||
-    combined.includes("asap") ||
-    combined.includes("important") ||
-    combined.includes("critical")
-  )
-    return 3;
-  if (
-    combined.includes("meeting") ||
-    combined.includes("call") ||
-    combined.includes("deadline")
-  )
-    return 2;
-  return 1;
-};
-
-// Category groupings
-const getCategoryGroup = (item: ItemWithDetails): string => {
-  const title = item.title.toLowerCase();
-  if (
-    title.includes("meeting") ||
-    title.includes("call") ||
-    title.includes("sync")
-  )
-    return "Meetings";
-  if (
-    title.includes("gym") ||
-    title.includes("workout") ||
-    title.includes("exercise")
-  )
-    return "Health";
-  if (
-    title.includes("birthday") ||
-    title.includes("family") ||
-    title.includes("mom") ||
-    title.includes("dad")
-  )
-    return "Personal";
-  if (
-    title.includes("deadline") ||
-    title.includes("project") ||
-    title.includes("proposal") ||
-    title.includes("draft")
-  )
-    return "Work";
-  return "Other";
-};
-
-// Morning greetings based on time
-const getGreeting = (hour: number): { emoji: ReactNode; text: string } => {
+function getGreeting(hour: number): { icon: ReactNode; text: string } {
   if (hour < 5)
-    return {
-      emoji: <Moon className="w-5 h-5 text-indigo-400" />,
-      text: "Working late?",
-    };
+    return { icon: <Moon className="w-4 h-4 text-indigo-400" />, text: "Working late?" };
   if (hour < 12)
-    return {
-      emoji: <Sun className="w-5 h-5 text-yellow-400" />,
-      text: "Good Morning!",
-    };
+    return { icon: <Sun className="w-4 h-4 text-yellow-400" />, text: "Good morning" };
   if (hour < 17)
-    return {
-      emoji: <Sun className="w-5 h-5 text-orange-400" />,
-      text: "Good Afternoon!",
-    };
+    return { icon: <Sun className="w-4 h-4 text-orange-400" />, text: "Good afternoon" };
   if (hour < 21)
-    return {
-      emoji: <Moon className="w-5 h-5 text-purple-400" />,
-      text: "Good Evening!",
-    };
-  return {
-    emoji: <Moon className="w-5 h-5 text-indigo-400" />,
-    text: "Winding Down",
-  };
-};
+    return { icon: <Moon className="w-4 h-4 text-purple-400" />, text: "Good evening" };
+  return { icon: <Moon className="w-4 h-4 text-indigo-400" />, text: "Winding down" };
+}
 
-// ============================================
-// HELPERS
-// ============================================
 function getItemDate(item: ItemWithDetails): Date | null {
   const dateStr =
     item.type === "reminder" || item.type === "task"
@@ -203,8 +82,6 @@ function getItemDate(item: ItemWithDetails): Date | null {
         : null;
   return dateStr ? parseISO(dateStr) : null;
 }
-
-// buildFullRRuleString imported from @/lib/utils/date
 
 function expandRecurringItems(
   items: ItemWithDetails[],
@@ -220,50 +97,33 @@ function expandRecurringItems(
 
     if (item.recurrence_rule?.rrule) {
       try {
-        const rruleString = buildFullRRuleString(
-          itemDate,
+        const occurrences = getOccurrencesInRange(
           item.recurrence_rule,
+          itemDate,
+          startDate,
+          endDate,
         );
-        const rule = RRule.fromString(rruleString);
-        const occurrences = rule.between(startDate, endDate, true);
-
         for (const occ of occurrences) {
           const adjusted = adjustOccurrenceToWallClock(occ, itemDate);
           const isCompleted = isOccurrenceCompleted(item.id, occ, actions);
-          result.push({
-            item,
-            occurrenceDate: adjusted,
-            isCompleted,
-          });
+          result.push({ item, occurrenceDate: adjusted, isCompleted });
         }
       } catch (error) {
         console.error("Error parsing RRULE:", error);
       }
     } else if (isWithinInterval(itemDate, { start: startDate, end: endDate })) {
       const isCompleted =
-        item.status === "completed" ||
-        isOccurrenceCompleted(item.id, itemDate, actions);
-      result.push({
-        item,
-        occurrenceDate: itemDate,
-        isCompleted,
-      });
+        item.status === "completed" || isOccurrenceCompleted(item.id, itemDate, actions);
+      result.push({ item, occurrenceDate: itemDate, isCompleted });
     }
   }
 
-  // Add postponed occurrences
   let currentDate = new Date(startDate);
   while (currentDate <= endDate) {
-    const dayPostponed = getPostponedOccurrencesForDate(
-      items,
-      currentDate,
-      actions,
-    );
+    const dayPostponed = getPostponedOccurrencesForDate(items, currentDate, actions);
     for (const p of dayPostponed) {
       const alreadyExists = result.some(
-        (r) =>
-          r.item.id === p.item.id &&
-          isSameDay(r.occurrenceDate, p.occurrenceDate),
+        (r) => r.item.id === p.item.id && isSameDay(r.occurrenceDate, p.occurrenceDate),
       );
       if (!alreadyExists) {
         result.push({
@@ -278,38 +138,17 @@ function expandRecurringItems(
     currentDate = addDays(currentDate, 1);
   }
 
-  return result.sort(
-    (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime(),
-  );
+  return result.sort((a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime());
 }
 
-// ============================================
-// MAIN TODAY VIEW - Multi-Mode Experience
-// ============================================
 export default function WebTodayView() {
   const { theme } = useTheme();
   const isPink = theme === "pink";
   const isFrost = theme === "frost";
-  const itemActions = useItemActionsWithToast();
-
-  // State
-  const [viewMode, setViewMode] = useState<ViewMode>("briefing");
-  const [timeScope, setTimeScope] = useState<TimeScope>("today");
-  const [sortMode, setSortMode] = useState<SortMode>("time");
-  const [showOverdue, setShowOverdue] = useState(false);
-  const [showNarrative, setShowNarrative] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
   const tts = useBriefingTTS();
 
-  // Stop TTS when view mode changes
-  useEffect(() => {
-    return () => {
-      tts.stop();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode]);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Update time every minute for live updates
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(interval);
@@ -319,37 +158,23 @@ export default function WebTodayView() {
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
 
   const today = startOfDay(new Date());
-  const currentHour = new Date().getHours();
 
-  // Filter active items
-  const activeItems = useMemo(() => {
-    return allItems.filter(
-      (item) =>
-        item.status !== "archived" &&
-        item.status !== "cancelled" &&
-        !item.archived_at,
-    );
-  }, [allItems]);
+  const activeItems = useMemo(
+    () =>
+      allItems.filter(
+        (item) =>
+          item.status !== "archived" && item.status !== "cancelled" && !item.archived_at,
+      ),
+    [allItems],
+  );
 
-  // Get tasks based on time scope (today or week)
-  const { scopedTasks, overdueTasks, weekStart, weekEnd } = useMemo(() => {
-    // Calculate date ranges
+  const { todayTasks, overdueTasks } = useMemo(() => {
     const todayEnd = addDays(today, 1);
-    const wStart = startOfWeek(today, { weekStartsOn: 1 });
-    const wEnd = endOfWeek(today, { weekStartsOn: 1 });
 
-    // Get tasks for the selected scope
-    const scopeStart = timeScope === "today" ? today : wStart;
-    const scopeEnd = timeScope === "today" ? todayEnd : addDays(wEnd, 1);
+    const todayOccs = expandRecurringItems(activeItems, today, todayEnd, occurrenceActions)
+      .filter((o) => !o.isCompleted)
+      .sort((a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime());
 
-    const scopedOccs = expandRecurringItems(
-      activeItems,
-      scopeStart,
-      scopeEnd,
-      occurrenceActions,
-    );
-
-    // Expand past 30 days + today so items past their due time today are caught
     const pastStart = addDays(today, -30);
     const allPastOccs = expandRecurringItems(
       activeItems,
@@ -361,245 +186,116 @@ export default function WebTodayView() {
       (occ) => isBefore(occ.occurrenceDate, currentTime) && !occ.isCompleted,
     );
 
-    // Sort based on selected mode
-    let sortedTasks = scopedOccs.filter((o) => !o.isCompleted);
+    return { todayTasks: todayOccs, overdueTasks: overdueOccs };
+  }, [activeItems, occurrenceActions, today, currentTime]);
 
-    if (sortMode === "time") {
-      sortedTasks.sort(
-        (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime(),
-      );
-    } else if (sortMode === "priority") {
-      sortedTasks.sort((a, b) => {
-        const priorityDiff =
-          getPriorityLevel(b.item) - getPriorityLevel(a.item);
-        if (priorityDiff !== 0) return priorityDiff;
-        return a.occurrenceDate.getTime() - b.occurrenceDate.getTime();
-      });
-    } else if (sortMode === "category") {
-      sortedTasks.sort((a, b) => {
-        const catA = getCategoryGroup(a.item);
-        const catB = getCategoryGroup(b.item);
-        if (catA !== catB) return catA.localeCompare(catB);
-        return a.occurrenceDate.getTime() - b.occurrenceDate.getTime();
-      });
-    }
+  const currentHour = currentTime.getHours();
+  const greeting = useMemo(() => getGreeting(currentHour), [currentHour]);
 
-    return {
-      scopedTasks: sortedTasks,
-      overdueTasks: overdueOccs,
-      weekStart: wStart,
-      weekEnd: wEnd,
-    };
-  }, [activeItems, occurrenceActions, today, currentTime, timeScope, sortMode]);
-
-  // Alias for backward compatibility with existing views
-  const todayTasks = scopedTasks;
-
-  // Compute day/week boundaries
-  const dayInfo = useMemo(() => {
-    if (scopedTasks.length === 0) return null;
-    const firstTask = scopedTasks[0];
-    const lastTask = scopedTasks[scopedTasks.length - 1];
-    return {
-      startsAt: format(firstTask.occurrenceDate, "h:mm a"),
-      endsAt: format(lastTask.occurrenceDate, "h:mm a"),
-      totalItems: scopedTasks.length,
-    };
-  }, [scopedTasks]);
-
-  // AI Briefing Data - ERA style
-  const briefingData = useMemo(() => {
-    const now = currentTime;
-    const hour = now.getHours();
-    const greeting = getGreeting(hour);
-
-    // Get today's tasks only for the briefing
-    const todayEnd = addDays(today, 1);
-    const todayOnly = expandRecurringItems(
-      activeItems,
-      today,
-      todayEnd,
-      occurrenceActions,
-    )
-      .filter((o) => !o.isCompleted)
-      .sort((a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime());
-
-    // Find NOW (current or most recent past task today)
-    // and NEXT (upcoming task)
+  const { nowTask, nextTask } = useMemo(() => {
     let nowTask: ExpandedOccurrence | null = null;
     let nextTask: ExpandedOccurrence | null = null;
 
-    for (let i = 0; i < todayOnly.length; i++) {
-      const task = todayOnly[i];
+    for (let i = 0; i < todayTasks.length; i++) {
+      const task = todayTasks[i];
       const taskTime = task.occurrenceDate.getTime();
-      const nowTime = now.getTime();
+      const nowTime = currentTime.getTime();
 
-      // Task is in the past or happening now (within 30 min window)
       if (taskTime <= nowTime && taskTime >= nowTime - 30 * 60 * 1000) {
         nowTask = task;
-        nextTask = todayOnly[i + 1] || null;
+        nextTask = todayTasks[i + 1] || null;
         break;
       }
-      // Task is in the future
       if (taskTime > nowTime) {
         if (i === 0) {
-          // First task is in the future, no "now" task
           nextTask = task;
         } else {
-          // Previous task might be "now"
-          nowTask = todayOnly[i - 1];
+          nowTask = todayTasks[i - 1];
           nextTask = task;
         }
         break;
       }
     }
 
-    // If all tasks are in the past
-    if (!nowTask && !nextTask && todayOnly.length > 0) {
-      nowTask = todayOnly[todayOnly.length - 1];
+    if (!nowTask && !nextTask && todayTasks.length > 0) {
+      nowTask = todayTasks[todayTasks.length - 1];
     }
 
-    // Top 3 priorities (by priority level, then time)
-    const topPriorities = [...todayOnly]
-      .sort((a, b) => {
-        const priorityDiff =
-          getPriorityLevel(b.item) - getPriorityLevel(a.item);
-        if (priorityDiff !== 0) return priorityDiff;
-        return a.occurrenceDate.getTime() - b.occurrenceDate.getTime();
-      })
-      .slice(0, 3);
+    return { nowTask, nextTask };
+  }, [todayTasks, currentTime]);
 
-    // Time-sensitive items (happening in next 2 hours)
-    const timeSensitive = todayOnly.filter((t) => {
-      const taskTime = t.occurrenceDate.getTime();
-      return (
-        taskTime > now.getTime() &&
-        taskTime <= now.getTime() + 2 * 60 * 60 * 1000
-      );
-    });
+  // Visual bullet points — one per today item, with time and NOW/NEXT markers
+  const briefingBullets = useMemo((): BriefingBullet[] => {
+    const bullets: BriefingBullet[] = [];
 
-    // Group by category
-    const byCategory = todayOnly.reduce(
-      (acc, task) => {
-        const cat = getCategoryGroup(task.item);
-        if (!acc[cat]) acc[cat] = [];
-        acc[cat].push(task);
-        return acc;
-      },
-      {} as Record<string, ExpandedOccurrence[]>,
-    );
-
-    return {
-      greeting,
-      now: nowTask,
-      next: nextTask,
-      topPriorities,
-      timeSensitive,
-      byCategory,
-      totalToday: todayOnly.length,
-      completedToday: 0, // Would need completion tracking
-      hour,
-    };
-  }, [currentTime, activeItems, occurrenceActions, today]);
-
-  // Generate ERA-style narrative briefing
-  const narrative = useMemo(() => {
-    const {
-      greeting,
-      now,
-      next,
-      topPriorities,
-      timeSensitive,
-      totalToday,
-      hour,
-    } = briefingData;
-
-    if (totalToday === 0) {
-      const freeMessages = [
-        "Your schedule is clear. A perfect opportunity to focus on what matters most to you.",
-        "No scheduled commitments ahead. You have complete freedom to shape this time.",
-        "All clear on the horizon. Perhaps a good moment for deep work or strategic planning.",
-      ];
-      return freeMessages[Math.floor(hour / 8) % 3];
-    }
-
-    const parts: string[] = [];
-
-    // Opening with context
-    if (hour < 12) {
-      parts.push(
-        `You have ${totalToday} ${totalToday === 1 ? "item" : "items"} on your agenda today.`,
-      );
+    if (todayTasks.length === 0) {
+      bullets.push({ text: "Your schedule is clear today" });
     } else {
-      const remaining = scopedTasks.filter(
-        (t) => t.occurrenceDate > currentTime,
-      ).length;
-      if (remaining > 0) {
-        parts.push(
-          `${remaining} ${remaining === 1 ? "item remains" : "items remain"} for the rest of today.`,
-        );
-      } else {
-        parts.push("You've made it through today's schedule. Well done.");
+      for (const occ of todayTasks) {
+        const isNow =
+          nowTask?.item.id === occ.item.id &&
+          nowTask?.occurrenceDate.getTime() === occ.occurrenceDate.getTime();
+        const isNext =
+          !isNow &&
+          nextTask?.item.id === occ.item.id &&
+          nextTask?.occurrenceDate.getTime() === occ.occurrenceDate.getTime();
+
+        let sub = format(occ.occurrenceDate, "h:mm a");
+        let type: BriefingBullet["type"] = "default";
+
+        if (isNow) {
+          sub = `${format(occ.occurrenceDate, "h:mm a")} · Now`;
+          type = "now";
+        } else if (isNext) {
+          const timeUntil = Math.round(
+            (occ.occurrenceDate.getTime() - currentTime.getTime()) / (1000 * 60),
+          );
+          sub =
+            timeUntil <= 60
+              ? `${format(occ.occurrenceDate, "h:mm a")} · in ${timeUntil} min`
+              : format(occ.occurrenceDate, "h:mm a");
+          type = "next";
+        }
+
+        bullets.push({ text: occ.item.title, sub, type });
       }
     }
 
-    // Current focus
-    if (now) {
-      parts.push(
-        `\n\nCurrently: "${now.item.title}" at ${format(now.occurrenceDate, "h:mm a")}.`,
-      );
-    }
-
-    // What's next
-    if (next) {
-      const timeUntil = Math.round(
-        (next.occurrenceDate.getTime() - currentTime.getTime()) / (1000 * 60),
-      );
-      if (timeUntil <= 60) {
-        parts.push(`\n\nIn ${timeUntil} minutes: "${next.item.title}".`);
-      } else {
-        parts.push(
-          `\n\nNext up at ${format(next.occurrenceDate, "h:mm a")}: "${next.item.title}".`,
-        );
-      }
-    }
-
-    // Top priorities callout
-    if (topPriorities.length > 0 && totalToday > 1) {
-      parts.push("\n\nKey priorities for today:");
-      topPriorities.forEach((task, idx) => {
-        parts.push(`\n  ${idx + 1}. ${task.item.title}`);
+    if (overdueTasks.length > 0) {
+      bullets.push({
+        text: `${overdueTasks.length} overdue ${overdueTasks.length === 1 ? "item" : "items"} need attention`,
+        type: "warn",
       });
     }
 
-    // Time-sensitive warning
-    if (timeSensitive.length > 1) {
-      parts.push(
-        `\n\n💡 Heads up: You have ${timeSensitive.length} items coming up in the next 2 hours.`,
-      );
-    }
+    return bullets;
+  }, [todayTasks, currentTime, nowTask, nextTask, overdueTasks]);
 
-    // Things to prepare
-    const thingsToTake = scopedTasks.filter(
-      (t) =>
-        t.item.title.toLowerCase().includes("give") ||
-        t.item.title.toLowerCase().includes("bring") ||
-        t.item.title.toLowerCase().includes("take") ||
-        t.item.title.toLowerCase().includes("deliver") ||
-        t.item.title.toLowerCase().includes("birthday"),
-    );
+  // Natural prose narrative for TTS — reads every today item by name and time
+  const narrative = useMemo(() => {
+    const timeStr = format(currentTime, "h:mm a");
+    const dateStr = format(today, "EEEE, MMMM do");
+    const total = todayTasks.length;
 
-    if (thingsToTake.length > 0) {
-      parts.push("\n\n📦 Don't forget to prepare:");
-      thingsToTake.forEach((t) => {
-        parts.push(
-          `\n  • ${t.item.title} (${format(t.occurrenceDate, "h:mm a")})`,
-        );
+    let text = `It's ${timeStr} on ${dateStr}. `;
+
+    if (total === 0) {
+      text += "Your schedule is clear today. Enjoy your free time.";
+    } else {
+      text += `You have ${total} ${total === 1 ? "item" : "items"} today. `;
+      todayTasks.forEach((occ, idx) => {
+        const t = format(occ.occurrenceDate, "h:mm a");
+        const isLast = idx === total - 1;
+        text += `${occ.item.title} at ${t}${isLast ? "." : ", "}`;
       });
     }
 
-    return parts.join("");
-  }, [briefingData, scopedTasks, currentTime]);
+    if (overdueTasks.length > 0) {
+      text += ` You also have ${overdueTasks.length} overdue ${overdueTasks.length === 1 ? "item" : "items"} that need attention.`;
+    }
+
+    return text;
+  }, [currentTime, today, todayTasks, overdueTasks]);
 
   if (isLoading) {
     return (
@@ -614,308 +310,117 @@ export default function WebTodayView() {
     );
   }
 
-  const accentColor = isFrost ? "indigo" : isPink ? "pink" : "cyan";
+  const bulletDot: Record<NonNullable<BriefingBullet["type"]>, string> = {
+    now: "bg-emerald-400",
+    next: "bg-blue-400",
+    warn: "bg-amber-400",
+    default: isFrost ? "bg-slate-300" : "bg-white/20",
+  };
 
-  // ==========================================
-  // BRIEFING VIEW - ERA-style Day at a Glance
-  // ==========================================
-  const renderBriefingView = () => {
-    const {
-      greeting,
-      now,
-      next,
-      topPriorities,
-      byCategory,
-      totalToday,
-      timeSensitive,
-    } = briefingData;
+  const bulletSub: Record<NonNullable<BriefingBullet["type"]>, string> = {
+    now: isFrost ? "text-emerald-600" : "text-emerald-400",
+    next: isFrost ? "text-blue-600" : "text-blue-400",
+    warn: isFrost ? "text-amber-600" : "text-amber-400",
+    default: isFrost ? "text-slate-400" : "text-white/40",
+  };
 
-    return (
-      <div className="px-4 py-4 space-y-4">
-        {/* Greeting Section - Clean and minimal */}
-        <div className="mb-2">
-          <p
+  // Kanban periods
+  const periods = [
+    {
+      label: "Morning",
+      sub: "before noon",
+      icon: <Sun className="w-3.5 h-3.5" />,
+      items: todayTasks.filter((t) => t.occurrenceDate.getHours() < 12),
+      accentBorder: isFrost ? "border-t-amber-400" : "border-t-amber-500/70",
+      headerText: isFrost ? "text-amber-600" : "text-amber-400",
+      headerBg: isFrost ? "bg-amber-50/80" : "bg-amber-500/5",
+      countBadge: isFrost ? "bg-amber-100 text-amber-700" : "bg-amber-500/20 text-amber-300",
+    },
+    {
+      label: "Afternoon",
+      sub: "noon – 5 PM",
+      icon: <Sun className="w-3.5 h-3.5" />,
+      items: todayTasks.filter((t) => {
+        const h = t.occurrenceDate.getHours();
+        return h >= 12 && h < 17;
+      }),
+      accentBorder: isFrost ? "border-t-sky-400" : "border-t-sky-500/70",
+      headerText: isFrost ? "text-sky-600" : "text-sky-400",
+      headerBg: isFrost ? "bg-sky-50/80" : "bg-sky-500/5",
+      countBadge: isFrost ? "bg-sky-100 text-sky-700" : "bg-sky-500/20 text-sky-300",
+    },
+    {
+      label: "Evening",
+      sub: "after 5 PM",
+      icon: <Moon className="w-3.5 h-3.5" />,
+      items: todayTasks.filter((t) => t.occurrenceDate.getHours() >= 17),
+      accentBorder: isFrost ? "border-t-indigo-400" : "border-t-indigo-500/70",
+      headerText: isFrost ? "text-indigo-600" : "text-indigo-400",
+      headerBg: isFrost ? "bg-indigo-50/80" : "bg-indigo-500/5",
+      countBadge: isFrost ? "bg-indigo-100 text-indigo-700" : "bg-indigo-500/20 text-indigo-300",
+    },
+  ];
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Compact header */}
+      <div
+        className={cn(
+          "flex-shrink-0 px-4 py-2 flex items-center justify-between",
+          isFrost ? "border-b border-slate-100" : "border-b border-white/[0.04]",
+        )}
+      >
+        <p className={cn("text-xs font-medium", isFrost ? "text-slate-500" : "text-white/50")}>
+          {format(today, "EEEE, MMMM d")}
+        </p>
+        {overdueTasks.length > 0 && (
+          <div
             className={cn(
-              "text-lg font-medium mb-1",
-              isFrost ? "text-slate-700" : "text-white/90",
+              "flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium",
+              isFrost ? "bg-amber-50 text-amber-600" : "bg-amber-500/10 text-amber-400",
             )}
           >
-            <span className="inline-flex items-center gap-2">
-              {greeting.emoji} {greeting.text}
+            <AlertCircle className="w-3 h-3" />
+            {overdueTasks.length} overdue
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5">
+        {/* Live clock + greeting */}
+        <div>
+          <p
+            className={cn(
+              "text-4xl font-light tabular-nums tracking-tight",
+              isFrost ? "text-slate-800" : "text-white",
+            )}
+          >
+            {format(currentTime, "h:mm")}
+            <span className={cn("text-xl ml-1.5", isFrost ? "text-slate-400" : "text-white/40")}>
+              {format(currentTime, "a")}
             </span>
           </p>
-          <h1
+          <p
             className={cn(
-              "text-sm",
+              "flex items-center gap-1.5 text-sm mt-1",
               isFrost ? "text-slate-500" : "text-white/50",
             )}
           >
-            {totalToday === 0 ? (
-              "Your schedule is clear. A perfect opportunity for focused work."
-            ) : (
-              <>
-                You have{" "}
-                <span className="font-medium">
-                  {totalToday} {totalToday === 1 ? "item" : "items"}
-                </span>{" "}
-                scheduled
-                {timeScope === "today" ? " today" : " this week"}.
-                {dayInfo && ` First up at ${dayInfo.startsAt}.`}
-              </>
-            )}
-          </h1>
+            {greeting.icon}
+            {greeting.text}
+          </p>
         </div>
 
-        {/* NOW / NEXT / TOP 3 Widget Row */}
-        {totalToday > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* NOW Card */}
-            <div
-              className={cn(
-                "rounded-xl p-4 border-l-4",
-                isFrost
-                  ? "bg-white border-l-emerald-500 shadow-sm"
-                  : "bg-white/[0.04] border-l-emerald-500 border border-white/[0.08]",
-              )}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <div
-                  className={cn(
-                    "w-6 h-6 rounded-full flex items-center justify-center",
-                    isFrost
-                      ? "bg-emerald-100 text-emerald-600"
-                      : "bg-emerald-500/20 text-emerald-400",
-                  )}
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                </div>
-                <span
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider",
-                    isFrost ? "text-emerald-600" : "text-emerald-400",
-                  )}
-                >
-                  NOW
-                </span>
-              </div>
-              {now ? (
-                <>
-                  <h3
-                    className={cn(
-                      "font-semibold text-sm mb-1 line-clamp-2",
-                      isFrost ? "text-slate-800" : "text-white",
-                    )}
-                  >
-                    {now.item.title}
-                  </h3>
-                  <p
-                    className={cn(
-                      "text-xs",
-                      isFrost ? "text-slate-500" : "text-white/50",
-                    )}
-                  >
-                    @ {format(now.occurrenceDate, "h:mm a")}
-                  </p>
-                </>
-              ) : (
-                <p
-                  className={cn(
-                    "text-sm",
-                    isFrost ? "text-slate-400" : "text-white/40",
-                  )}
-                >
-                  Nothing active right now
-                </p>
-              )}
-            </div>
-
-            {/* NEXT Card */}
-            <div
-              className={cn(
-                "rounded-xl p-4 border-l-4",
-                isFrost
-                  ? "bg-white border-l-blue-500 shadow-sm"
-                  : "bg-white/[0.04] border-l-blue-500 border border-white/[0.08]",
-              )}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <div
-                  className={cn(
-                    "w-6 h-6 rounded-full flex items-center justify-center",
-                    isFrost
-                      ? "bg-blue-100 text-blue-600"
-                      : "bg-blue-500/20 text-blue-400",
-                  )}
-                >
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </div>
-                <span
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider",
-                    isFrost ? "text-blue-600" : "text-blue-400",
-                  )}
-                >
-                  NEXT
-                </span>
-              </div>
-              {next ? (
-                <>
-                  <h3
-                    className={cn(
-                      "font-semibold text-sm mb-1 line-clamp-2",
-                      isFrost ? "text-slate-800" : "text-white",
-                    )}
-                  >
-                    {next.item.title}
-                  </h3>
-                  <p
-                    className={cn(
-                      "text-xs",
-                      isFrost ? "text-slate-500" : "text-white/50",
-                    )}
-                  >
-                    @ {format(next.occurrenceDate, "h:mm a")}
-                  </p>
-                </>
-              ) : (
-                <p
-                  className={cn(
-                    "text-sm",
-                    isFrost ? "text-slate-400" : "text-white/40",
-                  )}
-                >
-                  Nothing coming up
-                </p>
-              )}
-            </div>
-
-            {/* Top 3 Priorities Card */}
-            <div
-              className={cn(
-                "rounded-xl p-4 border-l-4",
-                isFrost
-                  ? "bg-white border-l-amber-500 shadow-sm"
-                  : "bg-white/[0.04] border-l-amber-500 border border-white/[0.08]",
-              )}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <div
-                  className={cn(
-                    "w-6 h-6 rounded-full flex items-center justify-center",
-                    isFrost
-                      ? "bg-amber-100 text-amber-600"
-                      : "bg-amber-500/20 text-amber-400",
-                  )}
-                >
-                  <Star className="w-3.5 h-3.5" />
-                </div>
-                <span
-                  className={cn(
-                    "text-xs font-bold uppercase tracking-wider",
-                    isFrost ? "text-amber-600" : "text-amber-400",
-                  )}
-                >
-                  Top Priorities
-                </span>
-              </div>
-              {topPriorities.length > 0 ? (
-                <ul className="space-y-1">
-                  {topPriorities.slice(0, 3).map((task, idx) => (
-                    <li
-                      key={`priority-${task.item.id}-${idx}`}
-                      className={cn(
-                        "text-xs flex items-start gap-1.5",
-                        isFrost ? "text-slate-600" : "text-white/70",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold",
-                          isFrost
-                            ? "bg-slate-100 text-slate-500"
-                            : "bg-white/10 text-white/50",
-                        )}
-                      >
-                        {idx + 1}
-                      </span>
-                      <span className="line-clamp-1">{task.item.title}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p
-                  className={cn(
-                    "text-sm",
-                    isFrost ? "text-slate-400" : "text-white/40",
-                  )}
-                >
-                  No priorities set
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Time-Sensitive Alert */}
-        {timeSensitive.length > 0 && (
-          <div
-            className={cn(
-              "rounded-xl p-4 flex items-start gap-3",
-              isFrost
-                ? "bg-orange-50 border border-orange-100"
-                : "bg-orange-500/10 border border-orange-500/20",
-            )}
-          >
-            <div
-              className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                isFrost
-                  ? "bg-orange-100 text-orange-600"
-                  : "bg-orange-500/20 text-orange-400",
-              )}
-            >
-              <Clock className="w-4 h-4" />
-            </div>
-            <div>
-              <h4
-                className={cn(
-                  "font-semibold text-sm mb-1",
-                  isFrost ? "text-orange-800" : "text-orange-300",
-                )}
-              >
-                Don't miss these coming up
-              </h4>
-              <div className="space-y-1">
-                {timeSensitive.slice(0, 3).map((task, idx) => (
-                  <p
-                    key={`urgent-${task.item.id}-${idx}`}
-                    className={cn(
-                      "text-xs flex items-center gap-2",
-                      isFrost ? "text-orange-700" : "text-orange-300/80",
-                    )}
-                  >
-                    <span className="font-medium">
-                      {format(task.occurrenceDate, "h:mm a")}
-                    </span>
-                    <ChevronRight className="w-3 h-3 opacity-50" />
-                    <span>{task.item.title}</span>
-                  </p>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* AI Summary Section - Immersive Reading */}
+        {/* Personal Briefing — bullet points, TTS reads natural prose */}
         <div
           className={cn(
-            "rounded-xl p-5",
+            "rounded-2xl p-5",
             isFrost
               ? "bg-gradient-to-br from-slate-50 to-indigo-50/50 border border-slate-100"
               : "bg-gradient-to-br from-white/[0.03] to-cyan-500/[0.03] border border-white/[0.06]",
           )}
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div
                 className={cn(
@@ -929,23 +434,19 @@ export default function WebTodayView() {
               >
                 <Sparkles className="w-4 h-4" />
               </div>
-              <h3
+              <span
                 className={cn(
-                  "font-semibold text-sm",
+                  "text-sm font-semibold",
                   isFrost ? "text-slate-700" : "text-white/90",
                 )}
               >
-                Your Personal Briefing
-              </h3>
+                Your Briefing
+              </span>
             </div>
-
-            {/* Speak Button */}
             <button
               type="button"
               onClick={() =>
-                tts.isPlaying || tts.isLoading
-                  ? tts.stop()
-                  : tts.play(narrative)
+                tts.isPlaying || tts.isLoading ? tts.stop() : tts.play(narrative)
               }
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
@@ -978,210 +479,217 @@ export default function WebTodayView() {
               )}
             </button>
           </div>
-          <p
-            className={cn(
-              "text-sm leading-relaxed whitespace-pre-wrap",
-              isFrost ? "text-slate-600" : "text-white/70",
-            )}
-            style={{ fontFamily: "'Georgia', serif" }}
-          >
-            {narrative}
-          </p>
+
+          <ul className="space-y-3">
+            {briefingBullets.map((bullet, idx) => {
+              const type = bullet.type ?? "default";
+              return (
+                <li key={idx} className="flex items-start gap-2.5">
+                  <div
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full mt-[5px] flex-shrink-0",
+                      bulletDot[type],
+                    )}
+                  />
+                  <div>
+                    <p
+                      className={cn(
+                        "text-sm font-medium leading-snug",
+                        isFrost ? "text-slate-700" : "text-white/90",
+                      )}
+                    >
+                      {bullet.text}
+                    </p>
+                    {bullet.sub && (
+                      <p className={cn("text-xs mt-0.5", bulletSub[type])}>{bullet.sub}</p>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </div>
 
-        {/* Category Breakdown */}
-        {Object.keys(byCategory).length > 0 && (
+        {/* Today's Kanban — grouped by time of day */}
+        {todayTasks.length > 0 && (
           <div>
             <h3
               className={cn(
-                "text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2",
-                isFrost ? "text-slate-400" : "text-white/40",
+                "text-xs font-bold uppercase tracking-wider mb-3",
+                isFrost ? "text-slate-400" : "text-white/30",
               )}
             >
-              <Layers className="w-3.5 h-3.5" />
-              By Category
+              Today
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {Object.entries(byCategory).map(([category, tasks]) => (
-                <div
-                  key={category}
-                  className={cn(
-                    "rounded-lg p-3",
-                    isFrost
-                      ? "bg-white border border-slate-100 shadow-sm"
-                      : "bg-white/[0.03] border border-white/[0.06]",
-                  )}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span
-                      className={cn(
-                        "text-xs font-medium",
-                        isFrost ? "text-slate-600" : "text-white/70",
-                      )}
-                    >
-                      {category}
-                    </span>
-                    <span
-                      className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
-                        isFrost
-                          ? "bg-slate-100 text-slate-500"
-                          : "bg-white/10 text-white/50",
-                      )}
-                    >
-                      {tasks.length}
-                    </span>
-                  </div>
-                  <div className="space-y-0.5">
-                    {tasks.slice(0, 2).map((task, idx) => (
-                      <p
-                        key={`cat-${task.item.id}-${idx}`}
-                        className={cn(
-                          "text-[11px] truncate",
-                          isFrost ? "text-slate-400" : "text-white/40",
-                        )}
-                      >
-                        {task.item.title}
-                      </p>
-                    ))}
-                    {tasks.length > 2 && (
-                      <p
-                        className={cn(
-                          "text-[10px]",
-                          isFrost ? "text-slate-300" : "text-white/20",
-                        )}
-                      >
-                        +{tasks.length - 2} more
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Quick Schedule Preview */}
-        {totalToday > 0 && (
-          <div>
-            <h3
-              className={cn(
-                "text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2",
-                isFrost ? "text-slate-400" : "text-white/40",
-              )}
-            >
-              <CalendarDays className="w-3.5 h-3.5" />
-              {timeScope === "today" ? "Today's" : "This Week's"} Schedule
-            </h3>
-            <div
-              className={cn(
-                "rounded-xl overflow-hidden divide-y",
-                isFrost
-                  ? "bg-white border border-slate-100 divide-slate-50"
-                  : "bg-white/[0.02] border border-white/[0.06] divide-white/[0.04]",
-              )}
-            >
-              {scopedTasks.slice(0, 5).map((occ, idx) => {
-                const { item, occurrenceDate } = occ;
-                const Icon = typeIcons[item.type];
-                const isTaskToday = isToday(occurrenceDate);
-
-                return (
+            <div className="grid grid-cols-3 gap-3">
+              {periods.map(
+                ({ label, sub, icon, items, accentBorder, headerText, headerBg, countBadge }) => (
                   <div
-                    key={`schedule-${item.id}-${idx}`}
+                    key={label}
                     className={cn(
-                      "flex items-center gap-3 px-4 py-3",
-                      isFrost ? "hover:bg-slate-50" : "hover:bg-white/[0.02]",
+                      "rounded-xl overflow-hidden border-t-2",
+                      accentBorder,
+                      isFrost
+                        ? "bg-slate-50/60 border border-slate-100"
+                        : "bg-white/[0.02] border border-white/[0.05]",
                     )}
                   >
+                    {/* Column header */}
                     <div
                       className={cn(
-                        "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
-                        item.type === "event" &&
-                          (isFrost
-                            ? "bg-pink-50 text-pink-500"
-                            : "bg-pink-500/10 text-pink-400"),
-                        item.type === "reminder" &&
-                          (isFrost
-                            ? "bg-cyan-50 text-cyan-500"
-                            : "bg-cyan-500/10 text-cyan-400"),
-                        item.type === "task" &&
-                          (isFrost
-                            ? "bg-purple-50 text-purple-500"
-                            : "bg-purple-500/10 text-purple-400"),
+                        "px-3 py-2.5 flex items-center justify-between",
+                        headerBg,
+                        isFrost ? "border-b border-slate-100" : "border-b border-white/[0.05]",
                       )}
                     >
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4
-                        className={cn(
-                          "text-sm font-medium truncate",
-                          isFrost ? "text-slate-800" : "text-white",
-                        )}
-                      >
-                        {item.title}
-                      </h4>
-                      {item.description && (
+                      <div className="min-w-0">
+                        <div
+                          className={cn("flex items-center gap-1.5 text-xs font-semibold", headerText)}
+                        >
+                          {icon}
+                          {label}
+                        </div>
                         <p
                           className={cn(
-                            "text-xs truncate",
-                            isFrost ? "text-slate-400" : "text-white/40",
+                            "text-[10px] mt-0.5",
+                            isFrost ? "text-slate-400" : "text-white/30",
                           )}
                         >
-                          {item.description}
+                          {sub}
                         </p>
-                      )}
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p
+                      </div>
+                      <span
                         className={cn(
-                          "text-xs font-medium tabular-nums",
-                          isFrost ? "text-slate-600" : "text-white/70",
+                          "text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0",
+                          items.length > 0
+                            ? countBadge
+                            : isFrost
+                              ? "bg-slate-100 text-slate-400"
+                              : "bg-white/5 text-white/20",
                         )}
                       >
-                        {format(occurrenceDate, "h:mm a")}
-                      </p>
-                      {timeScope === "week" && !isTaskToday && (
+                        {items.length}
+                      </span>
+                    </div>
+
+                    {/* Cards */}
+                    <div className="p-2 space-y-2 min-h-[72px]">
+                      {items.length === 0 ? (
                         <p
                           className={cn(
-                            "text-[10px]",
-                            isFrost ? "text-slate-400" : "text-white/40",
+                            "text-[11px] text-center py-5",
+                            isFrost ? "text-slate-300" : "text-white/15",
                           )}
                         >
-                          {format(occurrenceDate, "EEE")}
+                          Clear
                         </p>
+                      ) : (
+                        items.map((occ, idx) => {
+                          const { item, occurrenceDate } = occ;
+                          const Icon = typeIcons[item.type];
+                          const isPast = isBefore(occurrenceDate, currentTime);
+                          const isNow =
+                            nowTask?.item.id === item.id &&
+                            nowTask?.occurrenceDate.getTime() === occurrenceDate.getTime();
+                          const isNext =
+                            !isNow &&
+                            nextTask?.item.id === item.id &&
+                            nextTask?.occurrenceDate.getTime() === occurrenceDate.getTime();
+
+                          return (
+                            <div
+                              key={`${item.id}-${idx}`}
+                              className={cn(
+                                "rounded-lg p-2.5 border transition-opacity",
+                                isFrost
+                                  ? "bg-white border-slate-200 shadow-sm"
+                                  : "bg-white/[0.04] border-white/[0.08]",
+                                isPast && !isNow && "opacity-35",
+                              )}
+                            >
+                              {/* Card top row: time + badges + icon */}
+                              <div className="flex items-center justify-between gap-1 mb-1.5">
+                                <span
+                                  className={cn(
+                                    "text-[10px] font-medium tabular-nums",
+                                    isFrost ? "text-slate-400" : "text-white/50",
+                                  )}
+                                >
+                                  {format(occurrenceDate, "h:mm a")}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  {isNow && (
+                                    <span
+                                      className={cn(
+                                        "text-[9px] font-bold px-1 py-0.5 rounded-full",
+                                        isFrost
+                                          ? "bg-emerald-100 text-emerald-600"
+                                          : "bg-emerald-500/20 text-emerald-400",
+                                      )}
+                                    >
+                                      NOW
+                                    </span>
+                                  )}
+                                  {isNext && (
+                                    <span
+                                      className={cn(
+                                        "text-[9px] font-bold px-1 py-0.5 rounded-full",
+                                        isFrost
+                                          ? "bg-blue-100 text-blue-600"
+                                          : "bg-blue-500/20 text-blue-400",
+                                      )}
+                                    >
+                                      NEXT
+                                    </span>
+                                  )}
+                                  <div
+                                    className={cn(
+                                      "w-5 h-5 rounded flex items-center justify-center",
+                                      item.type === "event" &&
+                                        (isFrost
+                                          ? "bg-pink-50 text-pink-400"
+                                          : "bg-pink-500/10 text-pink-400"),
+                                      item.type === "reminder" &&
+                                        (isFrost
+                                          ? "bg-cyan-50 text-cyan-400"
+                                          : "bg-cyan-500/10 text-cyan-400"),
+                                      item.type === "task" &&
+                                        (isFrost
+                                          ? "bg-purple-50 text-purple-400"
+                                          : "bg-purple-500/10 text-purple-400"),
+                                    )}
+                                  >
+                                    <Icon className="w-3 h-3" />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Card title */}
+                              <p
+                                className={cn(
+                                  "text-xs font-medium leading-snug line-clamp-2",
+                                  isFrost ? "text-slate-700" : "text-white/90",
+                                )}
+                              >
+                                {item.title}
+                              </p>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>
-                );
-              })}
-              {scopedTasks.length > 5 && (
-                <div
-                  className={cn(
-                    "px-4 py-2 text-center",
-                    isFrost ? "bg-slate-50" : "bg-white/[0.01]",
-                  )}
-                >
-                  <p
-                    className={cn(
-                      "text-xs",
-                      isFrost ? "text-slate-400" : "text-white/40",
-                    )}
-                  >
-                    +{scopedTasks.length - 5} more items
-                  </p>
-                </div>
+                ),
               )}
             </div>
           </div>
         )}
 
         {/* Empty State */}
-        {totalToday === 0 && (
+        {todayTasks.length === 0 && (
           <div
             className={cn(
-              "text-center py-8 rounded-xl",
+              "text-center py-12 rounded-xl",
               isFrost
                 ? "bg-white border border-slate-100"
                 : "bg-white/[0.02] border border-white/[0.06]",
@@ -1189,1319 +697,21 @@ export default function WebTodayView() {
           >
             <div
               className={cn(
-                "w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center",
-                isFrost
-                  ? "bg-slate-100 text-slate-400"
-                  : "bg-white/5 text-white/20",
+                "w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center",
+                isFrost ? "bg-slate-100 text-slate-300" : "bg-white/5 text-white/15",
               )}
             >
-              <Target className="w-8 h-8" />
+              <Calendar className="w-7 h-7" />
             </div>
-            <h3
-              className={cn(
-                "font-semibold mb-1",
-                isFrost ? "text-slate-700" : "text-white/80",
-              )}
-            >
-              All Clear
-            </h3>
-            <p
-              className={cn(
-                "text-sm",
-                isFrost ? "text-slate-400" : "text-white/40",
-              )}
-            >
-              No {timeScope === "today" ? "tasks for today" : "tasks this week"}
-              . Enjoy your free time!
+            <p className={cn("text-sm font-medium", isFrost ? "text-slate-500" : "text-white/50")}>
+              Nothing scheduled today
+            </p>
+            <p className={cn("text-xs mt-1", isFrost ? "text-slate-400" : "text-white/30")}>
+              Enjoy your free time
             </p>
           </div>
         )}
       </div>
-    );
-  };
-
-  // ==========================================
-  // VIEW 1: TIMELINE - Visual journey of your day
-  // ==========================================
-  const renderTimelineView = () => (
-    <div className="px-3 py-3 space-y-0">
-      {todayTasks.length === 0 ? (
-        <div
-          className={cn(
-            "text-center py-8",
-            isFrost ? "text-slate-400" : "text-white/40",
-          )}
-        >
-          <p>Nothing scheduled</p>
-        </div>
-      ) : (
-        todayTasks.map((occ, idx) => {
-          const { item, occurrenceDate } = occ;
-          const Icon = typeIcons[item.type];
-          const isLast = idx === todayTasks.length - 1;
-
-          return (
-            <div key={`${item.id}-${idx}`} className="flex gap-3">
-              {/* Timeline spine */}
-              <div className="flex flex-col items-center w-10 flex-shrink-0">
-                <span
-                  className={cn(
-                    "text-[11px] font-medium tabular-nums",
-                    isFrost ? "text-slate-500" : "text-white/60",
-                  )}
-                >
-                  {format(occurrenceDate, "h:mm")}
-                </span>
-                <span
-                  className={cn(
-                    "text-[9px] uppercase",
-                    isFrost ? "text-slate-400" : "text-white/30",
-                  )}
-                >
-                  {format(occurrenceDate, "a")}
-                </span>
-                {/* Connector line */}
-                {!isLast && (
-                  <div
-                    className={cn(
-                      "w-px flex-1 my-1.5 min-h-[24px]",
-                      isFrost ? "bg-slate-200" : "bg-white/10",
-                    )}
-                  />
-                )}
-              </div>
-
-              {/* Content card */}
-              <div className={cn("flex-1 pb-3", isLast && "pb-0")}>
-                <div
-                  className={cn(
-                    "rounded-xl p-3",
-                    isFrost
-                      ? "bg-white shadow-sm border border-slate-100"
-                      : "bg-white/[0.03] border border-white/[0.06]",
-                  )}
-                >
-                  <div className="flex items-start gap-2">
-                    <div
-                      className={cn(
-                        "w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0",
-                        item.type === "event" &&
-                          (isFrost
-                            ? "bg-pink-50 text-pink-500"
-                            : "bg-pink-500/10 text-pink-400"),
-                        item.type === "reminder" &&
-                          (isFrost
-                            ? "bg-cyan-50 text-cyan-500"
-                            : "bg-cyan-500/10 text-cyan-400"),
-                        item.type === "task" &&
-                          (isFrost
-                            ? "bg-purple-50 text-purple-500"
-                            : "bg-purple-500/10 text-purple-400"),
-                      )}
-                    >
-                      <Icon className="w-3 h-3" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3
-                        className={cn(
-                          "text-sm font-medium leading-tight",
-                          isFrost ? "text-slate-800" : "text-white",
-                        )}
-                      >
-                        {item.title}
-                      </h3>
-                      {item.description && (
-                        <p
-                          className={cn(
-                            "text-xs mt-0.5 line-clamp-2",
-                            isFrost ? "text-slate-500" : "text-white/50",
-                          )}
-                        >
-                          {item.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })
-      )}
-    </div>
-  );
-
-  // ==========================================
-  // VIEW 2: CARDS - Compact stacked cards
-  // ==========================================
-  const renderCardsView = () => (
-    <div className="px-3 py-3 space-y-2">
-      {todayTasks.length === 0 ? (
-        <div
-          className={cn(
-            "text-center py-8",
-            isFrost ? "text-slate-400" : "text-white/40",
-          )}
-        >
-          <p>Nothing scheduled</p>
-        </div>
-      ) : (
-        todayTasks.map((occ, idx) => {
-          const { item, occurrenceDate } = occ;
-          const Icon = typeIcons[item.type];
-
-          return (
-            <div
-              key={`${item.id}-${idx}`}
-              className={cn(
-                "rounded-xl p-3",
-                isFrost
-                  ? "bg-white shadow-sm border border-slate-100"
-                  : "bg-white/[0.04] border border-white/[0.08]",
-              )}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <div
-                    className={cn(
-                      "w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0",
-                      item.type === "event" &&
-                        (isFrost
-                          ? "bg-pink-50 text-pink-500"
-                          : "bg-pink-500/10 text-pink-400"),
-                      item.type === "reminder" &&
-                        (isFrost
-                          ? "bg-cyan-50 text-cyan-500"
-                          : "bg-cyan-500/10 text-cyan-400"),
-                      item.type === "task" &&
-                        (isFrost
-                          ? "bg-purple-50 text-purple-500"
-                          : "bg-purple-500/10 text-purple-400"),
-                    )}
-                  >
-                    <Icon className="w-3 h-3" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3
-                      className={cn(
-                        "text-sm font-medium truncate",
-                        isFrost ? "text-slate-800" : "text-white",
-                      )}
-                    >
-                      {item.title}
-                    </h3>
-                    {item.description && (
-                      <p
-                        className={cn(
-                          "text-xs truncate",
-                          isFrost ? "text-slate-500" : "text-white/50",
-                        )}
-                      >
-                        {item.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <span
-                  className={cn(
-                    "text-xs font-medium tabular-nums flex-shrink-0",
-                    isFrost ? "text-slate-500" : "text-white/60",
-                  )}
-                >
-                  {format(occurrenceDate, "h:mm a")}
-                </span>
-              </div>
-            </div>
-          );
-        })
-      )}
-    </div>
-  );
-
-  // ==========================================
-  // VIEW 3: EDITORIAL - Newspaper style (compact)
-  // ==========================================
-  const renderEditorialView = () => (
-    <div className="px-3 py-4">
-      {/* Masthead */}
-      <div
-        className={cn(
-          "text-center pb-3 mb-3 border-b",
-          isFrost ? "border-slate-200" : "border-white/10",
-        )}
-      >
-        <p
-          className={cn(
-            "text-[10px] uppercase tracking-[0.15em] mb-0.5",
-            isFrost ? "text-slate-400" : "text-white/30",
-          )}
-        >
-          {format(today, "EEEE")}
-        </p>
-        <h1
-          className={cn(
-            "text-xl font-serif font-bold",
-            isFrost ? "text-slate-800" : "text-white",
-          )}
-        >
-          {format(today, "MMMM d, yyyy")}
-        </h1>
-      </div>
-
-      {todayTasks.length === 0 ? (
-        <p
-          className={cn(
-            "text-center italic py-6 text-sm",
-            isFrost ? "text-slate-400" : "text-white/40",
-          )}
-        >
-          No appointments for today
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {/* Headline */}
-          <div
-            className={cn(
-              "pb-3 border-b",
-              isFrost ? "border-slate-100" : "border-white/5",
-            )}
-          >
-            <p
-              className={cn(
-                "text-xs mb-0.5",
-                isFrost ? "text-slate-500" : "text-white/50",
-              )}
-            >
-              {format(todayTasks[0].occurrenceDate, "h:mm a")}
-            </p>
-            <h2
-              className={cn(
-                "text-lg font-serif font-bold leading-tight",
-                isFrost ? "text-slate-800" : "text-white",
-              )}
-            >
-              {todayTasks[0].item.title}
-            </h2>
-            {todayTasks[0].item.description && (
-              <p
-                className={cn(
-                  "mt-1 text-sm leading-relaxed",
-                  isFrost ? "text-slate-600" : "text-white/60",
-                )}
-              >
-                {todayTasks[0].item.description}
-              </p>
-            )}
-          </div>
-
-          {/* Secondary items */}
-          {todayTasks.length > 1 && (
-            <div className="space-y-1.5">
-              <p
-                className={cn(
-                  "text-[10px] uppercase tracking-wider",
-                  isFrost ? "text-slate-400" : "text-white/30",
-                )}
-              >
-                Also Today
-              </p>
-              {todayTasks.slice(1).map((occ, idx) => (
-                <div
-                  key={`${occ.item.id}-${idx}`}
-                  className="flex gap-2 py-1.5"
-                >
-                  <span
-                    className={cn(
-                      "text-xs tabular-nums w-12 flex-shrink-0",
-                      isFrost ? "text-slate-400" : "text-white/40",
-                    )}
-                  >
-                    {format(occ.occurrenceDate, "h:mm a")}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className={cn(
-                        "text-sm font-medium",
-                        isFrost ? "text-slate-700" : "text-white/90",
-                      )}
-                    >
-                      {occ.item.title}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
-  // ==========================================
-  // VIEW 4: MINIMAL - Ultra clean list
-  // ==========================================
-  const renderMinimalView = () => (
-    <div className="px-3 py-3">
-      {todayTasks.length === 0 ? (
-        <p
-          className={cn(
-            "text-center py-8",
-            isFrost ? "text-slate-400" : "text-white/40",
-          )}
-        >
-          Nothing today
-        </p>
-      ) : (
-        <div className="space-y-0">
-          {todayTasks.map((occ, idx) => (
-            <div
-              key={`${occ.item.id}-${idx}`}
-              className={cn(
-                "flex items-baseline gap-3 py-2",
-                idx > 0 && "border-t",
-                isFrost ? "border-slate-100" : "border-white/[0.04]",
-              )}
-            >
-              <span
-                className={cn(
-                  "text-xs tabular-nums w-14 flex-shrink-0",
-                  isFrost ? "text-slate-400" : "text-white/40",
-                )}
-              >
-                {format(occ.occurrenceDate, "h:mm a")}
-              </span>
-              <div className="flex-1 min-w-0">
-                <span
-                  className={cn(
-                    "text-sm",
-                    isFrost ? "text-slate-800" : "text-white",
-                  )}
-                >
-                  {occ.item.title}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
-  // ==========================================
-  // VIEW 5: GRID - 2-column card grid (full width usage)
-  // ==========================================
-  const renderGridView = () => (
-    <div className="px-3 py-3">
-      {todayTasks.length === 0 ? (
-        <div
-          className={cn(
-            "text-center py-8",
-            isFrost ? "text-slate-400" : "text-white/40",
-          )}
-        >
-          <p>Nothing scheduled</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-2">
-          {todayTasks.map((occ, idx) => {
-            const { item, occurrenceDate } = occ;
-            const Icon = typeIcons[item.type];
-
-            return (
-              <div
-                key={`${item.id}-${idx}`}
-                className={cn(
-                  "rounded-xl p-3 flex flex-col",
-                  isFrost
-                    ? "bg-white shadow-sm border border-slate-100"
-                    : "bg-white/[0.04] border border-white/[0.08]",
-                  item.type === "event" &&
-                    (isFrost
-                      ? "border-l-2 border-l-pink-400"
-                      : "border-l-2 border-l-pink-500"),
-                  item.type === "reminder" &&
-                    (isFrost
-                      ? "border-l-2 border-l-cyan-400"
-                      : "border-l-2 border-l-cyan-500"),
-                  item.type === "task" &&
-                    (isFrost
-                      ? "border-l-2 border-l-purple-400"
-                      : "border-l-2 border-l-purple-500"),
-                )}
-              >
-                <div className="flex items-center justify-between gap-1 mb-1">
-                  <span
-                    className={cn(
-                      "text-[10px] font-medium tabular-nums",
-                      isFrost ? "text-slate-400" : "text-white/50",
-                    )}
-                  >
-                    {format(occurrenceDate, "h:mm a")}
-                  </span>
-                  <Icon
-                    className={cn(
-                      "w-3 h-3",
-                      item.type === "event" &&
-                        (isFrost ? "text-pink-400" : "text-pink-400"),
-                      item.type === "reminder" &&
-                        (isFrost ? "text-cyan-400" : "text-cyan-400"),
-                      item.type === "task" &&
-                        (isFrost ? "text-purple-400" : "text-purple-400"),
-                    )}
-                  />
-                </div>
-                <h3
-                  className={cn(
-                    "text-sm font-medium leading-tight flex-1",
-                    isFrost ? "text-slate-800" : "text-white",
-                  )}
-                >
-                  {item.title}
-                </h3>
-                {item.description && (
-                  <p
-                    className={cn(
-                      "text-[11px] mt-1 line-clamp-2",
-                      isFrost ? "text-slate-500" : "text-white/40",
-                    )}
-                  >
-                    {item.description}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-
-  // ==========================================
-  // VIEW 6: AGENDA - Horizontal time blocks
-  // ==========================================
-  const renderAgendaView = () => {
-    // Group by morning/afternoon/evening
-    const morning = todayTasks.filter((t) => t.occurrenceDate.getHours() < 12);
-    const afternoon = todayTasks.filter(
-      (t) =>
-        t.occurrenceDate.getHours() >= 12 && t.occurrenceDate.getHours() < 17,
-    );
-    const evening = todayTasks.filter((t) => t.occurrenceDate.getHours() >= 17);
-
-    const renderBlock = (label: string, items: ExpandedOccurrence[]) => {
-      if (items.length === 0) return null;
-      return (
-        <div className="mb-3">
-          <div
-            className={cn(
-              "text-[10px] uppercase tracking-wider mb-1.5 px-1",
-              isFrost ? "text-slate-400" : "text-white/30",
-            )}
-          >
-            {label}{" "}
-            <span className={cn(isFrost ? "text-slate-300" : "text-white/20")}>
-              ({items.length})
-            </span>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {items.map((occ, idx) => {
-              const { item, occurrenceDate } = occ;
-              const Icon = typeIcons[item.type];
-              return (
-                <div
-                  key={`${item.id}-${idx}`}
-                  className={cn(
-                    "flex-shrink-0 w-36 rounded-xl p-2.5",
-                    isFrost
-                      ? "bg-white shadow-sm border border-slate-100"
-                      : "bg-white/[0.04] border border-white/[0.08]",
-                  )}
-                >
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <div
-                      className={cn(
-                        "w-5 h-5 rounded flex items-center justify-center",
-                        item.type === "event" &&
-                          (isFrost
-                            ? "bg-pink-50 text-pink-500"
-                            : "bg-pink-500/10 text-pink-400"),
-                        item.type === "reminder" &&
-                          (isFrost
-                            ? "bg-cyan-50 text-cyan-500"
-                            : "bg-cyan-500/10 text-cyan-400"),
-                        item.type === "task" &&
-                          (isFrost
-                            ? "bg-purple-50 text-purple-500"
-                            : "bg-purple-500/10 text-purple-400"),
-                      )}
-                    >
-                      <Icon className="w-2.5 h-2.5" />
-                    </div>
-                    <span
-                      className={cn(
-                        "text-[10px] tabular-nums",
-                        isFrost ? "text-slate-400" : "text-white/50",
-                      )}
-                    >
-                      {format(occurrenceDate, "h:mm a")}
-                    </span>
-                  </div>
-                  <p
-                    className={cn(
-                      "text-xs font-medium leading-tight line-clamp-2",
-                      isFrost ? "text-slate-800" : "text-white",
-                    )}
-                  >
-                    {item.title}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    };
-
-    return (
-      <div className="px-3 py-3">
-        {todayTasks.length === 0 ? (
-          <div
-            className={cn(
-              "text-center py-8",
-              isFrost ? "text-slate-400" : "text-white/40",
-            )}
-          >
-            <p>Nothing scheduled</p>
-          </div>
-        ) : (
-          <>
-            {renderBlock("Morning", morning)}
-            {renderBlock("Afternoon", afternoon)}
-            {renderBlock("Evening", evening)}
-          </>
-        )}
-      </div>
-    );
-  };
-
-  // ==========================================
-  // VIEW 7: LIST - Detailed rows
-  // ==========================================
-  const renderListView = () => (
-    <div className="px-0 py-2">
-      {todayTasks.length === 0 ? (
-        <p
-          className={cn(
-            "text-center py-8",
-            isFrost ? "text-slate-400" : "text-white/40",
-          )}
-        >
-          Nothing scheduled
-        </p>
-      ) : (
-        <div
-          className={cn(
-            "divide-y",
-            isFrost ? "divide-slate-100" : "divide-white/[0.04]",
-          )}
-        >
-          {todayTasks.map((occ, idx) => {
-            const { item, occurrenceDate } = occ;
-            const Icon = typeIcons[item.type];
-            return (
-              <div
-                key={`${item.id}-${idx}`}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02]",
-                  isFrost ? "hover:bg-slate-50" : "hover:bg-white/[0.02]",
-                )}
-              >
-                <div
-                  className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                    item.type === "event" &&
-                      (isFrost
-                        ? "bg-pink-100/50 text-pink-600"
-                        : "bg-pink-500/10 text-pink-400"),
-                    item.type === "reminder" &&
-                      (isFrost
-                        ? "bg-cyan-100/50 text-cyan-600"
-                        : "bg-cyan-500/10 text-cyan-400"),
-                    item.type === "task" &&
-                      (isFrost
-                        ? "bg-purple-100/50 text-purple-600"
-                        : "bg-purple-500/10 text-purple-400"),
-                  )}
-                >
-                  <Icon className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <h3
-                      className={cn(
-                        "text-sm font-medium truncate",
-                        isFrost ? "text-slate-900" : "text-white",
-                      )}
-                    >
-                      {item.title}
-                    </h3>
-                    <span
-                      className={cn(
-                        "text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded",
-                        isFrost
-                          ? "bg-slate-100 text-slate-500"
-                          : "bg-white/10 text-white/50",
-                      )}
-                    >
-                      {item.type}
-                    </span>
-                  </div>
-                  <p
-                    className={cn(
-                      "text-xs truncate",
-                      isFrost ? "text-slate-500" : "text-white/50",
-                    )}
-                  >
-                    {item.description || "No description"}
-                  </p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p
-                    className={cn(
-                      "text-xs font-medium tabular-nums",
-                      isFrost ? "text-slate-700" : "text-white/80",
-                    )}
-                  >
-                    {format(occurrenceDate, "h:mm a")}
-                  </p>
-                  <p
-                    className={cn(
-                      "text-[10px]",
-                      isFrost ? "text-slate-400" : "text-white/30",
-                    )}
-                  >
-                    {format(occurrenceDate, "MMM d")}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-
-  // ==========================================
-  // VIEW 8: FOCUS - Spotlight on next task
-  // ==========================================
-  const renderFocusView = () => {
-    // Determine the "active" task (next one based on current time)
-    const now = new Date();
-    // Assuming todayTasks are sorted by time already
-    // Find first task that is active or in future
-    // In a real app we might want to check if end time is passed, but here we just check start time vs now or just show first one
-    const activeIndex =
-      todayTasks.findIndex((t) => t.occurrenceDate > now) !== -1
-        ? todayTasks.findIndex((t) => t.occurrenceDate > now)
-        : todayTasks.length > 0
-          ? todayTasks.length - 1
-          : -1;
-
-    // If all tasks passed today, show the last one, or a "done" state.
-    // Let's just default to the first one if we can't decide, or the one closest to now.
-    // Actually, simple logic: show the NEXT one.
-
-    const nextTask =
-      todayTasks.find((t) => t.occurrenceDate >= now) ||
-      todayTasks[todayTasks.length - 1];
-
-    // For the list below, show subsequent tasks
-    const laterTasks = nextTask
-      ? todayTasks.filter(
-          (t) => t.occurrenceDate.getTime() > nextTask.occurrenceDate.getTime(),
-        )
-      : [];
-
-    if (!nextTask) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full py-12 text-center">
-          <div
-            className={cn(
-              "p-4 rounded-full mb-4",
-              isFrost
-                ? "bg-slate-100 text-slate-400"
-                : "bg-white/5 text-white/20",
-            )}
-          >
-            <Calendar className="w-8 h-8" />
-          </div>
-          <p className={cn(isFrost ? "text-slate-500" : "text-white/50")}>
-            No upcoming tasks
-          </p>
-        </div>
-      );
-    }
-
-    const Icon = typeIcons[nextTask.item.type];
-
-    return (
-      <div className="h-full flex flex-col">
-        <div className="flex-1 flex flex-col justify-center p-6 text-center">
-          <div
-            className={cn(
-              "text-xs font-medium uppercase tracking-widest mb-4",
-              isFrost ? "text-slate-400" : "text-white/40",
-            )}
-          >
-            Up Next
-          </div>
-          <div
-            className={cn(
-              "w-16 h-16 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg",
-              nextTask.item.type === "event" &&
-                (isFrost
-                  ? "bg-pink-100 text-pink-500 shadow-pink-200"
-                  : "bg-pink-500/20 text-pink-400 shadow-pink-900/20"),
-              nextTask.item.type === "reminder" &&
-                (isFrost
-                  ? "bg-cyan-100 text-cyan-500 shadow-cyan-200"
-                  : "bg-cyan-500/20 text-cyan-400 shadow-cyan-900/20"),
-              nextTask.item.type === "task" &&
-                (isFrost
-                  ? "bg-purple-100 text-purple-500 shadow-purple-200"
-                  : "bg-purple-500/20 text-purple-400 shadow-purple-900/20"),
-            )}
-          >
-            <Icon className="w-8 h-8" />
-          </div>
-          <h2
-            className={cn(
-              "text-2xl font-bold mb-2",
-              isFrost ? "text-slate-800" : "text-white",
-            )}
-          >
-            {nextTask.item.title}
-          </h2>
-          <p
-            className={cn(
-              "text-xl font-medium tabular-nums mb-4",
-              isFrost ? "text-slate-500" : "text-white/60",
-            )}
-          >
-            {format(nextTask.occurrenceDate, "h:mm a")}
-          </p>
-          {nextTask.item.description && (
-            <p
-              className={cn(
-                "text-sm max-w-xs mx-auto",
-                isFrost ? "text-slate-400" : "text-white/40",
-              )}
-            >
-              {nextTask.item.description}
-            </p>
-          )}
-        </div>
-
-        {laterTasks.length > 0 && (
-          <div
-            className={cn(
-              "flex-shrink-0 p-4 border-t",
-              isFrost
-                ? "bg-slate-50 border-slate-100"
-                : "bg-black/20 border-white/5",
-            )}
-          >
-            <p
-              className={cn(
-                "text-xs font-medium uppercase tracking-wider mb-3",
-                isFrost ? "text-slate-400" : "text-white/30",
-              )}
-            >
-              Later
-            </p>
-            <div className="space-y-2">
-              {laterTasks.slice(0, 3).map((occ, idx) => (
-                <div
-                  key={`${occ.item.id}-${idx}`}
-                  className="flex items-center justify-between text-sm"
-                >
-                  <span
-                    className={cn(isFrost ? "text-slate-600" : "text-white/70")}
-                  >
-                    {occ.item.title}
-                  </span>
-                  <span
-                    className={cn(
-                      isFrost ? "text-slate-400" : "text-white/30",
-                      "text-xs tabular-nums",
-                    )}
-                  >
-                    {format(occ.occurrenceDate, "h:mm a")}
-                  </span>
-                </div>
-              ))}
-              {laterTasks.length > 3 && (
-                <p
-                  className={cn(
-                    "text-xs text-center pt-1",
-                    isFrost ? "text-slate-400" : "text-white/30",
-                  )}
-                >
-                  + {laterTasks.length - 3} more
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ==========================================
-  // VIEW 9: KANBAN - Columnar view
-  // ==========================================
-  const renderKanbanView = () => {
-    // Group by morning/afternoon/evening
-    const morning = todayTasks.filter((t) => t.occurrenceDate.getHours() < 12);
-    const afternoon = todayTasks.filter(
-      (t) =>
-        t.occurrenceDate.getHours() >= 12 && t.occurrenceDate.getHours() < 17,
-    );
-    const evening = todayTasks.filter((t) => t.occurrenceDate.getHours() >= 17);
-
-    const renderColumn = (
-      label: string,
-      items: ExpandedOccurrence[],
-      colorClass: string,
-    ) => (
-      <div
-        className={cn(
-          "flex-shrink-0 w-64 flex flex-col rounded-xl h-full overflow-hidden border",
-          isFrost
-            ? "bg-slate-50 border-slate-200"
-            : "bg-white/[0.02] border-white/[0.06]",
-        )}
-      >
-        <div
-          className={cn(
-            "px-3 py-2 border-b flex items-center justify-between",
-            isFrost ? "border-slate-200" : "border-white/[0.06]",
-          )}
-        >
-          <span
-            className={cn(
-              "font-medium text-xs",
-              isFrost ? "text-slate-600" : "text-white/70",
-            )}
-          >
-            {label}
-          </span>
-          <span
-            className={cn(
-              "text-[10px] px-1.5 py-0.5 rounded-full",
-              isFrost
-                ? "bg-slate-200 text-slate-600"
-                : "bg-white/10 text-white/50",
-            )}
-          >
-            {items.length}
-          </span>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-2">
-          {items.map((occ, idx) => {
-            const { item, occurrenceDate } = occ;
-            const Icon = typeIcons[item.type];
-            return (
-              <div
-                key={`${item.id}-${idx}`}
-                className={cn(
-                  "p-2.5 rounded-lg border",
-                  isFrost
-                    ? "bg-white border-slate-200 shadow-sm"
-                    : "bg-black/40 border-white/5",
-                )}
-              >
-                <div className="flex justify-between items-start mb-1">
-                  <span
-                    className={cn(
-                      "text-[10px] font-medium px-1.5 py-0.5 rounded",
-                      colorClass,
-                    )}
-                  >
-                    {format(occurrenceDate, "h:mm a")}
-                  </span>
-                  {occ.isCompleted && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                  )}
-                </div>
-                <p
-                  className={cn(
-                    "text-sm font-medium leading-tight mb-1",
-                    isFrost ? "text-slate-800" : "text-white",
-                  )}
-                >
-                  {item.title}
-                </p>
-                {item.description && (
-                  <p
-                    className={cn(
-                      "text-[10px] line-clamp-2",
-                      isFrost ? "text-slate-400" : "text-white/40",
-                    )}
-                  >
-                    {item.description}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-
-    return (
-      <div className="h-full overflow-x-auto p-3 flex gap-3 items-stretch">
-        {renderColumn(
-          "Morning",
-          morning,
-          isFrost
-            ? "bg-amber-100 text-amber-700"
-            : "bg-amber-500/20 text-amber-300",
-        )}
-        {renderColumn(
-          "Afternoon",
-          afternoon,
-          isFrost ? "bg-sky-100 text-sky-700" : "bg-sky-500/20 text-sky-300",
-        )}
-        {renderColumn(
-          "Evening",
-          evening,
-          isFrost
-            ? "bg-indigo-100 text-indigo-700"
-            : "bg-indigo-500/20 text-indigo-300",
-        )}
-      </div>
-    );
-  };
-
-  // Render the active view
-  const renderActiveView = () => {
-    switch (viewMode) {
-      case "briefing":
-        return renderBriefingView();
-      case "timeline":
-        return renderTimelineView();
-      case "cards":
-        return renderCardsView();
-      case "editorial":
-        return renderEditorialView();
-      case "minimal":
-        return renderMinimalView();
-      case "grid":
-        return renderGridView();
-      case "agenda":
-        return renderAgendaView();
-      case "list":
-        return renderListView();
-      case "focus":
-        return renderFocusView();
-      case "kanban":
-        return renderKanbanView();
-    }
-  };
-
-  return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* Header with time scope toggle and controls */}
-      <div
-        className={cn(
-          "flex-shrink-0 px-3 py-2 flex items-center justify-between gap-2",
-          isFrost
-            ? "bg-slate-50 border-b border-slate-100"
-            : "bg-white/[0.02] border-b border-white/[0.04]",
-        )}
-      >
-        {/* Time scope toggle (Today / This Week) */}
-        <div className="flex items-center gap-1">
-          <div
-            className={cn(
-              "flex rounded-lg p-0.5",
-              isFrost ? "bg-slate-100" : "bg-white/[0.05]",
-            )}
-          >
-            {(["today", "week"] as TimeScope[]).map((scope) => (
-              <button
-                key={scope}
-                type="button"
-                onClick={() => setTimeScope(scope)}
-                className={cn(
-                  "px-2.5 py-1 rounded-md text-xs font-medium transition-all",
-                  timeScope === scope
-                    ? isFrost
-                      ? "bg-white text-slate-800 shadow-sm"
-                      : isPink
-                        ? "bg-pink-500/30 text-pink-300"
-                        : "bg-cyan-500/30 text-cyan-300"
-                    : isFrost
-                      ? "text-slate-500 hover:text-slate-700"
-                      : "text-white/40 hover:text-white/60",
-                )}
-              >
-                {timeScopeLabels[scope]}
-              </button>
-            ))}
-          </div>
-
-          {/* Date display */}
-          <div className="ml-2 hidden sm:block">
-            <p
-              className={cn(
-                "text-xs",
-                isFrost ? "text-slate-500" : "text-white/50",
-              )}
-            >
-              {timeScope === "today"
-                ? format(today, "EEEE, MMMM d")
-                : `${format(weekStart, "MMM d")} - ${format(weekEnd, "MMM d")}`}
-            </p>
-          </div>
-        </div>
-
-        {/* Right side controls */}
-        <div className="flex items-center gap-1">
-          {/* Sort mode dropdown */}
-          <div className="relative group">
-            <button
-              type="button"
-              className={cn(
-                "flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors",
-                isFrost
-                  ? "text-slate-500 hover:bg-slate-100"
-                  : "text-white/50 hover:bg-white/[0.05]",
-              )}
-            >
-              {sortMode === "time" && <Clock className="w-3 h-3" />}
-              {sortMode === "priority" && <Star className="w-3 h-3" />}
-              {sortMode === "category" && <Layers className="w-3 h-3" />}
-              <span className="hidden sm:inline">
-                {sortMode === "time" && "By Time"}
-                {sortMode === "priority" && "By Priority"}
-                {sortMode === "category" && "By Category"}
-              </span>
-            </button>
-            {/* Dropdown menu */}
-            <div
-              className={cn(
-                "absolute right-0 top-full mt-1 py-1 rounded-lg shadow-lg z-20 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all",
-                isFrost
-                  ? "bg-white border border-slate-200"
-                  : "bg-slate-900 border border-white/10",
-              )}
-            >
-              {(["time", "priority", "category"] as SortMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setSortMode(mode)}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-left transition-colors",
-                    sortMode === mode
-                      ? isFrost
-                        ? "bg-indigo-50 text-indigo-600"
-                        : "bg-cyan-500/10 text-cyan-400"
-                      : isFrost
-                        ? "text-slate-600 hover:bg-slate-50"
-                        : "text-white/70 hover:bg-white/5",
-                  )}
-                >
-                  {mode === "time" && <Clock className="w-3 h-3" />}
-                  {mode === "priority" && <Star className="w-3 h-3" />}
-                  {mode === "category" && <Layers className="w-3 h-3" />}
-                  <span className="capitalize">{mode}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Overdue badge */}
-          {overdueTasks.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowOverdue(!showOverdue)}
-              className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium transition-colors",
-                showOverdue
-                  ? isFrost
-                    ? "bg-amber-100 text-amber-700"
-                    : "bg-amber-500/20 text-amber-300"
-                  : isFrost
-                    ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
-                    : "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20",
-              )}
-            >
-              <AlertCircle className="w-3 h-3" />
-              {overdueTasks.length}
-            </button>
-          )}
-
-          {/* Narrative toggle - only show when not in briefing mode */}
-          {viewMode !== "briefing" && (
-            <button
-              type="button"
-              onClick={() => setShowNarrative(!showNarrative)}
-              className={cn(
-                "p-1.5 rounded-lg transition-colors",
-                showNarrative
-                  ? isFrost
-                    ? "bg-indigo-100 text-indigo-600"
-                    : "bg-cyan-500/20 text-cyan-400"
-                  : isFrost
-                    ? "text-slate-400 hover:bg-slate-100"
-                    : "text-white/40 hover:bg-white/[0.05]",
-              )}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* View mode toggle (TEMPORARY) */}
-      <div
-        className={cn(
-          "flex-shrink-0 px-3 py-1.5 flex gap-1 overflow-x-auto",
-          isFrost ? "bg-slate-50/50" : "bg-white/[0.01]",
-        )}
-      >
-        {(Object.keys(viewModeLabels) as ViewMode[]).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => setViewMode(mode)}
-            className={cn(
-              "px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors",
-              viewMode === mode
-                ? isFrost
-                  ? "bg-indigo-500 text-white"
-                  : isPink
-                    ? "bg-pink-500 text-white"
-                    : "bg-cyan-500 text-black"
-                : isFrost
-                  ? "text-slate-500 hover:bg-slate-100"
-                  : "text-white/50 hover:bg-white/[0.05]",
-            )}
-          >
-            {viewModeLabels[mode]}
-          </button>
-        ))}
-      </div>
-
-      {/* Overdue panel (expandable) */}
-      {showOverdue && overdueTasks.length > 0 && (
-        <div
-          className={cn(
-            "flex-shrink-0 mx-3 mt-2 rounded-lg overflow-hidden",
-            isFrost
-              ? "bg-amber-50 border border-amber-100"
-              : "bg-amber-500/5 border border-amber-500/10",
-          )}
-        >
-          <div
-            className={cn(
-              "flex items-center justify-between px-2.5 py-1.5",
-              isFrost
-                ? "border-b border-amber-100"
-                : "border-b border-amber-500/10",
-            )}
-          >
-            <span
-              className={cn(
-                "text-[11px] font-medium",
-                isFrost ? "text-amber-700" : "text-amber-400",
-              )}
-            >
-              Overdue Items
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowOverdue(false)}
-              className={cn(
-                "p-0.5 rounded",
-                isFrost
-                  ? "hover:bg-amber-100 text-amber-500"
-                  : "hover:bg-amber-500/10 text-amber-400",
-              )}
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-          <div className="max-h-24 overflow-y-auto px-2.5 py-1.5 space-y-0.5">
-            {overdueTasks.map((occ, idx) => (
-              <div
-                key={`overdue-${occ.item.id}-${idx}`}
-                className="flex items-center gap-2 text-xs py-0.5"
-              >
-                <span
-                  className={cn(
-                    "text-[10px] w-10 flex-shrink-0",
-                    isFrost ? "text-amber-600" : "text-amber-400/70",
-                  )}
-                >
-                  {format(occ.occurrenceDate, "MMM d")}
-                </span>
-                <span
-                  className={cn(
-                    "truncate",
-                    isFrost ? "text-amber-800" : "text-amber-300",
-                  )}
-                >
-                  {occ.item.title}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Narrative panel (expandable) */}
-      {showNarrative && (
-        <div
-          className={cn(
-            "flex-shrink-0 mx-3 mt-2 rounded-lg p-3",
-            isFrost
-              ? "bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100"
-              : isPink
-                ? "bg-gradient-to-br from-pink-500/5 to-purple-500/5 border border-pink-500/10"
-                : "bg-gradient-to-br from-cyan-500/5 to-blue-500/5 border border-cyan-500/10",
-          )}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <p
-              className={cn(
-                "text-xs leading-relaxed whitespace-pre-wrap",
-                isFrost ? "text-slate-600" : "text-white/70",
-              )}
-            >
-              {narrative}
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowNarrative(false)}
-              className={cn(
-                "p-0.5 rounded flex-shrink-0",
-                isFrost
-                  ? "hover:bg-indigo-100 text-indigo-400"
-                  : "hover:bg-white/10 text-white/40",
-              )}
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Main content */}
-      <div className="flex-1 overflow-y-auto">{renderActiveView()}</div>
     </div>
   );
 }

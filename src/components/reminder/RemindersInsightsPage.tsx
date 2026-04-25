@@ -6,7 +6,7 @@ import { type ItemOccurrenceAction } from "@/features/items/useItemActions";
 import { useItems } from "@/features/items/useItems";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { buildFullRRuleString } from "@/lib/utils/date";
+import { buildFullRRuleString, getOccurrencesInRange } from "@/lib/utils/date";
 import type { ItemWithDetails } from "@/types/items";
 import { useQuery } from "@tanstack/react-query";
 import { parseISO, startOfDay, subDays } from "date-fns";
@@ -139,12 +139,12 @@ function countExpectedOccurrences(
 
     if (item.recurrence_rule?.rrule) {
       try {
-        const rruleString = buildFullRRuleString(
-          itemDate,
+        const occs = getOccurrencesInRange(
           item.recurrence_rule,
+          itemDate,
+          startDate,
+          endDate,
         );
-        const rule = RRule.fromString(rruleString);
-        const occs = rule.between(startDate, endDate, true);
         count += occs.length;
       } catch {
         // skip broken rules

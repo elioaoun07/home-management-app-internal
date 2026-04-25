@@ -5,10 +5,14 @@ import {
   useItemActionsWithToast,
   type PostponeType,
 } from "@/features/items/useItemActions";
+import { useUpdateRecurrenceRule } from "@/features/items/useItems";
+import { ToastIcons } from "@/lib/toastIcons";
+import { firstBiweeklyFlippedAnchor } from "@/lib/utils/date";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
 import { format, isBefore, parseISO } from "date-fns";
+import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RRule } from "rrule";
 import ItemActionsSheet from "./ItemActionsSheet";
@@ -279,6 +283,41 @@ export default function SwipeableItemCard({
     handleCancel: doCancel,
     handleDelete: doDelete,
   } = useItemActionsWithToast();
+  const updateRecurrence = useUpdateRecurrenceRule();
+
+  const handleReverseRecurrence = useCallback(() => {
+    if (!item.recurrence_rule?.start_anchor || !item.recurrence_rule.rrule) return;
+    const current = parseISO(item.recurrence_rule.start_anchor);
+    const newAnchor = firstBiweeklyFlippedAnchor(current).toISOString();
+    const flipTime = new Date().toISOString();
+    updateRecurrence.mutate(
+      {
+        itemId: item.id,
+        rrule: item.recurrence_rule.rrule,
+        start_anchor: newAnchor,
+        phase_changed_at: flipTime,
+        previous_start_anchor: current.toISOString(),
+      },
+      {
+        onSuccess: () =>
+          toast.success("Bi-weekly phase flipped", {
+            duration: 4000,
+            icon: ToastIcons.update,
+            action: {
+              label: "Undo",
+              onClick: () =>
+                updateRecurrence.mutate({
+                  itemId: item.id,
+                  rrule: item.recurrence_rule!.rrule,
+                  start_anchor: current.toISOString(),
+                  phase_changed_at: null,
+                  previous_start_anchor: null,
+                }),
+            },
+          }),
+      },
+    );
+  }, [item, updateRecurrence]);
 
   // Get occurrence date for actions
   const getOccurrenceDate = useCallback(() => {
@@ -877,6 +916,7 @@ export default function SwipeableItemCard({
         onPostpone={handlePostponeAction}
         onCancel={handleCancelAction}
         onDelete={handleDeleteAction}
+        onReverseRecurrence={handleReverseRecurrence}
       />
     </div>
   );

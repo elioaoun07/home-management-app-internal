@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
   buildFullRRuleString,
+  getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemWithDetails } from "@/types/items";
 import {
@@ -214,25 +215,18 @@ export function WebCalendar({
     // For recurring items, find the specific occurrence on this date
     if (item.recurrence_rule?.rrule) {
       try {
-        // Use start_anchor if available, otherwise fall back to item date
-        const startAnchor = item.recurrence_rule.start_anchor
-          ? parseISO(item.recurrence_rule.start_anchor)
-          : itemDate;
-        const rruleString = buildFullRRuleString(
-          startAnchor,
-          item.recurrence_rule,
-        );
-        const rrule = RRule.fromString(rruleString);
-
-        // Get occurrences for this specific day
         const dayStart = new Date(calendarDate);
         dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(calendarDate);
         dayEnd.setHours(23, 59, 59, 999);
 
-        const occurrences = rrule.between(dayStart, dayEnd, true);
+        const occurrences = getOccurrencesInRange(
+          item.recurrence_rule,
+          itemDate,
+          dayStart,
+          dayEnd,
+        );
         if (occurrences.length > 0) {
-          // Return the first occurrence on this day with the correct time
           return adjustOccurrenceToWallClock(occurrences[0], itemDate);
         }
       } catch (error) {
@@ -295,21 +289,19 @@ export function WebCalendar({
       // Check if this is a recurring item
       if (item.recurrence_rule?.rrule) {
         try {
-          // Use start_anchor if available, otherwise fall back to item date
-          const startAnchor = item.recurrence_rule.start_anchor
+          const anchor = item.recurrence_rule.start_anchor
             ? parseISO(item.recurrence_rule.start_anchor)
             : itemDate;
-          const rruleString = buildFullRRuleString(
-            startAnchor,
-            item.recurrence_rule,
-          );
-          const rrule = RRule.fromString(rruleString);
-
           const maxDate = item.recurrence_rule.end_until
             ? parseISO(item.recurrence_rule.end_until)
-            : new Date(startAnchor.getTime() + 365 * 24 * 60 * 60 * 1000);
+            : new Date(anchor.getTime() + 365 * 24 * 60 * 60 * 1000);
 
-          const occurrences = rrule.between(startAnchor, maxDate, true);
+          const occurrences = getOccurrencesInRange(
+            item.recurrence_rule,
+            itemDate,
+            anchor,
+            maxDate,
+          );
           const exceptions = item.recurrence_rule.exceptions || [];
 
           // First, check if any exception has been rescheduled TO this date

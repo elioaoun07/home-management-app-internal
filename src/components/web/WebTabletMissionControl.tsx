@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
   buildFullRRuleString,
+  getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemType, ItemWithDetails, Subtask } from "@/types/items";
 import {
@@ -159,12 +160,12 @@ function expandRecurringItems(
 
     if (item.recurrence_rule?.rrule) {
       try {
-        const rruleString = buildFullRRuleString(
-          itemDate,
+        const occurrences = getOccurrencesInRange(
           item.recurrence_rule,
+          itemDate,
+          startDate,
+          endDate,
         );
-        const rule = RRule.fromString(rruleString);
-        const occurrences = rule.between(startDate, endDate, true);
 
         for (const occ of occurrences) {
           const adjusted = adjustOccurrenceToWallClock(occ, itemDate);

@@ -5,8 +5,11 @@ import {
   useItemActionsWithToast,
   type PostponeType,
 } from "@/features/items/useItemActions";
+import { useUpdateRecurrenceRule } from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
+import { firstBiweeklyFlippedAnchor } from "@/lib/utils/date";
 import type { ItemWithDetails } from "@/types/items";
 import {
   differenceInDays,
@@ -16,6 +19,7 @@ import {
   isBefore,
   parseISO,
 } from "date-fns";
+import { toast } from "sonner";
 import { Check } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -265,6 +269,8 @@ export default function ItemDetailModal({
     handleDelete: doDelete,
   } = useItemActionsWithToast();
 
+  const updateRecurrence = useUpdateRecurrenceRule();
+
   // Determine fine-grained permissions
   const isCreator = currentUserId ? item.user_id === currentUserId : true;
   const isResponsible = currentUserId ? item.responsible_user_id === currentUserId : true;
@@ -368,6 +374,40 @@ export default function ItemDetailModal({
     await doDelete(item);
     setTimeout(onClose, 200);
   }, [doDelete, item, onClose]);
+
+  const handleReverseRecurrence = useCallback(() => {
+    if (!item.recurrence_rule?.start_anchor || !item.recurrence_rule.rrule) return;
+    const current = parseISO(item.recurrence_rule.start_anchor);
+    const newAnchor = firstBiweeklyFlippedAnchor(current).toISOString();
+    const flipTime = new Date().toISOString();
+    updateRecurrence.mutate(
+      {
+        itemId: item.id,
+        rrule: item.recurrence_rule.rrule,
+        start_anchor: newAnchor,
+        phase_changed_at: flipTime,
+        previous_start_anchor: current.toISOString(),
+      },
+      {
+        onSuccess: () =>
+          toast.success("Bi-weekly phase flipped", {
+            duration: 4000,
+            icon: ToastIcons.update,
+            action: {
+              label: "Undo",
+              onClick: () =>
+                updateRecurrence.mutate({
+                  itemId: item.id,
+                  rrule: item.recurrence_rule!.rrule,
+                  start_anchor: current.toISOString(),
+                  phase_changed_at: null,
+                  previous_start_anchor: null,
+                }),
+            },
+          }),
+      },
+    );
+  }, [item, updateRecurrence]);
 
   // Quick action handlers
   const handleQuickComplete = useCallback(async () => {
@@ -868,6 +908,7 @@ export default function ItemDetailModal({
           onPostpone={handlePostponeAction}
           onCancel={handleCancelAction}
           onDelete={handleDeleteWithActions}
+          onReverseRecurrence={handleReverseRecurrence}
         />
 
         {/* Promote to Catalogue Dialog */}

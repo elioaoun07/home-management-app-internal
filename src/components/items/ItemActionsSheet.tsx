@@ -165,6 +165,7 @@ type Props = {
   ) => void;
   onCancel: (reason?: string) => void;
   onDelete: () => void;
+  onReverseRecurrence?: () => void;
 };
 
 export default function ItemActionsSheet({
@@ -176,6 +177,7 @@ export default function ItemActionsSheet({
   onPostpone,
   onCancel,
   onDelete,
+  onReverseRecurrence,
 }: Props) {
   const { theme } = useTheme();
   const themeClasses = useThemeClasses();
@@ -196,6 +198,7 @@ export default function ItemActionsSheet({
   const sheetRef = useRef<HTMLDivElement>(null);
 
   const isRecurring = !!item.recurrence_rule?.rrule;
+  const isBiweekly = item.recurrence_rule?.rrule?.includes("INTERVAL=2") ?? false;
 
   // Initialize custom date/time from occurrence date
   useEffect(() => {
@@ -694,6 +697,45 @@ export default function ItemActionsSheet({
                 </p>
               </div>
             </button>
+
+            {/* Flip Bi-Weekly Phase Button */}
+            {isBiweekly && onReverseRecurrence && (
+              <button
+                type="button"
+                onClick={() => {
+                  onReverseRecurrence();
+                  handleClose();
+                }}
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
+                  "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
+                )}
+              >
+                <div
+                  className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center",
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                  )}
+                >
+                  <svg
+                    className={cn("w-5 h-5", isPink ? "text-pink-400" : "text-cyan-400")}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M7 16V4m0 0L3 8m4-4l4 4" />
+                    <path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-white font-medium">Flip bi-weekly phase</p>
+                  <p className="text-sm text-white/50">Switch which weeks this appears</p>
+                </div>
+              </button>
+            )}
 
             {/* Delete Button */}
             <button
