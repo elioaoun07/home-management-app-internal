@@ -1,0 +1,1381 @@
+{
+  "generatedAt": "2026-04-28T17:11:45.845Z",
+  "count": 55,
+  "nodes": [
+    {
+      "slug": "auth-reset",
+      "title": "Auth Reset",
+      "category": "auth",
+      "route": "/auth/reset",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/auth/reset/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- `/api/auth/reset`\n- `/api/auth/reset-password`",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/auth/reset`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `auth-reset-mobile.png`\n- `auth-reset-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/auth-reset.md"
+    },
+    {
+      "slug": "landing",
+      "title": "Landing",
+      "category": "auth",
+      "route": "/",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/page.tsx`\n- **Main component**: `src/app/LandingPageClient.tsx`\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `landing-mobile.png`\n- `landing-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/landing.md"
+    },
+    {
+      "slug": "login",
+      "title": "Login",
+      "category": "auth",
+      "route": "/login",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/login/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/login`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `login-mobile.png`\n- `login-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/login.md"
+    },
+    {
+      "slug": "reset-password",
+      "title": "Reset Password",
+      "category": "auth",
+      "route": "/reset-password",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/reset-password/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- `/api/auth/reset-password`",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/reset-password`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `reset-password-mobile.png`\n- `reset-password-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/reset-password.md"
+    },
+    {
+      "slug": "reset-password-update",
+      "title": "Reset Password Update",
+      "category": "auth",
+      "route": "/reset-password/update",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/reset-password/update/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- `/api/auth/reset`",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/reset-password/update`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `reset-password-update-mobile.png`\n- `reset-password-update-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/reset-password-update.md"
+    },
+    {
+      "slug": "signup",
+      "title": "Signup",
+      "category": "auth",
+      "route": "/signup",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/signup/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- `/api/auth/signup`",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/signup`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `signup-mobile.png`\n- `signup-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/signup.md"
+    },
+    {
+      "slug": "welcome",
+      "title": "Welcome",
+      "category": "auth",
+      "route": "/welcome",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/welcome/page.tsx`\n- **Main component**: `src/app/welcome/welcome-client.tsx`\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- `/api/onboarding`\n- `/api/household/claim`",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/welcome`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `welcome-mobile.png`\n- `welcome-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/welcome.md"
+    },
+    {
+      "slug": "feature-accounts",
+      "title": "Feature · Accounts",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/accounts/`",
+        "hooks": "- See files in `src/features/accounts/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/accounts/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/accounts`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Accounts/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-accounts.md"
+    },
+    {
+      "slug": "feature-ai-usage",
+      "title": "Feature · Ai Usage",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/ai-usage/`",
+        "hooks": "- See files in `src/features/ai-usage/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/ai-usage/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/ai-usage`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Ai Usage/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-ai-usage.md"
+    },
+    {
+      "slug": "feature-analytics",
+      "title": "Feature · Analytics",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/analytics/`",
+        "hooks": "- See files in `src/features/analytics/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/analytics/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/analytics`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Analytics/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-analytics.md"
+    },
+    {
+      "slug": "feature-atlas",
+      "title": "Feature · Atlas",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/atlas/`",
+        "hooks": "- See files in `src/features/atlas/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/atlas/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/atlas`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Atlas/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-atlas.md"
+    },
+    {
+      "slug": "feature-balance",
+      "title": "Feature · Balance",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/balance/`",
+        "hooks": "- See files in `src/features/balance/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/balance/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/balance`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Balance/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-balance.md"
+    },
+    {
+      "slug": "feature-blink",
+      "title": "Feature · Blink",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/blink/`",
+        "hooks": "- See files in `src/features/blink/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/blink/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/blink`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Blink/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-blink.md"
+    },
+    {
+      "slug": "feature-budget",
+      "title": "Feature · Budget",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/budget/`",
+        "hooks": "- See files in `src/features/budget/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/budget/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/budget`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Budget/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-budget.md"
+    },
+    {
+      "slug": "feature-catalogue",
+      "title": "Feature · Catalogue",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/catalogue/`",
+        "hooks": "- See files in `src/features/catalogue/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/catalogue/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/catalogue`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Catalogue/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-catalogue.md"
+    },
+    {
+      "slug": "feature-categories",
+      "title": "Feature · Categories",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/categories/`",
+        "hooks": "- See files in `src/features/categories/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/categories/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/categories`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Categories/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-categories.md"
+    },
+    {
+      "slug": "feature-dashboard",
+      "title": "Feature · Dashboard",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/dashboard/`",
+        "hooks": "- See files in `src/features/dashboard/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/dashboard/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/dashboard`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Dashboard/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-dashboard.md"
+    },
+    {
+      "slug": "feature-debts",
+      "title": "Feature · Debts",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/debts/`",
+        "hooks": "- See files in `src/features/debts/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/debts/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/debts`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Debts/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-debts.md"
+    },
+    {
+      "slug": "feature-drafts",
+      "title": "Feature · Drafts",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/drafts/`",
+        "hooks": "- See files in `src/features/drafts/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/drafts/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/drafts`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Drafts/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-drafts.md"
+    },
+    {
+      "slug": "feature-future-purchases",
+      "title": "Feature · Future Purchases",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/future-purchases/`",
+        "hooks": "- See files in `src/features/future-purchases/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/future-purchases/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/future-purchases`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Future Purchases/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-future-purchases.md"
+    },
+    {
+      "slug": "feature-hub",
+      "title": "Feature · Hub",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/hub/`",
+        "hooks": "- See files in `src/features/hub/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/hub/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/hub`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Hub/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-hub.md"
+    },
+    {
+      "slug": "feature-inventory",
+      "title": "Feature · Inventory",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/inventory/`",
+        "hooks": "- See files in `src/features/inventory/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/inventory/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/inventory`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Inventory/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-inventory.md"
+    },
+    {
+      "slug": "feature-items",
+      "title": "Feature · Items",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/items/`",
+        "hooks": "- See files in `src/features/items/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/items/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/items`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Items/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-items.md"
+    },
+    {
+      "slug": "feature-navigation",
+      "title": "Feature · Navigation",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/navigation/`",
+        "hooks": "- See files in `src/features/navigation/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/navigation/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/navigation`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Navigation/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-navigation.md"
+    },
+    {
+      "slug": "feature-nfc",
+      "title": "Feature · Nfc",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/nfc/`",
+        "hooks": "- See files in `src/features/nfc/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/nfc/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/nfc`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Nfc/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-nfc.md"
+    },
+    {
+      "slug": "feature-preferences",
+      "title": "Feature · Preferences",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/preferences/`",
+        "hooks": "- See files in `src/features/preferences/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/preferences/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/preferences`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Preferences/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-preferences.md"
+    },
+    {
+      "slug": "feature-recipes",
+      "title": "Feature · Recipes",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/recipes/`",
+        "hooks": "- See files in `src/features/recipes/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/recipes/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/recipes`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Recipes/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-recipes.md"
+    },
+    {
+      "slug": "feature-recurring",
+      "title": "Feature · Recurring",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/recurring/`",
+        "hooks": "- See files in `src/features/recurring/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/recurring/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/recurring`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Recurring/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-recurring.md"
+    },
+    {
+      "slug": "feature-reminders",
+      "title": "Feature · Reminders",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/reminders/`",
+        "hooks": "- See files in `src/features/reminders/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/reminders/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/reminders`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Reminders/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-reminders.md"
+    },
+    {
+      "slug": "feature-statement-import",
+      "title": "Feature · Statement Import",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/statement-import/`",
+        "hooks": "- See files in `src/features/statement-import/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/statement-import/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/statement-import`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Statement Import/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-statement-import.md"
+    },
+    {
+      "slug": "feature-today",
+      "title": "Feature · Today",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/today/`",
+        "hooks": "- See files in `src/features/today/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/today/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/today`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Today/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-today.md"
+    },
+    {
+      "slug": "feature-transactions",
+      "title": "Feature · Transactions",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/transactions/`",
+        "hooks": "- See files in `src/features/transactions/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/transactions/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/transactions`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Transactions/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-transactions.md"
+    },
+    {
+      "slug": "feature-transfers",
+      "title": "Feature · Transfers",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/transfers/`",
+        "hooks": "- See files in `src/features/transfers/` (typically `hooks.ts` or sub-files)",
+        "api_routes": "- TODO (list `/api/transfers/...` routes used by this feature)",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/transfers`.",
+        "what_it_links_to": "- TODO (which pages render this feature's UI)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Transfers/` _(verify path)_",
+        "screenshots": "- n/a",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-transfers.md"
+    },
+    {
+      "slug": "dashboard",
+      "title": "Dashboard",
+      "category": "main-tab",
+      "route": "/dashboard",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/dashboard/page.tsx`\n- **Main component**: `src/app/dashboard/DashboardClientPage.tsx`\n- **Sub-components**: TODO",
+        "hooks": "- `src/features/preferences/useUserPreferences`\n- `src/features/transactions/useDashboardTransactions`",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/dashboard`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `dashboard-mobile.png`\n- `dashboard-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/dashboard.md"
+    },
+    {
+      "slug": "expense",
+      "title": "Expense",
+      "category": "main-tab",
+      "route": "/expense",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/expense/page.tsx`\n- **Main component**: `src/app/expense/ExpenseClientWrapper.tsx`\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/expense`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `expense-mobile.png`\n- `expense-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/expense.md"
+    },
+    {
+      "slug": "recurring",
+      "title": "Recurring",
+      "category": "main-tab",
+      "route": "/recurring",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/recurring/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- `src/features/accounts/hooks`\n- `src/features/categories/useCategoriesQuery`\n- `src/features/preferences/useLbpSettings`\n- `src/features/recurring/useFuturePayments`\n- `src/features/recurring/useRecurringPayments`",
+        "api_routes": "- `/api/transactions/${transactionId}`",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/recurring`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `recurring-mobile.png`\n- `recurring-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/recurring.md"
+    },
+    {
+      "slug": "reminders",
+      "title": "Reminders",
+      "category": "main-tab",
+      "route": "/reminders",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/reminders/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- `src/features/items/useItems`",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/reminders`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `reminders-mobile.png`\n- `reminders-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/reminders.md"
+    },
+    {
+      "slug": "alerts",
+      "title": "Alerts",
+      "category": "standalone-page",
+      "route": "/alerts",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/alerts/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/alerts`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `alerts-mobile.png`\n- `alerts-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/alerts.md"
+    },
+    {
+      "slug": "catalogue",
+      "title": "Catalogue",
+      "category": "standalone-page",
+      "route": "/catalogue",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/catalogue/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/catalogue`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `catalogue-mobile.png`\n- `catalogue-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/catalogue.md"
+    },
+    {
+      "slug": "chat",
+      "title": "Chat",
+      "category": "standalone-page",
+      "route": "/chat",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/chat/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/chat`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `chat-mobile.png`\n- `chat-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/chat.md"
+    },
+    {
+      "slug": "expense-drafts",
+      "title": "Expense Drafts",
+      "category": "standalone-page",
+      "route": "/expense/drafts",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/expense/drafts/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- `src/features/accounts/hooks`\n- `src/features/categories/useCategoriesQuery`\n- `src/features/drafts/useDrafts`",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/expense/drafts`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `expense-drafts-mobile.png`\n- `expense-drafts-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/expense-drafts.md"
+    },
+    {
+      "slug": "focus",
+      "title": "Focus",
+      "category": "standalone-page",
+      "route": "/focus",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/focus/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/focus`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `focus-mobile.png`\n- `focus-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/focus.md"
+    },
+    {
+      "slug": "g-drinks-admin",
+      "title": "G Drinks Admin",
+      "category": "standalone-page",
+      "route": "/g/drinks-admin",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/g/drinks-admin/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- `/api/guest-portal/session`\n- `/api/guest-portal/drinks`\n- `/api/guest-portal/allergies`",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/g/drinks-admin`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `g-drinks-admin-mobile.png`\n- `g-drinks-admin-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/g-drinks-admin.md"
+    },
+    {
+      "slug": "g-tag",
+      "title": "G Tag",
+      "category": "standalone-page",
+      "route": "/g/[tag]",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/g/[tag]/page.tsx`\n- **Main component**: `src/app/g/[tag]/guest-portal-client.tsx`\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- `/api/guest-portal/wifi`\n- `/api/guest-portal/allergies`\n- `/api/guest-portal/feedback`\n- `/api/guest-portal/drinks`\n- `/api/guest-portal/chat`\n- `/api/guest-portal/bot`\n- `/api/guest-portal/session`",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/g/[tag]`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `g-tag-mobile.png`\n- `g-tag-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/g-tag.md"
+    },
+    {
+      "slug": "nfc",
+      "title": "Nfc",
+      "category": "standalone-page",
+      "route": "/nfc",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/nfc/page.tsx`\n- **Main component**: `src/app/nfc/nfc-admin-client.tsx`\n- **Sub-components**: TODO",
+        "hooks": "- `src/features/nfc/hooks`",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/nfc`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `nfc-mobile.png`\n- `nfc-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/nfc.md"
+    },
+    {
+      "slug": "nfc-tag",
+      "title": "Nfc Tag",
+      "category": "standalone-page",
+      "route": "/nfc/[tag]",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/nfc/[tag]/page.tsx`\n- **Main component**: `src/app/nfc/[tag]/nfc-tap-client.tsx`\n- **Sub-components**: TODO",
+        "hooks": "- `src/features/nfc/hooks`",
+        "api_routes": "- `/api/items/subtasks/${subtaskId}`\n- `/api/items/${item.id}/complete`",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/nfc/[tag]`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `nfc-tag-mobile.png`\n- `nfc-tag-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/nfc-tag.md"
+    },
+    {
+      "slug": "recipe",
+      "title": "Recipe",
+      "category": "standalone-page",
+      "route": "/recipe",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/recipe/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/recipe`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `recipe-mobile.png`\n- `recipe-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/recipe.md"
+    },
+    {
+      "slug": "settings",
+      "title": "Settings",
+      "category": "standalone-page",
+      "route": "/settings",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/settings/page.tsx`\n- **Main component**: `src/app/settings/SettingsPage.tsx`\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/settings`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `settings-mobile.png`\n- `settings-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/settings.md"
+    },
+    {
+      "slug": "ai-usage",
+      "title": "Ai Usage",
+      "category": "utility",
+      "route": "/ai-usage",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/ai-usage/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/ai-usage`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `ai-usage-mobile.png`\n- `ai-usage-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/ai-usage.md"
+    },
+    {
+      "slug": "atlas",
+      "title": "Atlas Viewer",
+      "category": "utility",
+      "route": "/atlas",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "docs",
+        "dev-tool"
+      ],
+      "sections": {
+        "files": "- **Page**: `src/app/atlas/page.tsx`\n- **Main component**: `src/components/atlas/AtlasShell.tsx`\n- **Sub-components**:\n  - `src/components/atlas/AtlasTree.tsx`\n  - `src/components/atlas/AtlasDetail.tsx`\n  - `src/components/atlas/AtlasSearch.tsx`\n- **Feature module**: `src/features/atlas/types.ts`, `src/features/atlas/utils.ts`\n- **Build script**: `scripts/build-atlas.mjs`\n- **Seed script**: `scripts/seed-atlas.mjs`\n- **Generated data**: `public/atlas/atlas.json`\n- **Screenshots folder**: `public/atlas/screenshots/`",
+        "hooks": "- n/a (static data, read from JSON server-side)",
+        "api_routes": "- n/a (page is statically rendered; JSON is served from `/atlas/atlas.json`)",
+        "db_tables": "- n/a",
+        "how_to_get_here": "- Direct URL: `/atlas`\n- Linked from `ERA Notes/04 - UI & Design/Screen File Map.md` banner.\n- Linked from `ERA Notes/04 - UI & Design/App Routes and Icons.md`.",
+        "what_it_links_to": "- Each entry's \"Files\" section uses `vscode://file/...` deep-links to open paths in VS Code.\n- \"Related vault doc\" cross-links into `ERA Notes/02 - Standalone Modules/` and `03 - Junction Modules/`.",
+        "related_vault_doc": "- `ERA Notes/04 - UI & Design/Page & Feature Atlas/README.md`\n- `ERA Notes/04 - UI & Design/Page & Feature Atlas/_Index.md`",
+        "screenshots": "- `atlas-mobile.png`\n- `atlas-desktop.png`",
+        "notes": "- Run `pnpm atlas` after editing any MD in this folder.\n- `pnpm atlas:seed` re-seeds stubs for any new routes/features (idempotent — never overwrites existing).\n- `prebuild` script automatically regenerates `atlas.json` before `next build`.\n- CLAUDE.md Hard Rule #20 enforces keeping the atlas in sync."
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/atlas.md"
+    },
+    {
+      "slug": "error-logs",
+      "title": "Error Logs",
+      "category": "utility",
+      "route": "/error-logs",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/error-logs/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- `/api/error-logs`",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/error-logs`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `error-logs-mobile.png`\n- `error-logs-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/error-logs.md"
+    },
+    {
+      "slug": "offline",
+      "title": "Offline",
+      "category": "utility",
+      "route": "/offline",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/offline/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/offline`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `offline-mobile.png`\n- `offline-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/offline.md"
+    },
+    {
+      "slug": "qr-expense",
+      "title": "Qr Expense",
+      "category": "utility",
+      "route": "/qr/expense",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/qr/expense/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- `src/features/accounts/hooks`\n- `src/features/categories/useCategoriesQuery`\n- `src/features/transactions/useDashboardTransactions`",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/qr/expense`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `qr-expense-mobile.png`\n- `qr-expense-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/qr-expense.md"
+    },
+    {
+      "slug": "quick-expense",
+      "title": "Quick Expense",
+      "category": "utility",
+      "route": "/quick-expense",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/quick-expense/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/quick-expense`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `quick-expense-mobile.png`\n- `quick-expense-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/quick-expense.md"
+    },
+    {
+      "slug": "temp",
+      "title": "Temp",
+      "category": "utility",
+      "route": "/temp",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/temp/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
+        "hooks": "- TODO",
+        "api_routes": "- TODO",
+        "db_tables": "- TODO",
+        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/temp`",
+        "what_it_links_to": "- TODO",
+        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "screenshots": "- `temp-mobile.png`\n- `temp-desktop.png`",
+        "notes": "- TODO"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/temp.md"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->
+]633;E;printf '<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->\\n\\n';7aa31fa9-c199-4816-a306-d44829cfc5a5]633;C<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->
 
 # CLAUDE.md
 
@@ -43,6 +43,7 @@ CLAUDE.md auto-syncs to `.github/copilot-instructions.md` via PostToolUse hook.
 17. **Cache invalidation** — see `.claude/skills/cache-invalidation/SKILL.md` and `ERA Notes/01 - Architecture/Cache Invalidation.md`.
 18. **Timezone consistency** — see `.claude/skills/timezone-handling/SKILL.md` and `ERA Notes/01 - Architecture/Timezone Handling.md`.
 19. **Mobile number inputs** — never use `type="number"`. Use `type="text"` with `inputMode="decimal"`. Prevents iOS scroll-wheel bug and inconsistent decimal handling.
+20. **Atlas must be kept in sync** — every new page (`src/app/.../page.tsx`), new route, new feature module (`src/features/[name]/`), or significant navigation change MUST add/update an entry in `ERA Notes/04 - UI & Design/Page & Feature Atlas/` (copy `_Template.md`, fill all sections, add a row to `_Index.md`) AND regenerate `public/atlas/atlas.json` via `pnpm atlas`. The in-app viewer at `/atlas` reads that JSON. Renaming a feature/route is a breaking change for the atlas — update or delete the corresponding MD file in the same commit. Stub generator: `node scripts/seed-atlas.mjs` (idempotent — safe to re-run; never overwrites existing files).
 
 ---
 
@@ -211,4 +212,5 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Ideas/pending                | `ERA Notes/07 - Backlog & Ideas/`                           |
 | Session notes (personal)     | `ERA Notes/08 - Sessions/{Features\|Bug Fixes\|Refactors}/` |
 | Reusable patterns (personal) | `ERA Notes/09 - Patterns & Lessons/`                        |
+| Page & Feature Atlas entry   | `ERA Notes/04 - UI & Design/Page & Feature Atlas/`          |
 | Root-level only              | `CLAUDE.md`, `README.md`                                    |

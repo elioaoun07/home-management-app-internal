@@ -10,6 +10,9 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit -p .",
     "icons": "node scripts/generate-icons.cjs",
+    "atlas": "node scripts/build-atlas.mjs",
+    "atlas:seed": "node scripts/seed-atlas.mjs && node scripts/build-atlas.mjs",
+    "prebuild": "node scripts/build-atlas.mjs",
     "prepare": "husky install"
   },
   "dependencies": {

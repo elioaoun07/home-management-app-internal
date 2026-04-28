@@ -12,7 +12,10 @@ tags:
 
 # Screen → File Map
 
-> **Purpose**: When you see a UI issue on any screen, look it up here to find the exact TSX file(s) to edit.
+> ⚠️ **Superseded by the [Page & Feature Atlas](Page%20&%20Feature%20Atlas/_Index.md)**.
+> The Atlas is auto-seeded from the codebase and viewable in-app at `/atlas`. This file remains as a quick legacy reference but should not be the source of truth for new work.
+>
+> **Purpose (legacy)**: When you see a UI issue on any screen, look it up here to find the exact TSX file(s) to edit.
 > For icons and route metadata, see [[App Routes and Icons]].
 
 ---
