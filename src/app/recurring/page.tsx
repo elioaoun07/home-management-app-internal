@@ -29,6 +29,11 @@ import {
   useUpdateRecurringPayment,
 } from "@/features/recurring/useRecurringPayments";
 import {
+  useConfirmDraft,
+  useDeleteDraft,
+  useDrafts,
+} from "@/features/drafts/useDrafts";
+import {
   getMemberDisplayName,
   useHouseholdMembers,
 } from "@/hooks/useHouseholdMembers";
@@ -48,6 +53,7 @@ import {
   Calendar,
   CalendarClock,
   Edit2,
+  FileText,
   Lock,
   Power,
   Trash2,
@@ -70,7 +76,23 @@ function getOrdinalSuffix(day: number) {
   }
 }
 
-type TabMode = "recurring" | "future";
+type TabMode = "recurring" | "future" | "draft";
+
+type DraftItem = {
+  id: string;
+  date: string;
+  amount: number;
+  description: string;
+  category_id: string | null;
+  subcategory_id: string | null;
+  voice_transcript: string | null;
+  confidence_score: number | null;
+  inserted_at: string;
+  account_id: string;
+  accounts: { name: string };
+  category?: { name: string } | null;
+  subcategory?: { name: string } | null;
+};
 
 export default function RecurringPage() {
   const tc = useThemeClasses();
@@ -94,6 +116,9 @@ export default function RecurringPage() {
     useState<RecurringPayment | null>(null);
   const [confirmingFuture, setConfirmingFuture] =
     useState<FuturePayment | null>(null);
+  const [confirmingDraft, setConfirmingDraft] = useState<DraftItem | null>(
+    null,
+  );
 
   // LBP settings
   const { lbpRate, calculateActualValue } = useLbpSettings();
@@ -108,6 +133,9 @@ export default function RecurringPage() {
   const confirmRecurringMutation = useConfirmPayment();
   const confirmFutureMutation = useConfirmFuturePayment();
   const deleteFutureMutation = useDeleteFuturePayment();
+  const { data: draftPayments = [], isLoading: isLoadingDrafts } = useDrafts();
+  const deleteDraftMutation = useDeleteDraft();
+  const confirmDraftMutation = useConfirmDraft();
 
   // Form state for Add/Edit recurring
   const [formData, setFormData] = useState({
@@ -344,6 +372,15 @@ export default function RecurringPage() {
     }
   }, [confirmingFuture, currentUserId, populateConfirmForm]);
 
+  useEffect(() => {
+    if (confirmingDraft) {
+      populateConfirmForm(
+        { ...confirmingDraft, name: confirmingDraft.description },
+        true,
+      );
+    }
+  }, [confirmingDraft, populateConfirmForm]);
+
   const resetForm = () => {
     setFormData({
       account_id: defaultAccount?.id || "",
@@ -414,6 +451,24 @@ export default function RecurringPage() {
       resetForm();
       setShowAddDrawer(false);
       setEditingPayment(null);
+    } catch {
+      // Error toast shown by hook
+    }
+  };
+
+  const handleConfirmDraft = async () => {
+    if (!confirmingDraft) return;
+    try {
+      await confirmDraftMutation.mutateAsync({
+        id: confirmingDraft.id,
+        amount: confirmFormData.amount,
+        category_id: confirmFormData.category_id,
+        subcategory_id: confirmFormData.subcategory_id || undefined,
+        description: confirmFormData.description,
+        date: confirmFormData.date,
+        account_id: confirmFormData.account_id || confirmingDraft.account_id,
+      });
+      setConfirmingDraft(null);
     } catch {
       // Error toast shown by hook
     }
@@ -546,7 +601,11 @@ export default function RecurringPage() {
     : [];
 
   const isLoading =
-    activeTab === "recurring" ? isLoadingRecurring : isLoadingFuture;
+    activeTab === "recurring"
+      ? isLoadingRecurring
+      : activeTab === "future"
+        ? isLoadingFuture
+        : isLoadingDrafts;
 
   if (isLoading) {
     return (
@@ -578,7 +637,9 @@ export default function RecurringPage() {
               <p className={cn("text-sm", tc.textMuted)}>
                 {activeTab === "recurring"
                   ? `${activePayments.length} active · $${monthlyTotal.toFixed(0)}/mo`
-                  : `${futurePayments.length} scheduled · $${futureTotal.toFixed(0)} total`}
+                  : activeTab === "future"
+                    ? `${futurePayments.length} scheduled · $${futureTotal.toFixed(0)} total`
+                    : `${draftPayments.length} draft${draftPayments.length !== 1 ? "s" : ""}`}
               </p>
             </div>
             {activeTab === "recurring" && (
@@ -624,6 +685,23 @@ export default function RecurringPage() {
               {dueFuturePayments.length > 0 && (
                 <span className="w-5 h-5 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold">
                   {dueFuturePayments.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("draft")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
+                activeTab === "draft"
+                  ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
+                  : "text-white/40 hover:text-white/60",
+              )}
+            >
+              <FileText className="w-4 h-4" />
+              Drafts
+              {draftPayments.length > 0 && (
+                <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white/10 text-white/60 text-[10px] font-bold">
+                  {draftPayments.length}
                 </span>
               )}
             </button>
@@ -861,6 +939,61 @@ export default function RecurringPage() {
                     )}
                   >
                     ${futureTotal.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ═══ DRAFT PAYMENTS TAB ═══ */}
+        {activeTab === "draft" && (
+          <>
+            {draftPayments.length === 0 ? (
+              <div className="neo-card p-8 text-center">
+                <FileText
+                  className={cn("w-16 h-16 mx-auto mb-4", tc.textFaint)}
+                />
+                <p className={cn("mb-2", tc.textMuted)}>No drafts</p>
+                <p className={cn("text-sm", tc.textFaint)}>
+                  Drafts appear here when an expense is saved without being
+                  confirmed
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <div className="flex items-center gap-3 px-3 py-2 text-[10px] uppercase tracking-wider text-white/30">
+                  <span className="w-14 text-center">Date</span>
+                  <span className="flex-1">Description</span>
+                  <span className="w-16 text-right">Amount</span>
+                  <span className="w-16" />
+                </div>
+                {draftPayments.map((draft) => (
+                  <DraftRow
+                    key={draft.id}
+                    draft={draft}
+                    tc={tc}
+                    onConfirm={setConfirmingDraft}
+                    onDelete={(id) => deleteDraftMutation.mutate(id)}
+                  />
+                ))}
+                <div
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-3 rounded-lg border",
+                    tc.border,
+                    tc.bgSurface,
+                  )}
+                >
+                  <span className="flex-1 text-sm font-semibold text-white/60">
+                    Total Drafts
+                  </span>
+                  <span
+                    className={cn(
+                      "text-sm font-bold tabular-nums",
+                      tc.textHighlight,
+                    )}
+                  >
+                    ${draftPayments.reduce((s, d) => s + d.amount, 0).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -1293,12 +1426,14 @@ export default function RecurringPage() {
         )}
 
         {/* ═══ CONFIRM DRAWER (shared for recurring + future) ═══ */}
-        {(confirmingRecurring || confirmingFuture) && (
+        {(confirmingRecurring || confirmingFuture || confirmingDraft) && (
           <ConfirmDrawer
             title={
               confirmingRecurring
                 ? confirmingRecurring.name
-                : confirmingFuture!.description || "Future Payment"
+                : confirmingFuture
+                  ? confirmingFuture.description || "Future Payment"
+                  : confirmingDraft!.description || "Draft"
             }
             tc={tc}
             formData={confirmFormData}
@@ -1308,14 +1443,20 @@ export default function RecurringPage() {
             subcategories={confirmSubcategories}
             isPending={
               confirmRecurringMutation.isPending ||
-              confirmFutureMutation.isPending
+              confirmFutureMutation.isPending ||
+              confirmDraftMutation.isPending
             }
             onConfirm={
-              confirmingRecurring ? handleConfirmRecurring : handleConfirmFuture
+              confirmingRecurring
+                ? handleConfirmRecurring
+                : confirmingFuture
+                  ? handleConfirmFuture
+                  : handleConfirmDraft
             }
             onClose={() => {
               setConfirmingRecurring(null);
               setConfirmingFuture(null);
+              setConfirmingDraft(null);
             }}
             lbpRate={lbpRate}
             calculateActualValue={calculateActualValue}
@@ -1678,6 +1819,67 @@ function FutureSection({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   DRAFT ROW (compact)
+   ═══════════════════════════════════════════════════ */
+function DraftRow({
+  draft,
+  tc,
+  onConfirm,
+  onDelete,
+}: {
+  draft: DraftItem;
+  tc: ReturnType<typeof useThemeClasses>;
+  onConfirm: (d: DraftItem) => void;
+  onDelete: (id: string) => void;
+}) {
+  const draftDate = new Date(draft.date);
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all border border-transparent hover:bg-white/5">
+      <span className="w-14 text-center text-[11px] font-bold text-white/50">
+        {format(draftDate, "MMM d")}
+      </span>
+      <div
+        className="flex-1 min-w-0 cursor-pointer"
+        onClick={() => onConfirm(draft)}
+      >
+        <p className="text-sm font-medium text-white truncate">
+          {draft.description || "Draft payment"}
+        </p>
+        <div className="flex items-center gap-2 text-[10px] text-white/30">
+          {draft.category && <span>{draft.category.name}</span>}
+          {draft.accounts && <span>{draft.accounts.name}</span>}
+        </div>
+      </div>
+      <span
+        className={cn(
+          "w-16 text-right text-sm font-semibold tabular-nums",
+          tc.textHighlight,
+        )}
+      >
+        ${draft.amount.toFixed(0)}
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onConfirm(draft)}
+          className={cn(
+            "p-1.5 rounded-md active:scale-95 transition-all",
+            tc.bgSurface,
+          )}
+        >
+          <CheckIcon className={cn("w-3.5 h-3.5", tc.text)} />
+        </button>
+        <button
+          onClick={() => onDelete(draft.id)}
+          className="p-1.5 rounded-md bg-[#ef4444]/10 hover:bg-[#ef4444]/20 active:scale-95 transition-all"
+        >
+          <Trash2 className="w-3.5 h-3.5 text-[#ef4444]" />
+        </button>
+      </div>
     </div>
   );
 }

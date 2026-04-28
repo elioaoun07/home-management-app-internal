@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-28T17:11:45.845Z",
+  "generatedAt": "2026-04-28T17:26:11.466Z",
   "count": 55,
   "nodes": [
     {
@@ -906,7 +906,8 @@
       "tags": [],
       "sections": {
         "files": "- **Page**: `src/app/recurring/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
-        "hooks": "- `src/features/accounts/hooks`\n- `src/features/categories/useCategoriesQuery`\n- `src/features/preferences/useLbpSettings`\n- `src/features/recurring/useFuturePayments`\n- `src/features/recurring/useRecurringPayments`",
+        "tabs": "- **Recurring** — active recurring payments split into Cash/Manual and Auto/Online sections, plus Disabled list\n- **Future** — one-off scheduled payments (due now / upcoming)\n- **Drafts** — saved draft transactions pending confirmation; confirm via log-transaction drawer or delete",
+        "hooks": "- `src/features/accounts/hooks`\n- `src/features/categories/useCategoriesQuery`\n- `src/features/preferences/useLbpSettings`\n- `src/features/recurring/useFuturePayments`\n- `src/features/recurring/useRecurringPayments`\n- `src/features/drafts/useDrafts` (Draft tab)",
         "api_routes": "- `/api/transactions/${transactionId}`",
         "db_tables": "- TODO",
         "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/recurring`",

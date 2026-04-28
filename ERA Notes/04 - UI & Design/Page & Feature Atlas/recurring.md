@@ -20,6 +20,12 @@ tags: []
 - **Main component**: _(self-contained in page file)_
 - **Sub-components**: TODO
 
+## Tabs
+
+- **Recurring** — active recurring payments split into Cash/Manual and Auto/Online sections, plus Disabled list
+- **Future** — one-off scheduled payments (due now / upcoming)
+- **Drafts** — saved draft transactions pending confirmation; confirm via log-transaction drawer or delete
+
 ## Hooks
 
 - `src/features/accounts/hooks`
@@ -27,6 +33,7 @@ tags: []
 - `src/features/preferences/useLbpSettings`
 - `src/features/recurring/useFuturePayments`
 - `src/features/recurring/useRecurringPayments`
+- `src/features/drafts/useDrafts` (Draft tab)
 
 ## API routes
 

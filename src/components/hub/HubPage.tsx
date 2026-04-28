@@ -2544,11 +2544,16 @@ function ThreadConversation({
                   {/* Sync Status Indicator */}
                   <SyncIndicator
                     compact
-                    onRefresh={() =>
-                      queryClient.invalidateQueries({
+                    onRefresh={async () => {
+                      await queryClient.invalidateQueries({
                         queryKey: ["hub", "messages", threadId],
-                      })
-                    }
+                        refetchType: "none",
+                      });
+                      await queryClient.refetchQueries({
+                        queryKey: ["hub", "messages", threadId],
+                        type: "active",
+                      });
+                    }}
                   />
                 </>
               )}

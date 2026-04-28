@@ -9,7 +9,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { yyyyMmDd } from "@/lib/utils/date";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import FilterBar, {
   type FilterBarSection,
   type GroupMode,
@@ -113,8 +113,37 @@ export default function ActivityView() {
   });
   const isFetchingTr = useIsFetching({ queryKey: ["transfers"] });
   const isFetchingItems = useIsFetching({ queryKey: itemsKeys.all });
-  const isFetching =
+  const isFetchingAny =
     isFetchingTx > 0 || isFetchingTr > 0 || isFetchingItems > 0;
+
+  // Bridges the gap between invalidateQueries() and isFetching going positive (one render cycle).
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!isManualRefreshing) return;
+
+    if (isFetchingAny) {
+      // Fetch is active — cancel any pending stop timer
+      if (clearTimerRef.current) {
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = null;
+      }
+    } else {
+      // Not fetching — schedule stop after grace period
+      clearTimerRef.current = setTimeout(() => {
+        setIsManualRefreshing(false);
+        clearTimerRef.current = null;
+      }, 500);
+    }
+
+    return () => {
+      if (clearTimerRef.current) {
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = null;
+      }
+    };
+  }, [isManualRefreshing, isFetchingAny]);
 
   useEffect(() => {
     supabaseBrowser()
@@ -126,6 +155,11 @@ export default function ActivityView() {
 
   const handleRefresh = () => {
     if (navigator.vibrate) navigator.vibrate(5);
+    if (clearTimerRef.current) {
+      clearTimeout(clearTimerRef.current);
+      clearTimerRef.current = null;
+    }
+    setIsManualRefreshing(true);
     queryClient.invalidateQueries({
       queryKey: ["transactions", "dashboard", dateRange.start, dateRange.end],
     });
@@ -176,7 +210,7 @@ export default function ActivityView() {
         isBlurred={isBlurred}
         onToggleBlur={toggleBlur}
         isBudgetSection={!activeIsJournal}
-        isFetching={isFetching}
+        isFetching={isManualRefreshing || isFetchingAny}
         onRefresh={handleRefresh}
       />
 
