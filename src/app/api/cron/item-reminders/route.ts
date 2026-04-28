@@ -16,6 +16,8 @@
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/pushSender";
+import { buildFullRRuleString } from "@/lib/utils/date";
+import { RRule } from "rrule";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +46,7 @@ export async function GET(req: NextRequest) {
         id,
         item_id,
         trigger_at,
+        offset_minutes,
         channel,
         items (
           id,
@@ -54,7 +57,7 @@ export async function GET(req: NextRequest) {
           description,
           type,
           priority,
-          item_recurrence_rules (id)
+          item_recurrence_rules (id, rrule, start_anchor, end_until, count)
         )
       `,
       )
@@ -93,7 +96,13 @@ export async function GET(req: NextRequest) {
         description: string | null;
         type: string;
         priority: string;
-        item_recurrence_rules: { id: string }[] | null;
+        item_recurrence_rules: {
+          id: string;
+          rrule: string;
+          start_anchor: string;
+          end_until: string | null;
+          count: number | null;
+        }[] | null;
       } | null;
 
       if (!item) {
@@ -215,6 +224,45 @@ export async function GET(req: NextRequest) {
         .from("item_alerts")
         .update({ last_fired_at: now.toISOString() })
         .eq("id", alert.id);
+
+      // For recurring items, advance trigger_at to the next occurrence.
+      // We advance by the interval between occurrences (nextOcc - currentOcc),
+      // which naturally preserves any custom fire time (e.g. "8pm") without
+      // needing a separate custom_time column.
+      const rule = item?.item_recurrence_rules?.[0];
+      const offsetMinutes = (alert as unknown as { offset_minutes: number | null }).offset_minutes;
+      if (rule && alert.trigger_at && offsetMinutes != null) {
+        const firedTriggerAt = new Date(alert.trigger_at);
+        // Current event start = trigger_at + offset_minutes
+        const currentEventTime = new Date(
+          firedTriggerAt.getTime() + offsetMinutes * 60 * 1000,
+        );
+        const rruleStr = buildFullRRuleString(new Date(rule.start_anchor), rule);
+        const nextOcc = RRule.fromString(rruleStr).after(currentEventTime, false);
+        if (nextOcc) {
+          // Advance by the exact gap between occurrences — preserves custom time
+          const interval = nextOcc.getTime() - currentEventTime.getTime();
+          const newTriggerAt = new Date(
+            firedTriggerAt.getTime() + interval,
+          ).toISOString();
+          await supabase
+            .from("item_alerts")
+            .update({ trigger_at: newTriggerAt, last_fired_at: null })
+            .eq("id", alert.id);
+          console.log(
+            `[Item Reminders] Rescheduled alert ${alert.id} → ${newTriggerAt}`,
+          );
+        } else {
+          // Series is done — deactivate the alert
+          await supabase
+            .from("item_alerts")
+            .update({ active: false })
+            .eq("id", alert.id);
+          console.log(
+            `[Item Reminders] Alert ${alert.id} deactivated — no more occurrences`,
+          );
+        }
+      }
     }
 
     return NextResponse.json({

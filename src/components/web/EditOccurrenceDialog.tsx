@@ -24,9 +24,14 @@ import {
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { localToISO } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
+import {
+  SmartAlertPicker,
+  type SmartAlertValue,
+} from "@/components/items/SmartAlertPicker";
 import type { ItemWithDetails } from "@/types/items";
 import { format, isSameDay, parseISO } from "date-fns";
 import {
+  Bell,
   CalendarClock,
   CalendarDays,
   Clock,
@@ -67,6 +72,10 @@ export default function EditOccurrenceDialog({
   const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [alertValue, setAlertValue] = useState<SmartAlertValue>({
+    offsetMinutes: 0,
+    customTime: null,
+  });
 
   const isLoading = createException.isPending || updateException.isPending;
 
@@ -91,6 +100,60 @@ export default function EditOccurrenceDialog({
     return { start: "09:00", end: "10:00" };
   };
 
+  // Get the existing exception for this occurrence (if any)
+  const getExistingException = () =>
+    item.recurrence_rule?.exceptions?.find((ex) =>
+      isSameDay(parseISO(ex.exdate), occurrenceDate),
+    );
+
+  // Get the original alert value for this occurrence.
+  // Priority: exception-specific alert → base item alert → no alert.
+  const getOriginalAlertValue = (): SmartAlertValue => {
+    const existing = getExistingException();
+    const exceptionAlert = existing?.override_payload_json?.exception_alert as
+      | SmartAlertValue
+      | undefined;
+    if (exceptionAlert) {
+      return {
+        offsetMinutes: exceptionAlert.offsetMinutes,
+        customTime: exceptionAlert.customTime ?? null,
+      };
+    }
+    // Fall back to base item alert (series-level)
+    const baseAlert = item.alerts?.[0];
+    if (baseAlert?.kind === "relative" && (baseAlert.offset_minutes ?? 0) > 0) {
+      return {
+        offsetMinutes: baseAlert.offset_minutes ?? 0,
+        customTime:
+          (baseAlert as unknown as Record<string, unknown>).custom_time as
+            | string
+            | null ?? null,
+      };
+    }
+    return { offsetMinutes: 0, customTime: null };
+  };
+
+  // Compute the absolute trigger_at for the alert
+  const computeAlertTriggerAt = (alert: SmartAlertValue): string | null => {
+    if (!alert.offsetMinutes && !alert.customTime) return null;
+
+    if (alert.customTime) {
+      const days = Math.floor((alert.offsetMinutes || 0) / 1440);
+      const alertDate = new Date(newDate);
+      alertDate.setDate(alertDate.getDate() - days);
+      const [h, m] = alert.customTime.split(":").map(Number);
+      alertDate.setHours(h, m, 0, 0);
+      return alertDate.toISOString();
+    }
+
+    const [eh, em] = startTime.split(":").map(Number);
+    const eventDateTime = new Date(newDate);
+    eventDateTime.setHours(eh, em, 0, 0);
+    return new Date(
+      eventDateTime.getTime() - alert.offsetMinutes * 60 * 1000,
+    ).toISOString();
+  };
+
   // Initialize form when dialog opens
   useEffect(() => {
     if (open) {
@@ -101,6 +164,7 @@ export default function EditOccurrenceDialog({
       setStartTime(times.start);
       setEndTime(times.end);
       setLocation(originalLocation);
+      setAlertValue(getOriginalAlertValue());
     }
   }, [open, item, occurrenceDate]);
 
@@ -117,6 +181,7 @@ export default function EditOccurrenceDialog({
   const getModifiedFields = () => {
     const modified: string[] = [];
     const originalTimes = getOriginalTimes();
+    const originalAlert = getOriginalAlertValue();
 
     if (title !== originalTitle) modified.push("title");
     if (description !== originalDescription) modified.push("description");
@@ -124,6 +189,11 @@ export default function EditOccurrenceDialog({
     if (startTime !== originalTimes.start) modified.push("start_at");
     if (endTime !== originalTimes.end) modified.push("end_at");
     if (location !== originalLocation) modified.push("location_text");
+    if (
+      alertValue.offsetMinutes !== originalAlert.offsetMinutes ||
+      alertValue.customTime !== originalAlert.customTime
+    )
+      modified.push("exception_alert");
 
     return modified;
   };
@@ -176,11 +246,26 @@ export default function EditOccurrenceDialog({
       override_payload_json.location_text = location;
     }
 
+    // Build exception_alert input if alert field was touched
+    const alertChanged = modifiedFields.includes("exception_alert");
+    const alertEnabled =
+      alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime);
+    const exceptionAlert = alertChanged
+      ? alertEnabled
+        ? {
+            offsetMinutes: alertValue.offsetMinutes,
+            customTime: alertValue.customTime ?? null,
+            trigger_at: computeAlertTriggerAt(alertValue)!,
+          }
+        : null // cleared
+      : undefined; // unchanged — don't touch existing alert
+
     try {
       await createException.mutateAsync({
         rule_id: item.recurrence_rule.id,
         exdate: getExdateIso(),
         override_payload_json,
+        exception_alert: exceptionAlert,
       });
 
       onOpenChange(false);
@@ -361,6 +446,20 @@ export default function EditOccurrenceDialog({
               />
             </div>
           )}
+
+          {/* Alert */}
+          <div className="space-y-2">
+            <Label className="text-white/80 text-sm flex items-center gap-1.5">
+              <Bell className="w-3.5 h-3.5 text-purple-400" />
+              Alert
+            </Label>
+            <SmartAlertPicker
+              value={alertValue}
+              onChange={setAlertValue}
+              variant="compact"
+              eventTime={startTime}
+            />
+          </div>
 
           {/* Info text */}
           <p className="text-xs text-white/40">

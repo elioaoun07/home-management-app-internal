@@ -2131,7 +2131,15 @@ export interface CreateRecurrenceExceptionInput {
     location_text?: string;
     priority?: string;
     modified_fields?: string[];
+    rescheduled_to?: string;
+    [key: string]: unknown;
   };
+  /** Alert to set for this specific occurrence. null = clear any existing alert. undefined = leave unchanged. */
+  exception_alert?: {
+    offsetMinutes: number;
+    customTime?: string | null;
+    trigger_at: string; // pre-computed absolute ISO timestamp
+  } | null;
 }
 
 export interface RecurrenceExceptionWithDetails {
@@ -2173,6 +2181,71 @@ export function useCreateRecurrenceException() {
 
       console.log("Rule found:", rule);
 
+      // Handle alert lifecycle when exception_alert is explicitly passed
+      let newAlertId: string | null = null;
+      if (input.exception_alert !== undefined) {
+        // Find existing exception to get any old alert ID
+        const { data: existingEx } = await supabase
+          .from("item_recurrence_exceptions")
+          .select("override_payload_json")
+          .eq("rule_id", input.rule_id)
+          .eq("exdate", input.exdate)
+          .maybeSingle();
+
+        const oldAlertId = (
+          existingEx?.override_payload_json as Record<string, unknown> | null
+        )?.exception_alert_id as string | undefined;
+
+        if (oldAlertId) {
+          await supabase
+            .from("item_alerts")
+            .update({ active: false })
+            .eq("id", oldAlertId);
+        }
+
+        if (input.exception_alert?.trigger_at) {
+          const { data: alertData, error: alertErr } = await supabase
+            .from("item_alerts")
+            .insert({
+              item_id: rule.item_id,
+              kind: "absolute",
+              trigger_at: input.exception_alert.trigger_at,
+              offset_minutes: input.exception_alert.offsetMinutes || null,
+              custom_time: input.exception_alert.customTime ?? null,
+              relative_to: "start",
+              channel: "push",
+              active: true,
+            })
+            .select("id")
+            .single();
+          if (alertErr) {
+            console.error("Failed to insert exception alert:", alertErr);
+            throw new Error(
+              `Failed to save exception alert: ${alertErr.message}`,
+            );
+          }
+          newAlertId = alertData?.id ?? null;
+        }
+      }
+
+      // Build final payload, merging alert fields
+      const overridePayload: Record<string, unknown> = {
+        ...(input.override_payload_json || {}),
+      };
+      if (input.exception_alert !== undefined) {
+        if (input.exception_alert?.trigger_at) {
+          overridePayload.exception_alert = {
+            offsetMinutes: input.exception_alert.offsetMinutes,
+            customTime: input.exception_alert.customTime ?? null,
+          };
+          if (newAlertId) overridePayload.exception_alert_id = newAlertId;
+        } else {
+          // Alert cleared
+          delete overridePayload.exception_alert;
+          delete overridePayload.exception_alert_id;
+        }
+      }
+
       // Create or update the exception (upsert on rule_id + exdate)
       const { data, error } = await supabase
         .from("item_recurrence_exceptions")
@@ -2180,7 +2253,8 @@ export function useCreateRecurrenceException() {
           {
             rule_id: input.rule_id,
             exdate: input.exdate,
-            override_payload_json: input.override_payload_json || null,
+            override_payload_json:
+              Object.keys(overridePayload).length > 0 ? overridePayload : null,
           },
           {
             onConflict: "rule_id,exdate",
@@ -2365,7 +2439,9 @@ export function useUpdateRecurrenceRule() {
             end_until,
             count,
             ...(phase_changed_at !== undefined && { phase_changed_at }),
-            ...(previous_start_anchor !== undefined && { previous_start_anchor }),
+            ...(previous_start_anchor !== undefined && {
+              previous_start_anchor,
+            }),
           })
           .eq("id", existingRule.id)
           .select()

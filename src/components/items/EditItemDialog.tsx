@@ -28,7 +28,7 @@ import type {
   ItemPrerequisite,
 } from "@/types/prerequisites";
 import { format, parseISO } from "date-fns";
-import { localToISO } from "@/lib/utils/date";
+import { buildFullRRuleString, localToISO } from "@/lib/utils/date";
 import {
   Bell,
   MapPin,
@@ -356,6 +356,81 @@ export default function EditItemDialog({
             rrule: recurrenceRule || null,
             start_anchor: startAnchor,
           });
+        }
+      }
+
+      // Upsert alert
+      {
+        const enableAlert =
+          alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime);
+        const originalAlert = item.alerts?.[0];
+        const alertChanged = !originalAlert
+          ? enableAlert
+          : originalAlert.offset_minutes !== alertValue.offsetMinutes ||
+            ((originalAlert as unknown as Record<string, unknown>)
+              .custom_time ?? null) !== alertValue.customTime;
+
+        if (alertChanged) {
+          await supabase
+            .from("item_alerts")
+            .delete()
+            .eq("item_id", item.id)
+            .eq("kind", "relative");
+
+          if (enableAlert) {
+            let triggerAt: string | null = null;
+            const rule = item.recurrence_rule;
+            if (rule) {
+              const { RRule } = await import("rrule");
+              const anchor = new Date(rule.start_anchor);
+              const rruleStr = buildFullRRuleString(anchor, rule);
+              const nextOcc = RRule.fromString(rruleStr).after(
+                new Date(),
+                true,
+              );
+              if (nextOcc) {
+                if (alertValue.customTime) {
+                  const days = Math.floor(
+                    (alertValue.offsetMinutes || 0) / 1440,
+                  );
+                  const alertDate = new Date(nextOcc);
+                  alertDate.setDate(alertDate.getDate() - days);
+                  const [h, m] = alertValue.customTime.split(":").map(Number);
+                  alertDate.setHours(h, m, 0, 0);
+                  triggerAt = alertDate.toISOString();
+                } else {
+                  triggerAt = new Date(
+                    nextOcc.getTime() - alertValue.offsetMinutes * 60 * 1000,
+                  ).toISOString();
+                }
+              }
+            } else {
+              const baseTimeStr =
+                item.event_details?.start_at ??
+                item.reminder_details?.due_at ??
+                null;
+              if (baseTimeStr) {
+                triggerAt = new Date(
+                  new Date(baseTimeStr).getTime() -
+                    alertValue.offsetMinutes * 60 * 1000,
+                ).toISOString();
+              }
+            }
+
+            const alertRow: Record<string, unknown> = {
+              item_id: item.id,
+              kind: "relative",
+              offset_minutes: alertValue.offsetMinutes || null,
+              relative_to: item.type === "event" ? "start" : "due",
+              trigger_at: triggerAt,
+              channel: "push",
+              active: true,
+            };
+            if (alertValue.customTime) {
+              alertRow.custom_time = alertValue.customTime;
+            }
+            await supabase.from("item_alerts").insert(alertRow);
+          }
         }
       }
 

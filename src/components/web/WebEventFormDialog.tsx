@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
+  itemsKeys,
   useCreateEvent,
   useCreateReminder,
   useCreateTask,
@@ -36,7 +37,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNotification";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
-import { localToISO } from "@/lib/utils/date";
+import { buildFullRRuleString, localToISO } from "@/lib/utils/date";
 import type {
   CreateAlertInput,
   CreateEventInput,
@@ -48,6 +49,7 @@ import type {
   ItemWithDetails,
 } from "@/types/items";
 import type { CreatePrerequisiteInput } from "@/types/prerequisites";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { motion } from "framer-motion";
 import {
@@ -225,6 +227,7 @@ export function WebEventFormDialog({
   const updateEventDetails = useUpdateEventDetails();
   const updateReminderDetails = useUpdateReminderDetails();
   const deleteItem = useDeleteItem();
+  const queryClient = useQueryClient();
 
   const isEditing = !!editItem;
 
@@ -458,12 +461,112 @@ export function WebEventFormDialog({
           }
         }
 
+        // Upsert alert for all-occurrences edit
+        {
+          const enableAlert =
+            alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime);
+          const originalAlert = editItem.alerts?.[0];
+          const alertChanged = !originalAlert
+            ? enableAlert
+            : originalAlert.offset_minutes !== alertValue.offsetMinutes ||
+              ((originalAlert as unknown as Record<string, unknown>)
+                .custom_time ?? null) !== alertValue.customTime;
+
+          if (alertChanged) {
+            // Remove existing relative alerts for this item
+            await supabase
+              .from("item_alerts")
+              .delete()
+              .eq("item_id", editItem.id)
+              .eq("kind", "relative");
+
+            if (enableAlert) {
+              // Compute trigger_at for the next upcoming occurrence
+              let triggerAt: string | null = null;
+              const rule = editItem.recurrence_rule;
+              if (rule) {
+                const { RRule } = await import("rrule");
+                const anchor = new Date(rule.start_anchor);
+                const rruleStr = buildFullRRuleString(anchor, rule);
+                const nextOcc = RRule.fromString(rruleStr).after(
+                  new Date(),
+                  true,
+                );
+                if (nextOcc) {
+                  if (alertValue.customTime) {
+                    const days = Math.floor(
+                      (alertValue.offsetMinutes || 0) / 1440,
+                    );
+                    const alertDate = new Date(nextOcc);
+                    alertDate.setDate(alertDate.getDate() - days);
+                    const [h, m] = alertValue.customTime.split(":").map(Number);
+                    alertDate.setHours(h, m, 0, 0);
+                    triggerAt = alertDate.toISOString();
+                  } else {
+                    triggerAt = new Date(
+                      nextOcc.getTime() - alertValue.offsetMinutes * 60 * 1000,
+                    ).toISOString();
+                  }
+                }
+              } else {
+                // Non-recurring: use item's own event/reminder time
+                const baseTimeStr =
+                  editItem.event_details?.start_at ??
+                  editItem.reminder_details?.due_at ??
+                  null;
+                if (baseTimeStr) {
+                  const baseTime = new Date(baseTimeStr);
+                  if (alertValue.customTime) {
+                    const days = Math.floor(
+                      (alertValue.offsetMinutes || 0) / 1440,
+                    );
+                    const alertDate = new Date(baseTime);
+                    alertDate.setDate(alertDate.getDate() - days);
+                    const [h, m] = alertValue.customTime.split(":").map(Number);
+                    alertDate.setHours(h, m, 0, 0);
+                    triggerAt = alertDate.toISOString();
+                  } else {
+                    triggerAt = new Date(
+                      baseTime.getTime() - alertValue.offsetMinutes * 60 * 1000,
+                    ).toISOString();
+                  }
+                }
+              }
+
+              const { error: alertInsertError } = await supabase
+                .from("item_alerts")
+                .insert({
+                  item_id: editItem.id,
+                  kind: "relative",
+                  offset_minutes: alertValue.offsetMinutes || null,
+                  relative_to: editItem.type === "event" ? "start" : "due",
+                  trigger_at: triggerAt,
+                  custom_time: alertValue.customTime || null,
+                  channel: "push",
+                  active: true,
+                });
+              if (alertInsertError) {
+                console.error(
+                  "[WebEventFormDialog] Failed to save alert:",
+                  alertInsertError,
+                );
+                toast.error(
+                  `Failed to save alert: ${alertInsertError.message}`,
+                );
+              }
+            }
+
+            // Invalidate items cache so the new alert is reflected in UI
+            await queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+          }
+        }
+
         toast.success("Updated successfully!", {
           icon: ToastIcons.create,
           action: {
             label: "Undo",
             onClick: () => {
-              // Note: Implement undo edit when we store previous state
+              // Note: Implement undo edit when we store upcoming state
               toast.info("Undo edit coming soon");
             },
           },
