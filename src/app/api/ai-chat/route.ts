@@ -1,6 +1,7 @@
 import {
   BudgetContext,
   ChatMessage,
+  GeminiRateLimitError,
   generateSystemPrompt,
   sendMessageToGemini,
 } from "@/lib/ai/gemini";
@@ -257,7 +258,23 @@ export async function POST(req: NextRequest) {
       console.error("Failed to log error:", logError);
     }
 
-    // Check for rate limit (429) errors
+    // Typed rate-limit from the centralized helper — distinguishes daily
+    // RPD exhaustion (no useful retry until midnight Pacific) from per-minute
+    // throttling. Both buckets (primary + fallback model) were already exhausted
+    // by the time we reach here.
+    if (error instanceof GeminiRateLimitError) {
+      recordRateLimitError(errorMessage); // keep in-memory cooldown in sync
+      return NextResponse.json(
+        {
+          error: error.message,
+          retryAfter: error.retryAfterSeconds,
+          dailyQuotaExhausted: error.daily,
+        },
+        { status: 429 },
+      );
+    }
+
+    // Fallback: non-typed rate-limit error (older code path or third-party).
     if (
       errorMessage.includes("429") ||
       errorMessage.includes("quota") ||

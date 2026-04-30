@@ -127,7 +127,7 @@ export async function DELETE(
   const { error } = await supabase
     .from("recipes")
     .update({
-      archived_at: new Date().toISOString(),
+      deleted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)

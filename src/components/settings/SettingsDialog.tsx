@@ -7,7 +7,6 @@ import {
   SmartphoneIcon,
   WatchIcon,
 } from "@/components/icons/FuturisticIcons";
-import { Check, Clock, CreditCard } from "lucide-react";
 import { CategoryManagement } from "@/components/settings/CategoryManagement";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { Button } from "@/components/ui/button";
@@ -48,6 +47,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useQuery } from "@tanstack/react-query";
+import { Check, Clock, CreditCard } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SortableItem } from "./SortableItem";
@@ -84,7 +85,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
   const { data: serverOrderArray } = useSectionOrder();
   const initialOrder = Array.isArray(serverOrderArray) ? serverOrderArray : [];
   const [order, setOrder] = useState<SectionKey[]>(() =>
-    initialOrder.length ? initialOrder : []
+    initialOrder.length ? initialOrder : [],
   );
   const [activeId, setActiveId] = useState<SectionKey | null>(null);
   const updatePreferences = useUpdatePreferences();
@@ -93,7 +94,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     if (Array.isArray(serverOrderArray) && open) {
       // Filter out any invalid/undefined keys
       const validKeys = (serverOrderArray as SectionKey[]).filter(
-        (key) => key && SECTION_LABELS[key]
+        (key) => key && SECTION_LABELS[key],
       );
       setOrder(validKeys);
     }
@@ -110,7 +111,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     const so = Array.isArray(serverOrderArray) ? serverOrderArray : null;
     if (!so) return;
     setOrder(
-      (so as SectionKey[]) ?? ["amount", "account", "category", "subcategory"]
+      (so as SectionKey[]) ?? ["amount", "account", "category", "subcategory"],
     );
   }
 
@@ -129,7 +130,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   function handleDragStart(event: DragStartEvent) {
@@ -508,6 +509,18 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
             {activeSection === "statement" && <StatementImportPanel />}
           </ScrollArea>
         </div>
+        {/* FOOTER: Recycle Bin hyperlink */}
+        <div
+          className={`px-8 py-3 border-t ${themeClasses.border} flex items-center justify-end`}
+        >
+          <Link
+            href="/recycle-bin"
+            onClick={() => onOpenChange(false)}
+            className={`text-sm underline-offset-4 hover:underline ${themeClasses.textMuted}`}
+          >
+            Recycle Bin
+          </Link>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -567,11 +580,13 @@ function AccountsPanel() {
                 className={`w-12 h-12 rounded-xl bg-gradient-to-br ${themeClasses.iconBg} flex items-center justify-center`}
               >
                 <span className="text-xl">
-                  {account.type === "cash"
-                    ? "💵"
-                    : account.type === "bank"
-                      ? "🏦"
-                      : <CreditCard className="w-4 h-4 text-blue-400" />}
+                  {account.type === "cash" ? (
+                    "💵"
+                  ) : account.type === "bank" ? (
+                    "🏦"
+                  ) : (
+                    <CreditCard className="w-4 h-4 text-blue-400" />
+                  )}
                 </span>
               </div>
               <div className="flex-1 text-left">

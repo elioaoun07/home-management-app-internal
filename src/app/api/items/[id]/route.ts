@@ -136,7 +136,11 @@ export async function DELETE(
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
     } else {
-      const { error } = await supabase.from("items").delete().eq("id", itemId);
+      // Soft-delete (Recycle Bin). Item is recoverable for 30 days.
+      const { error } = await supabase
+        .from("items")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", itemId);
 
       if (error) {
         console.error("[items/[id]] Failed to delete item:", error);

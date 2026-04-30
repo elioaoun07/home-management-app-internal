@@ -67,6 +67,7 @@ export default function AccountBalance({
   const offlinePendingCount = Math.max(zustandCount, contextCount);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
+  const [editReason, setEditReason] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const [showDebts, setShowDebts] = useState(false);
   const [showDrafts, setShowDrafts] = useState(false);
@@ -186,13 +187,19 @@ export default function AccountBalance({
   // (c) safeFetch's 3s pre-flight timeout causes false-offline rejections on
   //     slow connections, blocking the mutation before it even attempts a request.
   const updateBalanceMutation = useMutation({
-    mutationFn: async (newBalance: number) => {
+    mutationFn: async ({
+      newBalance,
+      reason,
+    }: {
+      newBalance: number;
+      reason: string;
+    }) => {
       if (isOffline) throw new Error("You're offline — balance not updated.");
       if (!accountId) throw new Error("No account selected");
       const res = await fetch(`/api/accounts/${accountId}/balance`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ balance: newBalance }),
+        body: JSON.stringify({ balance: newBalance, reason }),
       });
       if (!res.ok) throw new Error("Failed to update balance");
       return res.json();
@@ -205,6 +212,7 @@ export default function AccountBalance({
       });
       toast.success("Balance updated successfully");
       setIsEditing(false);
+      setEditReason("");
     },
     onError: (error) => {
       toast.error(
@@ -215,6 +223,7 @@ export default function AccountBalance({
 
   const handleEdit = () => {
     setEditValue(String(balance?.balance || 0));
+    setEditReason("");
     setIsEditing(true);
   };
 
@@ -224,12 +233,18 @@ export default function AccountBalance({
       toast.error("Please enter a valid number");
       return;
     }
-    updateBalanceMutation.mutate(newBalance);
+    const reason = editReason.trim();
+    if (!reason) {
+      toast.error("Please add a short reason for the manual edit");
+      return;
+    }
+    updateBalanceMutation.mutate({ newBalance, reason });
   };
 
   const handleCancel = () => {
     setIsEditing(false);
     setEditValue("");
+    setEditReason("");
   };
 
   if (!accountId) {
@@ -302,44 +317,63 @@ export default function AccountBalance({
             {accountName || "Account"} Balance
           </Label>
           {isEditing ? (
-            <div className="flex items-center gap-2 mt-1.5">
+            <div className="flex flex-col gap-2 mt-1.5">
+              <div className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className={cn(
+                    "h-8 w-32 text-lg font-bold text-white focus:ring-2",
+                    themeClasses.inputBg,
+                    themeClasses.border,
+                    themeClasses.focusBorder,
+                    themeClasses.focusRing,
+                  )}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") handleCancel();
+                  }}
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 bg-[#14b8a6]/20 hover:bg-[#14b8a6]/30 border border-[#14b8a6]/30"
+                  onClick={handleSave}
+                  disabled={updateBalanceMutation.isPending}
+                >
+                  <SaveIcon className="h-4 w-4 text-[#14b8a6] drop-shadow-[0_0_6px_rgba(20,184,166,0.5)]" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30"
+                  onClick={handleCancel}
+                  disabled={updateBalanceMutation.isPending}
+                >
+                  <XIcon className="h-4 w-4 text-red-400 drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
+                </Button>
+              </div>
               <Input
                 type="text"
-                inputMode="decimal"
-                step="0.01"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                placeholder="Reason for manual edit (required)"
+                maxLength={200}
                 className={cn(
-                  "h-8 w-32 text-lg font-bold text-white focus:ring-2",
+                  "h-8 text-xs text-white focus:ring-2",
                   themeClasses.inputBg,
                   themeClasses.border,
                   themeClasses.focusBorder,
                   themeClasses.focusRing,
                 )}
-                autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSave();
                   if (e.key === "Escape") handleCancel();
                 }}
               />
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 bg-[#14b8a6]/20 hover:bg-[#14b8a6]/30 border border-[#14b8a6]/30"
-                onClick={handleSave}
-                disabled={updateBalanceMutation.isPending}
-              >
-                <SaveIcon className="h-4 w-4 text-[#14b8a6] drop-shadow-[0_0_6px_rgba(20,184,166,0.5)]" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30"
-                onClick={handleCancel}
-                disabled={updateBalanceMutation.isPending}
-              >
-                <XIcon className="h-4 w-4 text-red-400 drop-shadow-[0_0_6px_rgba(248,113,113,0.5)]" />
-              </Button>
             </div>
           ) : (
             <div className="flex flex-col gap-0.5 mt-1">

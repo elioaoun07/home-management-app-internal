@@ -79,6 +79,7 @@ export class SupabaseTransactionService implements TransactionService {
         subcategory:user_categories!transactions_subcategory_fk(name, color)`,
       )
       .is("parent_transaction_id", null)
+      .is("deleted_at", null)
       .order("inserted_at", { ascending: false })
       .limit(limit);
 

@@ -112,7 +112,7 @@ export async function DELETE(
 
     const { error } = await supabase
       .from("transactions")
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", user.id)
       .eq("is_draft", true);

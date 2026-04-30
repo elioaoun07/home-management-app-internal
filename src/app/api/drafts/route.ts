@@ -37,6 +37,7 @@ export async function GET(request: Request) {
       )
       .eq("user_id", user.id)
       .eq("is_draft", true)
+      .is("deleted_at", null)
       .order("inserted_at", { ascending: false });
 
     if (error) throw error;

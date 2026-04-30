@@ -44,7 +44,8 @@ export async function GET(req: NextRequest) {
        prep_time_minutes, cook_time_minutes, difficulty,
        is_favorite, times_cooked, average_rating`,
     )
-    .is("archived_at", null);
+    .is("archived_at", null)
+    .is("deleted_at", null);
 
   // Filter by ownership (own recipes + household shared)
   if (household) {
@@ -151,7 +152,10 @@ export async function POST(req: NextRequest) {
     if (error) {
       console.error("Error creating recipe:", error);
       if ((error as any).code === "23505") {
-        return NextResponse.json({ error: "Recipe already exists" }, { status: 409 });
+        return NextResponse.json(
+          { error: "Recipe already exists" },
+          { status: 409 },
+        );
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

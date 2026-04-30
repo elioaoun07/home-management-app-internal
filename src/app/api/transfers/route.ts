@@ -80,6 +80,7 @@ export async function GET(req: NextRequest) {
       `,
       )
       .in("user_id", allowedUserIds)
+      .is("deleted_at", null)
       .order("date", { ascending: false })
       .limit(limit);
 
@@ -109,6 +110,7 @@ export async function GET(req: NextRequest) {
       )
       .eq("recipient_user_id", user.id)
       .not("user_id", "in", `(${allowedUserIds.join(",")})`)
+      .is("deleted_at", null)
       .order("date", { ascending: false })
       .limit(limit);
 

@@ -2,8 +2,8 @@
 // Smart AI-powered focus insights with persistent caching
 // Minimizes Gemini API calls - max 1 per user per day
 
+import { generateContentWithFallback } from "@/lib/ai/gemini";
 import { supabaseServer } from "@/lib/supabase/server";
-import { GoogleGenAI } from "@google/genai";
 import crypto from "crypto";
 import { differenceInHours, format, startOfWeek } from "date-fns";
 import { cookies } from "next/headers";
@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+// Gemini calls go through generateContentWithFallback for retry + fallback model.
 const MODEL = "gemini-2.0-flash";
 
 // Cache expiry: 24 hours for normal refresh, but can use stale data up to 7 days
@@ -270,8 +270,7 @@ Keep the tone friendly but professional. Be concise - users want quick insights,
 Max 3 items in priorityInsights. Focus on what matters most.`;
 
     // Call Gemini
-    const response = await genAI.models.generateContent({
-      model: MODEL,
+    const response = await generateContentWithFallback({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.7,

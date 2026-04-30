@@ -21,16 +21,18 @@ import {
 import { useSplitBillModal } from "@/contexts/SplitBillContext";
 import { useTab } from "@/contexts/TabContext";
 import {
-  getActionButtonText,
   getActionRoute,
   getPriorityBorderColor,
+  getQuickActions,
   useArchiveNotification,
   useCompleteNotificationAction,
   useDismissNotification,
   useInAppNotifications,
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
+  useNotificationQuickAction,
   type Notification,
+  type QuickAction,
 } from "@/hooks/useNotifications";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
@@ -44,11 +46,15 @@ import {
   CheckSquare,
   Clock,
   CreditCard,
+  Eye,
   ExternalLink,
   FileText,
   Info,
   MessageCircle,
+  MessageSquare,
+  Send,
   Sparkles,
+  SplitSquareHorizontal,
   Target,
   Wallet,
   X,
@@ -84,6 +90,7 @@ export default function NotificationModal({
   const dismiss = useDismissNotification();
   const archive = useArchiveNotification();
   const completeAction = useCompleteNotificationAction();
+  const quickAction = useNotificationQuickAction();
 
   const notifications = data?.notifications || [];
   const unreadCount = data?.unread_count || 0;
@@ -93,6 +100,157 @@ export default function NotificationModal({
     return (
       !notification.action_type || notification.action_completed_at !== null
     );
+  };
+
+  // Navigate to the notification's natural target (used by body click + "open" quick action)
+  const navigateForNotification = (notification: Notification) => {
+    // Split bill modal pre-population
+    if (
+      notification.notification_type === "transaction_pending" &&
+      notification.action_data
+    ) {
+      const splitData = notification.action_data as {
+        transaction_id?: string;
+        owner_amount?: number;
+        owner_description?: string;
+        category_name?: string;
+      };
+
+      if (splitData.transaction_id) {
+        openSplitBillModal({
+          transaction_id: splitData.transaction_id,
+          owner_amount: splitData.owner_amount || 0,
+          owner_description: splitData.owner_description || "",
+          category_name: splitData.category_name || "Expense",
+        });
+        onOpenChange(false);
+        return;
+      }
+    }
+
+    const route = getActionRoute(notification);
+    if (!route) return;
+
+    onOpenChange(false);
+
+    try {
+      const url = new URL(route, window.location.origin);
+      const tab = url.searchParams.get("tab");
+      const action = url.searchParams.get("action");
+
+      if (tab === "dashboard") {
+        setActiveTab("dashboard");
+      } else if (tab === "reminder") {
+        setActiveTab("reminder");
+      } else if (tab === "hub") {
+        router.push("/alerts");
+      } else if (route === "/expense" || action === "add-expense") {
+        setActiveTab("expense");
+      } else if (action === "split-bill") {
+        setActiveTab("expense");
+      } else if (
+        route.startsWith("/chat") ||
+        route.startsWith("/recurring") ||
+        route.startsWith("/reminders") ||
+        route.startsWith("/focus") ||
+        route.startsWith("/catalogue")
+      ) {
+        router.push(route);
+      } else {
+        router.push(route);
+      }
+    } catch {
+      router.push(route);
+    }
+  };
+
+  // Handle a quick-action button (multi-action row)
+  const handleQuickAction = (notification: Notification, qa: QuickAction) => {
+    // Mark as read if unread
+    if (!notification.is_read) markRead.mutate(notification.id);
+
+    switch (qa.id) {
+      case "open":
+      case "log_transaction":
+      case "view_budget":
+      case "open_split_bill":
+      case "reply":
+        navigateForNotification(notification);
+        // Also clear the notification once acted upon
+        if (qa.closesNotification) {
+          completeAction.mutate({
+            notificationId: notification.id,
+            dismiss: false,
+          });
+        }
+        break;
+
+      case "complete_task":
+        quickAction.mutate({
+          notificationId: notification.id,
+          action: "complete_task",
+        });
+        break;
+
+      case "confirm":
+        quickAction.mutate({
+          notificationId: notification.id,
+          action: "confirm",
+        });
+        break;
+
+      case "dismiss":
+        quickAction.mutate({
+          notificationId: notification.id,
+          action: "dismiss",
+        });
+        break;
+
+      case "snooze_15m":
+        quickAction.mutate({
+          notificationId: notification.id,
+          action: "snooze",
+          snoozeMinutes: 15,
+        });
+        break;
+      case "snooze_1h":
+        quickAction.mutate({
+          notificationId: notification.id,
+          action: "snooze",
+          snoozeMinutes: 60,
+        });
+        break;
+      case "snooze_tomorrow":
+        quickAction.mutate({
+          notificationId: notification.id,
+          action: "snooze",
+          snoozeMinutes: 60 * 24,
+        });
+        break;
+    }
+  };
+
+  const renderQuickActionIcon = (icon: QuickAction["icon"]) => {
+    switch (icon) {
+      case "send":
+        return <Send className="w-3 h-3" />;
+      case "check":
+        return <CheckCircle className="w-3 h-3" />;
+      case "clock":
+        return <Clock className="w-3 h-3" />;
+      case "x":
+        return <X className="w-3 h-3" />;
+      case "eye":
+        return <Eye className="w-3 h-3" />;
+      case "wallet":
+        return <Wallet className="w-3 h-3" />;
+      case "split":
+        return <SplitSquareHorizontal className="w-3 h-3" />;
+      case "reply":
+        return <MessageSquare className="w-3 h-3" />;
+      default:
+        return null;
+    }
   };
 
   const handleNotificationClick = (notification: Notification) => {
@@ -161,38 +319,6 @@ export default function NotificationModal({
           router.push(route);
         }
       } catch {
-        router.push(route);
-      }
-    }
-  };
-
-  const handleActionClick = (notification: Notification) => {
-    // Complete the action
-    completeAction.mutate({
-      notificationId: notification.id,
-      dismiss:
-        notification.action_type === "confirm" ||
-        notification.action_type === "dismiss",
-    });
-
-    // Handle navigation if needed
-    const route = getActionRoute(notification);
-    if (
-      route &&
-      notification.action_type !== "confirm" &&
-      notification.action_type !== "dismiss"
-    ) {
-      onOpenChange(false);
-
-      if (route === "/expense") {
-        setActiveTab("expense");
-      } else if (route === "/budget") {
-        setActiveTab("dashboard");
-      } else if (route === "/reminder") {
-        setActiveTab("reminder");
-      } else if (route.startsWith("/hub")) {
-        router.push("/alerts");
-      } else {
         router.push(route);
       }
     }
@@ -431,36 +557,6 @@ export default function NotificationModal({
                         {formatTime(notification.created_at)}
                       </span>
 
-                      {/* Action button */}
-                      {notification.action_type &&
-                        !notification.action_completed_at && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleActionClick(notification);
-                            }}
-                            className={cn(
-                              "h-7 px-3 text-xs font-medium",
-                              notification.action_type === "log_transaction" &&
-                                "bg-primary/20 text-primary hover:bg-primary/30",
-                              notification.action_type === "view_details" &&
-                                "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30",
-                              notification.action_type === "complete_task" &&
-                                "bg-green-500/20 text-green-400 hover:bg-green-500/30",
-                              notification.action_type === "confirm" &&
-                                "bg-white/10 text-white/70 hover:bg-white/20",
-                            )}
-                          >
-                            {getActionButtonText(notification.action_type)}
-                            {(notification.action_type === "log_transaction" ||
-                              notification.action_type === "view_details") && (
-                              <ExternalLink className="w-3 h-3 ml-1" />
-                            )}
-                          </Button>
-                        )}
-
                       {notification.action_completed_at && (
                         <span className="flex items-center gap-1 text-xs text-green-400">
                           <CheckCircle className="w-3 h-3" />
@@ -468,6 +564,35 @@ export default function NotificationModal({
                         </span>
                       )}
                     </div>
+
+                    {/* Quick action row — multi-button context-aware */}
+                    {!notification.action_completed_at && (
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {getQuickActions(notification).map((qa) => (
+                          <button
+                            key={qa.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuickAction(notification, qa);
+                            }}
+                            className={cn(
+                              "flex items-center gap-1 h-7 px-2.5 rounded-md text-xs font-medium transition-colors",
+                              qa.variant === "primary" &&
+                                "bg-primary/20 text-primary hover:bg-primary/30",
+                              qa.variant === "success" &&
+                                "bg-green-500/20 text-green-400 hover:bg-green-500/30",
+                              qa.variant === "neutral" &&
+                                "bg-blue-500/15 text-blue-300 hover:bg-blue-500/25",
+                              qa.variant === "muted" &&
+                                "bg-white/5 text-white/60 hover:bg-white/10",
+                            )}
+                          >
+                            {renderQuickActionIcon(qa.icon)}
+                            <span>{qa.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -1,7 +1,7 @@
 // Service Worker for Push Notifications + Offline Caching
 // Handles push events, displays notifications with alarm-like behavior, and caches app shell
 
-const SW_VERSION = "5.1.0";
+const SW_VERSION = "5.2.0";
 
 // Minimal loading shell served immediately when no cached HTML is available.
 // Embedded directly in the SW bundle — never lost even when Cache Storage is cleared by iOS.
@@ -515,7 +515,12 @@ self.addEventListener("push", (event) => {
     options.actions = [
       {
         action: "add_expense",
-        title: "➕ Log Expense",
+        title: "➕ Log Now",
+        icon: "/appicon-192.png",
+      },
+      {
+        action: "mark_done",
+        title: "✅ Already Done",
         icon: "/appicon-192.png",
       },
       { action: "snooze_1h", title: "⏰ Later", icon: "/appicon-192.png" },
@@ -529,7 +534,12 @@ self.addEventListener("push", (event) => {
     options.vibrate = [500, 200, 500, 200, 500, 200, 500, 200, 500];
     options.actions = [
       { action: "complete_item", title: "✅ Done", icon: "/appicon-192.png" },
-      { action: "snooze", title: "⏰ Snooze", icon: "/appicon-192.png" },
+      {
+        action: "snooze_15m",
+        title: "⏰ Snooze 15m",
+        icon: "/appicon-192.png",
+      },
+      { action: "open_item", title: "👁️ Open", icon: "/appicon-192.png" },
     ];
     options.timestamp = data.data?.due_at
       ? new Date(data.data.due_at).getTime()
@@ -538,7 +548,8 @@ self.addEventListener("push", (event) => {
     // Chat message → gentle vibration
     options.vibrate = [200, 100, 200];
     options.actions = [
-      { action: "open_thread", title: "💬 Open", icon: "/appicon-192.png" },
+      { action: "open_thread", title: "💬 Reply", icon: "/appicon-192.png" },
+      { action: "mark_read", title: "👁️ Mark Read", icon: "/appicon-192.png" },
       { action: "snooze", title: "⏰ Snooze", icon: "/appicon-192.png" },
     ];
   } else if (notifType === "transaction_pending") {
@@ -550,6 +561,7 @@ self.addEventListener("push", (event) => {
         title: "💰 Add Amount",
         icon: "/appicon-192.png",
       },
+      { action: "dismiss", title: "✓ Dismiss", icon: "/appicon-192.png" },
       { action: "snooze_1h", title: "⏰ Later", icon: "/appicon-192.png" },
     ];
   } else if (notifType === "bill_due" || notifType === "bill_overdue") {
@@ -557,11 +569,30 @@ self.addEventListener("push", (event) => {
     options.vibrate = [300, 150, 300, 150, 300];
     options.actions = [
       {
-        action: "open_recurring",
-        title: "✅ Confirm",
+        action: "log_recurring",
+        title: "💸 Log Now",
         icon: "/appicon-192.png",
       },
-      { action: "snooze", title: "⏰ Snooze", icon: "/appicon-192.png" },
+      {
+        action: "mark_done",
+        title: "✅ Already Paid",
+        icon: "/appicon-192.png",
+      },
+      { action: "snooze_1h", title: "⏰ Later", icon: "/appicon-192.png" },
+    ];
+  } else if (
+    notifType === "budget_warning" ||
+    notifType === "budget_exceeded"
+  ) {
+    // Budget alert → medium vibration
+    options.vibrate = [300, 150, 300];
+    options.actions = [
+      {
+        action: "view_budget",
+        title: "📊 View Budget",
+        icon: "/appicon-192.png",
+      },
+      { action: "dismiss", title: "✓ Got It", icon: "/appicon-192.png" },
     ];
   } else if (notifType === "guest_chat") {
     // Guest portal chat → gentle vibration
@@ -619,6 +650,10 @@ self.addEventListener("notificationclick", (event) => {
     event.waitUntil(handleSnooze(data, 5));
     return;
   }
+  if (action === "snooze_15m") {
+    event.waitUntil(handleSnooze(data, 15));
+    return;
+  }
   if (action === "snooze_1h") {
     event.waitUntil(handleSnooze(data, 60));
     return;
@@ -627,8 +662,22 @@ self.addEventListener("notificationclick", (event) => {
     event.waitUntil(handleSnooze(data, 180));
     return;
   }
+  if (action === "snooze_tomorrow") {
+    // Snooze until tomorrow 9 AM (1440 minutes ≈ next day)
+    event.waitUntil(handleSnooze(data, 1440));
+    return;
+  }
   if (action === "dismiss") {
     event.waitUntil(handleDismiss(data));
+    return;
+  }
+  if (action === "mark_read") {
+    event.waitUntil(handleMarkRead(data));
+    return;
+  }
+  if (action === "mark_done" || action === "confirm") {
+    // Generic "already done / confirm" — works for daily reminders, bill due, etc.
+    event.waitUntil(handleConfirm(data));
     return;
   }
   if (action === "confirm_transactions") {
@@ -643,6 +692,16 @@ self.addEventListener("notificationclick", (event) => {
   if (action === "complete_item") {
     // Complete item via API, then show confirmation
     event.waitUntil(handleCompleteItem(data));
+    return;
+  }
+  if (action === "open_item") {
+    const itemId = data.item_id;
+    event.waitUntil(
+      openApp({
+        ...data,
+        url: itemId ? `/expense?tab=reminder&item=${itemId}` : "/expense?tab=reminder",
+      }),
+    );
     return;
   }
   if (action === "open_thread") {
@@ -662,6 +721,23 @@ self.addEventListener("notificationclick", (event) => {
   }
   if (action === "open_recurring") {
     event.waitUntil(openApp({ ...data, url: "/recurring" }));
+    return;
+  }
+  if (action === "log_recurring") {
+    // Open recurring page with the specific payment pre-filled for logging
+    const rpId = data.recurring_payment_id;
+    event.waitUntil(
+      openApp({
+        ...data,
+        url: rpId
+          ? `/recurring?action=log&id=${rpId}`
+          : "/recurring?action=log",
+      }),
+    );
+    return;
+  }
+  if (action === "view_budget") {
+    event.waitUntil(openApp({ ...data, url: "/expense?tab=dashboard" }));
     return;
   }
   if (action === "settings") {
@@ -1093,6 +1169,61 @@ async function handleConfirmTransactions(data) {
     }
   } catch (error) {
     console.error("[SW] Error confirming transactions:", error);
+  }
+}
+
+// Generic "Already done / Confirm" action — works for any notification type
+async function handleConfirm(data) {
+  console.log("[SW] Confirming notification (mark_done):", data);
+
+  if (!data.notification_id) {
+    console.warn("[SW] No notification_id — cannot mark as done");
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/notifications/actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        notification_id: data.notification_id,
+        action: "confirm",
+      }),
+    });
+
+    if (response.ok) {
+      await self.registration.showNotification("Marked as done ✅", {
+        body: data.title || "Notification cleared",
+        icon: "/appicon-192.png",
+        tag: "confirm-" + data.notification_id,
+        requireInteraction: false,
+        silent: true,
+      });
+    } else {
+      console.error("[SW] Failed to mark done:", await response.text());
+    }
+  } catch (error) {
+    console.error("[SW] Error marking done:", error);
+  }
+}
+
+// Mark a notification as read without dismissing it
+async function handleMarkRead(data) {
+  console.log("[SW] Marking notification read:", data);
+
+  if (!data.notification_id) return;
+
+  try {
+    await fetch("/api/notifications/actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        notification_id: data.notification_id,
+        action: "read",
+      }),
+    });
+  } catch (error) {
+    console.error("[SW] Error marking read:", error);
   }
 }
 

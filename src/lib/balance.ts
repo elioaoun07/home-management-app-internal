@@ -40,7 +40,11 @@ export async function adjustAccountBalance(
     );
     await admin
       .from("account_balances")
-      .insert({ account_id: accountId, balance: 0, user_id: metadata?.userId ?? "" });
+      .insert({
+        account_id: accountId,
+        balance: 0,
+        user_id: metadata?.userId ?? "",
+      });
     // Re-fetch after insert
     const { data: created } = await admin
       .from("account_balances")
@@ -166,7 +170,8 @@ export async function computeAccountBalance(
       .from("transactions")
       .select("amount, is_debt_return")
       .eq("account_id", accountId)
-      .eq("is_draft", false);
+      .eq("is_draft", false)
+      .is("deleted_at", null);
     if (balanceSetAt) q = q.gt("inserted_at", balanceSetAt);
     return q;
   })();
@@ -175,7 +180,8 @@ export async function computeAccountBalance(
     let q = admin
       .from("transfers")
       .select("amount, returned_amount, transfer_type")
-      .eq("from_account_id", accountId);
+      .eq("from_account_id", accountId)
+      .is("deleted_at", null);
     if (balanceSetAt) q = q.gt("created_at", balanceSetAt);
     return q;
   })();
@@ -184,7 +190,8 @@ export async function computeAccountBalance(
     let q = admin
       .from("transfers")
       .select("amount, returned_amount, transfer_type")
-      .eq("to_account_id", accountId);
+      .eq("to_account_id", accountId)
+      .is("deleted_at", null);
     if (balanceSetAt) q = q.gt("created_at", balanceSetAt);
     return q;
   })();
@@ -194,7 +201,8 @@ export async function computeAccountBalance(
       .from("transactions")
       .select("collaborator_amount")
       .eq("collaborator_account_id", accountId)
-      .not("split_completed_at", "is", null);
+      .not("split_completed_at", "is", null)
+      .is("deleted_at", null);
     if (balanceSetAt) q = q.gt("split_completed_at", balanceSetAt);
     return q;
   })();

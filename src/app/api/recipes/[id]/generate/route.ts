@@ -1,5 +1,5 @@
 // src/app/api/recipes/[id]/generate/route.ts
-import { geminiModel } from "@/lib/ai/gemini";
+import { generateContentWithFallback } from "@/lib/ai/gemini";
 import {
   checkUserRateLimit,
   generateRequestHash,
@@ -11,13 +11,12 @@ import type {
   RecipeIngredient,
   RecipeStep,
 } from "@/types/recipe";
-import { GoogleGenAI } from "@google/genai";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+// Gemini calls go through generateContentWithFallback for retry + fallback model.
 
 // POST: Generate ingredients and steps for a recipe using AI
 export async function POST(
@@ -97,8 +96,7 @@ Return ONLY valid JSON in this exact format (no markdown, no explanation):
 Make the recipe practical and clear. Include all ingredients needed. Steps should be detailed but concise.
 Consider the user's past feedback when available (e.g., if they said "too salty", use less salt).`;
 
-    const response = await genAI.models.generateContent({
-      model: geminiModel,
+    const response = await generateContentWithFallback({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.7,

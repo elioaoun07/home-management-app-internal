@@ -86,7 +86,8 @@ async function fetchItems(
       )
     `,
     )
-    .is("archived_at", null);
+    .is("archived_at", null)
+    .is("deleted_at", null);
 
   if (partnerId) {
     // Fetch my items OR partner's public items

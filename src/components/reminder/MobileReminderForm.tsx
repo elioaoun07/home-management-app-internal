@@ -13,6 +13,7 @@ import {
   CustomRecurrencePicker,
   describeRRule,
 } from "@/components/items/CustomRecurrencePicker";
+import ItemDetailModal from "@/components/items/ItemDetailModal";
 import { PrerequisitePicker } from "@/components/items/PrerequisitePicker";
 import { ResponsibleUserPicker } from "@/components/items/ResponsibleUserPicker";
 import {
@@ -28,10 +29,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { MOBILE_CONTENT_BOTTOM_OFFSET } from "@/constants/layout";
+import { useTabSafe } from "@/contexts/TabContext";
+import { useItemActionsWithToast } from "@/features/items/useItemActions";
 import {
   useCreateEvent,
   useCreateReminder,
   useCreateTask,
+  useItem,
 } from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import {
@@ -268,6 +272,16 @@ export default function MobileReminderForm() {
   const createEvent = useCreateEvent();
   const createTask = useCreateTask();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // ── Notification deep-link: open quick view for the targeted item ──
+  const tabCtx = useTabSafe();
+  const pendingItemId = tabCtx?.pendingItemId ?? null;
+  const setPendingItemId = tabCtx?.setPendingItemId;
+  const { data: pendingItem } = useItem(pendingItemId || undefined);
+  const itemActions = useItemActionsWithToast();
+  const closeQuickView = useCallback(() => {
+    setPendingItemId?.(null);
+  }, [setPendingItemId]);
 
   // Header height measurement
   const headerRef = useRef<HTMLDivElement>(null);
@@ -2260,6 +2274,19 @@ export default function MobileReminderForm() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Quick view modal opened from notification deep link */}
+      {pendingItem && (
+        <ItemDetailModal
+          item={pendingItem}
+          onClose={closeQuickView}
+          onEdit={closeQuickView}
+          onDelete={() => {
+            itemActions.handleDelete(pendingItem);
+            closeQuickView();
+          }}
+        />
+      )}
     </>
   );
 }

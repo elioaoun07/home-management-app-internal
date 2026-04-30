@@ -1,11 +1,10 @@
-import { geminiModel } from "@/lib/ai/gemini";
+import { geminiModel, generateContentWithFallback } from "@/lib/ai/gemini";
 import { supabaseServer } from "@/lib/supabase/server";
 import type {
   AiBudgetSuggestion,
   AiCategorySuggestion,
   BudgetWeek,
 } from "@/types/budgetAllocation";
-import { GoogleGenAI } from "@google/genai";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -402,7 +401,6 @@ RESPOND WITH ONLY valid JSON — no markdown, no explanation outside the JSON. U
   }
 
   try {
-    const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     console.log("[AI-Budget] Calling Gemini...", {
       model: geminiModel,
       month,
@@ -410,8 +408,7 @@ RESPOND WITH ONLY valid JSON — no markdown, no explanation outside the JSON. U
       walletBalance,
       categoryCount: categoryList.length,
     });
-    const response = await genAI.models.generateContent({
-      model: geminiModel,
+    const response = await generateContentWithFallback({
       contents: [
         {
           role: "user",
@@ -422,8 +419,8 @@ RESPOND WITH ONLY valid JSON — no markdown, no explanation outside the JSON. U
           ],
         },
       ],
+      systemInstruction: systemPrompt,
       config: {
-        systemInstruction: systemPrompt,
         temperature: 0.3,
         topP: 0.8,
         maxOutputTokens: 16384,

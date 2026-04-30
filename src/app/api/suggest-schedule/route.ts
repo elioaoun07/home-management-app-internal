@@ -2,15 +2,15 @@
 // AI-powered schedule suggestions for flexible routines
 // Uses completion patterns and optional Gemini for intelligent suggestions
 
+import { generateContentWithFallback } from "@/lib/ai/gemini";
 import { supabaseServer } from "@/lib/supabase/server";
-import { GoogleGenAI } from "@google/genai";
 import { format } from "date-fns";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+// Gemini calls go through generateContentWithFallback for retry + fallback model.
 const MODEL = "gemini-2.0-flash";
 
 const DAY_NAMES = [
@@ -376,8 +376,7 @@ Period: ${periodStart} to ${periodEnd}
 Respond with a JSON array matching the input structure, with enhanced "reason" fields that include actionable advice. Keep the same dates unless there's a clear conflict.
 Format: [{"itemId": "...", "suggestedDate": "YYYY-MM-DD", "suggestedTime": "HH:mm or null", "confidence": "high|medium|low", "reason": "..."}]`;
 
-  const result = await genAI.models.generateContent({
-    model: MODEL,
+  const result = await generateContentWithFallback({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       temperature: 0.3,

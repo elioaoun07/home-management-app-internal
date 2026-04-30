@@ -85,6 +85,8 @@ export async function GET(req: NextRequest) {
   if (!includeArchived) {
     query = query.is("archived_at", null);
   }
+  // Always exclude rows in the Recycle Bin from the catalogue listing
+  query = query.is("deleted_at", null);
 
   if (limit) {
     query = query.limit(parseInt(limit, 10));

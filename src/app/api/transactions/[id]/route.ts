@@ -364,85 +364,28 @@ export async function DELETE(
       .single();
     const txAccountType = (txAccount?.type || "expense") as AccountType;
 
-    // Use admin client to bypass RLS for cleaning up related records
+    // Use admin client to bypass RLS for cascading soft-delete to child transactions
     const adminClient = supabaseAdmin();
 
-    // 1. Nullify any account_balance_history rows that reference this transaction
-    //    (FK constraint has no ON DELETE action, so it would block the delete)
-    const { error: abhError } = await adminClient
-      .from("account_balance_history")
-      .update({ transaction_id: null })
-      .eq("transaction_id", id);
-
-    if (abhError) {
-      console.error(
-        "[Delete Transaction] Error clearing balance history refs:",
-        abhError,
-      );
-    }
-
-    // 2. Nullify hub_feed references
+    // Soft-delete child transactions (debt returns linked via parent_transaction_id)
+    // so they vanish from the user's view alongside the parent. They will be
+    // restored together when the parent is restored from the Recycle Bin.
+    const nowIso = new Date().toISOString();
     await adminClient
-      .from("hub_feed")
-      .update({ transaction_id: null })
-      .eq("transaction_id", id);
-
-    // 3. Nullify hub_message_actions references
-    await adminClient
-      .from("hub_message_actions")
-      .update({ transaction_id: null })
-      .eq("transaction_id", id);
-
-    // 4. Nullify hub_messages references
-    await adminClient
-      .from("hub_messages")
-      .update({ transaction_id: null })
-      .eq("transaction_id", id);
-
-    // 5. Nullify in_app_notifications references
-    await adminClient
-      .from("in_app_notifications")
-      .update({ transaction_id: null })
-      .eq("transaction_id", id);
-
-    // 6. Handle child transactions (debt returns linked via parent_transaction_id)
-    //    Delete them so they don't remain as orphaned income entries
-    const { data: childTransactions } = await adminClient
       .from("transactions")
-      .select("id, account_id, amount, is_draft")
-      .eq("parent_transaction_id", id);
+      .update({ deleted_at: nowIso })
+      .eq("parent_transaction_id", id)
+      .is("deleted_at", null);
 
-    if (childTransactions && childTransactions.length > 0) {
-      for (const child of childTransactions) {
-        // Clear balance history refs for child too
-        await adminClient
-          .from("account_balance_history")
-          .update({ transaction_id: null })
-          .eq("transaction_id", child.id);
-
-        // Delete the child transaction
-        await adminClient.from("transactions").delete().eq("id", child.id);
-        // Balance for child transactions is formula-based - no manual reversal needed
-      }
-
-      console.log(
-        `[Delete Transaction] Cleaned up ${childTransactions.length} child transaction(s)`,
-      );
-    }
-
-    // 7. Delete linked debts (ON DELETE CASCADE should handle this,
-    //    but let's be explicit to avoid any constraint issues)
-    await adminClient.from("debts").delete().eq("transaction_id", id);
-
-    // Delete the transaction
+    // Soft-delete the transaction itself.
     const { error } = await supabase
       .from("transactions")
-      .delete()
+      .update({ deleted_at: nowIso })
       .eq("id", id)
       .eq("user_id", user.id);
 
     if (error) {
-      console.error("Error deleting transaction:", error);
+      console.error("Error soft-deleting transaction:", error);
       return NextResponse.json(
         { error: "Failed to delete transaction" },
         { status: 500 },

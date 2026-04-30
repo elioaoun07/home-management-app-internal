@@ -7,7 +7,7 @@
 //   - YouTube: pass URL as context in prompt, Gemini uses training knowledge (no video processing)
 // This avoids the URL Context tool (needs 2.5+) and YouTube file_data (300 tokens/sec = very expensive)
 
-import { geminiModel } from "@/lib/ai/gemini";
+import { generateContentWithFallback } from "@/lib/ai/gemini";
 import {
   checkUserRateLimit,
   generateRequestHash,
@@ -20,13 +20,12 @@ import {
   RECIPE_CUISINES,
   RECIPE_TAGS,
 } from "@/types/recipe";
-import { GoogleGenAI } from "@google/genai";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+// Gemini calls go through generateContentWithFallback for retry + fallback model.
 
 // ------- SAFETY CONSTANTS -------
 const MAX_HTML_BYTES = 80_000; // ~80KB of text sent to Gemini (well under limits)
@@ -548,8 +547,7 @@ For tags, only include tags that clearly apply.`;
   }
 
   try {
-    const response = await genAI.models.generateContent({
-      model: geminiModel,
+    const response = await generateContentWithFallback({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.3, // Low temperature for accurate extraction

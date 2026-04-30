@@ -8,6 +8,7 @@ tags:
   - type/feature-doc
   - module/ai-assistant
 ---
+
 # Gemini API Usage Guidelines
 
 > **IMPORTANT**: Always follow these guidelines when working with Gemini API to prevent rate limits, avoid overcharges, and ensure optimal performance.
@@ -50,6 +51,50 @@ const MAX_REQUESTS_PER_WINDOW = 5; // 5 requests per user per minute
 const GLOBAL_MAX_REQUESTS_PER_WINDOW = 10; // 10 requests globally per minute
 const DEDUP_WINDOW_MS = 5_000; // 5 second deduplication
 ```
+
+---
+
+## Upstream 429 Resilience (Retry + Fallback Model)
+
+> **Issue (2026-04-30)**: User reported `Gemini call failed: { code: 429, status: RESOURCE_EXHAUSTED }` immediately on opening the AI Chatbot — _despite not having actively used Gemini for several days_. Followed by a 60s in-memory cooldown that doubled on every retry.
+>
+> **Real root cause** (after audit, not the obvious "you spammed the chat"):
+>
+> 1. **9 separate endpoints** all hit `gemini-2.0-flash` from the same `GEMINI_API_KEY`, sharing **one** free-tier quota bucket (RPD ~200/day, RPM ~10–15/min):
+>    - `/api/ai-chat`
+>    - `/api/focus-insights` ← **was auto-firing on Focus page mount, no user gesture required**
+>    - `/api/suggest-schedule`
+>    - `/api/budget-allocations/ai-suggest`
+>    - `/api/recipes/[id]/generate`, `/scale`, `/optimize`, `/substitute`
+>    - `/api/recipes/extract-from-url`
+> 2. **`useFocusInsights` had a `useEffect` that auto-called `POST /api/focus-insights`** whenever the cache returned `shouldRefresh: true` and `currentItems.length > 0`. Every visit to `/focus` (the home page for many users) silently consumed quota — without the user knowing they had "used Gemini today".
+> 3. **Free-tier RPD resets at midnight Pacific** (~10am Beirut). Quota burned on Tuesday evening surfaces as a 429 on Wednesday morning.
+> 4. **Only `/api/ai-chat` had any retry logic**; the other 8 endpoints surfaced raw 500s on 429, with no exponential backoff and no fallback model. So a single transient per-minute spike on any endpoint failed instead of recovering.
+> 5. **The error body had no `retryDelay` field** — diagnostic of a _daily_ RPD quota hit, not per-minute. The route's exponentially-doubling 60s cooldown was treating it like a per-minute throttle, so it never gave up and never told the user "this won't clear until tomorrow".
+> 6. **The cooldown was process-memory only** (`let lastRateLimitError`). On Vercel, every cold-start function instance reset it, so the system kept hammering Google and burning quota faster after a 429.
+>
+> **Fix shipped**:
+>
+> 1. **Centralized helper** [`generateContentWithFallback`](src/lib/ai/gemini.ts) — every Gemini caller now goes through it. Behavior:
+>    - Up to 3 attempts on the primary model, backing off using Google's own `retryDelay` hint (capped 30s) or exponential 1s → 2s → 4s.
+>    - One final attempt on a fallback model (`gemini-2.0-flash-lite` by default) — separate quota bucket, often succeeds when primary is throttled.
+>    - On total exhaustion, throws `GeminiRateLimitError` with `daily: boolean` and `retryAfterSeconds` based on whether the error had `retryDelay` (per-minute) or not (per-day).
+>    - Non-rate-limit errors (auth, safety, network, invalid model) rethrow immediately — no wasted retries.
+> 2. **All 9 endpoints migrated** to the helper (`/api/ai-chat`, `/api/focus-insights`, `/api/suggest-schedule`, `/api/budget-allocations/ai-suggest`, `/api/recipes/{generate,scale,optimize,substitute}`, `/api/recipes/extract-from-url`). Retry + fallback now apply uniformly.
+> 3. **Daily-quota detection** — `isDailyQuotaError(err)` returns true when `RESOURCE_EXHAUSTED` has no `retryDelay`. The chat route surfaces a distinct message: `"Gemini daily free-tier quota reached. Resets at midnight Pacific time."` and `dailyQuotaExhausted: true` in the JSON, with `retryAfterSeconds` computed as seconds-until-Pacific-midnight.
+> 4. **Removed the silent quota burner**: `useFocusInsights`'s auto-fire `useEffect` was deleted. Insight generation is now strictly user-gesture only via the existing `refresh()` callback. Cached insights still display normally; UI shows a "Refresh" affordance when `shouldRefresh` is true.
+>
+> **Env knobs** ([docs/ENV.md](docs/ENV.md)):
+>
+> - `GEMINI_MODEL` — primary (default `gemini-2.0-flash`).
+> - `GEMINI_FALLBACK_MODEL` — secondary, separate quota bucket (default `gemini-2.0-flash-lite`). Set to the same value as `GEMINI_MODEL` to disable fallback.
+>
+> **Diagnosing a recurrence**:
+>
+> 1. Server logs: search for `[gemini] primary … rate-limited, falling back to …`. Frequent → quota too small for usage; bump tier.
+> 2. `error_logs` table: filter `error_message LIKE '%Gemini%'`. If the rows show no `retryDelay` in stack, it's daily RPD — only midnight Pacific resets it.
+> 3. `ai_messages` table: `SELECT date_trunc('hour', created_at), count(*) FROM ai_messages WHERE created_at > now() - interval '24h' GROUP BY 1` — shows real hourly usage. Look for surprise spikes (browsing recipes triggers scale/optimize/substitute/extract; opening Focus used to auto-fire).
+> 4. **Never re-add an auto-fire `useEffect` for any AI endpoint.** If a feature genuinely needs proactive AI (e.g. dashboard briefing), gate it on a server-side cron with explicit per-user-per-day budget.
 
 ---
 

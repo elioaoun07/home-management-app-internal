@@ -2,7 +2,7 @@
 // AI optimizes a user's recipe: fills gaps, corrects times, improves steps
 // Returns a diff showing what changed and why
 
-import { geminiModel } from "@/lib/ai/gemini";
+import { generateContentWithFallback } from "@/lib/ai/gemini";
 import {
   checkUserRateLimit,
   generateRequestHash,
@@ -19,13 +19,12 @@ import {
   RECIPE_CUISINES,
   RECIPE_TAGS,
 } from "@/types/recipe";
-import { GoogleGenAI } from "@google/genai";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+// Gemini calls go through generateContentWithFallback for retry + fallback model.
 
 export async function POST(
   req: NextRequest,
@@ -222,8 +221,7 @@ The "changes" array should list EVERY field you changed from the user's input, w
 Only list fields that actually differ from the user's input.`;
 
   try {
-    const response = await genAI.models.generateContent({
-      model: geminiModel,
+    const response = await generateContentWithFallback({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.4,

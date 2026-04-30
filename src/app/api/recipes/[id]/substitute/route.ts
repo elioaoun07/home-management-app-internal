@@ -1,20 +1,19 @@
 // src/app/api/recipes/[id]/substitute/route.ts
 // AI suggests ingredient substitutions with impact analysis
 
-import { geminiModel } from "@/lib/ai/gemini";
+import { generateContentWithFallback } from "@/lib/ai/gemini";
 import {
   checkUserRateLimit,
   generateRequestHash,
   recordRequestHash,
 } from "@/lib/ai/rateLimit";
 import { supabaseServer } from "@/lib/supabase/server";
-import { GoogleGenAI } from "@google/genai";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+// Gemini calls go through generateContentWithFallback for retry + fallback model.
 
 export async function POST(
   req: NextRequest,
@@ -122,8 +121,7 @@ Return ONLY valid JSON (no markdown, no code fences):
 }`;
 
   try {
-    const response = await genAI.models.generateContent({
-      model: geminiModel,
+    const response = await generateContentWithFallback({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.5,

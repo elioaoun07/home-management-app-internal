@@ -113,10 +113,10 @@ export async function DELETE(
     return NextResponse.json({ error: "Transfer not found" }, { status: 404 });
   }
 
-  // Delete the transfer
+  // Soft-delete the transfer (kept in Recycle Bin for 30 days)
   const { error: deleteError } = await supabase
     .from("transfers")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
     .eq("user_id", user.id);
 

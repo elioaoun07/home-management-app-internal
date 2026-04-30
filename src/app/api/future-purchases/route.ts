@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
     .from("future_purchases")
     .select("*")
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .order("urgency", { ascending: false })
     .order("target_date", { ascending: true });
 
@@ -70,21 +71,21 @@ export async function POST(req: NextRequest) {
     if (!name || !target_amount || !urgency || !target_date) {
       return NextResponse.json(
         { error: "name, target_amount, urgency, and target_date are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (target_amount <= 0) {
       return NextResponse.json(
         { error: "target_amount must be positive" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (urgency < 1 || urgency > 5) {
       return NextResponse.json(
         { error: "urgency must be between 1 and 5" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
     const monthsRemaining = Math.max(
       1,
       (targetDate.getFullYear() - now.getFullYear()) * 12 +
-        (targetDate.getMonth() - now.getMonth())
+        (targetDate.getMonth() - now.getMonth()),
     );
     const recommendedMonthlySavings = target_amount / monthsRemaining;
 
@@ -127,7 +128,7 @@ export async function POST(req: NextRequest) {
     console.error("Failed to create future purchase:", e);
     return NextResponse.json(
       { error: "Failed to create future purchase" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -3,7 +3,180 @@ import { GoogleGenAI } from "@google/genai";
 // Initialize Gemini client
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
-export const geminiModel = "gemini-2.0-flash";
+export const geminiModel = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+// Fallback model has a separate quota bucket from the primary, so when the
+// primary 429s we transparently retry on the fallback before surfacing the
+// rate limit to the user. See ERA Notes/03 - Junction Modules/AI Assistant.
+export const geminiFallbackModel =
+  process.env.GEMINI_FALLBACK_MODEL || "gemini-2.0-flash-lite";
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Detect Gemini 429 / quota-exhausted errors. */
+function isRateLimitError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes("429") ||
+    msg.includes("RESOURCE_EXHAUSTED") ||
+    msg.toLowerCase().includes("quota") ||
+    msg.toLowerCase().includes("rate limit")
+  );
+}
+
+/**
+ * Parse `retryDelay` (e.g. "27s", "1.5s") from a Gemini RESOURCE_EXHAUSTED
+ * error body. Returns ms, capped to a sane upper bound.
+ */
+function parseRetryDelayMs(err: unknown): number | null {
+  const msg = err instanceof Error ? err.message : String(err);
+  // The SDK stringifies the JSON error body into the message, so a regex match
+  // is the most reliable way to recover retryDelay across SDK versions.
+  const m = msg.match(/"retryDelay"\s*:\s*"([\d.]+)s"/i);
+  if (!m) return null;
+  const seconds = parseFloat(m[1]);
+  if (!isFinite(seconds) || seconds <= 0) return null;
+  return Math.min(Math.ceil(seconds * 1000), 30_000); // cap at 30s per attempt
+}
+
+/**
+ * Heuristic: a per-minute 429 always carries a `retryDelay` (e.g. 30s); a
+ * per-day RPD exhaustion does not (Google can't promise a useful retry within
+ * the next minute — the bucket only resets at midnight Pacific). Use this to
+ * surface accurate UX instead of an exponentially growing 60s cooldown that
+ * will never help against a daily quota.
+ */
+export function isDailyQuotaError(err: unknown): boolean {
+  if (!isRateLimitError(err)) return false;
+  return parseRetryDelayMs(err) === null;
+}
+
+/**
+ * Friendly rate-limit error class — callers can detect this via
+ * `err instanceof GeminiRateLimitError` and surface a 429 with the right
+ * cooldown instead of a 500.
+ */
+export class GeminiRateLimitError extends Error {
+  readonly retryAfterSeconds: number;
+  readonly daily: boolean;
+  constructor(message: string, retryAfterSeconds: number, daily: boolean) {
+    super(message);
+    this.name = "GeminiRateLimitError";
+    this.retryAfterSeconds = retryAfterSeconds;
+    this.daily = daily;
+  }
+}
+
+interface GenerateOptions {
+  contents: Array<{ role: "user" | "model"; parts: { text: string }[] }>;
+  config?: Record<string, unknown>;
+  systemInstruction?: string;
+  primaryModel?: string;
+  fallbackModel?: string;
+  /** Number of attempts on the primary model. Defaults to 3. */
+  maxPrimaryAttempts?: number;
+}
+
+/**
+ * Centralized Gemini call with retry + fallback model.
+ *
+ * Behavior:
+ *   1. Up to N attempts on the primary model on RESOURCE_EXHAUSTED / 429,
+ *      backing off using the API's own `retryDelay` hint or 1s → 2s → 4s.
+ *   2. One final attempt on the fallback model (separate quota bucket).
+ *   3. On total exhaustion, throws `GeminiRateLimitError` with `daily=true`
+ *      if the original error had no `retryDelay` (per-day RPD) — callers
+ *      should surface "daily quota reached, resets at midnight Pacific"
+ *      instead of "try again in 60s".
+ *   4. Non-rate-limit errors (auth, safety, network) rethrow immediately.
+ *
+ * **All Gemini callers in the app should use this** so retries and the
+ * fallback bucket apply uniformly. See [src/lib/ai/gemini.ts](src/lib/ai/gemini.ts).
+ */
+export async function generateContentWithFallback(
+  opts: GenerateOptions,
+): Promise<Awaited<ReturnType<typeof genAI.models.generateContent>>> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+
+  const primary = opts.primaryModel || geminiModel;
+  const fallback = opts.fallbackModel ?? geminiFallbackModel;
+  const maxPrimaryAttempts = opts.maxPrimaryAttempts ?? 3;
+  const config = {
+    ...(opts.systemInstruction
+      ? { systemInstruction: opts.systemInstruction }
+      : {}),
+    ...(opts.config || {}),
+  };
+
+  let lastErr: unknown;
+
+  for (let attempt = 1; attempt <= maxPrimaryAttempts; attempt++) {
+    try {
+      return await genAI.models.generateContent({
+        model: primary,
+        contents: opts.contents,
+        config,
+      });
+    } catch (err) {
+      lastErr = err;
+      if (!isRateLimitError(err)) throw err;
+
+      if (attempt < maxPrimaryAttempts) {
+        const hinted = parseRetryDelayMs(err);
+        const backoff = hinted ?? Math.min(1000 * 2 ** (attempt - 1), 4000);
+        console.warn(
+          `[gemini] ${primary} 429 attempt ${attempt}/${maxPrimaryAttempts}, retrying in ${backoff}ms`,
+        );
+        await sleep(backoff);
+      }
+    }
+  }
+
+  // Primary exhausted — try fallback (separate quota bucket).
+  if (fallback && fallback !== primary) {
+    try {
+      console.warn(
+        `[gemini] primary ${primary} rate-limited, falling back to ${fallback}`,
+      );
+      return await genAI.models.generateContent({
+        model: fallback,
+        contents: opts.contents,
+        config,
+      });
+    } catch (err) {
+      if (!isRateLimitError(err)) throw err;
+      lastErr = err;
+    }
+  }
+
+  // Both buckets exhausted — surface a typed rate-limit error.
+  const daily = isDailyQuotaError(lastErr);
+  const hinted = parseRetryDelayMs(lastErr);
+  // Daily quota: tell the user when it likely resets (midnight Pacific).
+  // Per-minute: prefer Google's hint, else 60s.
+  const retryAfter = daily ? secondsUntilPacificMidnight() : (hinted ?? 60_000);
+  const friendly = daily
+    ? "Gemini daily free-tier quota reached. Resets at midnight Pacific time."
+    : `Gemini is rate-limited. Retry in ~${Math.ceil(retryAfter / 1000)}s.`;
+  throw new GeminiRateLimitError(friendly, Math.ceil(retryAfter / 1000), daily);
+}
+
+/** Seconds until next 00:00 America/Los_Angeles, the Gemini RPD reset boundary. */
+function secondsUntilPacificMidnight(): number {
+  const now = Date.now();
+  // Get the current LA time as a Date for arithmetic. The toLocaleString trick
+  // gives us the wall-clock components in LA which we then turn back into UTC.
+  const laParts = new Date(
+    new Date(now).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }),
+  );
+  // Build "tomorrow at 00:00 LA local" from those parts and convert to UTC.
+  const tomorrowLA = new Date(laParts);
+  tomorrowLA.setHours(24, 0, 0, 0);
+  const offsetMs = laParts.getTime() - now; // LA-local-as-UTC minus real-UTC
+  const resetUtc = tomorrowLA.getTime() - offsetMs;
+  return Math.max(60, Math.ceil((resetUtc - now) / 1000)); // never <60s
+}
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -235,11 +408,6 @@ export async function sendMessageToGemini(
   chatHistory: ChatMessage[] = [],
   context?: BudgetContext,
 ): Promise<string> {
-  // Check if API key is configured
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not configured");
-  }
-
   const systemPrompt = generateSystemPrompt(context);
 
   // Build conversation history for Gemini (only actual chat, no fake ack)
@@ -255,12 +423,10 @@ export async function sendMessageToGemini(
   ];
 
   try {
-    const response = await genAI.models.generateContent({
-      model: geminiModel,
+    const response = await generateContentWithFallback({
       contents,
+      systemInstruction: systemPrompt,
       config: {
-        // Use systemInstruction for the system prompt - cleaner and saves tokens
-        systemInstruction: systemPrompt,
         temperature: 0.7,
         topP: 0.9,
         topK: 40,
@@ -269,16 +435,13 @@ export async function sendMessageToGemini(
     });
 
     const text = response.text;
-
     if (!text) {
       throw new Error("No response from Gemini");
     }
-
     return text;
   } catch (error) {
-    // Re-throw with more context
+    if (error instanceof GeminiRateLimitError) throw error;
     if (error instanceof Error) {
-      // Check for common SDK errors
       if (error.message.includes("Could not find model")) {
         throw new Error(`Invalid model: ${geminiModel}`);
       }

@@ -2,7 +2,7 @@
 // Hook for AI-powered focus insights with smart caching
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 // Types
 export interface FocusItem {
@@ -143,27 +143,13 @@ export function useFocusInsights(currentItems: FocusItem[]) {
     },
   });
 
-  // Auto-generate if needed (only once per session)
-  useEffect(() => {
-    if (
-      !isFetchingCache &&
-      cachedResponse &&
-      cachedResponse.shouldRefresh &&
-      !cachedResponse.insight &&
-      !hasTriedGeneration &&
-      !generateMutation.isPending &&
-      currentItems.length > 0
-    ) {
-      generateMutation.mutate({ items: currentItems });
-    }
-  }, [
-    isFetchingCache,
-    cachedResponse,
-    hasTriedGeneration,
-    generateMutation.isPending,
-    currentItems,
-    generateMutation.mutate,
-  ]);
+  // NOTE: Auto-generation on mount was removed (2026-04-30). It silently
+  // consumed Gemini's free-tier daily quota every time the Focus page loaded
+  // — even when the user wasn't actively chatting — eventually exhausting the
+  // shared key and 429-ing the AI Chatbot. Insight generation is now strictly
+  // user-gesture driven via `refresh()`. The cached insight (if any) still
+  // displays; a "shouldRefresh" flag lets the UI offer a manual refresh button.
+  // See ERA Notes/03 - Junction Modules/AI Assistant/Gemini API Guidelines.md.
 
   // Manual refresh function
   const refresh = useCallback(

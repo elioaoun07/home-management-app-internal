@@ -91,12 +91,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         const monthsRemaining = Math.max(
           1,
           (targetDate.getFullYear() - now.getFullYear()) * 12 +
-            (targetDate.getMonth() - now.getMonth())
+            (targetDate.getMonth() - now.getMonth()),
         );
         const amountRemaining = targetAmount - currentSaved;
         updateData.recommended_monthly_savings = Math.max(
           0,
-          amountRemaining / monthsRemaining
+          amountRemaining / monthsRemaining,
         );
       }
     }
@@ -124,7 +124,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     console.error("Failed to update future purchase:", e);
     return NextResponse.json(
       { error: "Failed to update future purchase" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -140,9 +140,10 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Soft-delete (Recycle Bin)
   const { error } = await supabase
     .from("future_purchases")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
     .eq("user_id", user.id);
 

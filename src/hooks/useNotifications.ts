@@ -576,3 +576,149 @@ export function getPriorityBorderColor(priority: string): string {
       return "border-white/10";
   }
 }
+
+// ============================================
+// QUICK ACTIONS
+// ============================================
+// Multi-action quick buttons shown inline on each notification (in-app modal)
+// and mirroring the Android push notification action buttons.
+
+export type QuickActionId =
+  | "open" // primary navigation to the notification target
+  | "log_transaction" // open expense form / recurring log
+  | "complete_task" // mark item complete (item_reminder)
+  | "confirm" // "already done" — clears notification, no nav
+  | "snooze_15m"
+  | "snooze_1h"
+  | "snooze_tomorrow"
+  | "dismiss"
+  | "view_budget"
+  | "open_split_bill"
+  | "reply"; // open chat thread
+
+export type QuickAction = {
+  id: QuickActionId;
+  label: string;
+  icon: "send" | "check" | "clock" | "x" | "eye" | "wallet" | "split" | "reply";
+  variant: "primary" | "success" | "neutral" | "muted";
+  /** When true, mark the notification action_completed after running. */
+  closesNotification?: boolean;
+};
+
+/**
+ * Return 1–3 contextual quick actions for a notification.
+ * Order: [primary, secondary, tertiary]. Primary is the most useful action.
+ */
+export function getQuickActions(notification: Notification): QuickAction[] {
+  const t = notification.notification_type;
+
+  switch (t) {
+    case "daily_reminder":
+      return [
+        { id: "log_transaction", label: "Log Now", icon: "send", variant: "primary" },
+        { id: "confirm", label: "Already Done", icon: "check", variant: "success", closesNotification: true },
+        { id: "snooze_1h", label: "Later", icon: "clock", variant: "muted", closesNotification: true },
+      ];
+
+    case "bill_due":
+    case "bill_overdue":
+      return [
+        { id: "log_transaction", label: "Log Now", icon: "wallet", variant: "primary" },
+        { id: "confirm", label: "Already Paid", icon: "check", variant: "success", closesNotification: true },
+        { id: "snooze_1h", label: "Later", icon: "clock", variant: "muted", closesNotification: true },
+      ];
+
+    case "item_reminder":
+    case "item_due":
+    case "item_overdue":
+      return [
+        { id: "complete_task", label: "Done", icon: "check", variant: "success", closesNotification: true },
+        { id: "snooze_15m", label: "Snooze 15m", icon: "clock", variant: "neutral", closesNotification: true },
+        { id: "open", label: "Open", icon: "eye", variant: "muted" },
+      ];
+
+    case "transaction_pending":
+      return [
+        { id: "open_split_bill", label: "Add Amount", icon: "split", variant: "primary" },
+        { id: "dismiss", label: "Dismiss", icon: "x", variant: "muted", closesNotification: true },
+      ];
+
+    case "chat_message":
+    case "chat_mention":
+      return [
+        { id: "reply", label: "Reply", icon: "reply", variant: "primary" },
+        { id: "confirm", label: "Mark Read", icon: "eye", variant: "muted", closesNotification: true },
+      ];
+
+    case "budget_warning":
+    case "budget_exceeded":
+      return [
+        { id: "view_budget", label: "View Budget", icon: "wallet", variant: "primary" },
+        { id: "dismiss", label: "Got It", icon: "check", variant: "muted", closesNotification: true },
+      ];
+
+    case "goal_milestone":
+    case "goal_completed":
+      return [
+        { id: "open", label: "View", icon: "eye", variant: "primary" },
+        { id: "dismiss", label: "Dismiss", icon: "x", variant: "muted", closesNotification: true },
+      ];
+
+    default:
+      // Generic fallback — at minimum always offer "Open" + "Dismiss"
+      return [
+        { id: "open", label: "Open", icon: "eye", variant: "primary" },
+        { id: "dismiss", label: "Dismiss", icon: "x", variant: "muted", closesNotification: true },
+      ];
+  }
+}
+
+// Server-side action mutation. Hits the unified /api/notifications/actions
+// endpoint for confirm / dismiss / snooze / complete_task / read.
+export function useNotificationQuickAction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: {
+      notificationId: string;
+      action: "confirm" | "dismiss" | "snooze" | "complete_task" | "read";
+      snoozeMinutes?: number;
+    }) => {
+      const res = await fetch("/api/notifications/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notification_id: params.notificationId,
+          action: params.action,
+          snooze_minutes: params.snoozeMinutes,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to perform action");
+      return res.json();
+    },
+    onMutate: async ({ notificationId }) => {
+      await queryClient.cancelQueries({ queryKey: notificationKeys.list() });
+
+      // Optimistically remove from sidebar
+      queryClient.setQueriesData<{
+        notifications: Notification[];
+        unread_count: number;
+      }>({ queryKey: notificationKeys.list() }, (old) => {
+        if (!old) return old;
+        const notification = old.notifications.find((n) => n.id === notificationId);
+        const wasUnread = notification && !notification.is_read;
+        return {
+          ...old,
+          notifications: old.notifications.filter((n) => n.id !== notificationId),
+          unread_count: wasUnread ? Math.max(0, old.unread_count - 1) : old.unread_count,
+        };
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: notificationKeys.list() });
+      queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount() });
+      queryClient.invalidateQueries({ queryKey: ["hub", "alerts"] });
+    },
+  });
+}
+
