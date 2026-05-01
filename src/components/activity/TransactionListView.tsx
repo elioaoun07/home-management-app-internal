@@ -2,6 +2,7 @@
 
 import TransactionDetailModal from "@/components/dashboard/TransactionDetailModal";
 import {
+  BillIcon,
   ChevronDownIcon,
   ChevronUpIcon,
 } from "@/components/icons/FuturisticIcons";
@@ -355,6 +356,9 @@ export default function TransactionListView({
                     <span>·</span>
                     <span className="text-orange-400">Debt</span>
                   </>
+                )}
+                {tx.receipt_url && (
+                  <BillIcon className="w-3 h-3 text-white/30 flex-shrink-0" />
                 )}
               </div>
             </div>

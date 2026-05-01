@@ -9,7 +9,6 @@ import {
 } from "@/components/icons/FuturisticIcons";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { compressReceiptImage, formatFileSize } from "@/lib/receiptUtils";
-import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -54,13 +53,12 @@ export default function ReceiptSheet({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  // Generate signed URL for existing receipt
+  // Generate signed URL for existing receipt via server route (bypasses Storage RLS)
   useEffect(() => {
     if (!currentReceiptPath) { setSignedUrl(null); return; }
-    supabaseBrowser()
-      .storage.from("receipts")
-      .createSignedUrl(currentReceiptPath, 3600)
-      .then(({ data }) => setSignedUrl(data?.signedUrl ?? null));
+    fetch(`/api/receipts/signed-url?path=${encodeURIComponent(currentReceiptPath)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((json) => setSignedUrl(json?.signedUrl ?? null));
   }, [currentReceiptPath]);
 
   // Reset internal state when sheet opens

@@ -81,6 +81,8 @@ export type Transaction = {
   // Future payment fields
   scheduled_date?: string | null;
   is_debt_return?: boolean;
+  // Receipt
+  receipt_url?: string | null;
 };
 
 type TransactionInput = {

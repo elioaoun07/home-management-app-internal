@@ -74,7 +74,7 @@ export class SupabaseTransactionService implements TransactionService {
       .select(
         `id, date, category_id, subcategory_id, amount, description, account_id, inserted_at, user_id, is_private,
         split_requested, collaborator_id, collaborator_amount, collaborator_description, split_completed_at, lbp_change_received,
-        scheduled_date, is_debt_return, parent_transaction_id,
+        scheduled_date, is_debt_return, parent_transaction_id, receipt_url,
         category:user_categories!transactions_category_fk(name, color),
         subcategory:user_categories!transactions_subcategory_fk(name, color)`,
       )
@@ -296,6 +296,8 @@ export class SupabaseTransactionService implements TransactionService {
       // Future payment / debt return fields
       scheduled_date: r.scheduled_date ?? null,
       is_debt_return: r.is_debt_return || false,
+      // Receipt
+      receipt_url: r.receipt_url ?? null,
     }));
 
     // Batch-fetch debt data for all transaction IDs

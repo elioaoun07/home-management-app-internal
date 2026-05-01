@@ -18,7 +18,6 @@ import {
   useUpdateTransaction,
 } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
-import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { isToday, isYesterday, yyyyMmDd } from "@/lib/utils/date";
 import dynamic from "next/dynamic";
@@ -68,13 +67,12 @@ export default function TransactionDetailModal({
   const [receiptPath, setReceiptPath] = useState<string | null>(transaction.receipt_url ?? null);
   const [receiptThumbUrl, setReceiptThumbUrl] = useState<string | null>(null);
 
-  // Generate a signed URL for thumbnail preview
+  // Generate a signed URL for thumbnail preview via server route (bypasses Storage RLS)
   useEffect(() => {
     if (!receiptPath) { setReceiptThumbUrl(null); return; }
-    supabaseBrowser()
-      .storage.from("receipts")
-      .createSignedUrl(receiptPath, 3600)
-      .then(({ data }) => setReceiptThumbUrl(data?.signedUrl ?? null));
+    fetch(`/api/receipts/signed-url?path=${encodeURIComponent(receiptPath)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((json) => setReceiptThumbUrl(json?.signedUrl ?? null));
   }, [receiptPath]);
 
   // Helper to format date display
