@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  BillIcon,
   SaveIcon,
+  ScanIcon,
   Trash2Icon,
   XIcon,
 } from "@/components/icons/FuturisticIcons";
@@ -16,9 +18,14 @@ import {
   useUpdateTransaction,
 } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { supabaseBrowser } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import { isToday, isYesterday, yyyyMmDd } from "@/lib/utils/date";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+const ReceiptSheet = dynamic(() => import("@/components/expense/ReceiptSheet"), { ssr: false });
 
 type EditField = "date" | "account" | "category" | "subcategory" | null;
 
@@ -35,6 +42,7 @@ type Transaction = {
   user_theme?: string;
   user_id?: string;
   is_owner?: boolean;
+  receipt_url?: string | null;
 };
 
 type Props = {
@@ -56,6 +64,18 @@ export default function TransactionDetailModal({
   const [isClosing, setIsClosing] = useState(false);
   const [editingField, setEditingField] = useState<EditField>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const [showReceiptSheet, setShowReceiptSheet] = useState(false);
+  const [receiptPath, setReceiptPath] = useState<string | null>(transaction.receipt_url ?? null);
+  const [receiptThumbUrl, setReceiptThumbUrl] = useState<string | null>(null);
+
+  // Generate a signed URL for thumbnail preview
+  useEffect(() => {
+    if (!receiptPath) { setReceiptThumbUrl(null); return; }
+    supabaseBrowser()
+      .storage.from("receipts")
+      .createSignedUrl(receiptPath, 3600)
+      .then(({ data }) => setReceiptThumbUrl(data?.signedUrl ?? null));
+  }, [receiptPath]);
 
   // Helper to format date display
   const humanDate = (dateStr: string) => {
@@ -586,8 +606,63 @@ export default function TransactionDetailModal({
                 </span>
               </div>
             ) : null}
+
+            {/* Receipt row */}
+            <div>
+              <button
+                onClick={() => setShowReceiptSheet(true)}
+                className={cn(
+                  "w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/5 transition-colors",
+                  isOwner ? "hover:bg-white/8 active:scale-[0.99]" : "",
+                )}
+              >
+                <span className={`text-sm ${themeClasses.textMuted} flex items-center gap-1.5`}>
+                  <BillIcon className="w-3.5 h-3.5" />
+                  Receipt
+                </span>
+                {receiptThumbUrl ? (
+                  <div className="flex items-center gap-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={receiptThumbUrl} alt="Receipt thumbnail" className="h-8 w-14 object-cover rounded-md border border-white/10" />
+                    {isOwner && <span className={`text-white/30`}>›</span>}
+                  </div>
+                ) : receiptPath ? (
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs ${themeClasses.textMuted}`}>Loading…</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    {isOwner ? (
+                      <span className={`text-xs ${themeClasses.textMuted} flex items-center gap-1`}>
+                        <ScanIcon className="w-3.5 h-3.5" />
+                        Attach
+                      </span>
+                    ) : (
+                      <span className={`text-xs ${themeClasses.textMuted}`}>None</span>
+                    )}
+                  </div>
+                )}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Receipt Sheet */}
+        <ReceiptSheet
+          open={showReceiptSheet}
+          onClose={() => setShowReceiptSheet(false)}
+          transactionId={isOwner ? transaction.id : undefined}
+          currentReceiptPath={receiptPath}
+          onUploaded={(path) => {
+            setReceiptPath(path);
+            setShowReceiptSheet(false);
+          }}
+          onRemoved={() => {
+            setReceiptPath(null);
+            setReceiptThumbUrl(null);
+            setShowReceiptSheet(false);
+          }}
+        />
 
         {/* Footer */}
         {isOwner ? (

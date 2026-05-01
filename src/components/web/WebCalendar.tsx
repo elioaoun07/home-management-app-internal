@@ -1,5 +1,6 @@
 "use client";
 
+import { RefreshIcon } from "@/components/icons/FuturisticIcons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { getBirthdayDisplayName, getBirthdaysForDate } from "@/data/birthdays";
 import {
@@ -8,14 +9,14 @@ import {
   isOccurrenceCompleted,
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
-import { type SubtaskCompletion } from "@/features/items/useItems";
+import { itemsKeys, type SubtaskCompletion } from "@/features/items/useItems";
 import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
-  buildFullRRuleString,
   getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemWithDetails } from "@/types/items";
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import {
   addDays,
   addMonths,
@@ -47,7 +48,6 @@ import {
   PanelRightOpen,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RRule } from "rrule";
 import { DayExpansionModal } from "./DayExpansionModal";
 import { ItemSubtasksList } from "./ItemSubtasks";
 
@@ -192,6 +192,48 @@ export function WebCalendar({
   const [modalDate, setModalDate] = useState<Date | null>(null);
   const [modalAnchorRect, setModalAnchorRect] = useState<DOMRect | null>(null);
   const dayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // ─── Refresh logic (mirrors ActivityView pattern) ──────────────────────────
+  const queryClient = useQueryClient();
+  const isFetchingItems = useIsFetching({ queryKey: itemsKeys.all });
+  const isFetchingAny = isFetchingItems > 0;
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!isManualRefreshing) return;
+    if (isFetchingAny) {
+      if (clearTimerRef.current) {
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = null;
+      }
+    } else {
+      clearTimerRef.current = setTimeout(() => {
+        setIsManualRefreshing(false);
+        clearTimerRef.current = null;
+      }, 500);
+    }
+    return () => {
+      if (clearTimerRef.current) {
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = null;
+      }
+    };
+  }, [isManualRefreshing, isFetchingAny]);
+
+  const handleRefresh = () => {
+    if (navigator.vibrate) navigator.vibrate(5);
+    if (clearTimerRef.current) {
+      clearTimeout(clearTimerRef.current);
+      clearTimerRef.current = null;
+    }
+    setIsManualRefreshing(true);
+    queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+    queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
+  };
+
+  const isRefreshing = isManualRefreshing || isFetchingAny;
+  // ───────────────────────────────────────────────────────────────────────────
 
   /**
    * Get the actual occurrence datetime for an item on a specific date
@@ -714,6 +756,31 @@ export function WebCalendar({
                 <span className="hidden sm:inline">Add Event</span>
               </button>
             )}
+
+            {/* Refresh */}
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className={cn(
+                "p-1 lg:p-2 rounded-lg transition-all duration-200",
+                isRefreshing
+                  ? isFrost
+                    ? "bg-indigo-100 text-indigo-600"
+                    : "bg-white/10 text-white"
+                  : isFrost
+                    ? "bg-white hover:bg-slate-50 border border-slate-200 shadow-sm text-slate-600"
+                    : "bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white",
+              )}
+              title="Refresh data"
+            >
+              <RefreshIcon
+                className={cn(
+                  "w-3 h-3 lg:w-4 lg:h-4",
+                  isRefreshing && "animate-spin",
+                )}
+              />
+            </button>
 
             {/* Details panel collapse toggle — clean inline button */}
             <button

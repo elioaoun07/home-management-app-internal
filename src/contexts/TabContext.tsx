@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-type Tab = "dashboard" | "expense" | "reminder" | "recurring";
+type Tab = "dashboard" | "expense" | "reminder" | "recurring" | "schedule";
 type HubView = "chat" | "feed" | "score" | "alerts";
 
 // Key for FAB selection (source of truth for which form to show)

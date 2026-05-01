@@ -34,6 +34,11 @@ import {
   useDrafts,
 } from "@/features/drafts/useDrafts";
 import {
+  useEvents,
+  useReminders,
+  useTasks,
+} from "@/features/items/useItems";
+import {
   getMemberDisplayName,
   useHouseholdMembers,
 } from "@/hooks/useHouseholdMembers";
@@ -42,19 +47,30 @@ import { safeFetch } from "@/lib/safeFetch";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import {
+  addDays,
   format,
   formatDistanceToNow,
+  isSameDay,
   isPast,
   isToday,
   isTomorrow,
+  startOfDay,
+  subDays,
 } from "date-fns";
 import {
+  AlertCircle,
   Banknote,
   Calendar,
   CalendarClock,
+  CalendarDays,
+  CheckSquare,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
   Edit2,
   FileText,
   Lock,
+  MapPin,
   Power,
   Trash2,
   Zap,
@@ -107,6 +123,8 @@ export default function RecurringPage() {
   const currentUserId = householdData?.currentUserId ?? null;
   const members = householdData?.members ?? [];
 
+  const [pageMode, setPageMode] = useState<"budget" | "schedule">("budget");
+  const [scheduleDate, setScheduleDate] = useState(() => new Date());
   const [activeTab, setActiveTab] = useState<TabMode>("recurring");
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [editingPayment, setEditingPayment] = useState<RecurringPayment | null>(
@@ -136,6 +154,11 @@ export default function RecurringPage() {
   const { data: draftPayments = [], isLoading: isLoadingDrafts } = useDrafts();
   const deleteDraftMutation = useDeleteDraft();
   const confirmDraftMutation = useConfirmDraft();
+
+  // Schedule mode data
+  const { data: allEvents = [] } = useEvents();
+  const { data: allReminders = [] } = useReminders();
+  const { data: allTasks = [] } = useTasks();
 
   // Form state for Add/Edit recurring
   const [formData, setFormData] = useState({
@@ -633,16 +656,20 @@ export default function RecurringPage() {
         >
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h1 className={cn("text-2xl font-bold", tc.text)}>Payments</h1>
+              <h1 className={cn("text-2xl font-bold", tc.text)}>Plan</h1>
               <p className={cn("text-sm", tc.textMuted)}>
-                {activeTab === "recurring"
-                  ? `${activePayments.length} active · $${monthlyTotal.toFixed(0)}/mo`
-                  : activeTab === "future"
-                    ? `${futurePayments.length} scheduled · $${futureTotal.toFixed(0)} total`
-                    : `${draftPayments.length} draft${draftPayments.length !== 1 ? "s" : ""}`}
+                {pageMode === "schedule"
+                  ? isToday(scheduleDate)
+                    ? "Today"
+                    : format(scheduleDate, "EEEE, MMM d")
+                  : activeTab === "recurring"
+                    ? `${activePayments.length} active · $${monthlyTotal.toFixed(0)}/mo`
+                    : activeTab === "future"
+                      ? `${futurePayments.length} scheduled · $${futureTotal.toFixed(0)} total`
+                      : `${draftPayments.length} draft${draftPayments.length !== 1 ? "s" : ""}`}
               </p>
             </div>
-            {activeTab === "recurring" && (
+            {pageMode === "budget" && activeTab === "recurring" && (
               <button
                 onClick={() => {
                   setEditingPayment(null);
@@ -655,61 +682,131 @@ export default function RecurringPage() {
                 <span className="text-sm font-semibold">Add</span>
               </button>
             )}
+            {pageMode === "schedule" && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setScheduleDate((d) => subDays(d, 1))}
+                  className={cn("p-2 rounded-lg active:scale-95 transition-all", tc.bgSurface)}
+                >
+                  <ChevronLeft className={cn("w-4 h-4", tc.text)} />
+                </button>
+                <div className="text-center min-w-[72px]">
+                  <p className={cn("text-xs font-bold", tc.text)}>
+                    {format(scheduleDate, "MMM d")}
+                  </p>
+                  {!isToday(scheduleDate) && (
+                    <button
+                      onClick={() => setScheduleDate(new Date())}
+                      className={cn("text-[10px] font-bold", tc.textHighlight)}
+                    >
+                      Today
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setScheduleDate((d) => addDays(d, 1))}
+                  className={cn("p-2 rounded-lg active:scale-95 transition-all", tc.bgSurface)}
+                >
+                  <ChevronRight className={cn("w-4 h-4", tc.text)} />
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Tab toggle */}
-          <div className="flex gap-1 p-1 rounded-xl bg-white/5">
+          {/* Budget / Schedule mode toggle */}
+          <div className="flex gap-1 p-1 rounded-xl bg-white/5 mb-2">
             <button
-              onClick={() => setActiveTab("recurring")}
+              onClick={() => setPageMode("budget")}
               className={cn(
                 "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
-                activeTab === "recurring"
+                pageMode === "budget"
                   ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
                   : "text-white/40 hover:text-white/60",
               )}
             >
-              <CalendarClock className="w-4 h-4" />
-              Recurring
+              <Banknote className="w-4 h-4" />
+              Budget
             </button>
             <button
-              onClick={() => setActiveTab("future")}
+              onClick={() => setPageMode("schedule")}
               className={cn(
                 "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
-                activeTab === "future"
+                pageMode === "schedule"
                   ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
                   : "text-white/40 hover:text-white/60",
               )}
             >
-              <Calendar className="w-4 h-4" />
-              Future
-              {dueFuturePayments.length > 0 && (
-                <span className="w-5 h-5 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold">
-                  {dueFuturePayments.length}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab("draft")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
-                activeTab === "draft"
-                  ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
-                  : "text-white/40 hover:text-white/60",
-              )}
-            >
-              <FileText className="w-4 h-4" />
-              Drafts
-              {draftPayments.length > 0 && (
-                <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white/10 text-white/60 text-[10px] font-bold">
-                  {draftPayments.length}
-                </span>
-              )}
+              <CalendarDays className="w-4 h-4" />
+              Schedule
             </button>
           </div>
+
+          {/* Budget sub-tabs (only in budget mode) */}
+          {pageMode === "budget" && (
+            <div className="flex gap-1 p-1 rounded-xl bg-white/5">
+              <button
+                onClick={() => setActiveTab("recurring")}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
+                  activeTab === "recurring"
+                    ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
+                    : "text-white/40 hover:text-white/60",
+                )}
+              >
+                <CalendarClock className="w-4 h-4" />
+                Recurring
+              </button>
+              <button
+                onClick={() => setActiveTab("future")}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
+                  activeTab === "future"
+                    ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
+                    : "text-white/40 hover:text-white/60",
+                )}
+              >
+                <Calendar className="w-4 h-4" />
+                Future
+                {dueFuturePayments.length > 0 && (
+                  <span className="w-5 h-5 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold">
+                    {dueFuturePayments.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab("draft")}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
+                  activeTab === "draft"
+                    ? cn("bg-white/10", tc.textHighlight, "shadow-sm")
+                    : "text-white/40 hover:text-white/60",
+                )}
+              >
+                <FileText className="w-4 h-4" />
+                Drafts
+                {draftPayments.length > 0 && (
+                  <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white/10 text-white/60 text-[10px] font-bold">
+                    {draftPayments.length}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* ═══ RECURRING PAYMENTS TAB ═══ */}
-        {activeTab === "recurring" && (
+        {/* ═══ SCHEDULE VIEW ═══ */}
+        {pageMode === "schedule" && (
+          <ScheduleView
+            date={scheduleDate}
+            allEvents={allEvents}
+            allReminders={allReminders}
+            allTasks={allTasks}
+            tc={tc}
+          />
+        )}
+
+        {/* ═══ BUDGET CONTENT ═══ */}
+        {pageMode === "budget" && activeTab === "recurring" && (
           <>
             {activePayments.length === 0 && disabledPayments.length === 0 ? (
               <div className="neo-card p-8 text-center">
@@ -864,7 +961,7 @@ export default function RecurringPage() {
         )}
 
         {/* ═══ FUTURE PAYMENTS TAB ═══ */}
-        {activeTab === "future" && (
+        {pageMode === "budget" && activeTab === "future" && (
           <>
             {futurePayments.length === 0 ? (
               <div className="neo-card p-8 text-center">
@@ -947,7 +1044,7 @@ export default function RecurringPage() {
         )}
 
         {/* ═══ DRAFT PAYMENTS TAB ═══ */}
-        {activeTab === "draft" && (
+        {pageMode === "budget" && activeTab === "draft" && (
           <>
             {draftPayments.length === 0 ? (
               <div className="neo-card p-8 text-center">
@@ -2182,6 +2279,419 @@ function ConfirmDrawer({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   SCHEDULE VIEW
+   ═══════════════════════════════════════════════════ */
+
+import type { ItemWithDetails } from "@/types/items";
+
+const S_HOUR_HEIGHT = 64;
+const S_DAY_START = 6;
+const S_DAY_END = 23;
+const S_TOTAL_HOURS = S_DAY_END - S_DAY_START;
+const S_MIN_HEIGHT = 28;
+
+function sTimeToPixels(date: Date): number {
+  const h = date.getHours() + date.getMinutes() / 60;
+  return Math.max(0, Math.min(S_TOTAL_HOURS, h - S_DAY_START)) * S_HOUR_HEIGHT;
+}
+
+function sFormatHour(h: number): string {
+  if (h === 12) return "12pm";
+  if (h === 0 || h === 24) return "12am";
+  return h < 12 ? `${h}am` : `${h - 12}pm`;
+}
+
+function sGetGaps(
+  sorted: ItemWithDetails[],
+): Array<{ top: number; height: number; minutes: number }> {
+  const gaps: Array<{ top: number; height: number; minutes: number }> = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const cur = sorted[i];
+    const nxt = sorted[i + 1];
+    const curEnd =
+      cur.type === "event" && cur.event_details
+        ? new Date(cur.event_details.end_at)
+        : cur.reminder_details?.due_at
+          ? new Date(cur.reminder_details.due_at)
+          : null;
+    const nxtStart =
+      nxt.type === "event" && nxt.event_details
+        ? new Date(nxt.event_details.start_at)
+        : nxt.reminder_details?.due_at
+          ? new Date(nxt.reminder_details.due_at)
+          : null;
+    if (!curEnd || !nxtStart) continue;
+    const mins = Math.round((nxtStart.getTime() - curEnd.getTime()) / 60000);
+    if (mins >= 45) {
+      gaps.push({
+        top: sTimeToPixels(curEnd),
+        height: sTimeToPixels(nxtStart) - sTimeToPixels(curEnd),
+        minutes: mins,
+      });
+    }
+  }
+  return gaps;
+}
+
+function ScheduleView({
+  date,
+  allEvents,
+  allReminders,
+  allTasks,
+  tc,
+}: {
+  date: Date;
+  allEvents: ItemWithDetails[];
+  allReminders: ItemWithDetails[];
+  allTasks: ItemWithDetails[];
+  tc: ReturnType<typeof useThemeClasses>;
+}) {
+  const isSelectedToday = isToday(date);
+  const now = new Date();
+  const dayStart = startOfDay(date);
+
+  const timedEvents: ItemWithDetails[] = [];
+  const allDayEvents: ItemWithDetails[] = [];
+  const timedReminders: ItemWithDetails[] = [];
+  const overdueReminders: ItemWithDetails[] = [];
+
+  for (const item of allEvents) {
+    if (!item.event_details) continue;
+    const start = new Date(item.event_details.start_at);
+    if (!isSameDay(start, date)) continue;
+    if (item.event_details.all_day) allDayEvents.push(item);
+    else timedEvents.push(item);
+  }
+
+  for (const item of allReminders) {
+    const status = item.status ?? "pending";
+    if (status === "completed" || status === "cancelled" || status === "archived") continue;
+    const dueAt = item.reminder_details?.due_at
+      ? new Date(item.reminder_details.due_at)
+      : null;
+    if (!dueAt) continue;
+    if (isSameDay(dueAt, date)) timedReminders.push(item);
+    else if (dueAt < dayStart) overdueReminders.push(item);
+  }
+
+  const tasks = isSelectedToday
+    ? allTasks.filter((item) => {
+        const s = item.status ?? "pending";
+        return s === "pending" || s === "in_progress";
+      })
+    : [];
+
+  const timedItems = [...timedEvents, ...timedReminders].sort((a, b) => {
+    const aMs =
+      a.type === "event" && a.event_details
+        ? new Date(a.event_details.start_at).getTime()
+        : a.reminder_details?.due_at
+          ? new Date(a.reminder_details.due_at).getTime()
+          : 0;
+    const bMs =
+      b.type === "event" && b.event_details
+        ? new Date(b.event_details.start_at).getTime()
+        : b.reminder_details?.due_at
+          ? new Date(b.reminder_details.due_at).getTime()
+          : 0;
+    return aMs - bMs;
+  });
+
+  const gaps = sGetGaps(timedItems);
+  const currentTimePixels = isSelectedToday ? sTimeToPixels(now) : -1;
+  const hours = Array.from({ length: S_TOTAL_HOURS + 1 }, (_, i) => S_DAY_START + i);
+  const totalScheduled = timedEvents.length + allDayEvents.length + timedReminders.length;
+  const isEmpty =
+    timedItems.length === 0 &&
+    tasks.length === 0 &&
+    overdueReminders.length === 0 &&
+    allDayEvents.length === 0;
+
+  return (
+    <div className="mt-2">
+      {/* Summary chips */}
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        {overdueReminders.length > 0 && (
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-500/15 border border-red-500/30 shrink-0">
+            <AlertCircle className="w-3 h-3 text-red-400" />
+            <span className="text-[11px] font-semibold text-red-400">
+              {overdueReminders.length} overdue
+            </span>
+          </div>
+        )}
+        {timedEvents.length > 0 && (
+          <div className={cn("flex items-center gap-1 px-2.5 py-1 rounded-full border shrink-0", tc.bgActive, tc.borderActive)}>
+            <CalendarDays className={cn("w-3 h-3", tc.textHighlight)} />
+            <span className={cn("text-[11px] font-semibold", tc.textHighlight)}>
+              {timedEvents.length} event{timedEvents.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+        )}
+        {timedReminders.length > 0 && (
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 shrink-0">
+            <Clock className="w-3 h-3 text-amber-400" />
+            <span className="text-[11px] font-semibold text-amber-400">
+              {timedReminders.length} reminder{timedReminders.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+        )}
+        {tasks.length > 0 && (
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/8 border border-white/10 shrink-0">
+            <CheckSquare className="w-3 h-3 text-white/40" />
+            <span className="text-[11px] font-semibold text-white/40">
+              {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Overdue */}
+      {overdueReminders.length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+            <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">
+              Overdue
+            </span>
+          </div>
+          <div className="space-y-1">
+            {overdueReminders.map((item) => {
+              const dueAt = item.reminder_details?.due_at
+                ? new Date(item.reminder_details.due_at)
+                : null;
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-red-500/30 bg-red-500/5"
+                >
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{item.title}</p>
+                    {dueAt && (
+                      <p className="text-[10px] text-red-400/60">
+                        Due {format(dueAt, "MMM d, h:mm a")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* All-day events */}
+      {allDayEvents.length > 0 && (
+        <div className="mb-4">
+          <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">
+            All Day
+          </span>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {allDayEvents.map((item) => (
+              <div
+                key={item.id}
+                className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold", tc.bgActive, tc.textHighlight)}
+              >
+                {item.title}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {isEmpty && (
+        <div className="py-14 text-center">
+          <CalendarDays className={cn("w-14 h-14 mx-auto mb-4", tc.textFaint)} />
+          <p className={cn("text-base font-medium mb-1", tc.textMuted)}>
+            {isSelectedToday ? "Clear day ahead" : "Nothing scheduled"}
+          </p>
+          <p className={cn("text-sm", tc.textFaint)}>
+            {isSelectedToday ? "Enjoy the space — or plan something" : "No items on this day"}
+          </p>
+        </div>
+      )}
+
+      {/* Timeline */}
+      {!isEmpty && timedItems.length > 0 && (
+        <div className="flex gap-3 mb-6">
+          {/* Hour labels */}
+          <div className="shrink-0 relative" style={{ width: "36px", height: `${S_TOTAL_HOURS * S_HOUR_HEIGHT}px` }}>
+            {hours.map((h) => (
+              <div
+                key={h}
+                className="absolute right-0"
+                style={{ top: `${(h - S_DAY_START) * S_HOUR_HEIGHT - 7}px` }}
+              >
+                <span className="text-[10px] text-white/25 font-medium tabular-nums">
+                  {sFormatHour(h)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Grid + items */}
+          <div className="flex-1 relative" style={{ height: `${S_TOTAL_HOURS * S_HOUR_HEIGHT}px` }}>
+            {hours.map((h) => (
+              <div
+                key={h}
+                className="absolute left-0 right-0 border-t border-white/5"
+                style={{ top: `${(h - S_DAY_START) * S_HOUR_HEIGHT}px` }}
+              />
+            ))}
+            {hours.slice(0, -1).map((h) => (
+              <div
+                key={`half-${h}`}
+                className="absolute left-0 right-0 border-t border-white/[0.025]"
+                style={{ top: `${(h - S_DAY_START) * S_HOUR_HEIGHT + S_HOUR_HEIGHT / 2}px` }}
+              />
+            ))}
+
+            {/* Gaps */}
+            {gaps.map((gap, i) => (
+              <div
+                key={i}
+                className="absolute left-1 right-1 flex items-center justify-center pointer-events-none"
+                style={{ top: `${gap.top + 4}px`, height: `${gap.height - 8}px` }}
+              >
+                <div className="border border-dashed border-white/10 rounded-lg px-2 py-0.5">
+                  <span className="text-[9px] text-white/20 font-medium">
+                    {gap.minutes >= 60
+                      ? `${Math.floor(gap.minutes / 60)}h${gap.minutes % 60 > 0 ? ` ${gap.minutes % 60}m` : ""} free`
+                      : `${gap.minutes}m free`}
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {/* Current time */}
+            {currentTimePixels >= 0 && (
+              <div
+                className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
+                style={{ top: `${currentTimePixels}px` }}
+              >
+                <div className="w-2 h-2 rounded-full bg-red-400 shrink-0 -ml-1" />
+                <div className="flex-1 h-px bg-red-400/50" />
+                <span className="text-[9px] text-red-400/70 font-semibold ml-1 shrink-0">
+                  {format(now, "h:mm a")}
+                </span>
+              </div>
+            )}
+
+            {/* Event blocks */}
+            {timedEvents.map((item) => {
+              if (!item.event_details) return null;
+              const start = new Date(item.event_details.start_at);
+              const end = new Date(item.event_details.end_at);
+              const top = sTimeToPixels(start);
+              const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+              const height = Math.max(S_MIN_HEIGHT, durationHours * S_HOUR_HEIGHT);
+              const short = height < 44;
+              return (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "absolute left-1 right-0 rounded-xl px-2.5 overflow-hidden border",
+                    tc.bgActive, tc.borderActive,
+                  )}
+                  style={{ top: `${top}px`, height: `${height}px` }}
+                >
+                  {short ? (
+                    <div className="h-full flex items-center gap-2">
+                      <p className={cn("text-[11px] font-semibold truncate", tc.textHighlight)}>
+                        {item.title}
+                      </p>
+                      <p className="text-[9px] text-white/35 shrink-0 ml-auto">
+                        {format(start, "h:mm")}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className={cn("text-xs font-semibold leading-tight truncate mt-2", tc.textHighlight)}>
+                        {item.title}
+                      </p>
+                      <p className="text-[10px] text-white/40 mt-0.5">
+                        {format(start, "h:mm")}–{format(end, "h:mm a")}
+                      </p>
+                      {item.event_details.location_text && height > 64 && (
+                        <div className="flex items-center gap-0.5 mt-1">
+                          <MapPin className="w-2.5 h-2.5 text-white/25 shrink-0" />
+                          <p className="text-[9px] text-white/25 truncate">
+                            {item.event_details.location_text}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Reminder chips */}
+            {timedReminders.map((item) => {
+              if (!item.reminder_details?.due_at) return null;
+              const dueAt = new Date(item.reminder_details.due_at);
+              const top = sTimeToPixels(dueAt);
+              return (
+                <div
+                  key={item.id}
+                  className="absolute left-1 right-0 flex items-center gap-1.5"
+                  style={{ top: `${top}px`, height: `${S_MIN_HEIGHT}px` }}
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400/80 shrink-0" />
+                  <div className="flex-1 flex items-center justify-between gap-2 bg-amber-500/10 border border-amber-500/25 rounded-lg px-2 py-1.5 min-w-0">
+                    <p className="text-[11px] font-medium text-amber-300/90 truncate">
+                      {item.title}
+                    </p>
+                    <p className="text-[9px] text-amber-400/50 shrink-0">
+                      {format(dueAt, "h:mm a")}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Unscheduled tasks (today only) */}
+      {tasks.length > 0 && (
+        <div className="pb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+            <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">
+              Tasks
+            </span>
+          </div>
+          <div className="space-y-1">
+            {tasks.map((item) => {
+              const priorityDot =
+                item.priority === "urgent"
+                  ? "bg-red-400"
+                  : item.priority === "high"
+                    ? "bg-amber-400"
+                    : "bg-white/20";
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-transparent hover:bg-white/5 transition-all"
+                >
+                  <CheckSquare className="w-4 h-4 text-white/25 shrink-0" />
+                  <p className="flex-1 text-sm font-medium text-white/60 truncate">
+                    {item.title}
+                  </p>
+                  <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", priorityDot)} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

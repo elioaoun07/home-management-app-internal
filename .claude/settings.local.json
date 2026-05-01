@@ -18,7 +18,10 @@
       "Skill(update-config)",
       "WebFetch(domain:api.anthropic.com)",
       "Bash(bash .claude/hooks/block-ui-dir.sh)",
-      "Bash(Get-ChildItem *)"
+      "Bash(Get-ChildItem *)",
+      "Bash(Remove-Item *)",
+      "Bash(cat)",
+      "Read(//tmp/**)"
     ]
   }
 }

@@ -1096,6 +1096,7 @@ CREATE TABLE public.transactions (
   is_debt_return boolean NOT NULL DEFAULT false,
   parent_transaction_id uuid,
   statement_hash text,
+  receipt_url text,
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
   CONSTRAINT transactions_category_fk FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT transactions_subcategory_fk FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),

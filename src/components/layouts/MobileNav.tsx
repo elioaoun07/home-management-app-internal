@@ -41,10 +41,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 
-type TabId = "dashboard" | "expense" | "reminder" | "recurring";
+type TabId = "dashboard" | "expense" | "reminder" | "recurring" | "schedule";
 
 // Nav items without the primary FAB (now handled by SemiDonutFAB)
-// Left side: Dashboard | Right side: Recurring
+// Left side: Dashboard | Right side: Recurring/Schedule
 const navItems: Array<{
   id: TabId;
   icon: any;
@@ -60,7 +60,7 @@ const navItems: Array<{
   {
     id: "recurring",
     icon: CalendarClockIcon,
-    label: "Recurring",
+    label: "Plan",
     position: "right",
   },
 ];
@@ -302,29 +302,25 @@ export default function MobileNav() {
             </span>
           </div>
 
-          {/* Recurring Tab */}
+          {/* Plan Tab (Recurring + Schedule toggle inside) */}
           <button
             type="button"
             onClick={() => {
               if (navigator.vibrate) navigator.vibrate(10);
               setActiveTab("recurring");
-              if (pathname !== "/expense") router.push("/expense");
+              router.push("/recurring");
             }}
             suppressHydrationWarning
             className={cn(
               "flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-2xl transition-all min-w-[52px] hover:scale-105",
               "active:scale-95",
-              activeTab === "recurring" && pathname === "/expense"
+              pathname === "/recurring" || pathname === "/schedule"
                 ? "neo-card neo-glow-sm text-[hsl(var(--nav-icon-active))] bg-[hsl(var(--header-bg))]"
                 : "text-[hsl(var(--nav-text-secondary)/0.75)] hover:text-[hsl(var(--nav-text-secondary))]",
             )}
           >
-            <div className="relative">
-              <CalendarClockIcon className="w-5 h-5" />
-            </div>
-            <span className="text-[9px] font-medium whitespace-nowrap">
-              Recurring
-            </span>
+            <CalendarClockIcon className="w-5 h-5" />
+            <span className="text-[9px] font-medium whitespace-nowrap">Plan</span>
           </button>
         </div>
         {showTemplateDrawer && (

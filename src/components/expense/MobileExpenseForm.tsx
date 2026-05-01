@@ -5,6 +5,7 @@
 "use client";
 
 import {
+  BillIcon,
   CalculatorIcon,
   CalendarIcon,
   CheckIcon,
@@ -107,6 +108,7 @@ const NewCategoryDrawer = dynamic(() => import("./NewCategoryDrawer"), {
 const NewSubcategoryDrawer = dynamic(() => import("./NewSubcategoryDrawer"), {
   ssr: false,
 });
+const ReceiptSheet = dynamic(() => import("./ReceiptSheet"), { ssr: false });
 
 type Step = SectionKey | "confirm";
 
@@ -260,6 +262,8 @@ export default function MobileExpenseForm() {
   const [editModeSubcategory, setEditModeSubcategory] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showReceiptSheet, setShowReceiptSheet] = useState(false);
+  const [pendingReceiptFile, setPendingReceiptFile] = useState<File | null>(null);
 
   // Track if order has changed (to know whether to save on exit)
   const [accountsOrderChanged, setAccountsOrderChanged] = useState(false);
@@ -774,6 +778,7 @@ export default function MobileExpenseForm() {
     const wasDebt = isDebt;
     const debtorNameForToast = debtorName;
     const debtAmountForSubmit = debtAmount ? parseFloat(debtAmount) : undefined;
+    const capturedReceiptFile = pendingReceiptFile;
 
     // Auto-detect future payment: if the selected date is in the future, treat as scheduled
     const today = format(new Date(), "yyyy-MM-dd");
@@ -791,6 +796,7 @@ export default function MobileExpenseForm() {
     setDebtorName("");
     setDebtAmount("");
     setLbpChangeInput("");
+    setPendingReceiptFile(null);
     const newDefaultAccount = accounts.find((a: any) => a.is_default);
     if (newDefaultAccount) {
       setSelectedAccountId(newDefaultAccount.id);
@@ -915,6 +921,15 @@ export default function MobileExpenseForm() {
               },
             });
             return;
+          }
+
+          // Upload pending receipt (fire-and-forget; user is notified on error only)
+          if (capturedReceiptFile && newTransaction?.id && !newTransaction._offline) {
+            const fd = new FormData();
+            fd.append("image", capturedReceiptFile);
+            fetch(`/api/transactions/${newTransaction.id}/receipt`, { method: "POST", body: fd }).catch(() => {
+              toast.error("Receipt upload failed", { icon: ToastIcons.error });
+            });
           }
 
           // Online path: normal success toast
@@ -1248,7 +1263,7 @@ export default function MobileExpenseForm() {
                       if (v === "" || /^\d*\.?\d*$/.test(v)) setAmount(v);
                     }}
                     suppressHydrationWarning
-                    className={`text-2xl font-bold h-14 pl-10 pr-24 border text-center bg-bg-dark/60 ${themeClasses.border} ${themeClasses.textHighlight} placeholder:text-[hsl(var(--input-placeholder)/0.25)] ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all duration-200 rounded-xl`}
+                    className={`text-2xl font-bold h-14 pl-10 pr-32 border text-center bg-bg-dark/60 ${themeClasses.border} ${themeClasses.textHighlight} placeholder:text-[hsl(var(--input-placeholder)/0.25)] ${themeClasses.focusBorder} focus:ring-1 ${themeClasses.focusRing} transition-all duration-200 rounded-xl`}
                   />
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
                     <button
@@ -1267,6 +1282,27 @@ export default function MobileExpenseForm() {
                           themeClasses.glow,
                         )}
                       />
+                    </button>
+                    {/* Receipt scan button — between calculator and mic */}
+                    <button
+                      onClick={() => setShowReceiptSheet(true)}
+                      suppressHydrationWarning
+                      className={cn(
+                        "p-2.5 rounded-lg border active:scale-95 transition-all relative",
+                        themeClasses.border,
+                        pendingReceiptFile ? themeClasses.bgActive : themeClasses.bgHover,
+                      )}
+                    >
+                      <BillIcon
+                        className={cn(
+                          "w-5 h-5",
+                          pendingReceiptFile ? "text-emerald-400" : themeClasses.text,
+                          themeClasses.glow,
+                        )}
+                      />
+                      {pendingReceiptFile && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-bg-dark" />
+                      )}
                     </button>
                     <VoiceEntryButton
                       categories={categories}
@@ -2661,6 +2697,19 @@ export default function MobileExpenseForm() {
           onResult={(result) => {
             const rounded = parseFloat(result).toFixed(2);
             setAmount(rounded);
+          }}
+        />
+
+        <ReceiptSheet
+          open={showReceiptSheet}
+          onClose={() => setShowReceiptSheet(false)}
+          onCapture={(file) => {
+            setPendingReceiptFile(file);
+            setShowReceiptSheet(false);
+          }}
+          onRemoved={() => {
+            setPendingReceiptFile(null);
+            setShowReceiptSheet(false);
           }}
         />
 

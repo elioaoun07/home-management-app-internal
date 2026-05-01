@@ -509,10 +509,17 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
             {activeSection === "statement" && <StatementImportPanel />}
           </ScrollArea>
         </div>
-        {/* FOOTER: Recycle Bin hyperlink */}
+        {/* FOOTER: Recycle Bin + Receipts Archive links */}
         <div
-          className={`px-8 py-3 border-t ${themeClasses.border} flex items-center justify-end`}
+          className={`px-8 py-3 border-t ${themeClasses.border} flex items-center justify-between`}
         >
+          <Link
+            href="/receipts"
+            onClick={() => onOpenChange(false)}
+            className={`text-sm underline-offset-4 hover:underline ${themeClasses.textMuted}`}
+          >
+            Receipts Archive
+          </Link>
           <Link
             href="/recycle-bin"
             onClick={() => onOpenChange(false)}
