@@ -11,9 +11,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// Gemini calls go through generateContentWithFallback for retry + fallback model.
-const MODEL = "gemini-2.0-flash";
-
 // Cache expiry: 24 hours for normal refresh, but can use stale data up to 7 days
 const CACHE_FRESH_HOURS = 24;
 const CACHE_MAX_STALE_HOURS = 168; // 7 days

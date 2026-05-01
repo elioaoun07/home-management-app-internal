@@ -10,9 +10,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// Gemini calls go through generateContentWithFallback for retry + fallback model.
-const MODEL = "gemini-2.0-flash";
-
 const DAY_NAMES = [
   "Sunday",
   "Monday",

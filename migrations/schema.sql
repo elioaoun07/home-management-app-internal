@@ -109,7 +109,7 @@ CREATE TABLE public.ai_messages (
   input_tokens integer DEFAULT 0,
   output_tokens integer DEFAULT 0,
   included_budget_context boolean DEFAULT false,
-  model_used text DEFAULT 'gemini-2.0-flash'::text,
+  model_used text DEFAULT 'gemini-flash-latest'::text,
   response_time_ms integer,
   is_edited boolean DEFAULT false,
   edited_at timestamp with time zone,

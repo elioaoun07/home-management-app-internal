@@ -1,5 +1,16 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "input=$(cat); msg=$(echo \"$input\" | jq -r '.message // .prompt // \"\"' 2>/dev/null); if echo \"$msg\" | grep -iqE '(explore|trace.*(module|feature)|understand.*(module|feature|how)|map.*(module|feature|arch)|how does .* work|relationship between|cross.?module|junction|unfamiliar|what touches|which files|cascades|dependencies between|before.*(start|implement|build))'; then echo '{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"GRAPHIFY REMINDER: This looks like a codebase exploration task. Run /graphify before reading individual files to build a visual knowledge graph. ERA Notes = design intent + hard rules; graphify = implementation reality + relationships.\"}}'; fi"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",

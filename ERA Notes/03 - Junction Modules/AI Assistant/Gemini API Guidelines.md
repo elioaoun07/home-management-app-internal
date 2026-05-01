@@ -54,6 +54,20 @@ const DEDUP_WINDOW_MS = 5_000; // 5 second deduplication
 
 ---
 
+## Model Versioning Strategy (Future-Proof with Aliases)
+
+> **Problem (2026-05-01)**: Model deprecation cascades. Google retired `gemini-2.0-flash-lite`, then `gemini-1.5-flash` became unavailable for this API key. Each deprecation required manual code updates across 5+ files.
+>
+> **Solution**: Use Google's `-latest` aliases (`gemini-flash-latest`, `gemini-flash-lite-latest`). These automatically point to the newest model in each family without code changes. When Google releases `gemini-3.5-flash`, the alias silently updates — **no rewrites needed**.
+>
+> **Why this works**:
+> - Aliases never deprecate (Google maintains them as moving targets)
+> - Lightweight variants (`-flash`, `-flash-lite`) stay current automatically
+> - No per-model quota concerns (aliases route to the current model's bucket)
+> - Eliminates surprise 404 errors from retired models
+
+---
+
 ## Upstream 429 Resilience (Retry + Fallback Model)
 
 > **Issue (2026-04-30)**: User reported `Gemini call failed: { code: 429, status: RESOURCE_EXHAUSTED }` immediately on opening the AI Chatbot — _despite not having actively used Gemini for several days_. Followed by a 60s in-memory cooldown that doubled on every retry.
@@ -77,7 +91,7 @@ const DEDUP_WINDOW_MS = 5_000; // 5 second deduplication
 >
 > 1. **Centralized helper** [`generateContentWithFallback`](src/lib/ai/gemini.ts) — every Gemini caller now goes through it. Behavior:
 >    - Up to 3 attempts on the primary model, backing off using Google's own `retryDelay` hint (capped 30s) or exponential 1s → 2s → 4s.
->    - One final attempt on a fallback model (`gemini-2.0-flash-lite` by default) — separate quota bucket, often succeeds when primary is throttled.
+>    - One final attempt on a fallback model (`gemini-flash-lite-latest` by default) — separate quota bucket, lighter weight, often succeeds when primary is throttled.
 >    - On total exhaustion, throws `GeminiRateLimitError` with `daily: boolean` and `retryAfterSeconds` based on whether the error had `retryDelay` (per-minute) or not (per-day).
 >    - Non-rate-limit errors (auth, safety, network, invalid model) rethrow immediately — no wasted retries.
 > 2. **All 9 endpoints migrated** to the helper (`/api/ai-chat`, `/api/focus-insights`, `/api/suggest-schedule`, `/api/budget-allocations/ai-suggest`, `/api/recipes/{generate,scale,optimize,substitute}`, `/api/recipes/extract-from-url`). Retry + fallback now apply uniformly.
@@ -86,8 +100,8 @@ const DEDUP_WINDOW_MS = 5_000; // 5 second deduplication
 >
 > **Env knobs** ([docs/ENV.md](docs/ENV.md)):
 >
-> - `GEMINI_MODEL` — primary (default `gemini-2.0-flash`).
-> - `GEMINI_FALLBACK_MODEL` — secondary, separate quota bucket (default `gemini-2.0-flash-lite`). Set to the same value as `GEMINI_MODEL` to disable fallback.
+> - `GEMINI_MODEL` — primary (default `gemini-flash-latest`). Uses Google's `-latest` alias, which auto-updates to the newest Flash model **without requiring code changes** when Google releases a new version. No deprecation risk.
+> - `GEMINI_FALLBACK_MODEL` — secondary, separate quota bucket (default `gemini-flash-lite-latest`). Also uses `-latest` alias for automatic updates. Set to the same value as `GEMINI_MODEL` to disable fallback.
 >
 > **Diagnosing a recurrence**:
 >

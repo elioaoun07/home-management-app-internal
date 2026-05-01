@@ -289,21 +289,33 @@ export default function TransactionListView({
       >
         <div
           className={cn(
-            "neo-card rounded-xl p-3",
+            "neo-card rounded-xl p-3 relative overflow-hidden",
             tx._isPending && "opacity-70",
           )}
           style={{
-            borderLeft: `4px solid ${
-              isOwner
-                ? currentUserTheme === "pink"
-                  ? "#ec4899"
-                  : "#3b82f6"
-                : currentUserTheme === "pink"
-                  ? "#3b82f6"
-                  : "#ec4899"
-            }`,
+            borderLeft:
+              tx.split_requested && tx.split_completed_at
+                ? undefined
+                : `4px solid ${
+                    isOwner
+                      ? currentUserTheme === "pink"
+                        ? "#ec4899"
+                        : "#3b82f6"
+                      : currentUserTheme === "pink"
+                        ? "#3b82f6"
+                        : "#ec4899"
+                  }`,
           }}
         >
+          {tx.split_requested && tx.split_completed_at && (
+            <div
+              className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl overflow-hidden"
+              style={{
+                background:
+                  "linear-gradient(to bottom, #3b82f6 0%, #3b82f6 50%, #ec4899 50%, #ec4899 100%)",
+              }}
+            />
+          )}
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">

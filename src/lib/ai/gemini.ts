@@ -3,12 +3,13 @@ import { GoogleGenAI } from "@google/genai";
 // Initialize Gemini client
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
-export const geminiModel = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+export const geminiModel = process.env.GEMINI_MODEL || "gemini-flash-latest";
 // Fallback model has a separate quota bucket from the primary, so when the
 // primary 429s we transparently retry on the fallback before surfacing the
 // rate limit to the user. See ERA Notes/03 - Junction Modules/AI Assistant.
+// Uses -latest aliases which auto-update to new model versions — no deprecation risk.
 export const geminiFallbackModel =
-  process.env.GEMINI_FALLBACK_MODEL || "gemini-2.0-flash-lite";
+  process.env.GEMINI_FALLBACK_MODEL || "gemini-flash-lite-latest";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

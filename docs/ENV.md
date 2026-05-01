@@ -12,8 +12,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```env
 SUPABASE_SERVICE_ROLE_KEY=         # admin ops (cron, batch)
 GOOGLE_AI_API_KEY=                 # Gemini AI
-GEMINI_MODEL=                      # optional, default gemini-2.0-flash
-GEMINI_FALLBACK_MODEL=             # optional, default gemini-2.0-flash-lite (separate quota bucket; used on 429)
+GEMINI_MODEL=                      # optional, default gemini-flash-latest (auto-updates to latest Flash model, lightweight, future-proof)
+GEMINI_FALLBACK_MODEL=             # optional, default gemini-flash-lite-latest (lighter variant, separate quota bucket; auto-updates to latest Flash-Lite)
 CRON_SECRET=                       # cron job auth (Bearer token)
 VOICE_SECRET=                      # voice endpoint JWT
 AZURE_TTS_KEY=                     # Azure Cognitive Services TTS key

@@ -16,6 +16,21 @@ CLAUDE.md auto-syncs to `.github/copilot-instructions.md` via PostToolUse hook.
 
 ---
 
+## Graphify (Dynamic Codebase Exploration)
+
+> ERA Notes = **design intent + hard rules** (always read first).
+> Graphify = **implementation reality + relationships** (use for exploration).
+
+Run `/graphify` **before reading individual files** when the task involves:
+- Starting on an **unfamiliar module** — visualize structure before diving in
+- **Junction modules** — trace cross-module cascades before changing anything
+- **Large refactors** — map all affected modules and dependencies first
+- **Architecture verification** — confirm code matches ERA Notes intent
+
+Never use graphify as a substitute for ERA Notes — it cannot infer hard rules, gotchas, or design decisions.
+
+---
+
 ## Hard Rules (Non-Negotiable)
 
 > These are **universal** rules — they apply to every module. Module-specific rules live in the module's `ERA Notes/` Overview doc and are loaded via Mandatory Checklist step 3. Modules with their own Hard Rules: **NFC Tags** (slug URLs), **Guest Portal** (slug URLs), **Preferences** (LBP in thousands), **AI Assistant** (Focus briefing cache), **Categories** (cross-user slug matching).
