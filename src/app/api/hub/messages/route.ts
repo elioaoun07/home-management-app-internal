@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
   // Get thread_id from query params
   const { searchParams } = new URL(request.url);
   const threadId = searchParams.get("thread_id");
+  const parentItemId = searchParams.get("parent_item_id");
   const markAsRead = searchParams.get("mark_read") !== "false"; // default true
   const includeArchived = searchParams.get("include_archived") === "true"; // default false
 
@@ -56,6 +57,28 @@ export async function GET(request: NextRequest) {
       ? household.partner_user_id
       : household.owner_user_id;
 
+  // ── Item chat sub-messages (short-circuit — no archive logic, no receipts) ──
+  if (parentItemId) {
+    const { data: subMessages, error: subError } = await supabase
+      .from("hub_messages")
+      .select("*")
+      .eq("thread_id", threadId)
+      .eq("parent_item_id", parentItemId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true });
+
+    if (subError) {
+      return NextResponse.json({ error: subError.message }, { status: 500 });
+    }
+    return NextResponse.json({
+      messages: (subMessages || []).map((msg) => ({
+        ...msg,
+        is_hidden_by_me: false,
+      })),
+      current_user_id: user.id,
+    });
+  }
+
   // Fetch messages for this thread
   // By default, exclude archived messages for performance
   let query = supabase
@@ -63,6 +86,7 @@ export async function GET(request: NextRequest) {
     .select("*")
     .eq("thread_id", threadId)
     .is("deleted_at", null) // Exclude soft-deleted messages
+    .is("parent_item_id", null) // Exclude item chat sub-messages from main thread
     .order("created_at", { ascending: true })
     .limit(200);
 
@@ -344,8 +368,32 @@ export async function GET(request: NextRequest) {
     };
   });
 
+  // ── Reply counts for shopping threads ──
+  // Attach reply_count to each message so the shopping list can show chat badges.
+  let finalMessages: typeof transformedMessages = transformedMessages;
+  if (thread.purpose === "shopping" && transformedMessages.length > 0) {
+    const messageIds = transformedMessages.map((m) => m.id);
+    const { data: replyCounts } = await supabase
+      .from("hub_messages")
+      .select("parent_item_id")
+      .in("parent_item_id", messageIds)
+      .is("deleted_at", null);
+
+    const replyCountMap: Record<string, number> = {};
+    for (const r of replyCounts || []) {
+      if (r.parent_item_id) {
+        replyCountMap[r.parent_item_id] =
+          (replyCountMap[r.parent_item_id] || 0) + 1;
+      }
+    }
+    finalMessages = transformedMessages.map((m) => ({
+      ...m,
+      reply_count: replyCountMap[m.id] || 0,
+    }));
+  }
+
   return NextResponse.json({
-    messages: transformedMessages,
+    messages: finalMessages,
     message_actions: messageActions, // Include actions in response
     thread_id: threadId,
     household_id: thread.household_id,
@@ -368,8 +416,15 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { content, thread_id, topic_id, item_quantity, shopping_group_id } =
-    body;
+  const {
+    content,
+    thread_id,
+    topic_id,
+    item_quantity,
+    shopping_group_id,
+    parent_item_id,
+    item_chat_photo_url,
+  } = body;
 
   if (!content?.trim()) {
     return NextResponse.json(
@@ -433,6 +488,16 @@ export async function POST(request: NextRequest) {
   // Add shopping_group_id if provided (for shopping list grouping)
   if (shopping_group_id) {
     insertData.shopping_group_id = shopping_group_id;
+  }
+
+  // Add parent_item_id if provided (for item-level chat sub-messages)
+  if (parent_item_id) {
+    insertData.parent_item_id = parent_item_id;
+  }
+
+  // Add item_chat_photo_url if provided
+  if (item_chat_photo_url) {
+    insertData.item_chat_photo_url = item_chat_photo_url;
   }
 
   const { data: message, error } = await supabase

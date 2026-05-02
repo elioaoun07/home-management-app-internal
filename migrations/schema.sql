@@ -571,6 +571,8 @@ CREATE TABLE public.hub_messages (
   voice_duration integer,
   meal_plan_id uuid,
   item_sort_order float,
+  parent_item_id uuid,
+  item_chat_photo_url text,
   CONSTRAINT hub_messages_pkey PRIMARY KEY (id),
   CONSTRAINT hub_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
   CONSTRAINT hub_messages_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
@@ -580,7 +582,8 @@ CREATE TABLE public.hub_messages (
   CONSTRAINT hub_messages_source_item_id_fkey FOREIGN KEY (source_item_id) REFERENCES public.catalogue_items(id),
   CONSTRAINT hub_messages_meal_plan_id_fkey FOREIGN KEY (meal_plan_id) REFERENCES public.meal_plans(id),
   CONSTRAINT hub_messages_checked_by_fkey FOREIGN KEY (checked_by) REFERENCES auth.users(id),
-  CONSTRAINT hub_messages_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES public.hub_notes_topics(id)
+  CONSTRAINT hub_messages_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES public.hub_notes_topics(id),
+  CONSTRAINT hub_messages_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES public.hub_messages(id) ON DELETE CASCADE
 );
 CREATE TABLE public.hub_notes_topics (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

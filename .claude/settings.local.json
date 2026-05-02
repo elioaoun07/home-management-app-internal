@@ -22,7 +22,9 @@
       "Bash(Remove-Item *)",
       "Bash(cat)",
       "Read(//tmp/**)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "Bash(Select-Object FullName)",
+      "Bash(npx next *)"
     ]
   }
 }

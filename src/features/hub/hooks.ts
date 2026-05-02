@@ -113,6 +113,10 @@ export type HubMessage = {
   // Shopping group fields
   shopping_group_id?: string | null; // Reference to custom shopping group
   item_sort_order?: number | null; // Sort order within group (float for stable reorder)
+  // Item chat fields
+  parent_item_id?: string | null; // If set, this is a sub-message for a shopping item
+  item_chat_photo_url?: string | null; // Photo URL for item chat messages
+  reply_count?: number; // Computed: number of sub-messages for this item
 };
 
 export type HubFeedItem = {

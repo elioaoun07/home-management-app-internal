@@ -59,6 +59,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ProductComparisonSheet } from "./ProductComparisonSheet";
+import { ItemChatSheet } from "./ItemChatSheet";
 
 // ─────────────────────────────────────────────────────
 // Theme-based identity colors (Rule #17: me=my theme, partner=other theme)
@@ -112,6 +113,7 @@ interface ShoppingItem {
   shoppingGroupId: string | null;
   assignedTo: string | null;
   sortOrder: number | null;
+  hasChat: boolean;
 }
 
 interface ItemGroup {
@@ -706,6 +708,10 @@ export function ShoppingListView({
     groupName: string;
   } | null>(null);
 
+  // ── Item chat ──
+  const [chatItem, setChatItem] = useState<{ id: string; content: string } | null>(null);
+  const [itemsWithChat, setItemsWithChat] = useState<Set<string>>(new Set());
+
   // ── Partner presence + typing (Point 12) ──
   const [partnerOnline, setPartnerOnline] = useState(false);
   const [partnerTyping, setPartnerTyping] = useState(false);
@@ -859,6 +865,37 @@ export function ShoppingListView({
     };
   }, [threadId, currentUserId, queryClient]);
 
+  // ── Realtime: update chat badges when partner sends item chat messages ──
+  useEffect(() => {
+    if (!threadId) return;
+    const channel = supabaseBrowser()
+      .channel(`item-chat-badges-${threadId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "hub_messages",
+          filter: `thread_id=eq.${threadId}`,
+        },
+        (payload) => {
+          const msg = payload.new as { parent_item_id?: string | null };
+          if (msg.parent_item_id) {
+            setItemsWithChat((prev) => {
+              if (prev.has(msg.parent_item_id!)) return prev;
+              const next = new Set(prev);
+              next.add(msg.parent_item_id!);
+              return next;
+            });
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      supabaseBrowser().removeChannel(channel);
+    };
+  }, [threadId]);
+
   // ── Parse messages into shopping items ──
   const items: ShoppingItem[] = messages
     .filter(
@@ -887,6 +924,8 @@ export function ShoppingListView({
       sortOrder:
         ((msg as Record<string, unknown>).item_sort_order as number | null) ??
         null,
+      hasChat:
+        (((msg as Record<string, unknown>).reply_count as number) ?? 0) > 0,
     }))
     .sort((a, b) => {
       if (a.checked !== b.checked) return a.checked ? 1 : -1;
@@ -2102,9 +2141,20 @@ export function ShoppingListView({
 
             <div className="flex-1 min-w-0">
               <div className="flex items-start gap-2">
-                <span className="text-white text-sm break-words flex-1 min-w-0 pt-0.5">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!selectionMode) setChatItem({ id: item.id, content: item.content });
+                  }}
+                  className="text-white text-sm break-words flex-1 min-w-0 pt-0.5 text-left relative group/chat"
+                  title="Open item chat"
+                >
                   {item.content}
-                </span>
+                  {/* Chat badge dot */}
+                  {(item.hasChat || itemsWithChat.has(item.id)) && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyan-400 ring-1 ring-bg-custom" />
+                  )}
+                </button>
 
                 <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
                   {editingQuantityFor === item.id ? (
@@ -3106,6 +3156,24 @@ export function ShoppingListView({
           }}
           messageId={selectedItemForComparison.id}
           itemName={selectedItemForComparison.name}
+        />
+      )}
+
+      {/* ── Item Chat Sheet ── */}
+      {chatItem && (
+        <ItemChatSheet
+          item={chatItem}
+          threadId={threadId}
+          threadColor={thread?.color}
+          currentUserId={currentUserId}
+          onClose={() => setChatItem(null)}
+          onFirstMessage={(itemId) =>
+            setItemsWithChat((prev) => {
+              const next = new Set(prev);
+              next.add(itemId);
+              return next;
+            })
+          }
         />
       )}
     </div>
