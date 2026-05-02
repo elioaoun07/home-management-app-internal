@@ -489,7 +489,15 @@ export function WebCalendar({
           const isHandled =
             isOccurrenceCompleted(item.id, itemDate, occurrenceActions) ||
             item.status === "completed";
-          if (!isHandled) {
+          // Skip if this item was postponed TO this date — it will show in the postponed section
+          const wasPostponedHere = occurrenceActions.some(
+            (a) =>
+              a.item_id === item.id &&
+              a.action_type === "postponed" &&
+              a.postponed_to != null &&
+              isSameDay(parseISO(a.postponed_to), date),
+          );
+          if (!isHandled && !wasPostponedHere) {
             result.push(item);
           }
         }
