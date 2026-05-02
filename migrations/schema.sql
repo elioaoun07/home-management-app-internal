@@ -830,7 +830,6 @@ CREATE TABLE public.notification_preferences (
   enabled boolean DEFAULT true,
   frequency text DEFAULT 'daily'::text,
   custom_cron text,
-  preferred_time time without time zone DEFAULT '20:00:00'::time without time zone,
   timezone text DEFAULT 'UTC'::text,
   days_of_week ARRAY DEFAULT ARRAY[1, 2, 3, 4, 5, 6, 7],
   quiet_start time without time zone,

@@ -2,14 +2,19 @@
  * Daily Transaction Reminder - Unified Cron Endpoint
  *
  * SUPPORTS MULTIPLE REMINDER TIMES PER DAY:
- * - Uses `preferred_times` array in metadata for multiple daily reminders
- * - Uses `last_sent_slots` in metadata to track which time slots have been sent today
+ * - `metadata.preferred_times` is an array of LOCAL times (HH:mm:ss) interpreted
+ *   in the user's `notification_preferences.timezone`.
+ * - `metadata.last_sent_slots` tracks which slots were already sent today
+ *   (keyed by the user's local YYYY-MM-DD).
  *
- * Example metadata:
+ * Example metadata for a user with timezone="Asia/Beirut":
  * {
- *   "preferred_times": ["05:15:00", "16:00:00"],  // UTC times (7:15 AM and 6:00 PM Beirut)
- *   "last_sent_slots": { "2026-01-06": ["05:15:00"] }  // Already sent for this slot today
+ *   "preferred_times": ["07:00:00", "18:00:00"],   // 7 AM and 6 PM Beirut local
+ *   "last_sent_slots": { "2026-01-06": ["07:00:00"] }
  * }
+ *
+ * Users with no row in notification_preferences (or enabled=false) are skipped
+ * silently — no error is raised.
  *
  * Cron schedule: every 5 minutes
  * Endpoint: GET /api/cron/daily-reminder
@@ -48,6 +53,22 @@ function isTimeMatch(
 function parseTime(timeStr: string): [number, number] {
   const [hour, minute] = timeStr.split(":").map(Number);
   return [hour, minute];
+}
+
+// Helper: Safely parse the metadata jsonb column into a plain object.
+// Never throws — returns {} for null/invalid JSON/non-object values.
+function parseMetadata(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === "object") return raw as Record<string, unknown>;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
 }
 
 /**
@@ -144,13 +165,17 @@ export async function GET(req: NextRequest) {
     let alreadySentForSlot = 0;
 
     for (const pref of preferences) {
-      const metadata =
-        typeof pref.metadata === "string"
-          ? JSON.parse(pref.metadata)
-          : pref.metadata || {};
+      const metadata = parseMetadata(pref.metadata);
 
       // preferred_times are stored in the user's LOCAL timezone
-      const preferredTimes: string[] = metadata.preferred_times || ["20:00:00"];
+      const preferredTimesRaw = metadata.preferred_times;
+      const preferredTimes: string[] = Array.isArray(preferredTimesRaw)
+        ? preferredTimesRaw.filter(
+            (t): t is string => typeof t === "string" && /^\d{1,2}:\d{2}/.test(t),
+          )
+        : ["20:00:00"];
+
+      if (preferredTimes.length === 0) continue;
 
       // Convert current UTC time → user's local time for comparison
       const userTz = pref.timezone || "UTC";
@@ -158,8 +183,11 @@ export async function GET(req: NextRequest) {
         getLocalTime(userTz);
 
       // Get already sent slots for today (using user's local date)
+      const lastSentSlotsRaw = metadata.last_sent_slots;
       const lastSentSlots: Record<string, string[]> =
-        metadata.last_sent_slots || {};
+        lastSentSlotsRaw && typeof lastSentSlotsRaw === "object"
+          ? (lastSentSlotsRaw as Record<string, string[]>)
+          : {};
       const todaySentSlots: string[] = lastSentSlots[localDateStr] || [];
 
       // Check each preferred time
@@ -280,12 +308,12 @@ export async function GET(req: NextRequest) {
       }
       lastSentSlots[localDateStr].push(matchedSlot);
 
-      // Clean up old dates (keep only last 7 days to prevent metadata bloat)
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      // Clean up old dates (keep only last 3 days to prevent metadata bloat)
+      const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
         .toISOString()
         .split("T")[0];
       for (const date of Object.keys(lastSentSlots)) {
-        if (date < sevenDaysAgo) {
+        if (date < threeDaysAgo) {
           delete lastSentSlots[date];
         }
       }

@@ -428,22 +428,22 @@ function InAppNotificationPreferences() {
     return pref ? pref.enabled : defaultEnabled;
   };
 
-  // Get preferred times array from metadata (for multiple reminders per day)
+  // Get preferred times array from metadata (for multiple reminders per day).
+  // Returns defaults when the preference doesn't exist or metadata is malformed,
+  // so the UI never crashes for users who haven't set up notifications.
   const getPreferredTimes = (
     key: string,
     defaultTimes = ["18:00"],
   ): string[] => {
     const pref = getPreference(key);
     const metadata = pref?.metadata as Record<string, unknown> | null;
-    if (metadata?.preferred_times && Array.isArray(metadata.preferred_times)) {
-      // Convert "HH:mm:ss" to "HH:mm"
-      return (metadata.preferred_times as string[]).map((t) =>
-        t.substring(0, 5),
-      );
-    }
-    // Fallback to old preferred_time field
-    if (pref?.preferred_time) {
-      return [pref.preferred_time.substring(0, 5)];
+    const raw = metadata?.preferred_times;
+    if (Array.isArray(raw) && raw.length > 0) {
+      // Convert "HH:mm:ss" to "HH:mm" and filter malformed entries
+      const cleaned = raw
+        .filter((t): t is string => typeof t === "string" && t.length >= 5)
+        .map((t) => t.substring(0, 5));
+      if (cleaned.length > 0) return cleaned;
     }
     return defaultTimes;
   };

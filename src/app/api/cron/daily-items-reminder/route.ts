@@ -46,6 +46,21 @@ function parseTime(timeStr: string): [number, number] {
   return [hour, minute];
 }
 
+// Safely parse the metadata jsonb column. Never throws.
+function parseMetadata(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === "object") return raw as Record<string, unknown>;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 function buildItemsSummaryMessage(titles: string[], total: number): string {
   const preview = titles
     .slice(0, 3)
@@ -147,18 +162,23 @@ export async function GET(req: NextRequest) {
     let alreadySentForSlot = 0;
 
     for (const pref of preferences) {
-      const metadata =
-        typeof pref.metadata === "string"
-          ? JSON.parse(pref.metadata)
-          : pref.metadata || {};
+      const metadata = parseMetadata(pref.metadata);
 
       // preferred_times are stored in the user's LOCAL timezone
-      const preferredTimes: string[] = metadata.preferred_times || [
-        "07:00:00",
-        "18:00:00",
-      ];
+      const preferredTimesRaw = metadata.preferred_times;
+      const preferredTimes: string[] = Array.isArray(preferredTimesRaw)
+        ? preferredTimesRaw.filter(
+            (t): t is string => typeof t === "string" && /^\d{1,2}:\d{2}/.test(t),
+          )
+        : ["07:00:00", "18:00:00"];
+
+      if (preferredTimes.length === 0) continue;
+
+      const lastSentSlotsRaw = metadata.last_sent_slots;
       const lastSentSlots: Record<string, string[]> =
-        metadata.last_sent_slots || {};
+        lastSentSlotsRaw && typeof lastSentSlotsRaw === "object"
+          ? (lastSentSlotsRaw as Record<string, string[]>)
+          : {};
 
       // Convert current UTC time → user's local time for comparison
       const userTz = pref.timezone || "UTC";
@@ -376,11 +396,11 @@ export async function GET(req: NextRequest) {
       }
       lastSentSlots[localDateStr].push(matchedSlot);
 
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
         .toISOString()
         .split("T")[0];
       for (const date of Object.keys(lastSentSlots)) {
-        if (date < sevenDaysAgo) {
+        if (date < threeDaysAgo) {
           delete lastSentSlots[date];
         }
       }

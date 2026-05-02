@@ -1,6 +1,7 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,6 @@ export type NotificationPreference = {
   enabled: boolean;
   frequency: "daily" | "weekly" | "monthly" | "custom";
   custom_cron: string | null;
-  preferred_time: string;
   timezone: string;
   days_of_week: number[];
   quiet_start: string | null;
@@ -20,6 +20,18 @@ export type NotificationPreference = {
   created_at: string;
   updated_at: string;
 };
+
+const preferenceUpsertSchema = z.object({
+  preference_key: z.string().min(1),
+  enabled: z.boolean().optional(),
+  frequency: z.enum(["daily", "weekly", "monthly", "custom"]).optional(),
+  custom_cron: z.string().nullable().optional(),
+  timezone: z.string().optional(),
+  days_of_week: z.array(z.number().int().min(1).max(7)).optional(),
+  quiet_start: z.string().nullable().optional(),
+  quiet_end: z.string().nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+});
 
 // GET - Fetch notification preferences for user
 export async function GET() {
@@ -67,52 +79,43 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
-  const {
-    preference_key,
-    enabled = true,
-    frequency = "daily",
-    custom_cron,
-    preferred_time = "20:00:00",
-    timezone = "UTC",
-    days_of_week = [1, 2, 3, 4, 5, 6, 7],
-    quiet_start,
-    quiet_end,
-    metadata,
-  } = body;
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-  if (!preference_key) {
+  const parsed = preferenceUpsertSchema.safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "Preference key is required" },
-      { status: 400 }
+      { error: parsed.error.flatten() },
+      { status: 400 },
     );
+  }
+
+  // Build payload with defaults; only include fields the caller actually sent
+  // so partial updates don't reset other columns to defaults via upsert.
+  const payload: Record<string, unknown> = {
+    user_id: user.id,
+    preference_key: parsed.data.preference_key,
+  };
+  for (const [key, value] of Object.entries(parsed.data)) {
+    if (key === "preference_key") continue;
+    if (value !== undefined) payload[key] = value;
   }
 
   // Upsert preference
   const { data: preference, error } = await supabase
     .from("notification_preferences")
-    .upsert(
-      {
-        user_id: user.id,
-        preference_key,
-        enabled,
-        frequency,
-        custom_cron,
-        preferred_time,
-        timezone,
-        days_of_week,
-        quiet_start,
-        quiet_end,
-        metadata,
-      },
-      {
-        onConflict: "user_id,preference_key",
-      }
-    )
+    .upsert(payload, { onConflict: "user_id,preference_key" })
     .select()
     .single();
 
   if (error) {
+    if ((error as { code?: string }).code === "23505") {
+      return NextResponse.json({ error: "Already exists" }, { status: 409 });
+    }
     console.error("Error upserting preference:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

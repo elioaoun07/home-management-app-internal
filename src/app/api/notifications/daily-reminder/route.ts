@@ -5,7 +5,7 @@
  * This route is kept for backward compatibility but redirects to the new unified cron endpoint.
  *
  * The new endpoint:
- * - Respects user's preferred_time from notification_preferences
+ * - Respects user's `metadata.preferred_times` from notification_preferences
  * - Should be called every 5 minutes (not once daily)
  * - Handles timezone properly
  */
