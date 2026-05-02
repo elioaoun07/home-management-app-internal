@@ -12,6 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
+  useCreatePause,
+  useDeletePause,
+  useItemPauses,
   useUpdateEventDetails,
   useUpdateItem,
   useUpdateRecurrenceRule,
@@ -33,6 +36,8 @@ import {
   Bell,
   MapPin,
   Nfc,
+  PauseCircle,
+  PlayCircle,
   Repeat,
   Sparkles,
   Tag,
@@ -94,6 +99,12 @@ export default function EditItemDialog({
   >(undefined);
   const [recurrenceRule, setRecurrenceRule] = useState("");
   const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
+
+  // Recurrence pause state
+  const [showPauseForm, setShowPauseForm] = useState(false);
+  const [pauseStart, setPauseStart] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [pauseEnd, setPauseEnd] = useState("");
+  const [pauseReason, setPauseReason] = useState("");
 
   // Prerequisites
   const [existingPrerequisites, setExistingPrerequisites] = useState<
@@ -184,6 +195,14 @@ export default function EditItemDialog({
   const updateReminderDetails = useUpdateReminderDetails();
   const updateEventDetails = useUpdateEventDetails();
   const updateRecurrenceRule = useUpdateRecurrenceRule();
+  const { data: pauses = [] } = useItemPauses(item?.id);
+  const createPause = useCreatePause();
+  const deletePause = useDeletePause();
+
+  const today = format(new Date(), "yyyy-MM-dd");
+  const activePause = pauses.find(
+    (p) => p.pause_start <= today && (p.pause_end === null || p.pause_end >= today),
+  );
 
   // Initialize form when item changes
   useEffect(() => {
@@ -203,11 +222,12 @@ export default function EditItemDialog({
       const firstAlert = item.alerts[0];
       if (firstAlert.kind === "relative") {
         setAlertValue({
-          offsetMinutes: firstAlert.offset_minutes || 15,
+          offsetMinutes: firstAlert.offset_minutes || 0,
           customTime: firstAlert.custom_time || null,
         });
       } else {
-        setAlertValue({ offsetMinutes: 15, customTime: null });
+        // absolute alert fires at event time — treat as "At time"
+        setAlertValue({ offsetMinutes: 0, customTime: null });
       }
     } else {
       setAlertValue({ offsetMinutes: 0, customTime: null });
@@ -502,95 +522,6 @@ export default function EditItemDialog({
             />
           </div>
 
-          {/* Description */}
-          <div className="space-y-2">
-            <Label htmlFor="description" className="text-white/70">
-              Description
-            </Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter description (optional)"
-              className="bg-white/5 border-white/10 text-white resize-none"
-              rows={3}
-            />
-          </div>
-
-          {/* Prerequisites (Trigger Conditions) */}
-          <div className="space-y-3 border-t border-white/10 pt-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-white/70">
-              <Zap className="w-4 h-4" />
-              <span>
-                Trigger Conditions{" "}
-                {existingPrerequisites.length > 0 && (
-                  <span className="text-white/40">
-                    ({existingPrerequisites.length})
-                  </span>
-                )}
-              </span>
-            </div>
-
-            {/* Existing prerequisites */}
-            {existingPrerequisites.map((prereq) => {
-              const config = prereq.condition_config as unknown as Record<
-                string,
-                unknown
-              >;
-              const tagName =
-                prereq.condition_type === "nfc_state_change"
-                  ? (nfcTags.find((t) => t.id === config.tag_id)?.label ??
-                    "Unknown tag")
-                  : prereq.condition_type;
-
-              return (
-                <div
-                  key={prereq.id}
-                  className="flex items-center justify-between rounded-lg bg-white/5 border border-white/10 px-3 py-2"
-                >
-                  <div className="flex items-center gap-2 text-sm">
-                    <Nfc className="w-3.5 h-3.5 text-cyan-400" />
-                    <span className="text-white/80">{tagName}</span>
-                    <span className="text-white/40">→</span>
-                    <span className="text-amber-300/80">
-                      {(config.target_state as string) ?? "?"}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeExistingPrerequisite(prereq.id)}
-                    className="p-1 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              );
-            })}
-
-            {/* Add new prerequisite */}
-            <PrerequisitePicker
-              value={newPrerequisites}
-              onChange={(prereqs) => {
-                // When a new prerequisite is added, immediately persist it
-                if (prereqs.length > newPrerequisites.length) {
-                  const latest = prereqs[prereqs.length - 1];
-                  addNewPrerequisite(latest);
-                  // Don't keep it in newPrerequisites — it'll appear in existingPrerequisites after save
-                  return;
-                }
-                setNewPrerequisites(prereqs);
-              }}
-              compact
-            />
-
-            {(existingPrerequisites.length > 0 ||
-              newPrerequisites.length > 0) && (
-              <p className="text-xs text-amber-300/60">
-                Item is dormant — activates when conditions are met.
-              </p>
-            )}
-          </div>
-
           {/* Start Date & Time */}
           <div className="space-y-2">
             <Label className="text-white/70 flex items-center justify-between">
@@ -667,47 +598,6 @@ export default function EditItemDialog({
               />
             </div>
           )}
-
-          {/* Categories */}
-          <div className="space-y-2">
-            <Label className="text-white/70 flex items-center gap-2">
-              <Tag className="w-4 h-4" />
-              Categories ({selectedCategories.length})
-            </Label>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((cat) => {
-                const isSelected = selectedCategories.includes(cat.id);
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedCategories((prev) =>
-                        isSelected
-                          ? prev.filter((id) => id !== cat.id)
-                          : [...prev, cat.id],
-                      );
-                    }}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                      isSelected
-                        ? "text-white"
-                        : "bg-white/5 text-white/50 hover:bg-white/10",
-                    )}
-                    style={{
-                      backgroundColor: isSelected
-                        ? `${cat.color}40`
-                        : undefined,
-                      borderColor: isSelected ? `${cat.color}60` : undefined,
-                      borderWidth: isSelected ? "1px" : "0",
-                    }}
-                  >
-                    {cat.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
 
           {/* Alert */}
           <div className="space-y-2">
@@ -803,8 +693,193 @@ export default function EditItemDialog({
                   startDate ? new Date(`${startDate}T12:00:00`) : new Date()
                 }
               />
+
+              {/* Recurrence Pause */}
+              {recurrenceRule && (
+                <div className="mt-3 space-y-2">
+                  {activePause ? (
+                    <div className="flex items-center justify-between rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <PauseCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                        <div>
+                          <p className="text-xs font-medium text-amber-300">
+                            Paused
+                            {activePause.pause_end
+                              ? ` until ${activePause.pause_end}`
+                              : " indefinitely"}
+                          </p>
+                          {activePause.reason && (
+                            <p className="text-xs text-white/50">
+                              {activePause.reason}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          deletePause.mutate(
+                            { itemId: item!.id, pauseId: activePause.id },
+                            {
+                              onSuccess: () => toast.success("Recurrence resumed", {
+                                duration: 4000,
+                                action: { label: "Undo", onClick: () => createPause.mutate({ itemId: item!.id, input: { pause_start: activePause.pause_start, pause_end: activePause.pause_end, reason: activePause.reason } }) },
+                              }),
+                            },
+                          );
+                        }}
+                        disabled={deletePause.isPending}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-xs text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                      >
+                        <PlayCircle className="w-3.5 h-3.5" />
+                        Resume
+                      </button>
+                    </div>
+                  ) : showPauseForm ? (
+                    <div className="rounded-lg bg-white/5 border border-white/10 p-3 space-y-3">
+                      <p className="text-xs font-medium text-white/70 flex items-center gap-1">
+                        <PauseCircle className="w-3.5 h-3.5 text-amber-400" />
+                        Pause recurrence
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-xs text-white/50">
+                            Pause from
+                          </label>
+                          <input
+                            type="date"
+                            value={pauseStart}
+                            onChange={(e) => setPauseStart(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-white/50">
+                            Resume on (optional)
+                          </label>
+                          <input
+                            type="date"
+                            value={pauseEnd}
+                            min={pauseStart}
+                            onChange={(e) => setPauseEnd(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white"
+                          />
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        value={pauseReason}
+                        onChange={(e) => setPauseReason(e.target.value)}
+                        placeholder='Label, e.g. "Summer break", "Travelling"'
+                        className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder:text-white/30"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowPauseForm(false)}
+                          className="flex-1 px-3 py-1.5 rounded text-xs text-white/50 hover:text-white hover:bg-white/5"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!pauseStart || createPause.isPending}
+                          onClick={() => {
+                            createPause.mutate(
+                              {
+                                itemId: item!.id,
+                                input: {
+                                  pause_start: pauseStart,
+                                  pause_end: pauseEnd || null,
+                                  reason: pauseReason || null,
+                                },
+                              },
+                              {
+                                onSuccess: () => {
+                                  setShowPauseForm(false);
+                                  setPauseReason("");
+                                  setPauseEnd("");
+                                  toast.success("Recurrence paused", {
+                                    duration: 4000,
+                                    action: {
+                                      label: "Undo",
+                                      onClick: () => {
+                                        const latest = pauses[pauses.length - 1];
+                                        if (latest) deletePause.mutate({ itemId: item!.id, pauseId: latest.id });
+                                      },
+                                    },
+                                  });
+                                },
+                                onError: () => toast.error("Failed to pause recurrence"),
+                              },
+                            );
+                          }}
+                          className="flex-1 px-3 py-1.5 rounded text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 disabled:opacity-40"
+                        >
+                          {createPause.isPending ? "Pausing…" : "Pause"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPauseStart(format(new Date(), "yyyy-MM-dd"));
+                        setPauseEnd("");
+                        setPauseReason("");
+                        setShowPauseForm(true);
+                      }}
+                      className="flex items-center gap-1.5 text-xs text-white/40 hover:text-amber-400 transition-colors"
+                    >
+                      <PauseCircle className="w-3.5 h-3.5" />
+                      Pause recurrence
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
+
+          {/* Categories */}
+          <div className="space-y-2">
+            <Label className="text-white/70 flex items-center gap-2">
+              <Tag className="w-4 h-4" />
+              Categories ({selectedCategories.length})
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((cat) => {
+                const isSelected = selectedCategories.includes(cat.id);
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategories((prev) =>
+                        isSelected
+                          ? prev.filter((id) => id !== cat.id)
+                          : [...prev, cat.id],
+                      );
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                      isSelected
+                        ? "text-white"
+                        : "bg-white/5 text-white/50 hover:bg-white/10",
+                    )}
+                    style={{
+                      backgroundColor: isSelected
+                        ? `${cat.color}40`
+                        : undefined,
+                      borderColor: isSelected ? `${cat.color}60` : undefined,
+                      borderWidth: isSelected ? "1px" : "0",
+                    }}
+                  >
+                    {cat.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Priority */}
           <div className="space-y-2">
@@ -825,50 +900,6 @@ export default function EditItemDialog({
                   {p.label}
                 </button>
               ))}
-            </div>
-          </div>
-
-          {/* Visibility */}
-          <div className="space-y-2">
-            <Label className="text-white/70 flex items-center gap-2">
-              {isPublic ? (
-                <Users className="w-4 h-4" />
-              ) : (
-                <User className="w-4 h-4" />
-              )}
-              Visibility
-            </Label>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsPublic(!isPublic);
-                  // Reset responsible user to self when making private
-                  if (isPublic && householdData?.currentUserId) {
-                    setResponsibleUserId(householdData.currentUserId);
-                  }
-                }}
-                className={cn(
-                  "relative w-11 h-6 rounded-full transition-colors",
-                  isPublic
-                    ? isPink
-                      ? "bg-pink-500/50"
-                      : "bg-cyan-500/50"
-                    : "bg-white/20",
-                )}
-              >
-                <div
-                  className={cn(
-                    "absolute top-1 w-4 h-4 rounded-full bg-white shadow-md transition-all",
-                    isPublic ? "left-[calc(100%-20px)]" : "left-1",
-                  )}
-                />
-              </button>
-              <span className="text-sm text-white/50">
-                {isPublic
-                  ? "Public (visible to household)"
-                  : "Private (only you)"}
-              </span>
             </div>
           </div>
 
@@ -923,6 +954,135 @@ export default function EditItemDialog({
                 )}
             </div>
           )}
+
+          {/* Visibility */}
+          <div className="space-y-2">
+            <Label className="text-white/70 flex items-center gap-2">
+              {isPublic ? (
+                <Users className="w-4 h-4" />
+              ) : (
+                <User className="w-4 h-4" />
+              )}
+              Visibility
+            </Label>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPublic(!isPublic);
+                  // Reset responsible user to self when making private
+                  if (isPublic && householdData?.currentUserId) {
+                    setResponsibleUserId(householdData.currentUserId);
+                  }
+                }}
+                className={cn(
+                  "relative w-11 h-6 rounded-full transition-colors",
+                  isPublic
+                    ? isPink
+                      ? "bg-pink-500/50"
+                      : "bg-cyan-500/50"
+                    : "bg-white/20",
+                )}
+              >
+                <div
+                  className={cn(
+                    "absolute top-1 w-4 h-4 rounded-full bg-white shadow-md transition-all",
+                    isPublic ? "left-[calc(100%-20px)]" : "left-1",
+                  )}
+                />
+              </button>
+              <span className="text-sm text-white/50">
+                {isPublic
+                  ? "Public (visible to household)"
+                  : "Private (only you)"}
+              </span>
+            </div>
+          </div>
+
+          {/* Prerequisites (Trigger Conditions) */}
+          <div className="space-y-3 border-t border-white/10 pt-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-white/70">
+              <Zap className="w-4 h-4" />
+              <span>
+                Trigger Conditions{" "}
+                {existingPrerequisites.length > 0 && (
+                  <span className="text-white/40">
+                    ({existingPrerequisites.length})
+                  </span>
+                )}
+              </span>
+            </div>
+
+            {existingPrerequisites.map((prereq) => {
+              const config = prereq.condition_config as unknown as Record<
+                string,
+                unknown
+              >;
+              const tagName =
+                prereq.condition_type === "nfc_state_change"
+                  ? (nfcTags.find((t) => t.id === config.tag_id)?.label ??
+                    "Unknown tag")
+                  : prereq.condition_type;
+
+              return (
+                <div
+                  key={prereq.id}
+                  className="flex items-center justify-between rounded-lg bg-white/5 border border-white/10 px-3 py-2"
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <Nfc className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="text-white/80">{tagName}</span>
+                    <span className="text-white/40">→</span>
+                    <span className="text-amber-300/80">
+                      {(config.target_state as string) ?? "?"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeExistingPrerequisite(prereq.id)}
+                    className="p-1 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+
+            <PrerequisitePicker
+              value={newPrerequisites}
+              onChange={(prereqs) => {
+                if (prereqs.length > newPrerequisites.length) {
+                  const latest = prereqs[prereqs.length - 1];
+                  addNewPrerequisite(latest);
+                  return;
+                }
+                setNewPrerequisites(prereqs);
+              }}
+              compact
+            />
+
+            {(existingPrerequisites.length > 0 ||
+              newPrerequisites.length > 0) && (
+              <p className="text-xs text-amber-300/60">
+                Item is dormant — activates when conditions are met.
+              </p>
+            )}
+          </div>
+
+          {/* Description / Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="description" className="text-white/70">
+              Notes
+            </Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Additional notes (optional)"
+              className="bg-white/5 border-white/10 text-white resize-none"
+              rows={3}
+            />
+          </div>
         </div>
 
         {/* Actions */}

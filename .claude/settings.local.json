@@ -21,7 +21,8 @@
       "Bash(Get-ChildItem *)",
       "Bash(Remove-Item *)",
       "Bash(cat)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(Select-Object Name)"
     ]
   }
 }

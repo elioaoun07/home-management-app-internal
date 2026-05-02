@@ -397,6 +397,17 @@ export function WebCalendar({
 
           // Check if any occurrence matches this date AND is not completed/postponed
           for (const occurrence of occurrences) {
+            // Skip occurrences that fall within an active pause window
+            if (item.pauses && item.pauses.length > 0) {
+              const occDateStr = format(occurrence, "yyyy-MM-dd");
+              const isPaused = item.pauses.some(
+                (p) =>
+                  occDateStr >= p.pause_start &&
+                  (p.pause_end === null || occDateStr <= p.pause_end),
+              );
+              if (isPaused) continue;
+            }
+
             if (isSameDay(occurrence, date)) {
               // Check if this occurrence has an exception
               const matchingException = exceptions.find((ex) =>

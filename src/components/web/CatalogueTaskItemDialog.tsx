@@ -400,6 +400,88 @@ export default function CatalogueTaskItemDialog({
             />
           </div>
 
+          {/* Categories (multi-select) */}
+          <div className="space-y-2">
+            <Label className="text-white/80 text-sm font-medium flex items-center gap-2">
+              <FolderOpen className="w-4 h-4 text-orange-400" />
+              Categories
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {itemCategories.map((cat) => {
+                const isSelected = selectedCategoryIds.includes(cat.id);
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => toggleCategory(cat.id)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-sm font-medium border transition-all flex items-center gap-1.5",
+                      isSelected
+                        ? "border-white/30 text-white"
+                        : "border-white/10 text-white/60 hover:border-white/20 hover:text-white/80",
+                    )}
+                    style={{
+                      backgroundColor: isSelected
+                        ? `${cat.color_hex || "#888"}30`
+                        : "transparent",
+                      borderColor: isSelected
+                        ? cat.color_hex || "#888"
+                        : undefined,
+                    }}
+                  >
+                    {isSelected && <Check className="w-3 h-3" />}
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: cat.color_hex || "#888" }}
+                    />
+                    {cat.name}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedCategoryIds.length > 0 && (
+              <p className="text-xs text-white/40">
+                {selectedCategoryIds.length} categor
+                {selectedCategoryIds.length !== 1 ? "ies" : "y"} selected
+              </p>
+            )}
+          </div>
+
+          {/* Priority */}
+          <div className="space-y-2">
+            <Label className="text-white/80 text-sm font-medium">
+              Priority
+            </Label>
+            <div className="flex gap-2 flex-wrap">
+              {PRIORITY_OPTIONS.map((p) => {
+                const isSelected = priority === p;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPriority(p)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-sm font-medium transition-all border",
+                      isSelected
+                        ? "border-transparent"
+                        : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10",
+                    )}
+                    style={
+                      isSelected
+                        ? {
+                            backgroundColor: PRIORITY_COLORS[p] + "33",
+                            color: PRIORITY_COLORS[p],
+                          }
+                        : undefined
+                    }
+                  >
+                    {PRIORITY_LABELS[p]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Location Context */}
           <div className="space-y-2">
             <Label className="text-white/80 text-sm font-medium flex items-center gap-2">
@@ -695,41 +777,6 @@ export default function CatalogueTaskItemDialog({
             />
           </div>
 
-          {/* Priority */}
-          <div className="space-y-2">
-            <Label className="text-white/80 text-sm font-medium">
-              Priority
-            </Label>
-            <div className="flex gap-2 flex-wrap">
-              {PRIORITY_OPTIONS.map((p) => {
-                const isSelected = priority === p;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPriority(p)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-sm font-medium transition-all border",
-                      isSelected
-                        ? "border-transparent"
-                        : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10",
-                    )}
-                    style={
-                      isSelected
-                        ? {
-                            backgroundColor: PRIORITY_COLORS[p] + "33",
-                            color: PRIORITY_COLORS[p],
-                          }
-                        : undefined
-                    }
-                  >
-                    {PRIORITY_LABELS[p]}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Tags */}
           <div className="space-y-2">
             <Label className="text-white/80 text-sm font-medium flex items-center gap-2">
@@ -781,53 +828,6 @@ export default function CatalogueTaskItemDialog({
                   </span>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* Categories (multi-select) */}
-          <div className="space-y-2">
-            <Label className="text-white/80 text-sm font-medium flex items-center gap-2">
-              <FolderOpen className="w-4 h-4 text-orange-400" />
-              Categories
-            </Label>
-            <div className="flex flex-wrap gap-2">
-              {itemCategories.map((cat) => {
-                const isSelected = selectedCategoryIds.includes(cat.id);
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => toggleCategory(cat.id)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-full text-sm font-medium border transition-all flex items-center gap-1.5",
-                      isSelected
-                        ? "border-white/30 text-white"
-                        : "border-white/10 text-white/60 hover:border-white/20 hover:text-white/80",
-                    )}
-                    style={{
-                      backgroundColor: isSelected
-                        ? `${cat.color_hex || "#888"}30`
-                        : "transparent",
-                      borderColor: isSelected
-                        ? cat.color_hex || "#888"
-                        : undefined,
-                    }}
-                  >
-                    {isSelected && <Check className="w-3 h-3" />}
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: cat.color_hex || "#888" }}
-                    />
-                    {cat.name}
-                  </button>
-                );
-              })}
-            </div>
-            {selectedCategoryIds.length > 0 && (
-              <p className="text-xs text-white/40">
-                {selectedCategoryIds.length} categor
-                {selectedCategoryIds.length !== 1 ? "ies" : "y"} selected
-              </p>
             )}
           </div>
 

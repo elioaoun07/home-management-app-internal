@@ -31,10 +31,11 @@ import { localToISO } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import type { CatalogueItem, RecurrencePattern } from "@/types/catalogue";
 import { RECURRENCE_PATTERN_LABELS } from "@/types/catalogue";
-import type { CreateRecurrenceInput, CreateSubtaskInput, FlexiblePeriod } from "@/types/items";
+import type { CreateAlertInput, CreateRecurrenceInput, CreateSubtaskInput, FlexiblePeriod } from "@/types/items";
 import { addDays, format, setHours, setMinutes } from "date-fns";
 import {
   AlertTriangle,
+  Bell,
   Calendar,
   CalendarClock,
   CheckCircle2,
@@ -43,6 +44,7 @@ import {
   MapPin,
   Repeat,
 } from "lucide-react";
+import { SmartAlertPicker, type SmartAlertValue } from "@/components/items/SmartAlertPicker";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -168,6 +170,10 @@ export default function AddToCalendarDialog({
   const [isPublic, setIsPublic] = useState(true);
   const [responsibleUserId, setResponsibleUserId] = useState<string | undefined>(undefined);
   const [notifyAllHousehold, setNotifyAllHousehold] = useState(false);
+  const [alertValue, setAlertValue] = useState<SmartAlertValue>({
+    offsetMinutes: 0,
+    customTime: null,
+  });
 
   const isLoading =
     createReminder.isPending ||
@@ -228,6 +234,7 @@ export default function AddToCalendarDialog({
       setIsPublic(catalogueItem.is_public ?? true);
       setResponsibleUserId(undefined);
       setNotifyAllHousehold(false);
+      setAlertValue({ offsetMinutes: 0, customTime: null });
     }
   }, [open, catalogueItem]);
 
@@ -293,6 +300,20 @@ export default function AddToCalendarDialog({
         }
       }
 
+      // Build alert input to pass into the create mutation
+      const alertInput: CreateAlertInput | undefined =
+        alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime)
+          ? {
+              kind: "relative",
+              offset_minutes: alertValue.offsetMinutes || null,
+              relative_to: itemType === "event" ? "start" : "due",
+              channel: "push",
+              ...(alertValue.customTime
+                ? { custom_time: alertValue.customTime }
+                : {}),
+            }
+          : undefined;
+
       let createdItemId: string | undefined;
 
       // Create the appropriate item type
@@ -312,7 +333,7 @@ export default function AddToCalendarDialog({
           end_at: endAt,
           location_text: locationText || undefined,
           recurrence_rule: recurrenceRule,
-          // Bi-directional catalogue link
+          alerts: alertInput ? [alertInput] : undefined,
           source_catalogue_item_id: catalogueItem.id,
           is_template_instance: true,
         });
@@ -333,7 +354,7 @@ export default function AddToCalendarDialog({
           has_checklist: parsedSubtasks.length > 0,
           subtasks: parsedSubtasks,
           recurrence_rule: recurrenceRule,
-          // Bi-directional catalogue link
+          alerts: alertInput ? [alertInput] : undefined,
           source_catalogue_item_id: catalogueItem.id,
           is_template_instance: true,
         });
@@ -353,7 +374,7 @@ export default function AddToCalendarDialog({
           notify_all_household: notifyAllHousehold,
           due_at: startAt,
           recurrence_rule: recurrenceRule,
-          // Bi-directional catalogue link
+          alerts: alertInput ? [alertInput] : undefined,
           source_catalogue_item_id: catalogueItem.id,
           is_template_instance: true,
         });
@@ -518,58 +539,18 @@ export default function AddToCalendarDialog({
             </div>
           )}
 
-          {/* Visibility */}
+          {/* Alert */}
           <div className="space-y-2">
-            <Label className="text-white/80 text-sm font-medium">Visibility</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => { setIsPublic(false); setNotifyAllHousehold(false); }}
-                className={cn(
-                  "p-3 rounded-xl border transition-all flex items-center gap-2",
-                  !isPublic
-                    ? "border-slate-500 bg-slate-500/20"
-                    : "border-white/10 bg-white/5 hover:bg-white/10",
-                )}
-              >
-                <span className={cn("text-sm font-medium", !isPublic ? "text-white" : "text-white/70")}>
-                  Private
-                </span>
-                <span className="text-xs text-white/40 ml-auto">Only you</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsPublic(true)}
-                className={cn(
-                  "p-3 rounded-xl border transition-all flex items-center gap-2",
-                  isPublic
-                    ? isPink ? "border-pink-500 bg-pink-500/20" : "border-cyan-500 bg-cyan-500/20"
-                    : "border-white/10 bg-white/5 hover:bg-white/10",
-                )}
-              >
-                <span className={cn("text-sm font-medium", isPublic ? "text-white" : "text-white/70")}>
-                  Household
-                </span>
-                <span className="text-xs text-white/40 ml-auto">Shared</span>
-              </button>
-            </div>
+            <Label className="text-white/80 text-sm font-medium flex items-center gap-2">
+              <Bell className="w-4 h-4 text-amber-400" />
+              Alert
+            </Label>
+            <SmartAlertPicker
+              value={alertValue}
+              onChange={setAlertValue}
+              eventTime={startTime}
+            />
           </div>
-
-          {/* Responsible user — only when public and household has a partner */}
-          {isPublic && householdData?.hasPartner && (
-            <div className="space-y-2">
-              <Label className="text-white/80 text-sm font-medium">Responsible</Label>
-              <ResponsibleUserPicker
-                value={responsibleUserId}
-                notifyAllHousehold={notifyAllHousehold}
-                onChange={(userId, allHousehold) => {
-                  setResponsibleUserId(userId);
-                  setNotifyAllHousehold(allHousehold);
-                }}
-                isPublic={isPublic}
-              />
-            </div>
-          )}
 
           {/* Recurrence */}
           <div className="space-y-3">
@@ -672,6 +653,59 @@ export default function AddToCalendarDialog({
               </div>
             )}
           </div>
+
+          {/* Visibility */}
+          <div className="space-y-2">
+            <Label className="text-white/80 text-sm font-medium">Visibility</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => { setIsPublic(false); setNotifyAllHousehold(false); }}
+                className={cn(
+                  "p-3 rounded-xl border transition-all flex items-center gap-2",
+                  !isPublic
+                    ? "border-slate-500 bg-slate-500/20"
+                    : "border-white/10 bg-white/5 hover:bg-white/10",
+                )}
+              >
+                <span className={cn("text-sm font-medium", !isPublic ? "text-white" : "text-white/70")}>
+                  Private
+                </span>
+                <span className="text-xs text-white/40 ml-auto">Only you</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPublic(true)}
+                className={cn(
+                  "p-3 rounded-xl border transition-all flex items-center gap-2",
+                  isPublic
+                    ? isPink ? "border-pink-500 bg-pink-500/20" : "border-cyan-500 bg-cyan-500/20"
+                    : "border-white/10 bg-white/5 hover:bg-white/10",
+                )}
+              >
+                <span className={cn("text-sm font-medium", isPublic ? "text-white" : "text-white/70")}>
+                  Household
+                </span>
+                <span className="text-xs text-white/40 ml-auto">Shared</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Responsible user — only when public and household has a partner */}
+          {isPublic && householdData?.hasPartner && (
+            <div className="space-y-2">
+              <Label className="text-white/80 text-sm font-medium">Responsible</Label>
+              <ResponsibleUserPicker
+                value={responsibleUserId}
+                notifyAllHousehold={notifyAllHousehold}
+                onChange={(userId, allHousehold) => {
+                  setResponsibleUserId(userId);
+                  setNotifyAllHousehold(allHousehold);
+                }}
+                isPublic={isPublic}
+              />
+            </div>
+          )}
 
           {/* Subtasks Preview */}
           {parsedSubtasks.length > 0 && (

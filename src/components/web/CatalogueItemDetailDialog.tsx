@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +9,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useDeleteItem, useUpdateItem } from "@/features/catalogue/hooks";
+import {
+  useCreatePause,
+  useDeletePause,
+  useItemPauses,
+} from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { CatalogueItem, CatalogueModuleType } from "@/types/catalogue";
@@ -17,6 +23,7 @@ import {
   STATUS_COLORS,
   STATUS_LABELS,
 } from "@/types/catalogue";
+import { format } from "date-fns";
 import {
   Calendar,
   CalendarClock,
@@ -28,9 +35,11 @@ import {
   Loader2,
   Mail,
   MapPin,
+  PauseCircle,
   Pencil,
   Phone,
   Pin,
+  PlayCircle,
   Star,
   Tag,
   Trash2,
@@ -166,12 +175,26 @@ export default function CatalogueItemDetailDialog({
   const updateItem = useUpdateItem();
   const deleteItem = useDeleteItem();
 
+  const linkedItemId = item?.linked_item_id ?? undefined;
+  const { data: pauses = [] } = useItemPauses(linkedItemId);
+  const createPause = useCreatePause();
+  const deletePause = useDeletePause();
+  const [showPauseForm, setShowPauseForm] = useState(false);
+  const [pauseStart, setPauseStart] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [pauseEnd, setPauseEnd] = useState("");
+  const [pauseReason, setPauseReason] = useState("");
+
   if (!item) return null;
 
   const metadata = item.metadata_json || {};
   const displayFields = MODULE_DISPLAY_FIELDS[moduleType] || [];
   const isTasksModule = moduleType === "tasks";
   const isOnCalendar = item.is_active_on_calendar;
+
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const activePause = pauses.find(
+    (p) => p.pause_start <= todayStr && (p.pause_end === null || p.pause_end >= todayStr),
+  );
 
   // Progress calculation
   const hasProgress = item.progress_target && item.progress_target > 0;
@@ -497,23 +520,138 @@ export default function CatalogueItemDetailDialog({
             </div>
           )}
 
-          {/* Calendar Status (if already on calendar) */}
+          {/* Calendar Status + Pause (if already on calendar) */}
           {isTasksModule && isOnCalendar && (
-            <div
-              className={cn(
-                "flex items-center gap-2 p-3 rounded-xl",
-                themeClasses.bgHover,
-              )}
-            >
-              <CalendarClock className="w-5 h-5 text-emerald-400" />
-              <div>
-                <p className="text-sm font-medium text-emerald-400">
-                  Active on Calendar
-                </p>
-                <p className="text-xs text-white/50">
-                  This task is scheduled and recurring
-                </p>
+            <div className="space-y-2">
+              <div
+                className={cn(
+                  "flex items-center justify-between gap-2 p-3 rounded-xl",
+                  activePause ? "bg-amber-500/10 border border-amber-500/30" : themeClasses.bgHover,
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  {activePause ? (
+                    <PauseCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                  ) : (
+                    <CalendarClock className="w-5 h-5 text-emerald-400 shrink-0" />
+                  )}
+                  <div>
+                    {activePause ? (
+                      <>
+                        <p className="text-sm font-medium text-amber-300">
+                          Paused{activePause.pause_end ? ` until ${activePause.pause_end}` : " indefinitely"}
+                        </p>
+                        {activePause.reason && (
+                          <p className="text-xs text-white/50">{activePause.reason}</p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-emerald-400">Active on Calendar</p>
+                        <p className="text-xs text-white/50">Scheduled and recurring</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {linkedItemId && (
+                  activePause ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        deletePause.mutate(
+                          { itemId: linkedItemId, pauseId: activePause.id },
+                          { onSuccess: () => setShowPauseForm(false) },
+                        )
+                      }
+                      disabled={deletePause.isPending}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-xs text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10 transition-colors"
+                    >
+                      <PlayCircle className="w-3.5 h-3.5" />
+                      Resume
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPauseStart(format(new Date(), "yyyy-MM-dd"));
+                        setPauseEnd("");
+                        setPauseReason("");
+                        setShowPauseForm((v) => !v);
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-xs text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 transition-colors"
+                    >
+                      <PauseCircle className="w-3.5 h-3.5" />
+                      Pause
+                    </button>
+                  )
+                )}
               </div>
+
+              {/* Inline pause form */}
+              {showPauseForm && !activePause && linkedItemId && (
+                <div className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-3">
+                  <p className="text-xs font-medium text-white/70">
+                    Pause recurrence for this template
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-white/50">From</label>
+                      <input
+                        type="date"
+                        value={pauseStart}
+                        onChange={(e) => setPauseStart(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-white/50">Until (optional)</label>
+                      <input
+                        type="date"
+                        value={pauseEnd}
+                        min={pauseStart}
+                        onChange={(e) => setPauseEnd(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={pauseReason}
+                    onChange={(e) => setPauseReason(e.target.value)}
+                    placeholder='E.g. "Summer break", "Travelling"'
+                    className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder:text-white/30"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowPauseForm(false)}
+                      className="flex-1 px-3 py-1.5 rounded text-xs text-white/50 hover:bg-white/5"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!pauseStart || createPause.isPending}
+                      onClick={() =>
+                        createPause.mutate(
+                          {
+                            itemId: linkedItemId,
+                            input: {
+                              pause_start: pauseStart,
+                              pause_end: pauseEnd || null,
+                              reason: pauseReason || null,
+                            },
+                          },
+                          { onSuccess: () => setShowPauseForm(false) },
+                        )
+                      }
+                      className="flex-1 px-3 py-1.5 rounded text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 disabled:opacity-40"
+                    >
+                      {createPause.isPending ? "Pausing…" : "Confirm Pause"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

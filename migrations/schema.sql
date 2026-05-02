@@ -710,6 +710,19 @@ CREATE TABLE public.item_recurrence_rules (
   CONSTRAINT item_recurrence_rules_pkey PRIMARY KEY (id),
   CONSTRAINT item_recurrence_rules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
+CREATE TABLE public.recurrence_pauses (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  pause_start date NOT NULL,
+  pause_end date,
+  reason text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT recurrence_pauses_pkey PRIMARY KEY (id),
+  CONSTRAINT recurrence_pauses_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
+  CONSTRAINT recurrence_pauses_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
+CREATE INDEX idx_recurrence_pauses_item_id ON public.recurrence_pauses(item_id);
 CREATE TABLE public.item_snoozes (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   alert_id uuid NOT NULL,

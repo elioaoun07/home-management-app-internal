@@ -63,6 +63,7 @@ export interface ItemWithDetails extends Item {
   recurrence_rule?: RecurrenceRule | null;
   attachments?: ItemAttachment[];
   prerequisites?: import("@/types/prerequisites").ItemPrerequisite[];
+  pauses?: RecurrencePause[];
 }
 
 /** Item Category for organizing items */
@@ -232,6 +233,23 @@ export interface AlertPresetConfig {
   channel: AlertChannel;
   repeat_every_minutes?: number;
   max_repeats?: number;
+}
+
+/** A pause period suppressing occurrences of a recurring item */
+export interface RecurrencePause {
+  id: UUID;
+  item_id: UUID;
+  pause_start: string; // YYYY-MM-DD
+  pause_end: string | null; // YYYY-MM-DD or null for indefinite
+  reason: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface CreateRecurrencePauseInput {
+  pause_start: string; // YYYY-MM-DD
+  pause_end?: string | null;
+  reason?: string | null;
 }
 
 // ============================================

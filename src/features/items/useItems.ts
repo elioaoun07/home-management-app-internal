@@ -7,6 +7,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { ToastIcons } from "@/lib/toastIcons";
 import type {
   CreateEventInput,
+  CreateRecurrencePauseInput,
   CreateReminderInput,
   CreateTaskInput,
   Item,
@@ -14,11 +15,13 @@ import type {
   ItemsFilter,
   ItemsSort,
   ItemWithDetails,
+  RecurrencePause,
   Subtask,
   UpdateEventInput,
   UpdateItemInput,
   UpdateReminderInput,
 } from "@/types/items";
+import { safeFetch } from "@/lib/safeFetch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -83,7 +86,8 @@ async function fetchItems(
       item_recurrence_rules (
         *,
         item_recurrence_exceptions (*)
-      )
+      ),
+      recurrence_pauses (*)
     `,
     )
     .is("archived_at", null)
@@ -167,6 +171,7 @@ async function fetchItems(
       categories: item.categories || [],
       subtasks: item.item_subtasks || [],
       alerts: item.item_alerts || [],
+      pauses: item.recurrence_pauses || [],
       recurrence_rule: rule
         ? {
             ...rule,
@@ -193,7 +198,8 @@ async function fetchItemById(id: string): Promise<ItemWithDetails | null> {
         *,
         item_recurrence_exceptions (*)
       ),
-      item_attachments (*)
+      item_attachments (*),
+      recurrence_pauses (*)
     `,
     )
     .eq("id", id)
@@ -210,6 +216,7 @@ async function fetchItemById(id: string): Promise<ItemWithDetails | null> {
     categories: data.categories || [],
     subtasks: data.item_subtasks || [],
     alerts: data.item_alerts || [],
+    pauses: data.recurrence_pauses || [],
     recurrence_rule: rule
       ? {
           ...rule,
@@ -815,8 +822,48 @@ export function useCreateTask() {
         if (recurrenceError) throw recurrenceError;
       }
 
-      // Auto-create a push alert at the due time for tasks with a due date
-      if (input.due_at) {
+      // Create alerts if provided, otherwise auto-create at due time
+      if (input.alerts?.length) {
+        const alerts = input.alerts.map((a) => {
+          let computedTriggerAt = a.trigger_at;
+          if (a.kind === "relative" && input.due_at) {
+            const baseTime = new Date(input.due_at);
+            if (a.custom_time && a.offset_minutes) {
+              const daysOffset = Math.floor((a.offset_minutes || 0) / 1440);
+              const alertDate = new Date(baseTime);
+              alertDate.setDate(alertDate.getDate() - daysOffset);
+              const [hours, minutes] = a.custom_time.split(":").map(Number);
+              alertDate.setHours(hours, minutes, 0, 0);
+              computedTriggerAt = alertDate.toISOString();
+            } else if (a.offset_minutes) {
+              computedTriggerAt = new Date(
+                baseTime.getTime() - a.offset_minutes * 60 * 1000,
+              ).toISOString();
+            }
+          }
+          const alertData: Record<string, unknown> = {
+            item_id: item.id,
+            kind: a.kind,
+            trigger_at: computedTriggerAt,
+            offset_minutes: a.offset_minutes,
+            relative_to: a.relative_to,
+            repeat_every_minutes: a.repeat_every_minutes,
+            max_repeats: a.max_repeats,
+            channel: a.channel || "push",
+          };
+          if (a.custom_time) {
+            alertData.custom_time = a.custom_time;
+          }
+          return alertData;
+        });
+        const { error: alertsError } = await supabase
+          .from("item_alerts")
+          .insert(alerts);
+        if (alertsError) {
+          console.error("Failed to create alerts for task:", alertsError);
+        }
+      } else if (input.due_at) {
+        // Auto-create a push alert at the due time if no alerts provided
         const { error: alertsError } = await supabase
           .from("item_alerts")
           .insert({
@@ -826,7 +873,6 @@ export function useCreateTask() {
             channel: "push",
             active: true,
           });
-
         if (alertsError) {
           console.error("Failed to create auto-alert for task:", alertsError);
         }
@@ -2474,6 +2520,77 @@ export function useUpdateRecurrenceRule() {
     onError: (error) => {
       console.error("Failed to update recurrence rule:", error);
       toast.error("Failed to update repeat settings");
+    },
+  });
+}
+
+// ============================================
+// RECURRENCE PAUSE HOOKS
+// ============================================
+
+export const pauseKeys = {
+  forItem: (itemId: string) => ["recurrence-pauses", itemId] as const,
+};
+
+export function useItemPauses(itemId: string | undefined) {
+  return useQuery<RecurrencePause[]>({
+    queryKey: pauseKeys.forItem(itemId ?? ""),
+    queryFn: async () => {
+      const res = await fetch(`/api/items/${itemId}/pauses`);
+      if (!res.ok) throw new Error("Failed to fetch pauses");
+      return res.json();
+    },
+    enabled: !!itemId,
+    staleTime: 30_000,
+  });
+}
+
+export function useCreatePause() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      input,
+    }: {
+      itemId: string;
+      input: CreateRecurrencePauseInput;
+    }) => {
+      const res = await safeFetch(`/api/items/${itemId}/pauses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+        timeoutMs: 10_000,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to create pause");
+      }
+      return res.json() as Promise<RecurrencePause>;
+    },
+    onSuccess: (_, { itemId }) => {
+      queryClient.invalidateQueries({ queryKey: pauseKeys.forItem(itemId) });
+    },
+  });
+}
+
+export function useDeletePause() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      pauseId,
+    }: {
+      itemId: string;
+      pauseId: string;
+    }) => {
+      const res = await safeFetch(
+        `/api/items/${itemId}/pauses?pauseId=${pauseId}`,
+        { method: "DELETE", timeoutMs: 10_000 },
+      );
+      if (!res.ok) throw new Error("Failed to delete pause");
+    },
+    onSuccess: (_, { itemId }) => {
+      queryClient.invalidateQueries({ queryKey: pauseKeys.forItem(itemId) });
     },
   });
 }

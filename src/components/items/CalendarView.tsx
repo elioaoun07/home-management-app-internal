@@ -240,6 +240,17 @@ export function CalendarView({
       const itemDate = parseISO(dateStr);
       const isRecurring = !!item.recurrence_rule?.rrule;
 
+      // Hide occurrences that fall within an active pause window
+      if (isRecurring && item.pauses && item.pauses.length > 0) {
+        const occurrenceDateStr = format(itemDate, "yyyy-MM-dd");
+        const isPaused = item.pauses.some(
+          (p) =>
+            occurrenceDateStr >= p.pause_start &&
+            (p.pause_end === null || occurrenceDateStr <= p.pause_end),
+        );
+        if (isPaused) return false;
+      }
+
       // Check if this occurrence is completed
       if (
         isRecurring &&
