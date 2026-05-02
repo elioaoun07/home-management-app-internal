@@ -140,7 +140,7 @@ export async function DELETE(request: NextRequest) {
   if (!preferenceKey) {
     return NextResponse.json(
       { error: "Preference key required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 

@@ -20,8 +20,8 @@
  * Endpoint: GET /api/cron/daily-reminder
  */
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/pushSender";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -171,7 +171,8 @@ export async function GET(req: NextRequest) {
       const preferredTimesRaw = metadata.preferred_times;
       const preferredTimes: string[] = Array.isArray(preferredTimesRaw)
         ? preferredTimesRaw.filter(
-            (t): t is string => typeof t === "string" && /^\d{1,2}:\d{2}/.test(t),
+            (t): t is string =>
+              typeof t === "string" && /^\d{1,2}:\d{2}/.test(t),
           )
         : ["20:00:00"];
 

@@ -654,7 +654,10 @@ function InAppNotificationPreferences() {
                 <span
                   className={`text-xs font-medium ${themeClasses.textMuted}`}
                 >
-                  <span className="inline-flex items-center gap-1"><Sun className="w-4 h-4 text-yellow-400 inline" />{hasTwoReminders ? "Morning" : "Daily"} Reminder</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Sun className="w-4 h-4 text-yellow-400 inline" />
+                    {hasTwoReminders ? "Morning" : "Daily"} Reminder
+                  </span>
                 </span>
                 <div className="flex flex-wrap gap-2">
                   {(hasTwoReminders
@@ -707,7 +710,10 @@ function InAppNotificationPreferences() {
                   <span
                     className={`text-xs font-medium ${themeClasses.textMuted}`}
                   >
-                    <span className="inline-flex items-center gap-1"><Moon className="w-4 h-4 text-indigo-400 inline" /> Evening Reminder</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Moon className="w-4 h-4 text-indigo-400 inline" />{" "}
+                      Evening Reminder
+                    </span>
                   </span>
                   <div className="flex flex-wrap gap-2">
                     {eveningPresetTimes.map((preset) => (
