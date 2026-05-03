@@ -29,8 +29,8 @@ import type {
 import { addDays, format, isSameDay, isWithinInterval } from "date-fns";
 import {
   AlertCircle,
-  BellRing,
   BellOff,
+  BellRing,
   Calendar,
   CalendarPlus,
   CheckCircle2,
@@ -457,9 +457,7 @@ export function AddFlexibleFromCatalogueDialog({
         )}
       >
         {/* ── Header ── */}
-        <DialogHeader
-          className={cn("p-5 pb-4 border-b", dialogBorderClass)}
-        >
+        <DialogHeader className={cn("p-5 pb-4 border-b", dialogBorderClass)}>
           <div className="flex items-start gap-3">
             <div
               className={cn(
@@ -595,8 +593,7 @@ export function AddFlexibleFromCatalogueDialog({
                     const filledCount = scheduled.length;
                     // First item auto-expands if nothing is explicitly selected
                     const isExpanded =
-                      (expandedEntryId ?? visibleEntries[0]?.tpl.id) ===
-                      tpl.id;
+                      (expandedEntryId ?? visibleEntries[0]?.tpl.id) === tpl.id;
 
                     return (
                       <li key={tpl.id} className="relative">
@@ -604,9 +601,7 @@ export function AddFlexibleFromCatalogueDialog({
                         <button
                           type="button"
                           onClick={() =>
-                            setExpandedEntryId(
-                              isExpanded ? `__none__` : tpl.id,
-                            )
+                            setExpandedEntryId(isExpanded ? `__none__` : tpl.id)
                           }
                           className={cn(
                             "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
@@ -625,7 +620,11 @@ export function AddFlexibleFromCatalogueDialog({
                           <div
                             className={cn(
                               "shrink-0 w-[3px] h-8 rounded-full",
-                              isExpanded ? accentStripe : isFrost ? "bg-slate-200" : "bg-white/10",
+                              isExpanded
+                                ? accentStripe
+                                : isFrost
+                                  ? "bg-slate-200"
+                                  : "bg-white/10",
                             )}
                           />
 
@@ -668,7 +667,9 @@ export function AddFlexibleFromCatalogueDialog({
                                   <span aria-hidden>·</span>
                                   <span
                                     className={cn(
-                                      isFrost ? "text-green-700" : "text-green-400",
+                                      isFrost
+                                        ? "text-green-700"
+                                        : "text-green-400",
                                     )}
                                   >
                                     partial
@@ -990,7 +991,9 @@ export function AddFlexibleFromCatalogueDialog({
                                 <p
                                   className={cn(
                                     "text-[13px] font-semibold truncate",
-                                    isFrost ? "text-slate-800" : "text-white/85",
+                                    isFrost
+                                      ? "text-slate-800"
+                                      : "text-white/85",
                                   )}
                                 >
                                   {tpl.name}
@@ -1050,9 +1053,7 @@ export function AddFlexibleFromCatalogueDialog({
                                     <button
                                       type="button"
                                       disabled={pending === `clear-${item.id}`}
-                                      onClick={() =>
-                                        handleClearScheduled(item)
-                                      }
+                                      onClick={() => handleClearScheduled(item)}
                                       className={cn(
                                         "text-[11px] px-2 py-0.5 rounded-md transition-all disabled:opacity-50 shrink-0",
                                         isFrost

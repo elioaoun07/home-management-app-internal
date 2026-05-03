@@ -18,11 +18,10 @@ import {
 } from "@/features/items/useItemActions";
 import { useItems, useUpdateRecurrenceRule } from "@/features/items/useItems";
 import { ToastIcons } from "@/lib/toastIcons";
-import { firstBiweeklyFlippedAnchor } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
-  buildFullRRuleString,
+  firstBiweeklyFlippedAnchor,
   getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemType, ItemWithDetails } from "@/types/items";
@@ -35,7 +34,6 @@ import {
   parseISO,
   startOfDay,
 } from "date-fns";
-import { toast } from "sonner";
 import {
   AlertCircle,
   Bell,
@@ -66,7 +64,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { RRule } from "rrule";
+import { toast } from "sonner";
 
 // ============================================
 // SPARKLE CHECKBOX
@@ -584,7 +582,8 @@ export default function StandaloneRemindersPage({
   const updateRecurrence = useUpdateRecurrenceRule();
 
   const handleReverseRecurrence = (item: ItemWithDetails) => {
-    if (!item.recurrence_rule?.start_anchor || !item.recurrence_rule.rrule) return;
+    if (!item.recurrence_rule?.start_anchor || !item.recurrence_rule.rrule)
+      return;
     const current = parseISO(item.recurrence_rule.start_anchor);
     const newAnchor = firstBiweeklyFlippedAnchor(current).toISOString();
     const flipTime = new Date().toISOString();

@@ -35,7 +35,6 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
-  buildFullRRuleString,
   getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemWithDetails } from "@/types/items";
@@ -79,7 +78,6 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { RRule } from "rrule";
 
 // ============================================
 // TYPES
