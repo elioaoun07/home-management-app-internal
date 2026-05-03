@@ -255,6 +255,7 @@ CREATE TABLE public.catalogue_items (
   item_category_ids ARRAY DEFAULT '{}'::text[],
   is_public boolean DEFAULT false,
   is_flexible_routine boolean NOT NULL DEFAULT false,
+  flexible_occurrences integer NOT NULL DEFAULT 1 CHECK (flexible_occurrences >= 1 AND flexible_occurrences <= 31),
   CONSTRAINT catalogue_items_pkey PRIMARY KEY (id),
   CONSTRAINT catalogue_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT catalogue_items_module_id_fkey FOREIGN KEY (module_id) REFERENCES public.catalogue_modules(id),
@@ -710,8 +711,26 @@ CREATE TABLE public.item_recurrence_rules (
   count integer,
   phase_changed_at timestamp with time zone,
   previous_start_anchor timestamp with time zone,
+  is_flexible boolean NOT NULL DEFAULT false,
+  flexible_period text CHECK (flexible_period IS NULL OR (flexible_period = ANY (ARRAY['daily'::text, 'weekly'::text, 'biweekly'::text, 'monthly'::text]))),
   CONSTRAINT item_recurrence_rules_pkey PRIMARY KEY (id),
   CONSTRAINT item_recurrence_rules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+);
+
+-- Flexible routine schedules: one row per scheduled occurrence per period.
+-- For N-times-per-period routines, occurrence_index distinguishes the slot (0..N-1).
+CREATE TABLE public.item_flexible_schedules (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  period_start_date date NOT NULL,
+  scheduled_for_date date NOT NULL,
+  scheduled_for_time time without time zone,
+  occurrence_index integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT item_flexible_schedules_pkey PRIMARY KEY (id),
+  CONSTRAINT item_flexible_schedules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
+  CONSTRAINT item_flexible_schedules_unique_slot UNIQUE (item_id, period_start_date, occurrence_index)
 );
 CREATE TABLE public.recurrence_pauses (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

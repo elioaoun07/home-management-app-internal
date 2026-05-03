@@ -176,6 +176,7 @@ export interface FlexibleSchedule {
   period_start_date: string; // Date string (YYYY-MM-DD)
   scheduled_for_date: string; // Date string (YYYY-MM-DD)
   scheduled_for_time?: string | null; // Time string (HH:MM) or null for anytime
+  occurrence_index: number; // 0..N-1 for N-times-per-period routines (default 0)
   created_at: string; // ISO timestamp
   created_by?: UUID | null;
 }

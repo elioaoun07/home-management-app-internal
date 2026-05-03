@@ -174,10 +174,14 @@ export function WebWeekView({
 
   // Expand recurring items (accounting for occurrence actions and exceptions)
   const getItemsForDate = useMemo(() => {
+    const scheduledFlexible = flexibleRoutines?.scheduled ?? [];
     return (date: Date): ItemWithDetails[] => {
       const itemsOnDate: ItemWithDetails[] = [];
 
       for (const item of items) {
+        // Flexible items are placed via item_flexible_schedules — skip rrule expansion
+        if (item.recurrence_rule?.is_flexible) continue;
+
         const itemDate =
           item.event_details?.start_at || item.reminder_details?.due_at;
         if (!itemDate) continue;
@@ -356,9 +360,53 @@ export function WebWeekView({
         }
       }
 
+      // Add scheduled flexible items (from item_flexible_schedules) for this date
+      for (const si of scheduledFlexible) {
+        const sched = si.flexibleSchedule;
+        if (!sched?.scheduled_for_date) continue;
+        try {
+          if (!isSameDay(parseISO(sched.scheduled_for_date), date)) continue;
+        } catch {
+          continue;
+        }
+        if (itemsOnDate.some((i) => i.id === si.id)) continue;
+
+        const scheduledHour = sched.scheduled_for_time
+          ? parseInt(sched.scheduled_for_time.split(":")[0], 10)
+          : 9;
+        const scheduledMin = sched.scheduled_for_time
+          ? parseInt(sched.scheduled_for_time.split(":")[1], 10)
+          : 0;
+        const syntheticDue = new Date(date);
+        syntheticDue.setHours(scheduledHour, scheduledMin, 0, 0);
+        const isoStr = syntheticDue.toISOString();
+
+        let injectedItem: ItemWithDetails;
+        if (si.type === "event" && si.event_details) {
+          injectedItem = {
+            ...si,
+            event_details: { ...si.event_details, start_at: isoStr },
+          };
+        } else {
+          injectedItem = {
+            ...si,
+            reminder_details: si.reminder_details
+              ? { ...si.reminder_details, due_at: isoStr }
+              : {
+                  item_id: si.id,
+                  due_at: isoStr,
+                  completed_at: null,
+                  estimate_minutes: null,
+                  has_checklist: false,
+                },
+          };
+        }
+        itemsOnDate.push(injectedItem);
+      }
+
       return itemsOnDate;
     };
-  }, [items, occurrenceActions]);
+  }, [items, occurrenceActions, flexibleRoutines]);
 
   // Calculate position and height for an item
   const getItemStyle = (item: ItemWithDetails) => {

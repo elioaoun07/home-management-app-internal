@@ -8,6 +8,7 @@ import {
   isOccurrenceCompleted,
   useAllOccurrenceActions,
 } from "@/features/items/useItemActions";
+import { useFlexibleRoutines } from "@/features/items/useFlexibleRoutines";
 import { cn } from "@/lib/utils";
 import type { CatalogueItem } from "@/types/catalogue";
 import type { ItemWithDetails } from "@/types/items";
@@ -145,6 +146,12 @@ export function CalendarView({
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [direction, setDirection] = useState(0);
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
+  const { data: flexibleRoutines } = useFlexibleRoutines(
+    items,
+    occurrenceActions,
+    currentMonth,
+  );
+  const scheduledFlexible = flexibleRoutines?.scheduled ?? [];
 
   // 3D Day Expansion Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -217,6 +224,9 @@ export function CalendarView({
     return items.filter((item) => {
       // Skip archived items
       if (item.status === "archived" || item.archived_at) return false;
+
+      // Flexible items are placed via item_flexible_schedules — handled separately
+      if (item.recurrence_rule?.is_flexible) return false;
 
       // Check category filter
       if (selectedCategoryFilters.length > 0) {
@@ -293,7 +303,7 @@ export function CalendarView({
 
   // Get items for a specific date
   const getItemsForDate = (date: Date) => {
-    return filteredItems.filter((item) => {
+    const regular = filteredItems.filter((item) => {
       const dateStr =
         item.type === "reminder"
           ? item.reminder_details?.due_at
@@ -305,6 +315,24 @@ export function CalendarView({
 
       return isSameDay(parseISO(dateStr), date);
     });
+
+    // Inject scheduled flexible routines for this date
+    const flexible: ItemWithDetails[] = [];
+    for (const si of scheduledFlexible) {
+      const sched = si.flexibleSchedule;
+      if (!sched?.scheduled_for_date) continue;
+      try {
+        const schedDate = parseISO(sched.scheduled_for_date);
+        if (!isSameDay(schedDate, date)) continue;
+        if (si.isCompletedForCurrentPeriod) continue;
+        if (regular.some((r) => r.id === si.id)) continue;
+        flexible.push(si);
+      } catch {
+        continue;
+      }
+    }
+
+    return [...regular, ...flexible];
   };
 
   // Get completed items for a date (from occurrence actions)

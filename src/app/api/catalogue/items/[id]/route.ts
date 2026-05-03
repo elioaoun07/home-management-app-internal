@@ -138,6 +138,16 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (body.is_public !== undefined) updates.is_public = body.is_public;
     if (body.is_flexible_routine !== undefined)
       updates.is_flexible_routine = body.is_flexible_routine;
+    if (body.flexible_occurrences !== undefined) {
+      const n = Number(body.flexible_occurrences);
+      if (!Number.isFinite(n) || n < 1 || n > 31) {
+        return NextResponse.json(
+          { error: "flexible_occurrences must be an integer between 1 and 31" },
+          { status: 400 },
+        );
+      }
+      updates.flexible_occurrences = Math.floor(n);
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(

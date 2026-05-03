@@ -10,6 +10,7 @@ import {
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
 import { itemsKeys, type SubtaskCompletion } from "@/features/items/useItems";
+import { useFlexibleRoutines } from "@/features/items/useFlexibleRoutines";
 import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
@@ -162,6 +163,13 @@ export function WebCalendar({
     new Date(),
   );
   const [showCompleted, setShowCompleted] = useState(true);
+
+  // Flexible routines — items scheduled via item_flexible_schedules instead of rrule
+  const { data: flexibleRoutines } = useFlexibleRoutines(
+    items,
+    occurrenceActions,
+    currentMonth,
+  );
 
   // Collapsible right-side details panel (desktop only)
   const DETAILS_PANEL_STORAGE_KEY = "era.calendar.detailsPanelCollapsed";
@@ -317,6 +325,9 @@ export function WebCalendar({
     const result: ItemWithDetails[] = [];
 
     for (const item of items) {
+      // Flexible items are placed via item_flexible_schedules — skip rrule expansion
+      if (item.recurrence_rule?.is_flexible) continue;
+
       const dateStr =
         item.type === "reminder" || item.type === "task"
           ? item.reminder_details?.due_at
@@ -506,6 +517,47 @@ export function WebCalendar({
 
     // NOTE: We no longer add postponed items here - they are shown in a separate
     // "Postponed to this day" section via getPostponedItemsForDate
+
+    // Inject flexible routines that the user scheduled for this exact date.
+    // The source of truth for these items is item_flexible_schedules, NOT the rrule.
+    const scheduledFlex = flexibleRoutines?.scheduled ?? [];
+    for (const si of scheduledFlex) {
+      const sched = si.flexibleSchedule;
+      if (!sched?.scheduled_for_date) continue;
+      try {
+        if (!isSameDay(parseISO(sched.scheduled_for_date), date)) continue;
+      } catch {
+        continue;
+      }
+      if (result.some((i) => i.id === si.id)) continue;
+
+      const [hh, mm] = (sched.scheduled_for_time ?? "09:00")
+        .split(":")
+        .map((n) => parseInt(n, 10));
+      const synthetic = new Date(date);
+      synthetic.setHours(hh || 9, mm || 0, 0, 0);
+      const iso = synthetic.toISOString();
+
+      if (si.type === "event" && si.event_details) {
+        result.push({
+          ...si,
+          event_details: { ...si.event_details, start_at: iso },
+        });
+      } else {
+        result.push({
+          ...si,
+          reminder_details: si.reminder_details
+            ? { ...si.reminder_details, due_at: iso }
+            : {
+                item_id: si.id,
+                due_at: iso,
+                completed_at: null,
+                estimate_minutes: null,
+                has_checklist: false,
+              },
+        });
+      }
+    }
 
     return result;
   };

@@ -259,6 +259,8 @@ export interface CatalogueItem {
   is_public: boolean;
   // Flexible routine fields
   is_flexible_routine: boolean;
+  /** Times per period for flexible routines (default 1, max 31) */
+  flexible_occurrences?: number;
   // Virtual fields
   sub_items?: CatalogueSubItem[];
   category?: CatalogueCategory;
@@ -363,6 +365,8 @@ export interface CreateItemInput {
   is_public?: boolean;
   // Flexible routine fields
   is_flexible_routine?: boolean;
+  /** Times per period for flexible routines (1–31) */
+  flexible_occurrences?: number;
 }
 
 export interface UpdateItemInput {
@@ -404,6 +408,8 @@ export interface UpdateItemInput {
   is_public?: boolean;
   // Flexible routine fields
   is_flexible_routine?: boolean;
+  /** Times per period for flexible routines (1–31) */
+  flexible_occurrences?: number;
 }
 
 export interface CreateSubItemInput {

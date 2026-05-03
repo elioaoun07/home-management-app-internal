@@ -170,6 +170,7 @@ export default function CatalogueTaskItemDialog({
   const [tagInput, setTagInput] = useState("");
   // Flexible routine state
   const [isFlexibleRoutine, setIsFlexibleRoutine] = useState(false);
+  const [flexibleOccurrences, setFlexibleOccurrences] = useState("1");
   // New fields: categories and visibility
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
@@ -209,6 +210,9 @@ export default function CatalogueTaskItemDialog({
         );
         // Flexible routine state
         setIsFlexibleRoutine(editingItem.is_flexible_routine || false);
+        setFlexibleOccurrences(
+          String(editingItem.flexible_occurrences ?? 1),
+        );
       } else {
         // Reset to defaults
         setName("");
@@ -231,6 +235,7 @@ export default function CatalogueTaskItemDialog({
         setTriggerConditions([]);
         // Reset flexible routine state
         setIsFlexibleRoutine(false);
+        setFlexibleOccurrences("1");
       }
     }
   }, [open, editingItem]);
@@ -302,6 +307,9 @@ export default function CatalogueTaskItemDialog({
             : undefined,
         // Flexible routine fields
         is_flexible_routine: isFlexibleRoutine,
+        flexible_occurrences: isFlexibleRoutine
+          ? Math.min(31, Math.max(1, parseInt(flexibleOccurrences, 10) || 1))
+          : 1,
       };
 
       let result: CatalogueItem;
@@ -666,6 +674,58 @@ export default function CatalogueTaskItemDialog({
                 />
               </div>
             )}
+
+            {/* Times per period (only when flexible) */}
+            {isFlexibleRoutine &&
+              (recurrencePattern === "weekly" ||
+                recurrencePattern === "biweekly" ||
+                recurrencePattern === "monthly") && (
+                <div className="space-y-2 px-3 py-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                  <Label className="text-amber-300/90 text-xs font-medium">
+                    Times per{" "}
+                    {recurrencePattern === "monthly"
+                      ? "month"
+                      : recurrencePattern === "biweekly"
+                        ? "two weeks"
+                        : "week"}
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={flexibleOccurrences}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/[^0-9]/g, "");
+                        setFlexibleOccurrences(v);
+                      }}
+                      onBlur={() => {
+                        const n = parseInt(flexibleOccurrences, 10);
+                        if (!Number.isFinite(n) || n < 1) {
+                          setFlexibleOccurrences("1");
+                        } else if (n > 31) {
+                          setFlexibleOccurrences("31");
+                        }
+                      }}
+                      className="w-20 px-3 py-2 rounded-md bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-amber-400/50"
+                      aria-label="Times per period"
+                    />
+                    <span className="text-xs text-white/60">
+                      {parseInt(flexibleOccurrences, 10) === 1
+                        ? "time, any day"
+                        : `times — pick days each ${
+                            recurrencePattern === "monthly"
+                              ? "month"
+                              : recurrencePattern === "biweekly"
+                                ? "fortnight"
+                                : "week"
+                          }`}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-white/40 leading-relaxed">
+                    e.g. workout 3× per week — you decide which days.
+                  </p>
+                </div>
+              )}
 
             {/* Days of Week (for weekly/biweekly recurrence, only when NOT flexible) */}
             {(recurrencePattern === "weekly" ||

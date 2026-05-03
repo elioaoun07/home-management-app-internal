@@ -113,6 +113,16 @@ export function getPeriodStartString(
 
 export interface FlexibleRoutineItem extends ItemWithDetails {
   flexibleSchedule?: FlexibleSchedule | null;
+  /** All schedules for this item in the current period (sorted by occurrence_index) */
+  scheduledOccurrences?: FlexibleSchedule[];
+  /** Total slots requested for the period (from catalogue.flexible_occurrences, default 1) */
+  targetOccurrences?: number;
+  /** How many slots have a schedule row */
+  scheduledCount?: number;
+  /** How many completed actions exist within the current period */
+  completedCount?: number;
+  /** How many skipped actions exist within the current period */
+  skippedCount?: number;
   isScheduledForCurrentPeriod: boolean;
   isCompletedForCurrentPeriod: boolean;
   periodStart: string;
@@ -121,6 +131,10 @@ export interface FlexibleRoutineItem extends ItemWithDetails {
     completed: number;
     total: number;
   };
+  /** True when no completed/skipped action exists for one or more previous periods */
+  isOverdue?: boolean;
+  /** How many consecutive previous periods were missed */
+  overduePeriodsCount?: number;
 }
 
 export interface ScheduleRoutineInput {
@@ -128,6 +142,8 @@ export interface ScheduleRoutineInput {
   periodStartDate: string;
   scheduledForDate: string;
   scheduledForTime?: string | null;
+  /** Slot index for N-times-per-period routines (defaults to 0) */
+  occurrenceIndex?: number;
 }
 
 export interface FlexibleRoutinesResult {
@@ -142,6 +158,22 @@ export interface FlexibleRoutinesResult {
 // ============================================
 // FETCH FUNCTIONS
 // ============================================
+
+/**
+ * Move a reference date back by one flexible period
+ */
+function getPreviousPeriodDate(date: Date, period: FlexiblePeriod): Date {
+  switch (period) {
+    case "weekly":
+      return addWeeks(date, -1);
+    case "biweekly":
+      return addWeeks(date, -2);
+    case "monthly":
+      return new Date(date.getFullYear(), date.getMonth() - 1, date.getDate());
+    default:
+      return addWeeks(date, -1);
+  }
+}
 
 /**
  * Fetch all flexible schedules for the user
@@ -170,6 +202,7 @@ async function fetchFlexibleRoutines(
   schedules: FlexibleSchedule[],
   actions: ItemOccurrenceAction[],
   subtaskCompletions: SubtaskCompletion[],
+  catalogueOccurrenceMap: Map<string, number>,
   referenceDate: Date = new Date(),
 ): Promise<FlexibleRoutinesResult> {
   // Filter items that have flexible recurrence rules
@@ -210,33 +243,58 @@ async function fetchFlexibleRoutines(
     const { start, end } = getPeriodBoundaries(referenceDate, period);
     const itemPeriodStartStr = format(start, "yyyy-MM-dd");
 
-    // Find schedule for this item in current period
-    const schedule = schedules.find(
-      (s) =>
-        s.item_id === item.id && s.period_start_date === itemPeriodStartStr,
+    // Resolve target N from catalogue (default 1)
+    const sourceCatId = (item as ItemWithDetails & {
+      source_catalogue_item_id?: string | null;
+    }).source_catalogue_item_id;
+    const targetOccurrences = Math.max(
+      1,
+      sourceCatId ? catalogueOccurrenceMap.get(sourceCatId) ?? 1 : 1,
     );
 
-    // Check if completed for this period
-    // For flexible tasks, we consider it completed if there's a completion action
-    // with an occurrence_date within the current period
-    const isCompleted = actions.some((action) => {
-      if (action.item_id !== item.id) return false;
-      if (action.action_type !== "completed") return false;
-      const actionDate = parseISO(action.occurrence_date);
-      return isWithinInterval(actionDate, { start, end });
-    });
+    // Find ALL schedules for this item in current period (sorted by index)
+    const periodSchedules = schedules
+      .filter(
+        (s) =>
+          s.item_id === item.id && s.period_start_date === itemPeriodStartStr,
+      )
+      .slice()
+      .sort((a, b) => (a.occurrence_index ?? 0) - (b.occurrence_index ?? 0));
+
+    // Count completions & skips within the current period
+    const periodCompletedCount = actions.filter((a) => {
+      if (a.item_id !== item.id) return false;
+      if (a.action_type !== "completed") return false;
+      try {
+        return isWithinInterval(parseISO(a.occurrence_date), { start, end });
+      } catch {
+        return false;
+      }
+    }).length;
+    const periodSkippedCount = actions.filter((a) => {
+      if (a.item_id !== item.id) return false;
+      if (a.action_type !== "skipped") return false;
+      try {
+        return isWithinInterval(parseISO(a.occurrence_date), { start, end });
+      } catch {
+        return false;
+      }
+    }).length;
+
+    // For N=1 backwards compat, "isCompletedForCurrentPeriod" means at least one
+    // completion in this period. For N>1 it means all slots completed.
+    const isCompleted =
+      targetOccurrences === 1
+        ? periodCompletedCount > 0
+        : periodCompletedCount >= targetOccurrences;
 
     // Calculate subtask progress for current period
     let subtaskProgress: { completed: number; total: number } | undefined;
     if (item.subtasks && item.subtasks.length > 0) {
-      // For flexible items, check subtask_completions for this period
       const periodStartForComparison = format(start, "yyyy-MM-dd");
       const subtaskIds = new Set(item.subtasks.map((s) => s.id));
-
-      // Count completions for this period
       const periodCompletions = subtaskCompletions.filter((c) => {
         if (!subtaskIds.has(c.subtask_id)) return false;
-        // Parse occurrence_date and compare to period start
         try {
           const completionDate = format(
             parseISO(c.occurrence_date),
@@ -247,33 +305,104 @@ async function fetchFlexibleRoutines(
           return false;
         }
       });
-
       const completedSubtaskIds = new Set(
         periodCompletions.map((c) => c.subtask_id),
       );
-
       subtaskProgress = {
         completed: completedSubtaskIds.size,
         total: item.subtasks.length,
       };
     }
 
-    const flexibleItem: FlexibleRoutineItem = {
+    // Check for overdue: count consecutive previous periods with no completed/skipped action
+    let isOverdue = false;
+    let overduePeriodsCount = 0;
+    if (!isCompleted && periodSchedules.length === 0) {
+      const anchorDate = item.recurrence_rule?.start_anchor
+        ? parseISO(item.recurrence_rule.start_anchor)
+        : null;
+      let checkDate = referenceDate;
+      for (let i = 0; i < 3; i++) {
+        checkDate = getPreviousPeriodDate(checkDate, period);
+        const { start: prevStart, end: prevEnd } = getPeriodBoundaries(
+          checkDate,
+          period,
+        );
+        if (anchorDate && prevEnd < anchorDate) break;
+        const hadAction = actions.some((action) => {
+          if (action.item_id !== item.id) return false;
+          if (
+            action.action_type !== "completed" &&
+            action.action_type !== "skipped"
+          )
+            return false;
+          const actionDate = parseISO(action.occurrence_date);
+          return isWithinInterval(actionDate, {
+            start: prevStart,
+            end: prevEnd,
+          });
+        });
+        if (!hadAction) {
+          overduePeriodsCount++;
+          isOverdue = true;
+        } else {
+          break;
+        }
+      }
+    }
+
+    const baseFields = {
       ...item,
-      flexibleSchedule: schedule || null,
-      isScheduledForCurrentPeriod: !!schedule,
+      scheduledOccurrences: periodSchedules,
+      targetOccurrences,
+      scheduledCount: periodSchedules.length,
+      completedCount: periodCompletedCount,
+      skippedCount: periodSkippedCount,
+      isScheduledForCurrentPeriod: periodSchedules.length > 0,
       isCompletedForCurrentPeriod: isCompleted,
       periodStart: itemPeriodStartStr,
       periodEnd: format(end, "yyyy-MM-dd"),
       subtaskProgress,
+      isOverdue,
+      overduePeriodsCount: overduePeriodsCount > 0 ? overduePeriodsCount : undefined,
     };
 
     if (isCompleted) {
-      result.completed.push(flexibleItem);
-    } else if (schedule) {
-      result.scheduled.push(flexibleItem);
-    } else {
-      result.unscheduled.push(flexibleItem);
+      // Emit one entry per scheduled slot so views can place each one
+      if (periodSchedules.length > 0) {
+        for (const sched of periodSchedules) {
+          result.completed.push({
+            ...baseFields,
+            flexibleSchedule: sched,
+          } as FlexibleRoutineItem);
+        }
+      } else {
+        result.completed.push({
+          ...baseFields,
+          flexibleSchedule: null,
+        } as FlexibleRoutineItem);
+      }
+      continue;
+    }
+
+    if (periodSchedules.length > 0) {
+      // Emit one entry per scheduled slot
+      for (const sched of periodSchedules) {
+        result.scheduled.push({
+          ...baseFields,
+          flexibleSchedule: sched,
+        } as FlexibleRoutineItem);
+      }
+    }
+
+    // Still unscheduled if any remaining slots
+    const accountedFor =
+      periodSchedules.length + periodCompletedCount + periodSkippedCount;
+    if (accountedFor < targetOccurrences) {
+      result.unscheduled.push({
+        ...baseFields,
+        flexibleSchedule: null,
+      } as FlexibleRoutineItem);
     }
   }
 
@@ -345,6 +474,8 @@ export function useFlexibleRoutines(
   const { data: schedules = [] } = useFlexibleSchedules();
   const { data: subtaskCompletions = [] } =
     useFlexibleSubtaskCompletions(items);
+  const { data: catalogueOccurrenceMap } =
+    useCatalogueFlexibleOccurrences(items);
 
   return useQuery({
     queryKey: [
@@ -355,6 +486,7 @@ export function useFlexibleRoutines(
       schedules.length,
       actions?.length,
       subtaskCompletions.length,
+      catalogueOccurrenceMap?.size ?? 0,
     ],
     queryFn: () =>
       fetchFlexibleRoutines(
@@ -362,10 +494,55 @@ export function useFlexibleRoutines(
         schedules,
         actions || [],
         subtaskCompletions,
+        catalogueOccurrenceMap ?? new Map(),
         referenceDate,
       ),
     enabled: !!items && items.length > 0,
     staleTime: 1000 * 30, // 30 seconds
+  });
+}
+
+/**
+ * Fetch flexible_occurrences from catalogue_items for source templates
+ * referenced by the flexible items in this list.
+ */
+function useCatalogueFlexibleOccurrences(items: ItemWithDetails[] | undefined) {
+  const ids = (items ?? [])
+    .filter((i) => i.recurrence_rule?.is_flexible === true)
+    .map(
+      (i) =>
+        (i as ItemWithDetails & {
+          source_catalogue_item_id?: string | null;
+        }).source_catalogue_item_id,
+    )
+    .filter((v): v is string => !!v);
+  const uniqueIds = Array.from(new Set(ids)).sort();
+
+  return useQuery({
+    queryKey: [
+      ...flexibleRoutinesKeys.all,
+      "catalogue-occurrences",
+      uniqueIds,
+    ],
+    queryFn: async (): Promise<Map<string, number>> => {
+      if (uniqueIds.length === 0) return new Map();
+      const supabase = supabaseBrowser();
+      const { data, error } = await supabase
+        .from("catalogue_items")
+        .select("id, flexible_occurrences")
+        .in("id", uniqueIds);
+      if (error) throw error;
+      const map = new Map<string, number>();
+      for (const row of (data ?? []) as Array<{
+        id: string;
+        flexible_occurrences: number | null;
+      }>) {
+        map.set(row.id, Math.max(1, row.flexible_occurrences ?? 1));
+      }
+      return map;
+    },
+    enabled: uniqueIds.length > 0,
+    staleTime: 1000 * 60 * 5,
   });
 }
 
@@ -387,7 +564,7 @@ export function useScheduleRoutine() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Upsert the schedule (update if exists for same period, insert if not)
+      // Upsert the schedule (update if exists for same period+slot, insert if not)
       const { data, error } = await supabase
         .from("item_flexible_schedules")
         .upsert(
@@ -396,10 +573,11 @@ export function useScheduleRoutine() {
             period_start_date: input.periodStartDate,
             scheduled_for_date: input.scheduledForDate,
             scheduled_for_time: input.scheduledForTime || null,
+            occurrence_index: input.occurrenceIndex ?? 0,
             created_by: user.id,
           },
           {
-            onConflict: "item_id,period_start_date",
+            onConflict: "item_id,period_start_date,occurrence_index",
           },
         )
         .select()
@@ -427,17 +605,24 @@ export function useUnscheduleRoutine() {
     mutationFn: async ({
       itemId,
       periodStartDate,
+      occurrenceIndex,
     }: {
       itemId: string;
       periodStartDate: string;
+      /** If provided, only delete this slot. If omitted, delete all slots in the period. */
+      occurrenceIndex?: number;
     }) => {
       const supabase = supabaseBrowser();
 
-      const { error } = await supabase
+      let query = supabase
         .from("item_flexible_schedules")
         .delete()
         .eq("item_id", itemId)
         .eq("period_start_date", periodStartDate);
+      if (typeof occurrenceIndex === "number") {
+        query = query.eq("occurrence_index", occurrenceIndex);
+      }
+      const { error } = await query;
 
       if (error) throw error;
     },

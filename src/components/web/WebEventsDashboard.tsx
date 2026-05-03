@@ -7,6 +7,10 @@ import {
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
 import { useItems } from "@/features/items/useItems";
+import {
+  useFlexibleRoutines,
+  type FlexibleRoutineItem,
+} from "@/features/items/useFlexibleRoutines";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
@@ -43,6 +47,35 @@ function getItemDate(item: ItemWithDetails): Date | null {
         : null;
 
   return dateStr ? parseISO(dateStr) : null;
+}
+
+// Materialize a flexible routine into a synthetic item whose date is its
+// scheduled_for_date so date-based filters/streaks treat it correctly.
+function materializeFlexible(si: FlexibleRoutineItem): ItemWithDetails | null {
+  const sched = si.flexibleSchedule;
+  if (!sched?.scheduled_for_date) return null;
+  const isoDate = `${sched.scheduled_for_date}T${sched.scheduled_for_time ?? "09:00"}:00`;
+
+  const status: ItemWithDetails["status"] = si.isCompletedForCurrentPeriod
+    ? "completed"
+    : si.status;
+
+  if (si.type === "event") {
+    return {
+      ...si,
+      status,
+      event_details: si.event_details
+        ? { ...si.event_details, start_at: isoDate }
+        : { start_at: isoDate, end_at: null, all_day: false, location_text: null } as any,
+    };
+  }
+  return {
+    ...si,
+    status,
+    reminder_details: si.reminder_details
+      ? { ...si.reminder_details, due_at: isoDate }
+      : { due_at: isoDate, completed_at: null, estimate_minutes: null } as any,
+  };
 }
 
 // Check if item is overdue (considers occurrence actions for recurring items)
@@ -545,6 +578,10 @@ export default function WebEventsDashboard() {
 
   const { data: allItems = [], isLoading } = useItems();
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
+  const { data: flexibleRoutines } = useFlexibleRoutines(
+    allItems,
+    occurrenceActions,
+  );
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -553,10 +590,25 @@ export default function WebEventsDashboard() {
     const todayEnd = endOfDay(now);
     const last7Days = subDays(today, 7);
 
-    // Filter out archived items
-    const activeItems = allItems.filter(
-      (i) => i.status !== "archived" && !i.archived_at,
+    // Filter out archived items, and skip flexible items (placed via schedules)
+    const baseActive = allItems.filter(
+      (i) =>
+        i.status !== "archived" &&
+        !i.archived_at &&
+        !i.recurrence_rule?.is_flexible,
     );
+
+    // Inject scheduled flexible items as synthetic items with overridden dates
+    const flexibleMaterialized: ItemWithDetails[] = [];
+    for (const si of flexibleRoutines?.scheduled ?? []) {
+      const m = materializeFlexible(si);
+      if (m) flexibleMaterialized.push(m);
+    }
+    for (const si of flexibleRoutines?.completed ?? []) {
+      const m = materializeFlexible(si);
+      if (m) flexibleMaterialized.push(m);
+    }
+    const activeItems = [...baseActive, ...flexibleMaterialized];
 
     // Items by status
     const completed = activeItems.filter((i) => i.status === "completed");
@@ -667,7 +719,7 @@ export default function WebEventsDashboard() {
       streak,
       postponedCount,
     };
-  }, [allItems, occurrenceActions]);
+  }, [allItems, occurrenceActions, flexibleRoutines]);
 
   if (isLoading) {
     return (

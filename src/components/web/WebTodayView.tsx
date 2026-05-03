@@ -8,6 +8,7 @@ import {
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
 import { useItems } from "@/features/items/useItems";
+import { useFlexibleRoutines, type FlexibleRoutineItem } from "@/features/items/useFlexibleRoutines";
 import { useBriefingTTS } from "@/hooks/useBriefingTTS";
 import { cn } from "@/lib/utils";
 import {
@@ -88,10 +89,14 @@ function expandRecurringItems(
   startDate: Date,
   endDate: Date,
   actions: ItemOccurrenceAction[],
+  scheduledFlexible: FlexibleRoutineItem[] = [],
 ): ExpandedOccurrence[] {
   const result: ExpandedOccurrence[] = [];
 
   for (const item of items) {
+    // Flexible items are placed via item_flexible_schedules — handled below
+    if (item.recurrence_rule?.is_flexible) continue;
+
     const itemDate = getItemDate(item);
     if (!itemDate) continue;
 
@@ -138,6 +143,31 @@ function expandRecurringItems(
     currentDate = addDays(currentDate, 1);
   }
 
+  // Inject scheduled flexible routines (source of truth: item_flexible_schedules)
+  for (const si of scheduledFlexible) {
+    const sched = si.flexibleSchedule;
+    if (!sched?.scheduled_for_date) continue;
+    let schedDate: Date;
+    try {
+      schedDate = parseISO(sched.scheduled_for_date);
+    } catch {
+      continue;
+    }
+    if (!isWithinInterval(schedDate, { start: startDate, end: endDate })) continue;
+
+    const [hh, mm] = (sched.scheduled_for_time ?? "09:00")
+      .split(":")
+      .map((n) => parseInt(n, 10));
+    const occurrenceDate = new Date(schedDate);
+    occurrenceDate.setHours(hh || 9, mm || 0, 0, 0);
+
+    const isCompleted = si.isCompletedForCurrentPeriod;
+    if (result.some((r) => r.item.id === si.id && isSameDay(r.occurrenceDate, occurrenceDate))) {
+      continue;
+    }
+    result.push({ item: si, occurrenceDate, isCompleted });
+  }
+
   return result.sort((a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime());
 }
 
@@ -168,10 +198,23 @@ export default function WebTodayView() {
     [allItems],
   );
 
+  const { data: flexibleRoutines } = useFlexibleRoutines(
+    activeItems,
+    occurrenceActions,
+    today,
+  );
+  const scheduledFlexible = flexibleRoutines?.scheduled ?? [];
+
   const { todayTasks, overdueTasks } = useMemo(() => {
     const todayEnd = addDays(today, 1);
 
-    const todayOccs = expandRecurringItems(activeItems, today, todayEnd, occurrenceActions)
+    const todayOccs = expandRecurringItems(
+      activeItems,
+      today,
+      todayEnd,
+      occurrenceActions,
+      scheduledFlexible,
+    )
       .filter((o) => !o.isCompleted)
       .sort((a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime());
 
@@ -181,13 +224,14 @@ export default function WebTodayView() {
       pastStart,
       todayEnd,
       occurrenceActions,
+      scheduledFlexible,
     );
     const overdueOccs = allPastOccs.filter(
       (occ) => isBefore(occ.occurrenceDate, currentTime) && !occ.isCompleted,
     );
 
     return { todayTasks: todayOccs, overdueTasks: overdueOccs };
-  }, [activeItems, occurrenceActions, today, currentTime]);
+  }, [activeItems, occurrenceActions, today, currentTime, scheduledFlexible]);
 
   const currentHour = currentTime.getHours();
   const greeting = useMemo(() => getGreeting(currentHour), [currentHour]);

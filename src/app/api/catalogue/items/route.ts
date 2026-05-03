@@ -148,6 +148,7 @@ export async function POST(req: NextRequest) {
       item_category_ids,
       is_public,
       is_flexible_routine,
+      flexible_occurrences,
     } = body;
 
     if (!module_id || !name?.trim()) {
@@ -239,6 +240,10 @@ export async function POST(req: NextRequest) {
         item_category_ids: item_category_ids || [],
         is_public: is_public ?? false,
         is_flexible_routine: is_flexible_routine ?? false,
+        flexible_occurrences: Math.min(
+          31,
+          Math.max(1, Number(flexible_occurrences) || 1),
+        ),
       })
       .select(
         `
