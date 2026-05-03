@@ -2,18 +2,20 @@
 
 import { useTheme } from "@/contexts/ThemeContext";
 import {
+  useFlexibleRoutines,
+  type FlexibleRoutineItem,
+} from "@/features/items/useFlexibleRoutines";
+import {
   getPostponedOccurrencesForDate,
   isOccurrenceCompleted,
   useAllOccurrenceActions,
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
 import { useItems } from "@/features/items/useItems";
-import { useFlexibleRoutines, type FlexibleRoutineItem } from "@/features/items/useFlexibleRoutines";
 import { useBriefingTTS } from "@/hooks/useBriefingTTS";
 import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
-  buildFullRRuleString,
   getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemType, ItemWithDetails } from "@/types/items";
@@ -40,7 +42,6 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { RRule } from "rrule";
 
 interface ExpandedOccurrence {
   item: ItemWithDetails;
@@ -64,14 +65,29 @@ const typeIcons: Record<ItemType, typeof Calendar> = {
 
 function getGreeting(hour: number): { icon: ReactNode; text: string } {
   if (hour < 5)
-    return { icon: <Moon className="w-4 h-4 text-indigo-400" />, text: "Working late?" };
+    return {
+      icon: <Moon className="w-4 h-4 text-indigo-400" />,
+      text: "Working late?",
+    };
   if (hour < 12)
-    return { icon: <Sun className="w-4 h-4 text-yellow-400" />, text: "Good morning" };
+    return {
+      icon: <Sun className="w-4 h-4 text-yellow-400" />,
+      text: "Good morning",
+    };
   if (hour < 17)
-    return { icon: <Sun className="w-4 h-4 text-orange-400" />, text: "Good afternoon" };
+    return {
+      icon: <Sun className="w-4 h-4 text-orange-400" />,
+      text: "Good afternoon",
+    };
   if (hour < 21)
-    return { icon: <Moon className="w-4 h-4 text-purple-400" />, text: "Good evening" };
-  return { icon: <Moon className="w-4 h-4 text-indigo-400" />, text: "Winding down" };
+    return {
+      icon: <Moon className="w-4 h-4 text-purple-400" />,
+      text: "Good evening",
+    };
+  return {
+    icon: <Moon className="w-4 h-4 text-indigo-400" />,
+    text: "Winding down",
+  };
 }
 
 function getItemDate(item: ItemWithDetails): Date | null {
@@ -118,17 +134,24 @@ function expandRecurringItems(
       }
     } else if (isWithinInterval(itemDate, { start: startDate, end: endDate })) {
       const isCompleted =
-        item.status === "completed" || isOccurrenceCompleted(item.id, itemDate, actions);
+        item.status === "completed" ||
+        isOccurrenceCompleted(item.id, itemDate, actions);
       result.push({ item, occurrenceDate: itemDate, isCompleted });
     }
   }
 
   let currentDate = new Date(startDate);
   while (currentDate <= endDate) {
-    const dayPostponed = getPostponedOccurrencesForDate(items, currentDate, actions);
+    const dayPostponed = getPostponedOccurrencesForDate(
+      items,
+      currentDate,
+      actions,
+    );
     for (const p of dayPostponed) {
       const alreadyExists = result.some(
-        (r) => r.item.id === p.item.id && isSameDay(r.occurrenceDate, p.occurrenceDate),
+        (r) =>
+          r.item.id === p.item.id &&
+          isSameDay(r.occurrenceDate, p.occurrenceDate),
       );
       if (!alreadyExists) {
         result.push({
@@ -153,7 +176,8 @@ function expandRecurringItems(
     } catch {
       continue;
     }
-    if (!isWithinInterval(schedDate, { start: startDate, end: endDate })) continue;
+    if (!isWithinInterval(schedDate, { start: startDate, end: endDate }))
+      continue;
 
     const [hh, mm] = (sched.scheduled_for_time ?? "09:00")
       .split(":")
@@ -162,13 +186,20 @@ function expandRecurringItems(
     occurrenceDate.setHours(hh || 9, mm || 0, 0, 0);
 
     const isCompleted = si.isCompletedForCurrentPeriod;
-    if (result.some((r) => r.item.id === si.id && isSameDay(r.occurrenceDate, occurrenceDate))) {
+    if (
+      result.some(
+        (r) =>
+          r.item.id === si.id && isSameDay(r.occurrenceDate, occurrenceDate),
+      )
+    ) {
       continue;
     }
     result.push({ item: si, occurrenceDate, isCompleted });
   }
 
-  return result.sort((a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime());
+  return result.sort(
+    (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime(),
+  );
 }
 
 export default function WebTodayView() {
@@ -193,7 +224,9 @@ export default function WebTodayView() {
     () =>
       allItems.filter(
         (item) =>
-          item.status !== "archived" && item.status !== "cancelled" && !item.archived_at,
+          item.status !== "archived" &&
+          item.status !== "cancelled" &&
+          !item.archived_at,
       ),
     [allItems],
   );
@@ -292,7 +325,8 @@ export default function WebTodayView() {
           type = "now";
         } else if (isNext) {
           const timeUntil = Math.round(
-            (occ.occurrenceDate.getTime() - currentTime.getTime()) / (1000 * 60),
+            (occ.occurrenceDate.getTime() - currentTime.getTime()) /
+              (1000 * 60),
           );
           sub =
             timeUntil <= 60
@@ -378,7 +412,9 @@ export default function WebTodayView() {
       accentBorder: isFrost ? "border-t-amber-400" : "border-t-amber-500/70",
       headerText: isFrost ? "text-amber-600" : "text-amber-400",
       headerBg: isFrost ? "bg-amber-50/80" : "bg-amber-500/5",
-      countBadge: isFrost ? "bg-amber-100 text-amber-700" : "bg-amber-500/20 text-amber-300",
+      countBadge: isFrost
+        ? "bg-amber-100 text-amber-700"
+        : "bg-amber-500/20 text-amber-300",
     },
     {
       label: "Afternoon",
@@ -391,7 +427,9 @@ export default function WebTodayView() {
       accentBorder: isFrost ? "border-t-sky-400" : "border-t-sky-500/70",
       headerText: isFrost ? "text-sky-600" : "text-sky-400",
       headerBg: isFrost ? "bg-sky-50/80" : "bg-sky-500/5",
-      countBadge: isFrost ? "bg-sky-100 text-sky-700" : "bg-sky-500/20 text-sky-300",
+      countBadge: isFrost
+        ? "bg-sky-100 text-sky-700"
+        : "bg-sky-500/20 text-sky-300",
     },
     {
       label: "Evening",
@@ -401,7 +439,9 @@ export default function WebTodayView() {
       accentBorder: isFrost ? "border-t-indigo-400" : "border-t-indigo-500/70",
       headerText: isFrost ? "text-indigo-600" : "text-indigo-400",
       headerBg: isFrost ? "bg-indigo-50/80" : "bg-indigo-500/5",
-      countBadge: isFrost ? "bg-indigo-100 text-indigo-700" : "bg-indigo-500/20 text-indigo-300",
+      countBadge: isFrost
+        ? "bg-indigo-100 text-indigo-700"
+        : "bg-indigo-500/20 text-indigo-300",
     },
   ];
 
@@ -411,17 +451,26 @@ export default function WebTodayView() {
       <div
         className={cn(
           "flex-shrink-0 px-4 py-2 flex items-center justify-between",
-          isFrost ? "border-b border-slate-100" : "border-b border-white/[0.04]",
+          isFrost
+            ? "border-b border-slate-100"
+            : "border-b border-white/[0.04]",
         )}
       >
-        <p className={cn("text-xs font-medium", isFrost ? "text-slate-500" : "text-white/50")}>
+        <p
+          className={cn(
+            "text-xs font-medium",
+            isFrost ? "text-slate-500" : "text-white/50",
+          )}
+        >
           {format(today, "EEEE, MMMM d")}
         </p>
         {overdueTasks.length > 0 && (
           <div
             className={cn(
               "flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium",
-              isFrost ? "bg-amber-50 text-amber-600" : "bg-amber-500/10 text-amber-400",
+              isFrost
+                ? "bg-amber-50 text-amber-600"
+                : "bg-amber-500/10 text-amber-400",
             )}
           >
             <AlertCircle className="w-3 h-3" />
@@ -440,7 +489,12 @@ export default function WebTodayView() {
             )}
           >
             {format(currentTime, "h:mm")}
-            <span className={cn("text-xl ml-1.5", isFrost ? "text-slate-400" : "text-white/40")}>
+            <span
+              className={cn(
+                "text-xl ml-1.5",
+                isFrost ? "text-slate-400" : "text-white/40",
+              )}
+            >
               {format(currentTime, "a")}
             </span>
           </p>
@@ -490,7 +544,9 @@ export default function WebTodayView() {
             <button
               type="button"
               onClick={() =>
-                tts.isPlaying || tts.isLoading ? tts.stop() : tts.play(narrative)
+                tts.isPlaying || tts.isLoading
+                  ? tts.stop()
+                  : tts.play(narrative)
               }
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
@@ -545,7 +601,9 @@ export default function WebTodayView() {
                       {bullet.text}
                     </p>
                     {bullet.sub && (
-                      <p className={cn("text-xs mt-0.5", bulletSub[type])}>{bullet.sub}</p>
+                      <p className={cn("text-xs mt-0.5", bulletSub[type])}>
+                        {bullet.sub}
+                      </p>
                     )}
                   </div>
                 </li>
@@ -567,7 +625,16 @@ export default function WebTodayView() {
             </h3>
             <div className="grid grid-cols-3 gap-3">
               {periods.map(
-                ({ label, sub, icon, items, accentBorder, headerText, headerBg, countBadge }) => (
+                ({
+                  label,
+                  sub,
+                  icon,
+                  items,
+                  accentBorder,
+                  headerText,
+                  headerBg,
+                  countBadge,
+                }) => (
                   <div
                     key={label}
                     className={cn(
@@ -583,12 +650,17 @@ export default function WebTodayView() {
                       className={cn(
                         "px-3 py-2.5 flex items-center justify-between",
                         headerBg,
-                        isFrost ? "border-b border-slate-100" : "border-b border-white/[0.05]",
+                        isFrost
+                          ? "border-b border-slate-100"
+                          : "border-b border-white/[0.05]",
                       )}
                     >
                       <div className="min-w-0">
                         <div
-                          className={cn("flex items-center gap-1.5 text-xs font-semibold", headerText)}
+                          className={cn(
+                            "flex items-center gap-1.5 text-xs font-semibold",
+                            headerText,
+                          )}
                         >
                           {icon}
                           {label}
@@ -634,11 +706,13 @@ export default function WebTodayView() {
                           const isPast = isBefore(occurrenceDate, currentTime);
                           const isNow =
                             nowTask?.item.id === item.id &&
-                            nowTask?.occurrenceDate.getTime() === occurrenceDate.getTime();
+                            nowTask?.occurrenceDate.getTime() ===
+                              occurrenceDate.getTime();
                           const isNext =
                             !isNow &&
                             nextTask?.item.id === item.id &&
-                            nextTask?.occurrenceDate.getTime() === occurrenceDate.getTime();
+                            nextTask?.occurrenceDate.getTime() ===
+                              occurrenceDate.getTime();
 
                           return (
                             <div
@@ -656,7 +730,9 @@ export default function WebTodayView() {
                                 <span
                                   className={cn(
                                     "text-[10px] font-medium tabular-nums",
-                                    isFrost ? "text-slate-400" : "text-white/50",
+                                    isFrost
+                                      ? "text-slate-400"
+                                      : "text-white/50",
                                   )}
                                 >
                                   {format(occurrenceDate, "h:mm a")}
@@ -742,15 +818,27 @@ export default function WebTodayView() {
             <div
               className={cn(
                 "w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center",
-                isFrost ? "bg-slate-100 text-slate-300" : "bg-white/5 text-white/15",
+                isFrost
+                  ? "bg-slate-100 text-slate-300"
+                  : "bg-white/5 text-white/15",
               )}
             >
               <Calendar className="w-7 h-7" />
             </div>
-            <p className={cn("text-sm font-medium", isFrost ? "text-slate-500" : "text-white/50")}>
+            <p
+              className={cn(
+                "text-sm font-medium",
+                isFrost ? "text-slate-500" : "text-white/50",
+              )}
+            >
               Nothing scheduled today
             </p>
-            <p className={cn("text-xs mt-1", isFrost ? "text-slate-400" : "text-white/30")}>
+            <p
+              className={cn(
+                "text-xs mt-1",
+                isFrost ? "text-slate-400" : "text-white/30",
+              )}
+            >
               Enjoy your free time
             </p>
           </div>

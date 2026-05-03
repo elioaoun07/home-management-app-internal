@@ -210,9 +210,7 @@ export default function CatalogueTaskItemDialog({
         );
         // Flexible routine state
         setIsFlexibleRoutine(editingItem.is_flexible_routine || false);
-        setFlexibleOccurrences(
-          String(editingItem.flexible_occurrences ?? 1),
-        );
+        setFlexibleOccurrences(String(editingItem.flexible_occurrences ?? 1));
       } else {
         // Reset to defaults
         setName("");

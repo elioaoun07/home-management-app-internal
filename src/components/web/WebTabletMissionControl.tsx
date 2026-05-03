@@ -10,6 +10,10 @@ import {
 } from "@/components/ui/dialog";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
+  useFlexibleRoutines,
+  type FlexibleRoutineItem,
+} from "@/features/items/useFlexibleRoutines";
+import {
   getPostponedOccurrencesForDate,
   isOccurrenceCompleted,
   normalizeToLocalDateString,
@@ -19,10 +23,6 @@ import {
   type ItemOccurrenceAction,
   type PostponeType,
 } from "@/features/items/useItemActions";
-import {
-  useFlexibleRoutines,
-  type FlexibleRoutineItem,
-} from "@/features/items/useFlexibleRoutines";
 import {
   useAddSubtask,
   useAllSubtaskCompletions,
@@ -36,7 +36,6 @@ import {
 import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
-  buildFullRRuleString,
   getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemType, ItemWithDetails, Subtask } from "@/types/items";
@@ -84,7 +83,6 @@ import {
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RRule } from "rrule";
 import { toast } from "sonner";
 import { TaskFocusModal } from "./TaskFocusModal";
 // ============================================
@@ -240,7 +238,8 @@ function expandRecurringItems(
     } catch {
       continue;
     }
-    if (!isWithinInterval(schedDate, { start: startDate, end: endDate })) continue;
+    if (!isWithinInterval(schedDate, { start: startDate, end: endDate }))
+      continue;
     const [hh, mm] = (sched.scheduled_for_time ?? "09:00")
       .split(":")
       .map((n) => parseInt(n, 10));
@@ -249,7 +248,8 @@ function expandRecurringItems(
     const isCompleted = si.isCompletedForCurrentPeriod;
     if (
       result.some(
-        (r) => r.item.id === si.id && isSameDay(r.occurrenceDate, occurrenceDate),
+        (r) =>
+          r.item.id === si.id && isSameDay(r.occurrenceDate, occurrenceDate),
       )
     )
       continue;

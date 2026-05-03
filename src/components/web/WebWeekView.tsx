@@ -12,7 +12,6 @@ import { type SubtaskCompletion } from "@/features/items/useItems";
 import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
-  buildFullRRuleString,
   getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemWithDetails } from "@/types/items";
@@ -40,7 +39,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { RRule } from "rrule";
 
 interface WebWeekViewProps {
   items: ItemWithDetails[];

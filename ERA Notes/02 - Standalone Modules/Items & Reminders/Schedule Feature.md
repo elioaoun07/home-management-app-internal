@@ -8,11 +8,11 @@
 
 Every item has **one** of three placement strategies — they don't mix:
 
-| Strategy           | Where the date comes from                                                     | Source of truth                                  | Used for                                            |
-| ------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------- |
-| **Fixed**          | `reminder_details.due_at` / `event_details.start_at` (one row, one date)      | the row itself                                   | "Pay rent on the 5th" (one-shot)                    |
-| **Recurring**      | RRULE expanded against `recurrence_rule.start_anchor`                         | `item_recurrence_rules.rrule`                    | "Take vitamins every morning" (fixed cadence)       |
-| **Flexible**       | One row per period in `item_flexible_schedules` (the user picks the day)     | `item_flexible_schedules`                        | "Workout 3× per week" (cadence, flexible day)       |
+| Strategy      | Where the date comes from                                                | Source of truth               | Used for                                      |
+| ------------- | ------------------------------------------------------------------------ | ----------------------------- | --------------------------------------------- |
+| **Fixed**     | `reminder_details.due_at` / `event_details.start_at` (one row, one date) | the row itself                | "Pay rent on the 5th" (one-shot)              |
+| **Recurring** | RRULE expanded against `recurrence_rule.start_anchor`                    | `item_recurrence_rules.rrule` | "Take vitamins every morning" (fixed cadence) |
+| **Flexible**  | One row per period in `item_flexible_schedules` (the user picks the day) | `item_flexible_schedules`     | "Workout 3× per week" (cadence, flexible day) |
 
 A flexible item also has an `RRULE`, but **all views ignore it** when `recurrence_rule.is_flexible = true`. The RRULE is kept only for compatibility with code that filters "is this a recurring item at all?" — it never determines a calendar slot for a flexible item.
 
@@ -118,13 +118,13 @@ flowchart TD
 
 ## The Four Tables Involved
 
-| Table                          | Role                                                                              |
-| ------------------------------ | --------------------------------------------------------------------------------- |
-| `catalogue_items`              | Templates. `is_flexible_routine`, `recurrence_pattern`, `flexible_occurrences`    |
-| `items`                        | Activated user rows. `source_catalogue_item_id` links back to the template        |
-| `item_recurrence_rules`        | Flags the item as flexible (`is_flexible`, `flexible_period`)                     |
-| `item_flexible_schedules`      | One row per scheduled slot per period. `UNIQUE(item_id, period_start, occ_index)` |
-| `item_occurrence_actions`      | Completed / skipped / postponed events. Used for completion + overdue detection   |
+| Table                     | Role                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `catalogue_items`         | Templates. `is_flexible_routine`, `recurrence_pattern`, `flexible_occurrences`    |
+| `items`                   | Activated user rows. `source_catalogue_item_id` links back to the template        |
+| `item_recurrence_rules`   | Flags the item as flexible (`is_flexible`, `flexible_period`)                     |
+| `item_flexible_schedules` | One row per scheduled slot per period. `UNIQUE(item_id, period_start, occ_index)` |
+| `item_occurrence_actions` | Completed / skipped / postponed events. Used for completion + overdue detection   |
 
 ---
 
@@ -132,10 +132,10 @@ flowchart TD
 
 There are two distinct skip operations and they differ on purpose:
 
-| Where               | What it does                                                                          | Persistence                                          |
-| ------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Existing item       | Inserts an `item_occurrence_actions` row with `action_type='skipped'`                 | Persists in DB; counts toward "fully accounted for"  |
-| Dormant template    | Sets a session-only `Set<string>` keyed by `${tpl.id}:${periodStart}` to hide the row | In-memory only — modal stops showing it this session |
+| Where            | What it does                                                                          | Persistence                                          |
+| ---------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Existing item    | Inserts an `item_occurrence_actions` row with `action_type='skipped'`                 | Persists in DB; counts toward "fully accounted for"  |
+| Dormant template | Sets a session-only `Set<string>` keyed by `${tpl.id}:${periodStart}` to hide the row | In-memory only — modal stops showing it this session |
 
 The dormant version is intentionally session-only: nothing has been activated yet, so there's nothing to skip in the DB. We just stop nagging the user to activate this template _this period_.
 
@@ -202,16 +202,16 @@ A: `useScheduleRoutine` and `useUnscheduleRoutine` invalidate `flexibleRoutinesK
 
 ## Quick Map: where to look in the code
 
-| Concern                              | File                                                                |
-| ------------------------------------ | ------------------------------------------------------------------- |
-| Period boundaries (week/biweek/month)| `src/features/items/useFlexibleRoutines.ts` `getPeriodBoundaries`   |
-| Bucketing (unscheduled/scheduled/…)  | `src/features/items/useFlexibleRoutines.ts` `fetchFlexibleRoutines` |
-| Scheduling mutation                  | `useScheduleRoutine` (upserts on `(item, period_start, occ_index)`) |
-| Unscheduling                         | `useUnscheduleRoutine` (optional `occurrenceIndex`)                 |
-| Skip                                 | `useSkipFlexibleRoutine` → `item_occurrence_actions`                |
-| Modal                                | `src/components/web/AddFlexibleFromCatalogueDialog.tsx`             |
-| Catalogue editor (N input)           | `src/components/web/CatalogueTaskItemDialog.tsx`                    |
-| Schema (live & doc)                  | `migrations/schema.sql` + `migrations/2026-05-04_flexible_occurrences.sql` |
+| Concern                               | File                                                                       |
+| ------------------------------------- | -------------------------------------------------------------------------- |
+| Period boundaries (week/biweek/month) | `src/features/items/useFlexibleRoutines.ts` `getPeriodBoundaries`          |
+| Bucketing (unscheduled/scheduled/…)   | `src/features/items/useFlexibleRoutines.ts` `fetchFlexibleRoutines`        |
+| Scheduling mutation                   | `useScheduleRoutine` (upserts on `(item, period_start, occ_index)`)        |
+| Unscheduling                          | `useUnscheduleRoutine` (optional `occurrenceIndex`)                        |
+| Skip                                  | `useSkipFlexibleRoutine` → `item_occurrence_actions`                       |
+| Modal                                 | `src/components/web/AddFlexibleFromCatalogueDialog.tsx`                    |
+| Catalogue editor (N input)            | `src/components/web/CatalogueTaskItemDialog.tsx`                           |
+| Schema (live & doc)                   | `migrations/schema.sql` + `migrations/2026-05-04_flexible_occurrences.sql` |
 
 ---
 

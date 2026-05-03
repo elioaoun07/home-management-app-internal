@@ -2,15 +2,15 @@
 
 import { useTheme } from "@/contexts/ThemeContext";
 import {
+  useFlexibleRoutines,
+  type FlexibleRoutineItem,
+} from "@/features/items/useFlexibleRoutines";
+import {
   isOccurrenceCompleted,
   useAllOccurrenceActions,
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
 import { useItems } from "@/features/items/useItems";
-import {
-  useFlexibleRoutines,
-  type FlexibleRoutineItem,
-} from "@/features/items/useFlexibleRoutines";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
@@ -66,7 +66,12 @@ function materializeFlexible(si: FlexibleRoutineItem): ItemWithDetails | null {
       status,
       event_details: si.event_details
         ? { ...si.event_details, start_at: isoDate }
-        : { start_at: isoDate, end_at: null, all_day: false, location_text: null } as any,
+        : ({
+            start_at: isoDate,
+            end_at: null,
+            all_day: false,
+            location_text: null,
+          } as any),
     };
   }
   return {
@@ -74,7 +79,11 @@ function materializeFlexible(si: FlexibleRoutineItem): ItemWithDetails | null {
     status,
     reminder_details: si.reminder_details
       ? { ...si.reminder_details, due_at: isoDate }
-      : { due_at: isoDate, completed_at: null, estimate_minutes: null } as any,
+      : ({
+          due_at: isoDate,
+          completed_at: null,
+          estimate_minutes: null,
+        } as any),
   };
 }
 

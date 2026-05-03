@@ -244,12 +244,14 @@ async function fetchFlexibleRoutines(
     const itemPeriodStartStr = format(start, "yyyy-MM-dd");
 
     // Resolve target N from catalogue (default 1)
-    const sourceCatId = (item as ItemWithDetails & {
-      source_catalogue_item_id?: string | null;
-    }).source_catalogue_item_id;
+    const sourceCatId = (
+      item as ItemWithDetails & {
+        source_catalogue_item_id?: string | null;
+      }
+    ).source_catalogue_item_id;
     const targetOccurrences = Math.max(
       1,
-      sourceCatId ? catalogueOccurrenceMap.get(sourceCatId) ?? 1 : 1,
+      sourceCatId ? (catalogueOccurrenceMap.get(sourceCatId) ?? 1) : 1,
     );
 
     // Find ALL schedules for this item in current period (sorted by index)
@@ -364,7 +366,8 @@ async function fetchFlexibleRoutines(
       periodEnd: format(end, "yyyy-MM-dd"),
       subtaskProgress,
       isOverdue,
-      overduePeriodsCount: overduePeriodsCount > 0 ? overduePeriodsCount : undefined,
+      overduePeriodsCount:
+        overduePeriodsCount > 0 ? overduePeriodsCount : undefined,
     };
 
     if (isCompleted) {
@@ -511,19 +514,17 @@ function useCatalogueFlexibleOccurrences(items: ItemWithDetails[] | undefined) {
     .filter((i) => i.recurrence_rule?.is_flexible === true)
     .map(
       (i) =>
-        (i as ItemWithDetails & {
-          source_catalogue_item_id?: string | null;
-        }).source_catalogue_item_id,
+        (
+          i as ItemWithDetails & {
+            source_catalogue_item_id?: string | null;
+          }
+        ).source_catalogue_item_id,
     )
     .filter((v): v is string => !!v);
   const uniqueIds = Array.from(new Set(ids)).sort();
 
   return useQuery({
-    queryKey: [
-      ...flexibleRoutinesKeys.all,
-      "catalogue-occurrences",
-      uniqueIds,
-    ],
+    queryKey: [...flexibleRoutinesKeys.all, "catalogue-occurrences", uniqueIds],
     queryFn: async (): Promise<Map<string, number>> => {
       if (uniqueIds.length === 0) return new Map();
       const supabase = supabaseBrowser();

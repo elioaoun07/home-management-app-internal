@@ -117,6 +117,9 @@ function expandRecurringItems(
   const result: ExpandedOccurrence[] = [];
 
   for (const item of items) {
+    // Skip legacy is_flexible container items
+    if (item.recurrence_rule?.is_flexible) continue;
+
     const itemDate = getItemDate(item);
     if (!itemDate) continue;
 

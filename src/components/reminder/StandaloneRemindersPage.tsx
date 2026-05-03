@@ -258,6 +258,11 @@ function expandRecurringItems(
   const result: ExpandedOccurrence[] = [];
 
   for (const item of items) {
+    // Skip legacy is_flexible container items — their rrule expands against
+    // activation day and is no longer authoritative. Real flexible-routine
+    // items now have a regular due_at and no is_flexible flag.
+    if (item.recurrence_rule?.is_flexible) continue;
+
     const itemDate = getItemDate(item);
     if (!itemDate) continue;
 

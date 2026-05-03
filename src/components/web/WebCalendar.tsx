@@ -3,6 +3,7 @@
 import { RefreshIcon } from "@/components/icons/FuturisticIcons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { getBirthdayDisplayName, getBirthdaysForDate } from "@/data/birthdays";
+import { useFlexibleRoutines } from "@/features/items/useFlexibleRoutines";
 import {
   getCompletedOccurrencesForDate,
   getPostponedOccurrencesForDate,
@@ -10,7 +11,6 @@ import {
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
 import { itemsKeys, type SubtaskCompletion } from "@/features/items/useItems";
-import { useFlexibleRoutines } from "@/features/items/useFlexibleRoutines";
 import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
