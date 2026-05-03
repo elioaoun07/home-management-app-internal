@@ -1599,3 +1599,41 @@ CREATE POLICY "ai_session_types_select_own" ON public.ai_session_types FOR SELEC
 CREATE POLICY "ai_session_types_insert_own" ON public.ai_session_types FOR INSERT WITH CHECK (user_id = auth.uid());
 CREATE POLICY "ai_session_types_update_own" ON public.ai_session_types FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 CREATE POLICY "ai_session_types_delete_own" ON public.ai_session_types FOR DELETE USING (user_id = auth.uid());
+
+-- ===========================================================================
+-- ERA Persistence (Phase 0.5) — added 2026-05-03
+-- ===========================================================================
+CREATE TABLE public.era_conversations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  title text,
+  active_face_key text NOT NULL DEFAULT 'budget'::text CHECK (active_face_key = ANY (ARRAY['budget'::text, 'schedule'::text, 'chef'::text, 'brain'::text])),
+  is_archived boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT era_conversations_pkey PRIMARY KEY (id),
+  CONSTRAINT era_conversations_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE public.era_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  conversation_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  role text NOT NULL CHECK (role = ANY (ARRAY['user'::text, 'assistant'::text, 'system'::text])),
+  content text NOT NULL,
+  intent_kind text,
+  intent_face text,
+  intent_payload jsonb,
+  draft_transaction_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT era_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT era_messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.era_conversations(id) ON DELETE CASCADE,
+  CONSTRAINT era_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
+  CONSTRAINT era_messages_draft_transaction_id_fkey FOREIGN KEY (draft_transaction_id) REFERENCES public.transactions(id) ON DELETE SET NULL
+);
+
+ALTER TABLE public.era_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.era_messages ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY era_conversations_self ON public.era_conversations FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY era_messages_self ON public.era_messages FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);

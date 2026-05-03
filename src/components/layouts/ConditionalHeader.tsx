@@ -17,9 +17,12 @@ function moduleFromPath(
   appMode: "budget" | "items",
 ): ERAModuleKey {
   if (!pathname) return appMode === "items" ? "schedule" : "financial";
-  if (pathname.startsWith("/recipe") || pathname.startsWith("/catalogue")) return "recipe";
+  if (pathname.startsWith("/era")) return "memory";
+  if (pathname.startsWith("/recipe") || pathname.startsWith("/catalogue"))
+    return "recipe";
   if (pathname.startsWith("/chat")) return "chat";
-  if (pathname.startsWith("/reminders") || pathname.startsWith("/alerts")) return "schedule";
+  if (pathname.startsWith("/reminders") || pathname.startsWith("/alerts"))
+    return "schedule";
   return appMode === "items" ? "schedule" : "financial";
 }
 
@@ -124,7 +127,9 @@ export default function ConditionalHeader({
             >
               {config.title}
             </h1>
-            <span className="text-[11.5px] text-white/40 leading-tight">{config.role}</span>
+            <span className="text-[11.5px] text-white/40 leading-tight">
+              {config.role}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -166,7 +171,9 @@ export default function ConditionalHeader({
           >
             {defaultTitle}
           </h1>
-          <span className="text-[11.5px] text-white/40 leading-tight">{defaultRole}</span>
+          <span className="text-[11.5px] text-white/40 leading-tight">
+            {defaultRole}
+          </span>
         </div>
       </div>
       <div className="flex items-center gap-1">

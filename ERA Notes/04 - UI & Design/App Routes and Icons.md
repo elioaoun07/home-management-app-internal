@@ -30,6 +30,7 @@ tags:
 
 | Route        | Name               | Icon                       | Color Gradient                    |
 | ------------ | ------------------ | -------------------------- | --------------------------------- |
+| `/era`       | ERA (Assistant)    | `ERAMark` (active face)    | Theme-based (per face)            |
 | `/focus`     | Focus              | `FocusIcon`                | Theme-based                       |
 | `/catalogue` | Catalogue          | `BookOpen` (lucide)        | `from-emerald-400 to-emerald-600` |
 | `/recipe`    | Recipes            | `UtensilsCrossed` (lucide) | `from-orange-400 to-orange-600`   |
