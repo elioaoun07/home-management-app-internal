@@ -556,6 +556,7 @@ function SwipeableItem({
 import type { UserFilter } from "@/components/activity/FilterBar";
 import ItemActionsSheet from "@/components/items/ItemActionsSheet";
 import ItemDetailModal from "@/components/items/ItemDetailModal";
+import { WebEventFormDialog } from "@/components/web/WebEventFormDialog";
 import type { PostponeType } from "@/features/items/useItemActions";
 
 type TypeFilter = "all" | "reminder" | "task" | "event";
@@ -624,6 +625,7 @@ export default function StandaloneRemindersPage({
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
     null,
   );
+  const [editingItem, setEditingItem] = useState<ItemWithDetails | null>(null);
   const [skipPrompt, setSkipPrompt] = useState<{
     item: ItemWithDetails;
     occurrenceDate: string;
@@ -1312,12 +1314,23 @@ export default function StandaloneRemindersPage({
         <ItemDetailModal
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
-          onEdit={() => setSelectedItem(null)}
+          onEdit={() => {
+            setEditingItem(selectedItem);
+            setSelectedItem(null);
+          }}
           onDelete={() => {
             itemActions.handleDelete(selectedItem);
             setSelectedItem(null);
           }}
           currentUserId={currentUserId}
+        />
+      )}
+
+      {editingItem && (
+        <WebEventFormDialog
+          isOpen={!!editingItem}
+          onClose={() => setEditingItem(null)}
+          editItem={editingItem}
         />
       )}
 

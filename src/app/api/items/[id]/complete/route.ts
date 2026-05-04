@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 interface CompleteRequestBody {
   occurrence_date: string; // ISO date string (YYYY-MM-DD)
   is_recurring: boolean;
+  actual_minutes?: number; // optional task time tracking
 }
 
 export async function POST(
@@ -29,7 +30,7 @@ export async function POST(
 
     const { id: itemId } = await params;
     const body: CompleteRequestBody = await request.json();
-    const { occurrence_date, is_recurring } = body;
+    const { occurrence_date, is_recurring, actual_minutes } = body;
 
     if (!occurrence_date) {
       return NextResponse.json(
@@ -41,7 +42,9 @@ export async function POST(
     // Fetch item via adminDb to bypass RLS (partner's token would be blocked otherwise)
     const { data: item, error: itemError } = await adminDb
       .from("items")
-      .select("id, user_id, status, type, responsible_user_id, notify_all_household, is_public")
+      .select(
+        "id, user_id, status, type, responsible_user_id, notify_all_household, is_public",
+      )
       .eq("id", itemId)
       .single();
 
@@ -61,7 +64,7 @@ export async function POST(
         .eq("active", true)
         .or(
           `and(owner_user_id.eq.${item.user_id},partner_user_id.eq.${user.id}),` +
-          `and(owner_user_id.eq.${user.id},partner_user_id.eq.${item.user_id})`
+            `and(owner_user_id.eq.${user.id},partner_user_id.eq.${item.user_id})`,
         )
         .maybeSingle();
       canComplete = !!link;
@@ -80,6 +83,10 @@ export async function POST(
           occurrence_date,
           action_type: "completed",
           created_by: user.id,
+          metadata_json:
+            typeof actual_minutes === "number" && actual_minutes >= 0
+              ? { actual_minutes }
+              : null,
         })
         .select()
         .single();
@@ -143,8 +150,20 @@ export async function POST(
       // Also update reminder_details if it exists
       await adminDb
         .from("reminder_details")
-        .update({ completed_at: new Date().toISOString() })
+        .update({
+          completed_at: new Date().toISOString(),
+          ...(typeof actual_minutes === "number" && actual_minutes >= 0
+            ? { actual_minutes }
+            : {}),
+        })
         .eq("item_id", itemId);
+
+      // Cascade: deactivate any active alerts (non-recurring item is done)
+      await adminDb
+        .from("item_alerts")
+        .update({ active: false })
+        .eq("item_id", itemId)
+        .eq("active", true);
 
       // If this item has prerequisites, reset it to dormant for next trigger
       const wasReset = await resetCompletedPrerequisiteItem(itemId, adminDb);

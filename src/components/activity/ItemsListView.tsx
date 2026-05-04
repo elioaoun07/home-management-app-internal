@@ -3,6 +3,7 @@
 import ItemActionsSheet from "@/components/items/ItemActionsSheet";
 import ItemDetailModal from "@/components/items/ItemDetailModal";
 import { ResponsibleUserBadge } from "@/components/items/ResponsibleUserPicker";
+import { WebEventFormDialog } from "@/components/web/WebEventFormDialog";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   isOccurrenceCompleted,
@@ -11,20 +12,18 @@ import {
   useItemActionsWithToast,
 } from "@/features/items/useItemActions";
 import { useItems, useUpdateRecurrenceRule } from "@/features/items/useItems";
-import { ToastIcons } from "@/lib/toastIcons";
-import { firstBiweeklyFlippedAnchor } from "@/lib/utils/date";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import {
   adjustOccurrenceToWallClock,
-  buildFullRRuleString,
+  firstBiweeklyFlippedAnchor,
   getOccurrencesInRange,
 } from "@/lib/utils/date";
 import type { ItemStatus, ItemType, ItemWithDetails } from "@/types/items";
 import { eachDayOfInterval, format, parseISO } from "date-fns";
-import { toast } from "sonner";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { RRule } from "rrule";
+import { toast } from "sonner";
 
 // ─────────────────────────────────────────────
 // Inline Icons
@@ -585,6 +584,7 @@ export default function ItemsListView({
   const [selectedItem, setSelectedItem] = useState<ItemWithDetails | null>(
     null,
   );
+  const [editingItem, setEditingItem] = useState<ItemWithDetails | null>(null);
   const [actionsState, setActionsState] = useState<{
     item: ItemWithDetails;
     occurrenceDate: string;
@@ -603,7 +603,8 @@ export default function ItemsListView({
   const updateRecurrence = useUpdateRecurrenceRule();
 
   const handleReverseRecurrence = (item: ItemWithDetails) => {
-    if (!item.recurrence_rule?.start_anchor || !item.recurrence_rule.rrule) return;
+    if (!item.recurrence_rule?.start_anchor || !item.recurrence_rule.rrule)
+      return;
     const current = parseISO(item.recurrence_rule.start_anchor);
     const newAnchor = firstBiweeklyFlippedAnchor(current).toISOString();
     const flipTime = new Date().toISOString();
@@ -1290,12 +1291,23 @@ export default function ItemsListView({
         <ItemDetailModal
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
-          onEdit={() => setSelectedItem(null)}
+          onEdit={() => {
+            setEditingItem(selectedItem);
+            setSelectedItem(null);
+          }}
           onDelete={() => {
             handleDelete(selectedItem);
             setSelectedItem(null);
           }}
           currentUserId={currentUserId}
+        />
+      )}
+
+      {editingItem && (
+        <WebEventFormDialog
+          isOpen={!!editingItem}
+          onClose={() => setEditingItem(null)}
+          editItem={editingItem}
         />
       )}
 

@@ -39,6 +39,7 @@ export interface CompleteItemInput {
   occurrenceDate: string;
   isRecurring: boolean;
   reason?: string;
+  actualMinutes?: number;
 }
 
 export interface PostponeItemInput {
@@ -395,6 +396,7 @@ export function useCompleteItem() {
       occurrenceDate,
       isRecurring,
       reason,
+      actualMinutes,
     }: CompleteItemInput) => {
       if (!isReallyOnline()) {
         await addToQueue({
@@ -402,7 +404,13 @@ export function useCompleteItem() {
           operation: "complete",
           endpoint: `/api/items/${itemId}/actions`,
           method: "POST",
-          body: { action: "complete", occurrenceDate, isRecurring, reason },
+          body: {
+            action: "complete",
+            occurrenceDate,
+            isRecurring,
+            reason,
+            actualMinutes,
+          },
           metadata: { label: "Complete item" },
         });
         return {
@@ -427,6 +435,10 @@ export function useCompleteItem() {
             action_type: "completed",
             reason,
             created_by: user.id,
+            metadata_json:
+              typeof actualMinutes === "number" && actualMinutes >= 0
+                ? { actual_minutes: actualMinutes }
+                : null,
           })
           .select()
           .single();
@@ -448,6 +460,10 @@ export function useCompleteItem() {
             action_type: "completed",
             reason,
             created_by: user.id,
+            metadata_json:
+              typeof actualMinutes === "number" && actualMinutes >= 0
+                ? { actual_minutes: actualMinutes }
+                : null,
           }),
         ]);
 
@@ -456,8 +472,20 @@ export function useCompleteItem() {
         // Also update reminder_details if it exists
         await supabase
           .from("reminder_details")
-          .update({ completed_at: new Date().toISOString() })
+          .update({
+            completed_at: new Date().toISOString(),
+            ...(typeof actualMinutes === "number" && actualMinutes >= 0
+              ? { actual_minutes: actualMinutes }
+              : {}),
+          })
           .eq("item_id", itemId);
+
+        // Cascade: deactivate active alerts for non-recurring items
+        await supabase
+          .from("item_alerts")
+          .update({ active: false })
+          .eq("item_id", itemId)
+          .eq("active", true);
 
         return { type: "item", itemId };
       }
@@ -849,6 +877,7 @@ export function useItemActionsWithToast() {
     item: ItemWithDetails,
     occurrenceDate: string,
     reason?: string,
+    actualMinutes?: number,
   ) => {
     const isRecurring = !!item.recurrence_rule?.rrule;
 
@@ -858,6 +887,7 @@ export function useItemActionsWithToast() {
         occurrenceDate,
         isRecurring,
         reason,
+        actualMinutes,
       });
 
       const wasArchived = result.type === "item" && (result as any).archived;
@@ -866,16 +896,40 @@ export function useItemActionsWithToast() {
         : `"${item.title}" completed!`;
 
       toast.success(message, {
+        icon: ToastIcons.success,
+        duration: 4000,
         action: {
           label: "Undo",
           onClick: async () => {
-            if (result.type === "occurrence" && result.action) {
-              await undoAction.mutateAsync(result.action.id);
-              toast.success("Completion undone");
-            } else if (result.type === "item") {
-              // For non-recurring items, restore from completed/archived
-              await restoreItem.mutateAsync(item.id);
-              toast.success("Item restored");
+            try {
+              if (result.type === "occurrence" && (result as any).action) {
+                await undoAction.mutateAsync((result as any).action.id);
+              } else if (result.type === "item") {
+                // Non-recurring: properly revert status, completed_at, and
+                // delete the item_occurrence_actions row + reactivate alerts.
+                await uncompleteItem.mutateAsync({
+                  itemId: item.id,
+                  occurrenceDate,
+                  isRecurring: false,
+                });
+                // Re-activate any alerts we deactivated on completion
+                try {
+                  const supabase = supabaseBrowser();
+                  await supabase
+                    .from("item_alerts")
+                    .update({ active: true })
+                    .eq("item_id", item.id);
+                } catch {
+                  /* non-fatal */
+                }
+              }
+              queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+              toast.success("Completion undone", {
+                icon: ToastIcons.update,
+              });
+            } catch (e) {
+              console.error("Undo complete failed", e);
+              toast.error("Failed to undo completion");
             }
           },
         },

@@ -363,9 +363,9 @@ CREATE TABLE public.event_details (
   start_at timestamp with time zone NOT NULL,
   end_at timestamp with time zone NOT NULL,
   all_day boolean NOT NULL DEFAULT false,
-  location_text text,
+  location_text text, -- DEPRECATED: use items.location_text. Kept for backward compatibility.
   CONSTRAINT event_details_pkey PRIMARY KEY (item_id),
-  CONSTRAINT event_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+  CONSTRAINT event_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
 );
 CREATE TABLE public.future_purchases (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -666,7 +666,7 @@ CREATE TABLE public.item_alerts (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT item_alerts_pkey PRIMARY KEY (id),
-  CONSTRAINT item_alerts_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+  CONSTRAINT item_alerts_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
 );
 CREATE TABLE public.item_attachments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -677,7 +677,7 @@ CREATE TABLE public.item_attachments (
   size_bytes bigint,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT item_attachments_pkey PRIMARY KEY (id),
-  CONSTRAINT item_attachments_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+  CONSTRAINT item_attachments_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
 );
 CREATE TABLE public.item_occurrence_actions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -690,7 +690,7 @@ CREATE TABLE public.item_occurrence_actions (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   created_by uuid,
   CONSTRAINT item_occurrence_actions_pkey PRIMARY KEY (id),
-  CONSTRAINT item_occurrence_actions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
+  CONSTRAINT item_occurrence_actions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
   CONSTRAINT item_occurrence_actions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.item_recurrence_exceptions (
@@ -700,7 +700,7 @@ CREATE TABLE public.item_recurrence_exceptions (
   override_payload_json jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT item_recurrence_exceptions_pkey PRIMARY KEY (id),
-  CONSTRAINT item_recurrence_exceptions_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.item_recurrence_rules(id)
+  CONSTRAINT item_recurrence_exceptions_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.item_recurrence_rules(id) ON DELETE CASCADE
 );
 CREATE TABLE public.item_recurrence_rules (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -714,7 +714,7 @@ CREATE TABLE public.item_recurrence_rules (
   is_flexible boolean NOT NULL DEFAULT false,
   flexible_period text CHECK (flexible_period IS NULL OR (flexible_period = ANY (ARRAY['daily'::text, 'weekly'::text, 'biweekly'::text, 'monthly'::text]))),
   CONSTRAINT item_recurrence_rules_pkey PRIMARY KEY (id),
-  CONSTRAINT item_recurrence_rules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+  CONSTRAINT item_recurrence_rules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
 );
 
 -- Flexible routine schedules: one row per scheduled occurrence per period.
@@ -752,8 +752,8 @@ CREATE TABLE public.item_snoozes (
   snoozed_until timestamp with time zone NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT item_snoozes_pkey PRIMARY KEY (id),
-  CONSTRAINT item_snoozes_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.item_alerts(id),
-  CONSTRAINT item_snoozes_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+  CONSTRAINT item_snoozes_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.item_alerts(id) ON DELETE CASCADE,
+  CONSTRAINT item_snoozes_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
 );
 CREATE TABLE public.item_subtask_completions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -763,7 +763,7 @@ CREATE TABLE public.item_subtask_completions (
   completed_by uuid,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT item_subtask_completions_pkey PRIMARY KEY (id),
-  CONSTRAINT item_subtask_completions_subtask_id_fkey FOREIGN KEY (subtask_id) REFERENCES public.item_subtasks(id),
+  CONSTRAINT item_subtask_completions_subtask_id_fkey FOREIGN KEY (subtask_id) REFERENCES public.item_subtasks(id) ON DELETE CASCADE,
   CONSTRAINT item_subtask_completions_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.item_subtasks (
@@ -780,8 +780,8 @@ CREATE TABLE public.item_subtasks (
   kanban_stage text DEFAULT '''To Do''::text'::text,
   previous_kanban_stage text,
   CONSTRAINT item_subtasks_pkey PRIMARY KEY (id),
-  CONSTRAINT item_subtasks_parent_subtask_id_fkey FOREIGN KEY (parent_subtask_id) REFERENCES public.item_subtasks(id),
-  CONSTRAINT item_subtasks_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES public.items(id)
+  CONSTRAINT item_subtasks_parent_subtask_id_fkey FOREIGN KEY (parent_subtask_id) REFERENCES public.item_subtasks(id) ON DELETE CASCADE,
+  CONSTRAINT item_subtasks_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES public.items(id) ON DELETE CASCADE
 );
 CREATE TABLE public.items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -801,6 +801,8 @@ CREATE TABLE public.items (
   categories ARRAY DEFAULT '{}'::text[],
   subtask_kanban_stages jsonb DEFAULT '["To Do", "Later", "In Progress", "Done"]'::jsonb,
   subtask_kanban_enabled boolean DEFAULT false,
+  location_context text CHECK (location_context IS NULL OR (location_context = ANY (ARRAY['home'::text, 'outside'::text, 'anywhere'::text]))),
+  location_text text,
   CONSTRAINT items_pkey PRIMARY KEY (id),
   CONSTRAINT items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT items_responsible_user_fkey FOREIGN KEY (responsible_user_id) REFERENCES auth.users(id)
@@ -893,7 +895,7 @@ CREATE TABLE public.notifications (
   snoozed_until timestamp with time zone,
   CONSTRAINT notifications_pkey PRIMARY KEY (id),
   CONSTRAINT in_app_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT in_app_notifications_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
+  CONSTRAINT in_app_notifications_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
   CONSTRAINT in_app_notifications_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id),
   CONSTRAINT notifications_recurring_payment_id_fkey FOREIGN KEY (recurring_payment_id) REFERENCES public.recurring_payments(id),
   CONSTRAINT notifications_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
@@ -1032,9 +1034,10 @@ CREATE TABLE public.reminder_details (
   due_at timestamp with time zone,
   completed_at timestamp with time zone,
   estimate_minutes integer CHECK (estimate_minutes IS NULL OR estimate_minutes >= 0),
+  actual_minutes integer CHECK (actual_minutes IS NULL OR actual_minutes >= 0),
   has_checklist boolean NOT NULL DEFAULT false,
   CONSTRAINT reminder_details_pkey PRIMARY KEY (item_id),
-  CONSTRAINT reminder_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+  CONSTRAINT reminder_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
 );
 CREATE TABLE public.reminder_templates (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1340,8 +1343,7 @@ CREATE POLICY "items_update" ON public.items FOR UPDATE USING (
   user_id = auth.uid()
   OR responsible_user_id = auth.uid()
   OR (
-    notify_all_household = true
-    AND is_public = true
+    is_public = true
     AND EXISTS (
       SELECT 1 FROM public.household_links
       WHERE active = true
@@ -1355,8 +1357,7 @@ CREATE POLICY "items_update" ON public.items FOR UPDATE USING (
 CREATE POLICY "items_delete" ON public.items FOR DELETE USING (
   user_id = auth.uid()
   OR (
-    notify_all_household = true
-    AND is_public = true
+    is_public = true
     AND EXISTS (
       SELECT 1 FROM public.household_links
       WHERE active = true
@@ -1400,8 +1401,7 @@ CREATE POLICY "item_occurrence_actions_insert" ON public.item_occurrence_actions
       i.user_id = auth.uid()
       OR i.responsible_user_id = auth.uid()
       OR (
-        i.notify_all_household = true
-        AND i.is_public = true
+        i.is_public = true
         AND EXISTS (
           SELECT 1 FROM public.household_links
           WHERE active = true

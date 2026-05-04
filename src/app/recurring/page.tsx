@@ -13,6 +13,12 @@ import {
 } from "@/components/ui/select";
 import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
+import {
+  useConfirmDraft,
+  useDeleteDraft,
+  useDrafts,
+} from "@/features/drafts/useDrafts";
+import { useEvents, useReminders, useTasks } from "@/features/items/useItems";
 import { useLbpSettings } from "@/features/preferences/useLbpSettings";
 import {
   type FuturePayment,
@@ -29,16 +35,6 @@ import {
   useUpdateRecurringPayment,
 } from "@/features/recurring/useRecurringPayments";
 import {
-  useConfirmDraft,
-  useDeleteDraft,
-  useDrafts,
-} from "@/features/drafts/useDrafts";
-import {
-  useEvents,
-  useReminders,
-  useTasks,
-} from "@/features/items/useItems";
-import {
   getMemberDisplayName,
   useHouseholdMembers,
 } from "@/hooks/useHouseholdMembers";
@@ -50,8 +46,8 @@ import {
   addDays,
   format,
   formatDistanceToNow,
-  isSameDay,
   isPast,
+  isSameDay,
   isToday,
   isTomorrow,
   startOfDay,
@@ -155,10 +151,22 @@ export default function RecurringPage() {
   const deleteDraftMutation = useDeleteDraft();
   const confirmDraftMutation = useConfirmDraft();
 
-  // Schedule mode data
-  const { data: allEvents = [] } = useEvents();
-  const { data: allReminders = [] } = useReminders();
-  const { data: allTasks = [] } = useTasks();
+  // Schedule mode data — only items with a recurrence_rule belong on /recurring
+  const { data: rawEvents = [] } = useEvents();
+  const { data: rawReminders = [] } = useReminders();
+  const { data: rawTasks = [] } = useTasks();
+  const allEvents = useMemo(
+    () => rawEvents.filter((i) => i.recurrence_rule),
+    [rawEvents],
+  );
+  const allReminders = useMemo(
+    () => rawReminders.filter((i) => i.recurrence_rule),
+    [rawReminders],
+  );
+  const allTasks = useMemo(
+    () => rawTasks.filter((i) => i.recurrence_rule),
+    [rawTasks],
+  );
 
   // Form state for Add/Edit recurring
   const [formData, setFormData] = useState({
@@ -686,7 +694,10 @@ export default function RecurringPage() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setScheduleDate((d) => subDays(d, 1))}
-                  className={cn("p-2 rounded-lg active:scale-95 transition-all", tc.bgSurface)}
+                  className={cn(
+                    "p-2 rounded-lg active:scale-95 transition-all",
+                    tc.bgSurface,
+                  )}
                 >
                   <ChevronLeft className={cn("w-4 h-4", tc.text)} />
                 </button>
@@ -705,7 +716,10 @@ export default function RecurringPage() {
                 </div>
                 <button
                   onClick={() => setScheduleDate((d) => addDays(d, 1))}
-                  className={cn("p-2 rounded-lg active:scale-95 transition-all", tc.bgSurface)}
+                  className={cn(
+                    "p-2 rounded-lg active:scale-95 transition-all",
+                    tc.bgSurface,
+                  )}
                 >
                   <ChevronRight className={cn("w-4 h-4", tc.text)} />
                 </button>
@@ -1090,7 +1104,8 @@ export default function RecurringPage() {
                       tc.textHighlight,
                     )}
                   >
-                    ${draftPayments.reduce((s, d) => s + d.amount, 0).toFixed(2)}
+                    $
+                    {draftPayments.reduce((s, d) => s + d.amount, 0).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -2370,7 +2385,12 @@ function ScheduleView({
 
   for (const item of allReminders) {
     const status = item.status ?? "pending";
-    if (status === "completed" || status === "cancelled" || status === "archived") continue;
+    if (
+      status === "completed" ||
+      status === "cancelled" ||
+      status === "archived"
+    )
+      continue;
     const dueAt = item.reminder_details?.due_at
       ? new Date(item.reminder_details.due_at)
       : null;
@@ -2404,8 +2424,12 @@ function ScheduleView({
 
   const gaps = sGetGaps(timedItems);
   const currentTimePixels = isSelectedToday ? sTimeToPixels(now) : -1;
-  const hours = Array.from({ length: S_TOTAL_HOURS + 1 }, (_, i) => S_DAY_START + i);
-  const totalScheduled = timedEvents.length + allDayEvents.length + timedReminders.length;
+  const hours = Array.from(
+    { length: S_TOTAL_HOURS + 1 },
+    (_, i) => S_DAY_START + i,
+  );
+  const totalScheduled =
+    timedEvents.length + allDayEvents.length + timedReminders.length;
   const isEmpty =
     timedItems.length === 0 &&
     tasks.length === 0 &&
@@ -2425,7 +2449,13 @@ function ScheduleView({
           </div>
         )}
         {timedEvents.length > 0 && (
-          <div className={cn("flex items-center gap-1 px-2.5 py-1 rounded-full border shrink-0", tc.bgActive, tc.borderActive)}>
+          <div
+            className={cn(
+              "flex items-center gap-1 px-2.5 py-1 rounded-full border shrink-0",
+              tc.bgActive,
+              tc.borderActive,
+            )}
+          >
             <CalendarDays className={cn("w-3 h-3", tc.textHighlight)} />
             <span className={cn("text-[11px] font-semibold", tc.textHighlight)}>
               {timedEvents.length} event{timedEvents.length !== 1 ? "s" : ""}
@@ -2436,7 +2466,8 @@ function ScheduleView({
           <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 shrink-0">
             <Clock className="w-3 h-3 text-amber-400" />
             <span className="text-[11px] font-semibold text-amber-400">
-              {timedReminders.length} reminder{timedReminders.length !== 1 ? "s" : ""}
+              {timedReminders.length} reminder
+              {timedReminders.length !== 1 ? "s" : ""}
             </span>
           </div>
         )}
@@ -2471,7 +2502,9 @@ function ScheduleView({
                 >
                   <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{item.title}</p>
+                    <p className="text-sm font-medium text-white truncate">
+                      {item.title}
+                    </p>
                     {dueAt && (
                       <p className="text-[10px] text-red-400/60">
                         Due {format(dueAt, "MMM d, h:mm a")}
@@ -2495,7 +2528,11 @@ function ScheduleView({
             {allDayEvents.map((item) => (
               <div
                 key={item.id}
-                className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold", tc.bgActive, tc.textHighlight)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-semibold",
+                  tc.bgActive,
+                  tc.textHighlight,
+                )}
               >
                 {item.title}
               </div>
@@ -2507,12 +2544,16 @@ function ScheduleView({
       {/* Empty state */}
       {isEmpty && (
         <div className="py-14 text-center">
-          <CalendarDays className={cn("w-14 h-14 mx-auto mb-4", tc.textFaint)} />
+          <CalendarDays
+            className={cn("w-14 h-14 mx-auto mb-4", tc.textFaint)}
+          />
           <p className={cn("text-base font-medium mb-1", tc.textMuted)}>
             {isSelectedToday ? "Clear day ahead" : "Nothing scheduled"}
           </p>
           <p className={cn("text-sm", tc.textFaint)}>
-            {isSelectedToday ? "Enjoy the space — or plan something" : "No items on this day"}
+            {isSelectedToday
+              ? "Enjoy the space — or plan something"
+              : "No items on this day"}
           </p>
         </div>
       )}
@@ -2521,7 +2562,13 @@ function ScheduleView({
       {!isEmpty && timedItems.length > 0 && (
         <div className="flex gap-3 mb-6">
           {/* Hour labels */}
-          <div className="shrink-0 relative" style={{ width: "36px", height: `${S_TOTAL_HOURS * S_HOUR_HEIGHT}px` }}>
+          <div
+            className="shrink-0 relative"
+            style={{
+              width: "36px",
+              height: `${S_TOTAL_HOURS * S_HOUR_HEIGHT}px`,
+            }}
+          >
             {hours.map((h) => (
               <div
                 key={h}
@@ -2536,7 +2583,10 @@ function ScheduleView({
           </div>
 
           {/* Grid + items */}
-          <div className="flex-1 relative" style={{ height: `${S_TOTAL_HOURS * S_HOUR_HEIGHT}px` }}>
+          <div
+            className="flex-1 relative"
+            style={{ height: `${S_TOTAL_HOURS * S_HOUR_HEIGHT}px` }}
+          >
             {hours.map((h) => (
               <div
                 key={h}
@@ -2548,7 +2598,9 @@ function ScheduleView({
               <div
                 key={`half-${h}`}
                 className="absolute left-0 right-0 border-t border-white/[0.025]"
-                style={{ top: `${(h - S_DAY_START) * S_HOUR_HEIGHT + S_HOUR_HEIGHT / 2}px` }}
+                style={{
+                  top: `${(h - S_DAY_START) * S_HOUR_HEIGHT + S_HOUR_HEIGHT / 2}px`,
+                }}
               />
             ))}
 
@@ -2557,7 +2609,10 @@ function ScheduleView({
               <div
                 key={i}
                 className="absolute left-1 right-1 flex items-center justify-center pointer-events-none"
-                style={{ top: `${gap.top + 4}px`, height: `${gap.height - 8}px` }}
+                style={{
+                  top: `${gap.top + 4}px`,
+                  height: `${gap.height - 8}px`,
+                }}
               >
                 <div className="border border-dashed border-white/10 rounded-lg px-2 py-0.5">
                   <span className="text-[9px] text-white/20 font-medium">
@@ -2589,21 +2644,31 @@ function ScheduleView({
               const start = new Date(item.event_details.start_at);
               const end = new Date(item.event_details.end_at);
               const top = sTimeToPixels(start);
-              const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-              const height = Math.max(S_MIN_HEIGHT, durationHours * S_HOUR_HEIGHT);
+              const durationHours =
+                (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+              const height = Math.max(
+                S_MIN_HEIGHT,
+                durationHours * S_HOUR_HEIGHT,
+              );
               const short = height < 44;
               return (
                 <div
                   key={item.id}
                   className={cn(
                     "absolute left-1 right-0 rounded-xl px-2.5 overflow-hidden border",
-                    tc.bgActive, tc.borderActive,
+                    tc.bgActive,
+                    tc.borderActive,
                   )}
                   style={{ top: `${top}px`, height: `${height}px` }}
                 >
                   {short ? (
                     <div className="h-full flex items-center gap-2">
-                      <p className={cn("text-[11px] font-semibold truncate", tc.textHighlight)}>
+                      <p
+                        className={cn(
+                          "text-[11px] font-semibold truncate",
+                          tc.textHighlight,
+                        )}
+                      >
                         {item.title}
                       </p>
                       <p className="text-[9px] text-white/35 shrink-0 ml-auto">
@@ -2612,7 +2677,12 @@ function ScheduleView({
                     </div>
                   ) : (
                     <>
-                      <p className={cn("text-xs font-semibold leading-tight truncate mt-2", tc.textHighlight)}>
+                      <p
+                        className={cn(
+                          "text-xs font-semibold leading-tight truncate mt-2",
+                          tc.textHighlight,
+                        )}
+                      >
                         {item.title}
                       </p>
                       <p className="text-[10px] text-white/40 mt-0.5">
@@ -2685,7 +2755,12 @@ function ScheduleView({
                   <p className="flex-1 text-sm font-medium text-white/60 truncate">
                     {item.title}
                   </p>
-                  <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", priorityDot)} />
+                  <div
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full shrink-0",
+                      priorityDot,
+                    )}
+                  />
                 </div>
               );
             })}

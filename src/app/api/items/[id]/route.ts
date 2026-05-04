@@ -44,6 +44,8 @@ export async function PATCH(
       "responsible_user_id",
       "notify_all_household",
       "categories",
+      "location_context",
+      "location_text",
       "archived_at",
       "pinned",
     ];
@@ -93,6 +95,38 @@ export async function PATCH(
         .from("event_details")
         .update(eventUpdate)
         .eq("item_id", itemId);
+    }
+
+    // Cascade: if due_at or start_at changed, recompute relative alerts and
+    // reset absolute alerts to the new anchor time.
+    const newAnchor = body.start_at !== undefined ? body.start_at : body.due_at;
+    if (newAnchor !== undefined && newAnchor !== null) {
+      const { data: alerts } = await supabase
+        .from("item_alerts")
+        .select("id, kind, offset_minutes, relative_to")
+        .eq("item_id", itemId)
+        .eq("active", true);
+      if (alerts?.length) {
+        const baseTime = new Date(newAnchor as string);
+        for (const a of alerts) {
+          let newTrigger: string;
+          if (a.kind === "relative" && a.offset_minutes != null) {
+            const baseForThis =
+              a.relative_to === "end" && body.end_at
+                ? new Date(body.end_at as string)
+                : baseTime;
+            newTrigger = new Date(
+              baseForThis.getTime() - a.offset_minutes * 60 * 1000,
+            ).toISOString();
+          } else {
+            newTrigger = baseTime.toISOString();
+          }
+          await supabase
+            .from("item_alerts")
+            .update({ trigger_at: newTrigger, last_fired_at: null })
+            .eq("id", a.id);
+        }
+      }
     }
 
     return NextResponse.json({ item: data });

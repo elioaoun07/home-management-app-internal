@@ -19,6 +19,7 @@ import {
   isOccurrenceCompleted,
   useAllOccurrenceActions,
   useItemActionsWithToast,
+  useUncompleteItem,
   useUndoOccurrenceAction,
   type PostponeType,
 } from "@/features/items/useItemActions";
@@ -147,6 +148,9 @@ export default function WebEvents() {
   const [showActionDialog, setShowActionDialog] = useState(false);
   const [showPostponeDialog, setShowPostponeDialog] = useState(false);
   const [actionReason, setActionReason] = useState("");
+  // Task completion: optional time-spent prompt (tasks only)
+  const [showTaskTimePrompt, setShowTaskTimePrompt] = useState(false);
+  const [taskMinutesInput, setTaskMinutesInput] = useState("");
   const [customPostponeDate, setCustomPostponeDate] = useState<string>("");
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [clickedOccurrenceDate, setClickedOccurrenceDate] =
@@ -204,19 +208,37 @@ export default function WebEvents() {
   );
 
   // Action handlers
+  const performComplete = useCallback(
+    (actualMinutes?: number) => {
+      if (!detailItem) return;
+      itemActions.handleComplete(
+        detailItem,
+        getOccurrenceDate(detailItem).toISOString(),
+        actionReason || undefined,
+        actualMinutes,
+      );
+      setDetailItem(null);
+      setClickedOccurrenceDate(null);
+      setModalPosition(null);
+      setShowActionDialog(false);
+      setActionReason("");
+    },
+    [detailItem, itemActions, getOccurrenceDate, actionReason],
+  );
+
   const handleCompleteAction = useCallback(() => {
     if (!detailItem) return;
-    itemActions.handleComplete(
-      detailItem,
-      getOccurrenceDate(detailItem).toISOString(),
-      actionReason || undefined,
-    );
-    setDetailItem(null);
-    setClickedOccurrenceDate(null);
-    setModalPosition(null);
-    setShowActionDialog(false);
-    setActionReason("");
-  }, [detailItem, itemActions, getOccurrenceDate, actionReason]);
+    if (detailItem.type === "task") {
+      setTaskMinutesInput(
+        detailItem.reminder_details?.estimate_minutes
+          ? String(detailItem.reminder_details.estimate_minutes)
+          : "",
+      );
+      setShowTaskTimePrompt(true);
+      return;
+    }
+    performComplete();
+  }, [detailItem, performComplete]);
 
   const handlePostponeAction = useCallback(
     (postponeType: PostponeType, customDate?: string) => {
@@ -261,6 +283,7 @@ export default function WebEvents() {
 
   // Undo occurrence action mutation
   const undoAction = useUndoOccurrenceAction();
+  const uncompleteItem = useUncompleteItem();
 
   // Helper: Check if the clicked occurrence is completed and get the action ID
   const getCompletedOccurrenceAction = useCallback(() => {
@@ -289,23 +312,52 @@ export default function WebEvents() {
 
   // Undo handler
   const handleUndoAction = useCallback(async () => {
+    if (!detailItem) return;
+
     const action = getCompletedOccurrenceAction();
-    if (!action) return;
 
     try {
-      await undoAction.mutateAsync(action.id);
-      toast.success("Action undone");
+      if (action) {
+        // Recurring occurrence: delete the action record
+        await undoAction.mutateAsync(action.id);
+      } else if (
+        !isRecurring(detailItem) &&
+        detailItem.status === "completed"
+      ) {
+        // Non-recurring item: revert status, clear completed_at, delete action rows, re-enable alerts
+        await uncompleteItem.mutateAsync({
+          itemId: detailItem.id,
+          occurrenceDate: getOccurrenceDate(detailItem).toISOString(),
+          isRecurring: false,
+        });
+      } else {
+        return;
+      }
+      toast.success("Undone");
       setDetailItem(null);
       setClickedOccurrenceDate(null);
       setModalPosition(null);
     } catch (error) {
-      toast.error("Failed to undo action");
+      toast.error("Failed to undo");
       console.error(error);
     }
-  }, [getCompletedOccurrenceAction, undoAction]);
+  }, [
+    detailItem,
+    getCompletedOccurrenceAction,
+    getOccurrenceDate,
+    isRecurring,
+    uncompleteItem,
+    undoAction,
+  ]);
 
-  // Check if current occurrence is completed
-  const isCurrentOccurrenceCompleted = !!getCompletedOccurrenceAction();
+  // Show undo button if: recurring occurrence is completed OR non-recurring item status is completed
+  const isCurrentOccurrenceCompleted =
+    !!getCompletedOccurrenceAction() ||
+    !!(
+      detailItem &&
+      !isRecurring(detailItem) &&
+      detailItem.status === "completed"
+    );
 
   // Fetch subtask completions for recurring item subtasks
   const { data: subtaskCompletions = [] } = useAllSubtaskCompletions();
@@ -1578,6 +1630,75 @@ export default function WebEvents() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Task completion: optional time-spent prompt */}
+      {showTaskTimePrompt && (
+        <Dialog
+          open={showTaskTimePrompt}
+          onOpenChange={(open) => {
+            if (!open) setShowTaskTimePrompt(false);
+          }}
+        >
+          <DialogContent
+            className={cn(
+              "sm:max-w-sm neo-card border",
+              isPink ? "border-pink-500/30" : "border-cyan-500/30",
+            )}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-xl text-white">
+                How long did this take?
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-white/60">
+                Optional — helps refine future estimates.
+              </p>
+              <input
+                type="text"
+                inputMode="decimal"
+                autoFocus
+                value={taskMinutesInput}
+                onChange={(e) =>
+                  setTaskMinutesInput(e.target.value.replace(/[^0-9.]/g, ""))
+                }
+                placeholder="Minutes"
+                className="w-full rounded-xl px-3 py-2 text-white placeholder:text-white/40 outline-none bg-white/5 border border-white/10 focus:border-white/20"
+              />
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTaskTimePrompt(false);
+                    performComplete();
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  Skip
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const n = parseInt(taskMinutesInput, 10);
+                    const mins = Number.isFinite(n) && n >= 0 ? n : undefined;
+                    setShowTaskTimePrompt(false);
+                    setTaskMinutesInput("");
+                    performComplete(mins);
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                    isPink
+                      ? "bg-pink-500/25 text-pink-50 hover:bg-pink-500/35 ring-1 ring-pink-400/50"
+                      : "bg-cyan-500/25 text-cyan-50 hover:bg-cyan-500/35 ring-1 ring-cyan-400/50",
+                  )}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Postpone Options Dialog */}

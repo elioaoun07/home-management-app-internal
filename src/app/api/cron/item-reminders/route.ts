@@ -14,11 +14,11 @@
  * 4. Marks alert as fired
  */
 
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/pushSender";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { buildFullRRuleString } from "@/lib/utils/date";
-import { RRule } from "rrule";
 import { NextRequest, NextResponse } from "next/server";
+import { RRule } from "rrule";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -96,13 +96,15 @@ export async function GET(req: NextRequest) {
         description: string | null;
         type: string;
         priority: string;
-        item_recurrence_rules: {
-          id: string;
-          rrule: string;
-          start_anchor: string;
-          end_until: string | null;
-          count: number | null;
-        }[] | null;
+        item_recurrence_rules:
+          | {
+              id: string;
+              rrule: string;
+              start_anchor: string;
+              end_until: string | null;
+              count: number | null;
+            }[]
+          | null;
       } | null;
 
       if (!item) {
@@ -226,25 +228,36 @@ export async function GET(req: NextRequest) {
         .eq("id", alert.id);
 
       // For recurring items, advance trigger_at to the next occurrence.
-      // We advance by the interval between occurrences (nextOcc - currentOcc),
-      // which naturally preserves any custom fire time (e.g. "8pm") without
-      // needing a separate custom_time column.
+      // Handles both relative alerts (offset before due/start) and absolute
+      // alerts (trigger_at = occurrence time, no offset).
       const rule = item?.item_recurrence_rules?.[0];
-      const offsetMinutes = (alert as unknown as { offset_minutes: number | null }).offset_minutes;
-      if (rule && alert.trigger_at && offsetMinutes != null) {
+      const offsetMinutes = (
+        alert as unknown as { offset_minutes: number | null }
+      ).offset_minutes;
+      const alertKind = (alert as unknown as { kind: string }).kind;
+      if (rule && alert.trigger_at) {
         const firedTriggerAt = new Date(alert.trigger_at);
-        // Current event start = trigger_at + offset_minutes
-        const currentEventTime = new Date(
-          firedTriggerAt.getTime() + offsetMinutes * 60 * 1000,
+        // Derive the *occurrence time* this alert was firing for
+        const currentEventTime =
+          alertKind === "relative" && offsetMinutes != null
+            ? new Date(firedTriggerAt.getTime() + offsetMinutes * 60 * 1000)
+            : new Date(firedTriggerAt); // absolute: trigger_at IS the occurrence
+        const rruleStr = buildFullRRuleString(
+          new Date(rule.start_anchor),
+          rule,
         );
-        const rruleStr = buildFullRRuleString(new Date(rule.start_anchor), rule);
-        const nextOcc = RRule.fromString(rruleStr).after(currentEventTime, false);
+        const nextOcc = RRule.fromString(rruleStr).after(
+          currentEventTime,
+          false,
+        );
         if (nextOcc) {
-          // Advance by the exact gap between occurrences — preserves custom time
-          const interval = nextOcc.getTime() - currentEventTime.getTime();
-          const newTriggerAt = new Date(
-            firedTriggerAt.getTime() + interval,
-          ).toISOString();
+          // newTrigger anchors to nextOcc, applying the relative offset if any
+          const newTriggerAt =
+            alertKind === "relative" && offsetMinutes != null
+              ? new Date(
+                  nextOcc.getTime() - offsetMinutes * 60 * 1000,
+                ).toISOString()
+              : nextOcc.toISOString();
           await supabase
             .from("item_alerts")
             .update({ trigger_at: newTriggerAt, last_fired_at: null })

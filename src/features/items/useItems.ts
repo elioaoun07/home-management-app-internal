@@ -3,6 +3,7 @@
 
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
+import { safeFetch } from "@/lib/safeFetch";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ToastIcons } from "@/lib/toastIcons";
 import type {
@@ -21,7 +22,6 @@ import type {
   UpdateItemInput,
   UpdateReminderInput,
 } from "@/types/items";
-import { safeFetch } from "@/lib/safeFetch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -399,6 +399,8 @@ export function useCreateReminder() {
           responsible_user_id: input.responsible_user_id || user.id,
           notify_all_household: input.notify_all_household || false,
           categories: input.category_ids || [],
+          location_context: input.location_context ?? null,
+          location_text: input.location_text ?? null,
           // Catalogue template link
           source_catalogue_item_id: input.source_catalogue_item_id || null,
           is_template_instance: input.is_template_instance || false,
@@ -609,6 +611,8 @@ export function useCreateEvent() {
           responsible_user_id: input.responsible_user_id || user.id,
           notify_all_household: input.notify_all_household || false,
           categories: input.category_ids || [],
+          location_context: input.location_context ?? null,
+          location_text: input.location_text ?? null,
           // Catalogue template link
           source_catalogue_item_id: input.source_catalogue_item_id || null,
           is_template_instance: input.is_template_instance || false,
@@ -782,6 +786,8 @@ export function useCreateTask() {
           responsible_user_id: input.responsible_user_id || user.id,
           notify_all_household: input.notify_all_household || false,
           categories: input.category_ids || [],
+          location_context: input.location_context ?? null,
+          location_text: input.location_text ?? null,
           // Catalogue template link
           source_catalogue_item_id: input.source_catalogue_item_id || null,
           is_template_instance: input.is_template_instance || false,
@@ -803,6 +809,21 @@ export function useCreateTask() {
           });
 
         if (detailsError) throw detailsError;
+      }
+
+      // Create subtasks if provided (tasks can have subtasks too)
+      if (input.subtasks?.length) {
+        const subtasks = input.subtasks.map((s, i) => ({
+          parent_item_id: item.id,
+          title: s.title,
+          order_index: s.order_index ?? i,
+        }));
+        const { error: subtasksError } = await supabase
+          .from("item_subtasks")
+          .insert(subtasks);
+        if (subtasksError) {
+          console.error("Failed to create subtasks for task:", subtasksError);
+        }
       }
 
       // Create recurrence rule if provided

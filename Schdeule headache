@@ -1,0 +1,37 @@
+Okay this topic is becoming a real headache!
+Go back to the Schedule module. Do a deep analysis and run a full doc scanning and codebase understanding. The issue is that i feel it is too weak and not coherant across different pages.
+Let me start by clarifying my purpose, and review the weak points and fix them. Here is the flow/explanation i see for my different pages and multiple alternating features:
+
+1. Catalogue is my global picklist value. Think of it like a UI database. This is my warehouse from where i get my items. When i define an item (lets say task) in my catalogue, it has the following features:
+   Type, Title, Categories, Priority, Location, Preferred Time, Duration, Recurrence, Flexible, Subtasks, Additional Notes, Tags, Trigger, Visibility.
+   Most of these global picklists are a backbone to reduce the time needed from me for adding it each time; i have Type, title, category, priority, Location, Recurrence, Additional notes, Preferred time, and duration
+   Flexible is specific for Catalogue and will show on my weekly calendar to add as flexible item.
+   Tags is also specific for Catalogue to filter by tags keyword
+   Visibility is for the Catalogue item visibility not the item itself on the calendar
+   P.S. For reminder type item, remove Duration.
+
+2. When i 'add to calendar' an item from Catalogue, it should be created as a normal item like everything else on all my calendars views and have the above points prefilled: Type, Title, Categories, Priority, Location, Preferred Time, Duration, Recurrence, Flexible, Subtasks, Additional Notes, Tags, Trigger, Visibility. The modal that opens when adding the item to calendar is prefilled with most values, but great to keep Start date (not available in global catalogue item which is good), Alert (also not available in global catalogue item which is also good), Recurrence should also be prefilled and read only like title, type...visibility is needed since it is the item on calendar visibility and not catalogue item visibility. But it should take into consideration everything else: Type, Title, Categories, Priority, Location, Preferred Time (Overriden by start date/time), Duration, Recurrence, Subtasks, Additional Notes, Trigger.
+
+3. On Calendar web view: I should have for task duration like i have on catalogue modal.
+   For reminder and Tasks i should also have location
+   For all types, add like in catalogue: At Home, Outside home + location, Anywhere
+   Also add Subtasks for all Types
+
+4. On weekly view, when i add a flexible item, it should be created as a normal item like everything else on all my calendars views and should take into considerations all the prefilled fields from catalogue including the Duration (This is 1 bug i noticed. there could be more...)
+
+5. Undo on Calendar after an item is set to compelete didn't work, not sure if it was an issue with optimistic UI or Persistence...Make sure this is covered everywhere! THe hard rule of Optimistic UI vs Persistence, vs reload. Also add a more clearer animation of the refresh icon on Calendar web view to know that it completed reloading....
+
+6. Allow me to adjust the duration of an item while adding it from Catalogue (either the flexible or the recurrent) also when marking as completed, ask me for Tasks type only, how much time did it take me to complete this item (optional input not required)
+
+7. I have an item 'Mass' sunday at 11 AM with an alert set to 30 mins before. Today (monday) i received a notificaiton at 10:30 am about Mass...this is so bad. And after checking, this item only appears for some reason on mobile view under Plan navigation under hook /recurring no idea why...It shouldn't be there.../recurring hook > Schedule should show same like everywhere else... for today's schedule
+   check the notification table how it is handled, what is written in it. also make sure it has cascaded mutation and deletion if the item was postponed, you should postpone the alert with it, if it was deleted or cancelled you should as well remove the alert. if it was marked as completed, also remove the alert.
+
+8. On Mobile view > Activitiy: Default the filter to 'This week'.
+   When i click on quick viewing an item, Edit button isn't working.
+
+Make sure the database tables are also aligned and well structured:
+All tables are coherent!
+All Cascading is well structured
+All RLS Are optimal: When i create an item, I Own it; if it is public, all partners in the household can see it, act on it: Complete, postpone, skip... If it is private i only view it...
+
+If you have any question, suggestions, enhancement, bug...ask me if anything is not clear!

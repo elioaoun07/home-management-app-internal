@@ -19,10 +19,10 @@ import {
   isBefore,
   parseISO,
 } from "date-fns";
-import { toast } from "sonner";
 import { Check } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import ItemActionsSheet from "./ItemActionsSheet";
 import { PromoteToCatalogueDialog } from "./PromoteToCatalogueDialog";
 import { ResponsibleUserBadge } from "./ResponsibleUserPicker";
@@ -257,6 +257,12 @@ export default function ItemDetailModal({
   const [isClosing, setIsClosing] = useState(false);
   const [showActionsSheet, setShowActionsSheet] = useState(false);
   const [showPromoteDialog, setShowPromoteDialog] = useState(false);
+  // Task completion time prompt (only shown for type='task')
+  const [showTimePrompt, setShowTimePrompt] = useState(false);
+  const [pendingCompleteReason, setPendingCompleteReason] = useState<
+    string | undefined
+  >(undefined);
+  const [actualMinutesInput, setActualMinutesInput] = useState("");
 
   // Check if item is already linked to catalogue
   const isLinkedToCatalogue = !!item.source_catalogue_item_id;
@@ -273,7 +279,9 @@ export default function ItemDetailModal({
 
   // Determine fine-grained permissions
   const isCreator = currentUserId ? item.user_id === currentUserId : true;
-  const isResponsible = currentUserId ? item.responsible_user_id === currentUserId : true;
+  const isResponsible = currentUserId
+    ? item.responsible_user_id === currentUserId
+    : true;
   const isAllHousehold = !!(item.notify_all_household && item.is_public);
   const canComplete = isCreator || isResponsible || isAllHousehold;
   const canEdit = isCreator;
@@ -340,12 +348,47 @@ export default function ItemDetailModal({
   // Action handlers with toast support
   const handleCompleteAction = useCallback(
     async (reason?: string) => {
+      // For tasks: prompt for actual_minutes before completing
+      if (item.type === "task") {
+        setPendingCompleteReason(reason);
+        setActualMinutesInput(
+          item.reminder_details?.estimate_minutes
+            ? String(item.reminder_details.estimate_minutes)
+            : "",
+        );
+        setShowActionsSheet(false);
+        setShowTimePrompt(true);
+        return;
+      }
       setShowActionsSheet(false);
       setIsClosing(true);
       await doComplete(item, getOccurrenceDate(), reason);
       setTimeout(onClose, 200);
     },
     [doComplete, getOccurrenceDate, item, onClose],
+  );
+
+  const submitTaskCompletion = useCallback(
+    async (skipTime: boolean) => {
+      const mins = skipTime
+        ? undefined
+        : (() => {
+            const n = parseInt(actualMinutesInput, 10);
+            return Number.isFinite(n) && n >= 0 ? n : undefined;
+          })();
+      setShowTimePrompt(false);
+      setIsClosing(true);
+      await doComplete(item, getOccurrenceDate(), pendingCompleteReason, mins);
+      setTimeout(onClose, 200);
+    },
+    [
+      actualMinutesInput,
+      doComplete,
+      getOccurrenceDate,
+      item,
+      onClose,
+      pendingCompleteReason,
+    ],
   );
 
   const handlePostponeAction = useCallback(
@@ -376,7 +419,8 @@ export default function ItemDetailModal({
   }, [doDelete, item, onClose]);
 
   const handleReverseRecurrence = useCallback(() => {
-    if (!item.recurrence_rule?.start_anchor || !item.recurrence_rule.rrule) return;
+    if (!item.recurrence_rule?.start_anchor || !item.recurrence_rule.rrule)
+      return;
     const current = parseISO(item.recurrence_rule.start_anchor);
     const newAnchor = firstBiweeklyFlippedAnchor(current).toISOString();
     const flipTime = new Date().toISOString();
@@ -411,6 +455,17 @@ export default function ItemDetailModal({
 
   // Quick action handlers
   const handleQuickComplete = useCallback(async () => {
+    // Tasks: prompt for actual_minutes before completing
+    if (item.type === "task") {
+      setPendingCompleteReason(undefined);
+      setActualMinutesInput(
+        item.reminder_details?.estimate_minutes
+          ? String(item.reminder_details.estimate_minutes)
+          : "",
+      );
+      setShowTimePrompt(true);
+      return;
+    }
     setIsClosing(true);
     await doComplete(item, getOccurrenceDate());
     setTimeout(onClose, 200);
@@ -786,7 +841,13 @@ export default function ItemDetailModal({
           {/* Responsible user */}
           {item.responsible_user_id && (
             <div className="flex items-center gap-2 text-white/50 text-sm">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                 <circle cx="12" cy="7" r="4" />
               </svg>
@@ -804,7 +865,7 @@ export default function ItemDetailModal({
 
         {/* Footer Actions */}
         <div className="p-4 border-t border-white/10">
-          {(canComplete || canEdit) ? (
+          {canComplete || canEdit ? (
             <div className="space-y-3">
               {/* Info banner for household-assigned items (partner completing) */}
               {canComplete && !canEdit && !isCompleted && (
@@ -921,6 +982,66 @@ export default function ItemDetailModal({
             handleClose();
           }}
         />
+
+        {/* Task completion: actual time prompt */}
+        {showTimePrompt && (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowTimePrompt(false)}
+          >
+            <div
+              className={cn(
+                "neo-card w-[min(360px,90vw)] rounded-2xl border p-5 space-y-4",
+                isPink ? "border-pink-500/30" : "border-cyan-500/30",
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div>
+                <h3 className="text-base font-semibold text-white">
+                  How long did this take?
+                </h3>
+                <p className="mt-1 text-xs text-white/50">
+                  Optional — helps refine future estimates.
+                </p>
+              </div>
+              <input
+                type="text"
+                inputMode="decimal"
+                autoFocus
+                value={actualMinutesInput}
+                onChange={(e) =>
+                  setActualMinutesInput(e.target.value.replace(/[^0-9.]/g, ""))
+                }
+                placeholder="Minutes"
+                className={cn(
+                  "w-full rounded-xl px-3 py-2 text-white placeholder:text-white/40 outline-none",
+                  "bg-white/5 border border-white/10 focus:border-white/20",
+                )}
+              />
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => submitTaskCompletion(true)}
+                  className="px-3 py-1.5 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  Skip
+                </button>
+                <button
+                  type="button"
+                  onClick={() => submitTaskCompletion(false)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                    isPink
+                      ? "bg-pink-500/25 text-pink-50 hover:bg-pink-500/35 ring-1 ring-pink-400/50"
+                      : "bg-cyan-500/25 text-cyan-50 hover:bg-cyan-500/35 ring-1 ring-cyan-400/50",
+                  )}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Animation styles */}

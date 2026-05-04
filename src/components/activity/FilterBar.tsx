@@ -268,6 +268,18 @@ export default function FilterBar({
   const [dateRangeOpen, setDateRangeOpen] = useState(false);
   const [customDateOpen, setCustomDateOpen] = useState(false);
   const [customStart, setCustomStart] = useState(dateRange.start);
+
+  // Brief pulse animation on refresh completion (true → false transition)
+  const [refreshJustCompleted, setRefreshJustCompleted] = useState(false);
+  const prevFetchingRef = useRef(isFetching);
+  useEffect(() => {
+    if (prevFetchingRef.current && !isFetching) {
+      setRefreshJustCompleted(true);
+      const t = setTimeout(() => setRefreshJustCompleted(false), 600);
+      return () => clearTimeout(t);
+    }
+    prevFetchingRef.current = isFetching;
+  }, [isFetching]);
   const [customEnd, setCustomEnd] = useState(dateRange.end);
   const filterPanelRef = useRef<HTMLDivElement>(null);
 
@@ -438,13 +450,19 @@ export default function FilterBar({
             "p-1.5 rounded-lg transition-colors flex-shrink-0",
             isFetching
               ? `${themeClasses.bgActive} ${themeClasses.textActive}`
-              : `neo-card ${themeClasses.text} hover:bg-white/5`,
+              : refreshJustCompleted
+                ? "bg-emerald-500/20 text-emerald-300"
+                : `neo-card ${themeClasses.text} hover:bg-white/5`,
           )}
           title="Refresh data"
         >
-          <RefreshIcon
-            className={cn("w-4 h-4", isFetching && "animate-spin")}
-          />
+          {refreshJustCompleted ? (
+            <CheckIcon className="w-4 h-4 animate-in zoom-in-50 duration-300" />
+          ) : (
+            <RefreshIcon
+              className={cn("w-4 h-4", isFetching && "animate-spin")}
+            />
+          )}
         </button>
 
         {/* Eye — budget sections only */}

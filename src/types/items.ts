@@ -49,6 +49,10 @@ export interface Item {
   categories?: string[]; // Array of category IDs (e.g., ["work", "personal"])
   subtask_kanban_enabled?: boolean; // Whether kanban view is enabled for subtasks
   subtask_kanban_stages?: string[]; // Array of kanban stage names (e.g., ["To Do", "In Progress", "Done"])
+  /** Semantic location mode (applies to all item types) */
+  location_context?: "home" | "outside" | "anywhere" | null;
+  /** Free-form location text (address, place name, URL). Source of truth for all types. */
+  location_text?: string | null;
   // Catalogue template link
   source_catalogue_item_id?: UUID | null; // Reference to the catalogue template this item was created from
   is_template_instance?: boolean; // True if this item syncs with a catalogue template
@@ -83,6 +87,8 @@ export interface ReminderDetails {
   due_at?: string | null; // ISO timestamp
   completed_at?: string | null; // ISO timestamp
   estimate_minutes?: number | null;
+  /** Actual time spent on the task (set when user marks complete and answers prompt) */
+  actual_minutes?: number | null;
   has_checklist: boolean;
 }
 
@@ -268,6 +274,10 @@ export interface CreateItemInput {
   is_public?: boolean;
   responsible_user_id?: UUID; // Defaults to current user
   notify_all_household?: boolean; // When true, alerts are sent to ALL household members
+  /** Semantic location mode (applies to all item types) */
+  location_context?: "home" | "outside" | "anywhere" | null;
+  /** Free-form location text (address, place name, URL). Used for all types. */
+  location_text?: string | null;
   // Catalogue template link
   source_catalogue_item_id?: UUID; // Link to catalogue template
   is_template_instance?: boolean; // True if this is a template instance
@@ -286,7 +296,6 @@ export interface CreateReminderInput extends CreateItemInput {
   category_ids?: UUID[];
   recurrence_rule?: CreateRecurrenceInput;
 }
-
 /** Input for creating an event */
 export interface CreateEventInput extends CreateItemInput {
   type: "event";
@@ -307,6 +316,7 @@ export interface CreateTaskInput extends CreateItemInput {
   alerts?: CreateAlertInput[];
   category_ids?: UUID[];
   recurrence_rule?: CreateRecurrenceInput;
+  subtasks?: CreateSubtaskInput[];
 }
 
 /** Input for creating a subtask */
@@ -349,12 +359,17 @@ export interface UpdateItemInput {
   categories?: string[];
   responsible_user_id?: string | null;
   notify_all_household?: boolean; // When true, alerts are sent to ALL household members
+  /** Semantic location mode (applies to all item types) */
+  location_context?: "home" | "outside" | "anywhere" | null;
+  /** Free-form location text. Source of truth for all types. */
+  location_text?: string | null;
 }
 
 /** Input for updating reminder details */
 export interface UpdateReminderInput extends UpdateItemInput {
   due_at?: string | null;
   estimate_minutes?: number | null;
+  actual_minutes?: number | null;
   has_checklist?: boolean;
   completed_at?: string | null;
 }

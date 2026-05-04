@@ -51,6 +51,8 @@ export async function POST(request: NextRequest) {
         responsible_user_id: body.responsible_user_id || user.id,
         notify_all_household: body.notify_all_household || false,
         categories: body.category_ids || [],
+        location_context: body.location_context || null,
+        location_text: body.location_text || null,
         source_catalogue_item_id: body.source_catalogue_item_id || null,
         is_template_instance: body.is_template_instance || false,
       })
@@ -60,7 +62,10 @@ export async function POST(request: NextRequest) {
     if (itemError) {
       console.error("[items/route] Failed to create item:", itemError);
       if ((itemError as any).code === "23505") {
-        return NextResponse.json({ error: "Item already exists" }, { status: 409 });
+        return NextResponse.json(
+          { error: "Item already exists" },
+          { status: 409 },
+        );
       }
       return NextResponse.json({ error: itemError.message }, { status: 500 });
     }

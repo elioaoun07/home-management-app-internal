@@ -421,22 +421,29 @@ export function WebWeekView({
     // Calculate top position (in pixels from 6 AM) - 72px per hour
     const top = ((startHour - 6) * 60 + startMinute) * (72 / 60);
 
-    // Calculate height based on duration
-    let height = 72; // Default 1 hour for tasks/reminders without end time
+    // Calculate height based on item type and duration (72px = 1 hour)
+    let height: number;
+
     if (endTime) {
+      // Event with explicit end_at: scale to actual duration, min 36px (30 min)
       const endDate = parseISO(endTime);
       let durationMinutes = differenceInMinutes(endDate, startDate);
-
-      // If duration is negative, the end time is on the next day
-      // Calculate duration from start to midnight of the same day
       if (durationMinutes < 0) {
+        // End time crosses midnight — cap at end of day
         const midnight = new Date(startDate);
-        midnight.setHours(24, 0, 0, 0); // Next day midnight
+        midnight.setHours(24, 0, 0, 0);
         durationMinutes = differenceInMinutes(midnight, startDate);
       }
-
-      // Ensure minimum 30 minutes display (36px), then scale proportionally
       height = Math.max((durationMinutes / 60) * 72, 36);
+    } else if (item.type === "task") {
+      // Task: honour estimate_minutes when set; default to 60 min (72px)
+      const estimateMins = item.reminder_details?.estimate_minutes;
+      const mins = estimateMins != null && estimateMins > 0 ? estimateMins : 60;
+      // Minimum 28px (~20 min) so content stays readable
+      height = Math.max((mins / 60) * 72, 28);
+    } else {
+      // Reminder with no duration: compact pill — 36px (≈30 min slot) for clean UX
+      height = 36;
     }
 
     return { top, height };

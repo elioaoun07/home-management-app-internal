@@ -282,9 +282,11 @@ export default function CatalogueTaskItemDialog({
         location_context: locationContext || undefined,
         location_url: locationUrl.trim() || undefined,
         preferred_time: preferredTime || undefined,
-        preferred_duration_minutes: durationMinutes
-          ? parseInt(durationMinutes, 10)
-          : undefined,
+        // Reminders have no duration concept
+        preferred_duration_minutes:
+          itemType !== "reminder" && durationMinutes
+            ? parseInt(durationMinutes, 10)
+            : undefined,
         recurrence_pattern: recurrencePattern || undefined,
         recurrence_days_of_week:
           recurrenceDays.length > 0 && !isFlexibleRoutine
@@ -544,7 +546,12 @@ export default function CatalogueTaskItemDialog({
           </div>
 
           {/* Preferred Time & Duration */}
-          <div className="grid grid-cols-2 gap-4">
+          <div
+            className={cn(
+              "grid gap-4",
+              itemType === "reminder" ? "grid-cols-1" : "grid-cols-2",
+            )}
+          >
             <div className="space-y-2">
               <Label
                 htmlFor="preferredTime"
@@ -564,27 +571,29 @@ export default function CatalogueTaskItemDialog({
                 )}
               />
             </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="duration"
-                className="text-white/80 text-sm font-medium"
-              >
-                Duration (minutes)
-              </Label>
-              <Input
-                id="duration"
-                type="text"
-                inputMode="numeric"
-                min="1"
-                value={durationMinutes}
-                onChange={(e) => setDurationMinutes(e.target.value)}
-                placeholder="30"
-                className={cn(
-                  themeClasses.inputBg,
-                  "border-white/10 text-white placeholder:text-white/40",
-                )}
-              />
-            </div>
+            {itemType !== "reminder" && (
+              <div className="space-y-2">
+                <Label
+                  htmlFor="duration"
+                  className="text-white/80 text-sm font-medium"
+                >
+                  Duration (minutes)
+                </Label>
+                <Input
+                  id="duration"
+                  type="text"
+                  inputMode="numeric"
+                  min="1"
+                  value={durationMinutes}
+                  onChange={(e) => setDurationMinutes(e.target.value)}
+                  placeholder="30"
+                  className={cn(
+                    themeClasses.inputBg,
+                    "border-white/10 text-white placeholder:text-white/40",
+                  )}
+                />
+              </div>
+            )}
           </div>
 
           {/* Recurrence */}

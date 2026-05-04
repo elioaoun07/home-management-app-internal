@@ -100,13 +100,18 @@ export default function ActivityView() {
     useState<RecurringFilter>("all");
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
 
-  const thisMonthRange = useMemo(() => {
+  const thisWeekRange = useMemo(() => {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    return { start: yyyyMmDd(monthStart), end: yyyyMmDd(monthEnd) };
+    // Week starts Monday
+    const day = now.getDay();
+    const daysFromMonday = (day + 6) % 7;
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - daysFromMonday);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    return { start: yyyyMmDd(weekStart), end: yyyyMmDd(weekEnd) };
   }, []);
-  const [dateRange, setDateRange] = useState(thisMonthRange);
+  const [dateRange, setDateRange] = useState(thisWeekRange);
 
   const isFetchingTx = useIsFetching({
     queryKey: ["transactions", "dashboard", dateRange.start, dateRange.end],

@@ -216,6 +216,8 @@ export function AddFlexibleFromCatalogueDialog({
   const [dateSel, setDateSel] = useState<Record<string, string>>({});
   const [timeSel, setTimeSel] = useState<Record<string, string>>({});
   const [alertSel, setAlertSel] = useState<Record<string, number | null>>({});
+  // Per-slot duration override (in minutes). Empty / undefined = use template default.
+  const [durationSel, setDurationSel] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<string | null>(null);
 
   // Templates skipped this period (session-only)
@@ -270,6 +272,15 @@ export function AddFlexibleFromCatalogueDialog({
     timeSel[key] ?? fallback ?? "09:00";
   const getAlert = (key: string, fallback: number | null = 0): number | null =>
     key in alertSel ? alertSel[key] : fallback;
+  const getDuration = (
+    key: string,
+    fallback: number | undefined,
+  ): number | undefined => {
+    const raw = durationSel[key];
+    if (raw == null) return fallback;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  };
 
   function getScheduledDate(key: string, period: FlexiblePeriod): string {
     if (period === "weekly") {
@@ -304,6 +315,31 @@ export function AddFlexibleFromCatalogueDialog({
           ? "urgent"
           : (tpl.priority as "low" | "normal" | "high" | "urgent");
 
+      // Catalogue-derived fields (apply to all spawned types)
+      const tplDurationDefault =
+        typeof tpl.preferred_duration_minutes === "number" &&
+        tpl.preferred_duration_minutes > 0
+          ? tpl.preferred_duration_minutes
+          : undefined;
+      // Per-slot override takes precedence over template default
+      const tplDuration = getDuration(key, tplDurationDefault);
+      const tplCategoryIds = tpl.item_category_ids?.length
+        ? tpl.item_category_ids
+        : undefined;
+      const tplLocContext =
+        (tpl.location_context as
+          | "home"
+          | "outside"
+          | "anywhere"
+          | null
+          | undefined) || undefined;
+      const tplLocText =
+        (tpl as { location_url?: string | null }).location_url || undefined;
+      const tplPrereqs =
+        (tpl.metadata_json?.trigger_conditions as
+          | import("@/types/prerequisites").CreatePrerequisiteInput[]
+          | undefined) || undefined;
+
       // Build optional alert override.
       // null = no alert; the create hook auto-creates an absolute alert at
       // due_at when alerts is omitted, which is "At time". For other offsets
@@ -331,8 +367,13 @@ export function AddFlexibleFromCatalogueDialog({
           priority,
           is_public: tpl.is_public,
           due_at: dueAtIso,
+          estimate_minutes: tplDuration,
           has_checklist: subtasks.length > 0,
           subtasks,
+          category_ids: tplCategoryIds,
+          location_context: tplLocContext,
+          location_text: tplLocText,
+          prerequisites: tplPrereqs,
           source_catalogue_item_id: tpl.id,
           is_template_instance: true,
           alerts: alertsInput,
@@ -346,6 +387,12 @@ export function AddFlexibleFromCatalogueDialog({
           priority,
           is_public: tpl.is_public,
           due_at: dueAtIso,
+          estimate_minutes: tplDuration,
+          subtasks: subtasks.length > 0 ? subtasks : undefined,
+          category_ids: tplCategoryIds,
+          location_context: tplLocContext,
+          location_text: tplLocText,
+          prerequisites: tplPrereqs,
           source_catalogue_item_id: tpl.id,
           is_template_instance: true,
           alerts: alertsInput,
@@ -873,6 +920,73 @@ export function AddFlexibleFromCatalogueDialog({
                                         }))
                                       }
                                     />
+                                    {tpl.item_type !== "reminder" && (
+                                      <div
+                                        className={cn(
+                                          "flex items-center gap-2 rounded-lg px-2 py-1.5",
+                                          isFrost
+                                            ? "bg-slate-100 border border-slate-200"
+                                            : "bg-white/5 border border-white/10",
+                                        )}
+                                      >
+                                        <Clock
+                                          className={cn(
+                                            "w-3.5 h-3.5 shrink-0",
+                                            isFrost
+                                              ? "text-slate-500"
+                                              : "text-white/55",
+                                          )}
+                                        />
+                                        <span
+                                          className={cn(
+                                            "text-[11px] font-medium shrink-0",
+                                            isFrost
+                                              ? "text-slate-600"
+                                              : "text-white/65",
+                                          )}
+                                        >
+                                          Duration
+                                        </span>
+                                        <input
+                                          type="text"
+                                          inputMode="numeric"
+                                          value={
+                                            durationSel[key] ??
+                                            (tpl.preferred_duration_minutes
+                                              ? String(
+                                                  tpl.preferred_duration_minutes,
+                                                )
+                                              : "")
+                                          }
+                                          onChange={(e) =>
+                                            setDurationSel((s) => ({
+                                              ...s,
+                                              [key]: e.target.value.replace(
+                                                /[^0-9]/g,
+                                                "",
+                                              ),
+                                            }))
+                                          }
+                                          placeholder="60"
+                                          className={cn(
+                                            "w-14 rounded-md px-1.5 py-0.5 text-[12px] font-medium bg-transparent outline-none",
+                                            isFrost
+                                              ? "text-slate-800 border border-slate-300"
+                                              : "text-white border border-white/15 focus:border-white/30",
+                                          )}
+                                        />
+                                        <span
+                                          className={cn(
+                                            "text-[11px]",
+                                            isFrost
+                                              ? "text-slate-500"
+                                              : "text-white/45",
+                                          )}
+                                        >
+                                          min
+                                        </span>
+                                      </div>
+                                    )}
                                     <div className="flex items-center justify-between gap-2 pt-1">
                                       {slotIdx === 0 ? (
                                         <button

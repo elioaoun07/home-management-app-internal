@@ -184,6 +184,10 @@ export function WebEventFormDialog({
   const [endTime, setEndTime] = useState("10:00");
   const [allDay, setAllDay] = useState(false);
   const [location, setLocation] = useState("");
+  const [locationContext, setLocationContext] = useState<
+    "home" | "outside" | "anywhere" | null
+  >(null);
+  const [durationMinutes, setDurationMinutes] = useState<string>("");
 
   // Alert state (using SmartAlertPicker)
   const [alertValue, setAlertValue] = useState<SmartAlertValue>({
@@ -297,13 +301,28 @@ export function WebEventFormDialog({
           setEndDate(format(end, "yyyy-MM-dd"));
           setEndTime(format(end, "HH:mm"));
           setAllDay(editItem.event_details.all_day);
-          setLocation(editItem.event_details.location_text || "");
+          setLocation(
+            editItem.location_text ||
+              editItem.event_details.location_text ||
+              "",
+          );
+          setLocationContext(editItem.location_context ?? null);
+          // Derive duration in minutes
+          const dMin = Math.round((end.getTime() - start.getTime()) / 60000);
+          setDurationMinutes(dMin > 0 ? String(dMin) : "");
         } else if (editItem.reminder_details?.due_at) {
           const due = parseISO(editItem.reminder_details.due_at);
           setStartDate(format(due, "yyyy-MM-dd"));
           setStartTime(format(due, "HH:mm"));
           setEndDate(format(due, "yyyy-MM-dd"));
           setEndTime(format(due, "HH:mm"));
+          setLocation(editItem.location_text || "");
+          setLocationContext(editItem.location_context ?? null);
+          setDurationMinutes(
+            editItem.reminder_details.estimate_minutes
+              ? String(editItem.reminder_details.estimate_minutes)
+              : "",
+          );
         }
       } else {
         // Create mode - reset form
@@ -318,6 +337,8 @@ export function WebEventFormDialog({
         setEndTime("10:00");
         setAllDay(prefillTitle ? true : false);
         setLocation("");
+        setLocationContext(null);
+        setDurationMinutes("");
         setAlertValue({ offsetMinutes: 15, customTime: null });
         setRecurrenceRule("");
         setRecurrenceEndDate("");
@@ -373,6 +394,8 @@ export function WebEventFormDialog({
           categories: selectedCategories,
           responsible_user_id: responsibleUserId,
           notify_all_household: notifyAllHousehold,
+          location_context: locationContext,
+          location_text: location.trim() || null,
         });
 
         // Update type-specific details
@@ -419,10 +442,14 @@ export function WebEventFormDialog({
             startDate && startTime
               ? localToISO(startDate, startTime)
               : undefined;
+          const estMin = durationMinutes
+            ? parseInt(durationMinutes, 10) || null
+            : null;
 
           await updateReminderDetails.mutateAsync({
             itemId: editItem.id,
             due_at: dueAtIso,
+            estimate_minutes: estMin,
           });
 
           // Update recurrence rule's start_anchor if it exists
@@ -446,10 +473,14 @@ export function WebEventFormDialog({
             startDate && startTime
               ? localToISO(startDate, startTime)
               : undefined;
+          const estMin = durationMinutes
+            ? parseInt(durationMinutes, 10) || null
+            : null;
 
           await updateReminderDetails.mutateAsync({
             itemId: editItem.id,
             due_at: dueAtIso,
+            estimate_minutes: estMin,
           });
 
           // Update recurrence rule's start_anchor if it exists
@@ -613,6 +644,9 @@ export function WebEventFormDialog({
             description: description.trim() || undefined,
             priority,
             due_at: dueAtIso,
+            estimate_minutes: durationMinutes
+              ? parseInt(durationMinutes, 10) || undefined
+              : undefined,
             alerts: alerts.length > 0 ? alerts : undefined,
             recurrence_rule,
             category_ids:
@@ -620,6 +654,8 @@ export function WebEventFormDialog({
             is_public: isPublic,
             responsible_user_id: responsibleUserId,
             notify_all_household: notifyAllHousehold,
+            location_context: locationContext ?? undefined,
+            location_text: location.trim() || undefined,
             prerequisites: prerequisites.length > 0 ? prerequisites : undefined,
           };
           const newReminder = await createReminder.mutateAsync(input);
@@ -702,6 +738,7 @@ export function WebEventFormDialog({
             end_at: endAtIso,
             all_day: allDay,
             location_text: location.trim() || undefined,
+            location_context: locationContext ?? undefined,
             category_ids:
               selectedCategories.length > 0 ? selectedCategories : undefined,
             alerts: alerts.length > 0 ? alerts : undefined,
@@ -767,13 +804,17 @@ export function WebEventFormDialog({
             description: description.trim() || undefined,
             priority,
             due_at: dueAtIso,
-            estimate_minutes: undefined,
+            estimate_minutes: durationMinutes
+              ? parseInt(durationMinutes, 10) || undefined
+              : undefined,
             category_ids:
               selectedCategories.length > 0 ? selectedCategories : undefined,
             recurrence_rule,
             is_public: isPublic,
             responsible_user_id: responsibleUserId,
             notify_all_household: notifyAllHousehold,
+            location_context: locationContext ?? undefined,
+            location_text: location.trim() || undefined,
             prerequisites: prerequisites.length > 0 ? prerequisites : undefined,
           };
           const newTask = await createTask.mutateAsync(input);
@@ -1377,40 +1418,132 @@ export function WebEventFormDialog({
               </div>
             )}
 
-            {/* Location (Events only) */}
-            {itemType === "event" && (
-              <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={cn(
-                      "p-1.5 rounded-lg",
-                      isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
-                    )}
-                  >
-                    <MapPin
-                      className={cn(
-                        "w-4 h-4",
-                        isPink ? "text-pink-400" : "text-cyan-400",
-                      )}
-                    />
-                  </div>
-                  <Label className="text-sm font-semibold text-white">
-                    Location
-                  </Label>
-                </div>
-                <Input
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Add location..."
+            {/* Duration (tasks/reminders use estimate; events override end_at) */}
+            <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+              <div className="flex items-center gap-2">
+                <div
                   className={cn(
-                    "rounded-xl",
-                    themeClasses.inputBg,
-                    themeClasses.inputBorder,
-                    "text-white placeholder:text-white/40",
+                    "p-1.5 rounded-lg",
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
                   )}
-                />
+                >
+                  <Clock
+                    className={cn(
+                      "w-4 h-4",
+                      isPink ? "text-pink-400" : "text-cyan-400",
+                    )}
+                  />
+                </div>
+                <Label className="text-sm font-semibold text-white">
+                  Duration{" "}
+                  <span className="text-xs font-normal text-white/40">
+                    (minutes)
+                  </span>
+                </Label>
               </div>
-            )}
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={durationMinutes}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/[^0-9]/g, "");
+                  setDurationMinutes(v);
+                  // Sync end time for events
+                  if (itemType === "event" && startTime && startDate) {
+                    const mins = parseInt(v, 10);
+                    if (Number.isFinite(mins) && mins > 0) {
+                      const [h, m] = startTime.split(":").map(Number);
+                      const base = new Date(`${startDate}T00:00:00`);
+                      base.setHours(h || 0, m || 0, 0, 0);
+                      const endDt = new Date(base.getTime() + mins * 60000);
+                      setEndTime(format(endDt, "HH:mm"));
+                      setEndDate(format(endDt, "yyyy-MM-dd"));
+                    }
+                  }
+                }}
+                placeholder={
+                  itemType === "event"
+                    ? "Override End Time"
+                    : "How long will this take?"
+                }
+                className={cn(
+                  "rounded-xl",
+                  themeClasses.inputBg,
+                  themeClasses.inputBorder,
+                  "text-white placeholder:text-white/40",
+                )}
+              />
+            </div>
+
+            {/* Location (all types) with location_context selector */}
+            <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+              <div className="flex items-center gap-2">
+                <div
+                  className={cn(
+                    "p-1.5 rounded-lg",
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                  )}
+                >
+                  <MapPin
+                    className={cn(
+                      "w-4 h-4",
+                      isPink ? "text-pink-400" : "text-cyan-400",
+                    )}
+                  />
+                </div>
+                <Label className="text-sm font-semibold text-white">
+                  Location
+                </Label>
+              </div>
+
+              {/* 3-button location_context selector */}
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    { key: "home", label: "At Home" },
+                    { key: "outside", label: "Outside" },
+                    { key: "anywhere", label: "Anywhere" },
+                  ] as const
+                ).map((opt) => {
+                  const active = locationContext === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() =>
+                        setLocationContext(active ? null : opt.key)
+                      }
+                      className={cn(
+                        "px-2 py-1.5 rounded-lg text-xs font-medium transition-colors border",
+                        active
+                          ? isPink
+                            ? "bg-pink-500/25 text-pink-50 border-pink-400/50"
+                            : "bg-cyan-500/25 text-cyan-50 border-cyan-400/50"
+                          : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10",
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <Input
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder={
+                  locationContext === "home"
+                    ? "Optional (e.g. kitchen, garage)..."
+                    : "Address or Maps URL..."
+                }
+                className={cn(
+                  "rounded-xl",
+                  themeClasses.inputBg,
+                  themeClasses.inputBorder,
+                  "text-white placeholder:text-white/40",
+                )}
+              />
+            </div>
 
             {/* Visibility (Public/Private) */}
             <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">

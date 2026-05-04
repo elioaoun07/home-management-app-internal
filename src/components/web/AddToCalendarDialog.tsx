@@ -1,5 +1,10 @@
 "use client";
 
+import { ResponsibleUserPicker } from "@/components/items/ResponsibleUserPicker";
+import {
+  SmartAlertPicker,
+  type SmartAlertValue,
+} from "@/components/items/SmartAlertPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,21 +22,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ResponsibleUserPicker } from "@/components/items/ResponsibleUserPicker";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useUpdateItem } from "@/features/catalogue/hooks";
 import {
   useCreateEvent,
   useCreateReminder,
   useCreateTask,
 } from "@/features/items/useItems";
-import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
-import { useTheme } from "@/contexts/ThemeContext";
-import { localToISO } from "@/lib/utils/date";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
+import { localToISO } from "@/lib/utils/date";
 import type { CatalogueItem, RecurrencePattern } from "@/types/catalogue";
 import { RECURRENCE_PATTERN_LABELS } from "@/types/catalogue";
-import type { CreateAlertInput, CreateRecurrenceInput, CreateSubtaskInput, FlexiblePeriod } from "@/types/items";
+import type {
+  CreateAlertInput,
+  CreateRecurrenceInput,
+  CreateSubtaskInput,
+  FlexiblePeriod,
+} from "@/types/items";
+import type { CreatePrerequisiteInput } from "@/types/prerequisites";
 import { addDays, format, setHours, setMinutes } from "date-fns";
 import {
   AlertTriangle,
@@ -44,7 +54,6 @@ import {
   MapPin,
   Repeat,
 } from "lucide-react";
-import { SmartAlertPicker, type SmartAlertValue } from "@/components/items/SmartAlertPicker";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -161,6 +170,7 @@ export default function AddToCalendarDialog({
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState<string>("");
   const [recurrencePattern, setRecurrencePattern] =
     useState<RecurrencePattern | null>(null);
   const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
@@ -168,7 +178,9 @@ export default function AddToCalendarDialog({
   const [endDate, setEndDate] = useState("");
   const [locationText, setLocationText] = useState("");
   const [isPublic, setIsPublic] = useState(true);
-  const [responsibleUserId, setResponsibleUserId] = useState<string | undefined>(undefined);
+  const [responsibleUserId, setResponsibleUserId] = useState<
+    string | undefined
+  >(undefined);
   const [notifyAllHousehold, setNotifyAllHousehold] = useState(false);
   const [alertValue, setAlertValue] = useState<SmartAlertValue>({
     offsetMinutes: 0,
@@ -199,6 +211,7 @@ export default function AddToCalendarDialog({
 
       // Calculate end time based on duration
       if (catalogueItem.preferred_duration_minutes) {
+        setDurationMinutes(String(catalogueItem.preferred_duration_minutes));
         const [hours, mins] = preferredTime.split(":").map(Number);
         const startDateCalc = setMinutes(
           setHours(new Date(), hours || 9),
@@ -210,6 +223,7 @@ export default function AddToCalendarDialog({
         );
         setEndTime(format(endDateCalc, "HH:mm"));
       } else {
+        setDurationMinutes("");
         const [hours, mins] = preferredTime.split(":").map(Number);
         setEndTime(
           format(
@@ -272,7 +286,42 @@ export default function AddToCalendarDialog({
       }
 
       const startAt = localToISO(startDate, normalizedStartTime);
-      const endAt = localToISO(startDate, normalizedEndTime);
+      // Compute effective duration (in minutes) from override or end-time delta
+      const overrideDur = durationMinutes ? parseInt(durationMinutes, 10) : NaN;
+      const effectiveDuration =
+        Number.isFinite(overrideDur) && overrideDur > 0
+          ? overrideDur
+          : (() => {
+              const start = new Date(`${startDate}T${normalizedStartTime}:00`);
+              const end = new Date(`${startDate}T${normalizedEndTime}:00`);
+              const diff = Math.round(
+                (end.getTime() - start.getTime()) / 60000,
+              );
+              return diff > 0 ? diff : null;
+            })();
+      const endAt = effectiveDuration
+        ? new Date(
+            new Date(`${startDate}T${normalizedStartTime}:00`).getTime() +
+              effectiveDuration * 60000,
+          ).toISOString()
+        : localToISO(startDate, normalizedEndTime);
+
+      // Catalogue-derived fields propagated to all types
+      const categoryIds = catalogueItem.item_category_ids?.length
+        ? catalogueItem.item_category_ids
+        : undefined;
+      const prereqs =
+        (catalogueItem.metadata_json?.trigger_conditions as
+          | CreatePrerequisiteInput[]
+          | undefined) || undefined;
+      const locContext =
+        (catalogueItem.location_context as
+          | "home"
+          | "outside"
+          | "anywhere"
+          | null
+          | undefined) || undefined;
+      const locText = locationText.trim() || undefined;
 
       // Build recurrence rule if pattern is set
       let recurrenceRule: CreateRecurrenceInput | undefined;
@@ -288,13 +337,11 @@ export default function AddToCalendarDialog({
             rrule,
             start_anchor: startAt,
             end_until:
-              hasEndDate && endDate
-                ? localToISO(endDate, "23:59")
-                : undefined,
+              hasEndDate && endDate ? localToISO(endDate, "23:59") : undefined,
             // Pass flexible routine settings from catalogue item
             is_flexible: catalogueItem.is_flexible_routine || false,
             flexible_period: catalogueItem.is_flexible_routine
-              ? catalogueItem.recurrence_pattern as FlexiblePeriod
+              ? (catalogueItem.recurrence_pattern as FlexiblePeriod)
               : null,
           };
         }
@@ -331,9 +378,12 @@ export default function AddToCalendarDialog({
           notify_all_household: notifyAllHousehold,
           start_at: startAt,
           end_at: endAt,
-          location_text: locationText || undefined,
+          location_text: locText,
+          location_context: locContext,
           recurrence_rule: recurrenceRule,
           alerts: alertInput ? [alertInput] : undefined,
+          category_ids: categoryIds,
+          prerequisites: prereqs,
           source_catalogue_item_id: catalogueItem.id,
           is_template_instance: true,
         });
@@ -355,6 +405,10 @@ export default function AddToCalendarDialog({
           subtasks: parsedSubtasks,
           recurrence_rule: recurrenceRule,
           alerts: alertInput ? [alertInput] : undefined,
+          category_ids: categoryIds,
+          prerequisites: prereqs,
+          location_text: locText,
+          location_context: locContext,
           source_catalogue_item_id: catalogueItem.id,
           is_template_instance: true,
         });
@@ -373,8 +427,14 @@ export default function AddToCalendarDialog({
           responsible_user_id: responsibleUserId,
           notify_all_household: notifyAllHousehold,
           due_at: startAt,
+          estimate_minutes: effectiveDuration ?? undefined,
+          subtasks: parsedSubtasks.length > 0 ? parsedSubtasks : undefined,
           recurrence_rule: recurrenceRule,
           alerts: alertInput ? [alertInput] : undefined,
+          category_ids: categoryIds,
+          prerequisites: prereqs,
+          location_text: locText,
+          location_context: locContext,
           source_catalogue_item_id: catalogueItem.id,
           is_template_instance: true,
         });
@@ -515,22 +575,43 @@ export default function AddToCalendarDialog({
             </div>
           )}
 
-          {/* Location (for events) */}
-          {itemType === "event" && (
+          {/* Duration override (tasks/reminders use it for estimate; events: derived) */}
+          {itemType !== "reminder" && (
             <div className="space-y-2">
               <Label
-                htmlFor="location"
-                className="text-white/80 text-sm font-medium flex items-center gap-2"
+                htmlFor="durationMin"
+                className="text-white/80 text-sm font-medium"
               >
-                <MapPin className="w-4 h-4 text-pink-400" />
-                Location
+                Duration (minutes)
+                {itemType === "event" ? " — overrides End Time" : ""}
               </Label>
               <Input
-                id="location"
+                id="durationMin"
                 type="text"
-                value={locationText}
-                onChange={(e) => setLocationText(e.target.value)}
-                placeholder="Location or Maps URL..."
+                inputMode="numeric"
+                value={durationMinutes}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setDurationMinutes(v);
+                  // Keep end time in sync for events
+                  if (itemType === "event" && startTime) {
+                    const mins = parseInt(v, 10);
+                    if (Number.isFinite(mins) && mins > 0) {
+                      const [h, m] = startTime.split(":").map(Number);
+                      const base = setMinutes(
+                        setHours(new Date(), h || 0),
+                        m || 0,
+                      );
+                      setEndTime(
+                        format(
+                          new Date(base.getTime() + mins * 60000),
+                          "HH:mm",
+                        ),
+                      );
+                    }
+                  }
+                }}
+                placeholder="30"
                 className={cn(
                   themeClasses.inputBg,
                   "border-white/10 text-white placeholder:text-white/40",
@@ -538,6 +619,35 @@ export default function AddToCalendarDialog({
               />
             </div>
           )}
+
+          {/* Location (all types; optional especially when at home) */}
+          <div className="space-y-2">
+            <Label
+              htmlFor="location"
+              className="text-white/80 text-sm font-medium flex items-center gap-2"
+            >
+              <MapPin className="w-4 h-4 text-pink-400" />
+              Location{" "}
+              {catalogueItem.location_context === "home"
+                ? "(optional — at home)"
+                : ""}
+            </Label>
+            <Input
+              id="location"
+              type="text"
+              value={locationText}
+              onChange={(e) => setLocationText(e.target.value)}
+              placeholder={
+                catalogueItem.location_context === "home"
+                  ? "e.g. kitchen, garage"
+                  : "Address or Maps URL..."
+              }
+              className={cn(
+                themeClasses.inputBg,
+                "border-white/10 text-white placeholder:text-white/40",
+              )}
+            />
+          </div>
 
           {/* Alert */}
           <div className="space-y-2">
@@ -656,11 +766,16 @@ export default function AddToCalendarDialog({
 
           {/* Visibility */}
           <div className="space-y-2">
-            <Label className="text-white/80 text-sm font-medium">Visibility</Label>
+            <Label className="text-white/80 text-sm font-medium">
+              Visibility
+            </Label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => { setIsPublic(false); setNotifyAllHousehold(false); }}
+                onClick={() => {
+                  setIsPublic(false);
+                  setNotifyAllHousehold(false);
+                }}
                 className={cn(
                   "p-3 rounded-xl border transition-all flex items-center gap-2",
                   !isPublic
@@ -668,7 +783,12 @@ export default function AddToCalendarDialog({
                     : "border-white/10 bg-white/5 hover:bg-white/10",
                 )}
               >
-                <span className={cn("text-sm font-medium", !isPublic ? "text-white" : "text-white/70")}>
+                <span
+                  className={cn(
+                    "text-sm font-medium",
+                    !isPublic ? "text-white" : "text-white/70",
+                  )}
+                >
                   Private
                 </span>
                 <span className="text-xs text-white/40 ml-auto">Only you</span>
@@ -679,11 +799,18 @@ export default function AddToCalendarDialog({
                 className={cn(
                   "p-3 rounded-xl border transition-all flex items-center gap-2",
                   isPublic
-                    ? isPink ? "border-pink-500 bg-pink-500/20" : "border-cyan-500 bg-cyan-500/20"
+                    ? isPink
+                      ? "border-pink-500 bg-pink-500/20"
+                      : "border-cyan-500 bg-cyan-500/20"
                     : "border-white/10 bg-white/5 hover:bg-white/10",
                 )}
               >
-                <span className={cn("text-sm font-medium", isPublic ? "text-white" : "text-white/70")}>
+                <span
+                  className={cn(
+                    "text-sm font-medium",
+                    isPublic ? "text-white" : "text-white/70",
+                  )}
+                >
                   Household
                 </span>
                 <span className="text-xs text-white/40 ml-auto">Shared</span>
@@ -694,7 +821,9 @@ export default function AddToCalendarDialog({
           {/* Responsible user — only when public and household has a partner */}
           {isPublic && householdData?.hasPartner && (
             <div className="space-y-2">
-              <Label className="text-white/80 text-sm font-medium">Responsible</Label>
+              <Label className="text-white/80 text-sm font-medium">
+                Responsible
+              </Label>
               <ResponsibleUserPicker
                 value={responsibleUserId}
                 notifyAllHousehold={notifyAllHousehold}
