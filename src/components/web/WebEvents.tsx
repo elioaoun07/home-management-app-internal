@@ -1056,6 +1056,8 @@ export default function WebEvents() {
                 occurrenceActions={occurrenceActions}
                 subtaskCompletions={subtaskCompletions}
                 selectedDate={selectedDate}
+                controlledWeekStart={selectedDate ?? undefined}
+                onWeekChange={(newWeekStart) => setSelectedDate(newWeekStart)}
                 onItemClick={handleItemClick}
                 onAddEvent={handleAddEvent}
                 onBirthdayClick={handleBirthdayClick}
@@ -1504,6 +1506,7 @@ export default function WebEvents() {
                 })}
                 defaultDate={selectedDate ?? new Date()}
                 initialItemId={catalogueDialogInitialItemId}
+                onWeekChange={(newWeekStart) => setSelectedDate(newWeekStart)}
               />
             )}
 

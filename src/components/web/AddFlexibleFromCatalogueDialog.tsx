@@ -1,5 +1,6 @@
 "use client";
 
+import { ResponsibleUserPicker } from "@/components/items/ResponsibleUserPicker";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +27,15 @@ import type {
   FlexiblePeriod,
   ItemWithDetails,
 } from "@/types/items";
-import { addDays, format, isSameDay, isWithinInterval } from "date-fns";
+import {
+  addDays,
+  addWeeks,
+  endOfWeek,
+  format,
+  isSameDay,
+  isWithinInterval,
+  startOfWeek,
+} from "date-fns";
 import {
   AlertCircle,
   BellOff,
@@ -35,13 +44,16 @@ import {
   CalendarPlus,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock,
+  PlusCircle,
   SkipForward,
   Sparkles,
   Undo2,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -97,6 +109,7 @@ interface AddFlexibleFromCatalogueDialogProps {
   weekEnd: Date;
   defaultDate?: Date;
   initialItemId?: string | null; // catalogue template id to highlight
+  onWeekChange?: (newWeekStart: Date) => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -108,11 +121,40 @@ export function AddFlexibleFromCatalogueDialog({
   weekEnd,
   defaultDate,
   initialItemId,
+  onWeekChange,
 }: AddFlexibleFromCatalogueDialogProps) {
   const { theme } = useTheme();
   const tc = useThemeClasses();
   const isPink = theme === "pink";
   const isFrost = theme === "frost";
+
+  // ── Week navigation ───────────────────────────────────────────────────────
+  const [weekOffset, setWeekOffset] = useState(0);
+  // When the parent updates weekStart (e.g. calendar navigated externally), reset offset
+  useEffect(() => {
+    setWeekOffset(0);
+  }, [weekStart]);
+  const viewedWeekStart = useMemo(
+    () => startOfWeek(addWeeks(weekStart, weekOffset), { weekStartsOn: 1 }),
+    [weekStart, weekOffset],
+  );
+  const viewedWeekEnd = useMemo(
+    () => endOfWeek(viewedWeekStart, { weekStartsOn: 1 }),
+    [viewedWeekStart],
+  );
+  // Label offset relative to TODAY's week (not weekStart), so label is always accurate
+  const todayWeekStart = useMemo(
+    () => startOfWeek(new Date(), { weekStartsOn: 1 }),
+    [],
+  );
+  const weekLabelOffset = useMemo(
+    () =>
+      Math.round(
+        (viewedWeekStart.getTime() - todayWeekStart.getTime()) /
+          (7 * 24 * 60 * 60 * 1000),
+      ),
+    [viewedWeekStart, todayWeekStart],
+  );
 
   // ── Period boundaries (computed relative to viewed week) ──────────────────
   const periodInfo = useMemo(() => {
@@ -121,20 +163,20 @@ export function AddFlexibleFromCatalogueDialog({
       { start: Date; end: Date; startStr: string; label: string }
     >;
     for (const p of PERIOD_ORDER) {
-      const { start, end } = getPeriodBoundaries(weekStart, p);
+      const { start, end } = getPeriodBoundaries(viewedWeekStart, p);
       result[p] = {
         start,
         end,
         startStr: format(start, "yyyy-MM-dd"),
-        label: formatPeriodLabel(p, weekStart),
+        label: formatPeriodLabel(p, viewedWeekStart),
       };
     }
     return result;
-  }, [weekStart]);
+  }, [viewedWeekStart]);
 
   const weekDays = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
-    [weekStart],
+    () => Array.from({ length: 7 }, (_, i) => addDays(viewedWeekStart, i)),
+    [viewedWeekStart],
   );
 
   // ── Data ──────────────────────────────────────────────────────────────────
@@ -209,7 +251,24 @@ export function AddFlexibleFromCatalogueDialog({
     activeTab && availablePeriods.includes(activeTab)
       ? activeTab
       : (availablePeriods[0] ?? "weekly");
-  const activeEntries = templatesByPeriod[currentTab] ?? [];
+
+  // Extra slots requested by user beyond the normal target ("Plan again")
+  // Key: `${tpl.id}:${periodStartStr}`
+  const [extraSlotsMap, setExtraSlotsMap] = useState<Record<string, number>>(
+    {},
+  );
+
+  const activeEntries = useMemo(() => {
+    return (templatesByPeriod[currentTab] ?? []).map((e) => {
+      const key = `${e.tpl.id}:${periodInfo[e.period].startStr}`;
+      const extra = extraSlotsMap[key] ?? 0;
+      if (extra === 0) return e;
+      // Effective target = original target + requested extras
+      const effectiveTarget = e.target + extra;
+      const needsCount = Math.max(0, effectiveTarget - e.scheduled.length);
+      return { ...e, target: effectiveTarget, needsCount };
+    });
+  }, [templatesByPeriod, currentTab, extraSlotsMap, periodInfo]);
 
   // ── Selection state (per template+slot key) ───────────────────────────────
   const [daySel, setDaySel] = useState<Record<string, number>>({});
@@ -218,6 +277,10 @@ export function AddFlexibleFromCatalogueDialog({
   const [alertSel, setAlertSel] = useState<Record<string, number | null>>({});
   // Per-slot duration override (in minutes). Empty / undefined = use template default.
   const [durationSel, setDurationSel] = useState<Record<string, string>>({});
+  // Per-slot responsible user (only relevant when tpl.is_public)
+  const [responsibleSel, setResponsibleSel] = useState<
+    Record<string, string | undefined>
+  >({});
   const [pending, setPending] = useState<string | null>(null);
 
   // Templates skipped this period (session-only)
@@ -272,6 +335,8 @@ export function AddFlexibleFromCatalogueDialog({
     timeSel[key] ?? fallback ?? "09:00";
   const getAlert = (key: string, fallback: number | null = 0): number | null =>
     key in alertSel ? alertSel[key] : fallback;
+  const getResponsible = (key: string): string | undefined =>
+    responsibleSel[key];
   const getDuration = (
     key: string,
     fallback: number | undefined,
@@ -304,6 +369,7 @@ export function AddFlexibleFromCatalogueDialog({
     const dayStr = getScheduledDate(key, period);
     const dueAtIso = combineDateAndTime(dayStr, time);
     const alertOffset = getAlert(key, 0);
+    const responsibleUserId = tpl.is_public ? getResponsible(key) : undefined;
 
     setPending(key);
     try {
@@ -366,6 +432,7 @@ export function AddFlexibleFromCatalogueDialog({
           description: tpl.description || undefined,
           priority,
           is_public: tpl.is_public,
+          responsible_user_id: responsibleUserId,
           due_at: dueAtIso,
           estimate_minutes: tplDuration,
           has_checklist: subtasks.length > 0,
@@ -386,6 +453,7 @@ export function AddFlexibleFromCatalogueDialog({
           description: tpl.description || undefined,
           priority,
           is_public: tpl.is_public,
+          responsible_user_id: responsibleUserId,
           due_at: dueAtIso,
           estimate_minutes: tplDuration,
           subtasks: subtasks.length > 0 ? subtasks : undefined,
@@ -534,18 +602,97 @@ export function AddFlexibleFromCatalogueDialog({
                   ? "Nothing left to plan — you're all set."
                   : `Pick a day for ${totalNeeding} routine${totalNeeding === 1 ? "" : "s"} this ${PERIOD_LABELS[currentTab].toLowerCase()}.`}
               </p>
-              <div
-                className={cn(
-                  "mt-1.5 inline-flex items-center gap-1.5 text-[11px]",
-                  isFrost ? "text-slate-400" : "text-white/40",
+              {/* Week navigator */}
+              <div className="mt-2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = weekOffset - 1;
+                    setWeekOffset(next);
+                    onWeekChange?.(
+                      startOfWeek(addWeeks(weekStart, next), {
+                        weekStartsOn: 1,
+                      }),
+                    );
+                  }}
+                  className={cn(
+                    "w-6 h-6 flex items-center justify-center rounded-lg transition-colors",
+                    isFrost
+                      ? "hover:bg-slate-100 text-slate-500"
+                      : "hover:bg-white/10 text-white/50",
+                  )}
+                  aria-label="Previous week"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <div
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-medium",
+                    weekLabelOffset === 0
+                      ? isFrost
+                        ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                        : "bg-white/10 text-white/80 ring-1 ring-white/15"
+                      : isFrost
+                        ? "bg-slate-100 text-slate-600"
+                        : "bg-white/5 text-white/50",
+                  )}
+                >
+                  <Calendar className="w-3 h-3" />
+                  <span>
+                    {weekLabelOffset === 0
+                      ? `This week · ${format(viewedWeekStart, "MMM d")} – ${format(viewedWeekEnd, "MMM d")}`
+                      : weekLabelOffset === -1
+                        ? `Last week · ${format(viewedWeekStart, "MMM d")} – ${format(viewedWeekEnd, "MMM d")}`
+                        : weekLabelOffset > 0
+                          ? `Week +${weekLabelOffset} · ${format(viewedWeekStart, "MMM d")} – ${format(viewedWeekEnd, "MMM d")}`
+                          : `Week ${weekLabelOffset} · ${format(viewedWeekStart, "MMM d")} – ${format(viewedWeekEnd, "MMM d")}`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = weekOffset + 1;
+                    setWeekOffset(next);
+                    onWeekChange?.(
+                      startOfWeek(addWeeks(weekStart, next), {
+                        weekStartsOn: 1,
+                      }),
+                    );
+                  }}
+                  className={cn(
+                    "w-6 h-6 flex items-center justify-center rounded-lg transition-colors",
+                    isFrost
+                      ? "hover:bg-slate-100 text-slate-500"
+                      : "hover:bg-white/10 text-white/50",
+                  )}
+                  aria-label="Next week"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+                {weekLabelOffset !== 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const todayOffset = Math.round(
+                        (todayWeekStart.getTime() -
+                          startOfWeek(weekStart, {
+                            weekStartsOn: 1,
+                          }).getTime()) /
+                          (7 * 24 * 60 * 60 * 1000),
+                      );
+                      setWeekOffset(todayOffset);
+                      onWeekChange?.(todayWeekStart);
+                    }}
+                    className={cn(
+                      "ml-1 text-[10px] px-1.5 py-0.5 rounded-md transition-colors",
+                      isFrost
+                        ? "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        : "text-white/35 hover:text-white/65 hover:bg-white/10",
+                    )}
+                  >
+                    Today
+                  </button>
                 )}
-              >
-                <Calendar className="w-3 h-3" />
-                <span>
-                  {availablePeriods.length > 0
-                    ? periodInfo[currentTab]?.label
-                    : `${format(weekStart, "MMM d")} – ${format(weekEnd, "MMM d, yyyy")}`}
-                </span>
               </div>
             </div>
           </div>
@@ -881,14 +1028,6 @@ export function AddFlexibleFromCatalogueDialog({
                                       />
                                     ) : (
                                       <DateTimePicker
-                                        minDate={format(
-                                          periodInfo[period].start,
-                                          "yyyy-MM-dd",
-                                        )}
-                                        maxDate={format(
-                                          periodInfo[period].end,
-                                          "yyyy-MM-dd",
-                                        )}
                                         value={
                                           dateSel[key] ??
                                           format(
@@ -986,6 +1125,18 @@ export function AddFlexibleFromCatalogueDialog({
                                           min
                                         </span>
                                       </div>
+                                    )}
+                                    {tpl.is_public && (
+                                      <ResponsibleUserPicker
+                                        value={getResponsible(key)}
+                                        isPublic={true}
+                                        onChange={(userId) =>
+                                          setResponsibleSel((s) => ({
+                                            ...s,
+                                            [key]: userId,
+                                          }))
+                                        }
+                                      />
                                     )}
                                     <div className="flex items-center justify-between gap-2 pt-1">
                                       {slotIdx === 0 ? (
@@ -1125,6 +1276,29 @@ export function AddFlexibleFromCatalogueDialog({
                                   </p>
                                 )}
                               </div>
+                              {/* Plan again */}
+                              <button
+                                type="button"
+                                title="Plan again"
+                                onClick={() => {
+                                  const key = `${tpl.id}:${periodInfo[entry.period].startStr}`;
+                                  setExtraSlotsMap((prev) => ({
+                                    ...prev,
+                                    [key]: (prev[key] ?? 0) + 1,
+                                  }));
+                                  setExpandedEntryId(tpl.id);
+                                  setCompletedOpen(false);
+                                }}
+                                className={cn(
+                                  "flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all shrink-0",
+                                  isFrost
+                                    ? "text-indigo-600 hover:bg-indigo-50 ring-1 ring-indigo-200"
+                                    : "text-cyan-400 hover:bg-cyan-500/10 ring-1 ring-cyan-400/20",
+                                )}
+                              >
+                                <PlusCircle className="w-3.5 h-3.5" />
+                                <span>Plan again</span>
+                              </button>
                             </div>
                             <div className="space-y-1">
                               {scheduled.map((item) => {
@@ -1346,8 +1520,6 @@ function DayTimePicker({
 // ─── DateTimePicker (biweekly/monthly) ───────────────────────────────────────
 
 interface DateTimePickerProps {
-  minDate: string;
-  maxDate: string;
   value: string;
   time: string;
   onChange: (date: string) => void;
@@ -1355,8 +1527,6 @@ interface DateTimePickerProps {
 }
 
 function DateTimePicker({
-  minDate,
-  maxDate,
   value,
   time,
   onChange,
@@ -1393,8 +1563,6 @@ function DateTimePicker({
           <Calendar className={iconClass} />
           <input
             type="date"
-            min={minDate}
-            max={maxDate}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             className={cn(inputClass, "min-w-[130px]")}

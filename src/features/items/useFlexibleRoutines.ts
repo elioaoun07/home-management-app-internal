@@ -11,6 +11,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addWeeks,
+  endOfDay,
   endOfMonth,
   endOfWeek,
   format,
@@ -63,7 +64,7 @@ export function getPeriodBoundaries(
         weekNumber % 2 === 1 ? addWeeks(weekStart, -1) : weekStart;
       const periodEnd = addWeeks(periodStart, 2);
       periodEnd.setDate(periodEnd.getDate() - 1); // Last day of 2nd week
-      return { start: periodStart, end: periodEnd };
+      return { start: periodStart, end: endOfDay(periodEnd) };
     }
     case "monthly":
       return {

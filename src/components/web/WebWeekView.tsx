@@ -38,7 +38,7 @@ import {
   MapPin,
   Sparkles,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface WebWeekViewProps {
   items: ItemWithDetails[];
@@ -57,6 +57,10 @@ interface WebWeekViewProps {
   selectedDate?: Date | null;
   showBirthdays?: boolean;
   onOpenCataloguePicker?: (initialItemId?: string) => void;
+  /** Controlled week — when set, syncs the calendar to this date's week */
+  controlledWeekStart?: Date | null;
+  /** Called whenever the user navigates to a different week */
+  onWeekChange?: (newWeekStart: Date) => void;
 }
 
 // Item type colors with gradients for more visual appeal
@@ -105,11 +109,20 @@ export function WebWeekView({
   selectedDate,
   showBirthdays = true,
   onOpenCataloguePicker,
+  controlledWeekStart,
+  onWeekChange,
 }: WebWeekViewProps) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
   const [currentWeek, setCurrentWeek] = useState(selectedDate || new Date());
   const [direction, setDirection] = useState(0);
+
+  // Sync to controlled week when parent changes it (e.g. from the flexible modal)
+  useEffect(() => {
+    if (controlledWeekStart) {
+      setCurrentWeek(controlledWeekStart);
+    }
+  }, [controlledWeekStart]);
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Monday
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -451,17 +464,22 @@ export function WebWeekView({
 
   const previousWeek = () => {
     setDirection(-1);
-    setCurrentWeek(subWeeks(currentWeek, 1));
+    const next = subWeeks(currentWeek, 1);
+    setCurrentWeek(next);
+    onWeekChange?.(startOfWeek(next, { weekStartsOn: 1 }));
   };
 
   const nextWeek = () => {
     setDirection(1);
-    setCurrentWeek(addWeeks(currentWeek, 1));
+    const next = addWeeks(currentWeek, 1);
+    setCurrentWeek(next);
+    onWeekChange?.(startOfWeek(next, { weekStartsOn: 1 }));
   };
 
   const goToToday = () => {
     setDirection(0);
     setCurrentWeek(new Date());
+    onWeekChange?.(startOfWeek(new Date(), { weekStartsOn: 1 }));
   };
 
   // Get current time position for "now" line
