@@ -2,7 +2,7 @@
 
 > **Reactive + Proactive AI Personal Assistant** — a multi-module PWA covering budget tracking, reminders/tasks, meal planning, recipes, catalogues, household chat, dashboards, and an AI assistant. Modules are architecturally independent but share a single household ecosystem. The app is both reactive (responds to user input) and proactive (AI-driven briefings, alerts, and scheduled actions).
 
-CLAUDE.md auto-syncs to `.github/copilot-instructions.md` via PostToolUse hook.
+CLAUDE.md auto-syncs to `CODEX.md` and `.github/copilot-instructions.md` via PostToolUse hook.
 
 ---
 

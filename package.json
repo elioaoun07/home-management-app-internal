@@ -13,6 +13,7 @@
     "atlas": "node scripts/build-atlas.mjs",
     "atlas:seed": "node scripts/seed-atlas.mjs && node scripts/build-atlas.mjs",
     "prebuild": "node scripts/build-atlas.mjs",
+    "sync:ai": "bash scripts/sync-ai-mirrors.sh",
     "prepare": "husky install"
   },
   "dependencies": {

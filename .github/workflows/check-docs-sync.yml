@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - CLAUDE.md
+      - CODEX.md
       - .github/copilot-instructions.md
 
 jobs:
@@ -12,24 +13,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify CLAUDE.md and copilot-instructions.md are in sync
+      - name: Verify CLAUDE.md mirrors are in sync
         run: |
-          # Generate what copilot-instructions.md SHOULD look like
+          # Generate expected mirrors from CLAUDE.md
           {
             echo '<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->'
             echo ''
             cat CLAUDE.md
-          } > /tmp/expected.md
+          } > /tmp/expected_mirror.md
 
-          # Compare
-          if ! diff -q .github/copilot-instructions.md /tmp/expected.md > /dev/null 2>&1; then
-            echo "::error::.github/copilot-instructions.md is out of sync with CLAUDE.md"
-            echo ""
-            echo "To fix: copy CLAUDE.md contents into .github/copilot-instructions.md"
-            echo "with the auto-generated header prepended."
-            echo ""
-            diff --unified .github/copilot-instructions.md /tmp/expected.md || true
+          # Compare CODEX.md against expected mirror
+          if ! diff -q CODEX.md /tmp/expected_mirror.md > /dev/null 2>&1; then
+            echo "::error::CODEX.md is out of sync with CLAUDE.md"
+            echo "To fix: run 'pnpm sync:ai' or edit CLAUDE.md and save (PostToolUse hook regenerates CODEX.md automatically)."
+            diff --unified CODEX.md /tmp/expected_mirror.md || true
             exit 1
           fi
 
-          echo "✓ CLAUDE.md and .github/copilot-instructions.md are in sync"
+          # Compare .github/copilot-instructions.md against expected mirror
+          if ! diff -q .github/copilot-instructions.md /tmp/expected_mirror.md > /dev/null 2>&1; then
+            echo "::error::.github/copilot-instructions.md is out of sync with CLAUDE.md"
+            echo "To fix: run 'pnpm sync:ai' or edit CLAUDE.md and save (PostToolUse hook regenerates it automatically)."
+            diff --unified .github/copilot-instructions.md /tmp/expected_mirror.md || true
+            exit 1
+          fi
+
+          echo "✓ CODEX.md and .github/copilot-instructions.md are in sync with CLAUDE.md"

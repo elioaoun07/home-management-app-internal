@@ -24,7 +24,8 @@
       "Read(//tmp/**)",
       "Bash(Select-Object Name)",
       "Bash(Select-Object FullName)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(bash scripts/sync-ai-mirrors.sh)"
     ]
   }
 }
