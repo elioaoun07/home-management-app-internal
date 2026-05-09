@@ -16,9 +16,13 @@ export interface EraTurn {
   reply: string;
 }
 
+export type EraView = "hub" | "dashboard";
+
 interface EraState {
-  /** Currently active face. Drives the shapeshift slot and chip highlight. */
+  /** Currently active face. Drives ERA hue + intent routing + chip highlight. */
   activeFaceKey: FaceKey;
+  /** "hub" = chat/ERAMark center; "dashboard" = full face dashboard view. */
+  activeView: EraView;
   /** Last intent produced by the IntentRouter — useful for debug / future toasts. */
   lastIntent: Intent | null;
   /** Persisted command-bar text across in-app navigation (cleared on submit). */
@@ -27,31 +31,41 @@ interface EraState {
   turns: EraTurn[];
   /** ERA starts dormant; first click on the shell wakes it and begins all animations. */
   isAwake: boolean;
+  /** When true, assistant replies are spoken aloud via Azure TTS. Default false. */
+  voiceReplyEnabled: boolean;
 }
 
 interface EraActions {
   setActiveFace: (key: FaceKey) => void;
+  setActiveView: (view: EraView) => void;
+  /** Convenience: sets both face + view in one update (for nav clicks). */
+  openDashboard: (key: FaceKey) => void;
   setLastIntent: (intent: Intent | null) => void;
   setPendingTranscript: (text: string) => void;
   pushTurn: (turn: EraTurn) => void;
   clearTurns: () => void;
   reset: () => void;
   wake: () => void;
+  setVoiceReplyEnabled: (v: boolean) => void;
 }
 
 const MAX_TURNS = 12;
 
 const INITIAL: EraState = {
   activeFaceKey: DEFAULT_FACE_KEY,
+  activeView: "hub",
   lastIntent: null,
   pendingTranscript: "",
   turns: [],
   isAwake: false,
+  voiceReplyEnabled: false,
 };
 
 export const useEraStore = create<EraState & EraActions>((set) => ({
   ...INITIAL,
   setActiveFace: (key) => set({ activeFaceKey: key }),
+  setActiveView: (view) => set({ activeView: view }),
+  openDashboard: (key) => set({ activeFaceKey: key, activeView: "dashboard" }),
   setLastIntent: (intent) => set({ lastIntent: intent }),
   setPendingTranscript: (text) => set({ pendingTranscript: text }),
   pushTurn: (turn) =>
@@ -59,6 +73,7 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
   clearTurns: () => set({ turns: [] }),
   reset: () => set(INITIAL),
   wake: () => set({ isAwake: true }),
+  setVoiceReplyEnabled: (v) => set({ voiceReplyEnabled: v }),
 }));
 
 /** Non-React accessor for use from plain TS modules. */

@@ -29,6 +29,20 @@ export function formatReply(intent: Intent): string {
     case "showAnalytics":
       return `Spending analytics — ${COMING_SOON}`;
     case "unknown":
-      return "I didn't catch that. Try \"I paid $25 for car fuel\" — that's the only ERA action wired today. Everything else is coming soon.";
+      return "I didn't catch that. Try asking what's on your schedule today, how much you've spent this month, or tell me something to remember.";
+
+    // Phase 0.5 native chatbot — handled by resolveIntent; fallback only
+    case "todaySchedule":
+      return "Fetching your schedule…";
+    case "monthSpend":
+      return "Fetching your spending…";
+    case "recipeSearch":
+      return "Searching your recipes…";
+    case "recipeOfferGenerate":
+      return "I don't have that recipe — want me to look it up?";
+    case "memorySave":
+      return "Saving that to memory…";
+    case "memoryRecall":
+      return "Looking that up…";
   }
 }

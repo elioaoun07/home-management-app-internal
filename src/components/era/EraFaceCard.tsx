@@ -5,6 +5,7 @@
 // Clicking the card switches the active face (ERAMark transitions).
 // Action buttons navigate to the face route or trigger ERA.
 
+import { EraFaceWidget } from "@/components/era/face-widgets/EraFaceWidget";
 import type { Face } from "@/features/era/types";
 import { useEraStore } from "@/features/era/useEraStore";
 import { useRouter } from "next/navigation";
@@ -19,30 +20,30 @@ type CardContent = {
 
 const CARD_CONTENT: Record<string, CardContent> = {
   budget: {
-    headline: "Financial overview",
-    body: "Track where your money went this week. Any new expenses to log?",
-    meta: "This period",
+    headline: "This month's spending",
+    body: "",
+    meta: "",
     primary: "View",
     secondary: "Brief",
   },
   schedule: {
-    headline: "Schedule looks clear",
-    body: "Nothing urgent today. Add a reminder or check what's coming up.",
-    meta: "Today",
+    headline: "Today's schedule",
+    body: "",
+    meta: "",
     primary: "Add",
     secondary: "View all",
   },
   chef: {
-    headline: "Ready to cook?",
-    body: "ERA has recipe ideas based on what you usually make.",
-    meta: "~30 min avg",
+    headline: "Recipe library",
+    body: "",
+    meta: "",
     primary: "Open",
     secondary: "Suggest",
   },
   brain: {
-    headline: "Memory up to date",
-    body: "Your household catalogue is current. Ask ERA to recall anything.",
-    meta: "Synced today",
+    headline: "Household memory",
+    body: "",
+    meta: "",
     primary: "Browse",
     secondary: "Add",
   },
@@ -112,17 +113,14 @@ export function EraFaceCard({ face, isActive, position }: Props) {
       </div>
 
       {/* Headline */}
-      <h3 className="mb-1.5 text-sm font-semibold leading-snug text-white/85">
+      <h3 className="mb-2.5 text-sm font-semibold leading-snug text-white/85">
         {content.headline}
       </h3>
 
-      {/* Description */}
-      <p className="mb-3 text-xs leading-relaxed text-white/55">
-        {content.body}
-      </p>
-
-      {/* Meta */}
-      <p className="mb-3.5 text-xs font-medium text-white/65">{content.meta}</p>
+      {/* Live widget — replaces static body + meta */}
+      <div className="mb-3.5">
+        <EraFaceWidget face={face} variant="card" />
+      </div>
 
       {/* Actions */}
       <div

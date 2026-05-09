@@ -54,11 +54,20 @@ export type Intent =
       title?: string;
       rawText: string;
     }
+  | { kind: "showAnalytics"; face: "budget"; rawText: string }
+  // Phase 0.5 — native chatbot intents
+  | { kind: "todaySchedule"; face: "schedule"; rawText: string }
   | {
-      kind: "showAnalytics";
+      kind: "monthSpend";
       face: "budget";
+      scope: "self" | "partner" | "household";
+      categoryHint?: string;
       rawText: string;
     }
+  | { kind: "recipeSearch"; face: "chef"; dish: string; rawText: string }
+  | { kind: "recipeOfferGenerate"; face: "chef"; dish: string; rawText: string }
+  | { kind: "memorySave"; face: "brain"; label: string; value: string; rawText: string }
+  | { kind: "memoryRecall"; face: "brain"; query: string; rawText: string }
   | { kind: "unknown"; rawText: string };
 
 /**

@@ -6,6 +6,7 @@
 // headline using the gradient text, and decorative dots below.
 
 import { ERAMark } from "@/components/shared/ERAMark";
+import { EraFaceWidget } from "@/components/era/face-widgets/EraFaceWidget";
 import type { Face } from "@/features/era/types";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 
@@ -57,6 +58,11 @@ export function FacePlaceholder({ face }: Props) {
         >
           <ERAMark module={face.eraModuleKey} size={120} />
         </div>
+      </div>
+
+      {/* Live stat widget — mobile active-face view */}
+      <div className="mb-1">
+        <EraFaceWidget face={face} variant="placeholder" />
       </div>
 
       {/* Text */}

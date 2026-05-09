@@ -25,7 +25,9 @@
       "Bash(Select-Object Name)",
       "Bash(Select-Object FullName)",
       "Bash(npx next *)",
-      "Bash(bash scripts/sync-ai-mirrors.sh)"
+      "Bash(bash scripts/sync-ai-mirrors.sh)",
+      "PowerShell(New-Item *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); deps={**d.get\\('dependencies',{}\\), **d.get\\('devDependencies',{}\\)}; [print\\(k,v\\) for k,v in sorted\\(deps.items\\(\\)\\) if any\\(x in k for x in ['chart','recharts','victory','d3','plot','vis','canvas','visx','nivo']\\)]\")"
     ]
   }
 }
