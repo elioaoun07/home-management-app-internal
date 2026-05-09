@@ -42,13 +42,13 @@ export async function resolveTodaySchedule(): Promise<ResolveResult> {
         id, title, status,
         alerts:item_alerts(trigger_at, active)
       `)
-      .not("status", "in", `("completed","cancelled","dormant")`)
+      .not("status", "in", `("completed","cancelled")`)
       .limit(200);
 
     if (partnerId) {
-      q = q.in("responsible_user_id", [user.id, partnerId]);
+      q = q.or(`user_id.eq.${user.id},user_id.eq.${partnerId}`);
     } else {
-      q = q.eq("responsible_user_id", user.id);
+      q = q.eq("user_id", user.id);
     }
 
     const { data: items } = await q;

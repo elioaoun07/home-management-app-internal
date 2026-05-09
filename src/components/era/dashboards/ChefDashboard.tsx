@@ -2,7 +2,6 @@
 
 // ERA Chef Dashboard — recipe library overview, recently cooked, cuisine breakdown.
 
-import { eraKeys } from "@/features/era/queryKeys";
 import { CACHE_TIMES } from "@/lib/queryConfig";
 import { safeFetch } from "@/lib/safeFetch";
 import { useQuery } from "@tanstack/react-query";
@@ -12,6 +11,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -33,6 +33,7 @@ interface RecipeSummary {
   last_cooked_at?: string | null;
   image_url?: string | null;
   average_rating?: number | null;
+  created_at?: string | null;
 }
 
 function useRecipeData() {
@@ -124,10 +125,19 @@ export function ChefDashboard() {
     ).length;
   }, [recipes, mounted]);
 
+  const neverTried = useMemo(
+    () =>
+      [...recipes]
+        .filter((r) => (r.times_cooked ?? 0) === 0)
+        .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
+        .slice(0, 4),
+    [recipes],
+  );
+
   return (
     <div className="flex flex-col gap-4 px-4 py-3 pb-6">
       {/* Stat row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <EraStatCard
           hue={HUE}
           label="Total recipes"
@@ -140,6 +150,13 @@ export function ChefDashboard() {
           label="Cooked this month"
           value={mounted && !isLoading ? thisMonthCooked : "…"}
           sub="sessions"
+          loading={isLoading}
+        />
+        <EraStatCard
+          hue={HUE}
+          label="Favourite cuisine"
+          value={cuisineData[0]?.name ?? "—"}
+          sub={cuisineData[0] ? `${cuisineData[0].count} recipes` : undefined}
           loading={isLoading}
         />
         <EraStatCard
@@ -271,10 +288,70 @@ export function ChefDashboard() {
                       fill={`hsl(${(HUE + i * 22) % 360}, 65%, 58%)`}
                     />
                   ))}
+                  <LabelList
+                    dataKey="count"
+                    position="right"
+                    fill="rgba(255,255,255,0.55)"
+                    fontSize={10}
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}
+        </div>
+      )}
+
+      {/* Never tried */}
+      {neverTried.length > 0 && (
+        <div
+          className="rounded-2xl p-4"
+          style={{
+            background: `hsla(${HUE}, 18%, 7%, 0.82)`,
+            border: `1px solid hsla(${HUE}, 55%, 45%, 0.18)`,
+            backdropFilter: "blur(14px)",
+          }}
+        >
+          <p
+            className="mb-3 text-[10px] font-semibold uppercase tracking-[0.13em]"
+            style={{ color: `hsla(${HUE}, 60%, 65%, 0.65)` }}
+          >
+            Never tried
+          </p>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            {neverTried.map((r) => {
+              const total =
+                (r.prep_time_minutes ?? 0) + (r.cook_time_minutes ?? 0);
+              return (
+                <div
+                  key={r.id}
+                  className="flex flex-col gap-1.5 rounded-xl p-3"
+                  style={{
+                    background: `hsla(${HUE}, 20%, 9%, 0.55)`,
+                    border: `1px dashed hsla(${HUE}, 50%, 40%, 0.22)`,
+                  }}
+                >
+                  <span className="line-clamp-2 text-sm font-medium leading-snug text-white/70">
+                    {r.name}
+                  </span>
+                  <div className="flex items-center justify-between">
+                    {total > 0 && (
+                      <span
+                        className="text-[10px]"
+                        style={{ color: `hsla(${HUE}, 60%, 65%, 0.55)` }}
+                      >
+                        {total} min
+                      </span>
+                    )}
+                    {r.cuisine && (
+                      <span className="ml-auto text-[10px] text-white/35">
+                        {r.cuisine}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

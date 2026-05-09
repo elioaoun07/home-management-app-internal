@@ -1,8 +1,8 @@
 "use client";
 
-// ERA Budget Dashboard — MTD spend, trend chart, category breakdown, recent transactions.
+// ERA Budget Dashboard — MTD spend, vs. previous period, trend chart,
+// category donut, top accounts, and recent transactions.
 
-import { eraKeys } from "@/features/era/queryKeys";
 import { CACHE_TIMES, getCachedPreferences } from "@/lib/queryConfig";
 import { safeFetch } from "@/lib/safeFetch";
 import { getDefaultDateRange } from "@/lib/utils/date";
@@ -29,7 +29,10 @@ const AREA_FILL = `hsl(${HUE}, 72%, 62%)`;
 interface Transaction {
   amount: number;
   date: string;
-  category?: { name: string } | null;
+  description?: string | null;
+  /** API returns category as a flat string (the name) or null. */
+  category?: string | null;
+  account_name?: string | null;
   user_id: string;
 }
 
@@ -37,20 +40,52 @@ function fmt(n: number): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
-function useMonthTransactions() {
-  return useQuery<Transaction[]>({
+function previousRange(start: string, end: string) {
+  const s = new Date(start);
+  const e = new Date(end);
+  const days = Math.max(
+    1,
+    Math.round((e.getTime() - s.getTime()) / 86_400_000) + 1,
+  );
+  const prevEnd = new Date(s);
+  prevEnd.setDate(prevEnd.getDate() - 1);
+  const prevStart = new Date(prevEnd);
+  prevStart.setDate(prevStart.getDate() - (days - 1));
+  return {
+    start: prevStart.toISOString().slice(0, 10),
+    end: prevEnd.toISOString().slice(0, 10),
+  };
+}
+
+interface BudgetDashData {
+  current: Transaction[];
+  previous: Transaction[];
+  start: string;
+  end: string;
+}
+
+async function fetchTx(start: string, end: string): Promise<Transaction[]> {
+  const res = await safeFetch(`/api/transactions?start=${start}&end=${end}`, {
+    timeoutMs: 10_000,
+  });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return Array.isArray(json) ? json : [];
+}
+
+function useBudgetData() {
+  return useQuery<BudgetDashData>({
     queryKey: ["era", "dashboard", "budget"],
     queryFn: async () => {
       const prefs = getCachedPreferences();
       const day = Number(prefs?.date_start?.split("-")[1] ?? "1") || 1;
       const { start, end } = getDefaultDateRange(day);
-      const res = await safeFetch(
-        `/api/transactions?start=${start}&end=${end}`,
-        { timeoutMs: 10_000 },
-      );
-      if (!res.ok) return [];
-      const json = await res.json();
-      return Array.isArray(json) ? json : [];
+      const prev = previousRange(start, end);
+      const [current, previous] = await Promise.all([
+        fetchTx(start, end),
+        fetchTx(prev.start, prev.end),
+      ]);
+      return { current, previous, start, end };
     },
     staleTime: CACHE_TIMES.TRANSACTIONS,
   });
@@ -58,7 +93,6 @@ function useMonthTransactions() {
 
 function buildDailyData(transactions: Transaction[]) {
   const byDay: Record<string, number> = {};
-  if (!Array.isArray(transactions)) return [];
   for (const t of transactions) {
     const day = t.date?.slice(0, 10) ?? "";
     if (!day) continue;
@@ -79,18 +113,26 @@ function buildDailyData(transactions: Transaction[]) {
 function buildCategoryData(transactions: Transaction[]) {
   const map: Record<string, number> = {};
   for (const t of transactions) {
-    const name = t.category?.name ?? "Other";
+    const name = t.category ?? "No category";
     map[name] = (map[name] ?? 0) + t.amount;
   }
-  const sorted = Object.entries(map)
+  const sorted = Object.entries(map).sort(([, a], [, b]) => b - a);
+  const top = sorted.slice(0, 6);
+  const rest = sorted.slice(6).reduce((s, [, v]) => s + v, 0);
+  if (rest > 0) top.push(["Other", rest]);
+  return top.map(([name, value]) => ({ name, value: +value.toFixed(2) }));
+}
+
+function buildAccountData(transactions: Transaction[]) {
+  const map: Record<string, number> = {};
+  for (const t of transactions) {
+    const name = t.account_name ?? "Unknown";
+    map[name] = (map[name] ?? 0) + t.amount;
+  }
+  return Object.entries(map)
     .sort(([, a], [, b]) => b - a)
-    .slice(0, 6);
-  const rest = Object.entries(map)
-    .sort(([, a], [, b]) => b - a)
-    .slice(6)
-    .reduce((s, [, v]) => s + v, 0);
-  if (rest > 0) sorted.push(["Other", rest]);
-  return sorted.map(([name, value]) => ({ name, value: +value.toFixed(2) }));
+    .slice(0, 5)
+    .map(([name, value]) => ({ name, value: +value.toFixed(2) }));
 }
 
 const PIE_COLORS = [
@@ -127,12 +169,38 @@ function CustomTooltip({ active, payload }: TooltipProps) {
   );
 }
 
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="rounded-2xl p-4"
+      style={{
+        background: `hsla(${HUE}, 18%, 7%, 0.82)`,
+        border: `1px solid hsla(${HUE}, 55%, 45%, 0.18)`,
+        backdropFilter: "blur(14px)",
+      }}
+    >
+      <p
+        className="mb-3 text-[10px] font-semibold uppercase tracking-[0.13em]"
+        style={{ color: `hsla(${HUE}, 60%, 65%, 0.65)` }}
+      >
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
 export function BudgetDashboard() {
-  const { data: rawTransactions, isLoading } = useMonthTransactions();
-  const transactions: Transaction[] = Array.isArray(rawTransactions)
-    ? rawTransactions
-    : [];
-  // Gate Recharts + date-sensitive values to client-only to prevent hydration mismatch
+  const { data, isLoading } = useBudgetData();
+  const transactions = data?.current ?? [];
+  const previousTx = data?.previous ?? [];
+
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -143,10 +211,22 @@ export function BudgetDashboard() {
     () => buildCategoryData(transactions),
     [transactions],
   );
+  const accountData = useMemo(
+    () => buildAccountData(transactions),
+    [transactions],
+  );
+
   const total = useMemo(
     () => transactions.reduce((s, t) => s + t.amount, 0),
     [transactions],
   );
+  const previousTotal = useMemo(
+    () => previousTx.reduce((s, t) => s + t.amount, 0),
+    [previousTx],
+  );
+  const deltaPct =
+    previousTotal > 0 ? ((total - previousTotal) / previousTotal) * 100 : null;
+
   const topCat = catData[0];
   const dailyAvg = useMemo(() => {
     if (!mounted) return 0;
@@ -157,12 +237,25 @@ export function BudgetDashboard() {
   return (
     <div className="flex flex-col gap-4 px-4 py-3 pb-6">
       {/* Stat row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <EraStatCard
           hue={HUE}
           label="This period"
           value={isLoading ? "…" : fmt(total)}
           sub="month-to-date"
+          loading={isLoading}
+        />
+        <EraStatCard
+          hue={HUE}
+          label="vs. last period"
+          value={
+            isLoading
+              ? "…"
+              : deltaPct === null
+                ? "—"
+                : `${deltaPct > 0 ? "+" : ""}${Math.round(deltaPct)}%`
+          }
+          sub={previousTotal > 0 ? fmt(previousTotal) : "no prior data"}
           loading={isLoading}
         />
         <EraStatCard
@@ -182,20 +275,7 @@ export function BudgetDashboard() {
       </div>
 
       {/* Spending trend */}
-      <div
-        className="rounded-2xl p-4"
-        style={{
-          background: `hsla(${HUE}, 18%, 7%, 0.82)`,
-          border: `1px solid hsla(${HUE}, 55%, 45%, 0.18)`,
-          backdropFilter: "blur(14px)",
-        }}
-      >
-        <p
-          className="mb-3 text-[10px] font-semibold uppercase tracking-[0.13em]"
-          style={{ color: `hsla(${HUE}, 60%, 65%, 0.65)` }}
-        >
-          Cumulative spend — this period
-        </p>
+      <Section title="Cumulative spend — this period">
         {!mounted || isLoading ? (
           <div className="h-36 animate-pulse rounded-xl bg-white/5" />
         ) : dailyData.length === 0 ? (
@@ -256,25 +336,11 @@ export function BudgetDashboard() {
             </AreaChart>
           </ResponsiveContainer>
         )}
-      </div>
+      </Section>
 
-      {/* Bottom row: category donut + recent transactions */}
+      {/* Bottom row: category donut + top accounts */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {/* Category breakdown */}
-        <div
-          className="rounded-2xl p-4"
-          style={{
-            background: `hsla(${HUE}, 18%, 7%, 0.82)`,
-            border: `1px solid hsla(${HUE}, 55%, 45%, 0.18)`,
-            backdropFilter: "blur(14px)",
-          }}
-        >
-          <p
-            className="mb-3 text-[10px] font-semibold uppercase tracking-[0.13em]"
-            style={{ color: `hsla(${HUE}, 60%, 65%, 0.65)` }}
-          >
-            By category
-          </p>
+        <Section title="By category">
           {!mounted || isLoading ? (
             <div className="h-36 animate-pulse rounded-xl bg-white/5" />
           ) : catData.length === 0 ? (
@@ -298,7 +364,7 @@ export function BudgetDashboard() {
                   ))}
                 </Pie>
               </PieChart>
-              <ul className="flex flex-col gap-1.5 overflow-hidden">
+              <ul className="flex flex-1 flex-col gap-1.5 overflow-hidden">
                 {catData.slice(0, 5).map((c, i) => (
                   <li key={c.name} className="flex min-w-0 items-center gap-2">
                     <span
@@ -316,55 +382,95 @@ export function BudgetDashboard() {
               </ul>
             </div>
           )}
-        </div>
+        </Section>
 
-        {/* Recent transactions */}
-        <div
-          className="rounded-2xl p-4"
-          style={{
-            background: `hsla(${HUE}, 18%, 7%, 0.82)`,
-            border: `1px solid hsla(${HUE}, 55%, 45%, 0.18)`,
-            backdropFilter: "blur(14px)",
-          }}
-        >
-          <p
-            className="mb-3 text-[10px] font-semibold uppercase tracking-[0.13em]"
-            style={{ color: `hsla(${HUE}, 60%, 65%, 0.65)` }}
-          >
-            Recent
-          </p>
-          {isLoading ? (
-            <div className="flex flex-col gap-2">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-7 animate-pulse rounded-lg bg-white/5"
-                />
-              ))}
+        <Section title="Top accounts">
+          {!mounted || isLoading ? (
+            <div className="h-36 animate-pulse rounded-xl bg-white/5" />
+          ) : accountData.length === 0 ? (
+            <div className="flex h-36 items-center justify-center text-xs text-white/30">
+              No data
             </div>
           ) : (
             <ul className="flex flex-col gap-2">
-              {transactions.slice(0, 6).map((t, i) => (
+              {accountData.map((a, i) => {
+                const pct = total > 0 ? (a.value / total) * 100 : 0;
+                return (
+                  <li key={a.name} className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-xs text-white/65">
+                        {a.name}
+                      </span>
+                      <span className="ml-auto shrink-0 text-xs font-medium text-white/75">
+                        {fmt(a.value)}
+                      </span>
+                    </div>
+                    <div className="h-1 w-full overflow-hidden rounded-full bg-white/5">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.max(2, pct)}%`,
+                          background: PIE_COLORS[i % PIE_COLORS.length],
+                          opacity: 0.85,
+                        }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Section>
+      </div>
+
+      {/* Recent transactions */}
+      <Section title="Recent">
+        {isLoading ? (
+          <div className="flex flex-col gap-2">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-7 animate-pulse rounded-lg bg-white/5"
+              />
+            ))}
+          </div>
+        ) : transactions.length === 0 ? (
+          <p className="py-4 text-center text-xs text-white/30">Nothing yet.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {transactions.slice(0, 8).map((t, i) => {
+              const label =
+                t.description?.trim() ||
+                t.category ||
+                t.account_name ||
+                "Transaction";
+              const tag = t.category ?? t.account_name ?? "";
+              return (
                 <li key={i} className="flex items-center gap-2">
                   <span
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
                     style={{ background: LINE_COLOR }}
                   />
-                  <span className="flex-1 truncate text-xs text-white/55">
-                    {t.category?.name ?? "Uncategorized"}
+                  <span className="flex-1 truncate text-xs text-white/65">
+                    {label}
                   </span>
-                  <span className="shrink-0 text-xs font-medium text-white/70">
+                  {tag && tag !== label && (
+                    <span className="hidden shrink-0 text-[10px] text-white/30 md:inline">
+                      {tag}
+                    </span>
+                  )}
+                  <span className="shrink-0 text-xs font-medium text-white/75">
                     ${t.amount.toFixed(2)}
                   </span>
                   <span className="shrink-0 text-[10px] text-white/30">
                     {t.date?.slice(5)}
                   </span>
                 </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+              );
+            })}
+          </ul>
+        )}
+      </Section>
     </div>
   );
 }
