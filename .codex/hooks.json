@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash 'C:\\Users\\aoune\\WebApp\\budget-app\\.codex\\hooks\\block-ui-dir.sh'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash 'C:\\Users\\aoune\\WebApp\\budget-app\\.codex\\hooks\\sync-copilot.sh'"
+          },
+          {
+            "type": "command",
+            "command": "bash 'C:\\Users\\aoune\\WebApp\\budget-app\\.codex\\hooks\\update-atlas.sh'"
+          }
+        ]
+      }
+    ]
+  }
+}

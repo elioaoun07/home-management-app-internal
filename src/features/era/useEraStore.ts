@@ -25,6 +25,8 @@ interface EraState {
   pendingTranscript: string;
   /** Rolling history of recent turns (most recent first, capped at 12). */
   turns: EraTurn[];
+  /** ERA starts dormant; first click on the shell wakes it and begins all animations. */
+  isAwake: boolean;
 }
 
 interface EraActions {
@@ -34,6 +36,7 @@ interface EraActions {
   pushTurn: (turn: EraTurn) => void;
   clearTurns: () => void;
   reset: () => void;
+  wake: () => void;
 }
 
 const MAX_TURNS = 12;
@@ -43,6 +46,7 @@ const INITIAL: EraState = {
   lastIntent: null,
   pendingTranscript: "",
   turns: [],
+  isAwake: false,
 };
 
 export const useEraStore = create<EraState & EraActions>((set) => ({
@@ -54,6 +58,7 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
     set((s) => ({ turns: [turn, ...s.turns].slice(0, MAX_TURNS) })),
   clearTurns: () => set({ turns: [] }),
   reset: () => set(INITIAL),
+  wake: () => set({ isAwake: true }),
 }));
 
 /** Non-React accessor for use from plain TS modules. */

@@ -20,7 +20,10 @@ export default function GuestHeader() {
 
   const shouldHide =
     mounted &&
-    (pathname?.startsWith("/g/") || viewMode === "watch" || viewMode === "web");
+    (pathname?.startsWith("/g/") ||
+      pathname?.startsWith("/era") ||
+      viewMode === "watch" ||
+      viewMode === "web");
 
   if (shouldHide) {
     return null;

@@ -78,7 +78,8 @@ export async function GET(
     .select("amount, scheduled_date")
     .eq("account_id", accountId)
     .eq("user_id", accountOwnerId)
-    .eq("is_draft", true);
+    .eq("is_draft", true)
+    .is("deleted_at", null);
 
   if (draftError) {
     console.error("Error fetching draft transactions:", draftError);
@@ -214,7 +215,10 @@ export async function POST(
   if (error) {
     console.error("Error upserting balance:", error);
     if ((error as any).code === "23505") {
-      return NextResponse.json({ error: "Balance record already exists for this account" }, { status: 409 });
+      return NextResponse.json(
+        { error: "Balance record already exists for this account" },
+        { status: 409 },
+      );
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -4063,3 +4063,315 @@ body.theme-loaded {
   0%, 100% { box-shadow: 0 0 6px 1px rgba(6,182,212,0.45), inset 0 1px 0 rgba(255,255,255,0.2); }
   50% { box-shadow: 0 0 14px 4px rgba(6,182,212,0.7), inset 0 1px 0 rgba(255,255,255,0.25); }
 }
+
+/* ============================================================
+ * ERA Shell Ambient System
+ *
+ * @property registers CSS custom properties with a known syntax
+ * so the browser can interpolate them as numbers/percentages —
+ * enabling smooth gradient and color transitions when the face
+ * changes (1.8s cubic-bezier, matching ERAMark timing).
+ * ============================================================ */
+
+@property --era-hue {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 175;
+}
+@property --era-sat {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 72%;
+}
+@property --era-lum {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 55%;
+}
+
+.era-shell {
+  transition:
+    --era-hue 1.8s cubic-bezier(0.4, 0, 0.2, 1),
+    --era-sat 1.8s cubic-bezier(0.4, 0, 0.2, 1),
+    --era-lum 1.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Ambient top-glow that morphs with the active face color */
+.era-shell-glow {
+  background:
+    radial-gradient(
+      ellipse 90% 50% at 50% 0%,
+      hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.18) 0%,
+      transparent 100%
+    );
+}
+
+/* ── Ambient dots ── */
+.era-dot {
+  background: hsla(var(--era-hue), var(--era-sat), calc(var(--era-lum) + 22%), 0.9);
+  box-shadow:
+    0 0 10px 4px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.45),
+    0 0 2px 1px   hsla(var(--era-hue), 100%, 90%, 0.5);
+  animation: era-dot-pulse var(--dot-dur, 4.2s) ease-in-out infinite;
+  animation-delay: var(--dot-delay, 0s);
+}
+
+@keyframes era-dot-pulse {
+  0%, 100% { opacity: 0.18; transform: scale(0.75); }
+  50%      { opacity: 1;    transform: scale(1.2);  }
+}
+
+/* Small decorative dot (placeholder, etc.) */
+.era-dot-sm {
+  background: hsla(var(--era-hue), var(--era-sat), calc(var(--era-lum) + 22%), 0.8);
+  box-shadow: 0 0 6px 2px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.4);
+  animation: era-dot-pulse 3s ease-in-out infinite;
+}
+.era-dot-sm:nth-child(2) { animation-delay: -1s; }
+.era-dot-sm:nth-child(3) { animation-delay: -2s; }
+
+/* ── Gradient text (follows face hue) ── */
+.era-gradient-text {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--era-hue), var(--era-sat), calc(var(--era-lum) + 28%)) 0%,
+    hsl(var(--era-hue), var(--era-sat), var(--era-lum))             100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Header glow line ── */
+.era-header-glow-line {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.5) 50%,
+    transparent 100%
+  );
+}
+
+/* ── Face chips ── */
+.era-face-chip {
+  border: 1px solid transparent;
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.era-face-chip-active {
+  background-color: hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.14) !important;
+  border-color:     hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.55) !important;
+  box-shadow:
+    0 0 18px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.18),
+    inset 0 0 8px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.05);
+}
+
+/* ── Placeholder orbital rings ── */
+.era-orbit {
+  border: 1px solid hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.18);
+  animation: era-orbit-breathe 5s ease-in-out infinite;
+}
+
+.era-orbit-inner {
+  border-color: hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.30);
+  animation-delay: -2.5s;
+  animation-duration: 3.5s;
+}
+
+@keyframes era-orbit-breathe {
+  0%, 100% { transform: scale(1);    opacity: 0.45; }
+  50%      { transform: scale(1.07); opacity: 1;    }
+}
+
+/* ── Command bar ── */
+.era-command-bar {
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.era-command-bar:focus-within {
+  border-color: hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.65) !important;
+  box-shadow:
+    0 0 24px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.12),
+    inset 0 0 0 1px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.12);
+}
+
+/* Subtle scan line */
+.era-command-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.07) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: era-cmd-scan 8s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+@keyframes era-cmd-scan {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { transform: translateX(200%);  opacity: 0; }
+}
+
+/* Idle listening dot */
+.era-idle-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  background: hsla(var(--era-hue), var(--era-sat), calc(var(--era-lum) + 20%), 0.9);
+  box-shadow: 0 0 8px 2px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.5);
+  animation: era-dot-pulse 2.8s ease-in-out infinite;
+}
+
+/* Desktop rail separator glow */
+.era-rail-glow {
+  border-color: hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.18) !important;
+  box-shadow: inset -1px 0 12px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.04);
+}
+
+/* ── Hub orbital rings (large scale, around the center ERAMark) ── */
+.era-hub-ring-outer {
+  border: 1px solid hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.14);
+  animation: era-orbit-breathe 9s ease-in-out infinite;
+}
+.era-hub-ring-mid {
+  border: 1px solid hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.22);
+  animation: era-orbit-breathe 6.5s ease-in-out infinite;
+  animation-delay: -3.2s;
+}
+.era-hub-ring-inner {
+  border: 1px solid hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.32);
+  animation: era-orbit-breathe 4.8s ease-in-out infinite;
+  animation-delay: -1.6s;
+}
+
+/* ── Face card glass panels ── */
+.era-face-card {
+  background: rgba(26, 34, 58, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease, background 0.4s ease;
+}
+.era-face-card:hover {
+  border-color: rgba(255, 255, 255, 0.20);
+  background: rgba(30, 40, 68, 0.90);
+}
+.era-face-card-active {
+  border-color: hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.48) !important;
+  box-shadow:
+    0 0 40px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.12),
+    inset 0 0 20px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.06);
+}
+
+/* ── ERA wordmark (top center) ── */
+.era-wordmark {
+  font-size: 11px;
+  font-weight: 300;
+  letter-spacing: 0.55em;
+  color: rgba(255, 255, 255, 0.30);
+  text-transform: uppercase;
+  user-select: none;
+  transition: color 1.8s ease;
+}
+/* Sleeping state: slow breathing pulse */
+[data-awake="false"] .era-wordmark {
+  animation: era-sleep-breathe 4.5s ease-in-out infinite;
+}
+@keyframes era-sleep-breathe {
+  0%, 100% { color: rgba(255, 255, 255, 0.12); }
+  50%       { color: rgba(255, 255, 255, 0.22); }
+}
+
+/* ── Active face label (below center mark) ── */
+.era-face-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: hsla(var(--era-hue), var(--era-sat), calc(var(--era-lum) + 15%), 0.70);
+  transition: color 1.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Floating command pill (opaque per Hard Rule #15) ── */
+.era-command-pill {
+  /* Hard Rule #15: opaque, not glass */
+  /* Border follows active modal hue via CSS var — transitions with shell's 1.8s animation */
+  border-color: hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.38) !important;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+.era-command-pill:focus-within {
+  border-color: hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.70) !important;
+  box-shadow:
+    0 0 28px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.18),
+    inset 0 0 0 1px hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.12);
+}
+.era-command-pill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.06) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: era-cmd-scan 9s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* ── Mobile face chip (horizontal scroll row above command bar) ── */
+.era-mobile-chip {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(7, 11, 22, 0.60);
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+.era-mobile-chip-active {
+  border-color: hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.50) !important;
+  background: hsla(var(--era-hue), var(--era-sat), var(--era-lum), 0.12) !important;
+}
+
+/* ── Dot birth animation — runs once when EraDots mounts on wake ── */
+.era-dot-birth {
+  animation: era-dot-appear 0.55s ease-out both;
+  animation-delay: var(--birth-delay, 0s);
+}
+
+@keyframes era-dot-appear {
+  from { opacity: 0; transform: scale(0.2); }
+  to   { opacity: 1; transform: scale(1);   }
+}
+
+/* ── ERA mark filter — smooth transition between sleeping/awake ── */
+.era-mark-filter {
+  transition: filter 1.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .era-shell { transition: none !important; }
+  .era-dot,
+  .era-dot-sm,
+  .era-orbit,
+  .era-orbit-inner,
+  .era-hub-ring-outer,
+  .era-hub-ring-mid,
+  .era-hub-ring-inner,
+  .era-idle-dot,
+  .era-dot-birth,
+  .era-mark-filter,
+  .era-command-bar::after,
+  .era-command-pill::after { animation: none !important; transition: none !important; }
+}

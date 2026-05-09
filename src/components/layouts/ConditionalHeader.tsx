@@ -90,6 +90,7 @@ export default function ConditionalHeader({
   const shouldHide =
     mounted &&
     (pathname?.startsWith("/g/") ||
+      pathname?.startsWith("/era") ||
       pathname?.startsWith("/temp") ||
       pathname?.startsWith("/nfc/") ||
       viewMode === "watch" ||
