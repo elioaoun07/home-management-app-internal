@@ -5,6 +5,7 @@
 
 import { create } from "zustand";
 import { DEFAULT_FACE_KEY } from "./faceRegistry";
+import type { ERAModuleKey } from "@/components/shared/ERAMark";
 import type { FaceKey, Intent } from "./types";
 
 /** A turn in the ERA conversation log — user input + ERA's parsed reply. */
@@ -33,6 +34,13 @@ interface EraState {
   isAwake: boolean;
   /** When true, assistant replies are spoken aloud via Azure TTS. Default false. */
   voiceReplyEnabled: boolean;
+  /**
+   * The module key driving ERA DOT color/cue in hub view.
+   * Starts as "chat" (neutral) and updates to the mentioned face's module when
+   * a face-specific intent is parsed — so the DOT shifts hue live as the user
+   * addresses a module.
+   */
+  hubModuleKey: ERAModuleKey;
 }
 
 interface EraActions {
@@ -47,6 +55,7 @@ interface EraActions {
   reset: () => void;
   wake: () => void;
   setVoiceReplyEnabled: (v: boolean) => void;
+  setHubModuleKey: (key: ERAModuleKey) => void;
 }
 
 const MAX_TURNS = 12;
@@ -59,6 +68,7 @@ const INITIAL: EraState = {
   turns: [],
   isAwake: false,
   voiceReplyEnabled: false,
+  hubModuleKey: "chat",
 };
 
 export const useEraStore = create<EraState & EraActions>((set) => ({
@@ -74,6 +84,7 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
   reset: () => set(INITIAL),
   wake: () => set({ isAwake: true }),
   setVoiceReplyEnabled: (v) => set({ voiceReplyEnabled: v }),
+  setHubModuleKey: (key) => set({ hubModuleKey: key }),
 }));
 
 /** Non-React accessor for use from plain TS modules. */

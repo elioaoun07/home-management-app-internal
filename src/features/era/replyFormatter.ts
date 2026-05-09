@@ -31,6 +31,9 @@ export function formatReply(intent: Intent): string {
     case "unknown":
       return "I didn't catch that. Try asking what's on your schedule today, how much you've spent this month, or tell me something to remember.";
 
+    case "greeting":
+      return "Hey! Ask me about your budget, schedule, recipes, or anything to remember.";
+
     // Phase 0.5 native chatbot — handled by resolveIntent; fallback only
     case "todaySchedule":
       return "Fetching your schedule…";

@@ -8,6 +8,7 @@
 //   #6  uses safeFetch (inside useEraBudgetSubmit + useCreateEraMessage)
 //   #15 command pill uses tc.bgPage — opaque, not glass
 
+import { getFace } from "@/features/era/faceRegistry";
 import { rootIntentRouter } from "@/features/era/intentRouter";
 import { resolveIntent } from "@/features/era/intents/resolveIntent";
 import type { FaceKey, Intent } from "@/features/era/types";
@@ -40,6 +41,7 @@ export function CommandBar() {
   const setPendingTranscript = useEraStore((s) => s.setPendingTranscript);
   const activeFaceKey = useEraStore((s) => s.activeFaceKey);
   const setActiveFace = useEraStore((s) => s.setActiveFace);
+  const setHubModuleKey = useEraStore((s) => s.setHubModuleKey);
   const setLastIntent = useEraStore((s) => s.setLastIntent);
   const voiceReplyEnabled = useEraStore((s) => s.voiceReplyEnabled);
   const setVoiceReplyEnabled = useEraStore((s) => s.setVoiceReplyEnabled);
@@ -103,10 +105,10 @@ export function CommandBar() {
       if (!text || busy) return;
       const intent = rootIntentRouter.parse(text);
       setLastIntent(intent);
-      if (intent.kind !== "unknown") {
+      if (intent.kind !== "unknown" && intent.kind !== "greeting") {
         setActiveFace(intent.face);
+        setHubModuleKey(getFace(intent.face).eraModuleKey);
       }
-      setPendingTranscript("");
       setBusy(true);
 
       let conversationId = activeConversation?.id ?? null;
@@ -117,7 +119,10 @@ export function CommandBar() {
           role: "user",
           content: text,
           intent_kind: intent.kind,
-          intent_face: intent.kind === "unknown" ? null : intent.face,
+          intent_face:
+            intent.kind === "unknown" || intent.kind === "greeting"
+              ? null
+              : intent.face,
           intent_payload: intentPayload(intent),
         });
         conversationId = userResult.conversation_id;
@@ -148,7 +153,10 @@ export function CommandBar() {
           role: "assistant",
           content: reply,
           intent_kind: intent.kind,
-          intent_face: intent.kind === "unknown" ? null : intent.face,
+          intent_face:
+            intent.kind === "unknown" || intent.kind === "greeting"
+              ? null
+              : intent.face,
           intent_payload: metadata ?? intentPayload(intent),
           draft_transaction_id: draftTransactionId,
         });
@@ -170,6 +178,7 @@ export function CommandBar() {
       budgetSubmit,
       setLastIntent,
       setActiveFace,
+      setHubModuleKey,
       setPendingTranscript,
       voiceReplyEnabled,
       tts,
@@ -215,10 +224,18 @@ export function CommandBar() {
             !micSupportedRef.current ? "opacity-20 cursor-not-allowed" : "",
             micActive ? "opacity-100" : "opacity-50 hover:opacity-80",
           ].join(" ")}
-          style={micActive ? undefined : { color: "var(--era-accent-faint, rgba(255,255,255,0.35))" }}
+          style={
+            micActive
+              ? undefined
+              : { color: "var(--era-accent-faint, rgba(255,255,255,0.35))" }
+          }
         >
           {micActive ? (
-            <MicOff className="size-4 animate-pulse" style={{ color: "var(--era-accent)" }} aria-hidden />
+            <MicOff
+              className="size-4 animate-pulse"
+              style={{ color: "var(--era-accent)" }}
+              aria-hidden
+            />
           ) : (
             <Mic className="size-4" aria-hidden />
           )}
@@ -242,7 +259,9 @@ export function CommandBar() {
         <button
           suppressHydrationWarning
           type="button"
-          aria-label={voiceReplyEnabled ? "Mute ERA replies" : "Enable voice replies"}
+          aria-label={
+            voiceReplyEnabled ? "Mute ERA replies" : "Enable voice replies"
+          }
           onClick={() => setVoiceReplyEnabled(!voiceReplyEnabled)}
           className="flex-shrink-0 transition-opacity"
           style={{

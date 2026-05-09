@@ -68,9 +68,11 @@ export function EraShell() {
   const wake          = useEraStore((s) => s.wake);
   const user          = useUser();
 
+  const hubModuleKey = useEraStore((s) => s.hubModuleKey);
   const face      = getFace(activeFaceKey);
-  // Hub → "chat" module (190°); module → that face's module key
-  const moduleKey = activeView === "hub" ? "chat" : face.eraModuleKey;
+  // Hub → tracks last mentioned module (starts as "chat", shifts when user addresses a face);
+  // Module dashboard → that face's module key.
+  const moduleKey = activeView === "hub" ? hubModuleKey : face.eraModuleKey;
   const fc        = MODULE_COLORS[moduleKey] ?? MODULE_COLORS.chat;
   const isHub     = activeView === "hub";
 

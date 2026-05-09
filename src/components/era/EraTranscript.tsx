@@ -30,6 +30,8 @@ function intentBadge(kind: Intent["kind"] | null): string | null {
       return "Draft reminder";
     case "showAnalytics":
       return "Analytics";
+    case "greeting":
+      return null; // no badge for greetings — keep it conversational
     case "unknown":
       return "Not understood";
     default:

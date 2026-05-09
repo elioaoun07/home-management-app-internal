@@ -66,8 +66,15 @@ export type Intent =
     }
   | { kind: "recipeSearch"; face: "chef"; dish: string; rawText: string }
   | { kind: "recipeOfferGenerate"; face: "chef"; dish: string; rawText: string }
-  | { kind: "memorySave"; face: "brain"; label: string; value: string; rawText: string }
+  | {
+      kind: "memorySave";
+      face: "brain";
+      label: string;
+      value: string;
+      rawText: string;
+    }
   | { kind: "memoryRecall"; face: "brain"; query: string; rawText: string }
+  | { kind: "greeting"; rawText: string }
   | { kind: "unknown"; rawText: string };
 
 /**
