@@ -593,6 +593,7 @@ export function useScheduleRoutine() {
         queryKey: flexibleRoutinesKeys.schedules(),
       });
       queryClient.invalidateQueries({ queryKey: flexibleRoutinesKeys.all });
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
     },
   });
 }
@@ -633,6 +634,7 @@ export function useUnscheduleRoutine() {
         queryKey: flexibleRoutinesKeys.schedules(),
       });
       queryClient.invalidateQueries({ queryKey: flexibleRoutinesKeys.all });
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
     },
   });
 }

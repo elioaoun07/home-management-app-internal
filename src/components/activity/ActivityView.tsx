@@ -78,20 +78,36 @@ export default function ActivityView() {
     appModeCtx?.isItemsMode ? "items" : "transactions",
   );
 
-  // Sync active section when the FAB mode changes
+  // Sync active section ONLY when appMode changes from outside (e.g. FAB long-press).
+  // We deliberately don't include `activeSection` in deps — otherwise clicking
+  // "Transfers" (which keeps appMode = "budget") would snap us back to "transactions".
+  // We also guard so we only switch sections across the budget↔items boundary, never
+  // within the same group (so transfers ↔ transactions stays where the user put it).
+  const isItemsMode = appModeCtx?.isItemsMode;
+  const isBudgetMode = appModeCtx?.isBudgetMode;
   useEffect(() => {
-    if (appModeCtx?.isItemsMode) {
-      setActiveSection("items");
-    } else if (appModeCtx?.isBudgetMode) {
-      setActiveSection("transactions");
-    }
-  }, [appModeCtx?.isItemsMode, appModeCtx?.isBudgetMode]);
+    setActiveSection((prev) => {
+      if (isItemsMode && prev !== "items") return "items";
+      if (isBudgetMode && prev === "items") return "transactions";
+      return prev;
+    });
+  }, [isItemsMode, isBudgetMode]);
 
-  // Reverse sync: when user manually switches section, update appMode so the header follows
   const setAppModeFn = appModeCtx?.setAppMode;
-  useEffect(() => {
-    setAppModeFn?.(activeSection === "items" ? "items" : "budget");
-  }, [activeSection, setAppModeFn]);
+  const handleSectionChange = (key: ActiveSection) => {
+    setActiveSection(key);
+    // Update appMode lazily so the FAB / header follows, but only when the
+    // budget↔items group actually changes. Avoids re-running the sync effect
+    // for transfers ↔ transactions and prevents the toggle "jumping".
+    const wantedMode = key === "items" ? "items" : "budget";
+    if (
+      setAppModeFn &&
+      ((wantedMode === "items" && !isItemsMode) ||
+        (wantedMode === "budget" && !isBudgetMode))
+    ) {
+      setAppModeFn(wantedMode);
+    }
+  };
   const [userFilter, setUserFilter] = useState<UserFilter>("all");
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [groupMode, setGroupMode] = useState<GroupMode>("time");
@@ -197,7 +213,7 @@ export default function ActivityView() {
         onUserFilterChange={setUserFilter}
         sections={FILTER_SECTIONS}
         activeSection={activeSection}
-        onSectionChange={(key) => setActiveSection(key as ActiveSection)}
+        onSectionChange={(key) => handleSectionChange(key as ActiveSection)}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
         groupMode={groupMode}

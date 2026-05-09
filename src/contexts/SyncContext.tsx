@@ -156,6 +156,11 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   // Track last time transaction data was refreshed to prevent burst refetches on rapid tab switches
   const lastTxRefreshRef = useRef<number>(Date.now());
 
+  // Throttle refreshAll() — connectivity-changed and visibility events can fire
+  // in rapid succession on flaky 4G; without throttling each one re-invalidates
+  // every account/transaction/dashboard query, blowing up the dev server.
+  const lastRefreshAllRef = useRef<number>(0);
+
   // Connection health check interval
   const healthCheckInterval = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempt = useRef(0);
@@ -319,9 +324,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     // Listen for verified connectivity changes from the probe
     const handleConnectivityChanged = (e: Event) => {
       const online = (e as CustomEvent).detail?.online as boolean;
-      console.log(
-        `[OFFLINE] SyncContext: connectivity-changed event, online=${online}`,
-      );
       setIsOnline(online);
 
       if (online) {
@@ -329,15 +331,17 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         // Small delay then sync
         setTimeout(() => {
           if (!isReallyOnline()) return;
-          console.log(
-            "[OFFLINE] SyncContext: back online, processing queues...",
-          );
           processLegacyPendingOperations();
           syncEngineRef.current?.processQueue();
-          refreshAll();
+          // Only refreshAll if it hasn't run in the last 30 s. Otherwise a
+          // flapping connection (probe online \u2192 timeout offline \u2192 probe online)
+          // re-invalidates the world every few seconds.
+          if (Date.now() - lastRefreshAllRef.current > 30_000) {
+            lastRefreshAllRef.current = Date.now();
+            refreshAll();
+          }
         }, 500);
       } else {
-        console.log("[OFFLINE] SyncContext: status set to OFFLINE");
         setStatus("offline");
       }
     };
@@ -714,6 +718,15 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       setStatus("offline");
       return;
     }
+
+    // Throttle: at most once every 30 s. Prevents the cascade where multiple
+    // entry points (visibility change, connectivity-changed, focus, retry)
+    // all hit refreshAll back-to-back, each invalidating ~10 query keys.
+    const now = Date.now();
+    if (now - lastRefreshAllRef.current < 30_000) {
+      return;
+    }
+    lastRefreshAllRef.current = now;
 
     setStatus("reconnecting");
 

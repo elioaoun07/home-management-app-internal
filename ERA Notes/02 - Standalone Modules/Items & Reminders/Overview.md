@@ -207,6 +207,12 @@ Helper functions:
 3. **Occurrence actions go to `item_occurrence_actions`** — never mutate the base item to record a single-occurrence skip/complete
 4. **All toasts need Undo** — `{ duration: 4000, action: { label: "Undo", onClick: ... } }` per global Hard Rule #1
 5. **No red on item rows** — use theme colors (pink/cyan). Container headers can use red/amber. Overdue labels → `text-white/40`
+6. **Soft-delete and archive must deactivate `item_alerts`** — FK cascade only fires on hard delete. Both `useArchiveItem` (browser) and `DELETE /api/items/[id]` set `active=false` on pending alerts so the cron stops firing. Cancelling a single occurrence inserts to `item_alert_suppressions` so the cron can suppress that specific occurrence's push.
+7. **Alert cron must filter `archived_at IS NULL` AND `deleted_at IS NULL`** — and check `item_occurrence_actions` (cancelled/skipped/completed) and `item_alert_suppressions` before firing. See `src/app/api/cron/item-reminders/route.ts`.
+
+## Reminder list windows (`/reminders`)
+
+`StandaloneRemindersPage` renders four occurrence buckets — Overdue (-90d → now), Today, This Week (+1d → +7d), Later (+7d → +90d). The Later window is required so monthly recurring items remain visible mid-period; without it they disappear between weekly views. The "mine"/"partner" filter operates on `responsible_user_id`, not `user_id` — so an item I own and assign to my partner appears under "partner".
 
 ---
 

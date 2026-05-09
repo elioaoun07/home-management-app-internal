@@ -1,6 +1,7 @@
 // src/features/items/useFocusInsights.ts
 // Hook for AI-powered focus insights with smart caching
 
+import { safeFetch } from "@/lib/safeFetch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 
@@ -53,9 +54,10 @@ export const focusInsightsKeys = {
 
 // Fetch cached insight
 async function fetchCachedInsight(): Promise<InsightResponse> {
-  const response = await fetch("/api/focus-insights", {
+  const response = await safeFetch("/api/focus-insights", {
     method: "GET",
     headers: { "Content-Type": "application/json" },
+    timeoutMs: 10_000,
   });
 
   if (!response.ok) {
@@ -66,15 +68,17 @@ async function fetchCachedInsight(): Promise<InsightResponse> {
   return response.json();
 }
 
-// Generate new insight
+// Generate new insight. AI generation can take 30+ seconds — pass a generous
+// timeout so safeFetch's 3s default doesn't trip the offline indicator.
 async function generateInsight(
   items: FocusItem[],
   forceRefresh: boolean = false,
 ): Promise<InsightResponse> {
-  const response = await fetch("/api/focus-insights", {
+  const response = await safeFetch("/api/focus-insights", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ items, forceRefresh }),
+    timeoutMs: 60_000,
   });
 
   const data = await response.json();

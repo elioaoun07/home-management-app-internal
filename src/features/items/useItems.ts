@@ -55,131 +55,81 @@ async function fetchItems(
   sort?: ItemsSort,
 ): Promise<ItemWithDetails[]> {
   const supabase = supabaseBrowser();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
 
-  // Fetch partner ID to include their public items
-  const { data: link } = await supabase
-    .from("household_links")
-    .select("owner_user_id, partner_user_id")
-    .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
-    .eq("active", true)
-    .maybeSingle();
+  // ────────────────────────────────────────────────────────────────────────
+  // Single-round-trip bundle via SECURITY DEFINER RPC. See
+  //   migrations/2026-05-11_schedule_bundle_rpc.sql
+  // The RPC resolves the household partner, joins items + all 6 children,
+  // and returns one JSON document. Replaces 7 separate PostgREST round-trips
+  // (each ~170-200ms) with one. Filters/sort applied client-side — cheap for
+  // realistic item counts and avoids re-implementing query DSL in SQL.
+  // ────────────────────────────────────────────────────────────────────────
+  const includeArchived = filters?.archived === true;
+  const { data, error } = await supabase.rpc("get_schedule_bundle", {
+    include_archived: includeArchived,
+  });
+  if (error) throw error;
 
-  const partnerId = link
-    ? link.owner_user_id === user.id
-      ? link.partner_user_id
-      : link.owner_user_id
-    : null;
+  const bundle = (data ?? {}) as { items?: any[]; partner_id?: string | null };
+  let items: any[] = Array.isArray(bundle.items) ? bundle.items : [];
 
-  let query = supabase
-    .from("items")
-    .select(
-      `
-      *,
-      reminder_details (*),
-      event_details (*),
-      item_subtasks (*),
-      item_alerts (*),
-      item_recurrence_rules (
-        *,
-        item_recurrence_exceptions (*)
-      ),
-      recurrence_pauses (*)
-    `,
-    )
-    .is("archived_at", null)
-    .is("deleted_at", null);
-
-  if (partnerId) {
-    // Fetch my items OR partner's public items
-    // Using separate filter: my items, or partner items that are public
-    query = query.or(`user_id.eq.${user.id},user_id.eq.${partnerId}`);
-  } else {
-    query = query.eq("user_id", user.id);
-  }
-
-  // Fetch the data first, then filter partner's private items on the client
-  // This is needed because Supabase doesn't support complex AND/OR nesting well
-
-  // Apply filters
+  // Apply filters client-side (typical payload is <200 items)
   if (filters?.type) {
-    if (Array.isArray(filters.type)) {
-      query = query.in("type", filters.type);
-    } else {
-      query = query.eq("type", filters.type);
-    }
+    const types = Array.isArray(filters.type) ? filters.type : [filters.type];
+    items = items.filter((i) => types.includes(i.type));
   }
-
   if (filters?.status) {
-    if (Array.isArray(filters.status)) {
-      query = query.in("status", filters.status);
-    } else {
-      query = query.eq("status", filters.status);
-    }
+    const statuses = Array.isArray(filters.status)
+      ? filters.status
+      : [filters.status];
+    items = items.filter((i) => statuses.includes(i.status));
   }
-
   if (filters?.priority) {
-    if (Array.isArray(filters.priority)) {
-      query = query.in("priority", filters.priority);
-    } else {
-      query = query.eq("priority", filters.priority);
-    }
+    const ps = Array.isArray(filters.priority)
+      ? filters.priority
+      : [filters.priority];
+    items = items.filter((i) => ps.includes(i.priority));
   }
-
   if (filters?.search) {
-    query = query.or(
-      `title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`,
+    const s = filters.search.toLowerCase();
+    items = items.filter(
+      (i) =>
+        (i.title ?? "").toLowerCase().includes(s) ||
+        (i.description ?? "").toLowerCase().includes(s),
     );
   }
 
-  if (filters?.archived !== undefined) {
-    if (filters.archived) {
-      query = query.not("archived_at", "is", null);
-    }
-  }
-
-  // Apply sorting
+  // Apply sort
   if (sort) {
-    query = query.order(sort.field, { ascending: sort.direction === "asc" });
-  } else {
-    query = query.order("created_at", { ascending: false });
+    const dir = sort.direction === "asc" ? 1 : -1;
+    const f = sort.field;
+    items = [...items].sort((a, b) => {
+      const av = a?.[f];
+      const bv = b?.[f];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      return av < bv ? -dir : av > bv ? dir : 0;
+    });
   }
+  // Default sort (created_at desc) is already applied by the RPC.
 
-  const { data, error } = await query;
-  if (error) throw error;
-
-  // Filter out partner's private items on the client side
-  // (Supabase doesn't support complex AND/OR nesting in .or())
-  const filteredData = (data || []).filter((item: any) => {
-    // Always include my own items
-    if (item.user_id === user.id) return true;
-    // Only include partner's items if they are public
-    if (partnerId && item.user_id === partnerId) {
-      return item.is_public === true;
-    }
-    return false;
-  });
-
-  // Transform the data to match our types
-  return filteredData.map((item: any) => {
-    const rule = item.item_recurrence_rules?.[0];
-    return {
-      ...item,
-      categories: item.categories || [],
-      subtasks: item.item_subtasks || [],
-      alerts: item.item_alerts || [],
-      pauses: item.recurrence_pauses || [],
-      recurrence_rule: rule
-        ? {
-            ...rule,
-            exceptions: rule.item_recurrence_exceptions || [],
-          }
-        : null,
-    };
-  });
+  // Normalise shape so consumers see the same fields as before.
+  return items.map((item) => ({
+    ...item,
+    categories: item.categories || [],
+    reminder_details: item.reminder_details ?? null,
+    event_details: item.event_details ?? null,
+    subtasks: item.subtasks ?? [],
+    alerts: item.alerts ?? [],
+    pauses: item.pauses ?? [],
+    recurrence_rule: item.recurrence_rule
+      ? {
+          ...item.recurrence_rule,
+          exceptions: item.recurrence_rule.exceptions || [],
+        }
+      : null,
+  }));
 }
 
 async function fetchItemById(id: string): Promise<ItemWithDetails | null> {
@@ -1140,6 +1090,7 @@ export function useDeleteItem() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+      queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
     },
   });
 }
@@ -1167,10 +1118,18 @@ export function useArchiveItem() {
         .update({ archived_at: new Date().toISOString() })
         .eq("id", id);
       if (error) throw error;
+      // Soft delete bypasses FK cascade — deactivate any pending alerts so
+      // the cron stops firing them.
+      await supabase
+        .from("item_alerts")
+        .update({ active: false })
+        .eq("item_id", id)
+        .eq("active", true);
       return id;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+      queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
     },
   });
 }
@@ -2179,8 +2138,7 @@ export function useAllSubtaskCompletions() {
       }
       return data as SubtaskCompletion[];
     },
-    staleTime: 0,
-    refetchOnMount: true,
+    staleTime: 1000 * 60 * 2,
   });
 }
 

@@ -44,15 +44,23 @@ export async function POST(
       );
     }
 
-    // Verify item exists
+    // Verify item exists and is not archived/soft-deleted. Replays from the
+    // offline queue can otherwise resurrect actions on items the user has
+    // since removed.
     const { data: item, error: itemFetchError } = await supabase
       .from("items")
-      .select("id, user_id, type, status")
+      .select("id, user_id, type, status, archived_at, deleted_at")
       .eq("id", itemId)
       .single();
 
     if (itemFetchError || !item) {
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
+    }
+    if (item.archived_at || item.deleted_at) {
+      return NextResponse.json(
+        { error: "Item is archived or deleted" },
+        { status: 410 },
+      );
     }
 
     // === COMPLETE ===
@@ -218,6 +226,20 @@ export async function POST(
         if (error) {
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
+
+        // Also write a suppression so the cron has a fast, explicit signal
+        // that this occurrence's alert must not fire (separate from the
+        // completion/cancellation log used by views).
+        await supabase.from("item_alert_suppressions").upsert(
+          {
+            item_id: itemId,
+            occurrence_date,
+            reason: "cancelled",
+            created_by: user.id,
+          },
+          { onConflict: "item_id,occurrence_date" },
+        );
+
         return NextResponse.json({
           success: true,
           action: data,
@@ -235,6 +257,14 @@ export async function POST(
         if (error) {
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
+
+        // Whole item cancelled — deactivate any pending alerts for it.
+        await supabase
+          .from("item_alerts")
+          .update({ active: false })
+          .eq("item_id", itemId)
+          .eq("active", true);
+
         return NextResponse.json({
           success: true,
           type: "item",

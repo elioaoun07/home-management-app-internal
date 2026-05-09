@@ -182,6 +182,14 @@ export async function DELETE(
       }
     }
 
+    // Deactivate any pending alerts. Soft-delete and archive don't trigger
+    // FK CASCADE, so the cron would otherwise keep firing alerts for this item.
+    await supabase
+      .from("item_alerts")
+      .update({ active: false })
+      .eq("item_id", itemId)
+      .eq("active", true);
+
     return NextResponse.json({
       success: true,
       action: shouldArchive ? "archived" : "deleted",

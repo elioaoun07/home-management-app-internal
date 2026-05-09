@@ -383,6 +383,66 @@ const partnerColor = theme === "pink" ? "blue-400" : "pink-400";
 <input type="text" inputMode="decimal" value={amount} />
 ```
 
+### 11. `console.*` in committed code
+
+```ts
+// ❌ WRONG — leaks internal state in production, pollutes logs
+console.log("items:", items);
+console.error("fetch failed:", err);
+
+// ✅ CORRECT — use Error Logs module for persistence; debugger for one-off
+// For structured persistent errors:
+await fetch("/api/error-logs", {
+  method: "POST",
+  body: JSON.stringify({ message: err.message }),
+});
+// For dev-only:
+if (process.env.NODE_ENV === "development") {
+  /* only then */
+}
+```
+
+Before committing, verify:
+
+```bash
+grep -rn "console\." src/ --include="*.ts" --include="*.tsx"
+```
+
+### 12. RLS EXISTS-subquery on child tables
+
+```sql
+-- ❌ CATASTROPHICALLY SLOW — re-evaluates JOIN for every row scanned
+CREATE POLICY child_access ON public.item_alerts
+  USING (EXISTS (SELECT 1 FROM items i WHERE i.id = item_alerts.item_id AND i.user_id = auth.uid()));
+
+-- ✅ CORRECT option A — SECURITY DEFINER RPC enforces ownership in WHERE clause
+-- See migrations/2026-05-11_schedule_bundle_rpc.sql
+
+-- ✅ CORRECT option B — denormalized user_id with direct policy
+ALTER TABLE public.item_alerts ADD COLUMN user_id uuid;
+CREATE POLICY child_access ON public.item_alerts USING (user_id = auth.uid());
+```
+
+### 13. Fan-out queries for parent + children
+
+```ts
+// ❌ WRONG — 7 PostgREST round-trips = ~1.3s floor, before any RLS cost
+const [items, reminders, events, subtasks, alerts, rules, pauses] =
+  await Promise.all([
+    supabase.from("items").select("*"),
+    supabase.from("reminder_details").select("*").in("item_id", ids),
+    // ... 5 more
+  ]);
+
+// ✅ CORRECT — 1 round-trip via SECURITY DEFINER RPC
+const { data } = await supabase.rpc("get_schedule_bundle", {
+  include_archived: false,
+});
+// data.items[] already contains all children embedded
+```
+
+Rule: if a page needs a parent + ≥3 child tables, create a bundle RPC.
+
 ---
 
 ## Schema Quick Reference

@@ -16,6 +16,7 @@ import {
   type ActionType,
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
+import { usePartnerId } from "@/features/hub/usePartnerId";
 import { useItems, useUpdateRecurrenceRule } from "@/features/items/useItems";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ import {
   AlertCircle,
   Bell,
   Calendar,
+  CalendarDays,
   Check,
   ChevronRight,
   Clock,
@@ -151,7 +153,7 @@ const typeIcons: Record<ItemType, typeof Calendar> = {
 };
 
 // Section types
-type Section = "overdue" | "today" | "upcoming";
+type Section = "overdue" | "today" | "upcoming" | "later";
 
 // Time-of-day grouping
 type TimeOfDay = "all-day" | "morning" | "afternoon" | "evening" | "night";
@@ -213,6 +215,29 @@ function groupByDay(
     .map(([key, g]) => ({
       dateKey: key,
       label: format(g.date, "EEEE, MMM d"),
+      items: g.items,
+    }));
+}
+
+function groupByMonth(
+  items: ExpandedOccurrence[],
+): { monthKey: string; label: string; items: ExpandedOccurrence[] }[] {
+  const groups = new Map<string, { date: Date; items: ExpandedOccurrence[] }>();
+  for (const item of items) {
+    const key = format(item.occurrenceDate, "yyyy-MM");
+    if (!groups.has(key)) {
+      const first = new Date(item.occurrenceDate);
+      first.setDate(1);
+      first.setHours(0, 0, 0, 0);
+      groups.set(key, { date: first, items: [] });
+    }
+    groups.get(key)!.items.push(item);
+  }
+  return Array.from(groups.entries())
+    .sort(([, a], [, b]) => a.date.getTime() - b.date.getTime())
+    .map(([key, g]) => ({
+      monthKey: key,
+      label: format(g.date, "MMMM yyyy"),
       items: g.items,
     }));
 }
@@ -579,6 +604,7 @@ export default function StandaloneRemindersPage({
   const isPink = theme === "pink";
   const { data: allItems = [], isLoading } = useItems();
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
+  const { data: partnerUserId = null } = usePartnerId();
   const itemActions = useItemActionsWithToast();
   const updateRecurrence = useUpdateRecurrenceRule();
 
@@ -695,16 +721,22 @@ export default function StandaloneRemindersPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [occurrenceActions]);
 
-  // Filter items by ownership
+  // Filter items by who's *responsible* for them. Owner-only filtering hid
+  // public items the user assigned to their partner — those are the partner's
+  // tasks regardless of who created them.
   const ownershipFiltered = useMemo(() => {
-    if (!currentUserId || userFilter === "all") return allItems;
-    return allItems.filter((item) => {
-      const isOwnedByMe =
-        item.user_id === currentUserId ||
-        item.responsible_user_id === currentUserId;
-      return userFilter === "mine" ? isOwnedByMe : !isOwnedByMe;
-    });
-  }, [allItems, currentUserId, userFilter]);
+    if (userFilter === "all" || !currentUserId) return allItems;
+    if (userFilter === "mine") {
+      return allItems.filter(
+        (item) => item.responsible_user_id === currentUserId,
+      );
+    }
+    // userFilter === "partner"
+    if (!partnerUserId) return [];
+    return allItems.filter(
+      (item) => item.responsible_user_id === partnerUserId,
+    );
+  }, [allItems, currentUserId, partnerUserId, userFilter]);
 
   // Filter active items + apply type/recurring filters
   const activeItems = useMemo(() => {
@@ -724,51 +756,63 @@ export default function StandaloneRemindersPage({
     });
   }, [ownershipFiltered, typeFilter, recurringFilter]);
 
-  // Process items into occurrences
-  const { overdueItems, todayItems, upcomingItems, stats } = useMemo(() => {
-    const today = startOfDay(new Date());
-    const now = new Date();
-    const tomorrow = addDays(today, 1);
-    const weekFromNow = addDays(today, 7);
-    const pastStart = addDays(today, -30);
+  // Process items into occurrences across four windows: Overdue (-30d → now),
+  // Today, This Week (+1d → +7d), Later (+7d → +30d). Without the Later
+  // window, monthly recurring items whose next occurrence is more than a week
+  // out would never appear on this page.
+  const { overdueItems, todayItems, upcomingItems, laterItems, stats } =
+    useMemo(() => {
+      const today = startOfDay(new Date());
+      const now = new Date();
+      const tomorrow = addDays(today, 1);
+      const weekFromNow = addDays(today, 7);
+      const pastStart = addDays(today, -30);
+      const laterEnd = addDays(today, 30);
 
-    // Expand all items for different date ranges
-    const overdueOccs = expandRecurringItems(
-      activeItems,
-      pastStart,
-      tomorrow,
-      occurrenceActions,
-    ).filter((occ) => isBefore(occ.occurrenceDate, now) && !occ.isCompleted);
+      const overdueOccs = expandRecurringItems(
+        activeItems,
+        pastStart,
+        tomorrow,
+        occurrenceActions,
+      ).filter((occ) => isBefore(occ.occurrenceDate, now) && !occ.isCompleted);
 
-    const todayOccs = expandRecurringItems(
-      activeItems,
-      today,
-      tomorrow,
-      occurrenceActions,
-    ).filter(
-      // Exclude items already counted as overdue (past their due time today)
-      (occ) => !isBefore(occ.occurrenceDate, now) || occ.isCompleted,
-    );
+      const todayOccs = expandRecurringItems(
+        activeItems,
+        today,
+        tomorrow,
+        occurrenceActions,
+      ).filter(
+        (occ) => !isBefore(occ.occurrenceDate, now) || occ.isCompleted,
+      );
 
-    const upcomingOccs = expandRecurringItems(
-      activeItems,
-      tomorrow,
-      weekFromNow,
-      occurrenceActions,
-    );
+      const upcomingOccs = expandRecurringItems(
+        activeItems,
+        tomorrow,
+        weekFromNow,
+        occurrenceActions,
+      );
 
-    return {
-      overdueItems: overdueOccs,
-      todayItems: todayOccs,
-      upcomingItems: upcomingOccs,
-      stats: {
-        overdue: overdueOccs.length,
-        today: todayOccs.length,
-        todayCompleted: todayOccs.filter((t) => t.isCompleted).length,
-        upcoming: upcomingOccs.length,
-      },
-    };
-  }, [activeItems, occurrenceActions]);
+      const laterOccs = expandRecurringItems(
+        activeItems,
+        weekFromNow,
+        laterEnd,
+        occurrenceActions,
+      );
+
+      return {
+        overdueItems: overdueOccs,
+        todayItems: todayOccs,
+        upcomingItems: upcomingOccs,
+        laterItems: laterOccs,
+        stats: {
+          overdue: overdueOccs.length,
+          today: todayOccs.length,
+          todayCompleted: todayOccs.filter((t) => t.isCompleted).length,
+          upcoming: upcomingOccs.length,
+          later: laterOccs.length,
+        },
+      };
+    }, [activeItems, occurrenceActions]);
 
   // Handle item completion toggle (delegated to optimistic handler)
   const handleToggleComplete = handleOptimisticComplete;
@@ -954,6 +998,7 @@ export default function StandaloneRemindersPage({
           {section === "overdue" && <AlertCircle className="w-4 h-4" />}
           {section === "today" && <Target className="w-4 h-4" />}
           {section === "upcoming" && <Calendar className="w-4 h-4" />}
+          {section === "later" && <CalendarDays className="w-4 h-4" />}
         </div>
         <span className="font-medium text-white">{title}</span>
       </div>
@@ -1294,6 +1339,90 @@ export default function StandaloneRemindersPage({
             </div>
           )}
         </div>
+
+        {/* Later — items beyond +7 days, grouped by month */}
+        {stats.later > 0 && (
+          <div className="space-y-2">
+            {renderSectionHeader(
+              "Later",
+              stats.later,
+              "later",
+              isPink
+                ? "bg-pink-500/10 text-pink-300"
+                : "bg-cyan-500/10 text-cyan-300",
+            )}
+            {selectedSection === "later" && (
+              <div className="space-y-1 pl-2">
+                {groupByMonth(laterItems).map(({ monthKey, label, items }) => {
+                  const key = `later-${monthKey}`;
+                  const isExpanded = !collapsedSubSections.has(key);
+                  return (
+                    <div key={key} className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleSubSection(key)}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                      >
+                        <CalendarDays className="w-3.5 h-3.5 text-white/40" />
+                        <span className="text-xs font-medium text-white/60">
+                          {label}
+                        </span>
+                        <span className="text-xs text-white/30">
+                          {items.length}
+                        </span>
+                        <ChevronRight
+                          className={cn(
+                            "w-3 h-3 text-white/30 ml-auto transition-transform",
+                            isExpanded && "rotate-90",
+                          )}
+                        />
+                      </button>
+                      {isExpanded && (
+                        <div className="space-y-1 pl-1">
+                          {groupByDay(items).map(
+                            ({ dateKey, label: dayLabel, items: dayItems }) => {
+                              const dayKey = `later-${monthKey}-${dateKey}`;
+                              const isDayExpanded =
+                                !collapsedSubSections.has(dayKey);
+                              return (
+                                <div key={dayKey} className="space-y-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleSubSection(dayKey)}
+                                    className="w-full flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-white/5 transition-colors"
+                                  >
+                                    <Calendar className="w-3 h-3 text-white/30" />
+                                    <span className="text-xs text-white/50">
+                                      {dayLabel}
+                                    </span>
+                                    <span className="text-xs text-white/30">
+                                      {dayItems.length}
+                                    </span>
+                                    <ChevronRight
+                                      className={cn(
+                                        "w-3 h-3 text-white/30 ml-auto transition-transform",
+                                        isDayExpanded && "rotate-90",
+                                      )}
+                                    />
+                                  </button>
+                                  {isDayExpanded && (
+                                    <div className="space-y-1.5 pl-1">
+                                      {dayItems.map((occ) => renderItem(occ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            },
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Add New Reminder FAB */}

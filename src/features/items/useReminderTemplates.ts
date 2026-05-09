@@ -1,6 +1,7 @@
 // src/features/items/useReminderTemplates.ts
 // React Query hooks for Reminder Templates CRUD operations
 
+import { safeFetch } from "@/lib/safeFetch";
 import type {
   CreateReminderTemplateInput,
   ItemWithDetails,
@@ -26,8 +27,9 @@ export const reminderTemplatesKeys = {
 // ============================================
 
 async function fetchReminderTemplates(): Promise<ReminderTemplate[]> {
-  const res = await fetch("/api/reminder-templates", {
+  const res = await safeFetch("/api/reminder-templates", {
     credentials: "include",
+    timeoutMs: 8_000,
   });
   if (!res.ok) {
     throw new Error("Failed to fetch reminder templates");
@@ -58,7 +60,7 @@ export function useCreateReminderTemplate() {
 
   return useMutation({
     mutationFn: async (input: CreateReminderTemplateInput) => {
-      const res = await fetch("/api/reminder-templates", {
+      const res = await safeFetch("/api/reminder-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -85,7 +87,7 @@ export function useUpdateReminderTemplate() {
       id,
       ...input
     }: UpdateReminderTemplateInput & { id: string }) => {
-      const res = await fetch("/api/reminder-templates", {
+      const res = await safeFetch("/api/reminder-templates", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -109,7 +111,7 @@ export function useDeleteReminderTemplate() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/reminder-templates?id=${id}`, {
+      const res = await safeFetch(`/api/reminder-templates?id=${id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -131,11 +133,12 @@ export function useLaunchReminderTemplate() {
 
   return useMutation({
     mutationFn: async (input: LaunchReminderTemplateInput) => {
-      const res = await fetch("/api/reminder-templates/launch", {
+      const res = await safeFetch("/api/reminder-templates/launch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify(input),
+        timeoutMs: 10_000,
       });
       if (!res.ok) {
         const error = await res.json();

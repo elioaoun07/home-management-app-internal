@@ -183,12 +183,9 @@ export function useAllOccurrenceActions() {
 
       if (error) throw error;
 
-      console.log("📊 All occurrence actions loaded:", data);
-
       return data as ItemOccurrenceAction[];
     },
-    staleTime: 0, // Always refetch to ensure fresh data
-    refetchOnMount: true,
+    staleTime: 1000 * 60 * 2,
   });
 }
 
@@ -201,15 +198,7 @@ export function isOccurrenceCompleted(
   // Normalize to YYYY-MM-DD format in LOCAL timezone for comparison
   const targetDate = normalizeToLocalDateString(occurrenceDate);
 
-  console.log("🔍 isOccurrenceCompleted called:", {
-    itemId,
-    occurrenceDate: occurrenceDate.toISOString(),
-    targetDateLocal: targetDate,
-    totalActions: actions.length,
-    actionsForThisItem: actions.filter((a) => a.item_id === itemId),
-  });
-
-  const result = actions.some((action) => {
+  return actions.some((action) => {
     if (action.item_id !== itemId) return false;
     // Include postponed in the check - postponed occurrences shouldn't show on original date
     if (
@@ -221,23 +210,8 @@ export function isOccurrenceCompleted(
 
     // Parse the action's occurrence_date to local date string
     const actionDate = parseDbDateToLocalString(action.occurrence_date);
-    const matches = actionDate === targetDate;
-
-    console.log("  📋 Comparing action:", {
-      actionId: action.id,
-      actionOccurrenceDate: action.occurrence_date,
-      actionDateLocal: actionDate,
-      targetDateLocal: targetDate,
-      actionType: action.action_type,
-      matches,
-    });
-
-    return matches;
+    return actionDate === targetDate;
   });
-
-  console.log("  ✅ Result:", result);
-
-  return result;
 }
 
 /** Get postponed occurrences that should show on a specific date */

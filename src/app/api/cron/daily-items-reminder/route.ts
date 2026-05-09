@@ -242,6 +242,7 @@ export async function GET(req: NextRequest) {
           )
           .eq("responsible_user_id", userId)
           .is("archived_at", null)
+          .is("deleted_at", null)
           .or("status.is.null,status.eq.pending,status.eq.in_progress");
 
         if (morningQueryError) {
@@ -302,6 +303,7 @@ export async function GET(req: NextRequest) {
             )
             .eq("responsible_user_id", userId)
             .is("archived_at", null)
+            .is("deleted_at", null)
             .or("status.is.null,status.eq.pending,status.eq.in_progress");
 
         if (eveningQueryError) {

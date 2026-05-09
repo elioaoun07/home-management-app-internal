@@ -9,8 +9,12 @@
 
 import { isReallyOnline, markOffline } from "@/lib/connectivityManager";
 
-/** Default timeout for mutation requests (POST/PATCH/DELETE) */
-const DEFAULT_TIMEOUT_MS = 3_000;
+/** Default timeout for mutation requests (POST/PATCH/DELETE).
+ *  Was 3 s but that was too aggressive: slow 4G + Next.js dev mode often
+ *  takes 5-10 s for a single round trip, which would falsely flag the app as
+ *  offline and trigger a refresh storm. Long-running calls (AI, uploads)
+ *  must still pass an explicit timeoutMs. */
+const DEFAULT_TIMEOUT_MS = 8_000;
 
 /**
  * Custom error thrown when a fetch is aborted due to:

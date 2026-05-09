@@ -9,9 +9,12 @@
  *
  * What this does:
  * 1. Finds item_alerts with trigger_at in the past hour that haven't fired
- * 2. Creates a notification in the unified notifications table
- * 3. Sends push notification to user's devices
- * 4. Marks alert as fired
+ * 2. Filters out alerts whose parent item has been archived or soft-deleted
+ * 3. Suppresses alerts for occurrences that have been cancelled, skipped, or
+ *    completed (per-occurrence suppression for recurring items)
+ * 4. Creates a notification in the unified notifications table
+ * 5. Sends push notification to user's devices
+ * 6. Marks alert as fired and reschedules recurring alerts to the next occurrence
  */
 
 import { sendPushToUser } from "@/lib/pushSender";
@@ -25,20 +28,68 @@ export const maxDuration = 60;
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
+type AlertRow = {
+  id: string;
+  item_id: string;
+  trigger_at: string | null;
+  offset_minutes: number | null;
+  channel: string;
+  kind: string;
+  occurrence_date: string | null;
+  items: {
+    id: string;
+    user_id: string;
+    responsible_user_id: string | null;
+    notify_all_household: boolean | null;
+    title: string;
+    description: string | null;
+    type: string;
+    priority: string;
+    archived_at: string | null;
+    deleted_at: string | null;
+    item_recurrence_rules:
+      | {
+          id: string;
+          rrule: string;
+          start_anchor: string;
+          end_until: string | null;
+          count: number | null;
+        }[]
+      | null;
+  } | null;
+};
+
+/**
+ * Compute the occurrence_date this alert is firing for.
+ * For relative alerts: trigger_at + offset = occurrence time.
+ * For absolute alerts: trigger_at IS the occurrence time.
+ * Falls back to alert.occurrence_date if persisted, else derived.
+ */
+function deriveOccurrenceDate(alert: {
+  trigger_at: string | null;
+  offset_minutes: number | null;
+  kind: string;
+  occurrence_date: string | null;
+}): Date | null {
+  if (alert.occurrence_date) return new Date(alert.occurrence_date);
+  if (!alert.trigger_at) return null;
+  const triggerAt = new Date(alert.trigger_at);
+  if (alert.kind === "relative" && alert.offset_minutes != null) {
+    return new Date(triggerAt.getTime() + alert.offset_minutes * 60 * 1000);
+  }
+  return triggerAt;
+}
+
 export async function GET(req: NextRequest) {
-  // Verify cron secret (required — never skip)
-  const authHeader = req.headers.get("authorization");
-  if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (!CRON_SECRET || req.headers.get("authorization") !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const supabase = supabaseAdmin();
-
   const now = new Date();
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
   try {
-    // Get due alerts that haven't been fired
     const { data: dueAlerts, error: alertsError } = await supabase
       .from("item_alerts")
       .select(
@@ -48,6 +99,8 @@ export async function GET(req: NextRequest) {
         trigger_at,
         offset_minutes,
         channel,
+        kind,
+        occurrence_date,
         items (
           id,
           user_id,
@@ -57,6 +110,8 @@ export async function GET(req: NextRequest) {
           description,
           type,
           priority,
+          archived_at,
+          deleted_at,
           item_recurrence_rules (id, rrule, start_anchor, end_until, count)
         )
       `,
@@ -72,7 +127,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: alertsError.message }, { status: 500 });
     }
 
-    if (!dueAlerts || dueAlerts.length === 0) {
+    const alerts = (dueAlerts ?? []) as unknown as AlertRow[];
+    if (alerts.length === 0) {
       return NextResponse.json({
         success: true,
         sent: 0,
@@ -80,45 +136,78 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.log(`[Item Reminders] Processing ${dueAlerts.length} due alerts`);
+    console.log(`[Item Reminders] Processing ${alerts.length} due alerts`);
 
     let sent = 0;
     let failed = 0;
+    let suppressed = 0;
+    let dropped = 0;
 
-    for (const alert of dueAlerts) {
-      // Supabase returns a single object for many-to-one relations (item_alerts -> items)
-      const item = alert.items as unknown as {
-        id: string;
-        user_id: string;
-        responsible_user_id: string | null;
-        notify_all_household: boolean | null;
-        title: string;
-        description: string | null;
-        type: string;
-        priority: string;
-        item_recurrence_rules:
-          | {
-              id: string;
-              rrule: string;
-              start_anchor: string;
-              end_until: string | null;
-              count: number | null;
-            }[]
-          | null;
-      } | null;
+    for (const alert of alerts) {
+      const item = alert.items;
 
+      // 1. Drop alerts whose parent item is gone (archived or soft-deleted).
       if (!item) {
+        await supabase
+          .from("item_alerts")
+          .update({ active: false, last_fired_at: now.toISOString() })
+          .eq("id", alert.id);
+        dropped++;
+        continue;
+      }
+      if (item.archived_at || item.deleted_at) {
+        await supabase
+          .from("item_alerts")
+          .update({ active: false, last_fired_at: now.toISOString() })
+          .eq("id", alert.id);
         console.log(
-          `[Item Reminders] Alert ${alert.id} has no associated item, skipping`,
+          `[Item Reminders] Alert ${alert.id} dropped — item ${item.id} is ${item.deleted_at ? "deleted" : "archived"}`,
         );
+        dropped++;
         continue;
       }
 
-      // Determine which users should receive the notification
-      let targetUserIds: string[] = [];
+      // 2. Per-occurrence suppression check (cancelled/skipped/completed).
+      const occurrenceDate = deriveOccurrenceDate(alert);
+      if (occurrenceDate) {
+        const dayStart = new Date(occurrenceDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(dayStart);
+        dayEnd.setDate(dayEnd.getDate() + 1);
 
+        const [{ data: actions }, { data: suppressions }] = await Promise.all([
+          supabase
+            .from("item_occurrence_actions")
+            .select("id, action_type")
+            .eq("item_id", item.id)
+            .gte("occurrence_date", dayStart.toISOString())
+            .lt("occurrence_date", dayEnd.toISOString())
+            .in("action_type", ["cancelled", "skipped", "completed"]),
+          supabase
+            .from("item_alert_suppressions")
+            .select("id")
+            .eq("item_id", item.id)
+            .gte("occurrence_date", dayStart.toISOString())
+            .lt("occurrence_date", dayEnd.toISOString())
+            .limit(1),
+        ]);
+
+        if ((actions?.length ?? 0) > 0 || (suppressions?.length ?? 0) > 0) {
+          // This occurrence shouldn't fire. Mark fired so it doesn't retry,
+          // then advance recurring alerts to the next occurrence below.
+          await supabase
+            .from("item_alerts")
+            .update({ last_fired_at: now.toISOString() })
+            .eq("id", alert.id);
+          suppressed++;
+          await maybeRescheduleRecurring(supabase, alert, item);
+          continue;
+        }
+      }
+
+      // 3. Determine target users.
+      let targetUserIds: string[] = [];
       if (item.notify_all_household) {
-        // Get all household members for this item's owner
         const { data: householdLink } = await supabase
           .from("household_links")
           .select("owner_user_id, partner_user_id")
@@ -127,36 +216,24 @@ export async function GET(req: NextRequest) {
           )
           .eq("active", true)
           .maybeSingle();
-
         if (householdLink) {
-          // Include both owner and partner
           targetUserIds = [
             householdLink.owner_user_id,
             householdLink.partner_user_id,
           ].filter((id): id is string => !!id);
-          console.log(
-            `[Item Reminders] notify_all_household=true, sending to ${targetUserIds.length} household members`,
-          );
         } else {
-          // Fallback to just the owner if no household link found
           targetUserIds = [item.user_id];
         }
       } else {
-        // Send notification to the responsible user (who should do the task)
-        // Falls back to owner if no responsible user is set
-        const userId = item.responsible_user_id || item.user_id;
-        targetUserIds = [userId];
+        targetUserIds = [item.responsible_user_id || item.user_id];
       }
 
-      // Determine notification type based on item type
       const notificationType =
         item.type === "event" ? "item_due" : "item_reminder";
       const icon =
         item.type === "event" ? "📅" : item.type === "task" ? "✅" : "⏰";
 
-      // Send notification to each target user
       for (const userId of targetUserIds) {
-        // Create notification in unified table
         const { data: notification, error: insertError } = await supabase
           .from("notifications")
           .insert({
@@ -169,7 +246,7 @@ export async function GET(req: NextRequest) {
             source: "item",
             priority: item.priority || "normal",
             action_type: "complete_task",
-            action_url: null, // Items are viewed via reminder tab, not direct URL
+            action_url: null,
             action_data: {
               item_id: item.id,
               alert_id: alert.id,
@@ -205,7 +282,9 @@ export async function GET(req: NextRequest) {
             item_id: item.id,
             item_title: item.title,
             alert_id: alert.id,
-            occurrence_date: new Date().toISOString().split("T")[0],
+            occurrence_date: occurrenceDate
+              ? occurrenceDate.toISOString().split("T")[0]
+              : new Date().toISOString().split("T")[0],
             is_recurring: !!item.item_recurrence_rules?.length,
             url: `/expense?tab=reminder&item=${item.id}`,
           },
@@ -219,70 +298,23 @@ export async function GET(req: NextRequest) {
         );
         if (pushResult.sent > 0) sent++;
         if (pushResult.allFailed) failed++;
-      } // End of userId loop
+      }
 
-      // Mark alert as fired (after all users have been notified)
       await supabase
         .from("item_alerts")
         .update({ last_fired_at: now.toISOString() })
         .eq("id", alert.id);
 
-      // For recurring items, advance trigger_at to the next occurrence.
-      // Handles both relative alerts (offset before due/start) and absolute
-      // alerts (trigger_at = occurrence time, no offset).
-      const rule = item?.item_recurrence_rules?.[0];
-      const offsetMinutes = (
-        alert as unknown as { offset_minutes: number | null }
-      ).offset_minutes;
-      const alertKind = (alert as unknown as { kind: string }).kind;
-      if (rule && alert.trigger_at) {
-        const firedTriggerAt = new Date(alert.trigger_at);
-        // Derive the *occurrence time* this alert was firing for
-        const currentEventTime =
-          alertKind === "relative" && offsetMinutes != null
-            ? new Date(firedTriggerAt.getTime() + offsetMinutes * 60 * 1000)
-            : new Date(firedTriggerAt); // absolute: trigger_at IS the occurrence
-        const rruleStr = buildFullRRuleString(
-          new Date(rule.start_anchor),
-          rule,
-        );
-        const nextOcc = RRule.fromString(rruleStr).after(
-          currentEventTime,
-          false,
-        );
-        if (nextOcc) {
-          // newTrigger anchors to nextOcc, applying the relative offset if any
-          const newTriggerAt =
-            alertKind === "relative" && offsetMinutes != null
-              ? new Date(
-                  nextOcc.getTime() - offsetMinutes * 60 * 1000,
-                ).toISOString()
-              : nextOcc.toISOString();
-          await supabase
-            .from("item_alerts")
-            .update({ trigger_at: newTriggerAt, last_fired_at: null })
-            .eq("id", alert.id);
-          console.log(
-            `[Item Reminders] Rescheduled alert ${alert.id} → ${newTriggerAt}`,
-          );
-        } else {
-          // Series is done — deactivate the alert
-          await supabase
-            .from("item_alerts")
-            .update({ active: false })
-            .eq("id", alert.id);
-          console.log(
-            `[Item Reminders] Alert ${alert.id} deactivated — no more occurrences`,
-          );
-        }
-      }
+      await maybeRescheduleRecurring(supabase, alert, item);
     }
 
     return NextResponse.json({
       success: true,
-      processed: dueAlerts.length,
+      processed: alerts.length,
       push_sent: sent,
       push_failed: failed,
+      suppressed,
+      dropped,
     });
   } catch (error) {
     console.error("Item reminders cron error:", error);
@@ -293,7 +325,54 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Support POST for manual testing
+/**
+ * Advance a recurring alert to its next occurrence, or deactivate the alert
+ * when the rrule is exhausted. Persists the new occurrence_date so the next
+ * cron pass can cross-check suppressions cleanly.
+ */
+async function maybeRescheduleRecurring(
+  supabase: ReturnType<typeof supabaseAdmin>,
+  alert: AlertRow,
+  item: NonNullable<AlertRow["items"]>,
+) {
+  const rule = item.item_recurrence_rules?.[0];
+  if (!rule || !alert.trigger_at) return;
+
+  const firedTriggerAt = new Date(alert.trigger_at);
+  const currentEventTime =
+    alert.kind === "relative" && alert.offset_minutes != null
+      ? new Date(firedTriggerAt.getTime() + alert.offset_minutes * 60 * 1000)
+      : new Date(firedTriggerAt);
+  const rruleStr = buildFullRRuleString(new Date(rule.start_anchor), rule);
+  const nextOcc = RRule.fromString(rruleStr).after(currentEventTime, false);
+
+  if (nextOcc) {
+    const newTriggerAt =
+      alert.kind === "relative" && alert.offset_minutes != null
+        ? new Date(nextOcc.getTime() - alert.offset_minutes * 60 * 1000).toISOString()
+        : nextOcc.toISOString();
+    await supabase
+      .from("item_alerts")
+      .update({
+        trigger_at: newTriggerAt,
+        last_fired_at: null,
+        occurrence_date: nextOcc.toISOString(),
+      })
+      .eq("id", alert.id);
+    console.log(
+      `[Item Reminders] Rescheduled alert ${alert.id} → ${newTriggerAt}`,
+    );
+  } else {
+    await supabase
+      .from("item_alerts")
+      .update({ active: false })
+      .eq("id", alert.id);
+    console.log(
+      `[Item Reminders] Alert ${alert.id} deactivated — no more occurrences`,
+    );
+  }
+}
+
 export async function POST(req: NextRequest) {
   return GET(req);
 }

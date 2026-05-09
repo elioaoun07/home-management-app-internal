@@ -109,9 +109,6 @@ class OfflineSyncEngine {
   async processQueue(): Promise<SyncResult> {
     // Prevent concurrent processing
     if (this.isSyncing) {
-      console.log(
-        "[OFFLINE] syncEngine.processQueue(): already syncing, skipping",
-      );
       return {
         processed: 0,
         succeeded: 0,
@@ -121,7 +118,21 @@ class OfflineSyncEngine {
       };
     }
 
-    console.log("[OFFLINE] syncEngine.processQueue(): starting...");
+    // Fast path: if the queue is empty, do NOT fire onSyncStart/onSyncEnd.
+    // Otherwise the SyncPill repeatedly flashes "Syncing 0 changes\u2026" every
+    // time something (focus, visibility, connectivity-changed) calls
+    // processQueue() with nothing to process.
+    const initialCount = await this.getPendingCount();
+    if (initialCount === 0) {
+      return {
+        processed: 0,
+        succeeded: 0,
+        failed: 0,
+        remaining: 0,
+        errors: [],
+      };
+    }
+
     this.isSyncing = true;
     this.options.onSyncStart?.();
     this.notifyListeners();

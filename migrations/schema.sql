@@ -367,6 +367,7 @@ CREATE TABLE public.event_details (
   CONSTRAINT event_details_pkey PRIMARY KEY (item_id),
   CONSTRAINT event_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
 );
+CREATE INDEX idx_event_details_start_at ON public.event_details(start_at);
 CREATE TABLE public.future_purchases (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -663,11 +664,27 @@ CREATE TABLE public.item_alerts (
   channel USER-DEFINED NOT NULL DEFAULT 'push'::alert_channel_enum,
   active boolean NOT NULL DEFAULT true,
   last_fired_at timestamp with time zone,
+  occurrence_date timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT item_alerts_pkey PRIMARY KEY (id),
   CONSTRAINT item_alerts_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
 );
+CREATE INDEX idx_item_alerts_item_id ON public.item_alerts(item_id);
+CREATE INDEX idx_item_alerts_active_trigger ON public.item_alerts(active, trigger_at) WHERE active = true;
+CREATE TABLE public.item_alert_suppressions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  occurrence_date timestamp with time zone NOT NULL,
+  reason text NOT NULL CHECK (reason IN ('cancelled','skipped','deleted','archived','manual')),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT item_alert_suppressions_pkey PRIMARY KEY (id),
+  CONSTRAINT item_alert_suppressions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
+  CONSTRAINT item_alert_suppressions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT item_alert_suppressions_unique UNIQUE (item_id, occurrence_date)
+);
+CREATE INDEX idx_item_alert_suppressions_item_occ ON public.item_alert_suppressions(item_id, occurrence_date);
 CREATE TABLE public.item_attachments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   item_id uuid NOT NULL,
@@ -691,8 +708,10 @@ CREATE TABLE public.item_occurrence_actions (
   created_by uuid,
   CONSTRAINT item_occurrence_actions_pkey PRIMARY KEY (id),
   CONSTRAINT item_occurrence_actions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
-  CONSTRAINT item_occurrence_actions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+  CONSTRAINT item_occurrence_actions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
+  CONSTRAINT check_postponed_to CHECK (action_type <> 'postponed' OR postponed_to IS NOT NULL)
 );
+CREATE INDEX idx_item_occurrence_actions_item_occ ON public.item_occurrence_actions(item_id, occurrence_date);
 CREATE TABLE public.item_recurrence_exceptions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   rule_id uuid NOT NULL,
@@ -716,6 +735,7 @@ CREATE TABLE public.item_recurrence_rules (
   CONSTRAINT item_recurrence_rules_pkey PRIMARY KEY (id),
   CONSTRAINT item_recurrence_rules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
 );
+CREATE INDEX idx_item_recurrence_rules_item_id ON public.item_recurrence_rules(item_id);
 
 -- Flexible routine schedules: one row per scheduled occurrence per period.
 -- For N-times-per-period routines, occurrence_index distinguishes the slot (0..N-1).
@@ -732,6 +752,7 @@ CREATE TABLE public.item_flexible_schedules (
   CONSTRAINT item_flexible_schedules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
   CONSTRAINT item_flexible_schedules_unique_slot UNIQUE (item_id, period_start_date, occurrence_index)
 );
+CREATE INDEX idx_item_flexible_schedules_item_period ON public.item_flexible_schedules(item_id, period_start_date);
 CREATE TABLE public.recurrence_pauses (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   item_id uuid NOT NULL,
@@ -1039,6 +1060,7 @@ CREATE TABLE public.reminder_details (
   CONSTRAINT reminder_details_pkey PRIMARY KEY (item_id),
   CONSTRAINT reminder_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
 );
+CREATE INDEX idx_reminder_details_due_at ON public.reminder_details(due_at);
 CREATE TABLE public.reminder_templates (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -1704,3 +1726,156 @@ CREATE POLICY household_memories_update ON public.household_memories
 CREATE POLICY household_memories_delete ON public.household_memories
   FOR DELETE USING (created_by = auth.uid());
 CREATE POLICY era_messages_self ON public.era_messages FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- ============================================
+-- RLS POLICIES — ITEMS CHILD TABLES (parent-join pattern)
+-- Each child table inherits the same access predicate as items_select.
+-- ============================================
+ALTER TABLE public.item_alerts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "item_alerts_via_parent" ON public.item_alerts FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.items i WHERE i.id = item_alerts.item_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
+
+ALTER TABLE public.item_recurrence_rules ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "item_recurrence_rules_via_parent" ON public.item_recurrence_rules FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.items i WHERE i.id = item_recurrence_rules.item_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
+
+ALTER TABLE public.item_recurrence_exceptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "item_recurrence_exceptions_via_parent" ON public.item_recurrence_exceptions FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.item_recurrence_rules r
+    JOIN public.items i ON i.id = r.item_id
+    WHERE r.id = item_recurrence_exceptions.rule_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
+
+ALTER TABLE public.item_flexible_schedules ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "item_flexible_schedules_via_parent" ON public.item_flexible_schedules FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.items i WHERE i.id = item_flexible_schedules.item_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
+
+ALTER TABLE public.reminder_details ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "reminder_details_via_parent" ON public.reminder_details FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.items i WHERE i.id = reminder_details.item_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
+
+ALTER TABLE public.event_details ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "event_details_via_parent" ON public.event_details FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.items i WHERE i.id = event_details.item_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
+
+ALTER TABLE public.item_subtasks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "item_subtasks_via_parent" ON public.item_subtasks FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.items i WHERE i.id = item_subtasks.parent_item_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
+
+ALTER TABLE public.item_subtask_completions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "item_subtask_completions_via_parent" ON public.item_subtask_completions FOR ALL
+  USING (EXISTS (
+    SELECT 1
+    FROM public.item_subtasks st
+    JOIN public.items i ON i.id = st.parent_item_id
+    WHERE st.id = item_subtask_completions.subtask_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
+
+ALTER TABLE public.item_attachments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "item_attachments_via_parent" ON public.item_attachments FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.items i WHERE i.id = item_attachments.item_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
+
+ALTER TABLE public.item_snoozes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "item_snoozes_via_parent" ON public.item_snoozes FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.items i WHERE i.id = item_snoozes.item_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
+
+ALTER TABLE public.recurrence_pauses ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "recurrence_pauses_via_parent" ON public.recurrence_pauses FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.items i WHERE i.id = recurrence_pauses.item_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
+
+ALTER TABLE public.item_alert_suppressions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "item_alert_suppressions_via_parent" ON public.item_alert_suppressions FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.items i WHERE i.id = item_alert_suppressions.item_id AND (
+      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
+      OR (i.is_public = true AND EXISTS (
+        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
+          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
+          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
+        )))
+    )));
