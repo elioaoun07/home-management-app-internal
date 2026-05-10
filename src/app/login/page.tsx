@@ -132,6 +132,9 @@ function LoginContent() {
                   disabled={isLoading}
                   required
                   autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </div>
             </div>
@@ -151,6 +154,9 @@ function LoginContent() {
                   disabled={isLoading}
                   required
                   autoComplete="current-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </div>
             </div>
