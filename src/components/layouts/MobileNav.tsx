@@ -127,6 +127,7 @@ export default function MobileNav() {
     "/nfc/",
     "/ai-usage",
     "/era",
+    "/watch",
   ];
 
   // Prefetch all tabs on initial mount for instant switching

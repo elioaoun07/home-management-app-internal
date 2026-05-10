@@ -34,6 +34,8 @@ interface EraState {
   isAwake: boolean;
   /** When true, assistant replies are spoken aloud via Azure TTS. Default false. */
   voiceReplyEnabled: boolean;
+  /** Latest assistant reply text — drives the typewriter transcription display. */
+  eraReply: string;
   /**
    * The module key driving ERA DOT color/cue in hub view.
    * Starts as "chat" (neutral) and updates to the mentioned face's module when
@@ -56,6 +58,7 @@ interface EraActions {
   wake: () => void;
   setVoiceReplyEnabled: (v: boolean) => void;
   setHubModuleKey: (key: ERAModuleKey) => void;
+  setEraReply: (text: string) => void;
 }
 
 const MAX_TURNS = 12;
@@ -69,6 +72,7 @@ const INITIAL: EraState = {
   isAwake: false,
   voiceReplyEnabled: false,
   hubModuleKey: "chat",
+  eraReply: "",
 };
 
 export const useEraStore = create<EraState & EraActions>((set) => ({
@@ -85,6 +89,7 @@ export const useEraStore = create<EraState & EraActions>((set) => ({
   wake: () => set({ isAwake: true }),
   setVoiceReplyEnabled: (v) => set({ voiceReplyEnabled: v }),
   setHubModuleKey: (key) => set({ hubModuleKey: key }),
+  setEraReply: (text) => set({ eraReply: text }),
 }));
 
 /** Non-React accessor for use from plain TS modules. */

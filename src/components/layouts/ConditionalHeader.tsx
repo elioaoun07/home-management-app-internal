@@ -93,6 +93,7 @@ export default function ConditionalHeader({
       pathname?.startsWith("/era") ||
       pathname?.startsWith("/temp") ||
       pathname?.startsWith("/nfc/") ||
+      pathname?.startsWith("/watch") ||
       viewMode === "watch" ||
       viewMode === "web");
 

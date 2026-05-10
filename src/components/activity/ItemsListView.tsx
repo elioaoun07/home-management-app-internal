@@ -20,7 +20,7 @@ import {
   firstBiweeklyFlippedAnchor,
   getOccurrencesInRange,
 } from "@/lib/utils/date";
-import type { ItemStatus, ItemType, ItemWithDetails } from "@/types/items";
+import type { ItemType, ItemWithDetails } from "@/types/items";
 import { eachDayOfInterval, format, parseISO } from "date-fns";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -594,9 +594,10 @@ export default function ItemsListView({
     new Set([OVERDUE_KEY]),
   );
 
-  const { data: allItems = [], isLoading } = useItems({
-    status: ["pending", "in_progress"] as ItemStatus[],
-  });
+  // Same query as /reminders — no status filter so dormant/completed/etc. items
+  // (and recurring items whose parent status is anything other than "pending")
+  // are still expanded into per-occurrence rows.
+  const { data: allItems = [], isLoading } = useItems();
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
   const { handleComplete, handlePostpone, handleCancel, handleDelete } =
     useItemActionsWithToast();
@@ -693,20 +694,30 @@ export default function ItemsListView({
     const overdue: OccurrenceEntry[] = [];
 
     for (const item of base) {
+      // Skip legacy flexible-routine container items — mirrors /reminders behavior.
+      if (item.recurrence_rule?.is_flexible) continue;
+
+      // Resolve the item's anchor date (due_at / start_at). For undated items
+      // we fall back to created_at so they still appear in the Journal.
+      const primaryDate = getItemPrimaryDateStr(item);
+      const itemDate = primaryDate
+        ? parseISO(primaryDate)
+        : parseISO(item.created_at);
+
       if (!item.recurrence_rule?.rrule) {
-        // One-time item — use primary date directly
-        const dateStr = getItemDayStr(item);
-        const occurrenceDate = getItemPrimaryDateStr(item) ?? item.created_at;
-        if (!dateStr) continue;
+        // One-time item — use primary date directly (fallback to created_at).
+        const occurrenceDate = primaryDate ?? item.created_at;
+        const dateStr = normalizeToLocalDateString(itemDate);
         if (dateStr < todayStr) {
           overdue.push({ item, occurrenceDate, occurrenceDateStr: dateStr });
         } else if (dateStr >= startDate && dateStr <= endDate) {
           range.push({ item, occurrenceDate, occurrenceDateStr: dateStr });
         }
       } else {
-        // Recurring item — expand all occurrences within the date range
+        // Recurring item — expand occurrences in the date range, mirroring
+        // the /reminders page logic. We pass `itemDate` as DTSTART so the
+        // expansion works even if `start_anchor` is missing/invalid.
         const rule = item.recurrence_rule;
-        const startAnchor = parseISO(rule.start_anchor);
         try {
           const exceptionSet = new Set(
             rule.exceptions?.map((e) =>
@@ -715,14 +726,14 @@ export default function ItemsListView({
           );
           const occurrences = getOccurrencesInRange(
             rule,
-            startAnchor,
+            itemDate,
             new Date(rangeStart.getTime() - 1),
             new Date(rangeEnd.getTime() + 1),
           );
           for (const occ of occurrences) {
             const occDateStr = normalizeToLocalDateString(occ);
             if (exceptionSet.has(occDateStr)) continue;
-            const adjusted = adjustOccurrenceToWallClock(occ, startAnchor);
+            const adjusted = adjustOccurrenceToWallClock(occ, itemDate);
             const occIso = adjusted.toISOString();
             if (occDateStr < todayStr) {
               overdue.push({
@@ -739,10 +750,9 @@ export default function ItemsListView({
             }
           }
         } catch {
-          // Fallback: use primary date
-          const dateStr = getItemDayStr(item);
-          const occurrenceDate = getItemPrimaryDateStr(item) ?? item.created_at;
-          if (!dateStr) continue;
+          // Fallback: use primary/created_at date as a single occurrence
+          const occurrenceDate = primaryDate ?? item.created_at;
+          const dateStr = normalizeToLocalDateString(itemDate);
           if (dateStr < todayStr) {
             overdue.push({ item, occurrenceDate, occurrenceDateStr: dateStr });
           } else if (dateStr >= startDate && dateStr <= endDate) {

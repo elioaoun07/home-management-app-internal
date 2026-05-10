@@ -3,9 +3,58 @@
 // Used by offline sync engine for replay
 
 import { supabaseServer } from "@/lib/supabase/server";
+import { buildFullRRuleString } from "@/lib/utils/date";
 import { NextRequest, NextResponse } from "next/server";
+import { RRule } from "rrule";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Compute the base event time for an alert. For recurring items we MUST
+ * resolve the next future occurrence (relative to now) — using the raw
+ * `due_at`/`start_at` would land trigger_at in the past for any backdated
+ * series, and the cron's lookback window would never see it. See
+ * `src/app/api/cron/item-reminders/route.ts`.
+ */
+function resolveAlertBaseTime(
+  body: Record<string, unknown>,
+  type: string,
+  relativeTo: unknown,
+): Date | null {
+  const rule = body.recurrence_rule as
+    | {
+        rrule?: string;
+        start_anchor?: string;
+        end_until?: string | null;
+        count?: number | null;
+      }
+    | undefined;
+  const dueAt = body.due_at as string | undefined;
+  const startAt = body.start_at as string | undefined;
+  const endAt = body.end_at as string | undefined;
+
+  const baseStr =
+    type === "event" ? (relativeTo === "end" ? endAt : startAt) : dueAt;
+  if (!baseStr) return null;
+
+  if (rule?.rrule) {
+    try {
+      const anchor = new Date(rule.start_anchor || baseStr);
+      const rruleStr = buildFullRRuleString(anchor, {
+        rrule: rule.rrule,
+        end_until: rule.end_until ?? null,
+        count: rule.count ?? null,
+      });
+      const next = RRule.fromString(rruleStr).after(new Date(), true);
+      if (next) return next;
+      // No future occurrences — fall through to base.
+    } catch (err) {
+      console.error("[items/route] RRule expansion failed:", err);
+    }
+  }
+
+  return new Date(baseStr);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -130,15 +179,9 @@ export async function POST(request: NextRequest) {
     if (body.alerts?.length) {
       const alerts = body.alerts.map((a: Record<string, unknown>) => {
         let computedTriggerAt = a.trigger_at;
-        const baseTimeStr =
-          type === "event"
-            ? a.relative_to === "end"
-              ? body.end_at
-              : body.start_at
-            : body.due_at;
+        const baseTime = resolveAlertBaseTime(body, type, a.relative_to);
 
-        if (a.kind === "relative" && baseTimeStr) {
-          const baseTime = new Date(baseTimeStr as string);
+        if (a.kind === "relative" && baseTime) {
           if (a.custom_time && a.offset_minutes) {
             const daysOffset = Math.floor((a.offset_minutes as number) / 1440);
             const alertDate = new Date(baseTime);
@@ -175,11 +218,13 @@ export async function POST(request: NextRequest) {
         console.error("[items/route] Failed to create alerts:", alertsError);
       }
     } else if (body.due_at) {
-      // Auto-create a push alert at due time
+      // Auto-create a push alert at due time. For recurring items, anchor
+      // on the next future occurrence so the cron can pick it up.
+      const baseTime = resolveAlertBaseTime(body, type, "due");
       await supabase.from("item_alerts").insert({
         item_id: item.id,
         kind: "absolute",
-        trigger_at: body.due_at,
+        trigger_at: (baseTime ?? new Date(body.due_at)).toISOString(),
         channel: "push",
         active: true,
       });

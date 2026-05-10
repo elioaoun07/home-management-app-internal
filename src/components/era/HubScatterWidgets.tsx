@@ -10,7 +10,7 @@ import { useBudgetSummary } from "@/features/era/widgets/useBudgetSummary";
 import { useChefSummary } from "@/features/era/widgets/useChefSummary";
 import { useScheduleSummary } from "@/features/era/widgets/useScheduleSummary";
 import { AnimatePresence, motion } from "framer-motion";
-import React from "react";
+import React, { useMemo } from "react";
 
 const POS: Record<string, React.CSSProperties> = {
   tl: { top: "12%", left: "3%" },
@@ -41,49 +41,88 @@ interface CardProps {
 }
 
 function HubCard({ hue, pos, delay, label, children }: CardProps) {
-  const isHub = useEraStore((s) => s.activeView === "hub");
+  const isHub   = useEraStore((s) => s.activeView === "hub");
+  const isAwake = useEraStore((s) => s.isAwake);
+  const show    = isHub && isAwake;
 
   return (
     <AnimatePresence>
-      {isHub && (
+      {show && (
         <motion.div
-          className="absolute hidden md:flex w-[320px] flex-col gap-2.5 rounded-2xl p-5"
+          className="absolute hidden md:flex w-[340px] flex-col rounded-2xl overflow-hidden"
           style={{
             ...POS[pos],
-            transformOrigin: ORIGIN[pos],
+            transformOrigin: "center",
             background: `hsla(${hue}, 20%, 7%, 0.92)`,
-            border: `1px solid hsla(${hue}, 55%, 50%, 0.22)`,
+            border: `1px solid hsla(${hue}, 55%, 50%, 0.28)`,
             backdropFilter: "blur(18px)",
           }}
-          initial={{ scaleY: 0.04, scaleX: 0.88, opacity: 0 }}
+          initial={{ scaleY: 0.008, opacity: 1 }}
           animate={{
             scaleY: 1,
-            scaleX: 1,
             opacity: 1,
-            transition: { delay, duration: 0.4, ease: [0.34, 1.08, 0.64, 1] },
+            transition: { delay, duration: 0.46, ease: [0.34, 1.3, 0.64, 1] },
           }}
           exit={{
-            scaleY: 0.04,
-            scaleX: 0.88,
+            scaleY: 0.008,
             opacity: 0,
-            transition: { duration: 0.18, ease: "easeIn" },
+            transition: { duration: 0.15, ease: "easeIn" },
           }}
         >
-          {/* Hue accent line along top edge */}
+          {/* Top accent edge */}
           <div
             className="absolute inset-x-0 top-0 h-px rounded-t-2xl"
-            style={{ background: `hsl(${hue}, 70%, 62%)`, opacity: 0.65 }}
+            style={{ background: `hsl(${hue}, 75%, 65%)`, opacity: 0.9 }}
+          />
+          {/* Bottom accent edge */}
+          <div
+            className="absolute inset-x-0 bottom-0 h-px rounded-b-2xl"
+            style={{ background: `hsl(${hue}, 70%, 62%)`, opacity: 0.35 }}
           />
 
-          {/* Module label */}
-          <span
-            className="text-[10px] font-bold uppercase tracking-[0.18em]"
-            style={{ color: `hsla(${hue}, 65%, 68%, 0.55)` }}
-          >
-            {label}
-          </span>
+          {/* Scan line — glowing bar that sweeps top → bottom during card expansion */}
+          <motion.div
+            className="absolute inset-x-0 h-[2px] pointer-events-none"
+            style={{
+              background: `linear-gradient(90deg, transparent 0%, hsl(${hue}, 90%, 74%) 50%, transparent 100%)`,
+              zIndex: 6,
+              boxShadow: `0 0 8px 1px hsla(${hue}, 85%, 65%, 0.55)`,
+            }}
+            initial={{ top: "-2px", opacity: 0.95 }}
+            animate={{ top: "102%", opacity: 0 }}
+            transition={{ delay, duration: 0.44, ease: [0.22, 0.8, 0.36, 1] }}
+          />
 
-          {children}
+          {/* Shimmer diagonal sweep — fires once after card has expanded */}
+          <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none" style={{ zIndex: 4 }}>
+            <motion.div
+              className="absolute inset-y-0 left-0 w-full"
+              style={{
+                background: `linear-gradient(105deg, transparent 20%, hsla(${hue}, 85%, 78%, 0.10) 50%, transparent 80%)`,
+                x: "-100%",
+              }}
+              animate={{ x: "100%" }}
+              transition={{ delay: delay + 0.30, duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
+            />
+          </div>
+
+          {/* Card content — fades in after card has expanded */}
+          <motion.div
+            className="flex flex-col gap-3 p-5 w-full"
+            initial={{ opacity: 0 }}
+            animate={{
+              opacity: 1,
+              transition: { delay: delay + 0.28, duration: 0.3, ease: "easeOut" },
+            }}
+          >
+            <span
+              className="text-[11px] font-bold uppercase tracking-[0.18em]"
+              style={{ color: `hsla(${hue}, 65%, 68%, 0.55)` }}
+            >
+              {label}
+            </span>
+            {children}
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -116,12 +155,12 @@ function Headline({
 
   return (
     <div className="flex items-baseline gap-2">
-      <p className="text-[26px] font-semibold leading-none text-white/90">
+      <p className="text-[30px] font-semibold leading-none text-white/90">
         {value}
       </p>
       {showDelta && (
         <span
-          className="rounded-full px-1.5 py-[1px] text-[9px] font-semibold"
+          className="rounded-full px-1.5 py-[1px] text-[10px] font-semibold"
           style={{
             background: flat
               ? "rgba(255,255,255,0.06)"
@@ -148,7 +187,7 @@ function Sparkline({
   data,
   hue,
   width = 218,
-  height = 24,
+  height = 32,
 }: {
   data: number[];
   hue: number;
@@ -215,9 +254,9 @@ function ListRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-2 min-w-0">
-      <span className="truncate text-[12px] text-white/60">{label}</span>
+      <span className="truncate text-[13px] text-white/60">{label}</span>
       <span
-        className="shrink-0 text-[12px] font-medium"
+        className="shrink-0 text-[13px] font-medium"
         style={{
           color: accent ? `hsl(${hue}, 65%, 70%)` : "rgba(255,255,255,0.7)",
         }}
@@ -241,9 +280,9 @@ function StatRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-[12px] text-white/42">{label}</span>
+      <span className="text-[13px] text-white/42">{label}</span>
       <span
-        className="text-[12px] font-medium truncate max-w-[160px] text-right"
+        className="text-[13px] font-medium truncate max-w-[160px] text-right"
         style={{
           color: accent ? `hsl(${hue}, 65%, 68%)` : "rgba(255,255,255,0.7)",
         }}
@@ -256,7 +295,7 @@ function StatRow({
 
 // ── Per-module cards ───────────────────────────────────────────────────────
 
-function BudgetCard() {
+function BudgetCard({ delay }: { delay: number }) {
   const { data, isLoading } = useBudgetSummary();
   const hue = 175;
 
@@ -267,7 +306,7 @@ function BudgetCard() {
   const txCount = data?.txCount ?? 0;
 
   return (
-    <HubCard hue={hue} pos="tl" delay={0} label="Expenses">
+    <HubCard hue={hue} pos="tl" delay={0.06} label="Expenses">
       <Headline
         hue={hue}
         value={isLoading ? "…" : fmt(total)}
@@ -280,9 +319,9 @@ function BudgetCard() {
 
       <div className="flex flex-col gap-2">
         {isLoading ? (
-          <p className="text-[12px] text-white/35">Loading…</p>
+          <p className="text-[13px] text-white/35">Loading…</p>
         ) : top3.length === 0 ? (
-          <p className="text-[12px] text-white/35">No transactions yet</p>
+          <p className="text-[13px] text-white/35">No transactions yet</p>
         ) : (
           top3.map((c, i) => (
             <ListRow
@@ -299,10 +338,10 @@ function BudgetCard() {
       <Divider hue={hue} />
 
       <div className="flex items-center justify-between">
-        <span className="text-[11px] text-white/40">
+        <span className="text-[12px] text-white/40">
           {txCount > 0 ? `${txCount} tx` : "—"}
         </span>
-        <span className="text-[11px] text-white/40">
+        <span className="text-[12px] text-white/40">
           {dailyAvg > 0 ? `${fmt(dailyAvg)}/day` : ""}
         </span>
       </div>
@@ -310,7 +349,7 @@ function BudgetCard() {
   );
 }
 
-function ScheduleCard() {
+function ScheduleCard({ delay }: { delay: number }) {
   const { data, isLoading } = useScheduleSummary();
   const hue = 256;
 
@@ -337,7 +376,7 @@ function ScheduleCard() {
   };
 
   return (
-    <HubCard hue={hue} pos="tr" delay={0.07} label="Schedule">
+    <HubCard hue={hue} pos="tr" delay={0.22} label="Schedule">
       <Headline hue={hue} value={isLoading ? "…" : `${today} today`} />
 
       <Divider hue={hue} />
@@ -365,9 +404,9 @@ function ScheduleCard() {
 
       <div className="flex flex-col gap-2">
         {isLoading ? (
-          <p className="text-[12px] text-white/35">Loading…</p>
+          <p className="text-[13px] text-white/35">Loading…</p>
         ) : next.length === 0 ? (
-          <p className="text-[12px] text-white/35">
+          <p className="text-[13px] text-white/35">
             {unscheduled > 0 ? `${unscheduled} items — no due date` : "All clear"}
           </p>
         ) : (
@@ -386,7 +425,7 @@ function ScheduleCard() {
   );
 }
 
-function ChefCard() {
+function ChefCard({ delay }: { delay: number }) {
   const { data, isLoading } = useChefSummary();
   const hue = 28;
 
@@ -396,7 +435,7 @@ function ChefCard() {
   const mostMade = data?.mostMade;
 
   return (
-    <HubCard hue={hue} pos="bl" delay={0.14} label="Kitchen">
+    <HubCard hue={hue} pos="bl" delay={0.38} label="Kitchen">
       <Headline hue={hue} value={isLoading ? "…" : `${count} recipes`} />
 
       <Divider hue={hue} />
@@ -423,9 +462,9 @@ function ChefCard() {
 
       <div className="flex flex-col gap-2">
         {isLoading ? (
-          <p className="text-[12px] text-white/35">Loading…</p>
+          <p className="text-[13px] text-white/35">Loading…</p>
         ) : cuisines.length === 0 ? (
-          <p className="text-[12px] text-white/35">No recipes yet</p>
+          <p className="text-[13px] text-white/35">No recipes yet</p>
         ) : (
           cuisines.map((c, i) => (
             <ListRow
@@ -442,7 +481,7 @@ function ChefCard() {
   );
 }
 
-function BrainCard() {
+function BrainCard({ delay }: { delay: number }) {
   const { data, isLoading } = useBrainSummary();
   const hue = 220;
 
@@ -451,8 +490,8 @@ function BrainCard() {
   const lastValue = data?.lastValue;
 
   return (
-    <HubCard hue={hue} pos="br" delay={0.21} label="Memory">
-      <p className="text-[26px] font-semibold leading-none text-white/90">
+    <HubCard hue={hue} pos="br" delay={0.54} label="Memory">
+      <p className="text-[30px] font-semibold leading-none text-white/90">
         {isLoading ? "…" : `${count} saved`}
       </p>
 
@@ -460,9 +499,9 @@ function BrainCard() {
 
       <div className="flex flex-col gap-2">
         {isLoading ? (
-          <p className="text-[12px] text-white/35">Loading…</p>
+          <p className="text-[13px] text-white/35">Loading…</p>
         ) : count === 0 ? (
-          <p className="text-[12px] text-white/30">No memories yet</p>
+          <p className="text-[13px] text-white/30">No memories yet</p>
         ) : (
           <>
             {lastLabel && (
@@ -477,12 +516,25 @@ function BrainCard() {
 }
 
 export function HubScatterWidgets() {
+  const isAwake = useEraStore((s) => s.isAwake);
+
+  // Shuffle the appearance order every time ERA wakes — keeps each wake-up feeling fresh.
+  const [d0, d1, d2, d3] = useMemo(() => {
+    const slots = [0.04, 0.16, 0.29, 0.42];
+    for (let i = slots.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [slots[i], slots[j]] = [slots[j], slots[i]];
+    }
+    return slots;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAwake]);
+
   return (
     <>
-      <BudgetCard />
-      <ScheduleCard />
-      <ChefCard />
-      <BrainCard />
+      <BudgetCard delay={d0} />
+      <ScheduleCard delay={d1} />
+      <ChefCard delay={d2} />
+      <BrainCard delay={d3} />
     </>
   );
 }

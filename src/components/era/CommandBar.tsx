@@ -45,6 +45,7 @@ export function CommandBar() {
   const setLastIntent = useEraStore((s) => s.setLastIntent);
   const voiceReplyEnabled = useEraStore((s) => s.voiceReplyEnabled);
   const setVoiceReplyEnabled = useEraStore((s) => s.setVoiceReplyEnabled);
+  const setEraReply = useEraStore((s) => s.setEraReply);
 
   const budgetSubmit = useEraBudgetSubmit();
   const { data: activeConversation } = useActiveEraConversation();
@@ -103,6 +104,7 @@ export function CommandBar() {
   const submitText = useCallback(
     async (text: string) => {
       if (!text || busy) return;
+      setEraReply("");
       const intent = rootIntentRouter.parse(text);
       setLastIntent(intent);
       if (intent.kind !== "unknown" && intent.kind !== "greeting") {
@@ -164,6 +166,8 @@ export function CommandBar() {
         console.error("[era] failed to persist assistant reply", err);
       }
 
+      setEraReply(reply);
+
       // Speak if voice is enabled
       if (voiceReplyEnabled) {
         tts.play(reply);
@@ -180,6 +184,7 @@ export function CommandBar() {
       setActiveFace,
       setHubModuleKey,
       setPendingTranscript,
+      setEraReply,
       voiceReplyEnabled,
       tts,
     ],

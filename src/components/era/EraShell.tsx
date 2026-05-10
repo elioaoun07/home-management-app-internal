@@ -66,6 +66,7 @@ export function EraShell() {
   const activeView    = useEraStore((s) => s.activeView);
   const isAwake       = useEraStore((s) => s.isAwake);
   const wake          = useEraStore((s) => s.wake);
+  const eraReply      = useEraStore((s) => s.eraReply);
   const user          = useUser();
 
   const hubModuleKey = useEraStore((s) => s.hubModuleKey);
@@ -216,21 +217,6 @@ export function EraShell() {
               <ERAMark module={moduleKey} size={160} />
             </motion.div>
 
-            {/* Face label — hub only */}
-            <AnimatePresence>
-              {isHub && (
-                <motion.div
-                  key="label"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.22, delay: 0.08 }}
-                  className="mt-4 text-center"
-                >
-                  <p className="era-face-label">{face.label}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </motion.div>
 
           {/* ─── Hub scatter widgets (desktop, hub mode) ─────────────────── */}
@@ -259,8 +245,65 @@ export function EraShell() {
         </div>
       </div>
 
+      {/* ── ERA reply transcription — appears above command bar ── */}
+      <AnimatePresence>
+        {isAwake && !!eraReply && <EraReplyTranscript key="era-reply" />}
+      </AnimatePresence>
+
       {/* ── Floating command bar (always visible) ── */}
       <CommandBar />
     </div>
+  );
+}
+
+function EraReplyTranscript() {
+  const eraReply = useEraStore((s) => s.eraReply);
+  const [displayed, setDisplayed] = useState("");
+  const [typing, setTyping]       = useState(false);
+
+  useEffect(() => {
+    setDisplayed("");
+    setTyping(true);
+    let i = 0;
+    const id = setInterval(() => {
+      i++;
+      setDisplayed(eraReply.slice(0, i));
+      if (i >= eraReply.length) {
+        clearInterval(id);
+        setTyping(false);
+      }
+    }, 16);
+    return () => clearInterval(id);
+  }, [eraReply]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      transition={{ duration: 0.28, ease: "easeOut" }}
+      className="absolute inset-x-0 z-20 flex justify-center px-5 pointer-events-none bottom-[148px] md:bottom-[72px]"
+    >
+      <div
+        className="w-full max-w-[560px] px-4 py-3 rounded-2xl"
+        style={{
+          background: "rgba(13, 18, 32, 0.88)",
+          border: "1px solid var(--era-border-subtle, rgba(255,255,255,0.08))",
+        }}
+      >
+        <p
+          className="text-[13px] font-mono leading-relaxed tracking-wide"
+          style={{ color: "var(--era-accent)" }}
+        >
+          {displayed}
+          {typing && (
+            <span
+              className="inline-block w-[2px] h-[14px] ml-[2px] align-middle animate-pulse"
+              style={{ backgroundColor: "var(--era-accent)", opacity: 0.9 }}
+            />
+          )}
+        </p>
+      </div>
+    </motion.div>
   );
 }

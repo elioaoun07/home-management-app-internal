@@ -81,13 +81,27 @@ function deriveOccurrenceDate(alert: {
 }
 
 export async function GET(req: NextRequest) {
-  if (!CRON_SECRET || req.headers.get("authorization") !== `Bearer ${CRON_SECRET}`) {
+  if (
+    !CRON_SECRET ||
+    req.headers.get("authorization") !== `Bearer ${CRON_SECRET}`
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const supabase = supabaseAdmin();
   const now = new Date();
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  // We used to use a 1-hour lookback, but if the cron ever missed its window
+  // (deploy, downtime, even a single skipped minute) the alert was silently
+  // dropped. For recurring items we self-heal by advancing trigger_at to the
+  // next future occurrence; for one-time alerts we still fire as long as the
+  // alert is recent enough to be useful (12h window).
+  const LOOKBACK_HOURS = 12;
+  const lookbackStart = new Date(
+    now.getTime() - LOOKBACK_HOURS * 60 * 60 * 1000,
+  );
+  // Anything older than this for a recurring series is treated as "stale"
+  // and self-healed without firing a notification.
+  const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
 
   try {
     const { data: dueAlerts, error: alertsError } = await supabase
@@ -119,7 +133,7 @@ export async function GET(req: NextRequest) {
       .eq("active", true)
       .eq("channel", "push")
       .lte("trigger_at", now.toISOString())
-      .gte("trigger_at", oneHourAgo.toISOString())
+      .gte("trigger_at", lookbackStart.toISOString())
       .is("last_fired_at", null);
 
     if (alertsError) {
@@ -127,11 +141,54 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: alertsError.message }, { status: 500 });
     }
 
+    // Self-heal pass: any RECURRING alert whose trigger_at is older than the
+    // lookback window is permanently dead under the standard query above.
+    // Advance it to its next future occurrence so future Sundays (etc.) fire.
+    // We process up to 200 per run to bound work.
+    const { data: ancientRecurringAlerts } = await supabase
+      .from("item_alerts")
+      .select(
+        `
+        id,
+        item_id,
+        trigger_at,
+        offset_minutes,
+        channel,
+        kind,
+        occurrence_date,
+        items!inner (
+          id,
+          archived_at,
+          deleted_at,
+          item_recurrence_rules!inner (id, rrule, start_anchor, end_until, count)
+        )
+      `,
+      )
+      .eq("active", true)
+      .lt("trigger_at", lookbackStart.toISOString())
+      .limit(200);
+
+    let healed = 0;
+    for (const stale of (ancientRecurringAlerts ??
+      []) as unknown as AlertRow[]) {
+      const item = stale.items;
+      if (!item || item.archived_at || item.deleted_at) continue;
+      if (!item.item_recurrence_rules?.length) continue;
+      await maybeRescheduleRecurring(supabase, stale, item);
+      healed++;
+    }
+    if (healed > 0) {
+      console.log(
+        `[Item Reminders] Self-healed ${healed} ancient recurring alerts`,
+      );
+    }
+
     const alerts = (dueAlerts ?? []) as unknown as AlertRow[];
     if (alerts.length === 0) {
       return NextResponse.json({
         success: true,
         sent: 0,
+        healed,
         message: "No due item alerts",
       });
     }
@@ -164,6 +221,29 @@ export async function GET(req: NextRequest) {
           `[Item Reminders] Alert ${alert.id} dropped — item ${item.id} is ${item.deleted_at ? "deleted" : "archived"}`,
         );
         dropped++;
+        continue;
+      }
+
+      // 1b. Self-heal stale recurring alerts: if the trigger fired more than
+      // STALE_THRESHOLD_MS ago and the item is recurring, skip the (stale)
+      // notification but advance the alert to its next future occurrence so
+      // it fires correctly going forward. Without this, a single missed cron
+      // window would leave the alert permanently dead.
+      if (
+        alert.trigger_at &&
+        item.item_recurrence_rules?.length &&
+        now.getTime() - new Date(alert.trigger_at).getTime() >
+          STALE_THRESHOLD_MS
+      ) {
+        await supabase
+          .from("item_alerts")
+          .update({ last_fired_at: now.toISOString() })
+          .eq("id", alert.id);
+        await maybeRescheduleRecurring(supabase, alert, item);
+        suppressed++;
+        console.log(
+          `[Item Reminders] Self-healed stale recurring alert ${alert.id}`,
+        );
         continue;
       }
 
@@ -315,6 +395,7 @@ export async function GET(req: NextRequest) {
       push_failed: failed,
       suppressed,
       dropped,
+      healed,
     });
   } catch (error) {
     console.error("Item reminders cron error:", error);
@@ -349,7 +430,9 @@ async function maybeRescheduleRecurring(
   if (nextOcc) {
     const newTriggerAt =
       alert.kind === "relative" && alert.offset_minutes != null
-        ? new Date(nextOcc.getTime() - alert.offset_minutes * 60 * 1000).toISOString()
+        ? new Date(
+            nextOcc.getTime() - alert.offset_minutes * 60 * 1000,
+          ).toISOString()
         : nextOcc.toISOString();
     await supabase
       .from("item_alerts")

@@ -1,0 +1,33 @@
+{
+  "id": "/era-watch",
+  "name": "ERA Watch",
+  "short_name": "ERA",
+  "description": "ERA on your wrist — voice chat, budget, schedule, recipes at a tap",
+  "start_url": "/watch",
+  "scope": "/watch",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#04070f",
+  "theme_color": "#06b6d4",
+  "categories": ["productivity", "finance", "lifestyle"],
+  "icons": [
+    {
+      "src": "/appicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/appicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/appicon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
