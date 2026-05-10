@@ -107,7 +107,13 @@ export default function AIChatAssistant() {
   useEffect(() => setMounted(true), []);
 
   // Hide AI chat button on standalone pages (only after mount)
-  const standaloneRoutes = ["/chat", "/dashboard", "/reminders", "/nfc/"];
+  const standaloneRoutes = [
+    "/chat",
+    "/dashboard",
+    "/reminders",
+    "/nfc/",
+    "/watch",
+  ];
   const isStandalonePage =
     mounted && standaloneRoutes.some((r) => pathname?.startsWith(r));
   const shouldHideButton = isStandalonePage;

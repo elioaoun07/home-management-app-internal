@@ -49,7 +49,7 @@ function LoginContent() {
       toast.error(
         errorParam === "missing"
           ? "Please enter email and password"
-          : "Invalid email or password"
+          : "Invalid email or password",
       );
     }
   }, [errorParam]);
