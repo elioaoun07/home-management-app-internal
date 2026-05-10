@@ -13,6 +13,17 @@ tags:
 
 ---
 
+## Interaction Model
+
+ERA operates on a **two-tier interaction model**:
+
+- **ERA Hub Chat** is the top-layer, primary interface. Quick, conversational, low-friction input lives here — logging a purchase, setting a reminder, adding a shopping item. The AI Assistant is embedded here and can be both reactive (responds to messages) and proactive (pushes briefings and alerts).
+- **Standalone module pages** (Expense Entry Form, Items, Recipes, etc.) are precision tools for structured, detailed input — used when full field control is needed. They are not deprecated; they serve the cases that truly require them.
+
+The design goal: Hub Chat handles the high-frequency everyday interactions so that standalone pages are reserved for when detail matters.
+
+---
+
 ## Quick Links
 
 - [[Module Index]] — all modules in a queryable table

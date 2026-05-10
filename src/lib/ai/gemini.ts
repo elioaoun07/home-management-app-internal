@@ -456,6 +456,71 @@ export async function sendMessageToGemini(
 }
 
 /**
+ * Stream a message to Gemini and yield text chunks as they arrive.
+ * Falls back to the lite model on primary rate-limit — same retry policy as
+ * generateContentWithFallback but yields chunks instead of returning a string.
+ *
+ * Usage:
+ *   for await (const chunk of streamMessageToGemini(msg, history, context)) {
+ *     process(chunk);
+ *   }
+ */
+export async function* streamMessageToGemini(
+  message: string,
+  chatHistory: ChatMessage[] = [],
+  context?: BudgetContext,
+): AsyncGenerator<string> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+
+  const systemPrompt = generateSystemPrompt(context);
+  const contents = [
+    ...chatHistory.map((msg) => ({
+      role: (msg.role === "user" ? "user" : "model") as "user" | "model",
+      parts: [{ text: msg.content }],
+    })),
+    { role: "user" as const, parts: [{ text: message }] },
+  ];
+
+  const config = {
+    systemInstruction: systemPrompt,
+    temperature: 0.7,
+    topP: 0.9,
+    topK: 40,
+    maxOutputTokens: 512,
+  };
+
+  const modelsToTry = [geminiModel, geminiFallbackModel];
+
+  for (const model of modelsToTry) {
+    try {
+      const stream = await genAI.models.generateContentStream({ model, contents, config });
+      for await (const chunk of stream) {
+        const text = chunk.text;
+        if (text) yield text;
+      }
+      return;
+    } catch (err) {
+      if (isRateLimitError(err) && model !== modelsToTry[modelsToTry.length - 1]) {
+        continue;
+      }
+      if (isRateLimitError(err)) {
+        const daily = isDailyQuotaError(err);
+        const hinted = parseRetryDelayMs(err);
+        const retryAfter = daily ? secondsUntilPacificMidnight() : (hinted ?? 60_000);
+        throw new GeminiRateLimitError(
+          daily ? "Gemini daily quota reached." : `Rate limited. Retry in ${Math.ceil(retryAfter / 1000)}s.`,
+          Math.ceil(retryAfter / 1000),
+          daily,
+        );
+      }
+      throw err;
+    }
+  }
+}
+
+/**
  * Quick analysis functions for specific use cases
  */
 export async function analyzeSpending(context: BudgetContext): Promise<string> {

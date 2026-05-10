@@ -53,6 +53,7 @@ import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
+import { useConversationMode } from "@/features/voice-conversation";
 import { safeFetch } from "@/lib/safeFetch";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -122,6 +123,16 @@ const InlineVoiceRecorder = dynamic(
 
 const VoiceMessagePlayer = dynamic(
   () => import("@/components/hub/VoiceMessagePlayer"),
+  { ssr: false },
+);
+
+// Lazy load ERA conversation mode components
+const ConversationOrb = dynamic(
+  () => import("@/features/voice-conversation").then((m) => ({ default: m.ConversationOrb })),
+  { ssr: false },
+);
+const ConversationToggle = dynamic(
+  () => import("@/features/voice-conversation").then((m) => ({ default: m.ConversationToggle })),
   { ssr: false },
 );
 
@@ -1708,6 +1719,70 @@ function ThreadConversation({
   const defaultAccount = accounts.find((a: any) => a.is_default) || accounts[0];
   const { data: categories = [] } = useCategories(defaultAccount?.id);
 
+  // ERA conversation mode
+  const [isConvModeEnabled, setIsConvModeEnabled] = useState(false);
+  const shoppingThread = threadsData?.threads?.find(
+    (t: HubChatThread) => t.purpose === "shopping",
+  );
+
+  const convMode = useConversationMode({
+    enabled: isConvModeEnabled,
+    handlers: {
+      getCategories: () => categories as any[],
+      sessionId: `voice-${threadId}`,
+      onLogExpense: async (intent) => {
+        try {
+          const content = intent.amount
+            ? `Spent $${intent.amount}${intent.category ? ` on ${intent.category}` : ""}`
+            : "Voice expense";
+          const result = await sendMessage.mutateAsync({ content, thread_id: threadId });
+          const msgId = result?.message?.id;
+          if (msgId && intent.amount) {
+            setTransactionModalData({
+              messageId: msgId,
+              amount: intent.amount,
+              description: intent.category ?? "Voice expense",
+              categoryId: intent.categoryId,
+              subcategoryId: intent.subcategoryId,
+              date: intent.date,
+            });
+          }
+        } catch { /* ignore */ }
+      },
+      onSetReminder: async (intent) => {
+        try {
+          const result = await sendMessage.mutateAsync({
+            content: `Reminder: ${intent.title}`,
+            thread_id: threadId,
+          });
+          const msgId = result?.message?.id;
+          if (msgId) {
+            setReminderModalData({ messageId: msgId, title: intent.title, description: "" });
+          }
+        } catch { /* ignore */ }
+      },
+      onAddToShopping: async (intent) => {
+        if (!shoppingThread) return;
+        for (const item of intent.items) {
+          await sendMessage.mutateAsync({ content: item, thread_id: shoppingThread.id }).catch(() => {});
+        }
+      },
+      onQueryBalance: async () => {
+        const acct = (accounts as any[]).find((a) => a.is_default) || (accounts as any[])[0];
+        if (!acct) return "No accounts found.";
+        const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+        return `Your ${acct.name} balance is ${fmt.format(acct.balance ?? 0)}.`;
+      },
+      onQueryItems: async (filter) => {
+        return filter === "today"
+          ? "Let me check your schedule for today."
+          : filter === "overdue"
+            ? "You have some overdue items — check the reminders tab."
+            : "Let me pull up your open reminders.";
+      },
+    },
+  });
+
   // Long press handler for messages (must be at component level, not in map)
   const longPressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isLongPressRef = useRef(false);
@@ -2533,6 +2608,41 @@ function ThreadConversation({
                         <EyeIcon className="w-5 h-5" />
                       </button>
                     )}
+                  {/* ERA Conversation Mode Button — budget + reminder threads only */}
+                  {thread?.purpose &&
+                    (thread.purpose === "budget" || thread.purpose === "reminder") && (
+                      <button
+                        onClick={() => {
+                          if (!isConvModeEnabled) {
+                            setIsConvModeEnabled(true);
+                          } else if (convMode.state === "idle" || convMode.state === "listening") {
+                            convMode.wake();
+                          } else if (convMode.state === "speaking" || convMode.state === "ai_streaming") {
+                            convMode.bargeIn();
+                          } else {
+                            setIsConvModeEnabled(false);
+                          }
+                        }}
+                        className={cn(
+                          "p-2 rounded-lg transition-all relative",
+                          isConvModeEnabled
+                            ? "bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
+                            : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70",
+                        )}
+                        title={
+                          !isConvModeEnabled
+                            ? "Enable ERA voice mode"
+                            : convMode.state === "listening"
+                              ? "ERA is listening…"
+                              : "ERA voice mode — tap to wake"
+                        }
+                      >
+                        <SparklesIcon className="w-5 h-5" />
+                        {isConvModeEnabled && convMode.state !== "idle" && (
+                          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                        )}
+                      </button>
+                    )}
                   {/* Settings Button - Far Right */}
                   <button
                     onClick={() => setShowThreadSettings(true)}
@@ -3026,6 +3136,15 @@ function ThreadConversation({
                 />
               ) : (
                 <>
+                  {/* ERA conversation orb — shows when voice mode is active */}
+                  {isConvModeEnabled && (
+                    <ConversationOrb
+                      state={convMode.state}
+                      transcript={convMode.transcript}
+                      theme={theme}
+                      className="mb-1"
+                    />
+                  )}
                   {/* Partner presence / typing / voice indicators */}
                   <div className="flex items-center gap-3 mb-1.5">
                     {partnerRecordingVoice ? (
@@ -3109,6 +3228,18 @@ function ThreadConversation({
                       }
                     }}
                   />
+                  {/* ERA conversation toggle — appears for budget + reminder threads */}
+                  {(thread?.purpose === "budget" || thread?.purpose === "reminder") && convMode.isSupported && (
+                    <ConversationToggle
+                      isEnabled={isConvModeEnabled}
+                      isSupported={convMode.isSupported}
+                      state={convMode.state}
+                      theme={theme}
+                      onToggle={() => setIsConvModeEnabled((p) => !p)}
+                      onWake={convMode.wake}
+                      onBargeIn={convMode.bargeIn}
+                    />
+                  )}
                   {/* WhatsApp-style: Show mic when empty, send when typed */}
                   <div className="relative w-12 h-12 flex items-center justify-center">
                     {/* Mic button - fades out when typing */}

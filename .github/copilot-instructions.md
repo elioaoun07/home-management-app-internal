@@ -3,6 +3,8 @@
 # CLAUDE.md
 
 > **Reactive + Proactive AI Personal Assistant** — a multi-module PWA covering budget tracking, reminders/tasks, meal planning, recipes, catalogues, household chat, dashboards, and an AI assistant. Modules are architecturally independent but share a single household ecosystem. The app is both reactive (responds to user input) and proactive (AI-driven briefings, alerts, and scheduled actions).
+>
+> **Interaction model:** ERA Hub Chat is the **top-layer primary interface**. Quick, conversational, low-friction actions (logging a spend, setting a reminder, adding to the shopping list) happen in the Hub. Standalone module pages (Expense Entry Form, Items, Recipes, etc.) are **precision tools** for detailed, structured input — used when full field control is needed. The Hub offloads high-frequency everyday interactions so that dedicated forms are reserved for cases that truly require them. The AI Assistant lives inside Hub Chat and operates both reactively (parses user messages) and proactively (surfaces briefings and alerts unprompted).
 
 CLAUDE.md auto-syncs to `CODEX.md` and `.github/copilot-instructions.md` via PostToolUse hook.
 
@@ -24,6 +26,7 @@ CLAUDE.md auto-syncs to `CODEX.md` and `.github/copilot-instructions.md` via Pos
 > Graphify = **implementation reality + relationships** (use for exploration).
 
 Run `/graphify` **before reading individual files** when the task involves:
+
 - Starting on an **unfamiliar module** — visualize structure before diving in
 - **Junction modules** — trace cross-module cascades before changing anything
 - **Large refactors** — map all affected modules and dependencies first
