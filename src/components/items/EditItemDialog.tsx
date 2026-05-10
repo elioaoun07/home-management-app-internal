@@ -24,14 +24,15 @@ import { useNfcTags } from "@/features/nfc/hooks";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNotification";
 import { safeFetch } from "@/lib/safeFetch";
+import { getSeriesAlert } from "@/lib/schedule/alertResolution";
 import { cn } from "@/lib/utils";
+import { buildFullRRuleString, localToISO } from "@/lib/utils/date";
 import type { ItemPriority, ItemWithDetails } from "@/types/items";
 import type {
   CreatePrerequisiteInput,
   ItemPrerequisite,
 } from "@/types/prerequisites";
 import { format, parseISO } from "date-fns";
-import { buildFullRRuleString, localToISO } from "@/lib/utils/date";
 import {
   Bell,
   MapPin,
@@ -102,7 +103,9 @@ export default function EditItemDialog({
 
   // Recurrence pause state
   const [showPauseForm, setShowPauseForm] = useState(false);
-  const [pauseStart, setPauseStart] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [pauseStart, setPauseStart] = useState(
+    format(new Date(), "yyyy-MM-dd"),
+  );
   const [pauseEnd, setPauseEnd] = useState("");
   const [pauseReason, setPauseReason] = useState("");
 
@@ -201,7 +204,8 @@ export default function EditItemDialog({
 
   const today = format(new Date(), "yyyy-MM-dd");
   const activePause = pauses.find(
-    (p) => p.pause_start <= today && (p.pause_end === null || p.pause_end >= today),
+    (p) =>
+      p.pause_start <= today && (p.pause_end === null || p.pause_end >= today),
   );
 
   // Initialize form when item changes
@@ -217,21 +221,16 @@ export default function EditItemDialog({
     setNotifyAllHousehold(item.notify_all_household ?? false);
     setOriginalResponsibleUserId(item.responsible_user_id);
 
-    // Initialize alert
-    if (item.alerts && item.alerts.length > 0) {
-      const firstAlert = item.alerts[0];
-      if (firstAlert.kind === "relative") {
-        setAlertValue({
-          offsetMinutes: firstAlert.offset_minutes || 0,
-          customTime: firstAlert.custom_time || null,
-        });
-      } else {
-        // absolute alert fires at event time — treat as "At time"
-        setAlertValue({ offsetMinutes: 0, customTime: null });
-      }
-    } else {
-      setAlertValue({ offsetMinutes: 0, customTime: null });
-    }
+    // Initialize alert from the SERIES-LEVEL relative alert only.
+    const seriesAlert = getSeriesAlert(item);
+    setAlertValue(
+      seriesAlert.raw
+        ? {
+            offsetMinutes: seriesAlert.offsetMinutes || 0,
+            customTime: seriesAlert.customTime,
+          }
+        : { offsetMinutes: 0, customTime: null },
+    );
 
     // Parse date/time based on item type
     if (item.type === "reminder" || item.type === "task") {
@@ -379,16 +378,17 @@ export default function EditItemDialog({
         }
       }
 
-      // Upsert alert
+      // Upsert SERIES-LEVEL relative alert. Absolute (occurrence-specific)
+      // alerts are owned by item_recurrence_exceptions and ignored here.
       {
         const enableAlert =
           alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime);
-        const originalAlert = item.alerts?.[0];
-        const alertChanged = !originalAlert
+        const seriesAlert = getSeriesAlert(item);
+        const alertChanged = !seriesAlert.raw
           ? enableAlert
-          : originalAlert.offset_minutes !== alertValue.offsetMinutes ||
-            ((originalAlert as unknown as Record<string, unknown>)
-              .custom_time ?? null) !== alertValue.customTime;
+          : seriesAlert.offsetMinutes !== alertValue.offsetMinutes ||
+            (seriesAlert.customTime ?? null) !==
+              (alertValue.customTime ?? null);
 
         if (alertChanged) {
           await supabase
@@ -721,10 +721,22 @@ export default function EditItemDialog({
                           deletePause.mutate(
                             { itemId: item!.id, pauseId: activePause.id },
                             {
-                              onSuccess: () => toast.success("Recurrence resumed", {
-                                duration: 4000,
-                                action: { label: "Undo", onClick: () => createPause.mutate({ itemId: item!.id, input: { pause_start: activePause.pause_start, pause_end: activePause.pause_end, reason: activePause.reason } }) },
-                              }),
+                              onSuccess: () =>
+                                toast.success("Recurrence resumed", {
+                                  duration: 4000,
+                                  action: {
+                                    label: "Undo",
+                                    onClick: () =>
+                                      createPause.mutate({
+                                        itemId: item!.id,
+                                        input: {
+                                          pause_start: activePause.pause_start,
+                                          pause_end: activePause.pause_end,
+                                          reason: activePause.reason,
+                                        },
+                                      }),
+                                  },
+                                }),
                             },
                           );
                         }}
@@ -804,13 +816,19 @@ export default function EditItemDialog({
                                     action: {
                                       label: "Undo",
                                       onClick: () => {
-                                        const latest = pauses[pauses.length - 1];
-                                        if (latest) deletePause.mutate({ itemId: item!.id, pauseId: latest.id });
+                                        const latest =
+                                          pauses[pauses.length - 1];
+                                        if (latest)
+                                          deletePause.mutate({
+                                            itemId: item!.id,
+                                            pauseId: latest.id,
+                                          });
                                       },
                                     },
                                   });
                                 },
-                                onError: () => toast.error("Failed to pause recurrence"),
+                                onError: () =>
+                                  toast.error("Failed to pause recurrence"),
                               },
                             );
                           }}

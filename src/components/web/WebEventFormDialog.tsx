@@ -35,6 +35,7 @@ import {
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { checkAndNotifyAssignment } from "@/lib/notifications/sendAssignmentNotification";
+import { getSeriesAlert } from "@/lib/schedule/alertResolution";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { buildFullRRuleString, localToISO } from "@/lib/utils/date";
@@ -278,17 +279,14 @@ export function WebEventFormDialog({
           setRecurrenceCount(undefined);
         }
 
-        // Initialize alert - check if item has alerts
-        if (editItem.alerts && editItem.alerts.length > 0) {
-          const firstAlert = editItem.alerts[0];
-          if (firstAlert.kind === "relative") {
-            setAlertValue({
-              offsetMinutes: firstAlert.offset_minutes || 15,
-              customTime: firstAlert.custom_time || null,
-            });
-          } else {
-            setAlertValue({ offsetMinutes: 15, customTime: null });
-          }
+        // Initialize alert from the SERIES-LEVEL relative alert only.
+        // Occurrence-specific absolute alerts are ignored here.
+        const seriesAlert = getSeriesAlert(editItem);
+        if (seriesAlert.raw) {
+          setAlertValue({
+            offsetMinutes: seriesAlert.offsetMinutes || 0,
+            customTime: seriesAlert.customTime,
+          });
         } else {
           setAlertValue({ offsetMinutes: 0, customTime: null });
         }
@@ -460,14 +458,11 @@ export function WebEventFormDialog({
               .eq("item_id", editItem.id);
           }
 
-          // Update alert trigger_at if it exists
-          if (dueAtIso) {
-            await supabase
-              .from("item_alerts")
-              .update({ trigger_at: dueAtIso })
-              .eq("item_id", editItem.id)
-              .eq("kind", "absolute");
-          }
+          // NOTE: Do NOT touch kind='absolute' alerts here — those are
+          // occurrence-specific exception alerts owned by
+          // item_recurrence_exceptions and must not be rewritten when the
+          // series due_at changes. The relative series alert (if any) is
+          // recomputed below in the alert-upsert block.
         } else if (editItem.type === "task") {
           const dueAtIso =
             startDate && startTime
@@ -492,16 +487,18 @@ export function WebEventFormDialog({
           }
         }
 
-        // Upsert alert for all-occurrences edit
+        // Upsert SERIES-LEVEL alert (kind='relative'). Absolute exception
+        // alerts owned by item_recurrence_exceptions are intentionally
+        // ignored here — they belong to specific occurrences only.
         {
           const enableAlert =
             alertValue.offsetMinutes > 0 || Boolean(alertValue.customTime);
-          const originalAlert = editItem.alerts?.[0];
-          const alertChanged = !originalAlert
+          const seriesAlert = getSeriesAlert(editItem);
+          const alertChanged = !seriesAlert.raw
             ? enableAlert
-            : originalAlert.offset_minutes !== alertValue.offsetMinutes ||
-              ((originalAlert as unknown as Record<string, unknown>)
-                .custom_time ?? null) !== alertValue.customTime;
+            : seriesAlert.offsetMinutes !== alertValue.offsetMinutes ||
+              (seriesAlert.customTime ?? null) !==
+                (alertValue.customTime ?? null);
 
           if (alertChanged) {
             // Remove existing relative alerts for this item

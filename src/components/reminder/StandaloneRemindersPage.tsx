@@ -6,6 +6,7 @@
 "use client";
 
 import { useTheme } from "@/contexts/ThemeContext";
+import { usePartnerId } from "@/features/hub/usePartnerId";
 import {
   getPostponedOccurrencesForDate,
   isOccurrenceCompleted,
@@ -16,7 +17,6 @@ import {
   type ActionType,
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
-import { usePartnerId } from "@/features/hub/usePartnerId";
 import { useItems, useUpdateRecurrenceRule } from "@/features/items/useItems";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
@@ -581,6 +581,11 @@ function SwipeableItem({
 import type { UserFilter } from "@/components/activity/FilterBar";
 import ItemActionsSheet from "@/components/items/ItemActionsSheet";
 import ItemDetailModal from "@/components/items/ItemDetailModal";
+import {
+  RecurringEditChoiceDialog,
+  type RecurringEditMode,
+} from "@/components/items/RecurringEditChoiceDialog";
+import EditOccurrenceDialog from "@/components/web/EditOccurrenceDialog";
 import { WebEventFormDialog } from "@/components/web/WebEventFormDialog";
 import type { PostponeType } from "@/features/items/useItemActions";
 
@@ -652,6 +657,16 @@ export default function StandaloneRemindersPage({
     null,
   );
   const [editingItem, setEditingItem] = useState<ItemWithDetails | null>(null);
+  /**
+   * Single state for the "edit occurrence" flow so that transitioning
+   * chooser → occurrence is ONE atomic React update (no unmount/mount
+   * race that blocks Radix pointer-events).
+   */
+  type EditFlow =
+    | { step: "chooser"; item: ItemWithDetails; date: Date }
+    | { step: "occurrence"; item: ItemWithDetails; date: Date }
+    | null;
+  const [editFlow, setEditFlow] = useState<EditFlow>(null);
   const [skipPrompt, setSkipPrompt] = useState<{
     item: ItemWithDetails;
     occurrenceDate: string;
@@ -781,9 +796,7 @@ export default function StandaloneRemindersPage({
         today,
         tomorrow,
         occurrenceActions,
-      ).filter(
-        (occ) => !isBefore(occ.occurrenceDate, now) || occ.isCompleted,
-      );
+      ).filter((occ) => !isBefore(occ.occurrenceDate, now) || occ.isCompleted);
 
       const upcomingOccs = expandRecurringItems(
         activeItems,
@@ -1503,7 +1516,66 @@ export default function StandaloneRemindersPage({
             handleReverseRecurrence(actionsState.item);
             setActionsState(null);
           }}
+          onEdit={() => {
+            if (actionsState.item.recurrence_rule) {
+              setEditFlow({
+                step: "chooser",
+                item: actionsState.item,
+                date: parseISO(actionsState.occurrenceDate),
+              });
+            } else {
+              setEditingItem(actionsState.item);
+            }
+            setActionsState(null);
+          }}
+          onEditOccurrence={() => {
+            setEditFlow({
+              step: "occurrence",
+              item: actionsState.item,
+              date: parseISO(actionsState.occurrenceDate),
+            });
+            setActionsState(null);
+          }}
         />
+      )}
+
+      {/* Recurring edit chooser + per-occurrence dialog
+           Both are mounted whenever editFlow is non-null so that
+           transitioning between steps is a single state update.
+           This prevents Radix from having a close+open race that leaves
+           the second dialog non-interactive (the "click twice" bug). */}
+      {editFlow && (
+        <>
+          <RecurringEditChoiceDialog
+            open={editFlow.step === "chooser"}
+            onOpenChange={(o) => !o && setEditFlow(null)}
+            item={editFlow.item}
+            hideFuture
+            onChoose={(mode: RecurringEditMode) => {
+              const { item, date } = editFlow;
+              if (mode === "this") {
+                // Atomic: chooser → occurrence in ONE state update.
+                setEditFlow({ step: "occurrence", item, date });
+              } else {
+                if (mode === "future") {
+                  toast.info(
+                    "‘This and all future’ is coming soon — editing the whole series for now.",
+                  );
+                }
+                setEditFlow(null);
+                setEditingItem(item);
+              }
+            }}
+          />
+
+          <EditOccurrenceDialog
+            open={editFlow.step === "occurrence"}
+            onOpenChange={(o) => !o && setEditFlow(null)}
+            item={editFlow.item}
+            occurrenceDate={editFlow.date}
+            onSuccess={() => setEditFlow(null)}
+          />
+        </>
       )}
     </div>
   );

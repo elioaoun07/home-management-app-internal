@@ -145,6 +145,19 @@ const CalendarPlusIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const PencilIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    <path d="m15 5 4 4" />
+  </svg>
+);
+
 type PostponeOption = {
   id: "next_occurrence" | "tomorrow" | "custom" | "ai_slot";
   label: string;
@@ -166,6 +179,13 @@ type Props = {
   onCancel: (reason?: string) => void;
   onDelete: () => void;
   onReverseRecurrence?: () => void;
+  /** Edit the whole item / series. Shown for every item. */
+  onEdit?: () => void;
+  /**
+   * Edit only this occurrence (creates a recurrence exception).
+   * Only shown when the item is recurring.
+   */
+  onEditOccurrence?: () => void;
 };
 
 export default function ItemActionsSheet({
@@ -178,6 +198,8 @@ export default function ItemActionsSheet({
   onCancel,
   onDelete,
   onReverseRecurrence,
+  onEdit,
+  onEditOccurrence,
 }: Props) {
   const { theme } = useTheme();
   const themeClasses = useThemeClasses();
@@ -198,7 +220,8 @@ export default function ItemActionsSheet({
   const sheetRef = useRef<HTMLDivElement>(null);
 
   const isRecurring = !!item.recurrence_rule?.rrule;
-  const isBiweekly = item.recurrence_rule?.rrule?.includes("INTERVAL=2") ?? false;
+  const isBiweekly =
+    item.recurrence_rule?.rrule?.includes("INTERVAL=2") ?? false;
 
   // Initialize custom date/time from occurrence date
   useEffect(() => {
@@ -698,6 +721,80 @@ export default function ItemActionsSheet({
               </div>
             </button>
 
+            {/* Edit (this occurrence — recurring only) */}
+            {isRecurring && onEditOccurrence && (
+              <button
+                type="button"
+                onClick={() => {
+                  onEditOccurrence();
+                  handleClose();
+                }}
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
+                  "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
+                )}
+              >
+                <div
+                  className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center",
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                  )}
+                >
+                  <PencilIcon
+                    className={cn(
+                      "w-5 h-5",
+                      isPink ? "text-pink-400" : "text-cyan-400",
+                    )}
+                  />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-white font-medium">Edit this occurrence</p>
+                  <p className="text-sm text-white/50">
+                    Change only this date (alert, time, title…)
+                  </p>
+                </div>
+              </button>
+            )}
+
+            {/* Edit (whole item / series) */}
+            {onEdit && (
+              <button
+                type="button"
+                onClick={() => {
+                  onEdit();
+                  handleClose();
+                }}
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
+                  "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
+                )}
+              >
+                <div
+                  className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center",
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                  )}
+                >
+                  <PencilIcon
+                    className={cn(
+                      "w-5 h-5",
+                      isPink ? "text-pink-400" : "text-cyan-400",
+                    )}
+                  />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-white font-medium">
+                    {isRecurring ? "Edit item" : "Edit"}
+                  </p>
+                  <p className="text-sm text-white/50">
+                    {isRecurring
+                      ? "Change every occurrence"
+                      : "Change details, alerts, time…"}
+                  </p>
+                </div>
+              </button>
+            )}
+
             {/* Flip Bi-Weekly Phase Button */}
             {isBiweekly && onReverseRecurrence && (
               <button
@@ -718,7 +815,10 @@ export default function ItemActionsSheet({
                   )}
                 >
                   <svg
-                    className={cn("w-5 h-5", isPink ? "text-pink-400" : "text-cyan-400")}
+                    className={cn(
+                      "w-5 h-5",
+                      isPink ? "text-pink-400" : "text-cyan-400",
+                    )}
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -732,7 +832,9 @@ export default function ItemActionsSheet({
                 </div>
                 <div className="flex-1 text-left">
                   <p className="text-white font-medium">Flip bi-weekly phase</p>
-                  <p className="text-sm text-white/50">Switch which weeks this appears</p>
+                  <p className="text-sm text-white/50">
+                    Switch which weeks this appears
+                  </p>
                 </div>
               </button>
             )}

@@ -2187,25 +2187,29 @@ export function useCreateRecurrenceException() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      console.log("Creating recurrence exception with input:", input);
-
-      // Verify the rule exists and belongs to the user
+      // Verify the rule is visible to the user (RLS enforces access).
+      // We do NOT hard-code `items.user_id = user.id` because partner items
+      // (where the user is responsible_user_id or public household-shared)
+      // would otherwise be blocked from editing their own occurrences.
       const { data: rule, error: ruleError } = await supabase
         .from("item_recurrence_rules")
-        .select("id, item_id, items!inner(user_id)")
+        .select("id, item_id")
         .eq("id", input.rule_id)
-        .eq("items.user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (ruleError) {
-        console.error("Rule lookup error:", ruleError);
+        const detail = {
+          message: ruleError.message,
+          code: ruleError.code,
+          details: ruleError.details,
+          hint: ruleError.hint,
+        };
+        console.error("Rule lookup error:", detail);
         throw new Error(`Recurrence rule lookup failed: ${ruleError.message}`);
       }
       if (!rule) {
         throw new Error("Recurrence rule not found or access denied");
       }
-
-      console.log("Rule found:", rule);
 
       // Handle alert lifecycle when exception_alert is explicitly passed
       let newAlertId: string | null = null;
@@ -2272,29 +2276,69 @@ export function useCreateRecurrenceException() {
         }
       }
 
-      // Create or update the exception (upsert on rule_id + exdate)
-      const { data, error } = await supabase
+      // Create or update the exception. We do a manual select+update/insert
+      // here instead of `.upsert(..., { onConflict })` because
+      // `item_recurrence_exceptions` does not (yet) have a UNIQUE constraint
+      // on (rule_id, exdate) — so PostgREST upsert fails with a cryptic
+      // "there is no unique or exclusion constraint matching the
+      // ON CONFLICT specification" error. The migration to add the unique
+      // constraint is in `migrations/2026-05-12_recurrence_exceptions_unique.sql`,
+      // but this code path stays correct even before that migration runs.
+      const { data: existingByKey } = await supabase
         .from("item_recurrence_exceptions")
-        .upsert(
-          {
+        .select("id")
+        .eq("rule_id", input.rule_id)
+        .eq("exdate", input.exdate)
+        .maybeSingle();
+
+      const payload =
+        Object.keys(overridePayload).length > 0 ? overridePayload : null;
+
+      let data: RecurrenceExceptionWithDetails | null = null;
+      let error: {
+        message?: string;
+        code?: string;
+        details?: string;
+        hint?: string;
+      } | null = null;
+
+      if (existingByKey?.id) {
+        const res = await supabase
+          .from("item_recurrence_exceptions")
+          .update({ override_payload_json: payload })
+          .eq("id", existingByKey.id)
+          .select()
+          .single();
+        data = res.data as RecurrenceExceptionWithDetails | null;
+        error = res.error;
+      } else {
+        const res = await supabase
+          .from("item_recurrence_exceptions")
+          .insert({
             rule_id: input.rule_id,
             exdate: input.exdate,
-            override_payload_json:
-              Object.keys(overridePayload).length > 0 ? overridePayload : null,
-          },
-          {
-            onConflict: "rule_id,exdate",
-          },
-        )
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Upsert error:", error);
-        throw new Error(`Failed to save exception: ${error.message}`);
+            override_payload_json: payload,
+          })
+          .select()
+          .single();
+        data = res.data as RecurrenceExceptionWithDetails | null;
+        error = res.error;
       }
 
-      console.log("Exception created:", data);
+      if (error) {
+        // PostgrestError fields are non-enumerable — destructure for visibility.
+        const detail = {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        };
+        console.error("Recurrence exception write failed:", detail);
+        throw new Error(
+          `Failed to save exception: ${error.message ?? "unknown error"}`,
+        );
+      }
+
       return data as RecurrenceExceptionWithDetails;
     },
     onSuccess: () => {

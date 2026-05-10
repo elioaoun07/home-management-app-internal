@@ -719,6 +719,7 @@ CREATE TABLE public.item_recurrence_exceptions (
   override_payload_json jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT item_recurrence_exceptions_pkey PRIMARY KEY (id),
+  CONSTRAINT item_recurrence_exceptions_rule_id_exdate_key UNIQUE (rule_id, exdate),
   CONSTRAINT item_recurrence_exceptions_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.item_recurrence_rules(id) ON DELETE CASCADE
 );
 CREATE TABLE public.item_recurrence_rules (

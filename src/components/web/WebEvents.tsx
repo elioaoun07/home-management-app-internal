@@ -1,6 +1,7 @@
 "use client";
 
 import { PromoteToCatalogueDialog } from "@/components/items/PromoteToCatalogueDialog";
+import { RecurringEditChoiceDialog } from "@/components/items/RecurringEditChoiceDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,6 +30,7 @@ import {
   useItems,
 } from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { getOccurrenceAlert } from "@/lib/schedule/alertResolution";
 import { cn } from "@/lib/utils";
 import type { ItemType, ItemWithDetails } from "@/types/items";
 import { endOfWeek, format, parseISO, startOfWeek } from "date-fns";
@@ -134,9 +136,17 @@ export default function WebEvents() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showBirthdays, setShowBirthdays] = useState(true);
   const [detailItem, setDetailItem] = useState<ItemWithDetails | null>(null);
-  const [showRecurringDialog, setShowRecurringDialog] = useState(false);
+  /**
+   * Merged step state for the chooser→occurrence edit flow.
+   * Replaces separate showRecurringDialog + showEditOccurrenceDialog booleans
+   * so we can transition between steps in a single React state update,
+   * avoiding the Radix close+open pointer-events race.
+   */
   const [pendingEditItem, setPendingEditItem] =
     useState<ItemWithDetails | null>(null);
+  const [editStep, setEditStep] = useState<"chooser" | "occurrence" | null>(
+    null,
+  );
   const [modalPosition, setModalPosition] = useState<{
     x: number;
     y: number;
@@ -155,8 +165,6 @@ export default function WebEvents() {
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [clickedOccurrenceDate, setClickedOccurrenceDate] =
     useState<Date | null>(null);
-  const [showEditOccurrenceDialog, setShowEditOccurrenceDialog] =
-    useState(false);
   const [showPromoteDialog, setShowPromoteDialog] = useState(false);
 
   // Add-from-catalogue dialog (week view only)
@@ -449,7 +457,7 @@ export default function WebEvents() {
     // Check if this is a recurring event
     if (item.recurrence_rule) {
       setPendingEditItem(item);
-      setShowRecurringDialog(true);
+      setEditStep("chooser");
       setDetailItem(null);
     } else {
       setEditingItem(item);
@@ -467,10 +475,12 @@ export default function WebEvents() {
       setEditingItem(pendingEditItem);
       setFormDefaultType(pendingEditItem.type);
       setIsFormOpen(true);
+      setEditStep(null);
+      setPendingEditItem(null);
     } else {
-      // Open the single occurrence edit dialog
+      // “this” — atomic step transition, no close+open race.
       if (clickedOccurrenceDate) {
-        setShowEditOccurrenceDialog(true);
+        setEditStep("occurrence");
       } else {
         // Fallback if no occurrence date - edit the whole series
         toast.info(
@@ -479,10 +489,10 @@ export default function WebEvents() {
         setEditingItem(pendingEditItem);
         setFormDefaultType(pendingEditItem.type);
         setIsFormOpen(true);
+        setEditStep(null);
+        setPendingEditItem(null);
       }
     }
-
-    setShowRecurringDialog(false);
   };
 
   // Handle delete item
@@ -1367,45 +1377,56 @@ export default function WebEvents() {
                         </div>
                       )}
 
-                    {/* Alert */}
-                    {detailItem.alerts && detailItem.alerts.length > 0 && (
-                      <div className="flex items-start gap-3 pl-3">
-                        <Bell className="w-5 h-5 text-white/40 mt-0.5 flex-shrink-0" />
-                        <div className="text-white/60 text-sm">
-                          {(() => {
-                            const alert = detailItem.alerts[0];
-                            const offsetMinutes = alert.offset_minutes || 0;
-                            const customTime = alert.custom_time;
-
-                            // If custom_time is set, format as "X day(s) before at HH:MM AM/PM"
-                            if (customTime) {
-                              const days = Math.floor(offsetMinutes / 1440);
-                              const [hours, minutes] = customTime
-                                .split(":")
-                                .map(Number);
-                              const h = hours % 12 || 12;
-                              const ampm = hours < 12 ? "AM" : "PM";
-                              const timeFormatted = `${h}:${minutes.toString().padStart(2, "0")} ${ampm}`;
-                              if (days === 0) {
-                                return `Same day at ${timeFormatted}`;
+                    {/* Alert (resolves per-occurrence override when present) */}
+                    {(() => {
+                      const resolved = getOccurrenceAlert(
+                        detailItem,
+                        clickedOccurrenceDate ?? getOccurrenceDate(detailItem),
+                      );
+                      if (
+                        !resolved.raw &&
+                        resolved.offsetMinutes === 0 &&
+                        !resolved.customTime
+                      )
+                        return null;
+                      const offsetMinutes = resolved.offsetMinutes;
+                      const customTime = resolved.customTime;
+                      return (
+                        <div className="flex items-start gap-3 pl-3">
+                          <Bell className="w-5 h-5 text-white/40 mt-0.5 flex-shrink-0" />
+                          <div className="text-white/60 text-sm">
+                            {(() => {
+                              // If custom_time is set, format as "X day(s) before at HH:MM AM/PM"
+                              if (customTime) {
+                                const days = Math.floor(offsetMinutes / 1440);
+                                const [hours, minutes] = customTime
+                                  .split(":")
+                                  .map(Number);
+                                const h = hours % 12 || 12;
+                                const ampm = hours < 12 ? "AM" : "PM";
+                                const timeFormatted = `${h}:${minutes.toString().padStart(2, "0")} ${ampm}`;
+                                if (days === 0) {
+                                  return `Same day at ${timeFormatted}`;
+                                }
+                                return `${days} day${days > 1 ? "s" : ""} before at ${timeFormatted}`;
                               }
-                              return `${days} day${days > 1 ? "s" : ""} before at ${timeFormatted}`;
-                            }
 
-                            // Standard offset display
-                            if (offsetMinutes === 0) return "At time of event";
-                            if (offsetMinutes < 60)
-                              return `${offsetMinutes} minutes before`;
-                            if (offsetMinutes < 1440) {
-                              const hours = offsetMinutes / 60;
-                              return `${hours} hour${hours > 1 ? "s" : ""} before`;
-                            }
-                            const days = offsetMinutes / 1440;
-                            return `${days} day${days > 1 ? "s" : ""} before`;
-                          })()}
+                              // Standard offset display
+                              if (offsetMinutes === 0)
+                                return "At time of event";
+                              if (offsetMinutes < 60)
+                                return `${offsetMinutes} minutes before`;
+                              if (offsetMinutes < 1440) {
+                                const hours = offsetMinutes / 60;
+                                return `${hours} hour${hours > 1 ? "s" : ""} before`;
+                              }
+                              const days = offsetMinutes / 1440;
+                              return `${days} day${days > 1 ? "s" : ""} before`;
+                            })()}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Type & Priority */}
                     <div className="flex items-center gap-2 pl-3">
@@ -1510,113 +1531,58 @@ export default function WebEvents() {
               />
             )}
 
-            {/* Recurring Event Edit Dialog */}
-            {showRecurringDialog && pendingEditItem && (
-              <Dialog
-                open={showRecurringDialog}
-                onOpenChange={setShowRecurringDialog}
-              >
-                <DialogContent
-                  className={cn(
-                    "sm:max-w-md neo-card border",
-                    isPink ? "border-pink-500/30" : "border-cyan-500/30",
-                  )}
-                >
-                  <DialogHeader>
-                    <DialogTitle
-                      className={cn(
-                        "flex items-center gap-2 text-xl",
-                        isPink ? "text-pink-300" : "text-cyan-300",
-                      )}
-                    >
-                      <Repeat className="w-5 h-5" />
-                      Edit Recurring{" "}
-                      {pendingEditItem.type === "event" ? "Event" : "Reminder"}
-                    </DialogTitle>
-                  </DialogHeader>
-
-                  <div className="space-y-4 py-4">
-                    <p className="text-white/70">
-                      This is a recurring {pendingEditItem.type}. What would you
-                      like to edit?
-                    </p>
-
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => handleRecurringEditChoice("this")}
-                        className={cn(
-                          "w-full p-4 rounded-xl border text-left transition-all",
-                          "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
-                        )}
-                      >
-                        <div className="font-semibold text-white mb-1">
-                          This occurrence only
-                        </div>
-                        <div className="text-sm text-white/60">
-                          Changes will only apply to this specific date
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleRecurringEditChoice("all")}
-                        className={cn(
-                          "w-full p-4 rounded-xl border text-left transition-all",
-                          "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
-                        )}
-                      >
-                        <div className="font-semibold text-white mb-1">
-                          All occurrences
-                        </div>
-                        <div className="text-sm text-white/60">
-                          Changes will apply to all instances of this recurring{" "}
-                          {pendingEditItem.type}
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-
-                  <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setShowRecurringDialog(false);
-                        setPendingEditItem(null);
-                      }}
-                      className="border-white/20 text-white/70 hover:bg-white/10"
-                    >
-                      Cancel
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
-
-            {/* Edit Single Occurrence Dialog */}
-            {showEditOccurrenceDialog &&
-              pendingEditItem &&
-              clickedOccurrenceDate && (
-                <EditOccurrenceDialog
-                  open={showEditOccurrenceDialog}
-                  onOpenChange={(open) => {
-                    setShowEditOccurrenceDialog(open);
-                    if (!open) {
-                      setPendingEditItem(null);
-                      setClickedOccurrenceDate(null);
+            {/* Recurring edit — both dialogs mounted together so that
+                 chooser→occurrence is a single atomic state update (editStep).
+                 This eliminates the Radix close+open pointer-events race. */}
+            {pendingEditItem && editStep && (
+              <>
+                <RecurringEditChoiceDialog
+                  open={editStep === "chooser"}
+                  onOpenChange={(o) => {
+                    if (!o) {
+                      setEditStep(null);
+                      // pendingEditItem is intentionally kept alive here so EditOccurrenceDialog
+                      // can still render when transitioning chooser→occurrence in the same
+                      // React 18 batch. It is cleared by EditOccurrenceDialog.onOpenChange
+                      // and by the "whole series" path in handleRecurringEditChoice.
                     }
                   }}
                   item={pendingEditItem}
-                  occurrenceDate={clickedOccurrenceDate}
-                  onSuccess={() => {
-                    setShowEditOccurrenceDialog(false);
-                    setPendingEditItem(null);
-                    setClickedOccurrenceDate(null);
-                    toast.success("Occurrence updated successfully!");
+                  hideFuture
+                  onChoose={(mode) => {
+                    if (mode === "future") {
+                      toast.info(
+                        "‘This and all future’ is coming soon — editing the whole series for now.",
+                      );
+                      handleRecurringEditChoice("all");
+                    } else {
+                      handleRecurringEditChoice(mode);
+                    }
                   }}
                 />
-              )}
+
+                {clickedOccurrenceDate && (
+                  <EditOccurrenceDialog
+                    open={editStep === "occurrence"}
+                    onOpenChange={(open) => {
+                      if (!open) {
+                        setEditStep(null);
+                        setPendingEditItem(null);
+                        setClickedOccurrenceDate(null);
+                      }
+                    }}
+                    item={pendingEditItem}
+                    occurrenceDate={clickedOccurrenceDate}
+                    onSuccess={() => {
+                      setEditStep(null);
+                      setPendingEditItem(null);
+                      setClickedOccurrenceDate(null);
+                      toast.success("Occurrence updated successfully!");
+                    }}
+                  />
+                )}
+              </>
+            )}
 
             {/* Promote to Catalogue Dialog */}
             {showPromoteDialog && detailItem && (

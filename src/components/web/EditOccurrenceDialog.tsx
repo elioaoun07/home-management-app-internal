@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  SmartAlertPicker,
+  type SmartAlertValue,
+} from "@/components/items/SmartAlertPicker";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -22,12 +26,9 @@ import {
   useUpdateRecurrenceException,
 } from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
-import { localToISO } from "@/lib/utils/date";
+import { getSeriesAlert } from "@/lib/schedule/alertResolution";
 import { cn } from "@/lib/utils";
-import {
-  SmartAlertPicker,
-  type SmartAlertValue,
-} from "@/components/items/SmartAlertPicker";
+import { localToISO } from "@/lib/utils/date";
 import type { ItemWithDetails } from "@/types/items";
 import { format, isSameDay, parseISO } from "date-fns";
 import {
@@ -119,15 +120,12 @@ export default function EditOccurrenceDialog({
         customTime: exceptionAlert.customTime ?? null,
       };
     }
-    // Fall back to base item alert (series-level)
-    const baseAlert = item.alerts?.[0];
-    if (baseAlert?.kind === "relative" && (baseAlert.offset_minutes ?? 0) > 0) {
+    // Fall back to base item alert (series-level relative only)
+    const seriesAlert = getSeriesAlert(item);
+    if (seriesAlert.raw && seriesAlert.offsetMinutes > 0) {
       return {
-        offsetMinutes: baseAlert.offset_minutes ?? 0,
-        customTime:
-          (baseAlert as unknown as Record<string, unknown>).custom_time as
-            | string
-            | null ?? null,
+        offsetMinutes: seriesAlert.offsetMinutes,
+        customTime: seriesAlert.customTime,
       };
     }
     return { offsetMinutes: 0, customTime: null };
