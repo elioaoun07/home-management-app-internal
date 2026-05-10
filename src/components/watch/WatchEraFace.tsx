@@ -1,9 +1,11 @@
 "use client";
 
 // ERA DOT watch face — Galaxy Watch 7 (432×432 round display)
+// The ERA Mark IS the watch face. Hub rings are halos around it.
 // Modules (swipe left/right): CHAT → BUDGET → SCHEDULE → RECIPE
-// Tap anywhere: start / stop voice
+// Tap anywhere: start / stop voice.
 
+import { ERAMark, type ERAModuleKey } from "@/components/shared/ERAMark";
 import { useMyAccounts } from "@/features/accounts/hooks";
 import { useCategories } from "@/features/categories/useCategoriesQuery";
 import { parseSpeechExpense } from "@/lib/nlp/speechExpense";
@@ -15,33 +17,32 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 // ─── Module definitions ───────────────────────────────────────────────────────
-const MODULES = [
-  { id: "chat"    , label: "CHAT"    , hue: 190, sat: 85, lum: 62 },
-  { id: "budget"  , label: "BUDGET"  , hue: 175, sat: 72, lum: 55 },
-  { id: "schedule", label: "SCHEDULE", hue: 256, sat: 78, lum: 68 },
-  { id: "recipe"  , label: "RECIPE"  , hue:  28, sat: 85, lum: 58 },
+// mark = ERAModuleKey so ERAMark shows the correct cue animation per module
+const WATCH_MODULES = [
+  { id: "chat"    , mark: "chat"      as ERAModuleKey, label: "CHAT"    , hue: 190, sat: 85, lum: 62 },
+  { id: "budget"  , mark: "financial" as ERAModuleKey, label: "BUDGET"  , hue: 175, sat: 72, lum: 55 },
+  { id: "schedule", mark: "schedule"  as ERAModuleKey, label: "SCHEDULE", hue: 256, sat: 78, lum: 68 },
+  { id: "recipe"  , mark: "recipe"    as ERAModuleKey, label: "RECIPE"  , hue:  28, sat: 85, lum: 58 },
 ] as const;
 
-type Mod = (typeof MODULES)[number];
+type WMod = (typeof WATCH_MODULES)[number];
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function WatchEraFace() {
   const queryClient = useQueryClient();
-  const [mounted, setMounted]     = useState(false);
-  const [modIdx, setModIdx]       = useState(0);
-  const [slideDir, setSlideDir]   = useState<"l" | "r">("l");
-  const [recording, setRecording] = useState(false);
+  const [mounted, setMounted]       = useState(false);
+  const [modIdx, setModIdx]         = useState(0);
+  const [slideDir, setSlideDir]     = useState<"l" | "r">("l");
+  const [recording, setRecording]   = useState(false);
   const [transcript, setTranscript] = useState("");
-  const [saving, setSaving]       = useState(false);
+  const [saving, setSaving]         = useState(false);
 
-  const touchRef = useRef({ x: 0, t: 0 });
-  const recRef   = useRef<SpeechRecognition | null>(null);
-  const txRef    = useRef("");
-  const swipedRef = useRef(false);   // skip slide anim on first mount
+  const touchRef  = useRef({ x: 0, t: 0 });
+  const recRef    = useRef<SpeechRecognition | null>(null);
+  const txRef     = useRef("");
+  const swipedRef = useRef(false);
 
-  const mod    = MODULES[modIdx];
-  const accent = `hsl(${mod.hue},${mod.sat}%,${mod.lum}%)`;
-  const dimmed = (a: number) => `hsla(${mod.hue},${mod.sat}%,${mod.lum}%,${a})`;
+  const mod = WATCH_MODULES[modIdx];
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const { data: accounts = [] } = useMyAccounts();
@@ -79,7 +80,7 @@ export default function WatchEraFace() {
 
   useEffect(() => { setMounted(true); }, []);
 
-  // ── Speech recognition ────────────────────────────────────────────────────
+  // ── Voice ─────────────────────────────────────────────────────────────────
   const SR = useMemo(() => {
     if (typeof window === "undefined") return null;
     return (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition ?? null;
@@ -93,7 +94,6 @@ export default function WatchEraFace() {
     r.lang = "en-US";
     r.continuous     = true;
     r.interimResults = true;
-
     r.onresult = (e: SpeechRecognitionEvent) => {
       let t = "";
       for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0]?.transcript ?? "";
@@ -106,7 +106,6 @@ export default function WatchEraFace() {
       const t = txRef.current.trim();
       if (t) commitVoice(t);
     };
-
     r.start();
     setRecording(true);
     setTranscript("");
@@ -149,11 +148,10 @@ export default function WatchEraFace() {
       }
       setSaving(false);
     }
-    // All modules: clear transcript after a brief preview
     setTimeout(() => setTranscript(""), 3500);
   }
 
-  // ── Touch handling: tap vs swipe ──────────────────────────────────────────
+  // ── Touch: tap vs swipe ───────────────────────────────────────────────────
   function onTouchStart(e: React.TouchEvent) {
     touchRef.current = { x: e.touches[0].clientX, t: Date.now() };
   }
@@ -161,60 +159,55 @@ export default function WatchEraFace() {
   function onTouchEnd(e: React.TouchEvent) {
     const dx = touchRef.current.x - e.changedTouches[0].clientX;
     const dt = Date.now() - touchRef.current.t;
-
     if (Math.abs(dx) > 40 && dt < 500) {
-      // Swipe — switch module
       if (recording) stopVoice();
       setTranscript("");
       swipedRef.current = true;
-      if (dx > 0) {
-        setSlideDir("l");
-        setModIdx((i) => (i + 1) % MODULES.length);
-      } else {
-        setSlideDir("r");
-        setModIdx((i) => (i - 1 + MODULES.length) % MODULES.length);
-      }
+      if (dx > 0) { setSlideDir("l"); setModIdx((i) => (i + 1) % WATCH_MODULES.length); }
+      else        { setSlideDir("r"); setModIdx((i) => (i - 1 + WATCH_MODULES.length) % WATCH_MODULES.length); }
     } else if (Math.abs(dx) < 15 && dt < 350) {
-      // Tap — toggle voice
       if (recording) stopVoice();
       else startVoice();
     }
   }
 
-  // Slide animation direction for the center content
   const slideAnim = !swipedRef.current
     ? undefined
     : slideDir === "l"
-      ? "era-watch-slide-l 0.32s cubic-bezier(.25,.46,.45,.94)"
-      : "era-watch-slide-r 0.32s cubic-bezier(.25,.46,.45,.94)";
+      ? "era-w-slide-l 0.32s cubic-bezier(.25,.46,.45,.94)"
+      : "era-w-slide-r 0.32s cubic-bezier(.25,.46,.45,.94)";
+
+  // Build CSS vars as inline style — drives hub rings + shell glow
+  const eraVars = {
+    "--era-hue":           mod.hue,
+    "--era-sat":           `${mod.sat}%`,
+    "--era-lum":           `${mod.lum}%`,
+    "--era-accent":        `hsl(${mod.hue},${mod.sat}%,${mod.lum}%)`,
+    "--era-accent-faint":  `hsla(${mod.hue},60%,65%,.38)`,
+    "--era-border-subtle": `hsla(${mod.hue},45%,48%,.28)`,
+  } as React.CSSProperties;
 
   return (
     <>
       <style>{`
-        @keyframes era-watch-cw   { to { transform: rotate(360deg);  } }
-        @keyframes era-watch-ccw  { to { transform: rotate(-360deg); } }
-        @keyframes era-watch-breathe {
-          0%,100% { opacity: .55; transform: scale(1); }
-          50%     { opacity:  1;  transform: scale(1.05); }
+        @keyframes era-w-slide-l {
+          from { transform: translateX(36px); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
         }
-        @keyframes era-watch-recpulse {
-          0%,100% { box-shadow: 0 0 0 0   rgba(239,68,68,.6); }
-          50%     { box-shadow: 0 0 0 20px rgba(239,68,68,0); }
-        }
-        @keyframes era-watch-slide-l {
-          from { transform: translateX(52px); opacity: 0; }
-          to   { transform: translateX(0);   opacity: 1; }
-        }
-        @keyframes era-watch-slide-r {
-          from { transform: translateX(-52px); opacity: 0; }
+        @keyframes era-w-slide-r {
+          from { transform: translateX(-36px); opacity: 0; }
           to   { transform: translateX(0);     opacity: 1; }
         }
-        @keyframes era-watch-wave {
+        @keyframes era-w-recring {
+          0%,100% { box-shadow: 0 0 0 0   hsla(var(--era-hue),var(--era-sat),var(--era-lum),.55); }
+          50%     { box-shadow: 0 0 0 24px hsla(var(--era-hue),var(--era-sat),var(--era-lum),0); }
+        }
+        @keyframes era-w-spin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes era-w-wave {
           0%,100% { transform: scaleY(.3); }
           50%     { transform: scaleY(1);  }
-        }
-        @keyframes era-watch-spin {
-          to { transform: rotate(360deg); }
         }
       `}</style>
 
@@ -223,19 +216,21 @@ export default function WatchEraFace() {
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
         style={{
+          ...eraVars,
           position: "fixed",
           inset: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: `radial-gradient(circle at 50% 50%, hsla(${mod.hue},45%,6%,1) 0%, #04070f 100%)`,
-          transition: "background 0.65s ease",
+          background: "#0d1220",
           touchAction: "none",
           userSelect: "none",
           WebkitUserSelect: "none",
-          cursor: "default",
         }}
       >
+        {/* Shell ambient glow — same class used by EraShell */}
+        <div className="era-shell-glow pointer-events-none absolute inset-0" />
+
         {/* ── Circular watch face ── */}
         <div
           style={{
@@ -246,265 +241,220 @@ export default function WatchEraFace() {
             borderRadius: "50%",
             position:  "relative",
             overflow:  "hidden",
-            background: `radial-gradient(ellipse at 50% 38%, hsla(${mod.hue},35%,10%,1) 0%, #080c1c 100%)`,
-            boxShadow: `0 0 80px 14px ${dimmed(0.12)}, inset 0 0 100px rgba(0,0,0,0.6)`,
-            border: `1px solid ${dimmed(0.2)}`,
-            transition: "background 0.65s ease, box-shadow 0.65s ease, border-color 0.65s ease",
           }}
         >
+          {/* ── ERA hub rings — exactly as in EraShell desktop ──
+              Outer at 0, mid at ~5%, inner at ~11%
+              These use --era-hue/sat/lum and breathe/orbit-breathe animations  */}
+          <div className="era-hub-ring-outer absolute inset-0 rounded-full" />
+          <div className="era-hub-ring-mid   absolute rounded-full" style={{ inset: "5.2%" }} />
+          <div className="era-hub-ring-inner absolute rounded-full" style={{ inset: "10.8%" }} />
 
-          {/* ── ERA Ring: outer (full face, spinning CW) ── */}
-          <div style={{
-            position: "absolute", inset: 2,
-            borderRadius: "50%",
-            border: `1.5px solid ${dimmed(0.55)}`,
-            boxShadow: `0 0 24px 4px ${dimmed(0.2)}`,
-            animation: recording
-              ? "era-watch-recpulse 1.1s ease-in-out infinite"
-              : "era-watch-cw 9s linear infinite",
-            transition: "border-color .65s ease, box-shadow .65s ease",
-          }} />
+          {/* Recording pulse ring — replaces outer ring breathing with a hue-pulse */}
+          {recording && (
+            <div
+              className="absolute inset-0 rounded-full pointer-events-none"
+              style={{ animation: "era-w-recring 1.2s ease-in-out infinite" }}
+            />
+          )}
 
-          {/* ── ERA Ring: mid (82%, spinning CCW) ── */}
-          <div style={{
-            position: "absolute", inset: "9%",
-            borderRadius: "50%",
-            border: `1px solid ${dimmed(0.28)}`,
-            animation: "era-watch-ccw 14s linear infinite",
-            transition: "border-color .65s ease",
-          }} />
-
-          {/* ── ERA Ring: inner (64%, spinning CW) ── */}
-          <div style={{
-            position: "absolute", inset: "18%",
-            borderRadius: "50%",
-            border: `1px solid ${dimmed(0.14)}`,
-            animation: "era-watch-cw 21s linear infinite",
-            transition: "border-color .65s ease",
-          }} />
-
-          {/* ── ERA ambient glow core ── */}
-          <div style={{
-            position: "absolute",
-            top: "50%", left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "46%", height: "46%",
-            borderRadius: "50%",
-            background: `radial-gradient(circle, ${dimmed(0.24)} 0%, transparent 70%)`,
-            animation: "era-watch-breathe 3.5s ease-in-out infinite",
-            pointerEvents: "none",
-            transition: "background .65s ease",
-          }} />
-
-          {/* ── Module label — top ── */}
-          <div style={{
-            position: "absolute",
-            top: "14%", left: 0, right: 0,
-            textAlign: "center",
-            fontSize: 8.5,
-            fontWeight: 700,
-            letterSpacing: "2.5px",
-            textTransform: "uppercase",
-            color: dimmed(0.82),
-            transition: "color .65s ease",
-            pointerEvents: "none",
-          }}>
-            ERA · {mod.label}
+          {/* ── ERA Mark — slightly larger, centered ── */}
+          <div className="absolute" style={{ inset: "20%" }}>
+            <ERAMark module={mod.mark} size={207} className="!w-full !h-full" />
           </div>
 
-          {/* ── Center content: keyed on modIdx for slide-in on module switch ── */}
+          {/* ── Module data — below the ERA dot ── */}
           <div
             key={modIdx}
+            className="absolute pointer-events-none"
             style={{
-              position: "absolute",
-              top: "23%", left: "22%", right: "22%", bottom: "23%",
+              bottom: "17%",
+              left: 0,
+              right: 0,
               display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
               justifyContent: "center",
               animation: slideAnim,
+              zIndex: 2,
             }}
           >
             {recording ? (
-              <RecordingView transcript={transcript} accent={accent} dimmed={dimmed} />
+              <RecordingView transcript={transcript} />
             ) : saving ? (
-              <SavingView accent={accent} />
+              <SavingView />
             ) : (
-              <ModuleContent
+              <ModuleData
                 mod={mod}
                 balance={balance}
                 scheduleItems={scheduleItems}
-                accent={accent}
-                dimmed={dimmed}
               />
             )}
           </div>
 
-          {/* ── Tap hint — above dots ── */}
-          {!recording && !saving && (
-            <div style={{
-              position: "absolute",
-              bottom: "22%",
-              left: 0, right: 0,
+          {/* ── ERA label — top arch position ── */}
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              top: "8.5%", left: 0, right: 0,
               textAlign: "center",
-              fontSize: 7.5,
-              fontWeight: 600,
-              letterSpacing: "2px",
+              fontSize: 8,
+              fontWeight: 700,
+              letterSpacing: "3.5px",
               textTransform: "uppercase",
-              color: "rgba(255,255,255,0.18)",
-              pointerEvents: "none",
-            }}>
-              tap · speak
-            </div>
-          )}
-
-          {/* ── Module dot indicators — bottom ── */}
-          <div style={{
-            position: "absolute",
-            bottom: "15%",
-            left: 0, right: 0,
-            display: "flex",
-            justifyContent: "center",
-            gap: 5,
-            alignItems: "center",
-            pointerEvents: "none",
-          }}>
-            {MODULES.map((m, i) => (
-              <div key={m.id} style={{
-                width:        i === modIdx ? 12 : 5,
-                height:       5,
-                borderRadius: 3,
-                background:   i === modIdx ? accent : "rgba(255,255,255,0.22)",
-                boxShadow:    i === modIdx ? `0 0 7px ${accent}` : "none",
-                transition:   "all .35s ease",
-              }} />
-            ))}
+              color: `hsla(${mod.hue},${mod.sat}%,${mod.lum}%,.7)`,
+              transition: "--era-hue 3.5s, color 3.5s cubic-bezier(.65,0,.35,1)",
+            }}
+          >
+            ERA
           </div>
 
+          {/* ── Module dot indicators — bottom arch ── */}
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              bottom: "10%", left: 0, right: 0,
+              display: "flex",
+              justifyContent: "center",
+              gap: 5,
+              alignItems: "center",
+            }}
+          >
+            {WATCH_MODULES.map((m, i) => (
+              <div
+                key={m.id}
+                style={{
+                  width:        i === modIdx ? 14 : 5,
+                  height:       5,
+                  borderRadius: 3,
+                  background:   i === modIdx
+                    ? `hsl(${m.hue},${m.sat}%,${m.lum}%)`
+                    : "rgba(255,255,255,0.2)",
+                  boxShadow:    i === modIdx
+                    ? `0 0 8px hsl(${m.hue},${m.sat}%,${m.lum}%)`
+                    : "none",
+                  transition:   "all .4s cubic-bezier(.25,.46,.45,.94)",
+                }}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </>
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Sub-views ────────────────────────────────────────────────────────────────
 
-function RecordingView({
-  transcript,
-  accent,
-  dimmed,
-}: {
-  transcript: string;
-  accent: string;
-  dimmed: (a: number) => string;
-}) {
+function RecordingView({ transcript }: { transcript: string }) {
+  // Waveform bars — no emojis, pure geometric
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, width: "100%" }}>
-      {/* Animated waveform bars */}
-      <div style={{ display: "flex", gap: 3, alignItems: "center", height: 28 }}>
-        {[70, 100, 55, 90, 40, 100, 75].map((pct, i) => (
-          <div key={i} style={{
-            width: 3,
-            height: `${pct}%`,
-            maxHeight: 28,
-            minHeight: 4,
-            borderRadius: 2,
-            background: accent,
-            transformOrigin: "center",
-            animation: `era-watch-wave ${0.55 + i * 0.09}s ease-in-out ${i * 75}ms infinite`,
-          }} />
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: "100%" }}>
+      <div style={{ display: "flex", gap: 2.5, alignItems: "center", height: 24 }}>
+        {[55, 100, 40, 85, 30, 100, 65, 80, 45].map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: 2.5,
+              height: 22,
+              borderRadius: 2,
+              background: "var(--era-accent)",
+              transformOrigin: "center",
+              animation: `era-w-wave ${0.5 + (i % 4) * 0.12}s ease-in-out ${i * 65}ms infinite`,
+              opacity: 0.85,
+            }}
+          />
         ))}
       </div>
-
-      {/* Live transcript preview */}
       {transcript ? (
-        <p style={{
-          fontSize: 10,
-          color: "rgba(255,255,255,0.9)",
-          textAlign: "center",
-          lineHeight: 1.4,
-          fontStyle: "italic",
-          maxHeight: 44,
-          overflow: "hidden",
-          margin: 0,
-        }}>
+        <p
+          style={{
+            fontSize: 9,
+            color: "rgba(255,255,255,0.88)",
+            textAlign: "center",
+            lineHeight: 1.35,
+            fontStyle: "italic",
+            margin: 0,
+            maxHeight: 36,
+            overflow: "hidden",
+          }}
+        >
           {transcript}
         </p>
       ) : (
-        <p style={{ fontSize: 9.5, color: dimmed(0.75), textAlign: "center", letterSpacing: "1px", margin: 0 }}>
-          Listening…
+        <p
+          style={{
+            fontSize: 8,
+            color: "var(--era-accent)",
+            letterSpacing: "2px",
+            textTransform: "uppercase",
+            margin: 0,
+            opacity: 0.75,
+          }}
+        >
+          listening
         </p>
       )}
-
-      <p style={{ fontSize: 7.5, color: "rgba(255,255,255,0.28)", textTransform: "uppercase", letterSpacing: "1.5px", margin: 0 }}>
-        tap to stop
-      </p>
     </div>
   );
 }
 
-function SavingView({ accent }: { accent: string }) {
+function SavingView() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-      <div style={{
-        width: 30, height: 30,
+    <div
+      style={{
+        width: 24,
+        height: 24,
         borderRadius: "50%",
-        border: `2px solid ${accent}`,
+        border: "2px solid var(--era-accent)",
         borderTopColor: "transparent",
-        animation: "era-watch-spin 0.8s linear infinite",
-      }} />
-      <p style={{ fontSize: 9, color: accent, letterSpacing: "1.5px", textTransform: "uppercase", margin: 0 }}>
-        Saving…
-      </p>
-    </div>
+        animation: "era-w-spin 0.8s linear infinite",
+      }}
+    />
   );
 }
 
-function ModuleContent({
+function ModuleData({
   mod,
   balance,
   scheduleItems,
-  accent,
-  dimmed,
 }: {
-  mod: Mod;
+  mod: WMod;
   balance?: { balance: number; draft_count?: number };
   scheduleItems: any[];
-  accent: string;
-  dimmed: (a: number) => string;
 }) {
   if (mod.id === "chat") {
-    return (
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 30, marginBottom: 7, lineHeight: 1 }}>💬</div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: accent, letterSpacing: "1px" }}>ERA CHAT</div>
-        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.38)", marginTop: 5 }}>Speak to ERA</div>
-      </div>
-    );
+    // Chat: no data to show — ERA cue handles the visual (expanding rings)
+    return null;
   }
 
   if (mod.id === "budget") {
-    const bal = balance?.balance ?? 0;
-    const sign = bal < 0 ? "-" : "";
+    const bal  = balance?.balance ?? 0;
+    const sign = bal < 0 ? "−" : "";
     return (
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: dimmed(0.72), letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 5 }}>
-          Balance
-        </div>
-        <div style={{
-          fontSize: 30,
-          fontWeight: 800,
-          background: `linear-gradient(135deg, ${accent} 0%, #fbbf24 100%)`,
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-          backgroundClip: "text",
-          lineHeight: 1,
-        }}>
+      <div style={{ textAlign: "center", lineHeight: 1 }}>
+        <div
+          style={{
+            fontSize: 22,
+            fontWeight: 800,
+            color: "hsl(var(--era-hue),var(--era-sat),calc(var(--era-lum) + 22%))",
+            letterSpacing: "-0.5px",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
           {sign}${Math.abs(bal).toFixed(0)}
         </div>
         {(balance?.draft_count ?? 0) > 0 && (
-          <div style={{ fontSize: 8.5, color: "#fb923c", marginTop: 5, letterSpacing: "0.5px" }}>
-            {balance!.draft_count} draft{balance!.draft_count !== 1 ? "s" : ""}
+          <div
+            style={{
+              marginTop: 4,
+              fontSize: 7,
+              fontWeight: 600,
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              color: "rgba(255,255,255,0.38)",
+            }}
+          >
+            {balance!.draft_count} draft
+            {balance!.draft_count !== 1 ? "s" : ""}
           </div>
         )}
       </div>
@@ -515,26 +465,41 @@ function ModuleContent({
     const count = scheduleItems.length;
     const next  = scheduleItems[0];
     return (
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: dimmed(0.72), letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 5 }}>
-          Today
-        </div>
-        <div style={{ fontSize: 34, fontWeight: 800, color: accent, lineHeight: 1 }}>
+      <div style={{ textAlign: "center", lineHeight: 1 }}>
+        <div
+          style={{
+            fontSize: 26,
+            fontWeight: 800,
+            color: "hsl(var(--era-hue),var(--era-sat),calc(var(--era-lum) + 22%))",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
           {count}
         </div>
-        <div style={{ fontSize: 8.5, color: "rgba(255,255,255,0.45)", marginTop: 4 }}>
-          {count === 0 ? "All clear" : count === 1 ? "item" : "items"}
+        <div
+          style={{
+            marginTop: 3,
+            fontSize: 7,
+            fontWeight: 600,
+            letterSpacing: "1.5px",
+            textTransform: "uppercase",
+            color: "rgba(255,255,255,0.36)",
+          }}
+        >
+          {count === 0 ? "all clear" : count === 1 ? "item" : "items"}
         </div>
         {next?.title && (
-          <div style={{
-            fontSize: 9,
-            color: "rgba(255,255,255,0.55)",
-            marginTop: 7,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            maxWidth: "100%",
-          }}>
+          <div
+            style={{
+              marginTop: 5,
+              fontSize: 7.5,
+              color: "rgba(255,255,255,0.5)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              maxWidth: "100%",
+            }}
+          >
             {next.title}
           </div>
         )}
@@ -543,13 +508,8 @@ function ModuleContent({
   }
 
   if (mod.id === "recipe") {
-    return (
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 30, marginBottom: 7, lineHeight: 1 }}>🍳</div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: accent, letterSpacing: "1px" }}>ERA CHEF</div>
-        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.38)", marginTop: 5 }}>Speak a recipe</div>
-      </div>
-    );
+    // Recipe: ERA vapor-curl cue handles the visual — no text needed
+    return null;
   }
 
   return null;
