@@ -134,6 +134,7 @@ export type RecipeListItem = Pick<
   | "tags"
   | "prep_time_minutes"
   | "cook_time_minutes"
+  | "servings"
   | "difficulty"
   | "is_favorite"
   | "times_cooked"
@@ -310,6 +311,10 @@ export interface MealPlan {
   cooked_at: string | null;
   notes: string | null;
 
+  for_user_id: UUID | null;
+  eats_through_date: string | null; // YYYY-MM-DD, last day leftovers are eaten
+  servings_planned: number | null;
+
   shopping_thread_id: UUID | null;
   shopping_message_ids: UUID[];
 
@@ -328,10 +333,22 @@ export type MealPlanInsert = Pick<
   "recipe_id" | "planned_date" | "meal_type"
 > & {
   notes?: string | null;
+  for_user_id?: UUID | null;
+  eats_through_date?: string | null;
+  servings_planned?: number | null;
 };
 
 export type MealPlanUpdate = Partial<
-  Pick<MealPlan, "planned_date" | "meal_type" | "status" | "notes">
+  Pick<
+    MealPlan,
+    | "planned_date"
+    | "meal_type"
+    | "status"
+    | "notes"
+    | "for_user_id"
+    | "eats_through_date"
+    | "servings_planned"
+  >
 >;
 
 // =============================================================================

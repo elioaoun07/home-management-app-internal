@@ -1,115 +1,58 @@
--- Migration: 2026-05-16_household_item_access
--- Purpose: Fix household member access to shared items
+-- Migration: 2026-05-16 Household Member Item Access Fix
 --
--- Summary of fixes:
--- 1. Removed is_public requirement from household item auth checks
--- 2. Fixed auth checks in API routes to properly validate household member access
--- 3. Routed complete/postpone/cancel mutations through supabaseAdmin() with explicit auth
--- 4. Added owner checks to PATCH/DELETE routes
+-- WHAT THIS FIXES:
+-- Household members (notify_all_household = true) and responsible users
+-- can now complete, postpone, and cancel shared schedule items.
 --
--- No schema changes required — all columns and tables already exist.
--- This migration documents the authorization model for items and actions.
+-- ROOT CAUSES (application layer — no schema changes):
+-- 1. isAllHousehold check wrongly required is_public in addition to notify_all_household
+-- 2. /actions route had no authorization check at all
+-- 3. /[id] PATCH and DELETE had no ownership check
+-- 4. Browser hooks wrote directly to Supabase (RLS blocked partner writes)
+--    → Now route through supabaseAdmin() with explicit server-side auth checks
+--
+-- SCHEMA CHANGES REQUIRED:
+-- Two missing UNIQUE constraints needed for upserts that were already in the code.
 
 -- ============================================================================
--- AUTHORIZATION MODEL
+-- 1. item_alert_suppressions — UNIQUE(item_id, occurrence_date)
+--
+-- The cancel action upserts to this table using onConflict: "item_id,occurrence_date".
+-- Without this constraint PostgreSQL throws:
+--   "there is no unique or exclusion constraint matching the ON CONFLICT specification"
 -- ============================================================================
---
--- An item belongs to a USER (creator) and can have a RESPONSIBLE_USER (assignee).
--- NOTIFY_ALL_HOUSEHOLD controls whether any household member can act on it.
--- IS_PUBLIC controls broader app-wide visibility (independent concern).
---
--- For complete/postpone/cancel/skip actions:
---   - Creator (item.user_id) → always allowed
---   - Responsible user (item.responsible_user_id) → always allowed
---   - Household member (if notify_all_household = true) → allowed
---
--- For edit (PATCH /api/items/[id]):
---   - Creator only
---
--- For delete/archive (DELETE /api/items/[id]):
---   - Creator only
+ALTER TABLE public.item_alert_suppressions
+  ADD CONSTRAINT IF NOT EXISTS item_alert_suppressions_item_occurrence_unique
+  UNIQUE (item_id, occurrence_date);
 
 -- ============================================================================
--- REQUIRED RLS POLICIES (should already be in place)
+-- 2. item_recurrence_exceptions — UNIQUE(rule_id, exdate)
+--
+-- Exception upserts rely on this. The constraint was in a migration that was
+-- removed from the repo but may or may not have been applied to the live DB.
+-- IF NOT EXISTS guards against re-applying.
 -- ============================================================================
---
--- items table:
---   - SELECT: Creator OR Responsible User OR (Household member when notify_all_household)
---   - UPDATE: Creator only
---   - DELETE: Creator only
---
--- item_occurrence_actions table:
---   - INSERT: Creator of item OR Responsible user OR (Household member when notify_all_household)
---   - SELECT: Creator of item OR Responsible user OR (Household member when notify_all_household)
---   - DELETE: User who created_by OR Item creator
---
--- reminder_details, event_details, item_alerts, item_subtasks tables:
---   - UPDATE/DELETE: Same as parent item (Creator OR Responsible OR Household with notify_all_household)
---
--- Note: RLS policies should NOT use EXISTS-subquery joins on hot tables
--- (item_occurrence_actions, etc.). Use SECURITY DEFINER RPC or denormalized user_id.
--- See CLAUDE.md Hard Rule #20.
+ALTER TABLE public.item_recurrence_exceptions
+  ADD CONSTRAINT IF NOT EXISTS item_recurrence_exceptions_rule_exdate_unique
+  UNIQUE (rule_id, exdate);
 
 -- ============================================================================
--- APPLICATIONS CHANGES (code-level, no SQL needed)
+-- SUPPORTING INDEXES
+-- Auth checks in the routes query these columns on every action.
 -- ============================================================================
---
--- Files modified:
---   1. src/components/items/ItemDetailModal.tsx
---      - Line 285: isAllHousehold = !!item.notify_all_household (removed is_public requirement)
---
---   2. src/app/api/items/[id]/complete/route.ts
---      - Line 61: Removed && item.is_public from household check
---      - Added reason parameter to occurrence actions
---
---   3. src/app/api/items/[id]/actions/route.ts
---      - Added supabaseAdmin() for item fetch (bypasses RLS for auth check)
---      - Added explicit household member auth check (creator || responsible || household)
---      - Uses adminDb for all writes
---
---   4. src/app/api/items/[id]/route.ts
---      - PATCH: Added ownership check (403 if user_id != creator)
---      - DELETE: Added ownership check (403 if user_id != creator)
---
---   5. src/features/items/useItemActions.ts
---      - useCompleteItem: Routes online path through /api/items/{id}/complete via safeFetch
---      - usePostponeItem: Routes online path through /api/items/{id}/actions via safeFetch
---      - useCancelItem: Routes online path through /api/items/{id}/actions via safeFetch
---      - Offline queue paths: Fixed camelCase → snake_case body keys
---
--- Result: All mutations now go through supabaseAdmin() with proper auth checks.
--- This removes the RLS blocker for household member writes.
+CREATE INDEX IF NOT EXISTS idx_items_responsible_user_id
+  ON public.items (responsible_user_id);
 
--- ============================================================================
--- VERIFICATION
--- ============================================================================
---
--- To verify the fix works:
---
--- 1. Partner (responsible user) should be able to:
---    - See items they're assigned to
---    - Complete/postpone/cancel those items
---    - Edit basic fields (status, due date) where allowed
---
--- 2. Household member should be able to:
---    - See items where notify_all_household = true
---    - Complete/postpone/cancel those items
---
--- 3. Non-creator should NOT be able to:
---    - Edit title/description/recurrence
---    - Delete or archive the item
+CREATE INDEX IF NOT EXISTS idx_items_notify_all_household
+  ON public.items (notify_all_household)
+  WHERE notify_all_household = true;
 
--- ============================================================================
--- NOTES
--- ============================================================================
---
--- The fix was driven by user feedback: "household members couldn't complete
--- household items because isAllHousehold check required is_public flag".
---
--- The real blocker was RLS on direct Supabase writes from the browser.
--- Solution: Route all mutations through API routes that use supabaseAdmin().
--- This is safe because explicit auth checks run server-side.
---
--- This approach matches the existing pattern used for:
---   - Offline queue mutations (already used /api/items/{id}/actions)
---   - Service worker quick actions (already used /api/items/{id}/complete)
+CREATE INDEX IF NOT EXISTS idx_household_links_users_active
+  ON public.household_links (owner_user_id, partner_user_id, active)
+  WHERE active = true;
+
+CREATE INDEX IF NOT EXISTS idx_item_occurrence_actions_item_id
+  ON public.item_occurrence_actions (item_id);
+
+CREATE INDEX IF NOT EXISTS idx_item_alert_suppressions_item_occurrence
+  ON public.item_alert_suppressions (item_id, occurrence_date);

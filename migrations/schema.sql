@@ -925,6 +925,9 @@ CREATE TABLE public.meal_plans (
   status text DEFAULT 'planned'::text CHECK (status = ANY (ARRAY['planned'::text, 'shopping_added'::text, 'cooked'::text, 'skipped'::text])),
   cooked_at timestamp with time zone,
   notes text,
+  for_user_id uuid,
+  eats_through_date date,
+  servings_planned integer,
   shopping_thread_id uuid,
   shopping_message_ids ARRAY DEFAULT '{}'::uuid[],
   created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -933,6 +936,7 @@ CREATE TABLE public.meal_plans (
   CONSTRAINT meal_plans_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT meal_plans_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
   CONSTRAINT meal_plans_recipe_id_fkey FOREIGN KEY (recipe_id) REFERENCES public.recipes(id),
+  CONSTRAINT meal_plans_for_user_id_fkey FOREIGN KEY (for_user_id) REFERENCES auth.users(id),
   CONSTRAINT meal_plans_shopping_thread_id_fkey FOREIGN KEY (shopping_thread_id) REFERENCES public.hub_chat_threads(id)
 );
 CREATE TABLE public.merchant_mappings (

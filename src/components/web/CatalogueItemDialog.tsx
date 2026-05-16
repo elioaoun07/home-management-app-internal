@@ -18,7 +18,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateItem, useUpdateItem } from "@/features/catalogue/hooks";
+import { catalogueKeys } from "@/features/catalogue/queryKeys";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { safeFetch } from "@/lib/safeFetch";
 import { cn } from "@/lib/utils";
 import type {
   CatalogueItem,
@@ -35,6 +38,7 @@ import {
 } from "@/types/catalogue";
 import {
   Calendar,
+  Camera,
   DollarSign,
   Loader2,
   Mail,
@@ -42,10 +46,12 @@ import {
   Phone,
   Plus,
   Star,
+  Trash2,
   User,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface Props {
   open: boolean;
@@ -87,7 +93,7 @@ const MODULE_FIELD_CONFIG: Record<
     customFields: Array<{
       key: string;
       label: string;
-      type: "text" | "number" | "date" | "select" | "textarea";
+      type: "text" | "number" | "date" | "select" | "combobox" | "textarea";
       placeholder?: string;
       icon?: React.ComponentType<{ className?: string }>;
       options?: string[];
@@ -436,16 +442,23 @@ const MODULE_FIELD_CONFIG: Record<
       {
         key: "document_type",
         label: "Document Type",
-        type: "select",
+        type: "combobox",
+        placeholder: "Passport, ID, License...",
         options: [
-          "ID",
           "Passport",
-          "License",
-          "Certificate",
-          "Contract",
-          "Insurance",
-          "Financial",
-          "Medical",
+          "National ID",
+          "Driver's License",
+          "Residence Permit",
+          "Birth Certificate",
+          "Marriage Certificate",
+          "Health Card",
+          "Insurance Policy",
+          "Visa",
+          "Work Permit",
+          "Tax Document",
+          "Bank Document",
+          "Vehicle Registration",
+          "Property Deed",
           "Other",
         ],
       },
@@ -632,6 +645,37 @@ const FREQUENCY_OPTIONS = [
   { value: "as-needed", label: "As needed" },
 ];
 
+async function compressImage(file: File): Promise<Blob> {
+  const MAX_DIM = 2000;
+  const QUALITY = 0.88;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > MAX_DIM || height > MAX_DIM) {
+        const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas not supported"));
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error("Compression failed"))),
+        "image/jpeg",
+        QUALITY,
+      );
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 export default function CatalogueItemDialog({
   open,
   onOpenChange,
@@ -643,8 +687,12 @@ export default function CatalogueItemDialog({
   const themeClasses = useThemeClasses();
   const createItem = useCreateItem();
   const updateItem = useUpdateItem();
+  const qc = useQueryClient();
+  const { data: householdData } = useHouseholdMembers();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const config = MODULE_FIELD_CONFIG[moduleType] || MODULE_FIELD_CONFIG.custom;
+  const isDocuments = moduleType === "documents";
 
   // Form state
   const [name, setName] = useState("");
@@ -659,7 +707,14 @@ export default function CatalogueItemDialog({
   const [progressUnit, setProgressUnit] = useState("");
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
 
-  const isLoading = createItem.isPending || updateItem.isPending;
+  // Document-specific state
+  const [pendingImage, setPendingImage] = useState<Blob | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [belongsTo, setBelongsTo] = useState<string>("");
+  const [comboboxOpen, setComboboxOpen] = useState<Record<string, boolean>>({});
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const isLoading = createItem.isPending || updateItem.isPending || uploadingImage;
   const isEditing = !!editingItem;
 
   // Get module-specific title
@@ -692,6 +747,13 @@ export default function CatalogueItemDialog({
     }
   };
 
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    };
+  }, [imagePreviewUrl]);
+
   // Reset form when opening/closing or editing different item
   useEffect(() => {
     if (open) {
@@ -716,6 +778,7 @@ export default function CatalogueItemDialog({
           }
         });
         setCustomFields(loadedFields);
+        setBelongsTo((metadata.belongs_to_user_id as string) || "");
       } else {
         setName("");
         setDescription("");
@@ -728,9 +791,13 @@ export default function CatalogueItemDialog({
         setProgressTarget("");
         setProgressUnit("");
         setCustomFields({});
+        setBelongsTo(householdData?.currentUserId || "");
       }
+      setPendingImage(null);
+      setImagePreviewUrl(null);
+      setComboboxOpen({});
     }
-  }, [open, editingItem, config.customFields]);
+  }, [open, editingItem, config.customFields, householdData?.currentUserId]);
 
   const handleAddTag = () => {
     const tag = tagInput.trim().toLowerCase();
@@ -748,9 +815,28 @@ export default function CatalogueItemDialog({
     setCustomFields((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+      setPendingImage(compressed);
+      setImagePreviewUrl(URL.createObjectURL(compressed));
+    } catch {
+      // silently ignore compression errors — user can retry
+    }
+    e.target.value = "";
+  };
 
+  const handleRemoveImage = () => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setPendingImage(null);
+    setImagePreviewUrl(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!name.trim()) return;
 
     // Build metadata_json from custom fields (excluding notes)
@@ -765,6 +851,9 @@ export default function CatalogueItemDialog({
         }
       }
     });
+    if (isDocuments && belongsTo) {
+      metadataJson.belongs_to_user_id = belongsTo;
+    }
 
     const data = {
       name: name.trim(),
@@ -792,11 +881,31 @@ export default function CatalogueItemDialog({
         Object.keys(metadataJson).length > 0 ? metadataJson : undefined,
     };
 
+    const uploadImageForItem = async (itemId: string) => {
+      if (!pendingImage) return;
+      setUploadingImage(true);
+      try {
+        const formData = new FormData();
+        formData.append("image", pendingImage, "document.jpg");
+        await safeFetch(`/api/catalogue/items/${itemId}/document-image`, {
+          method: "POST",
+          body: formData,
+          timeoutMs: 30_000,
+        });
+        qc.invalidateQueries({ queryKey: catalogueKeys.items() });
+      } finally {
+        setUploadingImage(false);
+      }
+    };
+
     if (isEditing) {
       updateItem.mutate(
         { id: editingItem.id, ...data },
         {
-          onSuccess: () => onOpenChange(false),
+          onSuccess: async (saved) => {
+            await uploadImageForItem(saved.id);
+            onOpenChange(false);
+          },
         },
       );
     } else {
@@ -806,7 +915,10 @@ export default function CatalogueItemDialog({
         ...data,
       };
       createItem.mutate(createData, {
-        onSuccess: () => onOpenChange(false),
+        onSuccess: async (saved) => {
+          await uploadImageForItem(saved.id);
+          onOpenChange(false);
+        },
       });
     }
   };
@@ -814,6 +926,65 @@ export default function CatalogueItemDialog({
   const renderCustomField = (field: (typeof config.customFields)[number]) => {
     const value = customFields[field.key] || "";
     const Icon = field.icon;
+
+    if (field.type === "combobox") {
+      const isOpen = comboboxOpen[field.key] ?? false;
+      const filteredOptions = (field.options || []).filter(
+        (opt) =>
+          !value || opt.toLowerCase().includes(value.toLowerCase()),
+      );
+      return (
+        <div key={field.key} className="space-y-2 relative">
+          <Label className="text-white/70">{field.label}</Label>
+          <Input
+            value={value}
+            onChange={(e) => {
+              handleCustomFieldChange(field.key, e.target.value);
+              setComboboxOpen((prev) => ({ ...prev, [field.key]: true }));
+            }}
+            onFocus={() =>
+              setComboboxOpen((prev) => ({ ...prev, [field.key]: true }))
+            }
+            onBlur={() =>
+              setTimeout(
+                () =>
+                  setComboboxOpen((prev) => ({ ...prev, [field.key]: false })),
+                120,
+              )
+            }
+            placeholder={field.placeholder}
+            className={cn(themeClasses.inputBg, "border-white/10 text-white")}
+          />
+          {isOpen && filteredOptions.length > 0 && (
+            <div
+              className={cn(
+                "absolute z-50 left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-lg shadow-xl",
+                themeClasses.bgPage,
+                themeClasses.border,
+              )}
+            >
+              {filteredOptions.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleCustomFieldChange(field.key, opt);
+                    setComboboxOpen((prev) => ({
+                      ...prev,
+                      [field.key]: false,
+                    }));
+                  }}
+                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 transition-colors"
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
 
     if (field.type === "select") {
       return (
@@ -1078,6 +1249,84 @@ export default function CatalogueItemDialog({
                     "border-white/10 text-white",
                   )}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Document image upload */}
+          {isDocuments && (
+            <div className="space-y-2">
+              <Label className="text-white/70">Document Photo</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageSelect}
+              />
+              {imagePreviewUrl ? (
+                <div className="relative rounded-lg overflow-hidden border border-white/10">
+                  <img
+                    src={imagePreviewUrl}
+                    alt="Document preview"
+                    className="w-full max-h-48 object-contain bg-black/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-red-500/80 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4 text-white" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className={cn(
+                    "w-full flex flex-col items-center gap-2 py-6 rounded-lg border-2 border-dashed border-white/20 hover:border-white/40 transition-colors",
+                    themeClasses.inputBg,
+                  )}
+                >
+                  <Camera className="w-6 h-6 text-white/40" />
+                  <span className="text-sm text-white/50">
+                    {editingItem?.image_url
+                      ? "Replace photo"
+                      : "Add document photo"}
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Belongs to — documents only, shown when household partner exists */}
+          {isDocuments && householdData && householdData.members.length > 1 && (
+            <div className="space-y-2">
+              <Label className="text-white/70">Belongs to</Label>
+              <div className="flex gap-2">
+                {householdData.members.map((member) => {
+                  const isSelected = belongsTo === member.id;
+                  const isCurrentUser = member.isCurrentUser;
+                  const accentColor = isCurrentUser ? "blue" : "pink";
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => setBelongsTo(member.id)}
+                      className={cn(
+                        "flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all",
+                        isSelected
+                          ? accentColor === "blue"
+                            ? "bg-blue-500/20 border-blue-400/60 text-blue-300"
+                            : "bg-pink-500/20 border-pink-400/60 text-pink-300"
+                          : "border-white/10 text-white/50 hover:border-white/30",
+                      )}
+                    >
+                      <User className="w-3.5 h-3.5 inline mr-1.5" />
+                      {member.displayName}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

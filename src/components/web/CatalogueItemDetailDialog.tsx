@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import {
   useDeletePause,
   useItemPauses,
 } from "@/features/items/useItems";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { CatalogueItem, CatalogueModuleType } from "@/types/catalogue";
@@ -29,7 +30,9 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock,
+  Copy,
   DollarSign,
+  Download,
   ExternalLink,
   Film,
   Loader2,
@@ -40,6 +43,7 @@ import {
   Phone,
   Pin,
   PlayCircle,
+  Share2,
   Star,
   Tag,
   Trash2,
@@ -183,6 +187,68 @@ export default function CatalogueItemDetailDialog({
   const [pauseStart, setPauseStart] = useState(format(new Date(), "yyyy-MM-dd"));
   const [pauseEnd, setPauseEnd] = useState("");
   const [pauseReason, setPauseReason] = useState("");
+
+  // Document image + household state
+  const { data: householdData } = useHouseholdMembers();
+  const [docSignedUrl, setDocSignedUrl] = useState<string | null>(null);
+  const [docImageLoading, setDocImageLoading] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [copyDone, setCopyDone] = useState(false);
+
+  useEffect(() => {
+    if (!open || !item?.image_url || moduleType !== "documents") {
+      setDocSignedUrl(null);
+      return;
+    }
+    setDocImageLoading(true);
+    fetch(
+      `/api/catalogue/document-image/signed-url?path=${encodeURIComponent(item.image_url)}`,
+    )
+      .then((r) => r.json())
+      .then((d) => setDocSignedUrl(d.signedUrl || null))
+      .catch(() => setDocSignedUrl(null))
+      .finally(() => setDocImageLoading(false));
+  }, [open, item?.image_url, moduleType]);
+
+  const handleShareImage = async () => {
+    if (!docSignedUrl) return;
+    setSharing(true);
+    try {
+      const blob = await fetch(docSignedUrl).then((r) => r.blob());
+      const file = new File([blob], `${item?.name ?? "document"}.jpg`, {
+        type: blob.type,
+      });
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: item?.name });
+      } else {
+        // Fallback: open image in new tab
+        window.open(docSignedUrl, "_blank");
+      }
+    } catch {
+      // user cancelled share — ignore
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!docSignedUrl) return;
+    try {
+      await navigator.clipboard.writeText(docSignedUrl);
+      setCopyDone(true);
+      setTimeout(() => setCopyDone(false), 2000);
+    } catch {
+      // clipboard not available
+    }
+  };
+
+  const handleDownload = () => {
+    if (!docSignedUrl) return;
+    const a = document.createElement("a");
+    a.href = docSignedUrl;
+    a.download = `${item?.name ?? "document"}.jpg`;
+    a.click();
+  };
 
   if (!item) return null;
 
@@ -360,6 +426,74 @@ export default function CatalogueItemDetailDialog({
                   />
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Document image section */}
+          {moduleType === "documents" && (
+            <div className="space-y-3">
+              {docImageLoading ? (
+                <div className="flex items-center justify-center py-8 rounded-lg bg-white/5">
+                  <Loader2 className="w-6 h-6 animate-spin text-white/40" />
+                </div>
+              ) : docSignedUrl ? (
+                <div className="space-y-3">
+                  <img
+                    src={docSignedUrl}
+                    alt={item.name}
+                    className="w-full max-h-64 object-contain rounded-lg bg-black/20 border border-white/10"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleShareImage}
+                      disabled={sharing}
+                      className="flex-1 border-white/10 text-white/80 hover:bg-white/10"
+                    >
+                      {sharing ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Share2 className="w-4 h-4" />
+                      )}
+                      <span className="ml-1.5">Share</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCopyLink}
+                      className="flex-1 border-white/10 text-white/80 hover:bg-white/10"
+                    >
+                      <Copy className="w-4 h-4" />
+                      <span className="ml-1.5">{copyDone ? "Copied!" : "Copy link"}</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleDownload}
+                      className="flex-1 border-white/10 text-white/80 hover:bg-white/10"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="ml-1.5">Save</span>
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Belongs to */}
+              {!!(metadata.belongs_to_user_id as string) && !!householdData && (
+                <div className="flex items-center gap-3">
+                  <User className="w-4 h-4 text-white/40 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-white/40">Belongs to</div>
+                    <div className="text-white">
+                      {householdData.members.find(
+                        (m) => m.id === (metadata.belongs_to_user_id as string),
+                      )?.displayName ?? "Unknown"}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

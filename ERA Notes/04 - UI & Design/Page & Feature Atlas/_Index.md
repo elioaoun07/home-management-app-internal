@@ -55,6 +55,7 @@ tags:
 | `focus`          | `/focus`          | [[focus]]          |
 | `catalogue`      | `/catalogue`      | [[catalogue]]      |
 | `recipe`         | `/recipe`         | [[recipe]]         |
+| `meal-plan`      | `/meal-plan`      | [[Meal Planning]]  |
 | `chat`           | `/chat`           | [[chat]]           |
 | `alerts`         | `/alerts`         | [[alerts]]         |
 | `settings`       | `/settings`       | [[settings]]       |

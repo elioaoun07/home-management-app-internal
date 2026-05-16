@@ -190,7 +190,7 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Categories               | `src/features/categories/`                                        | `ERA Notes/02 - Standalone Modules/Categories/`         | Standalone |
 | Recurring Payments       | `src/app/recurring/`, `src/features/recurring/`                   | `ERA Notes/02 - Standalone Modules/Recurring Payments/` | Standalone |
 | Recipes                  | `src/features/recipes/`, `src/app/recipe/`                        | `ERA Notes/02 - Standalone Modules/Recipes/`            | Standalone |
-| Meal Planning            | `src/app/api/meal-plans/`                                         | `ERA Notes/03 - Junction Modules/Meal Planning/`        | Junction   |
+| Meal Planning            | `src/features/meal-planning/`, `src/app/meal-plan/`, `src/components/web/WebMealPlanCalendar.tsx` | `ERA Notes/03 - Junction Modules/Meal Planning/` | Standalone |
 | Inventory                | `src/features/inventory/`, `src/app/inventory/`                   | `ERA Notes/02 - Standalone Modules/Inventory/`          | Standalone |
 | Debts                    | `src/features/debts/`                                             | `ERA Notes/02 - Standalone Modules/Debts/`              | Standalone |
 | Catalogue                | `src/app/catalogue/`, `src/features/catalogue/`                   | `ERA Notes/02 - Standalone Modules/Catalogue/`          | Standalone |

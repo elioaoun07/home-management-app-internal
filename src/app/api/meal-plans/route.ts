@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       `*,
        recipe:recipes!meal_plans_recipe_id_fkey(
          id, name, description, image_url, category, cuisine, tags,
-         prep_time_minutes, cook_time_minutes, difficulty,
+         prep_time_minutes, cook_time_minutes, servings, difficulty,
          is_favorite, times_cooked, average_rating
        )`,
     )
@@ -118,14 +118,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     }
 
-    // Check if there's already a meal plan for this date
-    const { data: existing } = await supabase
+    // Check if there's already a meal plan for this exact slot (same date, meal_type, and for_user_id)
+    let existingQuery = supabase
       .from("meal_plans")
       .select("id")
       .eq("household_id", household.id)
       .eq("planned_date", body.planned_date)
-      .eq("meal_type", body.meal_type || "lunch")
-      .single();
+      .eq("meal_type", body.meal_type || "lunch");
+
+    if (body.for_user_id) {
+      existingQuery = existingQuery.eq("for_user_id", body.for_user_id);
+    } else {
+      existingQuery = existingQuery.is("for_user_id", null);
+    }
+
+    const { data: existing } = await existingQuery.maybeSingle();
 
     if (existing) {
       // Update existing meal plan instead of creating new
@@ -134,6 +141,8 @@ export async function POST(req: NextRequest) {
         .update({
           recipe_id: body.recipe_id,
           notes: body.notes,
+          eats_through_date: body.eats_through_date ?? null,
+          servings_planned: body.servings_planned ?? null,
           status: "planned",
           updated_at: new Date().toISOString(),
         })
@@ -142,7 +151,6 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (updateError) {
-        console.error("Error updating meal plan:", updateError);
         return NextResponse.json(
           { error: updateError.message },
           { status: 500 },
@@ -161,7 +169,10 @@ export async function POST(req: NextRequest) {
         recipe_id: body.recipe_id,
         planned_date: body.planned_date,
         meal_type: body.meal_type || "lunch",
-        notes: body.notes,
+        notes: body.notes ?? null,
+        for_user_id: body.for_user_id ?? null,
+        eats_through_date: body.eats_through_date ?? null,
+        servings_planned: body.servings_planned ?? null,
         status: "planned",
       })
       .select()

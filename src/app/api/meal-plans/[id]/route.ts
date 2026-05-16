@@ -76,6 +76,9 @@ export async function PATCH(
       }
     }
     if (body.notes !== undefined) updateData.notes = body.notes;
+    if (body.for_user_id !== undefined) updateData.for_user_id = body.for_user_id;
+    if (body.eats_through_date !== undefined) updateData.eats_through_date = body.eats_through_date;
+    if (body.servings_planned !== undefined) updateData.servings_planned = body.servings_planned;
 
     const { data: mealPlan, error } = await supabase
       .from("meal_plans")

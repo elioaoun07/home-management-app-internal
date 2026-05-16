@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     .from("recipes")
     .select(
       `id, name, description, image_url, category, cuisine, tags,
-       prep_time_minutes, cook_time_minutes, difficulty,
+       prep_time_minutes, cook_time_minutes, servings, difficulty,
        is_favorite, times_cooked, average_rating`,
     )
     .is("archived_at", null)

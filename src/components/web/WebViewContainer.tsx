@@ -8,6 +8,7 @@ import WebEvents from "@/components/web/WebEvents";
 import WebFuturePurchases from "@/components/web/WebFuturePurchases";
 import WebLandingPage from "@/components/web/WebLandingPage";
 import WebMealPlanner from "@/components/web/WebMealPlanner";
+import WebMealPlanCalendar from "@/components/web/WebMealPlanCalendar";
 import WebRecipes from "@/components/web/WebRecipes";
 import { ERAMark, type ERAModuleKey } from "@/components/shared/ERAMark";
 import { useUser } from "@/contexts/UserContext";
@@ -27,8 +28,8 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 
-// Top-level view modes - Budget, Events, Catalogue, or Recipes
-export type WebViewMode = "budget" | "events" | "catalogue" | "recipes";
+// Top-level view modes
+export type WebViewMode = "budget" | "events" | "catalogue" | "recipes" | "meal-plan";
 
 type ViewConfig = {
   module: ERAModuleKey;
@@ -39,17 +40,19 @@ type ViewConfig = {
 };
 
 const VIEW_CONFIG: Record<WebViewMode, ViewConfig> = {
-  events:    { module: "schedule",  title: "Events & Reminders", role: "Schedule Hub",  gradient: "from-violet-400 to-purple-400",  activeClass: "neo-gradient" },
-  budget:    { module: "financial", title: "Budget Manager",     role: "Financial",     gradient: "from-cyan-400 to-teal-400",      activeClass: "neo-gradient" },
-  catalogue: { module: "memory",    title: "Life Catalogue",     role: "Archive",       gradient: "from-blue-400 to-indigo-400",    activeClass: "bg-gradient-to-r from-violet-600 to-cyan-600" },
-  recipes:   { module: "recipe",    title: "Recipes & Meals",    role: "Culinary",      gradient: "from-orange-400 to-amber-400",   activeClass: "bg-gradient-to-r from-emerald-600 to-teal-600" },
+  events:     { module: "schedule",  title: "Events & Reminders", role: "Schedule Hub",  gradient: "from-violet-400 to-purple-400",  activeClass: "neo-gradient" },
+  budget:     { module: "financial", title: "Budget Manager",     role: "Financial",     gradient: "from-cyan-400 to-teal-400",      activeClass: "neo-gradient" },
+  catalogue:  { module: "memory",    title: "Life Catalogue",     role: "Archive",       gradient: "from-blue-400 to-indigo-400",    activeClass: "bg-gradient-to-r from-violet-600 to-cyan-600" },
+  recipes:    { module: "recipe",    title: "Recipes & Meals",    role: "Culinary",      gradient: "from-orange-400 to-amber-400",   activeClass: "bg-gradient-to-r from-emerald-600 to-teal-600" },
+  "meal-plan": { module: "meal",    title: "Meal Planning",       role: "Weekly Planner", gradient: "from-amber-400 to-yellow-400", activeClass: "bg-gradient-to-r from-amber-600 to-orange-600" },
 };
 
 const NAV_ITEMS: Array<{ mode: WebViewMode; label: string; eraModule: ERAModuleKey }> = [
-  { mode: "events",    label: "Events",    eraModule: "schedule"  },
-  { mode: "budget",    label: "Budget",    eraModule: "financial" },
-  { mode: "catalogue", label: "Catalogue", eraModule: "memory"    },
-  { mode: "recipes",   label: "Recipes",   eraModule: "recipe"    },
+  { mode: "events",     label: "Events",    eraModule: "schedule"  },
+  { mode: "budget",     label: "Budget",    eraModule: "financial" },
+  { mode: "catalogue",  label: "Catalogue", eraModule: "memory"    },
+  { mode: "recipes",    label: "Recipes",   eraModule: "recipe"    },
+  { mode: "meal-plan",  label: "Meals",     eraModule: "meal"      },
 ];
 
 // Tabs within Budget view
@@ -58,11 +61,11 @@ export type WebTab = "dashboard" | "budget" | "goals";
 // Tabs within Recipes view
 export type RecipesTab = "recipes" | "planner";
 
-export default function WebViewContainer() {
+export default function WebViewContainer({ initialMode }: { initialMode?: WebViewMode } = {}) {
   const themeClasses = useThemeClasses();
   const userData = useUser();
-  const [showLanding, setShowLanding] = useState(true);
-  const [viewMode, setViewMode] = useState<WebViewMode>("events");
+  const [showLanding, setShowLanding] = useState(!initialMode);
+  const [viewMode, setViewMode] = useState<WebViewMode>(initialMode ?? "events");
   const [activeTab, setActiveTab] = useState<WebTab>("dashboard");
   const [recipesTab, setRecipesTab] = useState<RecipesTab>("recipes");
   const [monthStartDay, setMonthStartDay] = useState(1);
@@ -168,6 +171,7 @@ export default function WebViewContainer() {
                 key={mode}
                 type="button"
                 onClick={() => setViewMode(mode)}
+                suppressHydrationWarning
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                   viewMode === mode
@@ -237,6 +241,9 @@ export default function WebViewContainer() {
           <>
             {viewMode === "events" && <WebEvents />}
             {viewMode === "catalogue" && <WebCatalogue />}
+            {viewMode === "meal-plan" && (
+              <WebMealPlanCalendar currentUserId={currentUserId} />
+            )}
             {viewMode === "recipes" && (
               <>
                 <div className={recipesTab === "recipes" ? "block" : "hidden"}>

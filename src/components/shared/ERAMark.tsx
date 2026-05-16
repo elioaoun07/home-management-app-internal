@@ -12,7 +12,8 @@ export type ERAModuleKey =
   | "fitness"
   | "outfit"
   | "chat"
-  | "memory";
+  | "memory"
+  | "meal";
 
 const ERA_MODULES: Record<
   ERAModuleKey,
@@ -28,6 +29,7 @@ const ERA_MODULES: Record<
   outfit:    { name: "Outfit",    hue: 325, sat: 78, lum: 68, cue: "ofi" },
   chat:      { name: "Chat",      hue: 190, sat: 85, lum: 62, cue: "chat"},
   memory:    { name: "Memory",    hue: 220, sat: 65, lum: 68, cue: "mem" },
+  meal:      { name: "Meal",      hue:  42, sat: 88, lum: 60, cue: "rec" },
 };
 
 type Props = {

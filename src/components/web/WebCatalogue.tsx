@@ -11,7 +11,9 @@ import {
   useDeleteModule,
   useUpdateItem,
 } from "@/features/catalogue/hooks";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
+import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
 import type {
   CatalogueCategory,
@@ -93,8 +95,12 @@ interface BreadcrumbItem {
   name: string;
 }
 
+type DocOwnerFilter = "all" | "mine" | "partner";
+
 export default function WebCatalogue() {
   const themeClasses = useThemeClasses();
+  const { theme } = useTheme();
+  const { data: householdData } = useHouseholdMembers();
 
   // Navigation state
   const [currentLevel, setCurrentLevel] = useState<ViewLevel>("modules");
@@ -104,6 +110,7 @@ export default function WebCatalogue() {
   const [selectedCategory, setSelectedCategory] =
     useState<CatalogueCategory | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [docOwnerFilter, setDocOwnerFilter] = useState<DocOwnerFilter>("all");
 
   // Dialog state
   const [showItemDialog, setShowItemDialog] = useState(false);
@@ -142,15 +149,45 @@ export default function WebCatalogue() {
 
   // Filtered data
   const filteredItems = useMemo(() => {
-    if (!searchQuery) return items;
-    const query = searchQuery.toLowerCase();
-    return items.filter(
-      (item) =>
-        item.name.toLowerCase().includes(query) ||
-        item.description?.toLowerCase().includes(query) ||
-        item.tags.some((tag) => tag.toLowerCase().includes(query)),
-    );
-  }, [items, searchQuery]);
+    let result = items;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.name.toLowerCase().includes(query) ||
+          item.description?.toLowerCase().includes(query) ||
+          item.tags.some((tag) => tag.toLowerCase().includes(query)),
+      );
+    }
+    if (selectedModule?.type === "documents" && docOwnerFilter !== "all" && householdData) {
+      const { currentUserId, members } = householdData;
+      const partner = members.find((m) => !m.isCurrentUser);
+      if (docOwnerFilter === "mine") {
+        result = result.filter((item) => {
+          const owner = item.metadata_json?.belongs_to_user_id as string | undefined;
+          return !owner || owner === currentUserId;
+        });
+      } else if (docOwnerFilter === "partner" && partner) {
+        result = result.filter(
+          (item) =>
+            (item.metadata_json?.belongs_to_user_id as string | undefined) ===
+            partner.id,
+        );
+      }
+    }
+    return result;
+  }, [items, searchQuery, docOwnerFilter, selectedModule, householdData]);
+
+  // Color for a document's owner (blue = me if theme isn't pink, pink = partner)
+  const getDocOwnerColor = (item: CatalogueItem): string | undefined => {
+    if (selectedModule?.type !== "documents") return undefined;
+    const owner = item.metadata_json?.belongs_to_user_id as string | undefined;
+    if (!owner || !householdData) return undefined;
+    const isMe = owner === householdData.currentUserId;
+    const myColor = theme === "pink" ? "#ec4899" : "#60a5fa";
+    const partnerColor = theme === "pink" ? "#60a5fa" : "#ec4899";
+    return isMe ? myColor : partnerColor;
+  };
 
   const filteredCategories = useMemo(() => {
     if (!searchQuery) return categories;
@@ -188,6 +225,7 @@ export default function WebCatalogue() {
     setSelectedModule(null);
     setSelectedCategory(null);
     setSearchQuery("");
+    setDocOwnerFilter("all");
   };
 
   const navigateToCategories = (module: CatalogueModule) => {
@@ -392,6 +430,48 @@ export default function WebCatalogue() {
                 </button>
               )}
           </div>
+
+          {/* Document owner filter — only when viewing document items and household partner exists */}
+          {selectedModule?.type === "documents" &&
+            currentLevel === "items" &&
+            householdData?.hasPartner && (
+              <div className="flex items-center gap-2 mt-3">
+                {(
+                  [
+                    { key: "all", label: "All" },
+                    { key: "mine", label: "Mine" },
+                    {
+                      key: "partner",
+                      label:
+                        householdData.members.find((m) => !m.isCurrentUser)
+                          ?.displayName ?? "Partner",
+                    },
+                  ] as { key: DocOwnerFilter; label: string }[]
+                ).map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setDocOwnerFilter(key)}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-sm font-medium border transition-all",
+                      docOwnerFilter === key
+                        ? key === "mine"
+                          ? theme === "pink"
+                            ? "bg-pink-500/20 border-pink-400/60 text-pink-300"
+                            : "bg-blue-500/20 border-blue-400/60 text-blue-300"
+                          : key === "partner"
+                            ? theme === "pink"
+                              ? "bg-blue-500/20 border-blue-400/60 text-blue-300"
+                              : "bg-pink-500/20 border-pink-400/60 text-pink-300"
+                            : "bg-white/15 border-white/30 text-white"
+                        : "border-white/10 text-white/50 hover:border-white/30 hover:text-white/70",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
         </div>
       </div>
 
@@ -600,6 +680,7 @@ export default function WebCatalogue() {
                     isLoading={itemsLoading}
                     themeClasses={themeClasses}
                     isTasksModule={isTasksModule}
+                    ownerColorFn={getDocOwnerColor}
                     onClick={handleViewItem}
                     onDoubleClick={handleTogglePin}
                     onEdit={handleEditItem}
@@ -619,6 +700,7 @@ export default function WebCatalogue() {
             isLoading={itemsLoading}
             themeClasses={themeClasses}
             isTasksModule={isTasksModule}
+            ownerColorFn={getDocOwnerColor}
             onClick={handleViewItem}
             onDoubleClick={handleTogglePin}
             onEdit={handleEditItem}
@@ -797,6 +879,7 @@ interface ItemsGridProps {
   isLoading: boolean;
   themeClasses: ReturnType<typeof useThemeClasses>;
   isTasksModule?: boolean;
+  ownerColorFn?: (item: CatalogueItem) => string | undefined;
   onClick: (item: CatalogueItem) => void;
   onDoubleClick: (item: CatalogueItem) => void;
   onEdit: (item: CatalogueItem) => void;
@@ -810,6 +893,7 @@ function ItemsGrid({
   isLoading,
   themeClasses,
   isTasksModule,
+  ownerColorFn,
   onClick,
   onDoubleClick,
   onEdit,
@@ -861,6 +945,7 @@ function ItemsGrid({
                 item={item}
                 themeClasses={themeClasses}
                 isTasksModule={isTasksModule}
+                ownerColor={ownerColorFn?.(item)}
                 onClick={onClick}
                 onDoubleClick={onDoubleClick}
                 onEdit={onEdit}
@@ -880,6 +965,7 @@ function ItemsGrid({
             item={item}
             themeClasses={themeClasses}
             isTasksModule={isTasksModule}
+            ownerColor={ownerColorFn?.(item)}
             onClick={onClick}
             onDoubleClick={onDoubleClick}
             onEdit={onEdit}
@@ -896,6 +982,7 @@ interface ItemCardProps {
   item: CatalogueItem;
   themeClasses: ReturnType<typeof useThemeClasses>;
   isTasksModule?: boolean;
+  ownerColor?: string;
   onClick: (item: CatalogueItem) => void;
   onDoubleClick: (item: CatalogueItem) => void;
   onEdit: (item: CatalogueItem) => void;
@@ -907,6 +994,7 @@ function ItemCard({
   item,
   themeClasses,
   isTasksModule,
+  ownerColor,
   onClick,
   onDoubleClick,
   onEdit,
@@ -937,6 +1025,7 @@ function ItemCard({
         themeClasses.border,
         isCompleted && "opacity-60",
       )}
+      style={ownerColor ? { borderLeftColor: ownerColor, borderLeftWidth: 3 } : undefined}
       onClick={() => onClick(item)}
       onDoubleClick={(e) => {
         e.stopPropagation();

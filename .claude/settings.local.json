@@ -31,7 +31,8 @@
       "Bash(pnpm tsc *)",
       "PowerShell(pnpm tsc *)",
       "Bash(ls src/app/today/)",
-      "Bash(ls src/app/focus/)"
+      "Bash(ls src/app/focus/)",
+      "Bash(npx eslint *)"
     ]
   }
 }

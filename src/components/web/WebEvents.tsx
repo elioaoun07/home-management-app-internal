@@ -66,6 +66,11 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AddFlexibleFromCatalogueDialog } from "./AddFlexibleFromCatalogueDialog";
+import {
+  CatalogueItemDragOverlay,
+  CatalogueSidePanel,
+} from "./CatalogueSidePanel";
+import { DropSlotConfigSheet } from "./DropSlotConfigSheet";
 import EditOccurrenceDialog from "./EditOccurrenceDialog";
 import { ItemSubtasksList } from "./ItemSubtasks";
 import { WebCalendar } from "./WebCalendar";
@@ -74,6 +79,16 @@ import WebEventsDashboard from "./WebEventsDashboard";
 import WebTabletMissionControl from "./WebTabletMissionControl";
 import WebTodayView from "./WebTodayView";
 import { WebWeekView } from "./WebWeekView";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import type { CatalogueItem } from "@/types/catalogue";
 
 // Item types for filtering (all visible by default)
 type ItemTypeFilter = "event" | "reminder" | "task";
@@ -171,6 +186,59 @@ export default function WebEvents() {
   const [isCatalogueDialogOpen, setIsCatalogueDialogOpen] = useState(false);
   const [catalogueDialogInitialItemId, setCatalogueDialogInitialItemId] =
     useState<string | null>(null);
+
+  // Catalogue side panel + drag-and-drop scheduling
+  const [showCataloguePanel, setShowCataloguePanel] = useState(false);
+  const [activeCatalogueItem, setActiveCatalogueItem] =
+    useState<CatalogueItem | null>(null);
+  const [pendingDrop, setPendingDrop] = useState<{
+    catalogueItem: CatalogueItem;
+    targetDate: Date;
+    /** Pre-filled time derived from the dropped hour slot, e.g. "09:00" */
+    droppedTime?: string;
+  } | null>(null);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+
+  function handleDragStart({ active }: DragStartEvent) {
+    const item = active.data.current?.catalogueItem as CatalogueItem | undefined;
+    setActiveCatalogueItem(item ?? null);
+  }
+
+  function handleDragEnd({ active, over }: DragEndEvent) {
+    setActiveCatalogueItem(null);
+    if (!active || !over) return;
+    const item = active.data.current?.catalogueItem as CatalogueItem | undefined;
+    if (!item) return;
+
+    const overId = over.id as string;
+
+    try {
+      if (overId.includes("|")) {
+        // Hour slot drop: "yyyy-MM-dd|HH"
+        const pipeIdx = overId.indexOf("|");
+        const dateStr = overId.slice(0, pipeIdx);
+        const hour = parseInt(overId.slice(pipeIdx + 1), 10);
+        const targetDate = new Date(`${dateStr}T12:00:00`);
+        if (isNaN(targetDate.getTime())) return;
+        const droppedTime = `${String(hour).padStart(2, "0")}:00`;
+        setPendingDrop({ catalogueItem: item, targetDate, droppedTime });
+      } else {
+        // Day header drop: ISO date string
+        const targetDate = new Date(overId);
+        if (isNaN(targetDate.getTime())) return;
+        setPendingDrop({ catalogueItem: item, targetDate });
+      }
+    } catch {
+      /* ignore invalid ids */
+    }
+  }
+
+  function handleDragCancel() {
+    setActiveCatalogueItem(null);
+  }
 
   // Track if screen is mobile size for modal positioning
   const [isMobileScreen, setIsMobileScreen] = useState(false);
@@ -843,22 +911,25 @@ export default function WebEvents() {
                 {view === "week" && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setCatalogueDialogInitialItemId(null);
-                      setIsCatalogueDialogOpen(true);
-                    }}
+                    onClick={() => setShowCataloguePanel((v) => !v)}
                     className={cn(
                       "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all duration-200 text-xs font-medium",
-                      isFrost
-                        ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-700 ring-1 ring-indigo-200"
-                        : isPink
-                          ? "bg-pink-500/15 hover:bg-pink-500/25 text-pink-200 ring-1 ring-pink-500/40"
-                          : "bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 ring-1 ring-cyan-500/40",
+                      showCataloguePanel
+                        ? isFrost
+                          ? "bg-indigo-600 text-white ring-1 ring-indigo-600 shadow-sm"
+                          : isPink
+                            ? "bg-pink-500/30 text-pink-100 ring-1 ring-pink-400/60"
+                            : "bg-cyan-500/30 text-cyan-100 ring-1 ring-cyan-400/60"
+                        : isFrost
+                          ? "bg-indigo-100 hover:bg-indigo-200 text-indigo-700 ring-1 ring-indigo-200"
+                          : isPink
+                            ? "bg-pink-500/15 hover:bg-pink-500/25 text-pink-200 ring-1 ring-pink-500/40"
+                            : "bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 ring-1 ring-cyan-500/40",
                     )}
-                    title="Add from Catalogue (flexible routines)"
+                    title="Toggle Catalogue panel (drag routines to calendar)"
                   >
                     <BookMarked className="w-4 h-4" />
-                    <span className="hidden sm:inline">From Catalogue</span>
+                    <span className="hidden sm:inline">Catalogue</span>
                   </button>
                 )}
                 <Popover>
@@ -1037,47 +1108,82 @@ export default function WebEvents() {
             )}
 
             {/* Main Calendar View */}
-            {!isLoading && view === "month" && (
-              <WebCalendar
-                items={filteredItems}
-                occurrenceActions={occurrenceActions}
-                subtaskCompletions={subtaskCompletions}
-                selectedDate={selectedDate}
-                onDateSelect={setSelectedDate}
-                onItemClick={handleItemClick}
-                onAddEvent={handleAddEvent}
-                onBirthdayClick={handleBirthdayClick}
-                onDayModalClose={() => {
-                  // Clean up action dialogs when day modal closes
-                  setDetailItem(null);
-                  setClickedOccurrenceDate(null);
-                  setModalPosition(null);
-                  setShowPostponeDialog(false);
-                  setShowActionDialog(false);
-                }}
-                showBirthdays={showBirthdays}
-              />
-            )}
+            <DndContext
+              sensors={dndSensors}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
+              {/* Side panel + calendar layout */}
+              <div className={cn("flex gap-3", showCataloguePanel && view === "week" ? "items-start" : "")}>
+                {/* Catalogue side panel (week view only) */}
+                {view === "week" && (
+                  <CatalogueSidePanel
+                    isOpen={showCataloguePanel}
+                    onClose={() => setShowCataloguePanel(false)}
+                    isPink={isPink}
+                    isFrost={isFrost}
+                    weekStart={startOfWeek(selectedDate ?? new Date(), {
+                      weekStartsOn: 1,
+                    })}
+                  />
+                )}
 
-            {/* Week View */}
-            {!isLoading && view === "week" && (
-              <WebWeekView
-                items={filteredItems}
-                occurrenceActions={occurrenceActions}
-                subtaskCompletions={subtaskCompletions}
-                selectedDate={selectedDate}
-                controlledWeekStart={selectedDate ?? undefined}
-                onWeekChange={(newWeekStart) => setSelectedDate(newWeekStart)}
-                onItemClick={handleItemClick}
-                onAddEvent={handleAddEvent}
-                onBirthdayClick={handleBirthdayClick}
-                onOpenCataloguePicker={(itemId) => {
-                  setCatalogueDialogInitialItemId(itemId ?? null);
-                  setIsCatalogueDialogOpen(true);
-                }}
-                showBirthdays={showBirthdays}
-              />
-            )}
+                <div className="flex-1 min-w-0">
+                  {!isLoading && view === "month" && (
+                    <WebCalendar
+                      items={filteredItems}
+                      occurrenceActions={occurrenceActions}
+                      subtaskCompletions={subtaskCompletions}
+                      selectedDate={selectedDate}
+                      onDateSelect={setSelectedDate}
+                      onItemClick={handleItemClick}
+                      onAddEvent={handleAddEvent}
+                      onBirthdayClick={handleBirthdayClick}
+                      onDayModalClose={() => {
+                        setDetailItem(null);
+                        setClickedOccurrenceDate(null);
+                        setModalPosition(null);
+                        setShowPostponeDialog(false);
+                        setShowActionDialog(false);
+                      }}
+                      showBirthdays={showBirthdays}
+                    />
+                  )}
+
+                  {!isLoading && view === "week" && (
+                    <WebWeekView
+                      items={filteredItems}
+                      occurrenceActions={occurrenceActions}
+                      subtaskCompletions={subtaskCompletions}
+                      selectedDate={selectedDate}
+                      controlledWeekStart={selectedDate ?? undefined}
+                      onWeekChange={(newWeekStart) => setSelectedDate(newWeekStart)}
+                      onItemClick={handleItemClick}
+                      onAddEvent={handleAddEvent}
+                      onBirthdayClick={handleBirthdayClick}
+                      onOpenCataloguePicker={(itemId) => {
+                        setCatalogueDialogInitialItemId(itemId ?? null);
+                        setIsCatalogueDialogOpen(true);
+                      }}
+                      showBirthdays={showBirthdays}
+                      isDragActive={!!activeCatalogueItem}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Drag overlay — ghost card that follows the cursor */}
+              <DragOverlay dropAnimation={null}>
+                {activeCatalogueItem && (
+                  <CatalogueItemDragOverlay
+                    item={activeCatalogueItem}
+                    isPink={isPink}
+                    isFrost={isFrost}
+                  />
+                )}
+              </DragOverlay>
+            </DndContext>
 
             {/* Item Detail Modal (Floating near item) */}
             {detailItem && modalPosition && (
@@ -1514,7 +1620,7 @@ export default function WebEvents() {
               prefillCategory={prefillCategory}
             />
 
-            {/* Add from Catalogue Dialog (week view) */}
+            {/* Add from Catalogue Dialog (week view — legacy flow from flexible strip) */}
             {isCatalogueDialogOpen && (
               <AddFlexibleFromCatalogueDialog
                 isOpen={isCatalogueDialogOpen}
@@ -1528,6 +1634,18 @@ export default function WebEvents() {
                 defaultDate={selectedDate ?? new Date()}
                 initialItemId={catalogueDialogInitialItemId}
                 onWeekChange={(newWeekStart) => setSelectedDate(newWeekStart)}
+              />
+            )}
+
+            {/* Drop slot config — shown after dragging a catalogue item onto a day */}
+            {pendingDrop && (
+              <DropSlotConfigSheet
+                catalogueItem={pendingDrop.catalogueItem}
+                targetDate={pendingDrop.targetDate}
+                droppedTime={pendingDrop.droppedTime}
+                onClose={() => setPendingDrop(null)}
+                isPink={isPink}
+                isFrost={isFrost}
               />
             )}
 

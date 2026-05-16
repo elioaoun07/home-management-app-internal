@@ -10,6 +10,7 @@ import {
 } from "@/features/items/useItemActions";
 import { type SubtaskCompletion } from "@/features/items/useItems";
 import { cn } from "@/lib/utils";
+import { useDroppable } from "@dnd-kit/core";
 import {
   adjustOccurrenceToWallClock,
   getOccurrencesInRange,
@@ -61,6 +62,8 @@ interface WebWeekViewProps {
   controlledWeekStart?: Date | null;
   /** Called whenever the user navigates to a different week */
   onWeekChange?: (newWeekStart: Date) => void;
+  /** Set to true while a catalogue item is being dragged (activates drop zones) */
+  isDragActive?: boolean;
 }
 
 // Item type colors with gradients for more visual appeal
@@ -99,6 +102,136 @@ const typeColors: Record<
 
 // buildFullRRuleString imported from @/lib/utils/date
 
+// ─── Droppable day header cell ────────────────────────────────────────────────
+
+function DroppableDayHeader({
+  day,
+  isDragActive,
+  isPink,
+  children,
+}: {
+  day: Date;
+  isDragActive: boolean;
+  isPink: boolean;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: day.toISOString() });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "relative transition-all duration-150",
+        isDragActive && "cursor-copy",
+      )}
+    >
+      {/* Drop indicator ring */}
+      {isDragActive && (
+        <div
+          className={cn(
+            "absolute inset-0 rounded-lg border-2 pointer-events-none z-10 transition-all duration-150",
+            isOver
+              ? isPink
+                ? "border-pink-400 bg-pink-500/10 scale-105"
+                : "border-cyan-400 bg-cyan-500/10 scale-105"
+              : "border-white/10 border-dashed",
+          )}
+        />
+      )}
+      {children}
+    </div>
+  );
+}
+
+// ─── Droppable hour slot cell ─────────────────────────────────────────────────
+
+function DroppableHourSlot({
+  day,
+  hour,
+  isDragActive,
+  isPink,
+  isToday: todayFlag,
+  children,
+  onClick,
+}: {
+  day: Date;
+  hour: number;
+  isDragActive: boolean;
+  isPink: boolean;
+  isToday: boolean;
+  children?: React.ReactNode;
+  onClick?: () => void;
+}) {
+  // ID encodes date + hour with pipe so the parent can parse both
+  const id = `${format(day, "yyyy-MM-dd")}|${hour}`;
+  const { setNodeRef, isOver } = useDroppable({ id });
+
+  const accentBg = isPink
+    ? "rgba(236,72,153,0.18)"
+    : "rgba(34,211,238,0.18)";
+  const accentBorder = isPink ? "rgb(236,72,153)" : "rgb(34,211,238)";
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "border-l border-t border-white/[0.06] relative group transition-colors",
+        isDragActive ? "cursor-copy" : "cursor-pointer",
+        todayFlag && "bg-white/[0.02]",
+        // Slot-level drag highlight
+        isDragActive && !isOver && "hover:bg-white/[0.03]",
+      )}
+      style={isOver && isDragActive ? { backgroundColor: accentBg } : undefined}
+      onClick={onClick}
+    >
+      {/* Normal hover gradient (only when not dragging) */}
+      {!isDragActive && (
+        <motion.div
+          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{
+            background: isPink
+              ? "linear-gradient(135deg, rgba(236,72,153,0.1), rgba(147,51,234,0.1))"
+              : "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(59,130,246,0.1))",
+          }}
+        />
+      )}
+
+      {/* Active drag: dashed outline on every slot */}
+      {isDragActive && !isOver && (
+        <div className="absolute inset-0 pointer-events-none border border-dashed border-white/[0.08]" />
+      )}
+
+      {/* Hovered slot highlight */}
+      {isDragActive && isOver && (
+        <>
+          <div
+            className="absolute inset-0 pointer-events-none border-2 rounded-sm"
+            style={{ borderColor: accentBorder }}
+          />
+          {/* "Drop here" label */}
+          <div
+            className="absolute inset-x-0 top-1 flex items-center justify-center pointer-events-none"
+          >
+            <span
+              className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md text-white"
+              style={{ backgroundColor: accentBorder }}
+            >
+              {`${hour % 12 === 0 ? 12 : hour % 12} ${hour < 12 ? "AM" : "PM"}`}
+            </span>
+          </div>
+        </>
+      )}
+
+      {/* Half-hour line */}
+      <div className="absolute left-0 right-0 top-1/2 border-t border-white/[0.03] border-dashed" />
+
+      {children}
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function WebWeekView({
   items,
   occurrenceActions = [],
@@ -111,6 +244,7 @@ export function WebWeekView({
   onOpenCataloguePicker,
   controlledWeekStart,
   onWeekChange,
+  isDragActive = false,
 }: WebWeekViewProps) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
@@ -677,8 +811,13 @@ export function WebWeekView({
                   const totalItems = dayItems.length + birthdays.length;
 
                   return (
-                    <motion.div
+                    <DroppableDayHeader
                       key={day.toISOString()}
+                      day={day}
+                      isDragActive={isDragActive}
+                      isPink={isPink}
+                    >
+                    <motion.div
                       initial={{ opacity: 0, y: -20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{
@@ -791,6 +930,7 @@ export function WebWeekView({
                         </motion.div>
                       )}
                     </motion.div>
+                    </DroppableDayHeader>
                   );
                 })}
               </motion.div>
@@ -927,33 +1067,21 @@ export function WebWeekView({
 
                   {/* Day Columns */}
                   {weekDays.map((day) => (
-                    <div
+                    <DroppableHourSlot
                       key={`${day.toISOString()}-${hour}`}
-                      className={cn(
-                        "border-l border-t border-white/[0.06] relative group transition-colors cursor-pointer",
-                        isToday(day) && "bg-white/[0.02]",
-                      )}
+                      day={day}
+                      hour={hour}
+                      isDragActive={isDragActive}
+                      isPink={isPink}
+                      isToday={isToday(day)}
                       onClick={() => {
-                        if (onAddEvent) {
-                          // Create a date at the specific hour on the clicked day
+                        if (!isDragActive && onAddEvent) {
                           const clickedDate = new Date(day);
                           clickedDate.setHours(hour, 0, 0, 0);
                           onAddEvent(clickedDate);
                         }
                       }}
-                    >
-                      {/* Hover effect */}
-                      <motion.div
-                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        style={{
-                          background: isPink
-                            ? "linear-gradient(135deg, rgba(236,72,153,0.1), rgba(147,51,234,0.1))"
-                            : "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(59,130,246,0.1))",
-                        }}
-                      />
-                      {/* Half-hour line */}
-                      <div className="absolute left-0 right-0 top-1/2 border-t border-white/[0.03] border-dashed" />
-                    </div>
+                    />
                   ))}
                 </div>
               ))}
