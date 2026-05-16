@@ -6,9 +6,10 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 interface CompleteRequestBody {
-  occurrence_date: string; // ISO date string (YYYY-MM-DD)
+  occurrence_date: string;
   is_recurring: boolean;
-  actual_minutes?: number; // optional task time tracking
+  actual_minutes?: number;
+  reason?: string;
 }
 
 export async function POST(
@@ -30,7 +31,7 @@ export async function POST(
 
     const { id: itemId } = await params;
     const body: CompleteRequestBody = await request.json();
-    const { occurrence_date, is_recurring, actual_minutes } = body;
+    const { occurrence_date, is_recurring, actual_minutes, reason } = body;
 
     if (!occurrence_date) {
       return NextResponse.json(
@@ -57,7 +58,7 @@ export async function POST(
     const isResponsible = item.responsible_user_id === user.id;
     let canComplete = isCreator || isResponsible;
 
-    if (!canComplete && item.notify_all_household && item.is_public) {
+    if (!canComplete && item.notify_all_household) {
       const { data: link } = await adminDb
         .from("household_links")
         .select("id")
@@ -82,6 +83,7 @@ export async function POST(
           item_id: itemId,
           occurrence_date,
           action_type: "completed",
+          reason: reason || null,
           created_by: user.id,
           metadata_json:
             typeof actual_minutes === "number" && actual_minutes >= 0
@@ -92,10 +94,6 @@ export async function POST(
         .single();
 
       if (error) {
-        console.error(
-          "[item-complete] Failed to complete recurring item:",
-          error,
-        );
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
@@ -132,15 +130,12 @@ export async function POST(
           item_id: itemId,
           occurrence_date,
           action_type: "completed",
+          reason: reason || null,
           created_by: user.id,
         }),
       ]);
 
       if (itemResult.error) {
-        console.error(
-          "[item-complete] Failed to update item:",
-          itemResult.error,
-        );
         return NextResponse.json(
           { error: itemResult.error.message },
           { status: 500 },

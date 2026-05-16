@@ -7,10 +7,12 @@ import {
   CANCEL_ACK,
   confirmTemplate,
   DIG_DEEPER_PROMPT,
+  getWakeGreeting,
   SLEEP_ACK,
   successTemplate,
-  WAKE_ACK,
 } from "./speechTemplates";
+import { getCachedGreeting } from "./greetingCache";
+import { getAudioContext } from "./audioContext";
 
 export type ConversationState =
   | "off"
@@ -48,13 +50,28 @@ interface EngineConfig {
   confirmationTimeoutMs?: number;
   /** High confidence threshold — auto-execute above this. Default 0.85. */
   highConfidenceThreshold?: number;
+  /** User's first name — personalizes the wake greeting. */
+  userName?: string;
+  /**
+   * Called when the engine activates.
+   * `source === "speech"` means the wake phrase was heard.
+   * `source === "trigger"` means the user tapped/clicked.
+   */
+  onWake?: (source: "speech" | "trigger") => void;
 }
 
 /** Confidence below which we ask "want me to dig deeper?" rather than confirm. */
 const AI_FALLBACK_THRESHOLD = 0.50;
 
+/**
+ * Wake phrase pattern. Accepts: "ERA", "Hey ERA", "Hi ERA", "Hello ERA", "OK ERA".
+ * Uses \b (not ^) so it survives Chrome prefixing with a space or filler word.
+ * The \b before the optional prefix ensures "area" doesn't match.
+ */
+const WAKE_PATTERN = /\b(hey|hi|hello|ok|okay)?\s*e\.?r\.?a\.?\b/i;
+
 export interface ConversationEngine {
-  /** Start conversation mode — opens mic, arms wake-word simulation. */
+  /** Start conversation mode — opens mic, arms wake-word detection. */
   startConversation(): void;
   /** Stop conversation mode — closes mic, resets state. */
   stopConversation(): void;
@@ -62,6 +79,11 @@ export interface ConversationEngine {
   triggerWake(): void;
   /** Immediately stop TTS playback (barge-in support). */
   bargeIn(): void;
+  /**
+   * Called by an external VAD gate when speech energy is detected in idle state.
+   * Arms a fresh STT instance to determine if it's the wake phrase.
+   */
+  armIdleSTT(): void;
   readonly currentState: ConversationState;
 }
 
@@ -71,6 +93,8 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
     continuationWindowMs = 12_000,
     confirmationTimeoutMs = 5_000,
     highConfidenceThreshold = 0.85,
+    userName,
+    onWake,
   } = config;
 
   let state: ConversationState = "off";
@@ -97,9 +121,80 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
     continuationTimer = setTimeout(() => {
       if (state === "listening" || state === "speaking") {
         setState("idle");
-        startListeningSTT(); // re-arm STT in idle — waiting for wake
+        startListeningSTT(); // re-arm STT in idle — listening for "Hey ERA"
       }
     }, continuationWindowMs);
+  }
+
+  /**
+   * Plays the wake greeting using a cached AudioBuffer (instant) if available,
+   * falling back to the live TTS fetch path.
+   */
+  function speakGreeting(onDone: () => void) {
+    const greeting = getWakeGreeting(userName);
+    handlers.onWillSpeak?.(greeting);
+    tts?.stop();
+
+    const cachedBuf = getCachedGreeting(greeting);
+    if (cachedBuf) {
+      setState("speaking");
+      try {
+        const ac = getAudioContext();
+        if (ac.state === "suspended") {
+          // Context not yet unlocked — fall through to live TTS
+          throw new Error("suspended");
+        }
+        const node = ac.createBufferSource();
+        node.buffer = cachedBuf;
+        node.connect(ac.destination);
+        node.onended = () => { if (!isStopped) onDone(); };
+        node.start();
+        return;
+      } catch {
+        // Fall through to live TTS
+      }
+    }
+
+    // Live TTS path (also handles the first wake before cache is warm)
+    tts = createTTSQueue({
+      onDone: () => {
+        if (isStopped) return;
+        onDone();
+      },
+    });
+    tts.push(greeting);
+    tts.flush();
+    setState("speaking");
+  }
+
+  /**
+   * Shared wake logic — called by triggerWake() (click/long-press) and by
+   * wake phrase detection (speech). Kill the current STT first so its abort()
+   * clears the sttCapture silence timer — preventing any stale onFinal from
+   * firing into intent classification while ERA is speaking the greeting.
+   */
+  function activateListening(source: "speech" | "trigger" = "speech") {
+    clearTimers();
+    stt?.abort();
+    stt = null;
+    tts?.stop();
+    pendingIntent = null;
+    onWake?.(source);
+    setState("listening");
+
+    if (source === "speech") {
+      // Voice wake: play greeting (cached or live), then open mic for user's command.
+      speakGreeting(() => {
+        if (!isStopped) {
+          startListeningSTT();
+          armContinuationWindow();
+        }
+      });
+    } else {
+      // Click/tap wake: no greeting TTS — go straight to listening.
+      startListeningSTT();
+      armContinuationWindow();
+    }
   }
 
   function speak(text: string, onDone?: () => void) {
@@ -181,14 +276,14 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
       setState("speaking");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = "";
+      let buf = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() ?? "";
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n\n");
+        buf = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           try {
@@ -222,10 +317,27 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
 
   function handleTranscript(transcript: string) {
     if (isStopped || !transcript.trim()) return;
+
+    // Ignore any stale STT results that fire while TTS is playing
+    if (state === "speaking") return;
+
+    // In idle state, only respond to the wake phrase — ignore everything else
+    if (state === "idle") {
+      if (WAKE_PATTERN.test(transcript)) {
+        activateListening("speech");
+      }
+      return;
+    }
+
     clearTimers();
 
     // If in CONFIRMING state, interpret new speech as yes/no answer
     if (state === "confirming" && pendingIntent) {
+      // Wake phrase escapes confirmation — user is re-addressing ERA
+      if (WAKE_PATTERN.test(transcript.trim())) {
+        activateListening("speech");
+        return;
+      }
       const lower = transcript.toLowerCase().trim();
       const isYes = /^(yes|yeah|yep|sure|do it|go ahead|confirm|ok|okay|correct|right)\b/i.test(lower);
       const isNo = /^(no|nope|never mind|cancel|don'?t|stop)\b/i.test(lower);
@@ -277,47 +389,36 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
     }
 
     if (intent.confidence >= highConfidenceThreshold) {
-      // High confidence → execute immediately
       executeNativeIntent(intent);
       return;
     }
 
     if (intent.confidence >= AI_FALLBACK_THRESHOLD) {
-      // Medium confidence → ask for confirmation
       pendingIntent = intent;
       pendingConfirmIsDigDeeper = false;
       const question = confirmTemplate(intent);
       setState("confirming");
-      speak(question, () => {
-        startConfirmationTimer();
-      });
+      speak(question, () => { startConfirmationTimer(); });
       return;
     }
 
     if (intent.kind === "unknown") {
-      // Offer AI fallback
       pendingIntent = intent;
       pendingConfirmIsDigDeeper = true;
       setState("confirming");
-      speak(DIG_DEEPER_PROMPT, () => {
-        startConfirmationTimer();
-      });
+      speak(DIG_DEEPER_PROMPT, () => { startConfirmationTimer(); });
       return;
     }
 
-    // Low-confidence non-unknown — still offer confirmation
     pendingIntent = intent;
     pendingConfirmIsDigDeeper = false;
     const question = confirmTemplate(intent);
     setState("confirming");
-    speak(question, () => {
-      startConfirmationTimer();
-    });
+    speak(question, () => { startConfirmationTimer(); });
   }
 
   function startConfirmationTimer() {
     confirmationTimer = setTimeout(() => {
-      // Timeout = implicit "no"
       pendingIntent = null;
       setState("listening");
       startListeningSTT();
@@ -329,7 +430,14 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
     stt?.abort();
     if (isStopped) return;
     stt = createSTTCapture({
-      onInterim: (t) => handlers.onTranscriptChange?.(t),
+      onInterim: (t) => {
+        handlers.onTranscriptChange?.(t);
+        // Fast-path: detect wake phrase on interim results so we don't wait
+        // for the 500ms silence window before responding.
+        if (state === "idle" && WAKE_PATTERN.test(t)) {
+          activateListening("speech");
+        }
+      },
       onFinal: (t) => {
         handlers.onTranscriptChange?.(t);
         handleTranscript(t);
@@ -344,10 +452,11 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
         }
       },
       onEnd: () => {
-        // Restart STT if still in listening state (Web Speech API stops itself)
+        stt = null; // mark as ended so armIdleSTT check knows it's safe to restart
         if ((state === "listening" || state === "idle") && !isStopped) {
           setTimeout(() => {
-            if ((state === "listening" || state === "idle") && !isStopped) {
+            // Skip if VAD already armed a fresh STT while we were waiting
+            if ((state === "listening" || state === "idle") && !isStopped && !stt) {
               startListeningSTT();
             }
           }, 100);
@@ -365,6 +474,7 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
     startConversation() {
       isStopped = false;
       setState("idle");
+      startListeningSTT(); // Begin listening for "Hey ERA" immediately
     },
 
     stopConversation() {
@@ -377,16 +487,7 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
 
     triggerWake() {
       if (state === "off" || isStopped) return;
-      clearTimers();
-      tts?.stop();
-      pendingIntent = null;
-      setState("listening");
-      speak(WAKE_ACK, () => {
-        if (!isStopped) {
-          startListeningSTT();
-          armContinuationWindow();
-        }
-      });
+      activateListening("trigger");
     },
 
     bargeIn() {
@@ -395,6 +496,12 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
         setState("listening");
         startListeningSTT();
         armContinuationWindow();
+      }
+    },
+
+    armIdleSTT() {
+      if (state === "idle" && !isStopped) {
+        startListeningSTT();
       }
     },
   };

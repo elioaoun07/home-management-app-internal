@@ -282,7 +282,7 @@ export default function ItemDetailModal({
   const isResponsible = currentUserId
     ? item.responsible_user_id === currentUserId
     : true;
-  const isAllHousehold = !!(item.notify_all_household && item.is_public);
+  const isAllHousehold = !!item.notify_all_household;
   const canComplete = isCreator || isResponsible || isAllHousehold;
   const canEdit = isCreator;
   const canDelete = isCreator;

@@ -2,6 +2,7 @@
 // API route for item actions: complete, postpone, cancel
 // Used by offline sync engine for replay
 
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -44,12 +45,14 @@ export async function POST(
       );
     }
 
-    // Verify item exists and is not archived/soft-deleted. Replays from the
-    // offline queue can otherwise resurrect actions on items the user has
-    // since removed.
-    const { data: item, error: itemFetchError } = await supabase
+    const adminDb = supabaseAdmin();
+
+    // Fetch via adminDb to bypass RLS — auth is enforced explicitly below.
+    const { data: item, error: itemFetchError } = await adminDb
       .from("items")
-      .select("id, user_id, type, status, archived_at, deleted_at")
+      .select(
+        "id, user_id, type, status, archived_at, deleted_at, responsible_user_id, notify_all_household",
+      )
       .eq("id", itemId)
       .single();
 
@@ -63,10 +66,33 @@ export async function POST(
       );
     }
 
+    // Authorization: creator or responsible user can always act.
+    // Any household member can act when notify_all_household is true.
+    const isCreator = item.user_id === user.id;
+    const isResponsible = item.responsible_user_id === user.id;
+    let canAct = isCreator || isResponsible;
+
+    if (!canAct && item.notify_all_household) {
+      const { data: link } = await adminDb
+        .from("household_links")
+        .select("id")
+        .eq("active", true)
+        .or(
+          `and(owner_user_id.eq.${item.user_id},partner_user_id.eq.${user.id}),` +
+            `and(owner_user_id.eq.${user.id},partner_user_id.eq.${item.user_id})`,
+        )
+        .maybeSingle();
+      canAct = !!link;
+    }
+
+    if (!canAct) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // === COMPLETE ===
     if (action === "complete") {
       if (is_recurring) {
-        const { data, error } = await supabase
+        const { data, error } = await adminDb
           .from("item_occurrence_actions")
           .insert({
             item_id: itemId,
@@ -105,9 +131,9 @@ export async function POST(
           updatePayload.archived_at = new Date().toISOString();
         }
 
-        const [itemResult, actionResult] = await Promise.all([
-          supabase.from("items").update(updatePayload).eq("id", itemId),
-          supabase.from("item_occurrence_actions").insert({
+        const [itemResult] = await Promise.all([
+          adminDb.from("items").update(updatePayload).eq("id", itemId),
+          adminDb.from("item_occurrence_actions").insert({
             item_id: itemId,
             occurrence_date,
             action_type: "completed",
@@ -123,11 +149,16 @@ export async function POST(
           );
         }
 
-        // Also update reminder details
-        await supabase
+        await adminDb
           .from("reminder_details")
           .update({ completed_at: new Date().toISOString() })
           .eq("item_id", itemId);
+
+        await adminDb
+          .from("item_alerts")
+          .update({ active: false })
+          .eq("item_id", itemId)
+          .eq("active", true);
 
         return NextResponse.json({
           success: true,
@@ -147,7 +178,7 @@ export async function POST(
         );
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await adminDb
         .from("item_occurrence_actions")
         .insert({
           item_id: itemId,
@@ -167,18 +198,17 @@ export async function POST(
 
       // For non-recurring items, update the due date and alerts
       if (!is_recurring && postponed_to) {
-        await supabase
+        await adminDb
           .from("reminder_details")
           .update({ due_at: postponed_to })
           .eq("item_id", itemId);
 
-        await supabase
+        await adminDb
           .from("event_details")
           .update({ start_at: postponed_to })
           .eq("item_id", itemId);
 
-        // Recalculate alert trigger times
-        const { data: alerts } = await supabase
+        const { data: alerts } = await adminDb
           .from("item_alerts")
           .select("id, kind, offset_minutes")
           .eq("item_id", itemId)
@@ -193,7 +223,7 @@ export async function POST(
                 postponedDate.getTime() - alert.offset_minutes * 60 * 1000,
               ).toISOString();
             }
-            await supabase
+            await adminDb
               .from("item_alerts")
               .update({ trigger_at: newTriggerAt, last_fired_at: null })
               .eq("id", alert.id);
@@ -211,7 +241,7 @@ export async function POST(
     // === CANCEL ===
     if (action === "cancel") {
       if (is_recurring && occurrence_date) {
-        const { data, error } = await supabase
+        const { data, error } = await adminDb
           .from("item_occurrence_actions")
           .insert({
             item_id: itemId,
@@ -227,10 +257,7 @@ export async function POST(
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // Also write a suppression so the cron has a fast, explicit signal
-        // that this occurrence's alert must not fire (separate from the
-        // completion/cancellation log used by views).
-        await supabase.from("item_alert_suppressions").upsert(
+        await adminDb.from("item_alert_suppressions").upsert(
           {
             item_id: itemId,
             occurrence_date,
@@ -246,7 +273,7 @@ export async function POST(
           type: "occurrence",
         });
       } else {
-        const { error } = await supabase
+        const { error } = await adminDb
           .from("items")
           .update({
             status: "cancelled",
@@ -258,8 +285,7 @@ export async function POST(
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // Whole item cancelled — deactivate any pending alerts for it.
-        await supabase
+        await adminDb
           .from("item_alerts")
           .update({ active: false })
           .eq("item_id", itemId)

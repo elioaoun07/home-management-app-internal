@@ -15,6 +15,7 @@ import BudgetForecastWidget from "@/components/dashboard-v2/widgets/BudgetForeca
 import BudgetVsActualWidget from "@/components/dashboard-v2/widgets/BudgetVsActualWidget";
 import CashFlowWaterfallWidget from "@/components/dashboard-v2/widgets/CashFlowWaterfallWidget";
 import CategoriesV2TabContent from "@/components/dashboard-v2/widgets/CategoriesV2TabContent";
+import MonthlyDistributionTabContent from "@/components/dashboard-v2/widgets/MonthlyDistributionTabContent";
 import CategoryComparisonChart from "@/components/dashboard-v2/widgets/CategoryComparisonChart";
 import CategoryDonutWidget from "@/components/dashboard-v2/widgets/CategoryDonutWidget";
 import CategoryForecastWidget from "@/components/dashboard-v2/widgets/CategoryForecastWidget";
@@ -74,11 +75,12 @@ import { RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type V2Tab = "overview" | "snapshot" | "deep-dive" | "categories" | "forecast";
+type V2Tab = "overview" | "snapshot" | "deep-dive" | "monthly" | "categories" | "forecast";
 const TABS: { id: V2Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "snapshot", label: "Snapshot" },
   { id: "deep-dive", label: "Deep Dive" },
+  { id: "monthly", label: "Monthly" },
   { id: "categories", label: "Categories" },
   { id: "forecast", label: "Forecast" },
 ];
@@ -155,8 +157,8 @@ export default function ReviewV2Dashboard({
             const today = formatDate(now);
             onDateRangeChange(jan1, today);
           }
-        } else if (tab === "categories") {
-          // 12 months back → today (matches CategoriesV2TabContent's build12Months buckets)
+        } else if (tab === "monthly" || tab === "categories") {
+          // 12 months back → today (matches build12Months buckets)
           const now = new Date();
           const twelveMonthsAgo = format(subMonths(now, 11), "yyyy-MM-01");
           onDateRangeChange(twelveMonthsAgo, formatDate(now));
@@ -189,7 +191,7 @@ export default function ReviewV2Dashboard({
         const jan1 = `${now.getFullYear()}-01-01`;
         const today = formatDate(now);
         onDateRangeChange(jan1, today);
-      } else if (activeTab === "categories") {
+      } else if (activeTab === "monthly" || activeTab === "categories") {
         programmaticDateChange.current = true;
         const now = new Date();
         const twelveMonthsAgo = format(subMonths(now, 11), "yyyy-MM-01");
@@ -969,7 +971,23 @@ export default function ReviewV2Dashboard({
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TAB 3 — CATEGORIES V2
+          TAB 3 — MONTHLY
+          "12-month Income / Expense / Savings distribution by person or combined"
+          ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "monthly" && (
+        <div className="space-y-4">
+          <MonthlyDistributionTabContent
+            analyticsMonths={analytics?.months}
+            transactions={transactions}
+            accounts={accounts}
+            currentUserId={currentUserId}
+            hasPartner={analytics?.hasPartner}
+          />
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          TAB 4 — CATEGORIES V2
           "12-month per-category bar charts with subcategory toggle"
           ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "categories" && (
@@ -983,7 +1001,7 @@ export default function ReviewV2Dashboard({
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TAB 4 — FORECAST
+          TAB 5 — FORECAST
           "What's coming? Forward-looking projections"
           ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "forecast" && (

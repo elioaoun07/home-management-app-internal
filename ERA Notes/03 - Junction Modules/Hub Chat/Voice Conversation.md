@@ -28,16 +28,16 @@ A foreground voice conversation mode that lets users speak to ERA naturally. Act
 ## Architecture — Five Tiers
 
 ### T0: Wake / Activation
-- No always-on wake word (requires Picovoice Porcupine integration — see below)
-- **Current activation:** Tap the ✨ button in thread header → enables conversation mode; tap again → wakes ERA
-- Or tap the `ConversationToggle` mic button in the input bar (replaces standard mic button visually)
-- **Barge-in:** Tap while ERA is speaking to interrupt immediately
+- **Voice wake:** Say "Hey ERA" / "ERA" / "Hi ERA" etc. — detected via Web Speech API interim results while engine is in `idle` state.
+- **Click wake:** Tap anywhere on the ERA shell (or the `ConversationToggle` mic button).
+- **VAD gate** (`src/features/voice-conversation/vadGate.ts`): always-on local energy detector using Web Audio `AnalyserNode`. When speech energy is detected during idle, immediately arms a fresh STT instance via `engine.armIdleSTT()`. Eliminates the 100ms STT restart-gap where wake words were previously lost.
+- **Barge-in:** Tap while ERA is speaking to interrupt immediately.
 
 ### T1: Speech Capture
 - `src/features/voice-conversation/sttCapture.ts`
 - Wraps `webkitSpeechRecognition` / `SpeechRecognition`
-- 500 ms silence window triggers `onFinal` callback (VAD simulation)
-- Restarts continuously while state is `listening`
+- 500 ms silence window triggers `onFinal` callback
+- Restarts continuously while state is `listening`; in `idle` state, VAD gate re-arms it reactively
 - Not available on Firefox (degrades gracefully — ConversationToggle hidden when unsupported)
 
 ### T2: Intent Classification
@@ -68,7 +68,9 @@ Native actions in `HubPage.tsx` wire to existing infrastructure:
 - `src/features/voice-conversation/ttsQueue.ts`
 - Sentence-streaming: splits text on `.!?`, fetches each sentence from `/api/tts`, plays sequentially
 - Voice: `en-US-AvaMultilingualNeural` (Azure Neural TTS)
-- First audio byte audible ~400 ms after ERA starts generating (well before full response)
+- Playback uses **Web Audio API** (`AudioContext` + `AudioBufferSourceNode`) — autoplay-policy-safe. Previous `HTMLAudioElement.play()` was silently blocked after voice-wake (no user gesture). AudioContext is unlocked on first user interaction in `EraShell` via `unlockAudioContext()`.
+- **Greeting pre-cache** (`src/features/voice-conversation/greetingCache.ts`): on mount, pre-fetches the 3 current-hour greeting variants from `/api/tts` and decodes them into `AudioBuffer`s. Voice-wake greeting plays from cache (~instant) rather than waiting for an Azure fetch (~400-700ms).
+- First audio byte audible ~400ms after ERA starts generating (well before full response)
 - Barge-in stops playback immediately
 
 ### T5: Conversation State Machine
@@ -97,8 +99,11 @@ ThreadConversation (HubPage.tsx)
 
 ## Future: Picovoice Porcupine Wake Word
 
-To enable "Hey ERA" always-on wake word:
+> **Status (May 2026):** Porcupine requires a company email for account registration — blocked pending review. Current VAD gate (energy-based) is the active fallback.
 
+When available, Porcupine replaces the Web Speech API for wake-word detection — sub-50ms local WASM detection vs. current ~300-500ms cloud round-trip. Free tier: 3 unique devices.
+
+Integration steps when unblocked:
 1. Sign up at [picovoice.ai](https://picovoice.ai)
 2. In Picovoice Console, train a custom keyword "Hey ERA" → download `.ppn` file
 3. Get an AccessKey from the console
@@ -108,12 +113,10 @@ To enable "Hey ERA" always-on wake word:
 7. Build `src/features/voice-conversation/wakeWord.ts` using `PorcupineWorker`:
    ```ts
    import { PorcupineWorker } from "@picovoice/porcupine-web";
-   const worker = await PorcupineWorker.create(accessKey, [{ builtin: null, label: "hey-era", sensitivity: 0.5 }], /* model */ null, audioInputDevices[0]);
+   const worker = await PorcupineWorker.create(accessKey, [{ builtin: null, label: "hey-era", sensitivity: 0.5 }], null, audioInputDevices[0]);
    worker.onmessage = (e) => { if (e.data.label === "hey-era") engine.triggerWake(); };
    ```
-8. In `useConversationMode.ts`, mount the worker alongside the conversation engine
-
-**Free tier:** 3 unique devices — fits the household model perfectly.
+8. In `useConversationMode.ts`, replace `createVADGate` with the Porcupine worker. Keep the energy VAD as fallback on unsupported platforms.
 
 ---
 

@@ -113,6 +113,7 @@ export default function AIChatAssistant() {
     "/reminders",
     "/nfc/",
     "/watch",
+    "/era",
   ];
   const isStandalonePage =
     mounted && standaloneRoutes.some((r) => pathname?.startsWith(r));

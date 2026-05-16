@@ -31,7 +31,7 @@ CREATE TABLE public.account_balance_history (
   previous_balance numeric NOT NULL DEFAULT 0,
   new_balance numeric NOT NULL,
   change_amount numeric NOT NULL,
-  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['initial_set'::text, 'manual_set'::text, 'manual_adjustment'::text, 'transfer_in'::text, 'transfer_out'::text, 'transaction_expense'::text, 'transaction_income'::text, 'transaction_deleted'::text, 'split_bill_paid'::text, 'split_bill_received'::text, 'draft_confirmed'::text, 'correction'::text, 'transaction'::text, 'transfer'::text, 'split_bill'::text, 'future_payment'::text, 'debt_settled'::text, 'auto_reconciliation'::text, 'statement_import'::text])),
+  change_type text NOT NULL CHECK (change_type = ANY (ARRAY['initial_set'::text, 'manual_set'::text, 'manual_adjustment'::text, 'transfer_in'::text, 'transfer_out'::text, 'transaction_expense'::text, 'transaction_income'::text, 'transaction_deleted'::text, 'split_bill_paid'::text, 'split_bill_received'::text, 'draft_confirmed'::text, 'correction'::text, 'transaction'::text, 'transfer'::text, 'split_bill'::text, 'future_payment'::text, 'debt_settled'::text, 'auto_reconciliation'::text])),
   transaction_id uuid,
   transfer_id uuid,
   reason text,
@@ -98,6 +98,18 @@ CREATE TABLE public.accounts (
   CONSTRAINT accounts_pkey PRIMARY KEY (id),
   CONSTRAINT accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.ai_budget_suggestions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  budget_month text NOT NULL,
+  week text NOT NULL CHECK (week = ANY (ARRAY['w0'::text, 'w1'::text, 'w2'::text, 'w3'::text, 'w4'::text])),
+  suggestions jsonb NOT NULL DEFAULT '[]'::jsonb,
+  wallet_balance_used numeric NOT NULL DEFAULT 0,
+  total_suggested numeric NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT ai_budget_suggestions_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_budget_suggestions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.ai_messages (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -109,7 +121,7 @@ CREATE TABLE public.ai_messages (
   input_tokens integer DEFAULT 0,
   output_tokens integer DEFAULT 0,
   included_budget_context boolean DEFAULT false,
-  model_used text DEFAULT 'gemini-flash-latest'::text,
+  model_used text DEFAULT 'gemini-2.0-flash'::text,
   response_time_ms integer,
   is_edited boolean DEFAULT false,
   edited_at timestamp with time zone,
@@ -130,6 +142,18 @@ CREATE TABLE public.ai_rate_limits (
   CONSTRAINT ai_rate_limits_pkey PRIMARY KEY (id),
   CONSTRAINT ai_rate_limits_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.ai_session_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  model_id uuid NOT NULL,
+  name text NOT NULL,
+  estimated_usage_pct numeric NOT NULL CHECK (estimated_usage_pct >= 0::numeric),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT ai_session_types_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_session_types_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT ai_session_types_model_id_fkey FOREIGN KEY (model_id) REFERENCES public.ai_usage_models(id)
+);
 CREATE TABLE public.ai_sessions (
   id text NOT NULL,
   user_id uuid NOT NULL,
@@ -139,6 +163,23 @@ CREATE TABLE public.ai_sessions (
   is_archived boolean DEFAULT false,
   CONSTRAINT ai_sessions_pkey PRIMARY KEY (id),
   CONSTRAINT ai_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.ai_usage_models (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  refresh_frequency text NOT NULL CHECK (refresh_frequency = ANY (ARRAY['weekly'::text, 'monthly'::text])),
+  cycle_start_date date NOT NULL DEFAULT CURRENT_DATE,
+  current_usage_pct numeric NOT NULL DEFAULT 0 CHECK (current_usage_pct >= 0::numeric),
+  last_updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  position integer NOT NULL DEFAULT 0,
+  notes text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  cycle_start_day integer CHECK (cycle_start_day IS NULL OR cycle_start_day >= 1 AND cycle_start_day <= 31),
+  cycle_anchor_date date,
+  CONSTRAINT ai_usage_models_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_usage_models_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.budget_allocations (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -157,23 +198,6 @@ CREATE TABLE public.budget_allocations (
   CONSTRAINT budget_allocations_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT budget_allocations_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
-CREATE TABLE public.ai_budget_suggestions (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  budget_month text NOT NULL,
-  week text NOT NULL CHECK (week = ANY (ARRAY['w0'::text, 'w1'::text, 'w2'::text, 'w3'::text, 'w4'::text])),
-  suggestions jsonb NOT NULL DEFAULT '[]'::jsonb,
-  wallet_balance_used numeric NOT NULL DEFAULT 0,
-  total_suggested numeric NOT NULL DEFAULT 0,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT ai_budget_suggestions_pkey PRIMARY KEY (id),
-  CONSTRAINT ai_budget_suggestions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT ai_budget_suggestions_unique UNIQUE (user_id, budget_month, week)
-);
-ALTER TABLE public.ai_budget_suggestions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can read own ai_budget_suggestions" ON public.ai_budget_suggestions FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own ai_budget_suggestions" ON public.ai_budget_suggestions FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can delete own ai_budget_suggestions" ON public.ai_budget_suggestions FOR DELETE USING (auth.uid() = user_id);
 CREATE TABLE public.catalogue_categories (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -254,7 +278,8 @@ CREATE TABLE public.catalogue_items (
   linked_item_id uuid,
   item_category_ids ARRAY DEFAULT '{}'::text[],
   is_public boolean DEFAULT false,
-  is_flexible_routine boolean NOT NULL DEFAULT false,
+  is_flexible_routine boolean DEFAULT false,
+  deleted_at timestamp with time zone,
   flexible_occurrences integer NOT NULL DEFAULT 1 CHECK (flexible_occurrences >= 1 AND flexible_occurrences <= 31),
   CONSTRAINT catalogue_items_pkey PRIMARY KEY (id),
   CONSTRAINT catalogue_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
@@ -322,7 +347,7 @@ CREATE TABLE public.cooking_logs (
 CREATE TABLE public.debts (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
-  transaction_id uuid NOT NULL,
+  transaction_id uuid,
   debtor_name text NOT NULL,
   original_amount numeric NOT NULL CHECK (original_amount > 0::numeric),
   returned_amount numeric NOT NULL DEFAULT 0 CHECK (returned_amount >= 0::numeric),
@@ -346,6 +371,33 @@ CREATE TABLE public.default_categories (
   CONSTRAINT default_categories_pkey PRIMARY KEY (id),
   CONSTRAINT default_categories_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.default_categories(id)
 );
+CREATE TABLE public.era_conversations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  title text,
+  active_face_key text NOT NULL DEFAULT 'budget'::text CHECK (active_face_key = ANY (ARRAY['budget'::text, 'schedule'::text, 'chef'::text, 'brain'::text])),
+  is_archived boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT era_conversations_pkey PRIMARY KEY (id),
+  CONSTRAINT era_conversations_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.era_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  conversation_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  role text NOT NULL CHECK (role = ANY (ARRAY['user'::text, 'assistant'::text, 'system'::text])),
+  content text NOT NULL,
+  intent_kind text,
+  intent_face text,
+  intent_payload jsonb,
+  draft_transaction_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT era_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT era_messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.era_conversations(id),
+  CONSTRAINT era_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT era_messages_draft_transaction_id_fkey FOREIGN KEY (draft_transaction_id) REFERENCES public.transactions(id)
+);
 CREATE TABLE public.error_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid,
@@ -363,11 +415,31 @@ CREATE TABLE public.event_details (
   start_at timestamp with time zone NOT NULL,
   end_at timestamp with time zone NOT NULL,
   all_day boolean NOT NULL DEFAULT false,
-  location_text text, -- DEPRECATED: use items.location_text. Kept for backward compatibility.
+  location_text text,
   CONSTRAINT event_details_pkey PRIMARY KEY (item_id),
-  CONSTRAINT event_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
+  CONSTRAINT event_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
-CREATE INDEX idx_event_details_start_at ON public.event_details(start_at);
+CREATE TABLE public.focus_insights (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  generated_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone NOT NULL DEFAULT (now() + '24:00:00'::interval),
+  items_snapshot_hash text,
+  item_count_at_generation integer DEFAULT 0,
+  greeting text NOT NULL,
+  summary text NOT NULL,
+  focus_tip text,
+  priority_insights jsonb DEFAULT '[]'::jsonb,
+  pattern_observations text,
+  encouragement text,
+  week_start date NOT NULL DEFAULT (date_trunc('week'::text, (CURRENT_DATE)::timestamp with time zone))::date,
+  completed_count_at_generation integer DEFAULT 0,
+  overdue_count_at_generation integer DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT focus_insights_pkey PRIMARY KEY (id),
+  CONSTRAINT focus_insights_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.future_purchases (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -385,6 +457,7 @@ CREATE TABLE public.future_purchases (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   completed_at timestamp with time zone,
+  deleted_at timestamp with time zone,
   CONSTRAINT future_purchases_pkey PRIMARY KEY (id),
   CONSTRAINT future_purchases_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -412,6 +485,19 @@ CREATE TABLE public.guest_chat_messages (
   CONSTRAINT guest_chat_messages_pkey PRIMARY KEY (id),
   CONSTRAINT guest_chat_messages_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.guest_portal_tags(id),
   CONSTRAINT guest_chat_messages_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.guest_sessions(id)
+);
+CREATE TABLE public.guest_drinks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tag_id uuid NOT NULL,
+  session_id uuid NOT NULL,
+  guest_name text,
+  drink_selection text NOT NULL,
+  other_drink text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT guest_drinks_pkey PRIMARY KEY (id),
+  CONSTRAINT guest_drinks_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.guest_portal_tags(id),
+  CONSTRAINT guest_drinks_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.guest_sessions(id)
 );
 CREATE TABLE public.guest_feedback (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -447,6 +533,7 @@ CREATE TABLE public.guest_sessions (
   is_active boolean NOT NULL DEFAULT true,
   last_seen_at timestamp with time zone NOT NULL DEFAULT now(),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  device_id text,
   CONSTRAINT guest_sessions_pkey PRIMARY KEY (id),
   CONSTRAINT guest_sessions_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.guest_portal_tags(id)
 );
@@ -572,7 +659,9 @@ CREATE TABLE public.hub_messages (
   voice_transcript text,
   voice_duration integer,
   meal_plan_id uuid,
-  item_sort_order float,
+  shopping_group_id uuid,
+  assigned_to uuid,
+  item_sort_order double precision,
   parent_item_id uuid,
   item_chat_photo_url text,
   CONSTRAINT hub_messages_pkey PRIMARY KEY (id),
@@ -583,9 +672,11 @@ CREATE TABLE public.hub_messages (
   CONSTRAINT hub_messages_reply_to_id_fkey FOREIGN KEY (reply_to_id) REFERENCES public.hub_messages(id),
   CONSTRAINT hub_messages_source_item_id_fkey FOREIGN KEY (source_item_id) REFERENCES public.catalogue_items(id),
   CONSTRAINT hub_messages_meal_plan_id_fkey FOREIGN KEY (meal_plan_id) REFERENCES public.meal_plans(id),
+  CONSTRAINT hub_messages_shopping_group_id_fkey FOREIGN KEY (shopping_group_id) REFERENCES public.shopping_groups(id),
+  CONSTRAINT hub_messages_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES auth.users(id),
   CONSTRAINT hub_messages_checked_by_fkey FOREIGN KEY (checked_by) REFERENCES auth.users(id),
   CONSTRAINT hub_messages_topic_id_fkey FOREIGN KEY (topic_id) REFERENCES public.hub_notes_topics(id),
-  CONSTRAINT hub_messages_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES public.hub_messages(id) ON DELETE CASCADE
+  CONSTRAINT hub_messages_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES public.hub_messages(id)
 );
 CREATE TABLE public.hub_notes_topics (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -652,6 +743,17 @@ CREATE TABLE public.inventory_stock (
   CONSTRAINT inventory_stock_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT inventory_stock_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.catalogue_items(id)
 );
+CREATE TABLE public.item_alert_suppressions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  occurrence_date timestamp with time zone NOT NULL,
+  reason text NOT NULL CHECK (reason = ANY (ARRAY['cancelled'::text, 'skipped'::text, 'deleted'::text, 'archived'::text, 'manual'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT item_alert_suppressions_pkey PRIMARY KEY (id),
+  CONSTRAINT item_alert_suppressions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
+  CONSTRAINT item_alert_suppressions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
 CREATE TABLE public.item_alerts (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   item_id uuid NOT NULL,
@@ -664,27 +766,13 @@ CREATE TABLE public.item_alerts (
   channel USER-DEFINED NOT NULL DEFAULT 'push'::alert_channel_enum,
   active boolean NOT NULL DEFAULT true,
   last_fired_at timestamp with time zone,
-  occurrence_date timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  custom_time time without time zone,
+  occurrence_date timestamp with time zone,
   CONSTRAINT item_alerts_pkey PRIMARY KEY (id),
-  CONSTRAINT item_alerts_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
+  CONSTRAINT item_alerts_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
-CREATE INDEX idx_item_alerts_item_id ON public.item_alerts(item_id);
-CREATE INDEX idx_item_alerts_active_trigger ON public.item_alerts(active, trigger_at) WHERE active = true;
-CREATE TABLE public.item_alert_suppressions (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  item_id uuid NOT NULL,
-  occurrence_date timestamp with time zone NOT NULL,
-  reason text NOT NULL CHECK (reason IN ('cancelled','skipped','deleted','archived','manual')),
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  created_by uuid,
-  CONSTRAINT item_alert_suppressions_pkey PRIMARY KEY (id),
-  CONSTRAINT item_alert_suppressions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
-  CONSTRAINT item_alert_suppressions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
-  CONSTRAINT item_alert_suppressions_unique UNIQUE (item_id, occurrence_date)
-);
-CREATE INDEX idx_item_alert_suppressions_item_occ ON public.item_alert_suppressions(item_id, occurrence_date);
 CREATE TABLE public.item_attachments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   item_id uuid NOT NULL,
@@ -694,7 +782,20 @@ CREATE TABLE public.item_attachments (
   size_bytes bigint,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT item_attachments_pkey PRIMARY KEY (id),
-  CONSTRAINT item_attachments_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
+  CONSTRAINT item_attachments_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+);
+CREATE TABLE public.item_flexible_schedules (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  period_start_date date NOT NULL,
+  scheduled_for_date date NOT NULL,
+  scheduled_for_time time without time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  occurrence_index integer NOT NULL DEFAULT 0,
+  CONSTRAINT item_flexible_schedules_pkey PRIMARY KEY (id),
+  CONSTRAINT item_flexible_schedules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
+  CONSTRAINT item_flexible_schedules_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.item_occurrence_actions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -707,11 +808,23 @@ CREATE TABLE public.item_occurrence_actions (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   created_by uuid,
   CONSTRAINT item_occurrence_actions_pkey PRIMARY KEY (id),
-  CONSTRAINT item_occurrence_actions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
   CONSTRAINT item_occurrence_actions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
-  CONSTRAINT check_postponed_to CHECK (action_type <> 'postponed' OR postponed_to IS NOT NULL)
+  CONSTRAINT item_occurrence_actions_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
-CREATE INDEX idx_item_occurrence_actions_item_occ ON public.item_occurrence_actions(item_id, occurrence_date);
+CREATE TABLE public.item_prerequisites (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  condition_type text NOT NULL CHECK (condition_type = ANY (ARRAY['nfc_state_change'::text, 'item_completed'::text, 'weather'::text, 'time_window'::text, 'schedule'::text, 'custom_formula'::text])),
+  condition_config jsonb NOT NULL,
+  logic_group integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  last_evaluated_at timestamp with time zone,
+  last_result boolean,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT item_prerequisites_pkey PRIMARY KEY (id),
+  CONSTRAINT item_prerequisites_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
+);
 CREATE TABLE public.item_recurrence_exceptions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   rule_id uuid NOT NULL,
@@ -719,8 +832,7 @@ CREATE TABLE public.item_recurrence_exceptions (
   override_payload_json jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT item_recurrence_exceptions_pkey PRIMARY KEY (id),
-  CONSTRAINT item_recurrence_exceptions_rule_id_exdate_key UNIQUE (rule_id, exdate),
-  CONSTRAINT item_recurrence_exceptions_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.item_recurrence_rules(id) ON DELETE CASCADE
+  CONSTRAINT item_recurrence_exceptions_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.item_recurrence_rules(id)
 );
 CREATE TABLE public.item_recurrence_rules (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -729,44 +841,13 @@ CREATE TABLE public.item_recurrence_rules (
   start_anchor timestamp with time zone NOT NULL,
   end_until timestamp with time zone,
   count integer,
+  is_flexible boolean DEFAULT false,
+  flexible_period text CHECK (flexible_period = ANY (ARRAY['weekly'::text, 'biweekly'::text, 'monthly'::text])),
   phase_changed_at timestamp with time zone,
   previous_start_anchor timestamp with time zone,
-  is_flexible boolean NOT NULL DEFAULT false,
-  flexible_period text CHECK (flexible_period IS NULL OR (flexible_period = ANY (ARRAY['daily'::text, 'weekly'::text, 'biweekly'::text, 'monthly'::text]))),
   CONSTRAINT item_recurrence_rules_pkey PRIMARY KEY (id),
-  CONSTRAINT item_recurrence_rules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
+  CONSTRAINT item_recurrence_rules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
-CREATE INDEX idx_item_recurrence_rules_item_id ON public.item_recurrence_rules(item_id);
-
--- Flexible routine schedules: one row per scheduled occurrence per period.
--- For N-times-per-period routines, occurrence_index distinguishes the slot (0..N-1).
-CREATE TABLE public.item_flexible_schedules (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  item_id uuid NOT NULL,
-  period_start_date date NOT NULL,
-  scheduled_for_date date NOT NULL,
-  scheduled_for_time time without time zone,
-  occurrence_index integer NOT NULL DEFAULT 0,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  created_by uuid,
-  CONSTRAINT item_flexible_schedules_pkey PRIMARY KEY (id),
-  CONSTRAINT item_flexible_schedules_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
-  CONSTRAINT item_flexible_schedules_unique_slot UNIQUE (item_id, period_start_date, occurrence_index)
-);
-CREATE INDEX idx_item_flexible_schedules_item_period ON public.item_flexible_schedules(item_id, period_start_date);
-CREATE TABLE public.recurrence_pauses (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  item_id uuid NOT NULL,
-  pause_start date NOT NULL,
-  pause_end date,
-  reason text,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  created_by uuid,
-  CONSTRAINT recurrence_pauses_pkey PRIMARY KEY (id),
-  CONSTRAINT recurrence_pauses_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
-  CONSTRAINT recurrence_pauses_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
-);
-CREATE INDEX idx_recurrence_pauses_item_id ON public.recurrence_pauses(item_id);
 CREATE TABLE public.item_snoozes (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   alert_id uuid NOT NULL,
@@ -774,8 +855,8 @@ CREATE TABLE public.item_snoozes (
   snoozed_until timestamp with time zone NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT item_snoozes_pkey PRIMARY KEY (id),
-  CONSTRAINT item_snoozes_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.item_alerts(id) ON DELETE CASCADE,
-  CONSTRAINT item_snoozes_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
+  CONSTRAINT item_snoozes_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
+  CONSTRAINT item_snoozes_alert_id_fkey FOREIGN KEY (alert_id) REFERENCES public.item_alerts(id)
 );
 CREATE TABLE public.item_subtask_completions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -785,8 +866,8 @@ CREATE TABLE public.item_subtask_completions (
   completed_by uuid,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT item_subtask_completions_pkey PRIMARY KEY (id),
-  CONSTRAINT item_subtask_completions_subtask_id_fkey FOREIGN KEY (subtask_id) REFERENCES public.item_subtasks(id) ON DELETE CASCADE,
-  CONSTRAINT item_subtask_completions_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES auth.users(id)
+  CONSTRAINT item_subtask_completions_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES auth.users(id),
+  CONSTRAINT item_subtask_completions_subtask_id_fkey FOREIGN KEY (subtask_id) REFERENCES public.item_subtasks(id)
 );
 CREATE TABLE public.item_subtasks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -802,8 +883,8 @@ CREATE TABLE public.item_subtasks (
   kanban_stage text DEFAULT '''To Do''::text'::text,
   previous_kanban_stage text,
   CONSTRAINT item_subtasks_pkey PRIMARY KEY (id),
-  CONSTRAINT item_subtasks_parent_subtask_id_fkey FOREIGN KEY (parent_subtask_id) REFERENCES public.item_subtasks(id) ON DELETE CASCADE,
-  CONSTRAINT item_subtasks_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES public.items(id) ON DELETE CASCADE
+  CONSTRAINT item_subtasks_parent_item_id_fkey FOREIGN KEY (parent_item_id) REFERENCES public.items(id),
+  CONSTRAINT item_subtasks_parent_subtask_id_fkey FOREIGN KEY (parent_subtask_id) REFERENCES public.item_subtasks(id)
 );
 CREATE TABLE public.items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -823,9 +904,14 @@ CREATE TABLE public.items (
   categories ARRAY DEFAULT '{}'::text[],
   subtask_kanban_stages jsonb DEFAULT '["To Do", "Later", "In Progress", "Done"]'::jsonb,
   subtask_kanban_enabled boolean DEFAULT false,
+  notify_all_household boolean NOT NULL DEFAULT false,
+  source_catalogue_item_id uuid,
+  is_template_instance boolean DEFAULT false,
+  deleted_at timestamp with time zone,
   location_context text CHECK (location_context IS NULL OR (location_context = ANY (ARRAY['home'::text, 'outside'::text, 'anywhere'::text]))),
   location_text text,
   CONSTRAINT items_pkey PRIMARY KEY (id),
+  CONSTRAINT items_source_catalogue_item_fkey FOREIGN KEY (source_catalogue_item_id) REFERENCES public.catalogue_items(id),
   CONSTRAINT items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT items_responsible_user_fkey FOREIGN KEY (responsible_user_id) REFERENCES auth.users(id)
 );
@@ -865,6 +951,59 @@ CREATE TABLE public.merchant_mappings (
   CONSTRAINT merchant_mappings_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
   CONSTRAINT merchant_mappings_subcategory_id_fkey FOREIGN KEY (subcategory_id) REFERENCES public.user_categories(id),
   CONSTRAINT merchant_mappings_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
+);
+CREATE TABLE public.nfc_checklist_completions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  checklist_item_id uuid NOT NULL,
+  state_log_id uuid NOT NULL,
+  completed_by uuid NOT NULL,
+  completed_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT nfc_checklist_completions_pkey PRIMARY KEY (id),
+  CONSTRAINT nfc_checklist_completions_item_fkey FOREIGN KEY (checklist_item_id) REFERENCES public.nfc_checklist_items(id),
+  CONSTRAINT nfc_checklist_completions_log_fkey FOREIGN KEY (state_log_id) REFERENCES public.nfc_state_log(id),
+  CONSTRAINT nfc_checklist_completions_user_fkey FOREIGN KEY (completed_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.nfc_checklist_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tag_id uuid NOT NULL,
+  state text NOT NULL,
+  title text NOT NULL,
+  order_index integer NOT NULL DEFAULT 0,
+  source_tag_id uuid,
+  source_state text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT nfc_checklist_items_pkey PRIMARY KEY (id),
+  CONSTRAINT nfc_checklist_items_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.nfc_tags(id),
+  CONSTRAINT nfc_checklist_items_source_tag_id_fkey FOREIGN KEY (source_tag_id) REFERENCES public.nfc_tags(id)
+);
+CREATE TABLE public.nfc_state_log (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tag_id uuid NOT NULL,
+  previous_state text,
+  new_state text NOT NULL,
+  changed_by uuid NOT NULL,
+  metadata_json jsonb,
+  changed_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT nfc_state_log_pkey PRIMARY KEY (id),
+  CONSTRAINT nfc_state_log_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.nfc_tags(id),
+  CONSTRAINT nfc_state_log_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.nfc_tags (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  tag_slug text NOT NULL UNIQUE,
+  label text NOT NULL,
+  location_name text,
+  icon text,
+  states jsonb NOT NULL DEFAULT '[]'::jsonb,
+  current_state text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  checklists jsonb NOT NULL DEFAULT '{}'::jsonb,
+  CONSTRAINT nfc_tags_pkey PRIMARY KEY (id),
+  CONSTRAINT nfc_tags_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.notification_preferences (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -917,11 +1056,11 @@ CREATE TABLE public.notifications (
   snoozed_until timestamp with time zone,
   CONSTRAINT notifications_pkey PRIMARY KEY (id),
   CONSTRAINT in_app_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT in_app_notifications_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE,
   CONSTRAINT in_app_notifications_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id),
   CONSTRAINT notifications_recurring_payment_id_fkey FOREIGN KEY (recurring_payment_id) REFERENCES public.recurring_payments(id),
   CONSTRAINT notifications_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
-  CONSTRAINT notifications_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id)
+  CONSTRAINT notifications_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
+  CONSTRAINT in_app_notifications_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
 CREATE TABLE public.profiles (
   id uuid NOT NULL,
@@ -930,25 +1069,6 @@ CREATE TABLE public.profiles (
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
-CREATE TABLE public.push_subscriptions (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  endpoint text NOT NULL,
-  p256dh text NOT NULL,
-  auth text NOT NULL,
-  device_name text,
-  user_agent text,
-  is_active boolean NOT NULL DEFAULT true,
-  last_used_at timestamp with time zone,
-  failed_at timestamp with time zone,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id),
-  CONSTRAINT push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
-  CONSTRAINT push_subscriptions_user_id_endpoint_key UNIQUE (user_id, endpoint)
-);
-CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_active
-  ON public.push_subscriptions (user_id) WHERE is_active = true;
 CREATE TABLE public.push_event_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid,
@@ -964,10 +1084,22 @@ CREATE TABLE public.push_event_logs (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT push_event_logs_pkey PRIMARY KEY (id)
 );
-CREATE INDEX IF NOT EXISTS idx_push_event_logs_user_created
-  ON public.push_event_logs (user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_push_event_logs_event_type
-  ON public.push_event_logs (event_type, created_at DESC);
+CREATE TABLE public.push_subscriptions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  endpoint text NOT NULL,
+  p256dh text NOT NULL,
+  auth text NOT NULL,
+  device_name text,
+  user_agent text,
+  is_active boolean NOT NULL DEFAULT true,
+  last_used_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  failed_at timestamp with time zone,
+  CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id),
+  CONSTRAINT push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.recipe_versions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   recipe_id uuid NOT NULL,
@@ -1022,10 +1154,23 @@ CREATE TABLE public.recipes (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   active_version_id uuid,
+  deleted_at timestamp with time zone,
   CONSTRAINT recipes_pkey PRIMARY KEY (id),
   CONSTRAINT recipes_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT recipes_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
   CONSTRAINT recipes_active_version_id_fkey FOREIGN KEY (active_version_id) REFERENCES public.recipe_versions(id)
+);
+CREATE TABLE public.recurrence_pauses (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  item_id uuid NOT NULL,
+  pause_start date NOT NULL,
+  pause_end date,
+  reason text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  CONSTRAINT recurrence_pauses_pkey PRIMARY KEY (id),
+  CONSTRAINT recurrence_pauses_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
+  CONSTRAINT recurrence_pauses_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.recurring_payments (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1040,11 +1185,12 @@ CREATE TABLE public.recurring_payments (
   recurrence_day integer,
   next_due_date date NOT NULL,
   last_processed_date date,
-  lbp_change_received numeric,
-  is_private boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  payment_method text NOT NULL DEFAULT 'manual'::text CHECK (payment_method = ANY (ARRAY['manual'::text, 'auto'::text])),
+  is_private boolean NOT NULL DEFAULT false,
+  lbp_change_received numeric,
   CONSTRAINT recurring_payments_pkey PRIMARY KEY (id),
   CONSTRAINT recurring_payments_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT recurring_payments_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id),
@@ -1056,12 +1202,11 @@ CREATE TABLE public.reminder_details (
   due_at timestamp with time zone,
   completed_at timestamp with time zone,
   estimate_minutes integer CHECK (estimate_minutes IS NULL OR estimate_minutes >= 0),
-  actual_minutes integer CHECK (actual_minutes IS NULL OR actual_minutes >= 0),
   has_checklist boolean NOT NULL DEFAULT false,
+  actual_minutes integer CHECK (actual_minutes IS NULL OR actual_minutes >= 0),
   CONSTRAINT reminder_details_pkey PRIMARY KEY (item_id),
-  CONSTRAINT reminder_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
+  CONSTRAINT reminder_details_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
-CREATE INDEX idx_reminder_details_due_at ON public.reminder_details(due_at);
 CREATE TABLE public.reminder_templates (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -1081,6 +1226,19 @@ CREATE TABLE public.reminder_templates (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT reminder_templates_pkey PRIMARY KEY (id),
   CONSTRAINT reminder_templates_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.shopping_groups (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  thread_id uuid NOT NULL,
+  household_id uuid NOT NULL,
+  name text NOT NULL,
+  sort_order integer DEFAULT 0,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT shopping_groups_pkey PRIMARY KEY (id),
+  CONSTRAINT shopping_groups_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.hub_chat_threads(id),
+  CONSTRAINT shopping_groups_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.household_links(id),
+  CONSTRAINT shopping_groups_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
 );
 CREATE TABLE public.shopping_item_links (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1156,6 +1314,7 @@ CREATE TABLE public.transactions (
   is_debt_return boolean NOT NULL DEFAULT false,
   parent_transaction_id uuid,
   statement_hash text,
+  deleted_at timestamp with time zone,
   receipt_url text,
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
   CONSTRAINT transactions_category_fk FOREIGN KEY (category_id) REFERENCES public.user_categories(id),
@@ -1166,9 +1325,6 @@ CREATE TABLE public.transactions (
   CONSTRAINT transactions_collaborator_account_id_fkey FOREIGN KEY (collaborator_account_id) REFERENCES public.accounts(id),
   CONSTRAINT transactions_parent_transaction_id_fkey FOREIGN KEY (parent_transaction_id) REFERENCES public.transactions(id)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS transactions_statement_hash_uniq
-  ON public.transactions(user_id, statement_hash)
-  WHERE statement_hash IS NOT NULL;
 CREATE TABLE public.transfers (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -1184,6 +1340,7 @@ CREATE TABLE public.transfers (
   fee_amount numeric DEFAULT 0 CHECK (fee_amount >= 0::numeric),
   returned_amount numeric DEFAULT 0 CHECK (returned_amount >= 0::numeric),
   household_link_id uuid,
+  deleted_at timestamp with time zone,
   CONSTRAINT transfers_pkey PRIMARY KEY (id),
   CONSTRAINT transfers_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT transfers_from_account_id_fkey FOREIGN KEY (from_account_id) REFERENCES public.accounts(id),
@@ -1204,11 +1361,12 @@ CREATE TABLE public.user_categories (
   default_category_id uuid,
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   slug text DEFAULT lower(regexp_replace(name, '[^a-z0-9]+'::text, '-'::text, 'g'::text)),
+  classification text CHECK (classification = ANY (ARRAY['need'::text, 'want'::text, 'saving'::text])),
   CONSTRAINT user_categories_pkey PRIMARY KEY (id),
   CONSTRAINT user_categories_default_fk FOREIGN KEY (default_category_id) REFERENCES public.default_categories(id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(id),
-  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(id),
+  CONSTRAINT user_categories_parent_fk FOREIGN KEY (user_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_parent_fk FOREIGN KEY (parent_id) REFERENCES public.user_categories(user_id),
   CONSTRAINT user_categories_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id)
 );
@@ -1231,652 +1389,3 @@ CREATE TABLE public.user_preferences (
   CONSTRAINT user_preferences_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
--- ============================================
--- NFC TAGS
--- ============================================
--- NOTE: item_status_enum was altered to include 'dormant':
--- ALTER TYPE item_status_enum ADD VALUE IF NOT EXISTS 'dormant';
-
-CREATE TABLE public.nfc_tags (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  tag_slug text NOT NULL,
-  label text NOT NULL,
-  location_name text,
-  icon text,
-  states jsonb NOT NULL DEFAULT '[]'::jsonb,
-  current_state text,
-  is_active boolean NOT NULL DEFAULT true,
-  checklists jsonb NOT NULL DEFAULT '{}'::jsonb, -- { "leaving": [{ id, title, order }], ... }
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT nfc_tags_pkey PRIMARY KEY (id),
-  CONSTRAINT nfc_tags_tag_slug_key UNIQUE (tag_slug),
-  CONSTRAINT nfc_tags_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
-);
-
-CREATE TABLE public.nfc_state_log (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  tag_id uuid NOT NULL,
-  previous_state text,
-  new_state text NOT NULL,
-  changed_by uuid NOT NULL,
-  metadata_json jsonb,
-  changed_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT nfc_state_log_pkey PRIMARY KEY (id),
-  CONSTRAINT nfc_state_log_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.nfc_tags(id) ON DELETE CASCADE,
-  CONSTRAINT nfc_state_log_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES auth.users(id)
-);
-
-CREATE INDEX idx_nfc_state_log_tag_id ON public.nfc_state_log (tag_id, changed_at DESC);
-
--- ============================================
--- ITEM PREREQUISITES (Trigger Engine)
--- ============================================
--- Condition types: nfc_state_change, item_completed, weather, time_window, schedule, custom_formula
--- Logic: prerequisites in the same logic_group are ANDed; different groups are ORed
--- Example: (group 0: nfc_state=leaving AND time_window=morning) OR (group 1: item_completed=pack-bag)
-
-CREATE TABLE public.item_prerequisites (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  item_id uuid NOT NULL,
-  condition_type text NOT NULL CHECK (condition_type IN ('nfc_state_change', 'item_completed', 'weather', 'time_window', 'schedule', 'custom_formula')),
-  condition_config jsonb NOT NULL,
-  logic_group integer NOT NULL DEFAULT 0,
-  is_active boolean NOT NULL DEFAULT true,
-  last_evaluated_at timestamp with time zone,
-  last_result boolean,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT item_prerequisites_pkey PRIMARY KEY (id),
-  CONSTRAINT item_prerequisites_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_item_prerequisites_item_id ON public.item_prerequisites (item_id);
-CREATE INDEX idx_item_prerequisites_condition_type ON public.item_prerequisites (condition_type) WHERE is_active = true;
-
--- ============================================
--- NFC CHECKLIST ITEMS (replaces jsonb checklists on nfc_tags)
--- ============================================
--- Persistent checklist definitions per tag + state.
--- source_tag_id / source_state enable cross-tag awareness:
---   e.g. "Turn off Oven" on main-door auto-checks when oven NFC current_state = 'off'
-
-CREATE TABLE public.nfc_checklist_items (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  tag_id uuid NOT NULL,
-  state text NOT NULL,
-  title text NOT NULL,
-  order_index integer NOT NULL DEFAULT 0,
-  source_tag_id uuid,
-  source_state text,
-  is_active boolean NOT NULL DEFAULT true,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT nfc_checklist_items_pkey PRIMARY KEY (id),
-  CONSTRAINT nfc_checklist_items_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.nfc_tags(id) ON DELETE CASCADE,
-  CONSTRAINT nfc_checklist_items_source_tag_id_fkey FOREIGN KEY (source_tag_id) REFERENCES public.nfc_tags(id) ON DELETE SET NULL
-);
-
-CREATE INDEX idx_nfc_checklist_items_tag_state ON public.nfc_checklist_items (tag_id, state) WHERE is_active = true;
-
--- ============================================
--- NFC CHECKLIST COMPLETIONS (per tap session)
--- ============================================
--- Each completion is scoped to a specific state_log entry (tap session).
--- On next tap for the same state, a new state_log is created → fresh session.
-
-CREATE TABLE public.nfc_checklist_completions (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  checklist_item_id uuid NOT NULL,
-  state_log_id uuid NOT NULL,
-  completed_by uuid NOT NULL,
-  completed_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT nfc_checklist_completions_pkey PRIMARY KEY (id),
-  CONSTRAINT nfc_checklist_completions_item_fkey FOREIGN KEY (checklist_item_id) REFERENCES public.nfc_checklist_items(id) ON DELETE CASCADE,
-  CONSTRAINT nfc_checklist_completions_log_fkey FOREIGN KEY (state_log_id) REFERENCES public.nfc_state_log(id) ON DELETE CASCADE,
-  CONSTRAINT nfc_checklist_completions_user_fkey FOREIGN KEY (completed_by) REFERENCES auth.users(id),
-  CONSTRAINT nfc_checklist_completions_unique UNIQUE (checklist_item_id, state_log_id)
-);
-
--- ============================================
--- RLS POLICIES — ITEMS (household sharing)
--- ============================================
-ALTER TABLE public.items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.item_occurrence_actions ENABLE ROW LEVEL SECURITY;
-
--- items: own items + items assigned to me + partner's public items
-CREATE POLICY "items_select" ON public.items FOR SELECT USING (
-  user_id = auth.uid()
-  OR responsible_user_id = auth.uid()
-  OR (
-    is_public = true
-    AND EXISTS (
-      SELECT 1 FROM public.household_links
-      WHERE active = true
-      AND (
-        (owner_user_id = auth.uid() AND partner_user_id = items.user_id)
-        OR (partner_user_id = auth.uid() AND owner_user_id = items.user_id)
-      )
-    )
-  )
-);
-CREATE POLICY "items_insert" ON public.items FOR INSERT WITH CHECK (user_id = auth.uid());
-CREATE POLICY "items_update" ON public.items FOR UPDATE USING (
-  user_id = auth.uid()
-  OR responsible_user_id = auth.uid()
-  OR (
-    is_public = true
-    AND EXISTS (
-      SELECT 1 FROM public.household_links
-      WHERE active = true
-      AND (
-        (owner_user_id = auth.uid() AND partner_user_id = items.user_id)
-        OR (partner_user_id = auth.uid() AND owner_user_id = items.user_id)
-      )
-    )
-  )
-);
-CREATE POLICY "items_delete" ON public.items FOR DELETE USING (
-  user_id = auth.uid()
-  OR (
-    is_public = true
-    AND EXISTS (
-      SELECT 1 FROM public.household_links
-      WHERE active = true
-      AND (
-        (owner_user_id = auth.uid() AND partner_user_id = items.user_id)
-        OR (partner_user_id = auth.uid() AND owner_user_id = items.user_id)
-      )
-    )
-  )
-);
-
--- item_occurrence_actions: read/write for items you can access
-CREATE POLICY "item_occurrence_actions_select" ON public.item_occurrence_actions FOR SELECT USING (
-  created_by = auth.uid()
-  OR EXISTS (
-    SELECT 1 FROM public.items i
-    WHERE i.id = item_occurrence_actions.item_id
-    AND (
-      i.user_id = auth.uid()
-      OR i.responsible_user_id = auth.uid()
-      OR (
-        i.is_public = true
-        AND EXISTS (
-          SELECT 1 FROM public.household_links
-          WHERE active = true
-          AND (
-            (owner_user_id = auth.uid() AND partner_user_id = i.user_id)
-            OR (partner_user_id = auth.uid() AND owner_user_id = i.user_id)
-          )
-        )
-      )
-    )
-  )
-);
-CREATE POLICY "item_occurrence_actions_insert" ON public.item_occurrence_actions FOR INSERT WITH CHECK (
-  created_by = auth.uid()
-  AND EXISTS (
-    SELECT 1 FROM public.items i
-    WHERE i.id = item_occurrence_actions.item_id
-    AND (
-      i.user_id = auth.uid()
-      OR i.responsible_user_id = auth.uid()
-      OR (
-        i.is_public = true
-        AND EXISTS (
-          SELECT 1 FROM public.household_links
-          WHERE active = true
-          AND (
-            (owner_user_id = auth.uid() AND partner_user_id = i.user_id)
-            OR (partner_user_id = auth.uid() AND owner_user_id = i.user_id)
-          )
-        )
-      )
-    )
-  )
-);
-
--- ============================================
--- RLS POLICIES — NFC TAGS (household sharing)
--- ============================================
-ALTER TABLE public.nfc_tags ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.nfc_state_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.nfc_checklist_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.nfc_checklist_completions ENABLE ROW LEVEL SECURITY;
-
--- nfc_tags: owner or household partner
-CREATE POLICY "nfc_tags_select" ON public.nfc_tags FOR SELECT USING (
-  user_id = auth.uid()
-  OR EXISTS (
-    SELECT 1 FROM public.household_links
-    WHERE active = true
-    AND (
-      (owner_user_id = auth.uid() AND partner_user_id = nfc_tags.user_id)
-      OR (partner_user_id = auth.uid() AND owner_user_id = nfc_tags.user_id)
-    )
-  )
-);
-CREATE POLICY "nfc_tags_insert" ON public.nfc_tags FOR INSERT WITH CHECK (user_id = auth.uid());
-CREATE POLICY "nfc_tags_update" ON public.nfc_tags FOR UPDATE USING (
-  user_id = auth.uid()
-  OR EXISTS (
-    SELECT 1 FROM public.household_links
-    WHERE active = true
-    AND (
-      (owner_user_id = auth.uid() AND partner_user_id = nfc_tags.user_id)
-      OR (partner_user_id = auth.uid() AND owner_user_id = nfc_tags.user_id)
-    )
-  )
-);
-CREATE POLICY "nfc_tags_delete" ON public.nfc_tags FOR DELETE USING (user_id = auth.uid());
-
--- nfc_state_log: readable by household, insertable by authenticated user
-CREATE POLICY "nfc_state_log_select" ON public.nfc_state_log FOR SELECT USING (
-  EXISTS (
-    SELECT 1 FROM public.nfc_tags t
-    WHERE t.id = nfc_state_log.tag_id
-    AND (
-      t.user_id = auth.uid()
-      OR EXISTS (
-        SELECT 1 FROM public.household_links
-        WHERE active = true
-        AND (
-          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
-          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
-        )
-      )
-    )
-  )
-);
-CREATE POLICY "nfc_state_log_insert" ON public.nfc_state_log FOR INSERT WITH CHECK (changed_by = auth.uid());
-
--- nfc_checklist_items: household can CRUD (both members manage)
-CREATE POLICY "nfc_checklist_items_select" ON public.nfc_checklist_items FOR SELECT USING (
-  EXISTS (
-    SELECT 1 FROM public.nfc_tags t
-    WHERE t.id = nfc_checklist_items.tag_id
-    AND (
-      t.user_id = auth.uid()
-      OR EXISTS (
-        SELECT 1 FROM public.household_links
-        WHERE active = true
-        AND (
-          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
-          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
-        )
-      )
-    )
-  )
-);
-CREATE POLICY "nfc_checklist_items_insert" ON public.nfc_checklist_items FOR INSERT WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.nfc_tags t
-    WHERE t.id = nfc_checklist_items.tag_id
-    AND (
-      t.user_id = auth.uid()
-      OR EXISTS (
-        SELECT 1 FROM public.household_links
-        WHERE active = true
-        AND (
-          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
-          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
-        )
-      )
-    )
-  )
-);
-CREATE POLICY "nfc_checklist_items_update" ON public.nfc_checklist_items FOR UPDATE USING (
-  EXISTS (
-    SELECT 1 FROM public.nfc_tags t
-    WHERE t.id = nfc_checklist_items.tag_id
-    AND (
-      t.user_id = auth.uid()
-      OR EXISTS (
-        SELECT 1 FROM public.household_links
-        WHERE active = true
-        AND (
-          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
-          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
-        )
-      )
-    )
-  )
-);
-CREATE POLICY "nfc_checklist_items_delete" ON public.nfc_checklist_items FOR DELETE USING (
-  EXISTS (
-    SELECT 1 FROM public.nfc_tags t
-    WHERE t.id = nfc_checklist_items.tag_id
-    AND (
-      t.user_id = auth.uid()
-      OR EXISTS (
-        SELECT 1 FROM public.household_links
-        WHERE active = true
-        AND (
-          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
-          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
-        )
-      )
-    )
-  )
-);
-
--- nfc_checklist_completions: household can read/write
-CREATE POLICY "nfc_checklist_completions_select" ON public.nfc_checklist_completions FOR SELECT USING (
-  EXISTS (
-    SELECT 1 FROM public.nfc_checklist_items ci
-    JOIN public.nfc_tags t ON t.id = ci.tag_id
-    WHERE ci.id = nfc_checklist_completions.checklist_item_id
-    AND (
-      t.user_id = auth.uid()
-      OR EXISTS (
-        SELECT 1 FROM public.household_links
-        WHERE active = true
-        AND (
-          (owner_user_id = auth.uid() AND partner_user_id = t.user_id)
-          OR (partner_user_id = auth.uid() AND owner_user_id = t.user_id)
-        )
-      )
-    )
-  )
-);
-CREATE POLICY "nfc_checklist_completions_insert" ON public.nfc_checklist_completions FOR INSERT WITH CHECK (completed_by = auth.uid());
-CREATE POLICY "nfc_checklist_completions_delete" ON public.nfc_checklist_completions FOR DELETE USING (completed_by = auth.uid());
-
--- =====================================================================
--- AI Usage module
--- Personal AI-model token-consumption tracker.
--- Data in ai_usage_models is OVERWRITTEN on each refresh cycle rollover
--- (current_usage_pct reset to 0, cycle_start_date advanced). No history
--- is stored on purpose. Session types survive as templates.
--- =====================================================================
-
-CREATE TABLE public.ai_usage_models (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  name text NOT NULL,
-  refresh_frequency text NOT NULL CHECK (refresh_frequency = ANY (ARRAY['weekly'::text, 'monthly'::text])),
-  cycle_start_date date NOT NULL DEFAULT CURRENT_DATE,
-  cycle_start_day integer CHECK (cycle_start_day IS NULL OR (cycle_start_day >= 1 AND cycle_start_day <= 31)),
-  -- Optional immutable anchor date. When set, cycles roll forward from this date
-  -- (by 7 days for weekly, 1 calendar month for monthly), ignoring cycle_start_day.
-  cycle_anchor_date date,
-  current_usage_pct numeric(6,3) NOT NULL DEFAULT 0 CHECK (current_usage_pct >= 0::numeric),
-  last_updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  position integer NOT NULL DEFAULT 0,
-  notes text,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT ai_usage_models_pkey PRIMARY KEY (id),
-  CONSTRAINT ai_usage_models_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
-  CONSTRAINT ai_usage_models_user_name_unique UNIQUE (user_id, name)
-);
-CREATE INDEX ai_usage_models_user_idx ON public.ai_usage_models (user_id, position);
-
-CREATE TABLE public.ai_session_types (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  model_id uuid NOT NULL,
-  name text NOT NULL,
-  estimated_usage_pct numeric(6,3) NOT NULL CHECK (estimated_usage_pct >= 0::numeric),
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT ai_session_types_pkey PRIMARY KEY (id),
-  CONSTRAINT ai_session_types_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
-  CONSTRAINT ai_session_types_model_id_fkey FOREIGN KEY (model_id) REFERENCES public.ai_usage_models(id) ON DELETE CASCADE,
-  CONSTRAINT ai_session_types_model_name_unique UNIQUE (model_id, name)
-);
-CREATE INDEX ai_session_types_model_idx ON public.ai_session_types (model_id);
-
-ALTER TABLE public.ai_usage_models ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ai_session_types ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "ai_usage_models_select_own" ON public.ai_usage_models FOR SELECT USING (user_id = auth.uid());
-CREATE POLICY "ai_usage_models_insert_own" ON public.ai_usage_models FOR INSERT WITH CHECK (user_id = auth.uid());
-CREATE POLICY "ai_usage_models_update_own" ON public.ai_usage_models FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
-CREATE POLICY "ai_usage_models_delete_own" ON public.ai_usage_models FOR DELETE USING (user_id = auth.uid());
-
-CREATE POLICY "ai_session_types_select_own" ON public.ai_session_types FOR SELECT USING (user_id = auth.uid());
-CREATE POLICY "ai_session_types_insert_own" ON public.ai_session_types FOR INSERT WITH CHECK (user_id = auth.uid());
-CREATE POLICY "ai_session_types_update_own" ON public.ai_session_types FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
-CREATE POLICY "ai_session_types_delete_own" ON public.ai_session_types FOR DELETE USING (user_id = auth.uid());
-
--- ===========================================================================
--- ERA Persistence (Phase 0.5) — added 2026-05-03
--- ===========================================================================
-CREATE TABLE public.era_conversations (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  title text,
-  active_face_key text NOT NULL DEFAULT 'budget'::text CHECK (active_face_key = ANY (ARRAY['budget'::text, 'schedule'::text, 'chef'::text, 'brain'::text])),
-  is_archived boolean NOT NULL DEFAULT false,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT era_conversations_pkey PRIMARY KEY (id),
-  CONSTRAINT era_conversations_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE public.era_messages (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  conversation_id uuid NOT NULL,
-  user_id uuid NOT NULL,
-  role text NOT NULL CHECK (role = ANY (ARRAY['user'::text, 'assistant'::text, 'system'::text])),
-  content text NOT NULL,
-  intent_kind text,
-  intent_face text,
-  intent_payload jsonb,
-  draft_transaction_id uuid,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT era_messages_pkey PRIMARY KEY (id),
-  CONSTRAINT era_messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.era_conversations(id) ON DELETE CASCADE,
-  CONSTRAINT era_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
-  CONSTRAINT era_messages_draft_transaction_id_fkey FOREIGN KEY (draft_transaction_id) REFERENCES public.transactions(id) ON DELETE SET NULL
-);
-
-ALTER TABLE public.era_conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.era_messages ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY era_conversations_self ON public.era_conversations FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
--- household_memories: shared notes/contacts for a household (ERA Brain face)
-CREATE TABLE public.household_memories (
-  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  household_id uuid NOT NULL REFERENCES public.household_links(id) ON DELETE CASCADE,
-  created_by   uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  label        text NOT NULL,
-  value        text NOT NULL,
-  tags         text[] NOT NULL DEFAULT '{}',
-  created_at   timestamptz NOT NULL DEFAULT now(),
-  updated_at   timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE UNIQUE INDEX household_memories_label_unique
-  ON public.household_memories (household_id, lower(label));
-
-CREATE INDEX household_memories_household_idx
-  ON public.household_memories (household_id, updated_at DESC);
-
-ALTER TABLE public.household_memories ENABLE ROW LEVEL SECURITY;
-
--- Any household member can read memories belonging to their household
-CREATE POLICY household_memories_select ON public.household_memories
-  FOR SELECT USING (
-    household_id IN (
-      SELECT id FROM public.household_links
-      WHERE (owner_user_id = auth.uid() OR partner_user_id = auth.uid())
-        AND active = true
-    )
-  );
-
--- Any household member can insert (created_by is set to auth.uid() by the API)
-CREATE POLICY household_memories_insert ON public.household_memories
-  FOR INSERT WITH CHECK (
-    created_by = auth.uid() AND
-    household_id IN (
-      SELECT id FROM public.household_links
-      WHERE (owner_user_id = auth.uid() OR partner_user_id = auth.uid())
-        AND active = true
-    )
-  );
-
--- Only the creator can update or delete their memories
-CREATE POLICY household_memories_update ON public.household_memories
-  FOR UPDATE USING (created_by = auth.uid()) WITH CHECK (created_by = auth.uid());
-
-CREATE POLICY household_memories_delete ON public.household_memories
-  FOR DELETE USING (created_by = auth.uid());
-CREATE POLICY era_messages_self ON public.era_messages FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
--- ============================================
--- RLS POLICIES — ITEMS CHILD TABLES (parent-join pattern)
--- Each child table inherits the same access predicate as items_select.
--- ============================================
-ALTER TABLE public.item_alerts ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "item_alerts_via_parent" ON public.item_alerts FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.items i WHERE i.id = item_alerts.item_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));
-
-ALTER TABLE public.item_recurrence_rules ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "item_recurrence_rules_via_parent" ON public.item_recurrence_rules FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.items i WHERE i.id = item_recurrence_rules.item_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));
-
-ALTER TABLE public.item_recurrence_exceptions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "item_recurrence_exceptions_via_parent" ON public.item_recurrence_exceptions FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.item_recurrence_rules r
-    JOIN public.items i ON i.id = r.item_id
-    WHERE r.id = item_recurrence_exceptions.rule_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));
-
-ALTER TABLE public.item_flexible_schedules ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "item_flexible_schedules_via_parent" ON public.item_flexible_schedules FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.items i WHERE i.id = item_flexible_schedules.item_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));
-
-ALTER TABLE public.reminder_details ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "reminder_details_via_parent" ON public.reminder_details FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.items i WHERE i.id = reminder_details.item_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));
-
-ALTER TABLE public.event_details ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "event_details_via_parent" ON public.event_details FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.items i WHERE i.id = event_details.item_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));
-
-ALTER TABLE public.item_subtasks ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "item_subtasks_via_parent" ON public.item_subtasks FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.items i WHERE i.id = item_subtasks.parent_item_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));
-
-ALTER TABLE public.item_subtask_completions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "item_subtask_completions_via_parent" ON public.item_subtask_completions FOR ALL
-  USING (EXISTS (
-    SELECT 1
-    FROM public.item_subtasks st
-    JOIN public.items i ON i.id = st.parent_item_id
-    WHERE st.id = item_subtask_completions.subtask_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));
-
-ALTER TABLE public.item_attachments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "item_attachments_via_parent" ON public.item_attachments FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.items i WHERE i.id = item_attachments.item_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));
-
-ALTER TABLE public.item_snoozes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "item_snoozes_via_parent" ON public.item_snoozes FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.items i WHERE i.id = item_snoozes.item_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));
-
-ALTER TABLE public.recurrence_pauses ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "recurrence_pauses_via_parent" ON public.recurrence_pauses FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.items i WHERE i.id = recurrence_pauses.item_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));
-
-ALTER TABLE public.item_alert_suppressions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "item_alert_suppressions_via_parent" ON public.item_alert_suppressions FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.items i WHERE i.id = item_alert_suppressions.item_id AND (
-      i.user_id = auth.uid() OR i.responsible_user_id = auth.uid()
-      OR (i.is_public = true AND EXISTS (
-        SELECT 1 FROM public.household_links hl WHERE hl.active = true AND (
-          (hl.owner_user_id = auth.uid() AND hl.partner_user_id = i.user_id)
-          OR (hl.partner_user_id = auth.uid() AND hl.owner_user_id = i.user_id)
-        )))
-    )));

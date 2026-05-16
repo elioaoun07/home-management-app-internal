@@ -1,22 +1,29 @@
 "use client";
 
+import { getAudioContext } from "./audioContext";
+
 type PlaybackState = "idle" | "fetching" | "playing";
 
 interface QueueEntry {
   text: string;
-  audioBlob?: Blob;
+}
+
+export const DEFAULT_TTS_VOICE = "en-US-AvaMultilingualNeural";
+
+export function buildTTSSSML(text: string, voice = DEFAULT_TTS_VOICE): string {
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="${voice}">${escaped}</voice></speak>`;
 }
 
 /**
  * Sentence-streaming TTS queue.
  * Splits incoming text on sentence boundaries, fetches MP3 from /api/tts per sentence,
- * and plays them sequentially — so audio starts well before the full response arrives.
- *
- * Usage:
- *   const q = createTTSQueue({ voice: "en-US-AvaMultilingualNeural", onStateChange });
- *   q.push("Hello!"); // can be called multiple times as chunks arrive
- *   q.flush();        // call when the full response has been pushed
- *   q.stop();         // immediate stop + clear queue
+ * decodes via Web Audio API, and plays them sequentially — audio starts before the full
+ * response arrives. Uses AudioContext (autoplay-policy-safe) instead of HTMLAudioElement.
  */
 export interface TTSQueue {
   push(text: string): void;
@@ -31,10 +38,10 @@ export function createTTSQueue(opts: {
   onSentenceStart?: (text: string) => void;
   onDone?: () => void;
 }): TTSQueue {
-  const voice = opts.voice ?? "en-US-AvaMultilingualNeural";
+  const voice = opts.voice ?? DEFAULT_TTS_VOICE;
   const queue: QueueEntry[] = [];
   let state: PlaybackState = "idle";
-  let currentAudio: HTMLAudioElement | null = null;
+  let currentNode: AudioBufferSourceNode | null = null;
   let stopped = false;
   let buffer = "";
   let flushed = false;
@@ -44,21 +51,12 @@ export function createTTSQueue(opts: {
     opts.onStateChange?.(s);
   }
 
-  function ssml(text: string): string {
-    const escaped = text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-    return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="${voice}">${escaped}</voice></speak>`;
-  }
-
   async function fetchAudio(text: string): Promise<Blob | null> {
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ssml: ssml(text) }),
+        body: JSON.stringify({ ssml: buildTTSSSML(text, voice) }),
       });
       if (!res.ok) return null;
       return await res.blob();
@@ -84,40 +82,42 @@ export function createTTSQueue(opts: {
     setState("playing");
     opts.onSentenceStart?.(entry.text);
 
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    currentAudio = audio;
-
-    audio.onended = () => {
-      URL.revokeObjectURL(url);
-      currentAudio = null;
-      setState("idle");
-      if (queue.length > 0) {
-        processQueue();
-      } else if (flushed) {
-        opts.onDone?.();
-      }
-    };
-
-    audio.onerror = () => {
-      URL.revokeObjectURL(url);
-      currentAudio = null;
-      setState("idle");
-      processQueue();
-    };
-
     try {
-      await audio.play();
+      const arrayBuffer = await blob.arrayBuffer();
+      if (stopped) return;
+
+      const ac = getAudioContext();
+      if (ac.state === "suspended") await ac.resume();
+      if (stopped) return;
+
+      const audioBuffer = await ac.decodeAudioData(arrayBuffer);
+      if (stopped) return;
+
+      const node = ac.createBufferSource();
+      node.buffer = audioBuffer;
+      node.connect(ac.destination);
+      currentNode = node;
+
+      node.onended = () => {
+        currentNode = null;
+        setState("idle");
+        if (queue.length > 0) {
+          processQueue();
+        } else if (flushed) {
+          opts.onDone?.();
+        }
+      };
+
+      node.start();
     } catch {
+      currentNode = null;
       setState("idle");
       processQueue();
     }
   }
 
-  /** Extract complete sentences from the buffer. */
   function extractSentences(): string[] {
     const sentences: string[] = [];
-    // Split on .!? followed by space or end — keep delimiter attached
     const re = /[^.!?]*[.!?]+(?:\s|$)/g;
     let match: RegExpExecArray | null;
     let lastIndex = 0;
@@ -132,7 +132,6 @@ export function createTTSQueue(opts: {
   function enqueue(text: string) {
     if (!text.trim()) return;
     queue.push({ text });
-    // Pre-fetch next while current is playing
     processQueue();
   }
 
@@ -150,7 +149,6 @@ export function createTTSQueue(opts: {
 
     flush() {
       flushed = true;
-      // Enqueue whatever remains in the buffer
       const remaining = buffer.trim();
       buffer = "";
       if (remaining) enqueue(remaining);
@@ -161,8 +159,8 @@ export function createTTSQueue(opts: {
 
     stop() {
       stopped = true;
-      currentAudio?.pause();
-      currentAudio = null;
+      try { currentNode?.stop(); } catch {}
+      currentNode = null;
       queue.length = 0;
       buffer = "";
       setState("idle");

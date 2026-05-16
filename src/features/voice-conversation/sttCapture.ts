@@ -43,6 +43,10 @@ export function createSTTCapture(opts: {
   let rec: SpeechRecognition | null = null;
   let silenceTimer: ReturnType<typeof setTimeout> | null = null;
   let accumulatedFinal = "";
+  // Prevents fireAfterSilence from scheduling a new timer after abort() is called
+  // from inside an onresult/onInterim callback (the caller sets aborted=true, onresult
+  // continues executing, and without this guard would re-arm the timer we just cleared).
+  let aborted = false;
 
   function clearSilenceTimer() {
     if (silenceTimer !== null) {
@@ -52,9 +56,10 @@ export function createSTTCapture(opts: {
   }
 
   function fireAfterSilence(transcript: string) {
+    if (aborted) return;
     clearSilenceTimer();
     silenceTimer = setTimeout(() => {
-      if (transcript.trim()) opts.onFinal(transcript.trim());
+      if (!aborted && transcript.trim()) opts.onFinal(transcript.trim());
     }, SILENCE_MS);
   }
 
@@ -62,6 +67,7 @@ export function createSTTCapture(opts: {
     isSupported: true,
 
     start() {
+      aborted = false;
       accumulatedFinal = "";
       clearSilenceTimer();
 
@@ -73,6 +79,7 @@ export function createSTTCapture(opts: {
       instance.maxAlternatives = 1;
 
       instance.onresult = (event: SpeechRecognitionEvent) => {
+        if (aborted) return;
         let interimText = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
@@ -85,7 +92,7 @@ export function createSTTCapture(opts: {
         }
         const combined = (accumulatedFinal + interimText).trim();
         opts.onInterim(combined);
-        fireAfterSilence(accumulatedFinal.trim() || combined);
+        if (!aborted) fireAfterSilence(accumulatedFinal.trim() || combined);
       };
 
       // onspeechend may not exist on all browser builds — use optional assignment
@@ -122,6 +129,7 @@ export function createSTTCapture(opts: {
     },
 
     abort() {
+      aborted = true;
       clearSilenceTimer();
       rec?.abort();
       rec = null;

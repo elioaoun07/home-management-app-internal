@@ -9,10 +9,14 @@
 // Every color (glow, CommandBar border, icons, text accent) is driven by
 // --era-hue / --era-accent CSS variables that shapeshift with the active module.
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getFace } from "@/features/era/faceRegistry";
 import { useEraStore } from "@/features/era/useEraStore";
+import { useEraWakeListener } from "@/features/era/useEraWakeListener";
+import { useConversationMode } from "@/features/voice-conversation/hooks/useConversationMode";
+import { unlockAudioContext } from "@/features/voice-conversation/audioContext";
+import { preloadGreetings } from "@/features/voice-conversation/greetingCache";
 import { ERAMark } from "@/components/shared/ERAMark";
 import { useUser } from "@/contexts/UserContext";
 import { BudgetDashboard } from "./dashboards/BudgetDashboard";
@@ -66,8 +70,51 @@ export function EraShell() {
   const activeView    = useEraStore((s) => s.activeView);
   const isAwake       = useEraStore((s) => s.isAwake);
   const wake          = useEraStore((s) => s.wake);
+  const setEraReply   = useEraStore((s) => s.setEraReply);
   const eraReply      = useEraStore((s) => s.eraReply);
   const user          = useUser();
+
+  const firstName = user?.name?.split(" ")[0] ?? "";
+  const setVoiceReplyEnabled = useEraStore((s) => s.setVoiceReplyEnabled);
+
+  // Unlock AudioContext on first user gesture — needed for voice-wake TTS to play.
+  // Also pre-caches the 3 greeting variants for the current time of day so the
+  // greeting plays from an AudioBuffer (~instant) instead of waiting for Azure fetch.
+  const handleFirstInteraction = useCallback(() => {
+    unlockAudioContext();
+    preloadGreetings(firstName || undefined);
+  }, [firstName]);
+
+  useEffect(() => {
+    document.addEventListener("pointerdown", handleFirstInteraction, { once: true });
+    return () => document.removeEventListener("pointerdown", handleFirstInteraction);
+  }, [handleFirstInteraction]);
+
+  // Re-preload when name becomes available (e.g., initial render before user data loads).
+  useEffect(() => {
+    if (firstName) {
+      preloadGreetings(firstName);
+    }
+  }, [firstName]);
+
+  // Conversation engine — handles wake detection, TTS greeting, and voice Q&A.
+  const { wake: engineWake, isEnabled: convModeEnabled } = useConversationMode({
+    enabled: true,
+    userName: firstName || undefined,
+    onWake: (source) => {
+      wake();
+      // Voice wake auto-enables the speaker so ERA speaks back.
+      // Click/tap wake leaves the speaker in whatever state the user set.
+      if (source === "speech") setVoiceReplyEnabled(true);
+    },
+    handlers: {
+      onWillSpeak: (text) => setEraReply(text),
+      sessionId: undefined,
+    },
+  });
+
+  // Fallback wake listener — only runs when conversation engine is not supported
+  useEraWakeListener({ enabled: !convModeEnabled });
 
   const hubModuleKey = useEraStore((s) => s.hubModuleKey);
   const face      = getFace(activeFaceKey);
@@ -77,7 +124,6 @@ export function EraShell() {
   const fc        = MODULE_COLORS[moduleKey] ?? MODULE_COLORS.chat;
   const isHub     = activeView === "hub";
 
-  const firstName = user?.name?.split(" ")[0] ?? "";
   const greeting  = `${getTimeGreeting()}${firstName ? `, ${firstName}.` : "."}`;
 
   // Measure the content area so we can spring the ERA DOT to an exact pixel center.
@@ -105,7 +151,7 @@ export function EraShell() {
     <div
       className="era-shell fixed inset-0 overflow-hidden"
       data-awake={isAwake}
-      onClick={!isAwake ? wake : undefined}
+      onClick={!isAwake ? () => { unlockAudioContext(); preloadGreetings(firstName || undefined); wake(); engineWake(); } : undefined}
       style={
         {
           "--era-hue":           fc.hue,

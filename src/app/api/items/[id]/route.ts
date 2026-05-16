@@ -22,7 +22,7 @@ export async function PATCH(
     const { id: itemId } = await params;
     const body = await request.json();
 
-    // Verify item exists
+    // Verify item exists and caller is the creator (only owner can edit)
     const { data: existing, error: fetchError } = await supabase
       .from("items")
       .select("id, user_id")
@@ -31,6 +31,10 @@ export async function PATCH(
 
     if (fetchError || !existing) {
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
+    }
+
+    if (existing.user_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Extract update fields (only allow known fields)
@@ -154,6 +158,21 @@ export async function DELETE(
     }
 
     const { id: itemId } = await params;
+
+    // Only the creator can delete or archive
+    const { data: existing, error: fetchError } = await supabase
+      .from("items")
+      .select("id, user_id")
+      .eq("id", itemId)
+      .single();
+
+    if (fetchError || !existing) {
+      return NextResponse.json({ error: "Item not found" }, { status: 404 });
+    }
+
+    if (existing.user_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     // Check if archive or hard delete (query param ?archive=true)
     const { searchParams } = new URL(request.url);

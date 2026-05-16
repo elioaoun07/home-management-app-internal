@@ -3,6 +3,7 @@
 
 import { isReallyOnline } from "@/lib/connectivityManager";
 import { addToQueue } from "@/lib/offlineQueue";
+import { safeFetch } from "@/lib/safeFetch";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ToastIcons } from "@/lib/toastIcons";
 import type { ItemWithDetails } from "@/types/items";
@@ -376,14 +377,13 @@ export function useCompleteItem() {
         await addToQueue({
           feature: "item",
           operation: "complete",
-          endpoint: `/api/items/${itemId}/actions`,
+          endpoint: `/api/items/${itemId}/complete`,
           method: "POST",
           body: {
-            action: "complete",
-            occurrenceDate,
-            isRecurring,
+            occurrence_date: occurrenceDate,
+            is_recurring: isRecurring,
             reason,
-            actualMinutes,
+            actual_minutes: actualMinutes,
           },
           metadata: { label: "Complete item" },
         });
@@ -393,76 +393,18 @@ export function useCompleteItem() {
           _offline: true,
         };
       }
-      const supabase = supabaseBrowser();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
 
-      if (isRecurring) {
-        // For recurring: record completion of this occurrence
-        const { data, error } = await supabase
-          .from("item_occurrence_actions")
-          .insert({
-            item_id: itemId,
-            occurrence_date: occurrenceDate,
-            action_type: "completed",
-            reason,
-            created_by: user.id,
-            metadata_json:
-              typeof actualMinutes === "number" && actualMinutes >= 0
-                ? { actual_minutes: actualMinutes }
-                : null,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        return { action: data, type: "occurrence" };
-      } else {
-        const updatePayload: any = {
-          status: "completed",
-          updated_at: new Date().toISOString(),
-        };
-
-        // For non-recurring: update item status + record action
-        const [itemResult, actionResult] = await Promise.all([
-          supabase.from("items").update(updatePayload).eq("id", itemId),
-          supabase.from("item_occurrence_actions").insert({
-            item_id: itemId,
-            occurrence_date: occurrenceDate,
-            action_type: "completed",
-            reason,
-            created_by: user.id,
-            metadata_json:
-              typeof actualMinutes === "number" && actualMinutes >= 0
-                ? { actual_minutes: actualMinutes }
-                : null,
-          }),
-        ]);
-
-        if (itemResult.error) throw itemResult.error;
-
-        // Also update reminder_details if it exists
-        await supabase
-          .from("reminder_details")
-          .update({
-            completed_at: new Date().toISOString(),
-            ...(typeof actualMinutes === "number" && actualMinutes >= 0
-              ? { actual_minutes: actualMinutes }
-              : {}),
-          })
-          .eq("item_id", itemId);
-
-        // Cascade: deactivate active alerts for non-recurring items
-        await supabase
-          .from("item_alerts")
-          .update({ active: false })
-          .eq("item_id", itemId)
-          .eq("active", true);
-
-        return { type: "item", itemId };
-      }
+      const result = await safeFetch(`/api/items/${itemId}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          occurrence_date: occurrenceDate,
+          is_recurring: isRecurring,
+          reason,
+          actual_minutes: actualMinutes,
+        }),
+      });
+      return result as { type: string; itemId?: string; action?: { id: string }; archived?: boolean };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
@@ -585,90 +527,32 @@ export function usePostponeItem() {
           method: "POST",
           body: {
             action: "postpone",
-            occurrenceDate,
-            postponeType,
-            postponedTo,
+            occurrence_date: occurrenceDate,
+            postpone_type: postponeType,
+            postponed_to: postponedTo,
             reason,
-            isRecurring,
+            is_recurring: isRecurring,
           },
           metadata: { label: "Postpone item" },
         });
         return { action: null, postponedTo, _offline: true };
       }
-      const supabase = supabaseBrowser();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
 
-      // Record the postponement action
-      const { data, error } = await supabase
-        .from("item_occurrence_actions")
-        .insert({
-          item_id: itemId,
+      const result = await safeFetch(`/api/items/${itemId}/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "postpone",
           occurrence_date: occurrenceDate,
-          action_type: "postponed",
-          postponed_to: postponedTo,
           postpone_type: postponeType,
+          postponed_to: postponedTo,
           reason,
-          created_by: user.id,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // For non-recurring items, also update the due date and alert time
-      if (!isRecurring && postponedTo) {
-        // Try updating reminder_details
-        await supabase
-          .from("reminder_details")
-          .update({ due_at: postponedTo })
-          .eq("item_id", itemId);
-
-        // Try updating event_details
-        await supabase
-          .from("event_details")
-          .update({ start_at: postponedTo })
-          .eq("item_id", itemId);
-
-        // Fetch existing alerts to recalculate trigger_at for relative alerts
-        const { data: alerts } = await supabase
-          .from("item_alerts")
-          .select("id, kind, offset_minutes")
-          .eq("item_id", itemId)
-          .eq("active", true);
-
-        if (alerts && alerts.length > 0) {
-          const postponedDate = new Date(postponedTo);
-
-          for (const alert of alerts) {
-            // For relative alerts, compute trigger_at = postponedTo - offset_minutes
-            // For absolute alerts, just set trigger_at to postponedTo
-            let newTriggerAt = postponedTo;
-            if (alert.kind === "relative" && alert.offset_minutes) {
-              newTriggerAt = new Date(
-                postponedDate.getTime() - alert.offset_minutes * 60 * 1000,
-              ).toISOString();
-            }
-
-            // Update the alert with new trigger time
-            // Reset last_fired_at to null so the cron job will send the notification again
-            await supabase
-              .from("item_alerts")
-              .update({
-                trigger_at: newTriggerAt,
-                last_fired_at: null,
-              })
-              .eq("id", alert.id);
-          }
-        }
-      }
-
-      return { action: data, postponedTo };
+          is_recurring: isRecurring,
+        }),
+      });
+      return result as { action?: { id: string }; postponedTo?: string };
     },
     onSuccess: () => {
-      // Invalidate both items and occurrence actions
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
       queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
     },
@@ -692,7 +576,12 @@ export function useCancelItem() {
           operation: "cancel",
           endpoint: `/api/items/${itemId}/actions`,
           method: "POST",
-          body: { action: "cancel", occurrenceDate, isRecurring, reason },
+          body: {
+            action: "cancel",
+            occurrence_date: occurrenceDate,
+            is_recurring: isRecurring,
+            reason,
+          },
           metadata: { label: "Cancel item" },
         });
         return {
@@ -701,41 +590,18 @@ export function useCancelItem() {
           _offline: true,
         };
       }
-      const supabase = supabaseBrowser();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
 
-      if (isRecurring && occurrenceDate) {
-        // For recurring: record cancellation of this occurrence only
-        const { data, error } = await supabase
-          .from("item_occurrence_actions")
-          .insert({
-            item_id: itemId,
-            occurrence_date: occurrenceDate,
-            action_type: "cancelled",
-            reason,
-            created_by: user.id,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        return { action: data, type: "occurrence" };
-      } else {
-        // For non-recurring: update item status to cancelled
-        const { error } = await supabase
-          .from("items")
-          .update({
-            status: "cancelled",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", itemId);
-
-        if (error) throw error;
-        return { type: "item", itemId };
-      }
+      const result = await safeFetch(`/api/items/${itemId}/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "cancel",
+          occurrence_date: occurrenceDate,
+          is_recurring: isRecurring,
+          reason,
+        }),
+      });
+      return result as { action?: { id: string }; type?: string; itemId?: string };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
@@ -995,8 +861,9 @@ export function useItemActionsWithToast() {
         action: {
           label: "Undo",
           onClick: async () => {
-            if (result.type === "occurrence" && result.action) {
-              await undoAction.mutateAsync(result.action.id);
+            const r = result as any;
+            if (r.type === "occurrence" && r.action?.id) {
+              await undoAction.mutateAsync(r.action.id);
               toast.success("Cancellation undone");
             }
           },

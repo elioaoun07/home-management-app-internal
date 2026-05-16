@@ -1,0 +1,115 @@
+-- Migration: 2026-05-16_household_item_access
+-- Purpose: Fix household member access to shared items
+--
+-- Summary of fixes:
+-- 1. Removed is_public requirement from household item auth checks
+-- 2. Fixed auth checks in API routes to properly validate household member access
+-- 3. Routed complete/postpone/cancel mutations through supabaseAdmin() with explicit auth
+-- 4. Added owner checks to PATCH/DELETE routes
+--
+-- No schema changes required — all columns and tables already exist.
+-- This migration documents the authorization model for items and actions.
+
+-- ============================================================================
+-- AUTHORIZATION MODEL
+-- ============================================================================
+--
+-- An item belongs to a USER (creator) and can have a RESPONSIBLE_USER (assignee).
+-- NOTIFY_ALL_HOUSEHOLD controls whether any household member can act on it.
+-- IS_PUBLIC controls broader app-wide visibility (independent concern).
+--
+-- For complete/postpone/cancel/skip actions:
+--   - Creator (item.user_id) → always allowed
+--   - Responsible user (item.responsible_user_id) → always allowed
+--   - Household member (if notify_all_household = true) → allowed
+--
+-- For edit (PATCH /api/items/[id]):
+--   - Creator only
+--
+-- For delete/archive (DELETE /api/items/[id]):
+--   - Creator only
+
+-- ============================================================================
+-- REQUIRED RLS POLICIES (should already be in place)
+-- ============================================================================
+--
+-- items table:
+--   - SELECT: Creator OR Responsible User OR (Household member when notify_all_household)
+--   - UPDATE: Creator only
+--   - DELETE: Creator only
+--
+-- item_occurrence_actions table:
+--   - INSERT: Creator of item OR Responsible user OR (Household member when notify_all_household)
+--   - SELECT: Creator of item OR Responsible user OR (Household member when notify_all_household)
+--   - DELETE: User who created_by OR Item creator
+--
+-- reminder_details, event_details, item_alerts, item_subtasks tables:
+--   - UPDATE/DELETE: Same as parent item (Creator OR Responsible OR Household with notify_all_household)
+--
+-- Note: RLS policies should NOT use EXISTS-subquery joins on hot tables
+-- (item_occurrence_actions, etc.). Use SECURITY DEFINER RPC or denormalized user_id.
+-- See CLAUDE.md Hard Rule #20.
+
+-- ============================================================================
+-- APPLICATIONS CHANGES (code-level, no SQL needed)
+-- ============================================================================
+--
+-- Files modified:
+--   1. src/components/items/ItemDetailModal.tsx
+--      - Line 285: isAllHousehold = !!item.notify_all_household (removed is_public requirement)
+--
+--   2. src/app/api/items/[id]/complete/route.ts
+--      - Line 61: Removed && item.is_public from household check
+--      - Added reason parameter to occurrence actions
+--
+--   3. src/app/api/items/[id]/actions/route.ts
+--      - Added supabaseAdmin() for item fetch (bypasses RLS for auth check)
+--      - Added explicit household member auth check (creator || responsible || household)
+--      - Uses adminDb for all writes
+--
+--   4. src/app/api/items/[id]/route.ts
+--      - PATCH: Added ownership check (403 if user_id != creator)
+--      - DELETE: Added ownership check (403 if user_id != creator)
+--
+--   5. src/features/items/useItemActions.ts
+--      - useCompleteItem: Routes online path through /api/items/{id}/complete via safeFetch
+--      - usePostponeItem: Routes online path through /api/items/{id}/actions via safeFetch
+--      - useCancelItem: Routes online path through /api/items/{id}/actions via safeFetch
+--      - Offline queue paths: Fixed camelCase → snake_case body keys
+--
+-- Result: All mutations now go through supabaseAdmin() with proper auth checks.
+-- This removes the RLS blocker for household member writes.
+
+-- ============================================================================
+-- VERIFICATION
+-- ============================================================================
+--
+-- To verify the fix works:
+--
+-- 1. Partner (responsible user) should be able to:
+--    - See items they're assigned to
+--    - Complete/postpone/cancel those items
+--    - Edit basic fields (status, due date) where allowed
+--
+-- 2. Household member should be able to:
+--    - See items where notify_all_household = true
+--    - Complete/postpone/cancel those items
+--
+-- 3. Non-creator should NOT be able to:
+--    - Edit title/description/recurrence
+--    - Delete or archive the item
+
+-- ============================================================================
+-- NOTES
+-- ============================================================================
+--
+-- The fix was driven by user feedback: "household members couldn't complete
+-- household items because isAllHousehold check required is_public flag".
+--
+-- The real blocker was RLS on direct Supabase writes from the browser.
+-- Solution: Route all mutations through API routes that use supabaseAdmin().
+-- This is safe because explicit auth checks run server-side.
+--
+-- This approach matches the existing pattern used for:
+--   - Offline queue mutations (already used /api/items/{id}/actions)
+--   - Service worker quick actions (already used /api/items/{id}/complete)
