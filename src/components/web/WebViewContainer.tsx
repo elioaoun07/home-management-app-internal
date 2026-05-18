@@ -3,6 +3,7 @@
 import UserMenuClient from "@/components/auth/UserMenuClient";
 import WebBudget from "@/components/web/WebBudget";
 import WebCatalogue from "@/components/web/WebCatalogue";
+import WebChores from "@/components/web/WebChores";
 import WebDashboard from "@/components/web/WebDashboard";
 import WebEvents from "@/components/web/WebEvents";
 import WebFuturePurchases from "@/components/web/WebFuturePurchases";
@@ -29,7 +30,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 
 // Top-level view modes
-export type WebViewMode = "budget" | "events" | "catalogue" | "recipes" | "meal-plan";
+export type WebViewMode = "budget" | "events" | "catalogue" | "recipes" | "meal-plan" | "chores";
 
 type ViewConfig = {
   module: ERAModuleKey;
@@ -45,6 +46,7 @@ const VIEW_CONFIG: Record<WebViewMode, ViewConfig> = {
   catalogue:  { module: "memory",    title: "Life Catalogue",     role: "Archive",       gradient: "from-blue-400 to-indigo-400",    activeClass: "bg-gradient-to-r from-violet-600 to-cyan-600" },
   recipes:    { module: "recipe",    title: "Recipes & Meals",    role: "Culinary",      gradient: "from-orange-400 to-amber-400",   activeClass: "bg-gradient-to-r from-emerald-600 to-teal-600" },
   "meal-plan": { module: "meal",    title: "Meal Planning",       role: "Weekly Planner", gradient: "from-amber-400 to-yellow-400", activeClass: "bg-gradient-to-r from-amber-600 to-orange-600" },
+  "chores":    { module: "home",    title: "Household Chores",    role: "Chore Tracker",  gradient: "from-green-400 to-emerald-400",  activeClass: "bg-gradient-to-r from-green-600 to-emerald-600"  },
 };
 
 const NAV_ITEMS: Array<{ mode: WebViewMode; label: string; eraModule: ERAModuleKey }> = [
@@ -53,6 +55,7 @@ const NAV_ITEMS: Array<{ mode: WebViewMode; label: string; eraModule: ERAModuleK
   { mode: "catalogue",  label: "Catalogue", eraModule: "memory"    },
   { mode: "recipes",    label: "Recipes",   eraModule: "recipe"    },
   { mode: "meal-plan",  label: "Meals",     eraModule: "meal"      },
+  { mode: "chores",     label: "Chores",    eraModule: "home"      },
 ];
 
 // Tabs within Budget view
@@ -241,6 +244,7 @@ export default function WebViewContainer({ initialMode }: { initialMode?: WebVie
           <>
             {viewMode === "events" && <WebEvents />}
             {viewMode === "catalogue" && <WebCatalogue />}
+            {viewMode === "chores" && <WebChores />}
             {viewMode === "meal-plan" && (
               <WebMealPlanCalendar currentUserId={currentUserId} />
             )}

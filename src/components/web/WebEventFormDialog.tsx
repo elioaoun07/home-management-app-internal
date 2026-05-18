@@ -325,14 +325,21 @@ export function WebEventFormDialog({
       } else {
         // Create mode - reset form
         const date = initialDate || new Date();
+        const hasExplicitTime = initialDate && (initialDate.getHours() !== 0 || initialDate.getMinutes() !== 0);
+        const defaultStart = hasExplicitTime
+          ? format(date, "HH:mm")
+          : "09:00";
+        const defaultEndHour = hasExplicitTime
+          ? String(Math.min(date.getHours() + 1, 23)).padStart(2, "0") + ":" + String(date.getMinutes()).padStart(2, "0")
+          : "10:00";
         setItemType(defaultType);
         setTitle(prefillTitle || "");
         setDescription("");
         setPriority("normal");
         setStartDate(format(date, "yyyy-MM-dd"));
-        setStartTime("09:00");
+        setStartTime(defaultStart);
         setEndDate(format(date, "yyyy-MM-dd"));
-        setEndTime("10:00");
+        setEndTime(defaultEndHour);
         setAllDay(prefillTitle ? true : false);
         setLocation("");
         setLocationContext(null);

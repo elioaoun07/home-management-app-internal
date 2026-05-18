@@ -70,6 +70,23 @@ export const ToastIcons = {
     </div>
   ) as ReactNode,
 
+  // Orange person - partner responsibility override prompt
+  partner: (
+    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500/20 ring-2 ring-orange-500/50 shadow-[0_0_10px_rgba(249,115,22,0.4)]">
+      <svg
+        className="w-3.5 h-3.5 text-orange-400"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" />
+      </svg>
+    </div>
+  ) as ReactNode,
+
   // Green checkmark - generic success
   success: (
     <div className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/20 ring-2 ring-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.4)]">

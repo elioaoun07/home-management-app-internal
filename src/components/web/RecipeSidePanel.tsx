@@ -142,6 +142,7 @@ export default function RecipeSidePanel() {
         <div className="relative mb-2">
           <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-white/30" />
           <input
+            suppressHydrationWarning
             type="text"
             placeholder="Search..."
             value={search}
@@ -155,6 +156,7 @@ export default function RecipeSidePanel() {
           />
         </div>
         <button
+          suppressHydrationWarning
           onClick={() => setFavoritesOnly((f) => !f)}
           className={cn(
             "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors",
@@ -179,6 +181,7 @@ export default function RecipeSidePanel() {
       >
         {QUICK_CATEGORIES.map((cat) => (
           <button
+            suppressHydrationWarning
             key={cat}
             onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
             className={cn(

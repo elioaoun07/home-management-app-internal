@@ -26,10 +26,11 @@ import { cn } from "@/lib/utils";
 import type {
   CatalogueItem,
   CataloguePriority,
+  ChoreCategory,
   LocationContext,
   RecurrencePattern,
 } from "@/types/catalogue";
-import { PRIORITY_COLORS, PRIORITY_LABELS } from "@/types/catalogue";
+import { CHORE_CATEGORIES, PRIORITY_COLORS, PRIORITY_LABELS } from "@/types/catalogue";
 import type { CreatePrerequisiteInput } from "@/types/prerequisites";
 import {
   AlertCircle,
@@ -46,6 +47,7 @@ import {
   MapPin,
   Plus,
   Repeat,
+  Sparkles,
   Tag,
   Users,
   X,
@@ -171,6 +173,9 @@ export default function CatalogueTaskItemDialog({
   // Flexible routine state
   const [isFlexibleRoutine, setIsFlexibleRoutine] = useState(false);
   const [flexibleOccurrences, setFlexibleOccurrences] = useState("1");
+  // Chore state
+  const [isChore, setIsChore] = useState(false);
+  const [choreCategory, setChoreCategory] = useState<string>("");
   // New fields: categories and visibility
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
@@ -211,6 +216,9 @@ export default function CatalogueTaskItemDialog({
         // Flexible routine state
         setIsFlexibleRoutine(editingItem.is_flexible_routine || false);
         setFlexibleOccurrences(String(editingItem.flexible_occurrences ?? 1));
+        // Chore state
+        setIsChore(editingItem.is_chore || false);
+        setChoreCategory(editingItem.chore_category || "");
       } else {
         // Reset to defaults
         setName("");
@@ -234,6 +242,9 @@ export default function CatalogueTaskItemDialog({
         // Reset flexible routine state
         setIsFlexibleRoutine(false);
         setFlexibleOccurrences("1");
+        // Reset chore state
+        setIsChore(false);
+        setChoreCategory("");
       }
     }
   }, [open, editingItem]);
@@ -310,6 +321,12 @@ export default function CatalogueTaskItemDialog({
         flexible_occurrences: isFlexibleRoutine
           ? Math.min(31, Math.max(1, parseInt(flexibleOccurrences, 10) || 1))
           : 1,
+        // Chore fields
+        is_chore: isChore,
+        chore_category:
+          isChore && choreCategory
+            ? (choreCategory as ChoreCategory)
+            : undefined,
       };
 
       let result: CatalogueItem;
@@ -733,6 +750,63 @@ export default function CatalogueTaskItemDialog({
                   </p>
                 </div>
               )}
+
+            {/* Household Chore Toggle (only for flexible routines) */}
+            {isFlexibleRoutine && (
+              <div
+                className={cn(
+                  "flex items-center justify-between p-3 rounded-lg",
+                  isChore
+                    ? "bg-emerald-500/20 border border-emerald-500/30"
+                    : "bg-white/5 border border-white/10",
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <Sparkles
+                    className={cn(
+                      "w-4 h-4",
+                      isChore ? "text-emerald-400" : "text-white/60",
+                    )}
+                  />
+                  <div>
+                    <p
+                      className={cn(
+                        "text-sm font-medium",
+                        isChore ? "text-emerald-300" : "text-white/80",
+                      )}
+                    >
+                      Household Chore
+                    </p>
+                    <p className="text-xs text-white/50">
+                      Appears in Chores view — not counted in Schedule overdue
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={isChore}
+                  onCheckedChange={(checked) => {
+                    setIsChore(checked);
+                    if (!checked) setChoreCategory("");
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Chore category (only when chore is enabled) */}
+            {isChore && isFlexibleRoutine && (
+              <Select value={choreCategory} onValueChange={setChoreCategory}>
+                <SelectTrigger className="bg-white/5 border-white/10 text-white text-sm">
+                  <SelectValue placeholder="Category (optional)" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1c1917] border-white/10">
+                  {CHORE_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat} className="text-white capitalize">
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             {/* Days of Week (for weekly/biweekly recurrence, only when NOT flexible) */}
             {(recurrencePattern === "weekly" ||

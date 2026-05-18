@@ -53,12 +53,12 @@ export async function POST(
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
 
-    // Authorization: creator, responsible user, or any household member when "All Household"
+    // Authorization: creator, responsible user, or any household partner
     const isCreator = item.user_id === user.id;
     const isResponsible = item.responsible_user_id === user.id;
     let canComplete = isCreator || isResponsible;
 
-    if (!canComplete && item.notify_all_household) {
+    if (!canComplete) {
       const { data: link } = await adminDb
         .from("household_links")
         .select("id")

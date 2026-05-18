@@ -209,6 +209,7 @@ export default function WebTodayView() {
   const tts = useBriefingTTS();
 
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [showChores, setShowChores] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 60000);
@@ -260,7 +261,10 @@ export default function WebTodayView() {
       scheduledFlexible,
     );
     const overdueOccs = allPastOccs.filter(
-      (occ) => isBefore(occ.occurrenceDate, currentTime) && !occ.isCompleted,
+      (occ) =>
+        isBefore(occ.occurrenceDate, currentTime) &&
+        !occ.isCompleted &&
+        !occ.item?.is_chore,
     );
 
     return { todayTasks: todayOccs, overdueTasks: overdueOccs };
@@ -375,6 +379,11 @@ export default function WebTodayView() {
     return text;
   }, [currentTime, today, todayTasks, overdueTasks]);
 
+  const choreCount = useMemo(
+    () => todayTasks.filter((t) => t.item.is_chore).length,
+    [todayTasks],
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -402,13 +411,16 @@ export default function WebTodayView() {
     default: isFrost ? "text-slate-400" : "text-white/40",
   };
 
+  const filterChores = (occs: ExpandedOccurrence[]) =>
+    showChores ? occs : occs.filter((t) => !t.item.is_chore);
+
   // Kanban periods
   const periods = [
     {
       label: "Morning",
       sub: "before noon",
       icon: <Sun className="w-3.5 h-3.5" />,
-      items: todayTasks.filter((t) => t.occurrenceDate.getHours() < 12),
+      items: filterChores(todayTasks.filter((t) => t.occurrenceDate.getHours() < 12)),
       accentBorder: isFrost ? "border-t-amber-400" : "border-t-amber-500/70",
       headerText: isFrost ? "text-amber-600" : "text-amber-400",
       headerBg: isFrost ? "bg-amber-50/80" : "bg-amber-500/5",
@@ -420,10 +432,10 @@ export default function WebTodayView() {
       label: "Afternoon",
       sub: "noon – 5 PM",
       icon: <Sun className="w-3.5 h-3.5" />,
-      items: todayTasks.filter((t) => {
+      items: filterChores(todayTasks.filter((t) => {
         const h = t.occurrenceDate.getHours();
         return h >= 12 && h < 17;
-      }),
+      })),
       accentBorder: isFrost ? "border-t-sky-400" : "border-t-sky-500/70",
       headerText: isFrost ? "text-sky-600" : "text-sky-400",
       headerBg: isFrost ? "bg-sky-50/80" : "bg-sky-500/5",
@@ -435,7 +447,7 @@ export default function WebTodayView() {
       label: "Evening",
       sub: "after 5 PM",
       icon: <Moon className="w-3.5 h-3.5" />,
-      items: todayTasks.filter((t) => t.occurrenceDate.getHours() >= 17),
+      items: filterChores(todayTasks.filter((t) => t.occurrenceDate.getHours() >= 17)),
       accentBorder: isFrost ? "border-t-indigo-400" : "border-t-indigo-500/70",
       headerText: isFrost ? "text-indigo-600" : "text-indigo-400",
       headerBg: isFrost ? "bg-indigo-50/80" : "bg-indigo-500/5",
@@ -615,14 +627,37 @@ export default function WebTodayView() {
         {/* Today's Kanban — grouped by time of day */}
         {todayTasks.length > 0 && (
           <div>
-            <h3
-              className={cn(
-                "text-xs font-bold uppercase tracking-wider mb-3",
-                isFrost ? "text-slate-400" : "text-white/30",
+            <div className="flex items-center justify-between mb-3">
+              <h3
+                className={cn(
+                  "text-xs font-bold uppercase tracking-wider",
+                  isFrost ? "text-slate-400" : "text-white/30",
+                )}
+              >
+                Today
+              </h3>
+              {choreCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowChores((v) => !v)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium transition-all",
+                    showChores
+                      ? isFrost
+                        ? "bg-green-100 text-green-700"
+                        : "bg-emerald-500/20 text-emerald-400"
+                      : isFrost
+                        ? "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                        : "bg-white/[0.05] text-white/30 hover:bg-white/[0.1]",
+                  )}
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden fill="currentColor">
+                    <circle cx="5" cy="5" r="4" opacity={showChores ? 1 : 0.4} />
+                  </svg>
+                  Chores · {choreCount}
+                </button>
               )}
-            >
-              Today
-            </h3>
+            </div>
             <div className="grid grid-cols-3 gap-3">
               {periods.map(
                 ({

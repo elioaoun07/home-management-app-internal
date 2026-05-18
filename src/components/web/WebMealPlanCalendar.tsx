@@ -467,6 +467,7 @@ export default function WebMealPlanCalendar({
             )}
           >
             <button
+              suppressHydrationWarning
               onClick={() => {
                 const d = new Date(weekStart);
                 d.setDate(d.getDate() - 7);
@@ -493,6 +494,7 @@ export default function WebMealPlanCalendar({
 
             <div className="flex items-center gap-1">
               <button
+                suppressHydrationWarning
                 onClick={() => setWeekStart(getWeekStart(new Date()))}
                 className={cn(
                   "text-xs px-2.5 py-1 rounded-lg border transition-colors mr-1",
@@ -504,6 +506,7 @@ export default function WebMealPlanCalendar({
                 Today
               </button>
               <button
+                suppressHydrationWarning
                 onClick={() => {
                   const d = new Date(weekStart);
                   d.setDate(d.getDate() + 7);

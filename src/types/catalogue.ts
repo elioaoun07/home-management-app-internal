@@ -207,6 +207,18 @@ export const RECURRENCE_PATTERN_LABELS: Record<RecurrencePattern, string> = {
 /** Flexible period for recurring tasks */
 export type FlexiblePeriod = "weekly" | "biweekly" | "monthly";
 
+/** Chore category values */
+export const CHORE_CATEGORIES = [
+  "cleaning",
+  "laundry",
+  "cooking",
+  "garden",
+  "maintenance",
+  "general",
+] as const;
+
+export type ChoreCategory = (typeof CHORE_CATEGORIES)[number];
+
 export const FLEXIBLE_PERIOD_LABELS: Record<FlexiblePeriod, string> = {
   weekly: "Weekly",
   biweekly: "Every 2 Weeks",
@@ -261,6 +273,9 @@ export interface CatalogueItem {
   is_flexible_routine: boolean;
   /** Times per period for flexible routines (default 1, max 31) */
   flexible_occurrences?: number;
+  // Chore fields
+  is_chore?: boolean;
+  chore_category?: ChoreCategory | null;
   // Virtual fields
   sub_items?: CatalogueSubItem[];
   category?: CatalogueCategory;
@@ -367,6 +382,9 @@ export interface CreateItemInput {
   is_flexible_routine?: boolean;
   /** Times per period for flexible routines (1–31) */
   flexible_occurrences?: number;
+  // Chore fields
+  is_chore?: boolean;
+  chore_category?: ChoreCategory;
 }
 
 export interface UpdateItemInput {
@@ -410,6 +428,9 @@ export interface UpdateItemInput {
   is_flexible_routine?: boolean;
   /** Times per period for flexible routines (1–31) */
   flexible_occurrences?: number;
+  // Chore fields
+  is_chore?: boolean;
+  chore_category?: ChoreCategory;
 }
 
 export interface CreateSubItemInput {

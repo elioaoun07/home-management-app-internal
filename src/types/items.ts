@@ -56,6 +56,8 @@ export interface Item {
   // Catalogue template link
   source_catalogue_item_id?: UUID | null; // Reference to the catalogue template this item was created from
   is_template_instance?: boolean; // True if this item syncs with a catalogue template
+  // Chore flag — denormalized from the source catalogue item at creation time
+  is_chore?: boolean;
 }
 
 /** Item with related data for display */
@@ -281,6 +283,7 @@ export interface CreateItemInput {
   // Catalogue template link
   source_catalogue_item_id?: UUID; // Link to catalogue template
   is_template_instance?: boolean; // True if this is a template instance
+  is_chore?: boolean; // Denormalized from catalogue template — excludes item from schedule overdue
   // Prerequisites (triggers) - items start dormant until conditions met
   prerequisites?: import("@/types/prerequisites").CreatePrerequisiteInput[];
 }

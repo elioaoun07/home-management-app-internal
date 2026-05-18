@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
         location_text: body.location_text || null,
         source_catalogue_item_id: body.source_catalogue_item_id || null,
         is_template_instance: body.is_template_instance || false,
+        is_chore: body.is_chore || false,
       })
       .select()
       .single();

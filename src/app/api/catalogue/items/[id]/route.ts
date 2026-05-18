@@ -148,6 +148,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       }
       updates.flexible_occurrences = Math.floor(n);
     }
+    if (body.is_chore !== undefined) updates.is_chore = body.is_chore;
+    if (body.chore_category !== undefined)
+      updates.chore_category = body.is_chore ? (body.chore_category || null) : null;
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
@@ -175,6 +178,15 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         return NextResponse.json({ error: "Item not found" }, { status: 404 });
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Backfill is_chore on all items previously activated from this catalogue template
+    if (body.is_chore !== undefined) {
+      await supabase
+        .from("items")
+        .update({ is_chore: body.is_chore })
+        .eq("source_catalogue_item_id", id)
+        .eq("user_id", user.id);
     }
 
     return NextResponse.json(data as CatalogueItem);

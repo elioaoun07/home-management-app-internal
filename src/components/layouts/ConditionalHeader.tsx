@@ -21,7 +21,7 @@ function moduleFromPath(
   if (pathname.startsWith("/recipe") || pathname.startsWith("/catalogue"))
     return "recipe";
   if (pathname.startsWith("/chat")) return "chat";
-  if (pathname.startsWith("/reminders") || pathname.startsWith("/alerts"))
+  if (pathname.startsWith("/reminders") || pathname.startsWith("/alerts") || pathname.startsWith("/chores"))
     return "schedule";
   return appMode === "items" ? "schedule" : "financial";
 }
@@ -56,6 +56,11 @@ const STANDALONE_APPS: Record<
     title: "Notifications",
     role: "Alert Center",
     color: "from-blue-400 to-purple-500",
+  },
+  "/chores": {
+    title: "Chores",
+    role: "Household Schedule",
+    color: "from-green-400 to-emerald-400",
   },
 };
 

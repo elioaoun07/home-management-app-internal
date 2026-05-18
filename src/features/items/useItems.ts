@@ -354,6 +354,7 @@ export function useCreateReminder() {
           // Catalogue template link
           source_catalogue_item_id: input.source_catalogue_item_id || null,
           is_template_instance: input.is_template_instance || false,
+          is_chore: input.is_chore || false,
         })
         .select()
         .single();
@@ -741,6 +742,7 @@ export function useCreateTask() {
           // Catalogue template link
           source_catalogue_item_id: input.source_catalogue_item_id || null,
           is_template_instance: input.is_template_instance || false,
+          is_chore: input.is_chore || false,
         })
         .select()
         .single();

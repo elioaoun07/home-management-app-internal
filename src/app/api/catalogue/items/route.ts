@@ -149,6 +149,8 @@ export async function POST(req: NextRequest) {
       is_public,
       is_flexible_routine,
       flexible_occurrences,
+      is_chore,
+      chore_category,
     } = body;
 
     if (!module_id || !name?.trim()) {
@@ -244,6 +246,8 @@ export async function POST(req: NextRequest) {
           31,
           Math.max(1, Number(flexible_occurrences) || 1),
         ),
+        is_chore: is_chore ?? false,
+        chore_category: is_chore ? (chore_category || null) : null,
       })
       .select(
         `

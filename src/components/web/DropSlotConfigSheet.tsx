@@ -29,7 +29,7 @@ import { toast } from "sonner";
 type AlertOption = { value: number | null; label: string; short: string };
 const ALERT_OPTIONS: AlertOption[] = [
   { value: null, label: "No alert", short: "Off" },
-  { value: 0, label: "At time", short: "Now" },
+  { value: 0, label: "At time", short: "At time" },
   { value: 15, label: "15 min", short: "15m" },
   { value: 30, label: "30 min", short: "30m" },
   { value: 60, label: "1 hour", short: "1h" },
@@ -152,7 +152,7 @@ export function DropSlotConfigSheet({
         alertOffset === null
           ? []
           : alertOffset === 0
-            ? undefined
+            ? [{ kind: "absolute" as const, trigger_at: dueAtIso, channel: "push" as const }]
             : [
                 {
                   kind: "relative" as const,

@@ -32,7 +32,17 @@ import {
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { getOccurrenceAlert } from "@/lib/schedule/alertResolution";
 import { cn } from "@/lib/utils";
+import type { CatalogueItem } from "@/types/catalogue";
 import type { ItemType, ItemWithDetails } from "@/types/items";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import { endOfWeek, format, parseISO, startOfWeek } from "date-fns";
 import { motion } from "framer-motion";
 import {
@@ -79,16 +89,6 @@ import WebEventsDashboard from "./WebEventsDashboard";
 import WebTabletMissionControl from "./WebTabletMissionControl";
 import WebTodayView from "./WebTodayView";
 import { WebWeekView } from "./WebWeekView";
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
-import type { CatalogueItem } from "@/types/catalogue";
 
 // Item types for filtering (all visible by default)
 type ItemTypeFilter = "event" | "reminder" | "task";
@@ -150,6 +150,7 @@ export default function WebEvents() {
   );
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showBirthdays, setShowBirthdays] = useState(true);
+  const [showChores, setShowChores] = useState(false);
   const [detailItem, setDetailItem] = useState<ItemWithDetails | null>(null);
   /**
    * Merged step state for the chooser→occurrence edit flow.
@@ -203,14 +204,18 @@ export default function WebEvents() {
   );
 
   function handleDragStart({ active }: DragStartEvent) {
-    const item = active.data.current?.catalogueItem as CatalogueItem | undefined;
+    const item = active.data.current?.catalogueItem as
+      | CatalogueItem
+      | undefined;
     setActiveCatalogueItem(item ?? null);
   }
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     setActiveCatalogueItem(null);
     if (!active || !over) return;
-    const item = active.data.current?.catalogueItem as CatalogueItem | undefined;
+    const item = active.data.current?.catalogueItem as
+      | CatalogueItem
+      | undefined;
     if (!item) return;
 
     const overId = over.id as string;
@@ -339,16 +344,15 @@ export default function WebEvents() {
 
   const handleCancelAction = useCallback(() => {
     if (!detailItem) return;
-    itemActions.handleCancel(
-      detailItem,
-      getOccurrenceDate(detailItem).toISOString(),
-      actionReason || undefined,
-    );
+    const capturedItem = detailItem;
+    const capturedDate = getOccurrenceDate(detailItem).toISOString();
+    const capturedReason = actionReason || undefined;
     setDetailItem(null);
     setClickedOccurrenceDate(null);
     setModalPosition(null);
     setShowActionDialog(false);
     setActionReason("");
+    itemActions.handleCancel(capturedItem, capturedDate, capturedReason);
   }, [detailItem, itemActions, getOccurrenceDate, actionReason]);
 
   // Fetch all items
@@ -478,7 +482,9 @@ export default function WebEvents() {
       (item.categories &&
         item.categories.some((cat) => selectedCategories.includes(cat)));
 
-    return typeMatch && categoryMatch;
+    const choreMatch = showChores || !item.is_chore;
+
+    return typeMatch && categoryMatch && choreMatch;
   });
 
   // Handle opening the form for a new item
@@ -904,6 +910,31 @@ export default function WebEvents() {
                     <span className="hidden sm:inline">Birthdays</span>
                   </button>
                 </div>
+
+                {/* Chores Toggle */}
+                <div
+                  className={cn(
+                    "flex items-center p-1 rounded-xl",
+                    isFrost
+                      ? "bg-slate-100/80"
+                      : "bg-white/[0.03] ring-1 ring-white/[0.06]",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowChores((v) => !v)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200",
+                      showChores
+                        ? "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/40 shadow-sm shadow-emerald-500/10"
+                        : "text-emerald-300/50 hover:text-emerald-300/70 hover:bg-emerald-500/5",
+                    )}
+                    title={showChores ? "Hide chores" : "Show chores"}
+                  >
+                    <Home className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Chores</span>
+                  </button>
+                </div>
               </div>
 
               {/* Right: Category filter - action button style */}
@@ -1115,7 +1146,12 @@ export default function WebEvents() {
               onDragCancel={handleDragCancel}
             >
               {/* Side panel + calendar layout */}
-              <div className={cn("flex gap-3", showCataloguePanel && view === "week" ? "items-start" : "")}>
+              <div
+                className={cn(
+                  "flex gap-3",
+                  showCataloguePanel && view === "week" ? "items-start" : "",
+                )}
+              >
                 {/* Catalogue side panel (week view only) */}
                 {view === "week" && (
                   <CatalogueSidePanel
@@ -1158,7 +1194,9 @@ export default function WebEvents() {
                       subtaskCompletions={subtaskCompletions}
                       selectedDate={selectedDate}
                       controlledWeekStart={selectedDate ?? undefined}
-                      onWeekChange={(newWeekStart) => setSelectedDate(newWeekStart)}
+                      onWeekChange={(newWeekStart) =>
+                        setSelectedDate(newWeekStart)
+                      }
                       onItemClick={handleItemClick}
                       onAddEvent={handleAddEvent}
                       onBirthdayClick={handleBirthdayClick}

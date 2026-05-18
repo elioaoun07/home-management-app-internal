@@ -6,6 +6,10 @@ import { addToQueue } from "@/lib/offlineQueue";
 import { safeFetch } from "@/lib/safeFetch";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ToastIcons } from "@/lib/toastIcons";
+import {
+  getMemberDisplayName,
+  useHouseholdMembers,
+} from "@/hooks/useHouseholdMembers";
 import type { ItemWithDetails } from "@/types/items";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, addWeeks, parseISO } from "date-fns";
@@ -394,7 +398,7 @@ export function useCompleteItem() {
         };
       }
 
-      const result = await safeFetch(`/api/items/${itemId}/complete`, {
+      const response = await safeFetch(`/api/items/${itemId}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -404,7 +408,11 @@ export function useCompleteItem() {
           actual_minutes: actualMinutes,
         }),
       });
-      return result as { type: string; itemId?: string; action?: { id: string }; archived?: boolean };
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Complete failed: ${response.status}`);
+      }
+      return response.json() as Promise<{ type: string; itemId?: string; action?: { id: string }; archived?: boolean }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
@@ -538,7 +546,7 @@ export function usePostponeItem() {
         return { action: null, postponedTo, _offline: true };
       }
 
-      const result = await safeFetch(`/api/items/${itemId}/actions`, {
+      const response = await safeFetch(`/api/items/${itemId}/actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -550,7 +558,11 @@ export function usePostponeItem() {
           is_recurring: isRecurring,
         }),
       });
-      return result as { action?: { id: string }; postponedTo?: string };
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Postpone failed: ${response.status}`);
+      }
+      return response.json() as Promise<{ action?: { id: string }; postponedTo?: string }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
@@ -591,7 +603,7 @@ export function useCancelItem() {
         };
       }
 
-      const result = await safeFetch(`/api/items/${itemId}/actions`, {
+      const response = await safeFetch(`/api/items/${itemId}/actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -601,7 +613,11 @@ export function useCancelItem() {
           reason,
         }),
       });
-      return result as { action?: { id: string }; type?: string; itemId?: string };
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Cancel failed: ${response.status}`);
+      }
+      return response.json() as Promise<{ action?: { id: string }; type?: string; itemId?: string }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
@@ -712,13 +728,44 @@ export function useItemActionsWithToast() {
   const deleteItem = useDeleteItemWithUndo();
   const restoreItem = useRestoreItem();
   const undoAction = useUndoOccurrenceAction();
+  const { data: householdData } = useHouseholdMembers();
+
+  const currentUserId = householdData?.currentUserId ?? null;
+  const members = householdData?.members ?? [];
+
+  // Shows a warning toast when the acting user is not the responsible party.
+  // Returns true if the guard fired (caller must return early); calls onConfirm
+  // when the user explicitly clicks "Override".
+  function guardPartnerOverride(
+    item: ItemWithDetails,
+    onConfirm: () => void,
+  ): boolean {
+    if (
+      !currentUserId ||
+      !item.responsible_user_id ||
+      item.responsible_user_id === currentUserId
+    ) {
+      return false;
+    }
+    const partnerName =
+      getMemberDisplayName(members, item.responsible_user_id) || "Your partner";
+    toast.warning(`${partnerName} is responsible for this`, {
+      description: "Override and act on their behalf?",
+      icon: ToastIcons.partner,
+      duration: 6000,
+      action: { label: "Override", onClick: onConfirm },
+    });
+    return true;
+  }
 
   const handleComplete = async (
     item: ItemWithDetails,
     occurrenceDate: string,
     reason?: string,
     actualMinutes?: number,
+    overridePartner = false,
   ) => {
+    if (!overridePartner && guardPartnerOverride(item, () => handleComplete(item, occurrenceDate, reason, actualMinutes, true))) return;
     const isRecurring = !!item.recurrence_rule?.rrule;
 
     try {
@@ -786,7 +833,9 @@ export function useItemActionsWithToast() {
     postponeType: PostponeType,
     reason?: string,
     customDate?: string,
+    overridePartner = false,
   ) => {
+    if (!overridePartner && guardPartnerOverride(item, () => handlePostpone(item, occurrenceDate, postponeType, reason, customDate, true))) return;
     const isRecurring = !!item.recurrence_rule?.rrule;
     let postponedTo: string | undefined;
 
@@ -842,7 +891,9 @@ export function useItemActionsWithToast() {
     item: ItemWithDetails,
     occurrenceDate?: string,
     reason?: string,
+    overridePartner = false,
   ) => {
+    if (!overridePartner && guardPartnerOverride(item, () => handleCancel(item, occurrenceDate, reason, true))) return;
     const isRecurring = !!item.recurrence_rule?.rrule;
 
     try {
@@ -897,7 +948,9 @@ export function useItemActionsWithToast() {
   const handleUncomplete = async (
     item: ItemWithDetails,
     occurrenceDate: string,
+    overridePartner = false,
   ) => {
+    if (!overridePartner && guardPartnerOverride(item, () => handleUncomplete(item, occurrenceDate, true))) return;
     const isRecurring = !!item.recurrence_rule?.rrule;
 
     try {

@@ -66,13 +66,12 @@ export async function POST(
       );
     }
 
-    // Authorization: creator or responsible user can always act.
-    // Any household member can act when notify_all_household is true.
+    // Authorization: creator, responsible user, or any household partner
     const isCreator = item.user_id === user.id;
     const isResponsible = item.responsible_user_id === user.id;
     let canAct = isCreator || isResponsible;
 
-    if (!canAct && item.notify_all_household) {
+    if (!canAct) {
       const { data: link } = await adminDb
         .from("household_links")
         .select("id")
@@ -257,15 +256,16 @@ export async function POST(
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        await adminDb.from("item_alert_suppressions").upsert(
-          {
+        await adminDb
+          .from("item_alert_suppressions")
+          .insert({
             item_id: itemId,
             occurrence_date,
             reason: "cancelled",
             created_by: user.id,
-          },
-          { onConflict: "item_id,occurrence_date" },
-        );
+          })
+          .then(() => {})
+          .catch(() => {});
 
         return NextResponse.json({
           success: true,

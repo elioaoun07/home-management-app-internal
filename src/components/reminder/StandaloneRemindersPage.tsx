@@ -789,7 +789,12 @@ export default function StandaloneRemindersPage({
         pastStart,
         tomorrow,
         occurrenceActions,
-      ).filter((occ) => isBefore(occ.occurrenceDate, now) && !occ.isCompleted);
+      ).filter(
+        (occ) =>
+          isBefore(occ.occurrenceDate, now) &&
+          !occ.isCompleted &&
+          !occ.item?.is_chore,
+      );
 
       const todayOccs = expandRecurringItems(
         activeItems,

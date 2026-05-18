@@ -70,7 +70,7 @@ const PERIOD_LABELS: Record<FlexiblePeriod, string> = {
 type AlertOption = { value: number | null; label: string; short: string };
 const ALERT_OPTIONS: AlertOption[] = [
   { value: null, label: "No alert", short: "Off" },
-  { value: 0, label: "At time", short: "On time" },
+  { value: 0, label: "At time", short: "At time" },
   { value: 15, label: "15 min before", short: "15m" },
   { value: 30, label: "30 min before", short: "30m" },
   { value: 60, label: "1 hour before", short: "1h" },
@@ -414,7 +414,7 @@ export function AddFlexibleFromCatalogueDialog({
         alertOffset === null
           ? [] // explicit "no alert"
           : alertOffset === 0
-            ? undefined // let auto-alert kick in (= at time)
+            ? [{ kind: "absolute" as const, trigger_at: dueAtIso, channel: "push" as const }]
             : [
                 {
                   kind: "relative" as const,
@@ -443,6 +443,7 @@ export function AddFlexibleFromCatalogueDialog({
           prerequisites: tplPrereqs,
           source_catalogue_item_id: tpl.id,
           is_template_instance: true,
+          is_chore: tpl.is_chore || false,
           alerts: alertsInput,
         });
         createdId = (res as { id?: string } | undefined)?.id;
@@ -463,6 +464,7 @@ export function AddFlexibleFromCatalogueDialog({
           prerequisites: tplPrereqs,
           source_catalogue_item_id: tpl.id,
           is_template_instance: true,
+          is_chore: tpl.is_chore || false,
           alerts: alertsInput,
         });
         createdId = (res as { id?: string } | undefined)?.id;
