@@ -4,6 +4,7 @@ import {
   GeminiRateLimitError,
   generateSystemPrompt,
   sendMessageToGemini,
+  streamMessageToGemini,
 } from "@/lib/ai/gemini";
 import {
   checkUserRateLimit,
@@ -56,7 +57,9 @@ interface ChatRequest {
   chatHistory?: ChatMessage[];
   includeContext?: boolean;
   sessionId?: string;
-  parentMessageId?: string; // For branching
+  parentMessageId?: string;
+  /** When true, stream tokens as SSE instead of returning a buffered JSON response. */
+  stream?: boolean;
 }
 
 /**
@@ -169,6 +172,58 @@ export async function POST(req: NextRequest) {
       estimateTokens(systemPrompt) +
       estimateTokens(chatHistoryText) +
       estimateTokens(message);
+
+    // ── Streaming path ──────────────────────────────────────────────────────
+    if (body.stream) {
+      const enc = new TextEncoder();
+      const sse = (data: Record<string, unknown>) =>
+        enc.encode(`data: ${JSON.stringify(data)}\n\n`);
+      const streamStartTime = Date.now();
+
+      const readable = new ReadableStream({
+        async start(ctrl) {
+          let fullText = "";
+          try {
+            for await (const chunk of streamMessageToGemini(
+              message,
+              formattedHistory,
+              budgetContext,
+            )) {
+              fullText += chunk;
+              ctrl.enqueue(sse({ type: "chunk", text: chunk }));
+            }
+            ctrl.enqueue(sse({ type: "done" }));
+            const outputTokensEstimate = estimateTokens(fullText);
+            await logMessagesToDatabase(supabase, {
+              userId: user.id,
+              sessionId: sessionId || `session_${Date.now()}`,
+              userMessage: message,
+              assistantResponse: fullText,
+              inputTokens: inputTokensEstimate,
+              outputTokens: outputTokensEstimate,
+              includedBudgetContext: includeContext && !!budgetContext,
+              responseTimeMs: Date.now() - streamStartTime,
+              parentMessageId: parentMessageId || null,
+            });
+          } catch (err) {
+            const msg =
+              err instanceof GeminiRateLimitError ? err.message : "AI error";
+            ctrl.enqueue(sse({ type: "error", error: msg }));
+          } finally {
+            ctrl.close();
+          }
+        },
+      });
+
+      return new Response(readable, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
 
     // Send message to Gemini with detailed error capture
     let response: string;

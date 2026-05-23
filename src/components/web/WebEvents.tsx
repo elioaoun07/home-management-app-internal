@@ -267,13 +267,19 @@ export default function WebEvents() {
     return !!item?.recurrence_rule?.rrule;
   }, []);
 
-  // Helper: Get occurrence date from item (uses clickedOccurrenceDate for recurring items)
+  // Helper: Get occurrence date from item (uses clickedOccurrenceDate for recurring/flexible items)
   const getOccurrenceDate = useCallback(
     (item: ItemWithDetails | null): Date => {
       if (!item) return new Date();
 
-      // For recurring items, use the clicked occurrence date if available
-      if (item.recurrence_rule?.rrule && clickedOccurrenceDate) {
+      // For recurring (rrule) and flexible items, use the clicked occurrence date if available.
+      // Flexible items have no rrule but ARE recurring — their base due_at is the original
+      // creation date, not the specific scheduled occurrence. Without this check, cancel/complete
+      // would send the wrong date to the API.
+      if (
+        (item.recurrence_rule?.rrule || item.recurrence_rule?.is_flexible) &&
+        clickedOccurrenceDate
+      ) {
         return clickedOccurrenceDate;
       }
 
@@ -473,10 +479,15 @@ export default function WebEvents() {
 
   // Filter items by type and category
   const filteredItems = allItems.filter((item) => {
-    // Filter by visible types
+    if (
+      item.status === "cancelled" ||
+      item.status === "archived" ||
+      item.archived_at
+    )
+      return false;
+
     const typeMatch = visibleTypes.has(item.type as ItemTypeFilter);
 
-    // Filter by category (if any categories are selected)
     const categoryMatch =
       selectedCategories.length === 0 ||
       (item.categories &&
@@ -1429,10 +1440,11 @@ export default function WebEvents() {
                         {detailItem.type === "event" &&
                           detailItem.event_details && (
                             <>
-                              {/* For recurring items, show the clicked occurrence date, not the original */}
+                              {/* For recurring/flexible items, show the clicked occurrence date */}
                               <div className="text-white text-sm">
                                 {format(
-                                  detailItem.recurrence_rule?.rrule &&
+                                  (detailItem.recurrence_rule?.rrule ||
+                                    detailItem.recurrence_rule?.is_flexible) &&
                                     clickedOccurrenceDate
                                     ? clickedOccurrenceDate
                                     : parseISO(
@@ -1464,10 +1476,11 @@ export default function WebEvents() {
                           detailItem.type === "task") &&
                           detailItem.reminder_details?.due_at && (
                             <>
-                              {/* For recurring items, show the clicked occurrence date, not the original */}
+                              {/* For recurring/flexible items, show the clicked occurrence date */}
                               <div className="text-white text-sm">
                                 {format(
-                                  detailItem.recurrence_rule?.rrule &&
+                                  (detailItem.recurrence_rule?.rrule ||
+                                    detailItem.recurrence_rule?.is_flexible) &&
                                     clickedOccurrenceDate
                                     ? clickedOccurrenceDate
                                     : parseISO(

@@ -623,6 +623,7 @@ export function useCancelItem() {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
       queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
       queryClient.invalidateQueries({ queryKey: [...itemsKeys.all, "stats"] });
+      queryClient.invalidateQueries({ queryKey: ["flexible-routines"] });
     },
   });
 }
@@ -711,6 +712,7 @@ export function useUndoOccurrenceAction() {
         queryKey: [...itemsKeys.all, "all-actions"],
       });
       queryClient.invalidateQueries({ queryKey: [...itemsKeys.all, "stats"] });
+      queryClient.invalidateQueries({ queryKey: ["flexible-routines"] });
     },
   });
 }
@@ -894,7 +896,11 @@ export function useItemActionsWithToast() {
     overridePartner = false,
   ) => {
     if (!overridePartner && guardPartnerOverride(item, () => handleCancel(item, occurrenceDate, reason, true))) return;
-    const isRecurring = !!item.recurrence_rule?.rrule;
+    // Flexible items have is_flexible=true but no rrule — treat as recurring so
+    // cancel inserts an item_occurrence_actions record instead of permanently
+    // setting items.status = 'cancelled'.
+    const isRecurring =
+      !!item.recurrence_rule?.rrule || !!item.recurrence_rule?.is_flexible;
 
     try {
       const result = await cancelItem.mutateAsync({

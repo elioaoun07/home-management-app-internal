@@ -255,11 +255,30 @@ async function fetchFlexibleRoutines(
       sourceCatId ? (catalogueOccurrenceMap.get(sourceCatId) ?? 1) : 1,
     );
 
-    // Find ALL schedules for this item in current period (sorted by index)
+    // Build set of dates that have a cancelled action for this item in this period
+    const cancelledDates = new Set(
+      actions
+        .filter(
+          (a) => a.item_id === item.id && a.action_type === "cancelled",
+        )
+        .map((a) => {
+          try {
+            return format(parseISO(a.occurrence_date), "yyyy-MM-dd");
+          } catch {
+            return null;
+          }
+        })
+        .filter((d): d is string => d !== null),
+    );
+
+    // Find ALL schedules for this item in current period (sorted by index),
+    // excluding any that have been individually cancelled.
     const periodSchedules = schedules
       .filter(
         (s) =>
-          s.item_id === item.id && s.period_start_date === itemPeriodStartStr,
+          s.item_id === item.id &&
+          s.period_start_date === itemPeriodStartStr &&
+          !cancelledDates.has(s.scheduled_for_date),
       )
       .slice()
       .sort((a, b) => (a.occurrence_index ?? 0) - (b.occurrence_index ?? 0));
@@ -399,9 +418,23 @@ async function fetchFlexibleRoutines(
       }
     }
 
-    // Still unscheduled if any remaining slots
+    // Count cancellations within the current period
+    const periodCancelledCount = actions.filter((a) => {
+      if (a.item_id !== item.id) return false;
+      if (a.action_type !== "cancelled") return false;
+      try {
+        return isWithinInterval(parseISO(a.occurrence_date), { start, end });
+      } catch {
+        return false;
+      }
+    }).length;
+
+    // Still unscheduled if any remaining slots (cancelled slots count as "accounted for")
     const accountedFor =
-      periodSchedules.length + periodCompletedCount + periodSkippedCount;
+      periodSchedules.length +
+      periodCompletedCount +
+      periodSkippedCount +
+      periodCancelledCount;
     if (accountedFor < targetOccurrences) {
       result.unscheduled.push({
         ...baseFields,

@@ -499,7 +499,8 @@ export function WebCalendar({
         if (isSameDay(itemDate, date)) {
           const isHandled =
             isOccurrenceCompleted(item.id, itemDate, occurrenceActions) ||
-            item.status === "completed";
+            item.status === "completed" ||
+            item.status === "cancelled";
           // Skip if this item was postponed TO this date — it will show in the postponed section
           const wasPostponedHere = occurrenceActions.some(
             (a) =>
@@ -530,6 +531,9 @@ export function WebCalendar({
         continue;
       }
       if (result.some((i) => i.id === si.id)) continue;
+      // Skip if this occurrence was cancelled (use noon to avoid UTC-offset issues)
+      const scheduledDateLocal = new Date(sched.scheduled_for_date + "T12:00:00");
+      if (isOccurrenceCompleted(si.id, scheduledDateLocal, occurrenceActions)) continue;
 
       const [hh, mm] = (sched.scheduled_for_time ?? "09:00")
         .split(":")

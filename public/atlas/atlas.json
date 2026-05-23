@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-04-28T17:26:11.466Z",
-  "count": 55,
+  "generatedAt": "2026-05-19T19:30:58.584Z",
+  "count": 57,
   "nodes": [
     {
       "slug": "auth-reset",
@@ -847,6 +847,37 @@
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-transfers.md"
     },
     {
+      "slug": "era",
+      "title": "ERA — Omnipotent Assistant",
+      "category": "junction-page",
+      "route": "/era",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "era",
+        "ai",
+        "dashboard",
+        "junction",
+        "phase-0"
+      ],
+      "sections": {
+        "files": "- **Page**: `src/app/era/page.tsx`\n- **Main component**: `src/components/era/EraShell.tsx`\n- **Sub-components**:\n  - `src/components/era/FaceHeader.tsx`\n  - `src/components/era/FaceCanvas.tsx`\n  - `src/components/era/QuickFaceChips.tsx`\n  - `src/components/era/CommandBar.tsx`\n  - `src/components/era/FacePlaceholder.tsx`",
+        "hooks": "- `src/features/era/useEraStore.ts` — `useEraStore` (Zustand) + `eraActions` (non-React)\n- `src/features/era/useEraHousehold.ts` — `useEraHousehold` (current user + partner id)",
+        "feature_module": "- `src/features/era/types.ts` — `FaceKey`, `Face`, `Intent`, `IntentRouter`\n- `src/features/era/faceRegistry.ts` — `FACES`, `getFace`, `DEFAULT_FACE_KEY`\n- `src/features/era/intentRouter.ts` — `stubIntentRouter` (Phase 0); replaced by Gemini in Phase 2\n- `src/features/era/queryKeys.ts` — `eraKeys`",
+        "api_routes": "- None in Phase 0. Phase 2 will add `/api/era/intent` for the Gemini-backed router.",
+        "db_tables": "- None in Phase 0. Phase 2+ may add `era_transcripts` and/or `era_face_preferences`.",
+        "how_to_get_here": "- Direct URL: `/era` (auth-gated; redirects to `/login` for guests)\n- Phase 0 does **not** add ERA to the bottom `MobileNav` — URL-only access while the design matures",
+        "what_it_links_to": "- Each face's `route` (`/expense`, `/items`, `/recipe`, `/catalogue`) — Phase 1+ wires the placeholder body to deep-link into these\n- Settings, Atlas, etc. via the global `ConditionalHeader` (visible above the shell)",
+        "related_vault_doc": "- `ERA Notes/03 - Junction Modules/ERA/Overview.md`",
+        "screenshots": "- _(pending Phase 1 design)_",
+        "notes": "- The shell uses `fixed inset-x-0 top-16 bottom-0` to claim the viewport under the global `h-16` header. Mobile reserves 72px (`MOBILE_NAV_HEIGHT`) at the bottom for the `MobileNav` via `pb-[72px] md:pb-0`.\n- Brand mark on the global header: `moduleFromPath()` in `src/components/layouts/ConditionalHeader.tsx` maps `/era` → `memory`. The shell itself shows the **active face's** mark via `FaceHeader`.\n- `layoutId=\"era-face\"` on `FaceCanvas` is reserved for Phase 1 morph animation.\n- All command-bar input must flow through `IntentRouter` — never bypass.\n- `CommandBar` background uses `tc.bgPage` (Hard Rule #15: floating overlays must be opaque, never `neo-card`).\n- ERA is **not** in `STANDALONE_APPS`, so the global `ConditionalHeader` and `MobileNav` remain visible."
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/era.md"
+    },
+    {
       "slug": "dashboard",
       "title": "Dashboard",
       "category": "main-tab",
@@ -1110,6 +1141,33 @@
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/g-tag.md"
+    },
+    {
+      "slug": "meal-plan",
+      "title": "Meal Planning",
+      "category": "standalone-page",
+      "route": "/meal-plan",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "food",
+        "household",
+        "week-view"
+      ],
+      "sections": {
+        "files": "- **Page**: `src/app/meal-plan/page.tsx`\n- **Layout**: `src/app/meal-plan/layout.tsx`\n- **PWA manifest**: `public/manifests/meal-plan.webmanifest`\n- **Main component**: `src/components/web/WebMealPlanCalendar.tsx`\n- **Sub-components**:\n  - `src/components/web/RecipeSidePanel.tsx` — draggable recipe list with search/filter\n  - `src/components/web/MealPlanDropSheet.tsx` — assignment + leftover spread sheet (opens after drag-drop)",
+        "hooks": "- `src/features/meal-planning/hooks.ts` — `useMealPlansForWeek`, `useMealPlansForDate`, `useCreateMealPlan`, `useUpdateMealPlan`, `useDeleteMealPlan`, `useHousehold`\n- `src/features/meal-planning/queryKeys.ts` — `mealPlanKeys`",
+        "api_routes": "- `GET /api/meal-plans?start=&end=` → `src/app/api/meal-plans/route.ts`\n- `POST /api/meal-plans` → `src/app/api/meal-plans/route.ts`\n- `GET|PATCH|DELETE /api/meal-plans/[id]` → `src/app/api/meal-plans/[id]/route.ts`\n- `GET /api/household` → `src/app/api/household/route.ts` (partner ID lookup)",
+        "db_tables": "- `meal_plans` (see `migrations/schema.sql` and `migrations/2026-05-17_meal_plan_household_and_leftovers.sql`)",
+        "how_to_get_here": "- Click **Meals** tab in the `WebViewContainer` top nav (web desktop)\n- Direct URL: `/meal-plan` (installs as standalone PWA)\n- From `/dashboard` (future: \"Today's Meals\" widget click)",
+        "what_it_links_to": "- **Recipes** — `RecipeSidePanel` lists `useRecipes()` data; drag to assign\n- **Shopping List** — `add-to-shopping` API route adds ingredients to Hub chat thread",
+        "related_vault_doc": "- `ERA Notes/03 - Junction Modules/Meal Planning/Overview.md`",
+        "notes": "- Warm amber radial ambient blobs rendered inside `WebMealPlanCalendar` (crossfades in on mount, replacing the blue Schedule blobs)\n- Meal slots: Breakfast 🌅 / Lunch ☀️ / Dinner 🌙 (snack deferred to v2)\n- Leftover cards render with `opacity-50` + \"Leftover\" badge on days after `planned_date` through `eats_through_date`\n- `for_user_id` color dots follow Hard Rule 14 (blue-theme user = blue, partner = pink; inverted for pink-theme)\n- The old `WebMealPlanner.tsx` (Recipes tab sub-tab) is kept for backwards compat; target cleanup in next PR"
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/Meal Planning.md"
     },
     {
       "slug": "nfc",

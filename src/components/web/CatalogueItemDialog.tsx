@@ -22,6 +22,7 @@ import { catalogueKeys } from "@/features/catalogue/queryKeys";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { safeFetch } from "@/lib/safeFetch";
+import { compressReceiptImage, formatFileSize } from "@/lib/receiptUtils";
 import { cn } from "@/lib/utils";
 import type {
   CatalogueItem,
@@ -40,6 +41,7 @@ import {
   Calendar,
   Camera,
   DollarSign,
+  ImageIcon,
   Loader2,
   Mail,
   MapPin,
@@ -645,36 +647,6 @@ const FREQUENCY_OPTIONS = [
   { value: "as-needed", label: "As needed" },
 ];
 
-async function compressImage(file: File): Promise<Blob> {
-  const MAX_DIM = 2000;
-  const QUALITY = 0.88;
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
-      if (width > MAX_DIM || height > MAX_DIM) {
-        const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return reject(new Error("Canvas not supported"));
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => (blob ? resolve(blob) : reject(new Error("Compression failed"))),
-        "image/jpeg",
-        QUALITY,
-      );
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
-}
 
 export default function CatalogueItemDialog({
   open,
@@ -689,7 +661,8 @@ export default function CatalogueItemDialog({
   const updateItem = useUpdateItem();
   const qc = useQueryClient();
   const { data: householdData } = useHouseholdMembers();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const config = MODULE_FIELD_CONFIG[moduleType] || MODULE_FIELD_CONFIG.custom;
   const isDocuments = moduleType === "documents";
@@ -708,8 +681,9 @@ export default function CatalogueItemDialog({
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
 
   // Document-specific state
-  const [pendingImage, setPendingImage] = useState<Blob | null>(null);
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [compressedSize, setCompressedSize] = useState<string>("");
   const [belongsTo, setBelongsTo] = useState<string>("");
   const [comboboxOpen, setComboboxOpen] = useState<Record<string, boolean>>({});
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -795,6 +769,7 @@ export default function CatalogueItemDialog({
       }
       setPendingImage(null);
       setImagePreviewUrl(null);
+      setCompressedSize("");
       setComboboxOpen({});
     }
   }, [open, editingItem, config.customFields, householdData?.currentUserId]);
@@ -819,10 +794,11 @@ export default function CatalogueItemDialog({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const compressed = await compressImage(file);
+      const compressed = await compressReceiptImage(file);
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
       setPendingImage(compressed);
       setImagePreviewUrl(URL.createObjectURL(compressed));
+      setCompressedSize(formatFileSize(compressed.size));
     } catch {
       // silently ignore compression errors — user can retry
     }
@@ -833,6 +809,7 @@ export default function CatalogueItemDialog({
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     setPendingImage(null);
     setImagePreviewUrl(null);
+    setCompressedSize("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1258,7 +1235,15 @@ export default function CatalogueItemDialog({
             <div className="space-y-2">
               <Label className="text-white/70">Document Photo</Label>
               <input
-                ref={fileInputRef}
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleImageSelect}
+              />
+              <input
+                ref={galleryInputRef}
                 type="file"
                 accept="image/*"
                 className="hidden"
@@ -1266,11 +1251,17 @@ export default function CatalogueItemDialog({
               />
               {imagePreviewUrl ? (
                 <div className="relative rounded-lg overflow-hidden border border-white/10">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={imagePreviewUrl}
                     alt="Document preview"
                     className="w-full max-h-48 object-contain bg-black/20"
                   />
+                  {compressedSize && (
+                    <div className="absolute bottom-2 right-2 bg-black/60 rounded-lg px-2 py-1 text-xs text-white/70">
+                      {compressedSize}
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={handleRemoveImage}
@@ -1280,21 +1271,42 @@ export default function CatalogueItemDialog({
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className={cn(
-                    "w-full flex flex-col items-center gap-2 py-6 rounded-lg border-2 border-dashed border-white/20 hover:border-white/40 transition-colors",
-                    themeClasses.inputBg,
-                  )}
-                >
-                  <Camera className="w-6 h-6 text-white/40" />
-                  <span className="text-sm text-white/50">
-                    {editingItem?.image_url
-                      ? "Replace photo"
-                      : "Add document photo"}
-                  </span>
-                </button>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className={cn(
+                      "w-full flex items-center gap-4 px-4 py-4 rounded-xl border transition-all active:scale-[0.98]",
+                      themeClasses.inputBg,
+                      "border-white/10 hover:border-white/30",
+                    )}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/5">
+                      <Camera className="w-5 h-5 text-white/60" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-white">Take Photo</p>
+                      <p className="text-xs text-white/40">Use rear camera for best quality</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => galleryInputRef.current?.click()}
+                    className={cn(
+                      "w-full flex items-center gap-4 px-4 py-4 rounded-xl border transition-all active:scale-[0.98]",
+                      themeClasses.inputBg,
+                      "border-white/10 hover:border-white/30",
+                    )}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/5">
+                      <ImageIcon className="w-5 h-5 text-white/60" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-white">Choose from Gallery</p>
+                      <p className="text-xs text-white/40">Select an existing photo</p>
+                    </div>
+                  </button>
+                </div>
               )}
             </div>
           )}

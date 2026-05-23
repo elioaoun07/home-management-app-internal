@@ -1,7 +1,7 @@
 "use client";
 
 import { classifyIntent, type Intent } from "./intentClassifier";
-import { createSTTCapture, type STTCapture } from "./sttCapture";
+import { createAzureSTT, type AzureSTTCapture as STTCapture } from "./azureSTT";
 import { createTTSQueue, type TTSQueue } from "./ttsQueue";
 import {
   CANCEL_ACK,
@@ -169,9 +169,8 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
 
   /**
    * Shared wake logic — called by triggerWake() (click/long-press) and by
-   * wake phrase detection (speech). Kill the current STT first so its abort()
-   * clears the sttCapture silence timer — preventing any stale onFinal from
-   * firing into intent classification while ERA is speaking the greeting.
+   * wake phrase detection (speech). Close the current Azure recognizer so no
+   * stale transcript fires into intent classification while ERA is speaking.
    */
   function activateListening(source: "speech" | "trigger" = "speech") {
     clearTimers();
@@ -427,13 +426,23 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
   }
 
   function startListeningSTT() {
-    stt?.abort();
+    if (stt !== null) return; // Azure STT already running — continuous, no restart needed
     if (isStopped) return;
-    stt = createSTTCapture({
+
+    stt = createAzureSTT({
+      phraseHints: handlers.getCategories?.()?.flatMap((c) => [
+        c.name,
+        ...(c.subcategories?.map((s) => s.name) ?? []),
+      ]) ?? [],
       onInterim: (t) => {
         handlers.onTranscriptChange?.(t);
-        // Fast-path: detect wake phrase on interim results so we don't wait
-        // for the 500ms silence window before responding.
+        // Instant barge-in: any recognized word while ERA is speaking cuts her off
+        if ((state === "speaking" || state === "ai_streaming") && t.trim()) {
+          tts?.stop();
+          setState("listening");
+          armContinuationWindow();
+          return;
+        }
         if (state === "idle" && WAKE_PATTERN.test(t)) {
           activateListening("speech");
         }
@@ -442,24 +451,22 @@ export function createConversationEngine(config: EngineConfig): ConversationEngi
         handlers.onTranscriptChange?.(t);
         handleTranscript(t);
       },
-      onError: (e) => {
-        if (e.error === "not-allowed") {
+      onError: (msg) => {
+        if (msg.includes("not-allowed") || msg.includes("denied")) {
           setState("off");
         } else {
-          setState("listening");
-          startListeningSTT();
-          armContinuationWindow();
+          // Network/Azure error — null out so the restart loop can kick in
+          stt = null;
+          if (!isStopped) {
+            setTimeout(() => { if (!isStopped && !stt) startListeningSTT(); }, 500);
+          }
         }
       },
       onEnd: () => {
-        stt = null; // mark as ended so armIdleSTT check knows it's safe to restart
-        if ((state === "listening" || state === "idle") && !isStopped) {
-          setTimeout(() => {
-            // Skip if VAD already armed a fresh STT while we were waiting
-            if ((state === "listening" || state === "idle") && !isStopped && !stt) {
-              startListeningSTT();
-            }
-          }, 100);
+        stt = null;
+        if (!isStopped) {
+          // Restart after unexpected session end (e.g. server timeout)
+          setTimeout(() => { if (!isStopped && !stt) startListeningSTT(); }, 100);
         }
       },
     });

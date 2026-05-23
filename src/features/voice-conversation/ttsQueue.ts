@@ -1,8 +1,8 @@
 "use client";
 
-import { getAudioContext } from "./audioContext";
+import { createAzureTTSPlayer } from "./azureTTS";
 
-type PlaybackState = "idle" | "fetching" | "playing";
+export type PlaybackState = "idle" | "fetching" | "playing";
 
 interface QueueEntry {
   text: string;
@@ -20,10 +20,9 @@ export function buildTTSSSML(text: string, voice = DEFAULT_TTS_VOICE): string {
 }
 
 /**
- * Sentence-streaming TTS queue.
- * Splits incoming text on sentence boundaries, fetches MP3 from /api/tts per sentence,
- * decodes via Web Audio API, and plays them sequentially — audio starts before the full
- * response arrives. Uses AudioContext (autoplay-policy-safe) instead of HTMLAudioElement.
+ * Sentence-streaming TTS queue backed by the Azure Speech SDK.
+ * Splits incoming text on sentence boundaries, synthesizes via Azure PCM streaming,
+ * and plays sequentially — audio starts before the full LLM response arrives.
  */
 export interface TTSQueue {
   push(text: string): void;
@@ -41,7 +40,7 @@ export function createTTSQueue(opts: {
   const voice = opts.voice ?? DEFAULT_TTS_VOICE;
   const queue: QueueEntry[] = [];
   let state: PlaybackState = "idle";
-  let currentNode: AudioBufferSourceNode | null = null;
+  let currentPlayer: ReturnType<typeof createAzureTTSPlayer> | null = null;
   let stopped = false;
   let buffer = "";
   let flushed = false;
@@ -51,66 +50,31 @@ export function createTTSQueue(opts: {
     opts.onStateChange?.(s);
   }
 
-  async function fetchAudio(text: string): Promise<Blob | null> {
-    try {
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ssml: buildTTSSSML(text, voice) }),
-      });
-      if (!res.ok) return null;
-      return await res.blob();
-    } catch {
-      return null;
-    }
-  }
-
   async function processQueue() {
     if (stopped || queue.length === 0 || state === "playing" || state === "fetching") return;
 
     const entry = queue.shift()!;
     setState("fetching");
-
-    const blob = await fetchAudio(entry.text);
-    if (stopped) return;
-    if (!blob) {
-      setState("idle");
-      processQueue();
-      return;
-    }
-
-    setState("playing");
     opts.onSentenceStart?.(entry.text);
 
-    try {
-      const arrayBuffer = await blob.arrayBuffer();
-      if (stopped) return;
-
-      const ac = getAudioContext();
-      if (ac.state === "suspended") await ac.resume();
-      if (stopped) return;
-
-      const audioBuffer = await ac.decodeAudioData(arrayBuffer);
-      if (stopped) return;
-
-      const node = ac.createBufferSource();
-      node.buffer = audioBuffer;
-      node.connect(ac.destination);
-      currentNode = node;
-
-      node.onended = () => {
-        currentNode = null;
+    const player = createAzureTTSPlayer({
+      onDone: () => {
+        currentPlayer = null;
         setState("idle");
         if (queue.length > 0) {
           processQueue();
         } else if (flushed) {
           opts.onDone?.();
         }
-      };
+      },
+    });
+    currentPlayer = player;
+    setState("playing");
 
-      node.start();
+    try {
+      await player.synthAndPlay(buildTTSSSML(entry.text, voice));
     } catch {
-      currentNode = null;
+      currentPlayer = null;
       setState("idle");
       processQueue();
     }
@@ -159,8 +123,8 @@ export function createTTSQueue(opts: {
 
     stop() {
       stopped = true;
-      try { currentNode?.stop(); } catch {}
-      currentNode = null;
+      currentPlayer?.stop();
+      currentPlayer = null;
       queue.length = 0;
       buffer = "";
       setState("idle");

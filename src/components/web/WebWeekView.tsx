@@ -481,12 +481,9 @@ export function WebWeekView({
             console.error("Error parsing RRULE:", error);
           }
         } else if (isSameDay(parsedDate, date)) {
-          // Check if non-recurring item has been handled
-          const isHandled = isOccurrenceCompleted(
-            item.id,
-            parsedDate,
-            occurrenceActions,
-          );
+          const isHandled =
+            isOccurrenceCompleted(item.id, parsedDate, occurrenceActions) ||
+            item.status === "cancelled";
           if (!isHandled) {
             itemsOnDate.push(item);
           }
@@ -515,6 +512,9 @@ export function WebWeekView({
           continue;
         }
         if (itemsOnDate.some((i) => i.id === si.id)) continue;
+        // Skip if this occurrence was cancelled (use noon to match WebCalendar convention)
+        const schedDateLocal = new Date(sched.scheduled_for_date + "T12:00:00");
+        if (isOccurrenceCompleted(si.id, schedDateLocal, occurrenceActions ?? [])) continue;
 
         const scheduledHour = sched.scheduled_for_time
           ? parseInt(sched.scheduled_for_time.split(":")[0], 10)

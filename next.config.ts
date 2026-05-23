@@ -2,6 +2,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  webpack(config, { isServer }) {
+    if (isServer) {
+      // Prevent the Azure Speech SDK (browser-only) from being analyzed server-side.
+      // It's loaded via dynamic import() in client components only.
+      const externals = Array.isArray(config.externals) ? config.externals : [];
+      config.externals = [...externals, "microsoft-cognitiveservices-speech-sdk"];
+    }
+    return config;
+  },
+
   async headers() {
     // Security headers applied to all routes
     // Note: Adjust CSP connect-src/script-src to include any third-party domains you intentionally use.

@@ -163,6 +163,7 @@ interface AIChatMessage {
   content: string;
   timestamp: Date;
   tokens?: number;
+  streaming?: boolean;
 }
 
 // Generate session ID for AI conversations
@@ -1297,7 +1298,7 @@ function AIThreadConversation({
       }
 
       try {
-        const response = await fetch("/api/ai-chat", {
+        const response = await safeFetch("/api/ai-chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1305,44 +1306,83 @@ function AIThreadConversation({
             chatHistory: messages.slice(-MAX_CONTEXT_MESSAGES),
             includeContext: true,
             sessionId: currentSessionId,
+            stream: true,
           }),
+          timeoutMs: 60_000,
         });
 
-        // Debug: capture raw response
-        const responseText = await response.text();
-        let data;
-        try {
-          data = JSON.parse(responseText);
-        } catch {
-          throw new Error(
-            `JSON parse failed (${response.status}): ${responseText.slice(0, 200)}`,
-          );
+        if (!response.ok || !response.body) {
+          const text = await response.text();
+          let errMsg = `API Error (${response.status})`;
+          try { errMsg = JSON.parse(text).error ?? errMsg; } catch {}
+          throw new Error(errMsg);
         }
 
-        if (!response.ok) {
-          // Include debug info if available
-          const debugInfo = data.debug
-            ? ` | Debug: ${JSON.stringify(data.debug)}`
-            : "";
-          throw new Error(
-            `API Error (${response.status}): ${data.error || responseText.slice(0, 200)}${debugInfo}`,
-          );
+        // Add an empty streaming message immediately; keep isLoading=true to disable input
+        const streamStart = new Date();
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "", timestamp: streamStart, streaming: true },
+        ]);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let accumulated = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const parts = buf.split("\n\n");
+          buf = parts.pop() ?? "";
+          for (const part of parts) {
+            if (!part.startsWith("data: ")) continue;
+            try {
+              const evt = JSON.parse(part.slice(6)) as { type: string; text?: string; error?: string };
+              if (evt.type === "chunk" && evt.text) {
+                accumulated += evt.text;
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    ...updated[updated.length - 1],
+                    content: accumulated,
+                  };
+                  return updated;
+                });
+              }
+              if (evt.type === "done" || evt.type === "error") {
+                if (evt.type === "error") setError(evt.error ?? "AI error");
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    ...updated[updated.length - 1],
+                    streaming: false,
+                  };
+                  return updated;
+                });
+              }
+            } catch {
+              // ignore malformed SSE event
+            }
+          }
         }
 
-        const assistantMessage: AIChatMessage = {
-          role: "assistant",
-          content: data.message,
-          timestamp: new Date(data.timestamp),
-          tokens: data.usage?.requestTokens,
-        };
-
-        setMessages((prev) => [...prev, assistantMessage]);
+        // Ensure streaming flag is cleared if stream ended without explicit done
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.streaming) {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, streaming: false };
+            return updated;
+          }
+          return prev;
+        });
+        setIsLoading(false);
       } catch (err) {
-        // Debug: show full error details
         const errorDetails =
           err instanceof Error ? `${err.name}: ${err.message}` : String(err);
         setError(errorDetails);
-      } finally {
         setIsLoading(false);
       }
     },
@@ -1449,7 +1489,12 @@ function AIThreadConversation({
                     🤖 Budget AI
                   </p>
                 )}
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                <p className="text-sm whitespace-pre-wrap">
+                  {msg.content}
+                  {msg.streaming && (
+                    <span className="inline-block w-0.5 h-4 bg-violet-400 align-middle ml-0.5 animate-pulse" />
+                  )}
+                </p>
                 <p
                   className={cn(
                     "text-xs mt-1",

@@ -256,16 +256,14 @@ export async function POST(
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        await adminDb
-          .from("item_alert_suppressions")
-          .insert({
+        await Promise.resolve(
+          adminDb.from("item_alert_suppressions").insert({
             item_id: itemId,
             occurrence_date,
             reason: "cancelled",
             created_by: user.id,
-          })
-          .then(() => {})
-          .catch(() => {});
+          }),
+        ).catch(() => {});
 
         return NextResponse.json({
           success: true,
