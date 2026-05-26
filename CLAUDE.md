@@ -10,11 +10,14 @@ CLAUDE.md auto-syncs to `CODEX.md` and `.github/copilot-instructions.md` via Pos
 
 ## Before You Code — Mandatory Checklist
 
-1. **Identify the module type** (Standalone or Junction — see Module Model below) before scoping work
-2. **Check the Feature Index** for the relevant vault path in `ERA Notes/`
-3. **Read that doc first** — it contains architecture, DB tables, and gotchas
-4. **Read `migrations/schema.sql`** before any DB work — it is the authoritative schema source
-5. **Read `ERA Notes/01 - Architecture/Common Patterns.md`** if touching state, mutations, or modals
+1. **For edit / bug-fix tasks, read the Feature Map first** — open `ERA Notes/01 - Architecture/Feature Map/_index.md`, find the matching module, then read that module's MD file to get exact source file paths. Do this **before** Glob / Grep / Read on source files. It is the cheapest and most accurate router from user intent → files to edit.
+2. **Identify the module type** (Standalone or Junction — see Module Model below) before scoping work
+3. **Check the Feature Index** for the deeper vault doc in `ERA Notes/`
+4. **Read that doc first** — it contains architecture, DB tables, and gotchas
+5. **Read `migrations/schema.sql`** before any DB work — it is the authoritative schema source
+6. **Read `ERA Notes/01 - Architecture/Common Patterns.md`** if touching state, mutations, or modals
+
+> **Two indexes, different jobs.** The Feature Map (step 1) is a flat, intent-routed file index — *"the user says X, edit these files."* The Feature Index (step 3, table further down) points at the deeper vault docs in `02 - Standalone Modules/` and `03 - Junction Modules/` for architecture intent. Use the Feature Map to find files; use the vault doc to understand *why* the feature is built that way.
 
 ---
 

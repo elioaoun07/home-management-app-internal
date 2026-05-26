@@ -6,7 +6,12 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "input=$(cat); msg=$(echo \"$input\" | jq -r '.message // .prompt // \"\"' 2>/dev/null); if echo \"$msg\" | grep -iqE '(explore|trace.*(module|feature)|understand.*(module|feature|how)|map.*(module|feature|arch)|how does .* work|relationship between|cross.?module|junction|unfamiliar|what touches|which files|cascades|dependencies between|before.*(start|implement|build))'; then echo '{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"GRAPHIFY REMINDER: This looks like a codebase exploration task. Run /graphify before reading individual files to build a visual knowledge graph. ERA Notes = design intent + hard rules; graphify = implementation reality + relationships.\"}}'; fi"
+            "command": "input=$(cat); msg=$(echo \"$input\" | jq -r '.message // .prompt // \"\"' 2>/dev/null); if echo \"$msg\" | grep -iqE '(unfamiliar|onboard|audit.*(architecture|codebase)|trace.*cascade|what.?s connected to|map.*(module relationships|the architecture)|how does the .* (system|module|engine) work|cross.?module cascades)'; then echo '{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"GRAPHIFY REMINDER: This looks like a true codebase exploration task (unfamiliar territory or cross-module audit). Run /graphify before reading individual files. For routine edits/bug fixes, prefer the Feature Map instead.\"}}'; fi"
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "input=$(cat); msg=$(echo \"$input\" | jq -r '.message // .prompt // \"\"' 2>/dev/null); if echo \"$msg\" | grep -iqE '(bug in |bugs? on |broken |not working|fix the |fix a |fix this|update the |edit the |change the |modify the |tweak the |adjust the |add (a |an |the )?(field|button|column|option|toggle|setting|tab|view) (to|on|in) |why (is|does|isn.?t) .* (broken|failing|not)|where (is|does) .* (live|render|come from)|which files? .*(touch|render|handle|implement))'; then echo '{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"FEATURE MAP REMINDER: This looks like an edit or bug-fix task. Read `ERA Notes/01 - Architecture/Feature Map/_index.md` first (one small MD) to find the matching module file, then read that module file to get the exact source file paths. This is faster and cheaper than grepping. Only fall back to /graphify or Glob/Grep if the Feature Map does not cover the feature.\"}}'; fi"
           }
         ]
       }
