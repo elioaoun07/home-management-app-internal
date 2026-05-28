@@ -10,6 +10,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+function statementHashRoot(hash: string) {
+  return hash.replace(/:split:\d+$/, "");
+}
+
 export async function POST(req: NextRequest) {
   const supabase = await supabaseServer(await cookies());
   const {
@@ -50,8 +54,70 @@ export async function POST(req: NextRequest) {
     const merchantMappingsToSave = [];
     const accountDeductions: Record<string, number> = {}; // Track deductions per account
     let skippedCount = 0; // Duplicate rows from re-uploading the same statement
+    const statementHashes = [
+      ...new Set(
+        transactions
+          .map((t: any) => t.statement_hash)
+          .filter(
+            (hash: unknown): hash is string =>
+              typeof hash === "string" && hash.length > 0,
+          ),
+      ),
+    ];
+    const existingStatementHashes = new Set<string>();
+    const existingStatementRoots = new Set<string>();
+
+    if (statementHashes.length > 0) {
+      const rootHashes = [...new Set(statementHashes.map(statementHashRoot))];
+      const { data: existingRows } = await supabase
+        .from("transactions")
+        .select("statement_hash")
+        .eq("user_id", user.id)
+        .in("statement_hash", [
+          ...new Set([...statementHashes, ...rootHashes]),
+        ]);
+
+      for (const row of existingRows || []) {
+        if (row.statement_hash) {
+          existingStatementHashes.add(row.statement_hash);
+          existingStatementRoots.add(statementHashRoot(row.statement_hash));
+        }
+      }
+
+      for (const rootHash of rootHashes) {
+        const { data: splitRows } = await supabase
+          .from("transactions")
+          .select("statement_hash")
+          .eq("user_id", user.id)
+          .like("statement_hash", `${rootHash}:split:%`)
+          .limit(1);
+
+        if (splitRows?.length) existingStatementRoots.add(rootHash);
+      }
+    }
+    const skippedHashes = new Set<string>();
+    const skippedRoots = new Set<string>();
 
     for (const t of transactions) {
+      const hashRoot = t.statement_hash
+        ? statementHashRoot(t.statement_hash)
+        : null;
+      const alreadyImported =
+        !!t.statement_hash &&
+        (existingStatementHashes.has(t.statement_hash) ||
+          (hashRoot ? existingStatementRoots.has(hashRoot) : false));
+
+      if (alreadyImported) {
+        if (hashRoot && !skippedRoots.has(hashRoot)) {
+          skippedCount++;
+          skippedRoots.add(hashRoot);
+        } else if (!hashRoot && !skippedHashes.has(t.statement_hash)) {
+          skippedCount++;
+          skippedHashes.add(t.statement_hash);
+        }
+        continue;
+      }
+
       // Insert transaction
       const { data: txn, error: txnError } = await supabase
         .from("transactions")
@@ -73,10 +139,18 @@ export async function POST(req: NextRequest) {
       if (txnError) {
         // 23505 = unique_violation — this row already exists (duplicate import)
         if ((txnError as any).code === "23505") {
-          skippedCount++;
+          if (hashRoot && !skippedRoots.has(hashRoot)) {
+            skippedCount++;
+            skippedRoots.add(hashRoot);
+          } else if (
+            !t.statement_hash ||
+            !skippedHashes.has(t.statement_hash)
+          ) {
+            skippedCount++;
+            if (t.statement_hash) skippedHashes.add(t.statement_hash);
+          }
           continue;
         }
-        console.error("Failed to insert transaction:", txnError);
         continue;
       }
 
@@ -173,8 +247,7 @@ export async function POST(req: NextRequest) {
       skipped_count: skippedCount,
       merchant_mappings_saved: merchantMappingsToSave.length,
     });
-  } catch (error) {
-    console.error("Failed to import transactions:", error);
+  } catch {
     return NextResponse.json(
       { error: "Failed to import transactions" },
       { status: 500 },

@@ -36,7 +36,12 @@
       "Bash(dir \"ERA Notes\\\\08 - Sessions\\\\Bug Fixes\\\\\" /o-d | head -20 && dir \"ERA Notes\\\\08 - Sessions\\\\Features\\\\\" /o-d)",
       "Bash(node -e \"const d=require\\('./package.json'\\); const deps={...d.dependencies,...\\(d.devDependencies||{}\\)}; Object.entries\\(deps\\).filter\\(\\([k]\\)=>['azure','microsoft','cognitive','speech','picovoice','porcupine','lru'].some\\(x=>k.toLowerCase\\(\\).includes\\(x\\)\\)\\).forEach\\(\\([k,v]\\)=>console.log\\(k,v\\)\\)\")",
       "Bash(node -e \"const d=require\\('./package.json'\\); console.log\\(JSON.stringify\\({...d.dependencies,...\\(d.devDependencies||{}\\)}, null, 2\\)\\)\")",
-      "Bash(node -e \"const d=require\\('./package.json'\\); const extras=Object.entries\\({...d.dependencies,...\\(d.devDependencies||{}\\)}\\).slice\\(80\\); extras.forEach\\(\\([k,v]\\)=>console.log\\(k,v\\)\\)\")"
+      "Bash(node -e \"const d=require\\('./package.json'\\); const extras=Object.entries\\({...d.dependencies,...\\(d.devDependencies||{}\\)}\\).slice\\(80\\); extras.forEach\\(\\([k,v]\\)=>console.log\\(k,v\\)\\)\")",
+      "PowerShell(winget upgrade *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(& \"$env:LOCALAPPDATA\\\\Microsoft\\\\WindowsApps\\\\winget.exe\" upgrade Anthropic.ClaudeCode --accept-source-agreements --accept-package-agreements)",
+      "PowerShell(winget list *)"
     ]
   }
 }

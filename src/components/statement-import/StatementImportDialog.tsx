@@ -78,7 +78,10 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
   const [filter, setFilter] = useState<FilterType>("all");
   const [keywordGroups, setKeywordGroups] = useState<KeywordGroup[]>([]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
-  const [importResult, setImportResult] = useState<{ imported_count: number; skipped_count: number } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    imported_count: number;
+    skipped_count: number;
+  } | null>(null);
 
   const { data: accounts = [] } = useMyAccounts();
   const parseStatement = useParseStatement();
@@ -87,7 +90,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
   // Find the user's default account (can be any type)
   const defaultAccount = useMemo(
     () => accounts.find((a: any) => a.is_default) || accounts[0],
-    [accounts]
+    [accounts],
   );
 
   // Check if transaction is a transfer (USD account to card)
@@ -165,7 +168,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
       const transferCount = txnsWithAccount.filter((t) => !t.selected).length;
       if (transferCount > 0) {
         toast.info(
-          `${transferCount} transfers auto-unselected (USD → Card transfers)`
+          `${transferCount} transfers auto-unselected (USD → Card transfers)`,
         );
       }
     } catch (error: any) {
@@ -180,7 +183,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
       const file = e.dataTransfer.files[0];
       if (file) handleFileUpload(file);
     },
-    [defaultAccount]
+    [defaultAccount],
   );
 
   // Handle file input change
@@ -192,7 +195,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
   // Toggle transaction selection
   const toggleSelection = (id: string) => {
     setTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, selected: !t.selected } : t))
+      prev.map((t) => (t.id === id ? { ...t, selected: !t.selected } : t)),
     );
   };
 
@@ -204,8 +207,8 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
 
     setTransactions((prev) =>
       prev.map((t) =>
-        filteredIds.has(t.id) ? { ...t, selected: !allSelected } : t
-      )
+        filteredIds.has(t.id) ? { ...t, selected: !allSelected } : t,
+      ),
     );
   };
 
@@ -213,11 +216,11 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
   const updateTransaction = (
     id: string,
     field: keyof ParsedTransaction,
-    value: any
+    value: any,
   ) => {
     // Update main transactions state
     setTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, [field]: value } : t))
+      prev.map((t) => (t.id === id ? { ...t, [field]: value } : t)),
     );
 
     // Also update transactions inside keywordGroups
@@ -225,9 +228,9 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
       prev.map((group) => ({
         ...group,
         transactions: group.transactions.map((t) =>
-          t.id === id ? { ...t, [field]: value } : t
+          t.id === id ? { ...t, [field]: value } : t,
         ),
-      }))
+      })),
     );
   };
 
@@ -337,13 +340,13 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
 
       txns.forEach((txn) => {
         extractSmartKeywords(txn.description).forEach((k) =>
-          allKeywords.add(k)
+          allKeywords.add(k),
         );
       });
 
       return Array.from(allKeywords);
     },
-    [extractSmartKeywords]
+    [extractSmartKeywords],
   );
 
   // Generate smart keyword groups from selected transactions
@@ -373,12 +376,12 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
         transactions: txns,
         category_id: txns[0]?.category_id || null,
         subcategory_id: txns[0]?.subcategory_id || null,
-      })
+      }),
     );
 
     // Sort by transaction count (most common first)
     keywordGroupsArray.sort(
-      (a, b) => b.transactions.length - a.transactions.length
+      (a, b) => b.transactions.length - a.transactions.length,
     );
 
     setKeywordGroups(keywordGroupsArray);
@@ -389,7 +392,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
   const updateGroupCategory = (
     keyword: string,
     field: "category_id" | "subcategory_id" | "selectedKeyword",
-    value: string | null
+    value: string | null,
   ) => {
     setKeywordGroups((prev) =>
       prev.map((g) => {
@@ -402,7 +405,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
           return updated;
         }
         return g;
-      })
+      }),
     );
   };
 
@@ -442,50 +445,70 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
       });
     });
 
-    // Build import list
-    transactions
-      .filter((t) => t.selected)
-      .forEach((txn) => {
-        const mapping = categoryMap.get(txn.id);
-        const finalCategoryId = mapping?.category_id || txn.category_id || null;
-        const finalSubcategoryId =
-          mapping?.subcategory_id || txn.subcategory_id || null;
+    const selectedTransactions = transactions.filter((t) => t.selected);
+    const invalidSplit = selectedTransactions.find((txn) => {
+      if (!txn.splits?.length) return false;
+      const splitTotal = txn.splits.reduce(
+        (sum, split) => sum + split.amount,
+        0,
+      );
+      return Math.abs(splitTotal - txn.amount) > 0.01;
+    });
 
-        // Handle split transactions
-        if (txn.splits && txn.splits.length > 0) {
-          // Import each split as a separate transaction
-          txn.splits.forEach((split, index) => {
-            txnsToImport.push({
-              date: txn.date,
-              description: `${txn.description} (Split ${index + 1}/${txn.splits!.length})`,
-              amount: txn.type === "debit" ? split.amount : -split.amount,
-              category_id: split.category_id || finalCategoryId,
-              subcategory_id: split.subcategory_id || finalSubcategoryId,
-              account_id: txn.account_id!,
-              // Don't save merchant mapping for splits (original pattern wouldn't match)
-              save_merchant_mapping: false,
-              merchant_pattern: txn.description,
-              merchant_name: txn.description,
-            });
-          });
-        } else {
-          // Normal transaction (no splits)
+    if (invalidSplit) {
+      toast.error(
+        `Split amounts for "${invalidSplit.description}" must total $${invalidSplit.amount.toFixed(2)}`,
+      );
+      return;
+    }
+
+    // Build import list
+    selectedTransactions.forEach((txn) => {
+      const mapping = categoryMap.get(txn.id);
+      const finalCategoryId = mapping?.category_id || txn.category_id || null;
+      const finalSubcategoryId =
+        mapping?.subcategory_id || txn.subcategory_id || null;
+
+      // Handle split transactions
+      if (txn.splits && txn.splits.length > 0) {
+        // Import each split as a separate transaction
+        txn.splits.forEach((split, index) => {
           txnsToImport.push({
             date: txn.date,
-            description: txn.description,
-            amount: txn.type === "debit" ? txn.amount : -txn.amount,
-            category_id: finalCategoryId,
-            subcategory_id: finalSubcategoryId,
+            description:
+              split.description?.trim() ||
+              `${txn.description} (Split ${index + 1}/${txn.splits!.length})`,
+            amount: txn.type === "debit" ? split.amount : -split.amount,
+            category_id: split.category_id || finalCategoryId,
+            subcategory_id: split.subcategory_id || finalSubcategoryId,
             account_id: txn.account_id!,
-            // Save merchant mapping if a category was assigned (always save for future matching)
-            save_merchant_mapping: !!finalCategoryId && !!mapping?.keyword,
-            merchant_pattern: mapping?.keyword || txn.description,
-            merchant_name:
-              mapping?.keyword || txn.merchant_name || txn.description,
-            statement_hash: txn.statement_hash,
+            // Don't save merchant mapping for splits (original pattern wouldn't match)
+            save_merchant_mapping: false,
+            merchant_pattern: txn.description,
+            merchant_name: txn.description,
+            statement_hash: txn.statement_hash
+              ? `${txn.statement_hash}:split:${index + 1}`
+              : undefined,
           });
-        }
-      });
+        });
+      } else {
+        // Normal transaction (no splits)
+        txnsToImport.push({
+          date: txn.date,
+          description: txn.description,
+          amount: txn.type === "debit" ? txn.amount : -txn.amount,
+          category_id: finalCategoryId,
+          subcategory_id: finalSubcategoryId,
+          account_id: txn.account_id!,
+          // Save merchant mapping if a category was assigned (always save for future matching)
+          save_merchant_mapping: !!finalCategoryId && !!mapping?.keyword,
+          merchant_pattern: mapping?.keyword || txn.description,
+          merchant_name:
+            mapping?.keyword || txn.merchant_name || txn.description,
+          statement_hash: txn.statement_hash,
+        });
+      }
+    });
 
     if (txnsToImport.length === 0) {
       toast.error("No transactions to import");
@@ -498,9 +521,12 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
         file_name: fileName,
       });
 
-      setImportResult({ imported_count: result.imported_count, skipped_count: result.skipped_count ?? 0 });
+      setImportResult({
+        imported_count: result.imported_count,
+        skipped_count: result.skipped_count ?? 0,
+      });
       toast.success(
-        `Successfully imported ${result.imported_count} transactions`
+        `Successfully imported ${result.imported_count} transactions`,
       );
       setStep("complete");
     } catch (error: any) {
@@ -509,8 +535,12 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
   };
 
   const selectedCount = transactions.filter((t) => t.selected).length;
+  const importRowCount = transactions.reduce((count, txn) => {
+    if (!txn.selected) return count;
+    return count + (txn.splits?.length || 1);
+  }, 0);
   const filteredSelectedCount = filteredTransactions.filter(
-    (t) => t.selected
+    (t) => t.selected,
   ).length;
 
   return (
@@ -725,7 +755,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
                         setDefaultAccountId(val);
                         // Update ALL transactions to use this account
                         setTransactions((prev) =>
-                          prev.map((t) => ({ ...t, account_id: val }))
+                          prev.map((t) => ({ ...t, account_id: val })),
                         );
                       }}
                     >
@@ -795,7 +825,9 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
                       expanded={expandedGroup === group.keyword}
                       onToggleExpand={() =>
                         setExpandedGroup(
-                          expandedGroup === group.keyword ? null : group.keyword
+                          expandedGroup === group.keyword
+                            ? null
+                            : group.keyword,
                         )
                       }
                       onUpdateCategory={(field, value) =>
@@ -826,11 +858,15 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
               {importResult && (
                 <div className="space-y-1 mt-3">
                   <p className={themeClasses.textMuted}>
-                    {importResult.imported_count} transaction{importResult.imported_count !== 1 ? "s" : ""} added to your account.
+                    {importResult.imported_count} transaction
+                    {importResult.imported_count !== 1 ? "s" : ""} added to your
+                    account.
                   </p>
                   {importResult.skipped_count > 0 && (
                     <p className="text-amber-400/80 text-sm">
-                      {importResult.skipped_count} duplicate{importResult.skipped_count !== 1 ? "s" : ""} skipped — already imported from a previous upload.
+                      {importResult.skipped_count} duplicate
+                      {importResult.skipped_count !== 1 ? "s" : ""} skipped —
+                      already imported from a previous upload.
                     </p>
                   )}
                 </div>
@@ -880,7 +916,7 @@ export function StatementImportDialog({ open, onOpenChange }: Props) {
               >
                 {importTransactions.isPending
                   ? "Importing..."
-                  : `Import ${selectedCount} Transactions`}
+                  : `Import ${importRowCount} Transactions`}
               </Button>
             </>
           )}
@@ -1120,12 +1156,12 @@ function KeywordGroupCard({
   onToggleExpand: () => void;
   onUpdateCategory: (
     field: "category_id" | "subcategory_id" | "selectedKeyword",
-    value: string | null
+    value: string | null,
   ) => void;
   onUpdateTransaction: (
     txnId: string,
     field: keyof ParsedTransaction,
-    value: any
+    value: any,
   ) => void;
   accountId: string;
 }) {
@@ -1135,13 +1171,13 @@ function KeywordGroupCard({
 
   const parentCategories = useMemo(
     () => categories.filter((c: any) => !c.parent_id && c.visible !== false),
-    [categories]
+    [categories],
   );
 
   const subcategories = useMemo(() => {
     if (!group.category_id) return [];
     return categories.filter(
-      (c: any) => c.parent_id === group.category_id && c.visible !== false
+      (c: any) => c.parent_id === group.category_id && c.visible !== false,
     );
   }, [categories, group.category_id]);
 
@@ -1214,7 +1250,7 @@ function KeywordGroupCard({
             onValueChange={(val) =>
               onUpdateCategory(
                 "subcategory_id",
-                val === "__none__" ? null : val
+                val === "__none__" ? null : val,
               )
             }
             disabled={!group.category_id || subcategories.length === 0}
@@ -1356,7 +1392,7 @@ function KeywordGroupCard({
                             ? categories.filter(
                                 (c: any) =>
                                   c.parent_id === split.category_id &&
-                                  c.visible !== false
+                                  c.visible !== false,
                               )
                             : [];
 
@@ -1372,6 +1408,26 @@ function KeywordGroupCard({
                                 >
                                   #{splitIdx + 1}
                                 </span>
+                                <Input
+                                  type="text"
+                                  value={split.description || ""}
+                                  onChange={(e) => {
+                                    const newSplits = [...txn.splits!];
+                                    newSplits[splitIdx] = {
+                                      ...split,
+                                      description: e.target.value,
+                                    };
+                                    onUpdateTransaction(
+                                      txn.id,
+                                      "splits",
+                                      newSplits,
+                                    );
+                                  }}
+                                  placeholder={
+                                    splitIdx === 1 ? "Bonus" : "Description"
+                                  }
+                                  className="h-7 text-xs flex-1 min-w-0"
+                                />
                                 <div className="flex items-center gap-1 flex-1">
                                   <span
                                     className={`text-xs ${themeClasses.textMuted}`}
@@ -1401,7 +1457,7 @@ function KeywordGroupCard({
                                         const otherIdx = splitIdx === 0 ? 1 : 0;
                                         const otherNewAmount = Math.max(
                                           0,
-                                          newSplits[otherIdx].amount - diff
+                                          newSplits[otherIdx].amount - diff,
                                         );
                                         newSplits[otherIdx] = {
                                           ...newSplits[otherIdx],
@@ -1412,7 +1468,7 @@ function KeywordGroupCard({
                                       onUpdateTransaction(
                                         txn.id,
                                         "splits",
-                                        newSplits
+                                        newSplits,
                                       );
                                     }}
                                     className="w-24 h-7 text-xs text-right"
@@ -1423,7 +1479,7 @@ function KeywordGroupCard({
                                   variant="ghost"
                                   onClick={() => {
                                     const newSplits = txn.splits!.filter(
-                                      (_, i) => i !== splitIdx
+                                      (_, i) => i !== splitIdx,
                                     );
                                     // If only one split remains, give it the full amount
                                     if (newSplits.length === 1) {
@@ -1437,7 +1493,7 @@ function KeywordGroupCard({
                                       "splits",
                                       newSplits.length > 0
                                         ? newSplits
-                                        : undefined
+                                        : undefined,
                                     );
                                   }}
                                   className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
@@ -1461,7 +1517,7 @@ function KeywordGroupCard({
                                     onUpdateTransaction(
                                       txn.id,
                                       "splits",
-                                      newSplits
+                                      newSplits,
                                     );
                                   }}
                                 >
@@ -1498,7 +1554,7 @@ function KeywordGroupCard({
                                     onUpdateTransaction(
                                       txn.id,
                                       "splits",
-                                      newSplits
+                                      newSplits,
                                     );
                                   }}
                                   disabled={
@@ -1547,6 +1603,7 @@ function KeywordGroupCard({
                             newSplits.push({
                               id: `split-${Date.now()}`,
                               amount: splitAmount,
+                              description: `Split ${newSplits.length + 1}`,
                             });
                             onUpdateTransaction(txn.id, "splits", newSplits);
                           }}
@@ -1564,10 +1621,15 @@ function KeywordGroupCard({
                           const halfAmount =
                             Math.floor((txn.amount / 2) * 100) / 100;
                           onUpdateTransaction(txn.id, "splits", [
-                            { id: `split-${Date.now()}-1`, amount: halfAmount },
+                            {
+                              id: `split-${Date.now()}-1`,
+                              amount: halfAmount,
+                              description: txn.merchant_name || txn.description,
+                            },
                             {
                               id: `split-${Date.now()}-2`,
                               amount: txn.amount - halfAmount,
+                              description: "Bonus",
                             },
                           ]);
                         }}

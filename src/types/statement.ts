@@ -18,6 +18,7 @@ export interface MerchantMapping {
 export interface TransactionSplit {
   id: string; // unique ID for the split
   amount: number;
+  description?: string;
   category_id?: string | null;
   subcategory_id?: string | null;
 }
@@ -40,7 +41,8 @@ export interface ParsedTransaction {
   splits?: TransactionSplit[]; // if set, import as multiple transactions
   // SHA-256 fingerprint of the original statement row (date|description|moneyOut|moneyIn|balance).
   // Used to prevent duplicate imports when the same e-statement is uploaded twice.
-  // Not set for split sub-transactions (they have no 1-to-1 statement row).
+  // Split sub-transactions use `${originalHash}:split:${index}` so each saved
+  // row is unique while still sharing the original statement-line fingerprint.
   statement_hash?: string;
 }
 
@@ -72,7 +74,7 @@ export interface ImportTransactionsRequest {
     save_merchant_mapping?: boolean;
     merchant_pattern?: string;
     merchant_name?: string;
-    // Deduplication fingerprint — omit for split sub-transactions
+    // Deduplication fingerprint of the original statement line.
     statement_hash?: string;
   }>;
   file_name: string;

@@ -2,6 +2,8 @@
 // React Query hooks for statement import feature
 
 import { safeFetch } from "@/lib/safeFetch";
+import { invalidateAccountData } from "@/lib/queryInvalidation";
+import { qk } from "@/lib/queryKeys";
 import { MerchantMapping, ParsedTransaction } from "@/types/statement";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -139,12 +141,12 @@ export function useImportTransactions() {
       return res.json();
     },
     onSuccess: () => {
-      // Invalidate transactions queries to refresh the dashboard
+      invalidateAccountData(queryClient);
+      queryClient.invalidateQueries({ queryKey: qk.drafts() });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({
         queryKey: statementKeys.merchantMappings(),
       });
-      queryClient.invalidateQueries({ queryKey: ["account-balance"] });
     },
   });
 }
