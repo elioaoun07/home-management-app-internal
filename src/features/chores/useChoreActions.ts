@@ -2,17 +2,15 @@
 
 import { useItemActionsWithToast } from "@/features/items/useItemActions";
 import {
+  flexibleRoutinesKeys,
   useScheduleRoutine,
   type FlexibleRoutineItem,
 } from "@/features/items/useFlexibleRoutines";
 import { useUpdateItem } from "@/features/items/useItems";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { addWeeks, endOfWeek, format } from "date-fns";
-import { useQuery } from "@tanstack/react-query";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Household partner lookup (cached per session)
-// ─────────────────────────────────────────────────────────────────────────────
+import { localToISO } from "@/lib/utils/date";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { addDays, addWeeks, endOfWeek, format, parseISO } from "date-fns";
 
 async function fetchHouseholdPartner(): Promise<{
   partnerId: string | null;
@@ -40,66 +38,117 @@ export function useHouseholdPartner() {
   return useQuery({
     queryKey: ["household", "partner"],
     queryFn: fetchHouseholdPartner,
-    staleTime: 1000 * 60 * 60, // 1 hour
+    staleTime: 1000 * 60 * 60,
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Chore-specific actions hook
-// ─────────────────────────────────────────────────────────────────────────────
+export type ChorePostponeTarget =
+  | "tomorrow"
+  | "end_of_week"
+  | "next_week"
+  | "custom";
 
-export type ChorePostponeTarget = "tomorrow" | "end_of_week" | "next_week" | "custom";
+export function getChorePlannedAt(entry: FlexibleRoutineItem): string {
+  if (entry.flexibleSchedule?.scheduled_for_date) {
+    return localToISO(
+      entry.flexibleSchedule.scheduled_for_date,
+      entry.flexibleSchedule.scheduled_for_time?.slice(0, 5) || "12:00",
+    );
+  }
+
+  if (entry.reminder_details?.due_at) {
+    return entry.reminder_details.due_at;
+  }
+
+  return new Date().toISOString();
+}
 
 export function useChoreActions(entry: FlexibleRoutineItem) {
   const actions = useItemActionsWithToast();
   const updateItem = useUpdateItem();
   const scheduleRoutine = useScheduleRoutine();
+  const queryClient = useQueryClient();
   const { data: householdPartner } = useHouseholdPartner();
 
-  const occurrenceDateStr = entry.flexibleSchedule?.scheduled_for_date
-    ? entry.flexibleSchedule.scheduled_for_date + "T12:00:00.000Z"
-    : new Date().toISOString();
+  const plannedOccurrenceDate = getChorePlannedAt(entry);
+  const completedOccurrenceDate =
+    entry.completedAction?.occurrence_date ?? plannedOccurrenceDate;
 
   const complete = () =>
-    actions.handleComplete(entry, occurrenceDateStr);
+    actions.handleComplete(
+      entry,
+      new Date().toISOString(),
+      undefined,
+      undefined,
+      false,
+      plannedOccurrenceDate,
+    );
+
+  const completeAt = (completedAt: string, reason?: string) =>
+    actions.handleComplete(
+      entry,
+      completedAt,
+      reason,
+      undefined,
+      false,
+      plannedOccurrenceDate,
+    );
 
   const reopen = () =>
-    actions.handleUncomplete(entry, occurrenceDateStr);
+    actions.handleUncomplete(entry, completedOccurrenceDate);
 
-  const skip = () =>
-    actions.handleCancel(entry, occurrenceDateStr);
+  const skip = (reason?: string) =>
+    actions.handleSkip(
+      entry,
+      plannedOccurrenceDate,
+      reason,
+      false,
+      plannedOccurrenceDate,
+    );
 
   const postpone = (to: ChorePostponeTarget, customDate?: string) => {
+    const plannedDate = parseISO(plannedOccurrenceDate);
+    const plannedTime = format(plannedDate, "HH:mm");
+    const toPostponedISO = (date: Date) =>
+      localToISO(format(date, "yyyy-MM-dd"), plannedTime);
+
     if (to === "tomorrow") {
-      return actions.handlePostpone(entry, occurrenceDateStr, "tomorrow");
+      return actions.handlePostpone(
+        entry,
+        plannedOccurrenceDate,
+        "tomorrow",
+        undefined,
+        toPostponedISO(addDays(plannedDate, 1)),
+      );
     }
+
     if (to === "end_of_week") {
-      const eow = endOfWeek(new Date(), { weekStartsOn: 1 });
       return actions.handlePostpone(
         entry,
-        occurrenceDateStr,
+        plannedOccurrenceDate,
         "custom",
         undefined,
-        format(eow, "yyyy-MM-dd") + "T12:00:00.000Z",
+        toPostponedISO(endOfWeek(plannedDate, { weekStartsOn: 1 })),
       );
     }
+
     if (to === "next_week") {
-      const nw = addWeeks(new Date(), 1);
       return actions.handlePostpone(
         entry,
-        occurrenceDateStr,
+        plannedOccurrenceDate,
         "custom",
         undefined,
-        nw.toISOString(),
+        toPostponedISO(addWeeks(plannedDate, 1)),
       );
     }
+
     if (to === "custom" && customDate) {
       return actions.handlePostpone(
         entry,
-        occurrenceDateStr,
+        plannedOccurrenceDate,
         "custom",
         undefined,
-        customDate,
+        localToISO(customDate, plannedTime),
       );
     }
   };
@@ -107,7 +156,14 @@ export function useChoreActions(entry: FlexibleRoutineItem) {
   const transferToPartner = () => {
     const partnerId = householdPartner?.partnerId;
     if (!partnerId) return;
-    updateItem.mutate({ id: entry.id, responsible_user_id: partnerId });
+    updateItem.mutate(
+      { id: entry.id, responsible_user_id: partnerId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: flexibleRoutinesKeys.all });
+        },
+      },
+    );
   };
 
   const scheduleToday = (periodStartDate: string) =>
@@ -120,6 +176,7 @@ export function useChoreActions(entry: FlexibleRoutineItem) {
 
   return {
     complete,
+    completeAt,
     reopen,
     skip,
     postpone,

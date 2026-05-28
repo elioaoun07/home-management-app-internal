@@ -388,7 +388,9 @@ export function AddFlexibleFromCatalogueDialog({
           ? tpl.preferred_duration_minutes
           : undefined;
       // Per-slot override takes precedence over template default
-      const tplDuration = getDuration(key, tplDurationDefault);
+      const tplDuration = tpl.is_chore
+        ? undefined
+        : getDuration(key, tplDurationDefault);
       const tplCategoryIds = tpl.item_category_ids?.length
         ? tpl.item_category_ids
         : undefined;
@@ -1061,7 +1063,7 @@ export function AddFlexibleFromCatalogueDialog({
                                         }))
                                       }
                                     />
-                                    {tpl.item_type !== "reminder" && (
+                                    {tpl.item_type !== "reminder" && !tpl.is_chore && (
                                       <div
                                         className={cn(
                                           "flex items-center gap-2 rounded-lg px-2 py-1.5",

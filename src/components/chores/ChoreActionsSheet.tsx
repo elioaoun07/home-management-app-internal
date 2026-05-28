@@ -1,23 +1,31 @@
 "use client";
 
+import { ChorePostponeSheet } from "@/components/chores/ChorePostponeSheet";
+import { type ChorePostponeTarget } from "@/features/chores/useChoreActions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import { type ChorePostponeTarget } from "@/features/chores/useChoreActions";
-import { ArrowRightLeft, Ban, Check, Clock, Pencil, X } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarX,
+  Check,
+  Pencil,
+  UserRoundPlus,
+  X,
+} from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
-import { ChorePostponeSheet } from "./ChorePostponeSheet";
 
 interface ChoreActionsSheetProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
   onComplete: () => void;
-  onSkip: () => void;
-  onPostpone: (to: ChorePostponeTarget, customDate?: string) => void;
+  onSkip?: () => void;
+  onPostpone?: (to: ChorePostponeTarget, customDate?: string) => void;
   onTransfer?: () => void;
   onEdit?: () => void;
-  hasPartner: boolean;
+  hasPartner?: boolean;
+  plannedAt?: string;
 }
 
 export function ChoreActionsSheet({
@@ -29,7 +37,8 @@ export function ChoreActionsSheet({
   onPostpone,
   onTransfer,
   onEdit,
-  hasPartner,
+  hasPartner = false,
+  plannedAt,
 }: ChoreActionsSheetProps) {
   const tc = useThemeClasses();
   const [isClosing, setIsClosing] = useState(false);
@@ -56,7 +65,7 @@ export function ChoreActionsSheet({
   };
 
   const handlePostpone = (to: ChorePostponeTarget, customDate?: string) => {
-    onPostpone(to, customDate);
+    onPostpone?.(to, customDate);
     setShowPostpone(false);
     handleClose();
   };
@@ -69,25 +78,33 @@ export function ChoreActionsSheet({
       bg: "bg-emerald-500/20 hover:bg-emerald-500/30",
       onClick: wrap(onComplete),
     },
-    {
-      label: "Postpone",
-      Icon: Clock,
-      className: "text-amber-400",
-      bg: "bg-amber-500/10 hover:bg-amber-500/20",
-      onClick: () => setShowPostpone(true),
-    },
-    {
-      label: "Skip this time",
-      Icon: Ban,
-      className: "text-white/60",
-      bg: "bg-white/5 hover:bg-white/10",
-      onClick: wrap(onSkip),
-    },
+    ...(onPostpone
+      ? [
+          {
+            label: "Postpone",
+            Icon: CalendarClock,
+            className: "text-amber-300",
+            bg: "bg-amber-500/10 hover:bg-amber-500/20",
+            onClick: () => setShowPostpone(true),
+          },
+        ]
+      : []),
+    ...(onSkip
+      ? [
+          {
+            label: "Skip this chore",
+            Icon: CalendarX,
+            className: "text-white/60",
+            bg: "bg-white/5 hover:bg-white/10",
+            onClick: wrap(onSkip),
+          },
+        ]
+      : []),
     ...(hasPartner && onTransfer
       ? [
           {
-            label: "Give to partner",
-            Icon: ArrowRightLeft,
+            label: "Assign to partner",
+            Icon: UserRoundPlus,
             className: "text-white/60",
             bg: "bg-white/5 hover:bg-white/10",
             onClick: wrap(onTransfer),
@@ -112,7 +129,6 @@ export function ChoreActionsSheet({
   return createPortal(
     <>
       <div className="fixed inset-0 z-50 flex items-end">
-        {/* Backdrop */}
         <div
           className={cn(
             "absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity",
@@ -121,7 +137,6 @@ export function ChoreActionsSheet({
           onClick={handleClose}
         />
 
-        {/* Sheet */}
         <div
           className={cn(
             "relative w-full rounded-t-3xl border-t border-white/10 p-5 pb-8",
@@ -164,12 +179,14 @@ export function ChoreActionsSheet({
         </div>
       </div>
 
-      {/* Nested postpone sheet */}
-      <ChorePostponeSheet
-        isOpen={showPostpone}
-        onClose={() => setShowPostpone(false)}
-        onPostpone={handlePostpone}
-      />
+      {onPostpone && (
+        <ChorePostponeSheet
+          isOpen={showPostpone}
+          onClose={() => setShowPostpone(false)}
+          onPostpone={handlePostpone}
+          plannedAt={plannedAt}
+        />
+      )}
     </>,
     document.body,
   );

@@ -10,6 +10,24 @@ interface CompleteRequestBody {
   is_recurring: boolean;
   actual_minutes?: number;
   reason?: string;
+  planned_for?: string;
+}
+
+function buildCompletionMetadata({
+  actualMinutes,
+  plannedFor,
+}: {
+  actualMinutes?: number;
+  plannedFor?: string;
+}) {
+  const metadata: Record<string, unknown> = {};
+  if (typeof actualMinutes === "number" && actualMinutes >= 0) {
+    metadata.actual_minutes = actualMinutes;
+  }
+  if (plannedFor) {
+    metadata.planned_for = plannedFor;
+  }
+  return Object.keys(metadata).length > 0 ? metadata : null;
 }
 
 export async function POST(
@@ -31,7 +49,17 @@ export async function POST(
 
     const { id: itemId } = await params;
     const body: CompleteRequestBody = await request.json();
-    const { occurrence_date, is_recurring, actual_minutes, reason } = body;
+    const {
+      occurrence_date,
+      is_recurring,
+      actual_minutes,
+      reason,
+      planned_for,
+    } = body;
+    const metadata_json = buildCompletionMetadata({
+      actualMinutes: actual_minutes,
+      plannedFor: planned_for,
+    });
 
     if (!occurrence_date) {
       return NextResponse.json(
@@ -85,10 +113,7 @@ export async function POST(
           action_type: "completed",
           reason: reason || null,
           created_by: user.id,
-          metadata_json:
-            typeof actual_minutes === "number" && actual_minutes >= 0
-              ? { actual_minutes }
-              : null,
+          metadata_json,
         })
         .select()
         .single();
@@ -132,6 +157,7 @@ export async function POST(
           action_type: "completed",
           reason: reason || null,
           created_by: user.id,
+          metadata_json,
         }),
       ]);
 

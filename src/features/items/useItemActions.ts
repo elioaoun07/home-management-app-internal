@@ -35,6 +35,7 @@ export interface ItemOccurrenceAction {
   postponed_to?: string | null;
   postpone_type?: PostponeType | null;
   reason?: string | null;
+  metadata_json?: Record<string, unknown> | null;
   created_at: string;
   created_by?: string | null;
 }
@@ -45,6 +46,7 @@ export interface CompleteItemInput {
   isRecurring: boolean;
   reason?: string;
   actualMinutes?: number;
+  plannedFor?: string;
 }
 
 export interface PostponeItemInput {
@@ -61,6 +63,14 @@ export interface CancelItemInput {
   occurrenceDate?: string; // If recurring, the specific occurrence
   isRecurring: boolean;
   reason?: string;
+}
+
+export interface SkipItemInput {
+  itemId: string;
+  occurrenceDate: string;
+  isRecurring: boolean;
+  reason?: string;
+  plannedFor?: string;
 }
 
 export interface ItemStats {
@@ -140,6 +150,11 @@ export function parseDbDateToLocalString(dbDate: string): string {
   return normalizeToLocalDateString(date);
 }
 
+function getActionPlannedFor(action: ItemOccurrenceAction): string | null {
+  const plannedFor = action.metadata_json?.planned_for;
+  return typeof plannedFor === "string" ? plannedFor : null;
+}
+
 // ============================================
 // QUERY HOOKS
 // ============================================
@@ -205,16 +220,22 @@ export function isOccurrenceCompleted(
 
   return actions.some((action) => {
     if (action.item_id !== itemId) return false;
-    // Include postponed in the check - postponed occurrences shouldn't show on original date
+    // Include postponed/skipped/cancelled in the check - handled occurrences
+    // should not show on their original date.
     if (
       action.action_type !== "completed" &&
       action.action_type !== "cancelled" &&
+      action.action_type !== "skipped" &&
       action.action_type !== "postponed"
     )
       return false;
 
-    // Parse the action's occurrence_date to local date string
-    const actionDate = parseDbDateToLocalString(action.occurrence_date);
+    // For chores/flexible routines, planned_for links a late action back to
+    // the calendar slot it resolved while occurrence_date stays the actual
+    // completion date for analytics.
+    const actionDate = parseDbDateToLocalString(
+      getActionPlannedFor(action) ?? action.occurrence_date,
+    );
     return actionDate === targetDate;
   });
 }
@@ -376,6 +397,7 @@ export function useCompleteItem() {
       isRecurring,
       reason,
       actualMinutes,
+      plannedFor,
     }: CompleteItemInput) => {
       if (!isReallyOnline()) {
         await addToQueue({
@@ -388,6 +410,7 @@ export function useCompleteItem() {
             is_recurring: isRecurring,
             reason,
             actual_minutes: actualMinutes,
+            planned_for: plannedFor,
           },
           metadata: { label: "Complete item" },
         });
@@ -406,6 +429,7 @@ export function useCompleteItem() {
           is_recurring: isRecurring,
           reason,
           actual_minutes: actualMinutes,
+          planned_for: plannedFor,
         }),
       });
       if (!response.ok) {
@@ -418,6 +442,71 @@ export function useCompleteItem() {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
       queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
       queryClient.invalidateQueries({ queryKey: [...itemsKeys.all, "stats"] });
+      queryClient.invalidateQueries({ queryKey: ["flexible-routines"] });
+    },
+  });
+}
+
+/** Mark an item or occurrence as skipped */
+export function useSkipItem() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      occurrenceDate,
+      isRecurring,
+      reason,
+      plannedFor,
+    }: SkipItemInput) => {
+      if (!isReallyOnline()) {
+        await addToQueue({
+          feature: "item",
+          operation: "skip",
+          endpoint: `/api/items/${itemId}/actions`,
+          method: "POST",
+          body: {
+            action: "skip",
+            occurrence_date: occurrenceDate,
+            is_recurring: isRecurring,
+            reason,
+            planned_for: plannedFor,
+          },
+          metadata: { label: "Skip item" },
+        });
+        return {
+          type: isRecurring ? "occurrence" : "item",
+          itemId,
+          _offline: true,
+        };
+      }
+
+      const response = await safeFetch(`/api/items/${itemId}/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "skip",
+          occurrence_date: occurrenceDate,
+          is_recurring: isRecurring,
+          reason,
+          planned_for: plannedFor,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Skip failed: ${response.status}`);
+      }
+      return response.json() as Promise<{
+        action?: { id: string };
+        type?: string;
+        itemId?: string;
+      }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+      queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
+      queryClient.invalidateQueries({ queryKey: [...itemsKeys.all, "stats"] });
+      queryClient.invalidateQueries({ queryKey: ["flexible-routines"] });
     },
   });
 }
@@ -509,6 +598,7 @@ export function useUncompleteItem() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
       queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
+      queryClient.invalidateQueries({ queryKey: ["flexible-routines"] });
       queryClient.invalidateQueries({ queryKey: [...itemsKeys.all, "stats"] });
     },
   });
@@ -567,6 +657,8 @@ export function usePostponeItem() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: itemsKeys.all });
       queryClient.invalidateQueries({ queryKey: itemsKeys.allActions() });
+      queryClient.invalidateQueries({ queryKey: [...itemsKeys.all, "stats"] });
+      queryClient.invalidateQueries({ queryKey: ["flexible-routines"] });
     },
   });
 }
@@ -727,6 +819,7 @@ export function useItemActionsWithToast() {
   const uncompleteItem = useUncompleteItem();
   const postponeItem = usePostponeItem();
   const cancelItem = useCancelItem();
+  const skipItem = useSkipItem();
   const deleteItem = useDeleteItemWithUndo();
   const restoreItem = useRestoreItem();
   const undoAction = useUndoOccurrenceAction();
@@ -766,9 +859,11 @@ export function useItemActionsWithToast() {
     reason?: string,
     actualMinutes?: number,
     overridePartner = false,
+    plannedFor?: string,
   ) => {
-    if (!overridePartner && guardPartnerOverride(item, () => handleComplete(item, occurrenceDate, reason, actualMinutes, true))) return;
-    const isRecurring = !!item.recurrence_rule?.rrule;
+    if (!overridePartner && guardPartnerOverride(item, () => handleComplete(item, occurrenceDate, reason, actualMinutes, true, plannedFor))) return;
+    const isRecurring =
+      !!item.recurrence_rule?.rrule || !!item.recurrence_rule?.is_flexible;
 
     try {
       const result = await completeItem.mutateAsync({
@@ -777,6 +872,7 @@ export function useItemActionsWithToast() {
         isRecurring,
         reason,
         actualMinutes,
+        plannedFor,
       });
 
       const wasArchived = result.type === "item" && (result as any).archived;
@@ -838,7 +934,8 @@ export function useItemActionsWithToast() {
     overridePartner = false,
   ) => {
     if (!overridePartner && guardPartnerOverride(item, () => handlePostpone(item, occurrenceDate, postponeType, reason, customDate, true))) return;
-    const isRecurring = !!item.recurrence_rule?.rrule;
+    const isRecurring =
+      !!item.recurrence_rule?.rrule || !!item.recurrence_rule?.is_flexible;
     let postponedTo: string | undefined;
 
     // Calculate postponed_to based on type
@@ -848,7 +945,7 @@ export function useItemActionsWithToast() {
         item.recurrence_rule.rrule,
       );
     } else if (postponeType === "tomorrow") {
-      postponedTo = calculateTomorrowSameTime(occurrenceDate);
+      postponedTo = customDate ?? calculateTomorrowSameTime(occurrenceDate);
     } else if (postponeType === "custom" && customDate) {
       postponedTo = customDate;
     }
@@ -932,6 +1029,66 @@ export function useItemActionsWithToast() {
     }
   };
 
+  const handleSkip = async (
+    item: ItemWithDetails,
+    occurrenceDate: string,
+    reason?: string,
+    overridePartner = false,
+    plannedFor?: string,
+  ) => {
+    if (!overridePartner && guardPartnerOverride(item, () => handleSkip(item, occurrenceDate, reason, true, plannedFor))) return;
+    const isRecurring =
+      !!item.recurrence_rule?.rrule || !!item.recurrence_rule?.is_flexible;
+
+    try {
+      const result = await skipItem.mutateAsync({
+        itemId: item.id,
+        occurrenceDate,
+        isRecurring,
+        reason,
+        plannedFor,
+      });
+
+      const message = isRecurring
+        ? `This occurrence of "${item.title}" skipped`
+        : `"${item.title}" skipped`;
+
+      toast.success(message, {
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            const r = result as any;
+            if (r.action?.id) {
+              await undoAction.mutateAsync(r.action.id);
+            }
+            if (r.type === "item") {
+              const supabase = supabaseBrowser();
+              await supabase
+                .from("items")
+                .update({
+                  status: "pending",
+                  archived_at: null,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", item.id);
+              await supabase
+                .from("item_alerts")
+                .update({ active: true })
+                .eq("item_id", item.id);
+              queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+            }
+            if (r.action?.id || r.type === "item") {
+              toast.success("Skip undone");
+            }
+          },
+        },
+      });
+    } catch (error) {
+      toast.error("Failed to skip item");
+      console.error(error);
+    }
+  };
+
   const handleDelete = async (item: ItemWithDetails) => {
     try {
       await deleteItem.mutateAsync(item.id);
@@ -957,7 +1114,8 @@ export function useItemActionsWithToast() {
     overridePartner = false,
   ) => {
     if (!overridePartner && guardPartnerOverride(item, () => handleUncomplete(item, occurrenceDate, true))) return;
-    const isRecurring = !!item.recurrence_rule?.rrule;
+    const isRecurring =
+      !!item.recurrence_rule?.rrule || !!item.recurrence_rule?.is_flexible;
 
     try {
       await uncompleteItem.mutateAsync({
@@ -1001,12 +1159,14 @@ export function useItemActionsWithToast() {
     handleToggleComplete,
     handlePostpone,
     handleCancel,
+    handleSkip,
     handleDelete,
     isLoading:
       completeItem.isPending ||
       uncompleteItem.isPending ||
       postponeItem.isPending ||
       cancelItem.isPending ||
+      skipItem.isPending ||
       deleteItem.isPending,
   };
 }

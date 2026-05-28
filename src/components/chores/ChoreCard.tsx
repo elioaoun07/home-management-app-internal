@@ -3,25 +3,27 @@
 import { ChoreActionsSheet } from "@/components/chores/ChoreActionsSheet";
 import { ChorePostponeSheet } from "@/components/chores/ChorePostponeSheet";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useThemeClasses } from "@/hooks/useThemeClasses";
 import {
+  getChorePlannedAt,
   type ChorePostponeTarget,
   useChoreActions,
 } from "@/features/chores/useChoreActions";
 import { type FlexibleRoutineItem } from "@/features/items/useFlexibleRoutines";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import {
-  ArrowRightLeft,
-  Ban,
+  CalendarClock,
+  CalendarX,
   CheckCircle2,
   ClipboardList,
   Clock,
+  UserRoundPlus,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const SWIPE_THRESHOLD = 80;
-const MAX_OFFSET = 120;
+const MAX_OFFSET = 192;
 const LONG_PRESS_MS = 500;
 
 interface ChoreCardProps {
@@ -34,14 +36,12 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
   const tc = useThemeClasses();
   const choreActions = useChoreActions(entry);
 
-  // Refs hold the authoritative values for use inside event handlers.
-  // State is only for triggering re-renders (the visual offset).
-  const offsetRef      = useRef(0);
-  const isDraggingRef  = useRef(false);
-  const startXRef      = useRef(0);
-  const currentXRef    = useRef(0);
-  const animFrameRef   = useRef<number | undefined>(undefined);
-  const longPressRef   = useRef<NodeJS.Timeout | null>(null);
+  const offsetRef = useRef(0);
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const currentXRef = useRef(0);
+  const animFrameRef = useRef<number | undefined>(undefined);
+  const longPressRef = useRef<NodeJS.Timeout | null>(null);
   const isLongPressRef = useRef(false);
 
   const [displayOffset, setDisplayOffset] = useState(0);
@@ -54,20 +54,23 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
 
   const isPink = theme === "pink";
   const borderColor = isOwner
-    ? isPink ? "#ec4899" : "#3b82f6"
-    : isPink ? "#3b82f6" : "#ec4899";
+    ? isPink
+      ? "#ec4899"
+      : "#3b82f6"
+    : isPink
+      ? "#3b82f6"
+      : "#ec4899";
 
   const scheduledLabel = entry.flexibleSchedule?.scheduled_for_date
     ? format(parseISO(entry.flexibleSchedule.scheduled_for_date), "EEE, MMM d")
     : null;
+  const plannedAt = getChorePlannedAt(entry);
 
-  // Helper to update both ref and display state
-  const setOffset = useCallback((v: number) => {
-    offsetRef.current = v;
-    setDisplayOffset(v);
+  const setOffset = useCallback((value: number) => {
+    offsetRef.current = value;
+    setDisplayOffset(value);
   }, []);
 
-  // ── Long press ──────────────────────────────────────────────────────────────
   const startLongPress = useCallback(() => {
     longPressRef.current = setTimeout(() => {
       isLongPressRef.current = true;
@@ -83,74 +86,93 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
     }
   }, []);
 
-  // ── Commit swipe gesture (used by both touch and mouse up) ─────────────────
   const commitSwipe = useCallback(() => {
     isDraggingRef.current = false;
     cancelLongPress();
+
     if (isLongPressRef.current) {
       isLongPressRef.current = false;
       setOffset(0);
       return;
     }
-    const cur = offsetRef.current;
-    if (cur > SWIPE_THRESHOLD) {
+
+    const currentOffset = offsetRef.current;
+    if (currentOffset > SWIPE_THRESHOLD) {
       setOffset(MAX_OFFSET);
       setTimeout(() => {
         setOffset(0);
         choreActions.complete();
       }, 200);
-    } else if (cur < -SWIPE_THRESHOLD) {
-      setOffset(-MAX_OFFSET); // snap open action rail
+    } else if (currentOffset < -SWIPE_THRESHOLD) {
+      setOffset(-MAX_OFFSET);
     } else {
       setOffset(0);
     }
   }, [cancelLongPress, choreActions, setOffset]);
 
-  // ── Touch handlers ──────────────────────────────────────────────────────────
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    startXRef.current = e.touches[0].clientX;
-    currentXRef.current = offsetRef.current;
-    isDraggingRef.current = true;
-    isLongPressRef.current = false;
-    startLongPress();
-  }, [startLongPress]);
+  const handleTouchStart = useCallback(
+    (event: React.TouchEvent) => {
+      startXRef.current = event.touches[0].clientX;
+      currentXRef.current = offsetRef.current;
+      isDraggingRef.current = true;
+      isLongPressRef.current = false;
+      startLongPress();
+    },
+    [startLongPress],
+  );
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isDraggingRef.current) return;
-    const diff = e.touches[0].clientX - startXRef.current;
-    if (Math.abs(diff) > 10) cancelLongPress();
-    const next = Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, currentXRef.current + diff));
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    animFrameRef.current = requestAnimationFrame(() => {
-      offsetRef.current = next;
-      setDisplayOffset(next);
-    });
-  }, [cancelLongPress]);
+  const handleTouchMove = useCallback(
+    (event: React.TouchEvent) => {
+      if (!isDraggingRef.current) return;
+      const diff = event.touches[0].clientX - startXRef.current;
+      if (Math.abs(diff) > 10) cancelLongPress();
+      const next = Math.max(
+        -MAX_OFFSET,
+        Math.min(MAX_OFFSET, currentXRef.current + diff),
+      );
+
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = requestAnimationFrame(() => {
+        offsetRef.current = next;
+        setDisplayOffset(next);
+      });
+    },
+    [cancelLongPress],
+  );
 
   const handleTouchEnd = useCallback(() => {
     commitSwipe();
   }, [commitSwipe]);
 
-  // ── Mouse handlers (desktop) ────────────────────────────────────────────────
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    startXRef.current = e.clientX;
-    currentXRef.current = offsetRef.current;
-    isDraggingRef.current = true;
-    isLongPressRef.current = false;
-    startLongPress();
-  }, [startLongPress]);
+  const handleMouseDown = useCallback(
+    (event: React.MouseEvent) => {
+      startXRef.current = event.clientX;
+      currentXRef.current = offsetRef.current;
+      isDraggingRef.current = true;
+      isLongPressRef.current = false;
+      startLongPress();
+    },
+    [startLongPress],
+  );
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDraggingRef.current) return;
-    const diff = e.clientX - startXRef.current;
-    if (Math.abs(diff) > 10) cancelLongPress();
-    const next = Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, currentXRef.current + diff));
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    animFrameRef.current = requestAnimationFrame(() => {
-      offsetRef.current = next;
-      setDisplayOffset(next);
-    });
-  }, [cancelLongPress]);
+  const handleMouseMove = useCallback(
+    (event: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const diff = event.clientX - startXRef.current;
+      if (Math.abs(diff) > 10) cancelLongPress();
+      const next = Math.max(
+        -MAX_OFFSET,
+        Math.min(MAX_OFFSET, currentXRef.current + diff),
+      );
+
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = requestAnimationFrame(() => {
+        offsetRef.current = next;
+        setDisplayOffset(next);
+      });
+    },
+    [cancelLongPress],
+  );
 
   const handleMouseUp = useCallback(() => {
     if (!isDraggingRef.current) return;
@@ -166,7 +188,6 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
     };
   }, [handleMouseMove, handleMouseUp]);
 
-  // Close action rail when the card body is tapped while rail is open
   const handleCardClick = useCallback(() => {
     if (offsetRef.current !== 0) {
       setOffset(0);
@@ -179,8 +200,7 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
 
   return (
     <>
-      <div className="relative overflow-hidden rounded-xl select-none">
-        {/* ── Swipe-right hint (complete) ── */}
+      <div className="relative select-none overflow-hidden rounded-xl">
         <div
           className="absolute inset-y-0 left-0 flex items-center justify-center rounded-l-xl bg-emerald-500/30"
           style={{ width: Math.max(0, displayOffset) }}
@@ -190,44 +210,54 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
           )}
         </div>
 
-        {/* ── Swipe-left action rail ── */}
         <div
           className="absolute inset-y-0 right-0 flex items-center justify-end gap-1 rounded-r-xl px-2"
           style={{ width: Math.max(0, -displayOffset) }}
         >
-          {-displayOffset > 40 && (
+          {-displayOffset > 48 && (
             <>
               <button
                 type="button"
-                onClick={() => { setOffset(0); setShowPostponeSheet(true); }}
-                className="flex flex-col items-center gap-0.5 rounded-lg bg-amber-500/20 px-2 py-2 text-[10px] text-amber-400"
+                onClick={() => {
+                  setOffset(0);
+                  setShowPostponeSheet(true);
+                }}
+                className="flex min-w-14 flex-col items-center gap-0.5 rounded-lg bg-amber-500/20 px-2 py-2 text-[9px] font-medium text-amber-300"
+                aria-label="Postpone chore"
               >
-                <Clock className="h-4 w-4" />
-                <span>Later</span>
+                <CalendarClock className="h-4 w-4" />
+                <span>Postpone</span>
               </button>
               <button
                 type="button"
-                onClick={() => { setOffset(0); choreActions.skip(); }}
-                className="flex flex-col items-center gap-0.5 rounded-lg bg-white/10 px-2 py-2 text-[10px] text-white/60"
+                onClick={() => {
+                  setOffset(0);
+                  choreActions.skip();
+                }}
+                className="flex min-w-14 flex-col items-center gap-0.5 rounded-lg bg-white/10 px-2 py-2 text-[9px] font-medium text-white/60"
+                aria-label="Skip chore"
               >
-                <Ban className="h-4 w-4" />
+                <CalendarX className="h-4 w-4" />
                 <span>Skip</span>
               </button>
               {choreActions.hasPartner && (
                 <button
                   type="button"
-                  onClick={() => { setOffset(0); choreActions.transferToPartner(); }}
-                  className="flex flex-col items-center gap-0.5 rounded-lg bg-white/10 px-2 py-2 text-[10px] text-white/60"
+                  onClick={() => {
+                    setOffset(0);
+                    choreActions.transferToPartner();
+                  }}
+                  className="flex min-w-14 flex-col items-center gap-0.5 rounded-lg bg-white/10 px-2 py-2 text-[9px] font-medium text-white/60"
+                  aria-label="Assign chore to partner"
                 >
-                  <ArrowRightLeft className="h-4 w-4" />
-                  <span>Pass</span>
+                  <UserRoundPlus className="h-4 w-4" />
+                  <span>Partner</span>
                 </button>
               )}
             </>
           )}
         </div>
 
-        {/* ── Card body ── */}
         <div
           className={cn(
             "relative flex items-center gap-3 rounded-xl border px-4 py-3",
@@ -238,7 +268,6 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
             transform: `translateX(${displayOffset}px)`,
             transition: isDraggingRef.current ? "none" : "transform 0.2s ease",
             boxShadow: `0 0 0 1px ${borderColor}22`,
-            // Allow vertical scroll but handle horizontal in JS
             touchAction: "pan-y",
           }}
           onTouchStart={handleTouchStart}
@@ -247,7 +276,6 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
           onMouseDown={handleMouseDown}
           onClick={handleCardClick}
         >
-          {/* Icon */}
           <div
             className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg"
             style={{ backgroundColor: `${borderColor}22` }}
@@ -260,11 +288,13 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
                 {String(entry.metadata_json.icon_emoji)}
               </span>
             ) : (
-              <ClipboardList className="h-4 w-4" style={{ color: borderColor }} />
+              <ClipboardList
+                className="h-4 w-4"
+                style={{ color: borderColor }}
+              />
             )}
           </div>
 
-          {/* Text */}
           <div className="min-w-0 flex-1">
             <p className={cn("truncate text-sm font-medium", tc.headerText)}>
               {entry.title}
@@ -277,7 +307,6 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
             )}
           </div>
 
-          {/* Assignee pill */}
           <div
             className="flex flex-shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
             style={{
@@ -289,7 +318,6 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
             {isOwner ? "You" : "Partner"}
           </div>
 
-          {/* Drag hint line */}
           <div className="absolute right-0 top-1/2 h-8 w-0.5 -translate-y-1/2 rounded-full bg-white/10" />
         </div>
       </div>
@@ -301,14 +329,20 @@ export function ChoreCard({ entry, currentUserId }: ChoreCardProps) {
         onComplete={() => choreActions.complete()}
         onSkip={() => choreActions.skip()}
         onPostpone={handlePostpone}
-        onTransfer={choreActions.hasPartner ? () => choreActions.transferToPartner() : undefined}
+        onTransfer={
+          choreActions.hasPartner
+            ? () => choreActions.transferToPartner()
+            : undefined
+        }
         hasPartner={choreActions.hasPartner}
+        plannedAt={plannedAt}
       />
 
       <ChorePostponeSheet
         isOpen={showPostponeSheet}
         onClose={() => setShowPostponeSheet(false)}
         onPostpone={handlePostpone}
+        plannedAt={plannedAt}
       />
     </>
   );

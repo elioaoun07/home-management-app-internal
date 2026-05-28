@@ -1,5 +1,5 @@
 // src/app/api/items/[id]/actions/route.ts
-// API route for item actions: complete, postpone, cancel
+// API route for item actions: complete, postpone, cancel, skip
 // Used by offline sync engine for replay
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -29,11 +29,15 @@ export async function POST(
       reason,
       postponed_to,
       postpone_type,
+      planned_for,
     } = body;
 
-    if (!action || !["complete", "postpone", "cancel"].includes(action)) {
+    if (
+      !action ||
+      !["complete", "postpone", "cancel", "skip"].includes(action)
+    ) {
       return NextResponse.json(
-        { error: "Invalid action. Must be complete, postpone, or cancel." },
+        { error: "Invalid action. Must be complete, postpone, cancel, or skip." },
         { status: 400 },
       );
     }
@@ -99,6 +103,7 @@ export async function POST(
             action_type: "completed",
             reason: reason || null,
             created_by: user.id,
+            metadata_json: planned_for ? { planned_for } : null,
           })
           .select()
           .single();
@@ -138,6 +143,7 @@ export async function POST(
             action_type: "completed",
             reason: reason || null,
             created_by: user.id,
+            metadata_json: planned_for ? { planned_for } : null,
           }),
         ]);
 
@@ -295,6 +301,71 @@ export async function POST(
           itemId,
         });
       }
+    }
+
+    // === SKIP ===
+    if (action === "skip") {
+      const { data: actionRow, error: actionError } = await adminDb
+        .from("item_occurrence_actions")
+        .insert({
+          item_id: itemId,
+          occurrence_date,
+          action_type: "skipped",
+          reason: reason || null,
+          created_by: user.id,
+          metadata_json: planned_for ? { planned_for } : null,
+        })
+        .select()
+        .single();
+
+      if (actionError) {
+        return NextResponse.json(
+          { error: actionError.message },
+          { status: 500 },
+        );
+      }
+
+      await Promise.resolve(
+        adminDb.from("item_alert_suppressions").insert({
+          item_id: itemId,
+          occurrence_date: planned_for || occurrence_date,
+          reason: "skipped",
+          created_by: user.id,
+        }),
+      ).catch(() => {});
+
+      if (!is_recurring) {
+        const { error } = await adminDb
+          .from("items")
+          .update({
+            status: "cancelled",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", itemId);
+
+        if (error) {
+          return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        await adminDb
+          .from("item_alerts")
+          .update({ active: false })
+          .eq("item_id", itemId)
+          .eq("active", true);
+
+        return NextResponse.json({
+          success: true,
+          action: actionRow,
+          type: "item",
+          itemId,
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        action: actionRow,
+        type: "occurrence",
+      });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

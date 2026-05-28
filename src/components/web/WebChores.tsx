@@ -1,15 +1,15 @@
 "use client";
 
 import { ChoreGroupList } from "@/components/chores/ChoreGroupList";
+import { ChoreCheckInPanel } from "@/components/chores/ChoreCheckInPanel";
 import { useChores } from "@/features/chores/useChores";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import type { FlexibleRoutineItem } from "@/features/items/useFlexibleRoutines";
-import { useUpdateItem } from "@/features/items/useItems";
+import { subWeeks } from "date-fns";
 import { Sparkles } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function WebChores() {
   const tc = useThemeClasses();
@@ -17,42 +17,20 @@ export default function WebChores() {
   const isPink = theme === "pink";
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [referenceDate] = useState(() => new Date());
+  const previousReferenceDate = useMemo(
+    () => subWeeks(referenceDate, 1),
+    [referenceDate],
+  );
 
   const { scheduled, unscheduled, completed, periodLabel } =
     useChores(referenceDate);
-  const updateItem = useUpdateItem();
+  const { scheduled: previousScheduled } = useChores(previousReferenceDate);
 
   useEffect(() => {
     supabaseBrowser()
       .auth.getUser()
       .then(({ data }) => setCurrentUserId(data.user?.id));
   }, []);
-
-  const handleTransferPartner = useCallback(
-    async (entry: FlexibleRoutineItem) => {
-      if (!currentUserId) return;
-      const supabase = supabaseBrowser();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: link } = await supabase
-        .from("household_links")
-        .select("owner_user_id, partner_user_id")
-        .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
-        .eq("active", true)
-        .single();
-
-      if (!link) return;
-      const partnerId =
-        link.owner_user_id === user.id ? link.partner_user_id : link.owner_user_id;
-      if (!partnerId) return;
-
-      updateItem.mutate({ id: entry.id, responsible_user_id: partnerId });
-    },
-    [currentUserId, updateItem],
-  );
 
   const totalPending = unscheduled.length + scheduled.length;
   const totalDone = completed.length;
@@ -99,20 +77,18 @@ export default function WebChores() {
           </div>
         </div>
         <p className="text-xs text-white/30">
-          Swipe right to complete · tap ✓ for quick done · long-press for more
-          options
+          Swipe right to complete chores as they are done.
         </p>
       </div>
 
       {/* Content */}
-      <div className="max-w-3xl mx-auto px-6 pb-10">
+      <div className="max-w-3xl mx-auto px-6 pb-10 space-y-6">
+        <ChoreCheckInPanel entries={previousScheduled} />
         <ChoreGroupList
           scheduled={scheduled}
           unscheduled={unscheduled}
           completed={completed}
-          periodStart={new Date()}
           currentUserId={currentUserId}
-          onTransferPartner={handleTransferPartner}
         />
       </div>
     </div>

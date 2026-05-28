@@ -18,6 +18,7 @@ export interface OfflineOperation {
     | "delete"
     | "complete"
     | "postpone"
+    | "skip"
     | "cancel"
     | "confirm"
     | "toggle"

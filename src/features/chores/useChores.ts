@@ -1,6 +1,9 @@
 "use client";
 
-import { useAllOccurrenceActions } from "@/features/items/useItemActions";
+import {
+  useAllOccurrenceActions,
+  type ItemOccurrenceAction,
+} from "@/features/items/useItemActions";
 import {
   getPeriodBoundaries,
   useFlexibleRoutines,
@@ -11,6 +14,33 @@ import { useItems } from "@/features/items/useItems";
 import type { ItemWithDetails } from "@/types/items";
 import { format, isWithinInterval, parseISO } from "date-fns";
 
+function getActionPlannedFor(action: ItemOccurrenceAction): string | null {
+  const plannedFor = action.metadata_json?.planned_for;
+  return typeof plannedFor === "string" ? plannedFor : null;
+}
+
+function actionMatchesDate(
+  action: ItemOccurrenceAction,
+  itemId: string,
+  dateStr: string,
+): boolean {
+  if (action.item_id !== itemId) return false;
+  if (
+    action.action_type !== "completed" &&
+    action.action_type !== "skipped" &&
+    action.action_type !== "cancelled" &&
+    action.action_type !== "postponed"
+  ) {
+    return false;
+  }
+  const accountingDate = getActionPlannedFor(action) ?? action.occurrence_date;
+  try {
+    return format(parseISO(accountingDate), "yyyy-MM-dd") === dateStr;
+  } catch {
+    return false;
+  }
+}
+
 function toFlexibleRoutineItem(
   item: ItemWithDetails,
   periodStartStr: string,
@@ -18,6 +48,7 @@ function toFlexibleRoutineItem(
 ): FlexibleRoutineItem {
   const dueAt = item.reminder_details?.due_at;
   const scheduledForDate = dueAt ? dueAt.split("T")[0] : null;
+  const scheduledForTime = dueAt ? format(parseISO(dueAt), "HH:mm") : null;
   return {
     ...item,
     flexibleSchedule: scheduledForDate
@@ -26,7 +57,7 @@ function toFlexibleRoutineItem(
           item_id: item.id as `${string}-${string}-${string}-${string}-${string}`,
           period_start_date: periodStartStr,
           scheduled_for_date: scheduledForDate,
-          scheduled_for_time: null,
+          scheduled_for_time: scheduledForTime,
           occurrence_index: 0,
           created_at: item.created_at ?? new Date().toISOString(),
           created_by: null,
@@ -78,15 +109,37 @@ export function useChores(referenceDate: Date = new Date()) {
   for (const item of oneTimeChores) {
     const dueAt = item.reminder_details?.due_at;
     if (!dueAt) continue;
+    if (
+      item.status === "cancelled" ||
+      item.status === "archived" ||
+      item.status === "dormant"
+    ) {
+      continue;
+    }
     const inPeriod = isWithinInterval(parseISO(dueAt), {
       start: weekStart,
       end: weekEnd,
     });
     if (!inPeriod) continue;
-    if (item.status === "completed") {
+    const dueDateStr = format(parseISO(dueAt), "yyyy-MM-dd");
+    const resolutionAction = actions.find((action) =>
+      actionMatchesDate(action, item.id, dueDateStr),
+    );
+    if (
+      item.status === "completed" ||
+      resolutionAction?.action_type === "completed"
+    ) {
       oneTimeCompleted.push(
-        toFlexibleRoutineItem(item, periodStartStr, periodEndStr),
+        {
+          ...toFlexibleRoutineItem(item, periodStartStr, periodEndStr),
+          completedAction:
+            resolutionAction?.action_type === "completed"
+              ? resolutionAction
+              : undefined,
+        },
       );
+    } else if (resolutionAction) {
+      continue;
     } else {
       oneTimeScheduled.push(
         toFlexibleRoutineItem(item, periodStartStr, periodEndStr),

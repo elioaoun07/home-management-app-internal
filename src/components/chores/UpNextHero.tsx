@@ -1,18 +1,24 @@
 "use client";
 
-import { ChoreActionsSheet } from "@/components/chores/ChoreActionsSheet";
 import { ChorePostponeSheet } from "@/components/chores/ChorePostponeSheet";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useThemeClasses } from "@/hooks/useThemeClasses";
 import {
+  getChorePlannedAt,
   type ChorePostponeTarget,
   useChoreActions,
 } from "@/features/chores/useChoreActions";
 import { type FlexibleRoutineItem } from "@/features/items/useFlexibleRoutines";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import { timeOfDayConfig, getTimeOfDay } from "@/lib/utils/timeOfDay";
+import { getTimeOfDay, timeOfDayConfig } from "@/lib/utils/timeOfDay";
 import { format, parseISO } from "date-fns";
-import { ArrowRightLeft, Ban, CheckCircle2, Clock, Sparkles } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarX,
+  CheckCircle2,
+  Sparkles,
+  UserRoundPlus,
+} from "lucide-react";
 import { useState } from "react";
 
 interface UpNextHeroProps {
@@ -24,6 +30,7 @@ function PriorityDot({ priority }: { priority: "high" | "urgent" }) {
   const isUrgent = priority === "urgent";
   const color = isUrgent ? "#f43f5e" : "#f59e0b";
   const label = isUrgent ? "Urgent" : "High";
+
   return (
     <span
       className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide"
@@ -41,7 +48,6 @@ export function UpNextHero({ entry, currentUserId }: UpNextHeroProps) {
   const { theme } = useTheme();
   const tc = useThemeClasses();
   const choreActions = useChoreActions(entry);
-  const [showActionsSheet, setShowActionsSheet] = useState(false);
   const [showPostponeSheet, setShowPostponeSheet] = useState(false);
 
   const isPink = theme === "pink";
@@ -49,17 +55,19 @@ export function UpNextHero({ entry, currentUserId }: UpNextHeroProps) {
     ? entry.responsible_user_id === currentUserId
     : true;
   const borderColor = isOwner
-    ? isPink ? "#ec4899" : "#3b82f6"
-    : isPink ? "#3b82f6" : "#ec4899";
+    ? isPink
+      ? "#ec4899"
+      : "#3b82f6"
+    : isPink
+      ? "#3b82f6"
+      : "#ec4899";
 
-  const dueAt = entry.reminder_details?.due_at;
-  const parsedDue = dueAt ? parseISO(dueAt) : null;
-  const timeOfDay = parsedDue ? getTimeOfDay(parsedDue) : "all-day";
+  const plannedAt = getChorePlannedAt(entry);
+  const parsedDue = parseISO(plannedAt);
+  const timeOfDay = getTimeOfDay(parsedDue);
   const todConfig = timeOfDayConfig[timeOfDay];
   const TodIcon = todConfig.icon;
-  const timeStr = parsedDue && timeOfDay !== "all-day"
-    ? format(parsedDue, "h:mm a")
-    : null;
+  const timeStr = timeOfDay !== "all-day" ? format(parsedDue, "h:mm a") : null;
 
   const priority = entry.priority as string | undefined;
   const showPriority = priority === "high" || priority === "urgent";
@@ -71,17 +79,21 @@ export function UpNextHero({ entry, currentUserId }: UpNextHeroProps) {
   return (
     <>
       <div
-        className="relative rounded-2xl border-2 p-5 overflow-hidden"
+        className="relative overflow-hidden rounded-2xl border-2 p-5"
         style={{
           borderColor,
           background: `linear-gradient(135deg, ${borderColor}10 0%, transparent 60%)`,
           boxShadow: `0 0 24px ${borderColor}18`,
         }}
       >
-        {/* Eyebrow row — time-of-day label + priority */}
-        <div className="flex items-center justify-between mb-4">
-          <span className={cn("flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider", todConfig.color)}>
-            <TodIcon className="w-3.5 h-3.5" />
+        <div className="mb-4 flex items-center justify-between">
+          <span
+            className={cn(
+              "flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider",
+              todConfig.color,
+            )}
+          >
+            <TodIcon className="h-3.5 w-3.5" />
             {todConfig.label}
           </span>
           {showPriority && (
@@ -89,80 +101,81 @@ export function UpNextHero({ entry, currentUserId }: UpNextHeroProps) {
           )}
         </div>
 
-        {/* Centered title */}
-        <p className={cn("text-center text-xl font-bold leading-tight px-2", tc.headerText, timeStr ? "mb-2" : "mb-5")}>
+        <p
+          className={cn(
+            "px-2 text-center text-xl font-bold leading-tight",
+            tc.headerText,
+            timeStr ? "mb-2" : "mb-5",
+          )}
+        >
           {entry.title}
         </p>
 
-        {/* Time — only shown when a specific time is set */}
         {timeStr && (
-          <p className="text-center text-sm font-semibold text-white/50 mb-5">{timeStr}</p>
+          <p className="mb-5 text-center text-sm font-semibold text-white/50">
+            {timeStr}
+          </p>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-2">
+        <div
+          className={cn(
+            "grid gap-2",
+            choreActions.hasPartner ? "grid-cols-4" : "grid-cols-3",
+          )}
+        >
           <button
             type="button"
             onClick={() => choreActions.complete()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500/20 py-2.5 text-sm font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/30 active:scale-[0.98]"
+            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-500/20 px-2 py-2 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/30 active:scale-[0.98]"
           >
-            <CheckCircle2 className="w-4 h-4" />
+            <CheckCircle2 className="h-4 w-4" />
             Done
           </button>
           <button
             type="button"
             onClick={() => setShowPostponeSheet(true)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500/10 py-2.5 text-sm font-semibold text-amber-400 transition-colors hover:bg-amber-500/20 active:scale-[0.98]"
+            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl bg-amber-500/15 px-2 py-2 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-500/25 active:scale-[0.98]"
           >
-            <Clock className="w-4 h-4" />
-            Later
+            <CalendarClock className="h-4 w-4" />
+            Postpone
           </button>
           <button
             type="button"
             onClick={() => choreActions.skip()}
-            className="flex items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-2.5 text-sm text-white/50 transition-colors hover:bg-white/10 active:scale-[0.98]"
+            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl bg-white/5 px-2 py-2 text-xs font-semibold text-white/55 transition-colors hover:bg-white/10 active:scale-[0.98]"
           >
-            <Ban className="w-4 h-4" />
+            <CalendarX className="h-4 w-4" />
+            Skip
           </button>
           {choreActions.hasPartner && (
             <button
               type="button"
               onClick={() => choreActions.transferToPartner()}
-              className="flex items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-2.5 text-sm text-white/50 transition-colors hover:bg-white/10 active:scale-[0.98]"
+              className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl bg-white/5 px-2 py-2 text-xs font-semibold text-white/55 transition-colors hover:bg-white/10 active:scale-[0.98]"
             >
-              <ArrowRightLeft className="w-4 h-4" />
+              <UserRoundPlus className="h-4 w-4" />
+              Partner
             </button>
           )}
         </div>
       </div>
 
-      <ChoreActionsSheet
-        isOpen={showActionsSheet}
-        onClose={() => setShowActionsSheet(false)}
-        title={entry.title}
-        onComplete={() => choreActions.complete()}
-        onSkip={() => choreActions.skip()}
-        onPostpone={handlePostpone}
-        onTransfer={choreActions.hasPartner ? () => choreActions.transferToPartner() : undefined}
-        hasPartner={choreActions.hasPartner}
-      />
-
       <ChorePostponeSheet
         isOpen={showPostponeSheet}
         onClose={() => setShowPostponeSheet(false)}
         onPostpone={handlePostpone}
+        plannedAt={plannedAt}
       />
     </>
   );
 }
 
-// ─── Empty state ─────────────────────────────────────────────────────────────
-
 export function UpNextEmpty() {
   const tc = useThemeClasses();
+
   return (
-    <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
-      <Sparkles className="w-8 h-8 text-emerald-400/40" />
+    <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+      <Sparkles className="h-8 w-8 text-emerald-400/40" />
       <p className={cn("text-sm font-medium", tc.headerText)}>All caught up!</p>
       <p className="text-xs text-white/30">No chores assigned for today</p>
     </div>

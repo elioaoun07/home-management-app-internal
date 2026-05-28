@@ -348,8 +348,9 @@ export default function ItemDetailModal({
   // Action handlers with toast support
   const handleCompleteAction = useCallback(
     async (reason?: string) => {
-      // For tasks: prompt for actual_minutes before completing
-      if (item.type === "task") {
+      // For tasks: prompt for actual_minutes before completing. Chores are
+      // intentionally simpler and do not track time spent.
+      if (item.type === "task" && !item.is_chore) {
         setPendingCompleteReason(reason);
         setActualMinutesInput(
           item.reminder_details?.estimate_minutes
@@ -455,8 +456,8 @@ export default function ItemDetailModal({
 
   // Quick action handlers
   const handleQuickComplete = useCallback(async () => {
-    // Tasks: prompt for actual_minutes before completing
-    if (item.type === "task") {
+    // Tasks: prompt for actual_minutes before completing. Chores skip this.
+    if (item.type === "task" && !item.is_chore) {
       setPendingCompleteReason(undefined);
       setActualMinutesInput(
         item.reminder_details?.estimate_minutes

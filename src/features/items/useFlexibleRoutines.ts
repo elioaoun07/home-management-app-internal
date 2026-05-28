@@ -136,6 +136,8 @@ export interface FlexibleRoutineItem extends ItemWithDetails {
   isOverdue?: boolean;
   /** How many consecutive previous periods were missed */
   overduePeriodsCount?: number;
+  /** Completion action that resolved this entry, if one exists. */
+  completedAction?: ItemOccurrenceAction;
 }
 
 export interface ScheduleRoutineInput {
@@ -173,6 +175,38 @@ function getPreviousPeriodDate(date: Date, period: FlexiblePeriod): Date {
       return new Date(date.getFullYear(), date.getMonth() - 1, date.getDate());
     default:
       return addWeeks(date, -1);
+  }
+}
+
+function getActionPlannedFor(action: ItemOccurrenceAction): string | null {
+  const plannedFor = action.metadata_json?.planned_for;
+  return typeof plannedFor === "string" ? plannedFor : null;
+}
+
+function getActionAccountingDate(action: ItemOccurrenceAction): string {
+  return getActionPlannedFor(action) ?? action.occurrence_date;
+}
+
+function actionDateKey(action: ItemOccurrenceAction): string | null {
+  try {
+    return format(parseISO(getActionAccountingDate(action)), "yyyy-MM-dd");
+  } catch {
+    return null;
+  }
+}
+
+function actionIsWithinPeriod(
+  action: ItemOccurrenceAction,
+  start: Date,
+  end: Date,
+): boolean {
+  try {
+    return isWithinInterval(parseISO(getActionAccountingDate(action)), {
+      start,
+      end,
+    });
+  } catch {
+    return false;
   }
 }
 
@@ -255,52 +289,69 @@ async function fetchFlexibleRoutines(
       sourceCatId ? (catalogueOccurrenceMap.get(sourceCatId) ?? 1) : 1,
     );
 
-    // Build set of dates that have a cancelled action for this item in this period
-    const cancelledDates = new Set(
+    const itemActions = actions.filter((a) => a.item_id === item.id);
+    const completedActionsInPeriod = itemActions
+      .filter(
+        (a) =>
+          a.action_type === "completed" && actionIsWithinPeriod(a, start, end),
+      )
+      .slice()
+      .sort(
+        (a, b) =>
+          parseISO(b.occurrence_date).getTime() -
+          parseISO(a.occurrence_date).getTime(),
+      );
+
+    const completedDates = new Set(
+      completedActionsInPeriod
+        .map(actionDateKey)
+        .filter((d): d is string => d !== null),
+    );
+
+    const blockedDates = new Set(
       actions
         .filter(
-          (a) => a.item_id === item.id && a.action_type === "cancelled",
+          (a) =>
+            a.item_id === item.id &&
+            (a.action_type === "cancelled" ||
+              a.action_type === "skipped" ||
+              a.action_type === "postponed"),
         )
-        .map((a) => {
-          try {
-            return format(parseISO(a.occurrence_date), "yyyy-MM-dd");
-          } catch {
-            return null;
-          }
-        })
+        .map(actionDateKey)
         .filter((d): d is string => d !== null),
     );
 
     // Find ALL schedules for this item in current period (sorted by index),
-    // excluding any that have been individually cancelled.
-    const periodSchedules = schedules
+    // excluding any that have been skipped/cancelled/postponed.
+    const visiblePeriodSchedules = schedules
       .filter(
         (s) =>
           s.item_id === item.id &&
           s.period_start_date === itemPeriodStartStr &&
-          !cancelledDates.has(s.scheduled_for_date),
+          !blockedDates.has(s.scheduled_for_date),
       )
       .slice()
       .sort((a, b) => (a.occurrence_index ?? 0) - (b.occurrence_index ?? 0));
+
+    const pendingPeriodSchedules = visiblePeriodSchedules.filter(
+      (s) => !completedDates.has(s.scheduled_for_date),
+    );
 
     // Count completions & skips within the current period
     const periodCompletedCount = actions.filter((a) => {
       if (a.item_id !== item.id) return false;
       if (a.action_type !== "completed") return false;
-      try {
-        return isWithinInterval(parseISO(a.occurrence_date), { start, end });
-      } catch {
-        return false;
-      }
+      return actionIsWithinPeriod(a, start, end);
     }).length;
     const periodSkippedCount = actions.filter((a) => {
       if (a.item_id !== item.id) return false;
       if (a.action_type !== "skipped") return false;
-      try {
-        return isWithinInterval(parseISO(a.occurrence_date), { start, end });
-      } catch {
-        return false;
-      }
+      return actionIsWithinPeriod(a, start, end);
+    }).length;
+    const periodPostponedCount = actions.filter((a) => {
+      if (a.item_id !== item.id) return false;
+      if (a.action_type !== "postponed") return false;
+      return actionIsWithinPeriod(a, start, end);
     }).length;
 
     // For N=1 backwards compat, "isCompletedForCurrentPeriod" means at least one
@@ -339,7 +390,7 @@ async function fetchFlexibleRoutines(
     // Check for overdue: count consecutive previous periods with no completed/skipped action
     let isOverdue = false;
     let overduePeriodsCount = 0;
-    if (!isCompleted && periodSchedules.length === 0) {
+    if (!isCompleted && pendingPeriodSchedules.length === 0) {
       const anchorDate = item.recurrence_rule?.start_anchor
         ? parseISO(item.recurrence_rule.start_anchor)
         : null;
@@ -355,14 +406,11 @@ async function fetchFlexibleRoutines(
           if (action.item_id !== item.id) return false;
           if (
             action.action_type !== "completed" &&
-            action.action_type !== "skipped"
+            action.action_type !== "skipped" &&
+            action.action_type !== "postponed"
           )
             return false;
-          const actionDate = parseISO(action.occurrence_date);
-          return isWithinInterval(actionDate, {
-            start: prevStart,
-            end: prevEnd,
-          });
+          return actionIsWithinPeriod(action, prevStart, prevEnd);
         });
         if (!hadAction) {
           overduePeriodsCount++;
@@ -375,12 +423,12 @@ async function fetchFlexibleRoutines(
 
     const baseFields = {
       ...item,
-      scheduledOccurrences: periodSchedules,
+      scheduledOccurrences: pendingPeriodSchedules,
       targetOccurrences,
-      scheduledCount: periodSchedules.length,
+      scheduledCount: pendingPeriodSchedules.length,
       completedCount: periodCompletedCount,
       skippedCount: periodSkippedCount,
-      isScheduledForCurrentPeriod: periodSchedules.length > 0,
+      isScheduledForCurrentPeriod: pendingPeriodSchedules.length > 0,
       isCompletedForCurrentPeriod: isCompleted,
       periodStart: itemPeriodStartStr,
       periodEnd: format(end, "yyyy-MM-dd"),
@@ -392,25 +440,31 @@ async function fetchFlexibleRoutines(
 
     if (isCompleted) {
       // Emit one entry per scheduled slot so views can place each one
-      if (periodSchedules.length > 0) {
-        for (const sched of periodSchedules) {
+      if (visiblePeriodSchedules.length > 0) {
+        for (const sched of visiblePeriodSchedules) {
+          const completedAction =
+            completedActionsInPeriod.find(
+              (a) => actionDateKey(a) === sched.scheduled_for_date,
+            ) ?? completedActionsInPeriod[0];
           result.completed.push({
             ...baseFields,
             flexibleSchedule: sched,
+            completedAction,
           } as FlexibleRoutineItem);
         }
       } else {
         result.completed.push({
           ...baseFields,
           flexibleSchedule: null,
+          completedAction: completedActionsInPeriod[0],
         } as FlexibleRoutineItem);
       }
       continue;
     }
 
-    if (periodSchedules.length > 0) {
+    if (pendingPeriodSchedules.length > 0) {
       // Emit one entry per scheduled slot
-      for (const sched of periodSchedules) {
+      for (const sched of pendingPeriodSchedules) {
         result.scheduled.push({
           ...baseFields,
           flexibleSchedule: sched,
@@ -422,18 +476,15 @@ async function fetchFlexibleRoutines(
     const periodCancelledCount = actions.filter((a) => {
       if (a.item_id !== item.id) return false;
       if (a.action_type !== "cancelled") return false;
-      try {
-        return isWithinInterval(parseISO(a.occurrence_date), { start, end });
-      } catch {
-        return false;
-      }
+      return actionIsWithinPeriod(a, start, end);
     }).length;
 
     // Still unscheduled if any remaining slots (cancelled slots count as "accounted for")
     const accountedFor =
-      periodSchedules.length +
+      pendingPeriodSchedules.length +
       periodCompletedCount +
       periodSkippedCount +
+      periodPostponedCount +
       periodCancelledCount;
     if (accountedFor < targetOccurrences) {
       result.unscheduled.push({

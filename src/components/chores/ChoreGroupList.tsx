@@ -15,18 +15,14 @@ interface ChoreGroupListProps {
   scheduled: FlexibleRoutineItem[];
   unscheduled: FlexibleRoutineItem[];
   completed: FlexibleRoutineItem[];
-  periodStart: Date;
   currentUserId?: string;
-  onTransferPartner?: (item: FlexibleRoutineItem) => void;
 }
 
 export function ChoreGroupList({
   scheduled,
   unscheduled,
   completed,
-  periodStart,
   currentUserId,
-  onTransferPartner,
 }: ChoreGroupListProps) {
   const tc = useThemeClasses();
   const scheduleRoutine = useScheduleRoutine();

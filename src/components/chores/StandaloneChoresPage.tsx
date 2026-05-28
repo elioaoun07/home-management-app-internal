@@ -2,6 +2,7 @@
 
 import { type UserFilter } from "@/components/activity/FilterBar";
 import { ChoreCard } from "@/components/chores/ChoreCard";
+import { ChoreCheckInPanel } from "@/components/chores/ChoreCheckInPanel";
 import { ChoresFilterBar } from "@/components/chores/ChoresFilterBar";
 import { UpNextEmpty, UpNextHero } from "@/components/chores/UpNextHero";
 import { useChoreActions } from "@/features/chores/useChoreActions";
@@ -11,7 +12,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { groupByTimeOfDay, timeOfDayConfig } from "@/lib/utils/timeOfDay";
-import { format, isToday, isTomorrow, parseISO } from "date-fns";
+import { format, isToday, isTomorrow, parseISO, subWeeks } from "date-fns";
 import {
   CalendarCheck,
   CalendarPlus,
@@ -27,11 +28,16 @@ export default function StandaloneChoresPage() {
   const [userFilter, setUserFilter] = useState<UserFilter>("all");
   const [showCompleted, setShowCompleted] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
+  const previousReferenceDate = useMemo(
+    () => subWeeks(referenceDate, 1),
+    [referenceDate],
+  );
 
   const scheduleRoutine = useScheduleRoutine();
 
   const { scheduled, unscheduled, completed, periodLabel } =
     useChores(referenceDate);
+  const { scheduled: previousScheduled } = useChores(previousReferenceDate);
 
   useEffect(() => {
     supabaseBrowser()
@@ -175,6 +181,8 @@ export default function StandaloneChoresPage() {
             )}
           </div>
         </div>
+
+        <ChoreCheckInPanel entries={previousScheduled} />
 
         {/* Up Next hero */}
         {heroEntry ? (
