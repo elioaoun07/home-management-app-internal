@@ -1,507 +1,252 @@
-# AGENTS.md
+<!-- AUTO-GENERATED FROM CLAUDE.md -- DO NOT EDIT DIRECTLY. Edit CLAUDE.md instead. -->
 
-> Quick-reference for AI coding agents. For full project rules, read `CLAUDE.md`. For feature docs, read `ERA Notes/`.
+# CLAUDE.md
 
----
+> **Reactive + Proactive AI Personal Assistant** — a multi-module PWA covering budget tracking, reminders/tasks, meal planning, recipes, catalogues, household chat, dashboards, and an AI assistant. Modules are architecturally independent but share a single household ecosystem. The app is both reactive (responds to user input) and proactive (AI-driven briefings, alerts, and scheduled actions).
+>
+> **Interaction model:** ERA Hub Chat is the **top-layer primary interface**. Quick, conversational, low-friction actions (logging a spend, setting a reminder, adding to the shopping list) happen in the Hub. Standalone module pages (Expense Entry Form, Items, Recipes, etc.) are **precision tools** for detailed, structured input — used when full field control is needed. The Hub offloads high-frequency everyday interactions so that dedicated forms are reserved for cases that truly require them. The AI Assistant lives inside Hub Chat and operates both reactively (parses user messages) and proactively (surfaces briefings and alerts unprompted).
 
-## Tech Stack
-
-- **Framework:** Next.js 16 (App Router, Turbopack) + React 19
-- **Language:** TypeScript (strict mode)
-- **State:** TanStack React Query 5 + Zustand 5
-- **DB:** Supabase (Postgres + Auth + Realtime + RLS)
-- **Styling:** TailwindCSS 4 + Radix UI + shadcn/ui
-- **AI:** Google Gemini (`@google/genai`)
-- **Path alias:** `@/*` → `src/*`
-- **Package manager:** pnpm
-- **Validation:** Run `pnpm typecheck` after every change
+CLAUDE.md auto-syncs to `AGENTS.md`, `CODEX.md`, and `.github/copilot-instructions.md` via PostToolUse hook.
 
 ---
 
-## File Placement Rules
+## Before You Code — Mandatory Checklist
 
-```
-src/
-├── app/api/[module]/route.ts   ← API routes (Next.js App Router)
-├── app/[page]/page.tsx         ← Page components
-├── features/[module]/          ← Standalone module hooks (NO cross-feature imports)
-│   └── hooks.ts                ← Query + mutation hooks only
-├── components/[domain]/        ← UI components (NEVER edit components/ui/)
-├── lib/                        ← Shared utilities (available to all modules)
-├── types/                      ← Shared TypeScript types
-└── contexts/                   ← React contexts (use Safe variants outside providers)
-```
+1. **For edit / bug-fix tasks, read the Feature Map first** — open `ERA Notes/01 - Architecture/Feature Map/_index.md`, find the matching module, then read that module's MD file to get exact source file paths. Do this **before** Glob / Grep / Read on source files. It is the cheapest and most accurate router from user intent → files to edit.
+2. **Identify the module type** (Standalone or Junction — see Module Model below) before scoping work
+3. **Check the Feature Index** for the deeper vault doc in `ERA Notes/`
+4. **Read that doc first** — it contains architecture, DB tables, and gotchas
+5. **Read `migrations/schema.sql`** before any DB work — it is the authoritative schema source
+6. **Read `ERA Notes/01 - Architecture/Common Patterns.md`** if touching state, mutations, or modals
 
-### Import Rules (Critical)
-
-```
-✅ feature/accounts/ → import from @/lib/, @/types/, @/components/
-✅ feature/accounts/ → import from @tanstack/react-query, zustand, etc.
-❌ feature/accounts/ → import from @/features/transactions/  (FORBIDDEN)
-❌ feature/accounts/ → import from @/features/items/          (FORBIDDEN)
-
-✅ Junction modules (hub, shopping-list, meal-planning) CAN import from any feature
-```
+> **Two indexes, different jobs.** The Feature Map (step 1) is a flat, intent-routed file index — *"the user says X, edit these files."* The Feature Index (step 3, table further down) points at the deeper vault docs in `02 - Standalone Modules/` and `03 - Junction Modules/` for architecture intent. Use the Feature Map to find files; use the vault doc to understand *why* the feature is built that way.
 
 ---
 
-## Code Templates
+## Graphify (Dynamic Codebase Exploration)
 
-### New API Route
+> ERA Notes = **design intent + hard rules** (always read first).
+> Graphify = **implementation reality + relationships** (use for exploration).
 
-```ts
-// src/app/api/[module]/route.ts
-import { supabaseServer } from "@/lib/supabase/server";
-import { cookies } from "next/headers";
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+Run `/graphify` **before reading individual files** when the task involves:
 
-export const dynamic = "force-dynamic";
+- Starting on an **unfamiliar module** — visualize structure before diving in
+- **Junction modules** — trace cross-module cascades before changing anything
+- **Large refactors** — map all affected modules and dependencies first
+- **Architecture verification** — confirm code matches ERA Notes intent
 
-export async function GET(req: NextRequest) {
-  const supabase = await supabaseServer(await cookies());
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Household linking — include partner's data
-  let userIds: string[] = [user.id];
-  const ownOnly = req.nextUrl.searchParams.get("own") === "true";
-  if (!ownOnly) {
-    const { data: link } = await supabase
-      .from("household_links")
-      .select("owner_user_id, partner_user_id, active")
-      .or(`owner_user_id.eq.${user.id},partner_user_id.eq.${user.id}`)
-      .eq("active", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const partnerId = link
-      ? link.owner_user_id === user.id
-        ? link.partner_user_id
-        : link.owner_user_id
-      : null;
-    if (partnerId) userIds = [user.id, partnerId];
-  }
-
-  const { data, error } = await supabase
-    .from("TABLE_NAME")
-    .select("*")
-    .in("user_id", userIds)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    // Unique constraint violation → 409
-    if ((error as any).code === "23505") {
-      return NextResponse.json({ error: "Already exists" }, { status: 409 });
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
-}
-
-export async function POST(req: NextRequest) {
-  const supabase = await supabaseServer(await cookies());
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const schema = z.object({
-    name: z.string().min(1),
-    // ... fields
-  });
-
-  const body = await req.json();
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
-
-  const { data, error } = await supabase
-    .from("TABLE_NAME")
-    .insert({ user_id: user.id, ...parsed.data })
-    .select()
-    .single();
-
-  if (error) {
-    if ((error as any).code === "23505") {
-      return NextResponse.json({ error: "Already exists" }, { status: 409 });
-    }
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json(data, { status: 201 });
-}
-```
-
-### New Feature Hook
-
-```ts
-// src/features/[module]/hooks.ts
-"use client";
-
-import { CACHE_TIMES } from "@/lib/queryConfig";
-import { qk } from "@/lib/queryKeys";
-import { safeFetch } from "@/lib/safeFetch";
-import type { YourType } from "@/types/domain";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
-async function fetchItems(): Promise<YourType[]> {
-  const res = await fetch("/api/your-module");
-  if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
-  return res.json();
-}
-
-export function useItems() {
-  return useQuery({
-    queryKey: qk.yourKey(),
-    queryFn: fetchItems,
-    staleTime: CACHE_TIMES.ACCOUNTS, // pick appropriate cache time
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-  });
-}
-```
-
-### Mutation with Undo Toast (Required Pattern)
-
-```ts
-import { safeFetch } from "@/lib/safeFetch";
-import { ToastIcons } from "@/lib/toastIcons";
-import { toast } from "sonner";
-
-export function useDeleteItem() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const res = await safeFetch(`/api/items/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete");
-    },
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: qk.yourKey() });
-      toast.success("Item deleted", {
-        icon: ToastIcons.delete,
-        duration: 4000,
-        action: {
-          label: "Undo",
-          onClick: async () => {
-            try {
-              await safeFetch("/api/items/restore", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id }),
-              });
-              queryClient.invalidateQueries({ queryKey: qk.yourKey() });
-              toast.success("Restored");
-            } catch {
-              toast.error("Failed to undo");
-            }
-          },
-        },
-      });
-    },
-  });
-}
-```
-
-### Cron Route
-
-```ts
-// src/app/api/cron/[job]/route.ts
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { NextRequest, NextResponse } from "next/server";
-
-export const maxDuration = 60;
-
-export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const supabase = supabaseAdmin();
-  // Use admin client — NOT supabaseServer()
-  // ... cron logic
-
-  return NextResponse.json({ success: true });
-}
-```
+Never use graphify as a substitute for ERA Notes — it cannot infer hard rules, gotchas, or design decisions.
 
 ---
 
-## Supabase Client Selection
+## Hard Rules (Non-Negotiable)
 
-| Client              | Import                  | Use For                                            |
-| ------------------- | ----------------------- | -------------------------------------------------- |
-| `supabaseServer()`  | `@/lib/supabase/server` | API routes, RSC — respects RLS via user cookies    |
-| `supabaseBrowser()` | `@/lib/supabase/client` | Client components, realtime subscriptions          |
-| `supabaseAdmin()`   | `@/lib/supabase/admin`  | Cron jobs, batch ops — bypasses RLS (service role) |
+> These are **universal** rules — they apply to every module. Module-specific rules live in the module's `ERA Notes/` Overview doc and are loaded via Mandatory Checklist step 3. Modules with their own Hard Rules: **NFC Tags** (slug URLs), **Guest Portal** (slug URLs), **Preferences** (LBP in thousands), **AI Assistant** (Focus briefing cache), **Categories** (cross-user slug matching).
 
-**Never mix these.** Never use `supabaseAdmin()` in API routes unless it's a cron job.
+1. **ALL toasts must have an Undo button** — `{ duration: 4000, action: { label: "Undo", onClick: () => undoMutation.mutate(...) } }`. Use `ToastIcons` enum from `src/lib/toastIcons.tsx`.
+2. **Single click** = open detail view · **Double click** = toggle pin/favorite
+3. **No red for individual task/item rows** — use theme colors (pink/cyan). Container headers CAN use red/amber. Overdue date labels → `text-white/40`
+4. **Futuristic SVG icons** where available in toasts and UI elements
+5. **Mobile-first** — always verify on mobile viewport
+6. **Never use `fetch()` for mutations** — always use `safeFetch()` from `src/lib/safeFetch.ts`. It does a pre-flight online check, a configurable timeout (default **3 s**), and calls `markOffline()` on any abort/network failure.
+   - The 3 s default is right for CRUD operations. **Long-running calls (AI generation, file uploads, any external API that may take >5 s) MUST pass `timeoutMs`** — e.g. `{ timeoutMs: 60_000 }` — or the request will be killed at 3 s and the app will be falsely flagged offline.
+   - `markOffline()` is triggered on **timeout** too, not only hard network failures. A missing `timeoutMs` on a slow call will light up the offline indicator and badge even when the user is fully online.
+7. **Never trust `navigator.onLine`** — use `isReallyOnline()` from `src/lib/connectivityManager.ts`. It probes `/api/health` every 30s for real connectivity.
+8. **Cron routes**: verify `Authorization: Bearer {CRON_SECRET}`, use `supabaseAdmin()` (not `supabaseServer()`), add `export const maxDuration = 60`.
+9. **Unique constraint violations** (`error.code === "23505"`) → return `409 Conflict`, not 500.
+10. **Theme changes invalidate ALL queries** — use `--theme-bg` CSS variable and `data-theme` attribute, never hardcode background colors.
+11. **Never edit `src/components/ui/`** — enforced by PreToolUse hook.
+12. **Zod schemas for all API input validation** — derive TS types with `z.infer<>`.
+13. **Household linking in API routes**: when fetching user-owned data, always check `household_links` for an active partner and include their data unless `ownOnly=true` is passed. See `src/app/api/accounts/route.ts:28-52`.
+14. **Color identity is person-absolute, not role-relative** — blue-theme user = `blue-400/500` on both phones always; pink-theme user = `pink-400/500` on both phones always. Derive from `useTheme()`: `theme === "pink"` → current user = pink, partner = blue; otherwise reverse. Colors follow the **person**, not the viewer. See `ERA Notes/01 - Architecture/Color Identity.md`.
+15. **Floating panels (dropdowns, popovers, command palettes) must be opaque** — never use `neo-card` (which is semi-transparent glass) on panels that float above page content. Use `tc.bgPage` from `useThemeClasses()` as the background class so the panel is the same solid color as the page background per theme. `neo-card` is only for non-overlaid cards. Glass/blur on floating panels causes text bleed-through from content behind them.
+16. **Fixed/sticky headers must not overlap page content** — when using `fixed` or `sticky` positioning on headers (`h-14`, etc.), the content below **must** have matching top padding (e.g., `pt-14`) to prevent overlap. For standalone/isolated pages (NFC, guest portal, etc.) that render their own layout, ensure the root layout's `ConditionalHeader` and `MobileNav` hide on those routes — otherwise a fixed header with no content offset causes overlap. Always verify on mobile viewport.
+17. **Cache invalidation** — see `.claude/skills/cache-invalidation/SKILL.md` and `ERA Notes/01 - Architecture/Cache Invalidation.md`.
+18. **Timezone consistency** — see `.claude/skills/timezone-handling/SKILL.md` and `ERA Notes/01 - Architecture/Timezone Handling.md`.
+19. **Mobile number inputs** — never use `type="number"`. Use `type="text"` with `inputMode="decimal"`. Prevents iOS scroll-wheel bug and inconsistent decimal handling.
+20. **Never add RLS `EXISTS`-subquery policies to hot child tables** — policies of the form `EXISTS (SELECT 1 FROM items i WHERE i.id = child.item_id AND i.user_id = auth.uid())` re-evaluate a join for every row scanned. On tables like `item_alerts`, `item_subtasks`, `reminder_details`, etc., this causes catastrophic slowdowns (~500ms per table for 50 rows even under service role baseline). Always enforce access in one of these ways instead:
 
----
+- **SECURITY DEFINER RPC** (preferred): own the WHERE clause inside the function; bypass per-table RLS. See `migrations/2026-05-11_schedule_bundle_rpc.sql` + `ERA Notes/05 - Performance/Performance Optimizations.md`.
+- **Denormalized `user_id`** on the child table + a direct `user_id = auth.uid()` RLS policy. Add a trigger to keep it in sync with the parent.
+  Never enable RLS on a child table without one of these patterns in place.
 
-## Query Keys & Cache Times
-
-```ts
-import { qk } from "@/lib/queryKeys"; // qk.accounts(), qk.categories(), etc.
-import { CACHE_TIMES } from "@/lib/queryConfig";
-
-// Cache durations:
-// BALANCE    = 5 min     TRANSACTIONS = 2 min
-// ACCOUNTS   = 1 hour    CATEGORIES   = 1 hour
-// RECURRING  = 30 min    DRAFTS       = 1 min
-// PREFERENCES = 1 hour   PERMANENT    = 24 hours
-```
-
-**Never** inline query key arrays like `["accounts"]`. Always use `qk.*` or feature-scoped `queryKeys.ts`.
-
----
-
-## Common Mistakes (Avoid These)
-
-### 1. Using `fetch()` for mutations
-
-```ts
-// ❌ WRONG — no offline check, no timeout
-const res = await fetch("/api/items", { method: "POST", ... });
-
-// ✅ CORRECT — pre-flight online check, 3s timeout, calls markOffline() on failure
-const res = await safeFetch("/api/items", { method: "POST", ... });
-```
-
-### 2. Trusting `navigator.onLine`
-
-```ts
-// ❌ WRONG — unreliable, often lies
-if (navigator.onLine) { ... }
-
-// ✅ CORRECT — probes /api/health every 30s
-import { isReallyOnline } from "@/lib/connectivityManager";
-if (await isReallyOnline()) { ... }
-```
-
-### 3. Missing Undo on toasts
-
-```ts
-// ❌ WRONG — every toast MUST have an undo action
-toast.success("Deleted");
-
-// ✅ CORRECT
-toast.success("Deleted", {
-  icon: ToastIcons.delete,
-  duration: 4000,
-  action: { label: "Undo", onClick: () => undoMutation.mutate(...) },
-});
-```
-
-### 4. Hardcoding background colors
-
-```ts
-// ❌ WRONG — breaks on theme change
-className = "bg-zinc-900";
-
-// ✅ CORRECT — uses theme CSS variable
-className = "bg-[var(--theme-bg)]";
-```
-
-### 5. Editing shadcn/ui components
-
-```
-// ❌ NEVER edit files in src/components/ui/
-// These are auto-generated by shadcn CLI
-
-// ✅ Create wrapper components in src/components/[domain]/ instead
-```
-
-### 6. Cross-feature imports (standalone modules)
-
-```ts
-// ❌ WRONG — standalone features cannot import from each other
-// In src/features/accounts/hooks.ts:
-import { useTransactions } from "@/features/transactions/hooks";
-
-// ✅ Move shared code to src/lib/ or src/types/
-```
-
-### 7. Returning 500 for unique constraint violations
-
-```ts
-// ❌ WRONG
-if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-// ✅ CORRECT — check for Postgres unique violation code
-if ((error as any).code === "23505") {
-  return NextResponse.json({ error: "Already exists" }, { status: 409 });
-}
-```
-
-### 8. Using wrong Supabase client
-
-```ts
-// ❌ WRONG — supabaseAdmin in regular API route (bypasses RLS!)
-import { supabaseAdmin } from "@/lib/supabase/admin";
-
-// ✅ CORRECT — supabaseServer respects user session + RLS
-import { supabaseServer } from "@/lib/supabase/server";
-const supabase = await supabaseServer(await cookies());
-```
-
-### 9. Color identity confusion (role-relative vs person-absolute)
-
-```ts
-// ❌ WRONG — hardcoding "current user = blue" regardless of who's logged in
-const myColor = "blue-400";
-const partnerColor = "pink-400";
-
-// ✅ CORRECT — derive from theme (person-absolute)
-// Blue-theme user is ALWAYS blue on both phones.
-// Pink-theme user is ALWAYS pink on both phones.
-const { theme } = useTheme();
-const myColor = theme === "pink" ? "pink-400" : "blue-400";
-const partnerColor = theme === "pink" ? "blue-400" : "pink-400";
-```
-
-### 10. Using `type="number"` on mobile inputs
-
-```tsx
-// ❌ WRONG — iOS scroll-wheel bug, inconsistent decimal handling
-<input type="number" value={amount} />
-
-// ✅ CORRECT — proper mobile numeric keyboard without iOS quirks
-<input type="text" inputMode="decimal" value={amount} />
-```
-
-### 11. `console.*` in committed code
-
-```ts
-// ❌ WRONG — leaks internal state in production, pollutes logs
-console.log("items:", items);
-console.error("fetch failed:", err);
-
-// ✅ CORRECT — use Error Logs module for persistence; debugger for one-off
-// For structured persistent errors:
-await fetch("/api/error-logs", {
-  method: "POST",
-  body: JSON.stringify({ message: err.message }),
-});
-// For dev-only:
-if (process.env.NODE_ENV === "development") {
-  /* only then */
-}
-```
-
-Before committing, verify:
-
-```bash
-grep -rn "console\." src/ --include="*.ts" --include="*.tsx"
-```
-
-### 12. RLS EXISTS-subquery on child tables
-
-```sql
--- ❌ CATASTROPHICALLY SLOW — re-evaluates JOIN for every row scanned
-CREATE POLICY child_access ON public.item_alerts
-  USING (EXISTS (SELECT 1 FROM items i WHERE i.id = item_alerts.item_id AND i.user_id = auth.uid()));
-
--- ✅ CORRECT option A — SECURITY DEFINER RPC enforces ownership in WHERE clause
--- See migrations/2026-05-11_schedule_bundle_rpc.sql
-
--- ✅ CORRECT option B — denormalized user_id with direct policy
-ALTER TABLE public.item_alerts ADD COLUMN user_id uuid;
-CREATE POLICY child_access ON public.item_alerts USING (user_id = auth.uid());
-```
-
-### 13. Fan-out queries for parent + children
-
-```ts
-// ❌ WRONG — 7 PostgREST round-trips = ~1.3s floor, before any RLS cost
-const [items, reminders, events, subtasks, alerts, rules, pauses] =
-  await Promise.all([
-    supabase.from("items").select("*"),
-    supabase.from("reminder_details").select("*").in("item_id", ids),
-    // ... 5 more
-  ]);
-
-// ✅ CORRECT — 1 round-trip via SECURITY DEFINER RPC
-const { data } = await supabase.rpc("get_schedule_bundle", {
-  include_archived: false,
-});
-// data.items[] already contains all children embedded
-```
-
-Rule: if a page needs a parent + ≥3 child tables, create a bundle RPC.
+21. **Hot read paths that fetch a parent + N child tables must use a single SECURITY DEFINER RPC** — each PostgREST call costs ~170–200 ms of network overhead. Fetching `items` + `reminder_details` + `event_details` + `item_subtasks` + `item_alerts` + `item_recurrence_rules` + `recurrence_pauses` as 7 separate queries adds ~1.3 s of floor latency before any RLS or query cost. Collapse them into one `get_*_bundle()` RPC returning JSON aggregates. See `get_schedule_bundle` as the canonical example.
+22. **No `console.log` / `console.warn` / `console.error` in committed code** — debug logging must be removed before committing. Use the Error Logs module (`src/app/error-logs/`) for persistent structured logging and `src/lib/logger.ts` (if present) for guarded dev-only logs. Stray `console.*` calls slow down React DevTools overlay and leak internal state in production.
+23. **Atlas must be kept in sync** — every new page (`src/app/.../page.tsx`), new route, new feature module (`src/features/[name]/`), or significant navigation/tab change MUST add/update an entry in `ERA Notes/04 - UI & Design/Page & Feature Atlas/` (copy `_Template.md`, fill all sections, add a row to `_Index.md`). Renaming a feature/route is a breaking change — update or delete the corresponding MD file in the same commit. Stub generator: `node scripts/seed-atlas.mjs` (idempotent). **`public/atlas/atlas.json` is regenerated automatically** via the PostToolUse hook in `.claude/hooks/update-atlas.sh` — no need to run `pnpm atlas` manually after editing `src/app/`, `src/features/`, or `src/components/`.
 
 ---
 
-## Schema Quick Reference
+## Module Model
 
-> Full schema: `migrations/schema.sql` (1122 lines). For live schema access, use the Supabase MCP server.
+Every feature in this app is either **Standalone** or **Junction**. Identify the type before coding — it determines your scope.
 
-### Finance
+### Standalone Modules
 
-| Table                | Key Columns                                                                                                                  | Notes                          |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `accounts`           | `id`, `user_id`, `name`, `type` (income/expense/saving), `position`, `visible`                                               | Type affects balance direction |
-| `account_balances`   | `account_id` (UNIQUE), `user_id`, `balance` (numeric, default 0)                                                             | One-to-one with accounts       |
-| `transactions`       | `id`, `user_id`, `account_id`, `category_id`, `subcategory_id`, `date`, `amount`, `description`, `is_draft`, `is_private`    | `amount` is always positive    |
-| `user_categories`    | `id`, `user_id`, `account_id`, `name`, `color`, `parent_id` (self-FK), `position`, `visible`                                 | Hierarchical categories        |
-| `transfers`          | `from_account_id`, `to_account_id`, `amount` (>0), `transfer_type` (self/household), `fee_amount`, `returned_amount`         |                                |
-| `recurring_payments` | `account_id`, `category_id`, `name`, `amount`, `recurrence_type` (daily/weekly/monthly/yearly), `next_due_date`, `is_active` |                                |
-| `budget_allocations` | `category_id`, `account_id`, `assigned_to` (user/partner/both), `monthly_budget`, `budget_month`                             |                                |
-| `debts`              | `transaction_id`, `debtor_name`, `original_amount`, `returned_amount`, `status` (open/archived/closed)                       |                                |
+Self-contained features with their own UI, hooks, API routes, and DB tables. Each can be developed, tested, and documented in isolation.
 
-### Items / Reminders
+**Rule:** Standalone feature directories (`src/features/[name]/`) must not import from other standalone feature directories.
+Shared code belongs in `src/components/`, `src/lib/`, or `src/types/` — available to all modules.
+**AI scope:** when modifying a Standalone, changes are fully contained — other standalones are unaffected.
 
-| Table                   | Key Columns                                                                                                                          | Notes                           |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
-| `items`                 | `id`, `user_id`, `responsible_user_id`, `type`, `title`, `priority`, `status`, `categories` (array), `subtask_kanban_stages` (jsonb) | Core task/reminder/event entity |
-| `reminder_details`      | `item_id` (FK), `due_at`, `completed_at`, `estimate_minutes`                                                                         | One-to-one with items           |
-| `event_details`         | `item_id` (FK), `start_at`, `end_at`, `all_day`, `location_text`                                                                     | One-to-one with items           |
-| `item_subtasks`         | `parent_item_id`, `title`, `done_at`, `order_index`, `kanban_stage`                                                                  | Nested subtasks                 |
-| `item_alerts`           | `item_id`, `kind`, `trigger_at`, `offset_minutes`, `channel` (push), `active`                                                        |                                 |
-| `item_recurrence_rules` | `item_id`, `rrule`, `start_anchor`                                                                                                   | iCal RRULE format               |
+| Module                                                 | Feature directory                                                                                                                                              |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Budget (Accounts, Transactions, Categories, Recurring) | `src/features/accounts/`, `src/features/transactions/`, `src/features/categories/`, `src/features/recurring/`, `src/features/balance/`, `src/features/budget/` |
+| Reminders / Items / Tasks                              | `src/features/items/`                                                                                                                                          |
+| Recipes                                                | `src/features/recipes/`                                                                                                                                        |
+| Catalogue                                              | `src/features/catalogue/`                                                                                                                                      |
+| Inventory                                              | `src/features/inventory/`                                                                                                                                      |
+| Debts                                                  | `src/features/debts/`                                                                                                                                          |
+| Future Purchases                                       | `src/features/future-purchases/`                                                                                                                               |
+| Analytics                                              | `src/features/analytics/`                                                                                                                                      |
+| Preferences (LBP, theme, settings)                     | `src/features/preferences/`                                                                                                                                    |
+| Statement Import                                       | `src/features/statement-import/`                                                                                                                               |
+| Transfers                                              | `src/features/transfers/`                                                                                                                                      |
+| Watch UI                                               | `src/components/watch/`                                                                                                                                        |
+| Guest Portal                                           | `src/app/g/[tag]/`                                                                                                                                             |
+| NFC Tags                                               | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`                                                                                                  |
 
-### Hub / Chat
+### Junction Modules
 
-| Table                 | Key Columns                                                                                                                 | Notes |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----- |
-| `hub_chat_threads`    | `household_id`, `created_by`, `title`, `purpose` (general/budget/shopping/...), `is_archived`                               |       |
-| `hub_messages`        | `thread_id`, `sender_user_id`, `message_type` (text/system/transaction/...), `content`, `source` (user/inventory/system/ai) |       |
-| `hub_message_actions` | `message_id`, `action_type` (transaction/reminder/forward/pin)                                                              |       |
+Bridge between Standalone modules. May import from any standalone feature directory to connect them.
 
-### Household / Users
+**Rule:** changes here can cascade across multiple standalones — always trace all connected modules before modifying.
+**AI scope:** when modifying a Junction, read the docs of every connected Standalone first.
 
-| Table              | Key Columns                                                                    | Notes                               |
-| ------------------ | ------------------------------------------------------------------------------ | ----------------------------------- |
-| `household_links`  | `code` (UNIQUE), `owner_user_id`, `partner_user_id`, `active`                  | Partner linking                     |
-| `profiles`         | `id` (FK to auth.users), `full_name`                                           |                                     |
-| `user_preferences` | `user_id`, `theme`, `section_order` (jsonb), `date_start`, `lbp_exchange_rate` | LBP rate in thousands (90 = 90,000) |
-
-### Other
-
-| Table              | Key Columns                                                                                                | Notes |
-| ------------------ | ---------------------------------------------------------------------------------------------------------- | ----- |
-| `recipes`          | `user_id`, `name`, `ingredients` (jsonb), `steps` (jsonb), `difficulty` (easy/medium/hard), `tags` (array) |       |
-| `catalogue_items`  | `module_id`, `category_id`, `name`, `status`, `priority`, `metadata_json` (jsonb)                          |       |
-| `inventory_stock`  | `item_id` (FK), `quantity_on_hand`, `auto_add_to_shopping`                                                 |       |
-| `notifications`    | `user_id`, `title`, `source`, `priority`, `push_status`, `severity`                                        |       |
-| `meal_plans`       | `recipe_id`, `planned_date`, `meal_type` (breakfast/lunch/dinner/snack), `status`                          |       |
-| `future_purchases` | `name`, `target_amount`, `current_saved`, `urgency` (1-5), `status`, `allocations` (jsonb)                 |       |
+| Junction          | Connects                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| Hub Chat          | Budget (message actions → transactions), Reminders (create from chat), Shopping List |
+| Shopping List     | Hub Chat, Recipes (ingredients → list), Inventory                                    |
+| Meal Planning     | Recipes, Reminders/Calendar, Shopping List                                           |
+| AI Assistant      | Transactions + Items (context injection), Dashboard briefing, Focus insights         |
+| Notifications     | Items (alerts), Recurring (payment reminders), Budget (spending alerts)              |
+| Household Sharing | ALL modules — shared data layer via `household_links` + `profiles`                   |
+| Sync & Offline    | ALL modules — IndexedDB queue + `OfflineSyncEngine`                                  |
+| Prerequisites     | NFC Tags + Items (trigger engine for dormant → pending activation)                   |
 
 ---
 
-## Custom Month Start
+## Architecture References
 
-Users set a billing cycle start day (1–31). Use `startOfCustomMonth(date, monthStartDay)` from `src/lib/utils/date.ts`, not calendar months.
+- **Data flow, optimistic mutations, ID-only state, Framer Motion + HTML5 drag conflicts**: `ERA Notes/01 - Architecture/Common Patterns.md`
+- **Offline queue, sync engine, IndexedDB vs legacy localStorage queue**: `ERA Notes/01 - Architecture/Sync and Offline.md`
+- **API route pattern** (auth check → zod parse → DB op → error handling): follow `src/app/api/accounts/route.ts`
+- **Query cache time constants** (`BALANCE=5min`, `TRANSACTIONS=2min`, `ACCOUNTS/CATEGORIES=1h`, `RECURRING=30min`): `src/lib/queryConfig.ts`
+- **Supabase clients**: `lib/supabase/client.ts` (browser singleton, required for realtime) · `server.ts` (API routes/RSC) · `admin.ts` (cron/batch ops, service role) — never mix
+- **Query keys**: use `qk.*` from `src/lib/queryKeys.ts` OR feature-scoped `queryKeys.ts` — never inline arrays
+- **Path alias**: `@/*` → `src/*`
+- **Offline queue**: new code uses IndexedDB via `src/lib/offlineQueue.ts`. The legacy localStorage queue in `SyncContext` is for hub shopping list only — don't add to it.
+- **Custom month start**: billing cycle uses day 1–31 set by user. Use `startOfCustomMonth(date, monthStartDay)` from `src/lib/utils/date.ts`, not calendar months.
+- **Environment variables**: see `docs/ENV.md`
+- **Project docs** live in `ERA Notes/`. See `ERA Notes/06 - Setup & Onboarding/Vault Setup.md` for vault structure.
+
+---
+
+## React Contexts
+
+Located in `src/contexts/`. Always use the `Safe` variant in components that may render outside the provider.
+
+| Context              | Purpose                                                                          | Safe variant       |
+| -------------------- | -------------------------------------------------------------------------------- | ------------------ |
+| `SyncContext`        | Offline queue, connectivity state, retry logic                                   | `useSyncSafe()`    |
+| `AppModeContext`     | "budget" vs "items" mode, FAB target                                             | `useAppModeSafe()` |
+| `TabContext`         | Active tab + notification deep-link routing (`pendingItemId`, `pendingThreadId`) | `useTabSafe()`     |
+| `ThemeContext`       | Theme switching (blue/pink/frost/calm), invalidates all queries on change        | —                  |
+| `UserContext`        | Current user name, email, avatar                                                 | —                  |
+| `PrivacyBlurContext` | Privacy mode blur toggle                                                         | —                  |
+| `SplitBillContext`   | Split bill calculation state                                                     | —                  |
+
+---
+
+## Database
+
+> **`migrations/schema.sql` is the single source of truth.** Read it before writing any SQL. Never assume a column exists.
+
+DB changes = SQL run manually in Supabase SQL Editor. New tables must include RLS policies. Update `schema.sql` and document in the feature doc.
+
+Unique constraint violations: Supabase returns `error.code === "23505"` → respond with `409 Conflict`.
+
+| Domain        | Tables                                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Finance       | `accounts`, `account_balances`, `account_balance_history`, `transactions`, `transfers`, `user_categories`, `recurring_payments` |
+| Hub           | `hub_chat_threads`, `hub_messages`, `hub_message_actions`                                                                       |
+| Items         | `items`, `item_alerts`, `item_recurrence_exceptions`, `catalogue_items`                                                         |
+| Notifications | `notifications`, `push_subscriptions`, `notification_preferences`                                                               |
+| Household     | `household_links`, `profiles`                                                                                                   |
+
+Account types (`expense`/`income`/`saving`) affect balance direction — see `migrations/schema.sql` CHECK constraints and `src/lib/balance-utils.ts`.
+
+---
+
+## Domain Gotchas
+
+- **Framer Motion + HTML5 drag**: never mix `<motion.div draggable>` with HTML5 drag events — use one or the other (see `COMMON_PATTERNS.md`)
+- **Enum/type updates**: always update DB migration + TypeScript type + API route + UI components + utilities together
+- **Standalone imports**: standalone feature dirs can't import from each other — use `src/components/`, `src/lib/`, `src/types/`
+- **Zustand in non-React modules**: use `store.getState().action()` directly — see `src/lib/stores/offlinePendingStore.ts` (`offlinePendingActions` export pattern)
+
+---
+
+## Feature Index
+
+| Feature                  | Src paths                                                         | Vault doc                                               | Type       |
+| ------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------- | ---------- |
+| Accounts & Balance       | `src/features/accounts/`, `src/features/balance/`                 | `ERA Notes/02 - Standalone Modules/Accounts & Balance/` | Standalone |
+| Transactions             | `src/app/expense/`, `src/features/transactions/`                  | `ERA Notes/02 - Standalone Modules/Transactions/`       | Standalone |
+| Categories               | `src/features/categories/`                                        | `ERA Notes/02 - Standalone Modules/Categories/`         | Standalone |
+| Recurring Payments       | `src/app/recurring/`, `src/features/recurring/`                   | `ERA Notes/02 - Standalone Modules/Recurring Payments/` | Standalone |
+| Recipes                  | `src/features/recipes/`, `src/app/recipe/`                        | `ERA Notes/02 - Standalone Modules/Recipes/`            | Standalone |
+| Meal Planning            | `src/features/meal-planning/`, `src/app/meal-plan/`, `src/components/web/WebMealPlanCalendar.tsx` | `ERA Notes/03 - Junction Modules/Meal Planning/` | Standalone |
+| Inventory                | `src/features/inventory/`, `src/app/inventory/`                   | `ERA Notes/02 - Standalone Modules/Inventory/`          | Standalone |
+| Debts                    | `src/features/debts/`                                             | `ERA Notes/02 - Standalone Modules/Debts/`              | Standalone |
+| Catalogue                | `src/app/catalogue/`, `src/features/catalogue/`                   | `ERA Notes/02 - Standalone Modules/Catalogue/`          | Standalone |
+| Future Purchases         | `src/features/future-purchases/`                                  | `ERA Notes/02 - Standalone Modules/Future Purchases/`   | Standalone |
+| Budget Allocation        | `src/features/budget/`                                            | `ERA Notes/02 - Standalone Modules/Budget Allocation/`  | Standalone |
+| Preferences (LBP, theme) | `src/features/preferences/`                                       | `ERA Notes/02 - Standalone Modules/Preferences/`        | Standalone |
+| Statement Import         | `src/features/statement-import/`                                  | `ERA Notes/02 - Standalone Modules/Statement Import/`   | Standalone |
+| Transfers                | `src/features/transfers/`                                         | `ERA Notes/02 - Standalone Modules/Transfers/`          | Standalone |
+| Hub Chat                 | `src/app/hub/`, `src/features/hub/`, `src/components/hub/`        | `ERA Notes/03 - Junction Modules/Hub Chat/`             | Junction   |
+| Shopping List            | `src/components/hub/ShoppingListView.tsx`                         | `ERA Notes/03 - Junction Modules/Shopping List/`        | Junction   |
+| Message Actions          | `src/features/hub/messageActions.ts`                              | `ERA Notes/03 - Junction Modules/Message Actions/`      | Junction   |
+| Items / Reminders        | `src/app/items/`, `src/features/items/`                           | `ERA Notes/02 - Standalone Modules/Items & Reminders/`  | Standalone |
+| AI Assistant             | `src/app/api/ai-chat/`, `src/lib/ai/`                             | `ERA Notes/03 - Junction Modules/AI Assistant/`         | Junction   |
+| Notifications            | `src/app/api/notifications/`, `src/app/api/cron/`                 | `ERA Notes/03 - Junction Modules/Notifications/`        | Junction   |
+| Household Sharing        | `src/features/hub/`                                               | `ERA Notes/03 - Junction Modules/Household Sharing/`    | Junction   |
+| Analytics                | `src/features/analytics/`                                         | `ERA Notes/02 - Standalone Modules/Analytics/`          | Standalone |
+| Drafts                   | `src/features/drafts/`                                            | `ERA Notes/02 - Standalone Modules/Drafts/`             | Standalone |
+| Watch UI                 | `src/components/watch/`                                           | `ERA Notes/02 - Standalone Modules/Watch UI/`           | Standalone |
+| Guest Portal             | `src/app/g/[tag]/`, `src/components/guest/`                       | `ERA Notes/02 - Standalone Modules/Guest Portal/`       | Standalone |
+| Sync & Offline           | `src/contexts/SyncContext.tsx`, `src/lib/offlineQueue.ts`         | `ERA Notes/03 - Junction Modules/Sync & Offline/`       | Junction   |
+| Error Logs               | `src/app/error-logs/`, `src/app/api/error-logs/`                  | `ERA Notes/02 - Standalone Modules/Error Logs/`         | Standalone |
+| NFC Tags                 | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`     | `ERA Notes/02 - Standalone Modules/NFC Tags/`           | Standalone |
+| Prerequisites            | `src/lib/prerequisites/`, `src/app/api/items/[id]/prerequisites/` | `ERA Notes/03 - Junction Modules/Prerequisites/`        | Junction   |
+| Chores                   | `src/app/chores/`, `src/features/chores/`                        | `ERA Notes/01 - Architecture/Feature Map/standalone/chores.md`      | Standalone |
+| Focus                    | `src/app/focus/`, `src/components/focus/`                        | `ERA Notes/01 - Architecture/Feature Map/standalone/focus.md`       | Standalone |
+| Trips                    | `src/app/trips/`, `src/features/trips/`, `src/components/trips/`  | `ERA Notes/03 - Junction Modules/Trips/`                            | Junction   |
+| Dashboard                | `src/app/dashboard/`, `src/components/web/WebDashboard.tsx`       | `ERA Notes/01 - Architecture/Feature Map/standalone/dashboard.md`   | Standalone |
+| Recycle Bin              | `src/app/recycle-bin/`, `src/features/recycle-bin/`              | `ERA Notes/01 - Architecture/Feature Map/standalone/recycle-bin.md` | Standalone |
+
+> **Note:** this table is validated against the **Feature Map** (`ERA Notes/01 - Architecture/Feature Map/_index.md`) by `pnpm docs:check`, which runs during `pnpm sync:ai` and pre-commit. **AI Usage is intentionally excluded** from this Feature Index because it is not part of the application.
+
+---
+
+## Documentation Rules
+
+- **Read before code** — check Feature Index for an existing doc in the vault first
+- **Update after implementing** — add new behavior, DB changes, and gotchas to the feature doc
+- **Never duplicate** — augment the existing doc, don't create a parallel one
+- Update `ERA Notes/04 - UI & Design/App Routes and Icons.md` when adding routes or icons
+- New feature doc template: `ERA Notes/Templates/Feature Doc.md`
+
+| Content type                 | Vault location                                              |
+| ---------------------------- | ----------------------------------------------------------- |
+| Feature doc (Standalone)     | `ERA Notes/02 - Standalone Modules/[module-name]/`          |
+| Feature doc (Junction)       | `ERA Notes/03 - Junction Modules/[module-name]/`            |
+| Cross-cutting/system         | `ERA Notes/01 - Architecture/`                              |
+| UI/visual                    | `ERA Notes/04 - UI & Design/`                               |
+| Performance                  | `ERA Notes/05 - Performance/`                               |
+| Setup/env                    | `ERA Notes/06 - Setup & Onboarding/`                        |
+| Ideas/pending                | `ERA Notes/07 - Backlog & Ideas/`                           |
+| Session notes (personal)     | `ERA Notes/08 - Sessions/{Features\|Bug Fixes\|Refactors}/` |
+| Reusable patterns (personal) | `ERA Notes/09 - Patterns & Lessons/`                        |
+| Page & Feature Atlas entry   | `ERA Notes/04 - UI & Design/Page & Feature Atlas/`          |
+| Root-level only              | `CLAUDE.md`, `README.md`                                    |

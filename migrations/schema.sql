@@ -1397,3 +1397,366 @@ CREATE TABLE public.user_preferences (
   CONSTRAINT user_preferences_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+
+-- ============================================================
+-- TRIPS MODULE
+-- ============================================================
+
+CREATE TABLE public.trips (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  destination_country_code text,
+  destination_name text,
+  currency text NOT NULL DEFAULT 'USD',
+  scope text NOT NULL DEFAULT 'household' CHECK (scope IN ('solo', 'household')),
+  status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'upcoming', 'active', 'completed', 'archived')),
+  start_date date,
+  end_date date,
+  account_id uuid,
+  is_template boolean NOT NULL DEFAULT false,
+  notes text,
+  activated_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT trips_pkey PRIMARY KEY (id),
+  CONSTRAINT trips_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT trips_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE SET NULL
+);
+
+CREATE TABLE public.trip_places (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  trip_id uuid NOT NULL,
+  name text NOT NULL,
+  place_type text CHECK (place_type IN ('hotel', 'activity', 'restaurant', 'attraction', 'transport', 'note', 'other')),
+  url text,
+  description text,
+  cost numeric,
+  currency text DEFAULT 'USD',
+  priority text NOT NULL DEFAULT 'flexible' CHECK (priority IN ('mandatory', 'flexible', 'wishlist')),
+  scheduled_date date,
+  scheduled_time time without time zone,
+  is_booked boolean NOT NULL DEFAULT false,
+  position integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT trip_places_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_places_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT trip_places_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id) ON DELETE CASCADE
+);
+
+CREATE TABLE public.trip_packing_items (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  trip_id uuid NOT NULL,
+  name text NOT NULL,
+  category text,
+  quantity integer NOT NULL DEFAULT 1,
+  packed_quantity integer NOT NULL DEFAULT 0,
+  is_packed boolean NOT NULL DEFAULT false,
+  position integer NOT NULL DEFAULT 0,
+  inventory_item_id uuid,
+  catalogue_item_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT trip_packing_items_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_packing_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT trip_packing_items_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id) ON DELETE CASCADE
+);
+
+CREATE TABLE public.trip_side_effects (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  trip_id uuid NOT NULL,
+  effect_type text NOT NULL CHECK (effect_type IN ('chore_skip', 'event_skip', 'recurrence_pause', 'meal_skip', 'item_reassign')),
+  target_table text NOT NULL,
+  target_id uuid,
+  previous_value jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT trip_side_effects_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_side_effects_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT trip_side_effects_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id) ON DELETE CASCADE
+);
+
+-- RLS policies (direct user_id check — no EXISTS subqueries per Hard Rule #20)
+ALTER TABLE public.trips ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "trips_owner" ON public.trips FOR ALL USING (user_id = auth.uid());
+
+ALTER TABLE public.trip_places ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "trip_places_owner" ON public.trip_places FOR ALL USING (user_id = auth.uid());
+
+ALTER TABLE public.trip_packing_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "trip_packing_items_owner" ON public.trip_packing_items FOR ALL USING (user_id = auth.uid());
+
+ALTER TABLE public.trip_side_effects ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "trip_side_effects_owner" ON public.trip_side_effects FOR ALL USING (user_id = auth.uid());
+
+-- ============================================================
+-- TRIPS ACTIVATION RPC
+-- Runs as SECURITY DEFINER to avoid per-row RLS overhead
+-- across multiple child tables (Hard Rules #20/#21).
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.activate_trip(p_trip_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_trip             public.trips%ROWTYPE;
+  v_caller_id        uuid := auth.uid();
+  v_partner_id       uuid;
+  v_affected_users   uuid[];
+  v_start            date;
+  v_end              date;
+  v_item             RECORD;
+  v_meal             RECORD;
+  v_skipped_chores   int := 0;
+  v_skipped_events   int := 0;
+  v_paused_recurring int := 0;
+  v_skipped_meals    int := 0;
+  v_reassigned_items int := 0;
+BEGIN
+  -- Load trip and verify ownership
+  SELECT * INTO v_trip FROM public.trips WHERE id = p_trip_id AND user_id = v_caller_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Trip not found or access denied';
+  END IF;
+  IF v_trip.status = 'active' THEN
+    RAISE EXCEPTION 'Trip is already active';
+  END IF;
+  IF v_trip.start_date IS NULL OR v_trip.end_date IS NULL THEN
+    RAISE EXCEPTION 'Trip must have start_date and end_date before activation';
+  END IF;
+
+  v_start := v_trip.start_date;
+  v_end   := v_trip.end_date;
+
+  -- Resolve partner
+  SELECT CASE WHEN owner_user_id = v_caller_id THEN partner_user_id ELSE owner_user_id END
+  INTO v_partner_id
+  FROM public.household_links
+  WHERE (owner_user_id = v_caller_id OR partner_user_id = v_caller_id)
+    AND active = true
+  LIMIT 1;
+
+  -- Determine affected users
+  IF v_trip.scope = 'household' THEN
+    IF v_partner_id IS NOT NULL THEN
+      v_affected_users := ARRAY[v_caller_id, v_partner_id];
+    ELSE
+      v_affected_users := ARRAY[v_caller_id];
+    END IF;
+  ELSE
+    -- solo: only the traveler
+    v_affected_users := ARRAY[v_caller_id];
+  END IF;
+
+  IF v_trip.scope = 'household' THEN
+    -- ── CHORES: skip each occurrence in the window ──────────────────────
+    FOR v_item IN
+      SELECT i.id, i.user_id, r.id AS rule_id
+      FROM public.items i
+      JOIN public.item_recurrence_rules r ON r.item_id = i.id
+      WHERE i.is_chore = true
+        AND i.user_id = ANY(v_affected_users)
+        AND i.status NOT IN ('completed', 'cancelled', 'archived')
+    LOOP
+      -- Insert skip occurrence action for trip window start date (representative)
+      INSERT INTO public.item_occurrence_actions (item_id, occurrence_date, action_type, reason, created_by)
+      VALUES (v_item.id, v_start, 'skipped', 'trip', v_caller_id)
+      ON CONFLICT DO NOTHING;
+
+      INSERT INTO public.item_alert_suppressions (item_id, occurrence_date, reason, created_by)
+      VALUES (v_item.id, v_start, 'trip', v_caller_id)
+      ON CONFLICT DO NOTHING;
+
+      INSERT INTO public.trip_side_effects (user_id, trip_id, effect_type, target_table, target_id, previous_value)
+      VALUES (v_caller_id, p_trip_id, 'chore_skip', 'items', v_item.id, jsonb_build_object('item_id', v_item.id, 'occurrence_date', v_start));
+
+      v_skipped_chores := v_skipped_chores + 1;
+    END LOOP;
+
+    -- ── RECURRING EVENTS: insert recurrence_pauses ───────────────────────
+    FOR v_item IN
+      SELECT DISTINCT i.id, i.user_id
+      FROM public.items i
+      JOIN public.item_recurrence_rules r ON r.item_id = i.id
+      WHERE i.is_chore = false
+        AND i.user_id = ANY(v_affected_users)
+        AND i.status NOT IN ('completed', 'cancelled', 'archived')
+    LOOP
+      INSERT INTO public.recurrence_pauses (item_id, pause_start, pause_end, reason, created_by)
+      VALUES (v_item.id, v_start, v_end, 'trip', v_caller_id)
+      ON CONFLICT DO NOTHING;
+
+      INSERT INTO public.trip_side_effects (user_id, trip_id, effect_type, target_table, target_id, previous_value)
+      VALUES (v_caller_id, p_trip_id, 'recurrence_pause', 'recurrence_pauses', v_item.id, jsonb_build_object('pause_start', v_start, 'pause_end', v_end));
+
+      v_paused_recurring := v_paused_recurring + 1;
+    END LOOP;
+
+    -- ── ONE-TIME EVENTS: skip + cancel in window ─────────────────────────
+    FOR v_item IN
+      SELECT i.id, i.user_id, i.status AS prev_status,
+             rd.due_at
+      FROM public.items i
+      LEFT JOIN public.reminder_details rd ON rd.item_id = i.id
+      WHERE i.is_chore = false
+        AND i.user_id = ANY(v_affected_users)
+        AND i.status NOT IN ('completed', 'cancelled', 'archived')
+        AND NOT EXISTS (SELECT 1 FROM public.item_recurrence_rules r WHERE r.item_id = i.id)
+        AND rd.due_at::date BETWEEN v_start AND v_end
+    LOOP
+      INSERT INTO public.item_occurrence_actions (item_id, occurrence_date, action_type, reason, created_by)
+      VALUES (v_item.id, v_item.due_at::date, 'skipped', 'trip', v_caller_id)
+      ON CONFLICT DO NOTHING;
+
+      UPDATE public.items SET status = 'cancelled', updated_at = now() WHERE id = v_item.id;
+      UPDATE public.item_alerts SET active = false WHERE item_id = v_item.id AND active = true;
+
+      INSERT INTO public.trip_side_effects (user_id, trip_id, effect_type, target_table, target_id, previous_value)
+      VALUES (v_caller_id, p_trip_id, 'event_skip', 'items', v_item.id, jsonb_build_object('previous_status', v_item.prev_status));
+
+      v_skipped_events := v_skipped_events + 1;
+    END LOOP;
+
+    -- ── MEAL PLANS: mark skipped ──────────────────────────────────────────
+    FOR v_meal IN
+      SELECT id, status AS prev_status
+      FROM public.meal_plans
+      WHERE (for_user_id = ANY(v_affected_users) OR household_id IS NOT NULL)
+        AND planned_date BETWEEN v_start AND v_end
+        AND status != 'skipped'
+    LOOP
+      UPDATE public.meal_plans SET status = 'skipped' WHERE id = v_meal.id;
+
+      INSERT INTO public.trip_side_effects (user_id, trip_id, effect_type, target_table, target_id, previous_value)
+      VALUES (v_caller_id, p_trip_id, 'meal_skip', 'meal_plans', v_meal.id, jsonb_build_object('previous_status', v_meal.prev_status));
+
+      v_skipped_meals := v_skipped_meals + 1;
+    END LOOP;
+
+  ELSE
+    -- ── SOLO: reassign traveler's items/chores to partner ────────────────
+    IF v_partner_id IS NOT NULL THEN
+      FOR v_item IN
+        SELECT i.id, i.responsible_user_id AS prev_responsible
+        FROM public.items i
+        WHERE i.user_id = v_caller_id
+          AND i.status NOT IN ('completed', 'cancelled', 'archived')
+          AND (
+            i.is_chore = true
+            OR (
+              NOT EXISTS (SELECT 1 FROM public.item_recurrence_rules r WHERE r.item_id = i.id)
+              AND EXISTS (
+                SELECT 1 FROM public.reminder_details rd
+                WHERE rd.item_id = i.id AND rd.due_at::date BETWEEN v_start AND v_end
+              )
+            )
+          )
+      LOOP
+        UPDATE public.items SET responsible_user_id = v_partner_id, updated_at = now() WHERE id = v_item.id;
+
+        INSERT INTO public.trip_side_effects (user_id, trip_id, effect_type, target_table, target_id, previous_value)
+        VALUES (v_caller_id, p_trip_id, 'item_reassign', 'items', v_item.id, jsonb_build_object('responsible_user_id', v_item.prev_responsible));
+
+        v_reassigned_items := v_reassigned_items + 1;
+      END LOOP;
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'scope', v_trip.scope,
+    'skipped_chores', v_skipped_chores,
+    'skipped_events', v_skipped_events,
+    'paused_recurring', v_paused_recurring,
+    'skipped_meals', v_skipped_meals,
+    'reassigned_items', v_reassigned_items
+  );
+END;
+$$;
+
+-- ============================================================
+-- TRIPS COMPLETION RPC
+-- Reverses all side effects logged in trip_side_effects.
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.complete_trip(p_trip_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_id uuid := auth.uid();
+  v_trip      public.trips%ROWTYPE;
+  v_effect    RECORD;
+  v_reversed  int := 0;
+BEGIN
+  SELECT * INTO v_trip FROM public.trips WHERE id = p_trip_id AND user_id = v_caller_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Trip not found or access denied';
+  END IF;
+  IF v_trip.status != 'active' THEN
+    RAISE EXCEPTION 'Only active trips can be completed';
+  END IF;
+
+  FOR v_effect IN
+    SELECT * FROM public.trip_side_effects WHERE trip_id = p_trip_id ORDER BY created_at DESC
+  LOOP
+    CASE v_effect.effect_type
+
+      WHEN 'chore_skip' THEN
+        -- Remove the skip occurrence action and suppression we added
+        DELETE FROM public.item_occurrence_actions
+        WHERE item_id = v_effect.target_id
+          AND action_type = 'skipped'
+          AND reason = 'trip'
+          AND occurrence_date = (v_effect.previous_value->>'occurrence_date')::date;
+        DELETE FROM public.item_alert_suppressions
+        WHERE item_id = v_effect.target_id
+          AND reason = 'trip'
+          AND occurrence_date = (v_effect.previous_value->>'occurrence_date')::date;
+
+      WHEN 'recurrence_pause' THEN
+        DELETE FROM public.recurrence_pauses
+        WHERE item_id = v_effect.target_id
+          AND reason = 'trip'
+          AND pause_start = (v_trip.start_date)
+          AND pause_end = (v_trip.end_date);
+
+      WHEN 'event_skip' THEN
+        -- Restore item status and reactivate alerts
+        UPDATE public.items
+        SET status = (v_effect.previous_value->>'previous_status'), updated_at = now()
+        WHERE id = v_effect.target_id;
+        UPDATE public.item_alerts SET active = true WHERE item_id = v_effect.target_id;
+        DELETE FROM public.item_occurrence_actions
+        WHERE item_id = v_effect.target_id AND action_type = 'skipped' AND reason = 'trip';
+
+      WHEN 'meal_skip' THEN
+        UPDATE public.meal_plans
+        SET status = (v_effect.previous_value->>'previous_status')
+        WHERE id = v_effect.target_id;
+
+      WHEN 'item_reassign' THEN
+        UPDATE public.items
+        SET responsible_user_id = (v_effect.previous_value->>'responsible_user_id')::uuid,
+            updated_at = now()
+        WHERE id = v_effect.target_id;
+
+    END CASE;
+
+    v_reversed := v_reversed + 1;
+  END LOOP;
+
+  -- Clean up side effects log
+  DELETE FROM public.trip_side_effects WHERE trip_id = p_trip_id;
+
+  RETURN jsonb_build_object('reversed_effects', v_reversed);
+END;
+$$;

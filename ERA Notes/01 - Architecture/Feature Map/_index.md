@@ -33,6 +33,7 @@ If the user says…                                              | Open
 "the dashboard" / "today view" / "main landing"                | [standalone/dashboard.md](standalone/dashboard.md)
 "the recycle bin"                                              | [standalone/recycle-bin.md](standalone/recycle-bin.md)
 ---                                                            | ---
+"trips" / "travel" / "activate trip" / "packing list"          | [junction/trips.md](junction/trips.md)
 "hub chat" / "message actions" / "chat thread"                 | [junction/hub-chat.md](junction/hub-chat.md)
 "shopping list"                                                | [junction/shopping-list.md](junction/shopping-list.md)
 "the ERA assistant" / "voice mode" / "faces" / "command bar"   | [junction/ai-assistant.md](junction/ai-assistant.md)
@@ -84,6 +85,7 @@ If the user says…                                              | Open
 
 | Module             | Connects                                                                          | File                                                                              |
 | ------------------ | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Trips              | Budget (auto account) ↔ Items/Chores (skip/pause) ↔ Meal Planning ↔ Catalogue.   | [junction/trips.md](junction/trips.md)                                            |
 | Hub Chat           | Transactions ↔ Items ↔ Shopping List (message actions create entries).            | [junction/hub-chat.md](junction/hub-chat.md)                                      |
 | Shopping List      | Hub ↔ Recipes (ingredients) ↔ Inventory.                                          | [junction/shopping-list.md](junction/shopping-list.md)                            |
 | AI Assistant       | All modules — context injection, briefing, voice mode, faces.                     | [junction/ai-assistant.md](junction/ai-assistant.md)                              |

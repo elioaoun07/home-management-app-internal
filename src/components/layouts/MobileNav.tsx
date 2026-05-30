@@ -129,6 +129,7 @@ export default function MobileNav() {
     "/era",
     "/watch",
     "/chores",
+    "/trips",
   ];
 
   // Prefetch all tabs on initial mount for instant switching

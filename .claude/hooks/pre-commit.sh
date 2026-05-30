@@ -2,9 +2,21 @@
 # Runs TypeScript check and ESLint on staged TS/TSX files.
 # Sourced by .husky/pre-commit.
 
+echo "Checking AI guidance docs..."
+if ! pnpm docs:check; then
+  echo "AI guidance docs drifted; fix before committing." >&2
+  exit 2
+fi
+
 echo "Running TypeScript check..."
 if ! pnpm tsc --noEmit; then
   echo "TypeScript errors — fix before committing." >&2
+  exit 2
+fi
+
+echo "Running unit tests..."
+if ! pnpm test; then
+  echo "Unit tests failed — fix before committing." >&2
   exit 2
 fi
 

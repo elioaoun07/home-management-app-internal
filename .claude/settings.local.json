@@ -41,7 +41,10 @@
       "PowerShell(Get-Process *)",
       "PowerShell(Test-Path *)",
       "PowerShell(& \"$env:LOCALAPPDATA\\\\Microsoft\\\\WindowsApps\\\\winget.exe\" upgrade Anthropic.ClaudeCode --accept-source-agreements --accept-package-agreements)",
-      "PowerShell(winget list *)"
+      "PowerShell(winget list *)",
+      "Bash(winget upgrade *)",
+      "PowerShell(winget source *)",
+      "Bash([ -d \"ERA Notes/$m\" ])"
     ]
   }
 }

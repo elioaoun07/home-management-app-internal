@@ -4,7 +4,7 @@
 >
 > **Interaction model:** ERA Hub Chat is the **top-layer primary interface**. Quick, conversational, low-friction actions (logging a spend, setting a reminder, adding to the shopping list) happen in the Hub. Standalone module pages (Expense Entry Form, Items, Recipes, etc.) are **precision tools** for detailed, structured input — used when full field control is needed. The Hub offloads high-frequency everyday interactions so that dedicated forms are reserved for cases that truly require them. The AI Assistant lives inside Hub Chat and operates both reactively (parses user messages) and proactively (surfaces briefings and alerts unprompted).
 
-CLAUDE.md auto-syncs to `CODEX.md` and `.github/copilot-instructions.md` via PostToolUse hook.
+CLAUDE.md auto-syncs to `AGENTS.md`, `CODEX.md`, and `.github/copilot-instructions.md` via PostToolUse hook.
 
 ---
 
@@ -217,6 +217,13 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Error Logs               | `src/app/error-logs/`, `src/app/api/error-logs/`                  | `ERA Notes/02 - Standalone Modules/Error Logs/`         | Standalone |
 | NFC Tags                 | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`     | `ERA Notes/02 - Standalone Modules/NFC Tags/`           | Standalone |
 | Prerequisites            | `src/lib/prerequisites/`, `src/app/api/items/[id]/prerequisites/` | `ERA Notes/03 - Junction Modules/Prerequisites/`        | Junction   |
+| Chores                   | `src/app/chores/`, `src/features/chores/`                        | `ERA Notes/01 - Architecture/Feature Map/standalone/chores.md`      | Standalone |
+| Focus                    | `src/app/focus/`, `src/components/focus/`                        | `ERA Notes/01 - Architecture/Feature Map/standalone/focus.md`       | Standalone |
+| Trips                    | `src/app/trips/`, `src/features/trips/`, `src/components/trips/`  | `ERA Notes/03 - Junction Modules/Trips/`                            | Junction   |
+| Dashboard                | `src/app/dashboard/`, `src/components/web/WebDashboard.tsx`       | `ERA Notes/01 - Architecture/Feature Map/standalone/dashboard.md`   | Standalone |
+| Recycle Bin              | `src/app/recycle-bin/`, `src/features/recycle-bin/`              | `ERA Notes/01 - Architecture/Feature Map/standalone/recycle-bin.md` | Standalone |
+
+> **Note:** this table is validated against the **Feature Map** (`ERA Notes/01 - Architecture/Feature Map/_index.md`) by `pnpm docs:check`, which runs during `pnpm sync:ai` and pre-commit. **AI Usage is intentionally excluded** from this Feature Index because it is not part of the application.
 
 ---
 

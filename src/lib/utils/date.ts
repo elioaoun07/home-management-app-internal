@@ -18,21 +18,55 @@ export function formatDate(d: Date): string {
  */
 export const yyyyMmDd = formatDate;
 
+function daysInMonth(year: number, monthIndex: number): number {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function clampMonthStartDay(
+  year: number,
+  monthIndex: number,
+  monthStartDay: number,
+): number {
+  const normalizedDay = Number.isFinite(monthStartDay)
+    ? Math.trunc(monthStartDay)
+    : 1;
+  return Math.min(Math.max(1, normalizedDay), daysInMonth(year, monthIndex));
+}
+
+function customMonthStartDate(
+  year: number,
+  monthIndex: number,
+  monthStartDay: number,
+): Date {
+  return new Date(
+    year,
+    monthIndex,
+    clampMonthStartDay(year, monthIndex, monthStartDay),
+    0,
+    0,
+    0,
+    0,
+  );
+}
+
 /**
  * Get start of custom month based on user-defined month start day
  */
 export function startOfCustomMonth(date: Date, monthStartDay: number): Date {
   const d = new Date(date);
-  const currentDay = d.getDate();
-  const s = new Date(d);
-  if (currentDay >= monthStartDay) {
-    s.setDate(monthStartDay);
-  } else {
-    s.setMonth(s.getMonth() - 1);
-    s.setDate(monthStartDay);
+  const year = d.getFullYear();
+  const monthIndex = d.getMonth();
+  const currentMonthStartDay = clampMonthStartDay(
+    year,
+    monthIndex,
+    monthStartDay,
+  );
+
+  if (d.getDate() >= currentMonthStartDay) {
+    return customMonthStartDate(year, monthIndex, monthStartDay);
   }
-  s.setHours(0, 0, 0, 0);
-  return s;
+
+  return customMonthStartDate(year, monthIndex - 1, monthStartDay);
 }
 
 /**
@@ -44,9 +78,11 @@ export function getDefaultDateRange(monthStartDay: number = 1): {
 } {
   const now = new Date();
   const sCustom = startOfCustomMonth(now, monthStartDay);
-  const nextPeriod = new Date(sCustom);
-  nextPeriod.setMonth(nextPeriod.getMonth() + 1);
-  nextPeriod.setDate(monthStartDay);
+  const nextPeriod = customMonthStartDate(
+    sCustom.getFullYear(),
+    sCustom.getMonth() + 1,
+    monthStartDay,
+  );
   const endOfPeriod = new Date(nextPeriod);
   endOfPeriod.setDate(endOfPeriod.getDate() - 1);
   return {

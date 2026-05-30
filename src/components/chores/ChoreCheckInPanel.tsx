@@ -11,7 +11,7 @@ import { localToISO } from "@/lib/utils/date";
 import { format, parseISO } from "date-fns";
 import {
   CheckCircle2,
-  ChevronDown,
+  ChevronRight,
   ClipboardCheck,
   SkipForward,
 } from "lucide-react";
@@ -63,10 +63,10 @@ export function ChoreCheckInPanel({ entries }: ChoreCheckInPanelProps) {
           <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-300">
             {unresolved.length} pending
           </span>
-          <ChevronDown
+          <ChevronRight
             className={cn(
               "h-4 w-4 text-white/35 transition-transform",
-              isOpen && "rotate-180",
+              isOpen && "rotate-90",
             )}
           />
         </span>
@@ -173,7 +173,10 @@ function ChoreCheckInRow({ entry }: { entry: FlexibleRoutineItem }) {
 
       {choice === "done" && (
         <div className="mt-3 flex items-center gap-2">
-          <label className="text-xs font-medium text-white/45" htmlFor={`done-${entry.id}`}>
+          <label
+            className="text-xs font-medium text-white/45"
+            htmlFor={`done-${entry.id}`}
+          >
             Completed at
           </label>
           <input
@@ -188,7 +191,10 @@ function ChoreCheckInRow({ entry }: { entry: FlexibleRoutineItem }) {
 
       {choice === "skipped" && (
         <div className="mt-3 space-y-2">
-          <label className="text-xs font-medium text-white/45" htmlFor={`reason-${entry.id}`}>
+          <label
+            className="text-xs font-medium text-white/45"
+            htmlFor={`reason-${entry.id}`}
+          >
             Reason
           </label>
           <textarea

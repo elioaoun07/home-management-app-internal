@@ -1,7 +1,23 @@
 import { adjustAccountBalance } from "@/lib/balance";
 import { getBalanceDelta } from "@/lib/balance-utils";
+import { calculateNextDueDate } from "@/lib/recurring";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+
+type RecurringPaymentUpdate = {
+  name?: unknown;
+  amount?: unknown;
+  description?: unknown;
+  lbp_change_received?: unknown;
+  category_id?: unknown;
+  subcategory_id?: unknown;
+  recurrence_type?: unknown;
+  recurrence_day?: unknown;
+  next_due_date?: unknown;
+  is_active?: unknown;
+  payment_method?: unknown;
+  is_private?: unknown;
+};
 
 export async function PATCH(
   request: Request,
@@ -36,8 +52,8 @@ export async function PATCH(
       "is_private",
     ];
 
-    const updates: any = {};
-    for (const field of allowedFields) {
+    const updates: RecurringPaymentUpdate = {};
+    for (const field of allowedFields as Array<keyof RecurringPaymentUpdate>) {
       if (field in body) {
         updates[field] = body[field];
       }
@@ -84,7 +100,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
@@ -237,15 +253,11 @@ export async function POST(
       effectiveDate: finalDate,
     });
 
-    // Calculate next due date using the database function
-    const { data: nextDueDateResult } = await supabase.rpc(
-      "calculate_next_due_date",
-      {
-        current_due_date: recurringPayment.next_due_date,
-        recurrence_type: recurringPayment.recurrence_type,
-        recurrence_day: recurringPayment.recurrence_day,
-      },
-    );
+    const nextDueDateResult = calculateNextDueDate({
+      currentDueDate: recurringPayment.next_due_date,
+      recurrenceType: recurringPayment.recurrence_type,
+      recurrenceDay: recurringPayment.recurrence_day,
+    });
 
     // Update the recurring payment with new due date
     const { error: updateError } = await supabase

@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/sync-copilot.sh"
+            "command": "node scripts/sync-ai-mirrors.mjs --hook"
           },
           {
             "type": "command",

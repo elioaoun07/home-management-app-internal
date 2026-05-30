@@ -1,4 +1,4 @@
-<!-- AUTO-GENERATED FROM CLAUDE.md — DO NOT EDIT DIRECTLY -->
+<!-- AUTO-GENERATED FROM CLAUDE.md -- DO NOT EDIT DIRECTLY. Edit CLAUDE.md instead. -->
 
 # CLAUDE.md
 
@@ -6,17 +6,20 @@
 >
 > **Interaction model:** ERA Hub Chat is the **top-layer primary interface**. Quick, conversational, low-friction actions (logging a spend, setting a reminder, adding to the shopping list) happen in the Hub. Standalone module pages (Expense Entry Form, Items, Recipes, etc.) are **precision tools** for detailed, structured input — used when full field control is needed. The Hub offloads high-frequency everyday interactions so that dedicated forms are reserved for cases that truly require them. The AI Assistant lives inside Hub Chat and operates both reactively (parses user messages) and proactively (surfaces briefings and alerts unprompted).
 
-CLAUDE.md auto-syncs to `CODEX.md` and `.github/copilot-instructions.md` via PostToolUse hook.
+CLAUDE.md auto-syncs to `AGENTS.md`, `CODEX.md`, and `.github/copilot-instructions.md` via PostToolUse hook.
 
 ---
 
 ## Before You Code — Mandatory Checklist
 
-1. **Identify the module type** (Standalone or Junction — see Module Model below) before scoping work
-2. **Check the Feature Index** for the relevant vault path in `ERA Notes/`
-3. **Read that doc first** — it contains architecture, DB tables, and gotchas
-4. **Read `migrations/schema.sql`** before any DB work — it is the authoritative schema source
-5. **Read `ERA Notes/01 - Architecture/Common Patterns.md`** if touching state, mutations, or modals
+1. **For edit / bug-fix tasks, read the Feature Map first** — open `ERA Notes/01 - Architecture/Feature Map/_index.md`, find the matching module, then read that module's MD file to get exact source file paths. Do this **before** Glob / Grep / Read on source files. It is the cheapest and most accurate router from user intent → files to edit.
+2. **Identify the module type** (Standalone or Junction — see Module Model below) before scoping work
+3. **Check the Feature Index** for the deeper vault doc in `ERA Notes/`
+4. **Read that doc first** — it contains architecture, DB tables, and gotchas
+5. **Read `migrations/schema.sql`** before any DB work — it is the authoritative schema source
+6. **Read `ERA Notes/01 - Architecture/Common Patterns.md`** if touching state, mutations, or modals
+
+> **Two indexes, different jobs.** The Feature Map (step 1) is a flat, intent-routed file index — *"the user says X, edit these files."* The Feature Index (step 3, table further down) points at the deeper vault docs in `02 - Standalone Modules/` and `03 - Junction Modules/` for architecture intent. Use the Feature Map to find files; use the vault doc to understand *why* the feature is built that way.
 
 ---
 
@@ -61,7 +64,15 @@ Never use graphify as a substitute for ERA Notes — it cannot infer hard rules,
 17. **Cache invalidation** — see `.claude/skills/cache-invalidation/SKILL.md` and `ERA Notes/01 - Architecture/Cache Invalidation.md`.
 18. **Timezone consistency** — see `.claude/skills/timezone-handling/SKILL.md` and `ERA Notes/01 - Architecture/Timezone Handling.md`.
 19. **Mobile number inputs** — never use `type="number"`. Use `type="text"` with `inputMode="decimal"`. Prevents iOS scroll-wheel bug and inconsistent decimal handling.
-20. **Atlas must be kept in sync** — every new page (`src/app/.../page.tsx`), new route, new feature module (`src/features/[name]/`), or significant navigation/tab change MUST add/update an entry in `ERA Notes/04 - UI & Design/Page & Feature Atlas/` (copy `_Template.md`, fill all sections, add a row to `_Index.md`). Renaming a feature/route is a breaking change — update or delete the corresponding MD file in the same commit. Stub generator: `node scripts/seed-atlas.mjs` (idempotent). **`public/atlas/atlas.json` is regenerated automatically** via the PostToolUse hook in `.claude/hooks/update-atlas.sh` — no need to run `pnpm atlas` manually after editing `src/app/`, `src/features/`, or `src/components/`.
+20. **Never add RLS `EXISTS`-subquery policies to hot child tables** — policies of the form `EXISTS (SELECT 1 FROM items i WHERE i.id = child.item_id AND i.user_id = auth.uid())` re-evaluate a join for every row scanned. On tables like `item_alerts`, `item_subtasks`, `reminder_details`, etc., this causes catastrophic slowdowns (~500ms per table for 50 rows even under service role baseline). Always enforce access in one of these ways instead:
+
+- **SECURITY DEFINER RPC** (preferred): own the WHERE clause inside the function; bypass per-table RLS. See `migrations/2026-05-11_schedule_bundle_rpc.sql` + `ERA Notes/05 - Performance/Performance Optimizations.md`.
+- **Denormalized `user_id`** on the child table + a direct `user_id = auth.uid()` RLS policy. Add a trigger to keep it in sync with the parent.
+  Never enable RLS on a child table without one of these patterns in place.
+
+21. **Hot read paths that fetch a parent + N child tables must use a single SECURITY DEFINER RPC** — each PostgREST call costs ~170–200 ms of network overhead. Fetching `items` + `reminder_details` + `event_details` + `item_subtasks` + `item_alerts` + `item_recurrence_rules` + `recurrence_pauses` as 7 separate queries adds ~1.3 s of floor latency before any RLS or query cost. Collapse them into one `get_*_bundle()` RPC returning JSON aggregates. See `get_schedule_bundle` as the canonical example.
+22. **No `console.log` / `console.warn` / `console.error` in committed code** — debug logging must be removed before committing. Use the Error Logs module (`src/app/error-logs/`) for persistent structured logging and `src/lib/logger.ts` (if present) for guarded dev-only logs. Stray `console.*` calls slow down React DevTools overlay and leak internal state in production.
+23. **Atlas must be kept in sync** — every new page (`src/app/.../page.tsx`), new route, new feature module (`src/features/[name]/`), or significant navigation/tab change MUST add/update an entry in `ERA Notes/04 - UI & Design/Page & Feature Atlas/` (copy `_Template.md`, fill all sections, add a row to `_Index.md`). Renaming a feature/route is a breaking change — update or delete the corresponding MD file in the same commit. Stub generator: `node scripts/seed-atlas.mjs` (idempotent). **`public/atlas/atlas.json` is regenerated automatically** via the PostToolUse hook in `.claude/hooks/update-atlas.sh` — no need to run `pnpm atlas` manually after editing `src/app/`, `src/features/`, or `src/components/`.
 
 ---
 
@@ -184,7 +195,7 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Categories               | `src/features/categories/`                                        | `ERA Notes/02 - Standalone Modules/Categories/`         | Standalone |
 | Recurring Payments       | `src/app/recurring/`, `src/features/recurring/`                   | `ERA Notes/02 - Standalone Modules/Recurring Payments/` | Standalone |
 | Recipes                  | `src/features/recipes/`, `src/app/recipe/`                        | `ERA Notes/02 - Standalone Modules/Recipes/`            | Standalone |
-| Meal Planning            | `src/app/api/meal-plans/`                                         | `ERA Notes/03 - Junction Modules/Meal Planning/`        | Junction   |
+| Meal Planning            | `src/features/meal-planning/`, `src/app/meal-plan/`, `src/components/web/WebMealPlanCalendar.tsx` | `ERA Notes/03 - Junction Modules/Meal Planning/` | Standalone |
 | Inventory                | `src/features/inventory/`, `src/app/inventory/`                   | `ERA Notes/02 - Standalone Modules/Inventory/`          | Standalone |
 | Debts                    | `src/features/debts/`                                             | `ERA Notes/02 - Standalone Modules/Debts/`              | Standalone |
 | Catalogue                | `src/app/catalogue/`, `src/features/catalogue/`                   | `ERA Notes/02 - Standalone Modules/Catalogue/`          | Standalone |
@@ -208,6 +219,13 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Error Logs               | `src/app/error-logs/`, `src/app/api/error-logs/`                  | `ERA Notes/02 - Standalone Modules/Error Logs/`         | Standalone |
 | NFC Tags                 | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`     | `ERA Notes/02 - Standalone Modules/NFC Tags/`           | Standalone |
 | Prerequisites            | `src/lib/prerequisites/`, `src/app/api/items/[id]/prerequisites/` | `ERA Notes/03 - Junction Modules/Prerequisites/`        | Junction   |
+| Chores                   | `src/app/chores/`, `src/features/chores/`                        | `ERA Notes/01 - Architecture/Feature Map/standalone/chores.md`      | Standalone |
+| Focus                    | `src/app/focus/`, `src/components/focus/`                        | `ERA Notes/01 - Architecture/Feature Map/standalone/focus.md`       | Standalone |
+| Trips                    | `src/app/trips/`, `src/features/trips/`, `src/components/trips/`  | `ERA Notes/03 - Junction Modules/Trips/`                            | Junction   |
+| Dashboard                | `src/app/dashboard/`, `src/components/web/WebDashboard.tsx`       | `ERA Notes/01 - Architecture/Feature Map/standalone/dashboard.md`   | Standalone |
+| Recycle Bin              | `src/app/recycle-bin/`, `src/features/recycle-bin/`              | `ERA Notes/01 - Architecture/Feature Map/standalone/recycle-bin.md` | Standalone |
+
+> **Note:** this table is validated against the **Feature Map** (`ERA Notes/01 - Architecture/Feature Map/_index.md`) by `pnpm docs:check`, which runs during `pnpm sync:ai` and pre-commit. **AI Usage is intentionally excluded** from this Feature Index because it is not part of the application.
 
 ---
 

@@ -38,6 +38,7 @@ tags:
 | `/alerts`    | Notifications      | `AlertBellIcon`            | Theme-based                       |
 | `/reminders` | Reminders          | `CalendarClockIcon`        | `from-amber-400 to-amber-600`     |
 | `/recurring` | Recurring Payments | `CalendarClockIcon`        | Theme-based                       |
+| `/trips`     | Trips              | `Plane` (lucide)           | `from-cyan-400 to-sky-500`        |
 
 ---
 

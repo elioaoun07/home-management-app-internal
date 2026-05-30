@@ -62,6 +62,11 @@ const STANDALONE_APPS: Record<
     role: "Household Schedule",
     color: "from-green-400 to-emerald-400",
   },
+  "/trips": {
+    title: "Trips",
+    role: "Travel Planner",
+    color: "from-cyan-400 to-sky-500",
+  },
 };
 
 type Props = {
