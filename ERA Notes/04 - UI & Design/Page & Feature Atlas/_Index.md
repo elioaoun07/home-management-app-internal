@@ -53,6 +53,7 @@ tags:
 | ---------------- | ----------------- | ------------------ |
 | `era`            | `/era`            | [[era]]            |
 | `focus`          | `/focus`          | [[focus]]          |
+| `chores`         | `/chores`         | [[chores]]         |
 | `catalogue`      | `/catalogue`      | [[catalogue]]      |
 | `recipe`         | `/recipe`         | [[recipe]]         |
 | `meal-plan`      | `/meal-plan`      | [[Meal Planning]]  |
@@ -73,9 +74,9 @@ tags:
 | `qr-expense`    | `/qr/expense`    | [[qr-expense]]    |
 | `error-logs`    | `/error-logs`    | [[error-logs]]    |
 | `ai-usage`      | `/ai-usage`      | [[ai-usage]]      |
+| `recycle-bin`   | `/recycle-bin`   | [[recycle-bin]]   |
 | `atlas`         | `/atlas`         | [[atlas]]         |
 | `offline`       | `/offline`       | [[offline]]       |
-| `temp`          | `/temp`          | [[temp]]          |
 
 ## Feature Modules (Standalone)
 
@@ -87,25 +88,21 @@ tags:
 | `feature-ai-usage`         | `src/features/ai-usage/`         | [[feature-ai-usage]]         |
 | `feature-analytics`        | `src/features/analytics/`        | [[feature-analytics]]        |
 | `feature-balance`          | `src/features/balance/`          | [[feature-balance]]          |
-| `feature-blink`            | `src/features/blink/`            | [[feature-blink]]            |
 | `feature-budget`           | `src/features/budget/`           | [[feature-budget]]           |
 | `feature-catalogue`        | `src/features/catalogue/`        | [[feature-catalogue]]        |
 | `feature-categories`       | `src/features/categories/`       | [[feature-categories]]       |
-| `feature-dashboard`        | `src/features/dashboard/`        | [[feature-dashboard]]        |
 | `feature-debts`            | `src/features/debts/`            | [[feature-debts]]            |
 | `feature-drafts`           | `src/features/drafts/`           | [[feature-drafts]]           |
 | `feature-future-purchases` | `src/features/future-purchases/` | [[feature-future-purchases]] |
 | `feature-hub`              | `src/features/hub/`              | [[feature-hub]]              |
 | `feature-inventory`        | `src/features/inventory/`        | [[feature-inventory]]        |
 | `feature-items`            | `src/features/items/`            | [[feature-items]]            |
-| `feature-navigation`       | `src/features/navigation/`       | [[feature-navigation]]       |
 | `feature-nfc`              | `src/features/nfc/`              | [[feature-nfc]]              |
 | `feature-preferences`      | `src/features/preferences/`      | [[feature-preferences]]      |
 | `feature-recipes`          | `src/features/recipes/`          | [[feature-recipes]]          |
 | `feature-recurring`        | `src/features/recurring/`        | [[feature-recurring]]        |
 | `feature-reminders`        | `src/features/reminders/`        | [[feature-reminders]]        |
 | `feature-statement-import` | `src/features/statement-import/` | [[feature-statement-import]] |
-| `feature-today`            | `src/features/today/`            | [[feature-today]]            |
 | `feature-transactions`     | `src/features/transactions/`     | [[feature-transactions]]     |
 | `feature-transfers`        | `src/features/transfers/`        | [[feature-transfers]]        |
 

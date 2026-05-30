@@ -217,11 +217,11 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Error Logs               | `src/app/error-logs/`, `src/app/api/error-logs/`                  | `ERA Notes/02 - Standalone Modules/Error Logs/`         | Standalone |
 | NFC Tags                 | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`     | `ERA Notes/02 - Standalone Modules/NFC Tags/`           | Standalone |
 | Prerequisites            | `src/lib/prerequisites/`, `src/app/api/items/[id]/prerequisites/` | `ERA Notes/03 - Junction Modules/Prerequisites/`        | Junction   |
-| Chores                   | `src/app/chores/`, `src/features/chores/`                        | `ERA Notes/01 - Architecture/Feature Map/standalone/chores.md`      | Standalone |
-| Focus                    | `src/app/focus/`, `src/components/focus/`                        | `ERA Notes/01 - Architecture/Feature Map/standalone/focus.md`       | Standalone |
+| Chores                   | `src/app/chores/`, `src/features/chores/`                        | `ERA Notes/02 - Standalone Modules/Chores/`                         | Standalone |
+| Focus                    | `src/app/focus/`, `src/components/focus/`                        | `ERA Notes/02 - Standalone Modules/Focus/`                          | Standalone |
 | Trips                    | `src/app/trips/`, `src/features/trips/`, `src/components/trips/`  | `ERA Notes/03 - Junction Modules/Trips/`                            | Junction   |
-| Dashboard                | `src/app/dashboard/`, `src/components/web/WebDashboard.tsx`       | `ERA Notes/01 - Architecture/Feature Map/standalone/dashboard.md`   | Standalone |
-| Recycle Bin              | `src/app/recycle-bin/`, `src/features/recycle-bin/`              | `ERA Notes/01 - Architecture/Feature Map/standalone/recycle-bin.md` | Standalone |
+| Dashboard                | `src/app/dashboard/`, `src/components/web/WebDashboard.tsx`       | `ERA Notes/02 - Standalone Modules/Dashboard/`                      | Standalone |
+| Recycle Bin              | `src/app/recycle-bin/`, `src/features/recycle-bin/`              | `ERA Notes/02 - Standalone Modules/Recycle Bin/`                    | Standalone |
 
 > **Note:** this table is validated against the **Feature Map** (`ERA Notes/01 - Architecture/Feature Map/_index.md`) by `pnpm docs:check`, which runs during `pnpm sync:ai` and pre-commit. **AI Usage is intentionally excluded** from this Feature Index because it is not part of the application.
 

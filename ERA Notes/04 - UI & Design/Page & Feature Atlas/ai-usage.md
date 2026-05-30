@@ -1,6 +1,6 @@
 ---
 slug: ai-usage
-title: Ai Usage
+title: AI Usage
 category: utility
 route: /ai-usage
 type: page
@@ -10,46 +10,53 @@ status: active
 tags: []
 ---
 
-# Ai Usage
+# AI Usage
 
-> TODO: one-sentence description.
+> Personal LLM cost tracker — register models, log sessions, monitor usage percentage per billing cycle.
 
 ## Files
 
 - **Page**: `src/app/ai-usage/page.tsx`
-- **Main component**: _(self-contained in page file)_
-- **Sub-components**: TODO
+- **Layout**: `src/app/ai-usage/layout.tsx`
+- **Main component**: `src/components/ai-usage/AIUsagePage.tsx`
+- **Sub-components**:
+  - `src/components/ai-usage/ModelCard.tsx`
+  - `src/components/ai-usage/UsageGauge.tsx`
+  - `src/components/ai-usage/AddModelDialog.tsx`
+  - `src/components/ai-usage/AddSessionUsage.tsx`
+  - `src/components/ai-usage/SessionTypesEditor.tsx`
+  - `src/components/ai-usage/UpcomingSessionsList.tsx`
 
 ## Hooks
 
-- TODO
+- `src/features/ai-usage/hooks.ts` — models, sessions, session types
+- `src/features/ai-usage/useUpcomingAISessions.ts` — upcoming planned sessions
+- `src/features/ai-usage/calc.ts` — usage percentage logic
 
 ## API routes
 
-- TODO
+- `GET/POST /api/ai-usage` → `src/app/api/ai-usage/`
 
 ## DB tables
 
-- TODO
+- `ai_usage_models`
+- `ai_session_types`
+- `ai_sessions`
+- `ai_rate_limits`
 
 ## How to get here
 
-- TODO (which button/icon/deep-link navigates here)
-- Direct URL: `/ai-usage`
+- ERA nav or direct URL: `/ai-usage`
 
 ## What it links to
 
-- TODO
+- No child routes — all interactions are in-page dialogs/sheets.
 
 ## Related vault doc
 
-- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)
-
-## Screenshots
-
-- `ai-usage-mobile.png`
-- `ai-usage-desktop.png`
+- `ERA Notes/02 - Standalone Modules/AI Usage/`
 
 ## Notes
 
-- TODO
+- `current_usage_pct` on the model is a denormalized field updated by session log mutations, not a DB trigger.
+- Adding a new provider: DB enum → Zod schema → `AddModelDialog.tsx`.

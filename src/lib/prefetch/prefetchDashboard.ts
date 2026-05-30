@@ -1,10 +1,6 @@
 import { prefetchDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
 import { QueryClient } from "@tanstack/react-query";
 
-/**
- * Prefetch all dashboard data for instant navigation
- * Call this when user hovers over dashboard link or before navigation
- */
 export async function prefetchDashboardData(queryClient: QueryClient) {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -15,7 +11,7 @@ export async function prefetchDashboardData(queryClient: QueryClient) {
 
   try {
     await prefetchDashboardTransactions(queryClient, { startDate, endDate });
-  } catch (error) {
-    console.error("Failed to prefetch dashboard data:", error);
+  } catch {
+    // silently ignore prefetch failures
   }
 }

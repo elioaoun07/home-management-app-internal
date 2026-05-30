@@ -232,7 +232,7 @@ async function fetchFlexibleSchedules(): Promise<FlexibleSchedule[]> {
 /**
  * Fetch flexible items with their schedules and completion status
  */
-async function fetchFlexibleRoutines(
+export async function fetchFlexibleRoutines(
   items: ItemWithDetails[],
   schedules: FlexibleSchedule[],
   actions: ItemOccurrenceAction[],

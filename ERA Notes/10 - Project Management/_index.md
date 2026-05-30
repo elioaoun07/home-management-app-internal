@@ -9,6 +9,8 @@ tags:
 # 10 - Project Management - Command Center
 
 > Your strategic overview. Start here when you're asking "what do I do next?" Audited against `main` on **2026-05-29**.
+>
+> **Scope:** the numbered files below are **whole-app** (cross-cutting). **Per-module PM lives in subfolders** in the same format — currently [Schedule/](<Schedule/_index.md>) (the Items & Reminders module). Add a sibling folder per module you want to prioritize on its own.
 
 | # | File | Read it when... |
 |---|---|---|
@@ -17,6 +19,14 @@ tags:
 | 3 | [Future Vision & Roadmap](<3 - Future Vision & Roadmap.md>) | You want to dream: enhancements and net-new modules, prioritized. |
 | 4 | [This Week (Action Plan)](<4 - This Week (Action Plan).md>) | Most days. The synthesis: exactly what to do next, day by day. |
 | 5 | [P0 Automated Tests Implementation Notes](<5 - P0 Automated Tests Implementation Notes.md>) | You want the record of how the first automated test baseline was added. |
+
+## Per-module PM
+
+| Module | Folder |
+|---|---|
+| **Schedule** (Items & Reminders) | [Schedule/](<Schedule/_index.md>) |
+
+> Each module folder mirrors this set at module scope: `1 - Feature State`, `2 - Future Vision & Roadmap`, `3 - Current — Action Plan`, `_index`.
 
 ## How to use this set
 

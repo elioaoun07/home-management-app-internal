@@ -77,7 +77,7 @@ tags:
 | **Shopping List** | 🔵 Established | ✅ | Hub ↔ Recipes ↔ Inventory; legacy localStorage queue (intentional). | Wire Inventory auto-add (gap 2a). |
 | **AI Assistant (ERA)** | 🟡 New/Thin | ✅ | **Your flagship.** Intent router, faces, widgets, wake listener, budget submit, household context. Big surface (`features/era/`). Heavy recent work May 9–26. Voice still needs external wake-word setup (per memory). | Harden intent routing; expand proactive briefings (file 3). |
 | **Voice Conversation** | 🟡 New/Thin | ➖ (in AI Assistant doc) | Azure STT/TTS/wake, conversation engine, intent classifier, greeting cache. Shipped May 2026. External-dependency heavy → fragile. | Add graceful-degradation tests; document setup. |
-| **Trips** | 🟡 New/Thin | ✅ (just added) | **Brand new, uncommitted on `main` right now.** Lifecycle trips, auto-account, activation/completion RPCs, places, packing list. Connects Budget ↔ Items/Chores ↔ Meal ↔ Catalogue. | Commit it; manual end-to-end verify of activate/complete cascades. |
+| **Trips** | 🟡 New/Thin | ✅ | Committed (`e058192`, 2026-05-30). Lifecycle trips, auto-account, activation/completion RPCs, places, packing list. Connects Budget ↔ Items/Chores ↔ Meal ↔ Catalogue. **Cascades unverified** (verify _deferred by choice_ — not this week). | Manual end-to-end verify of activate/complete cascades (deferred). |
 | **Prerequisites** | 🟠 Stub/Partial | ✅ | Engine works for NFC→item unlock, **but 4 evaluators are stubs**: `weather`, `time_window`, `schedule`, `custom_formula` (per backlog). | Ship `time_window` first (highest value, lowest effort). |
 
 ---
@@ -109,9 +109,11 @@ tags:
 
 ## The honest weak-link summary
 
-1. **The newest, most differentiated work is the least protected.** ERA (AI Assistant), Voice, Trips, Chores, Focus, Dashboard — your *signature* features — are all 🟡 New/Thin, several with **no vault doc**, and **none covered by tests**. That's where bugs are hiding right now.
+_(Updated 2026-05-30)_
+
+1. **The newest, most differentiated work is the least protected.** ERA (AI Assistant), Voice, Chores, Focus, Dashboard — your *signature* features — are all 🟡 New/Thin, several with **no vault doc**, and **none covered by tests**. That's where bugs are hiding right now.
 2. **Prerequisites is half-built** — 4 stubbed evaluators advertised but inert.
-3. **Documentation lags the last ~3 weeks of code.** 6 shipping modules have no Overview doc; the CLAUDE.md index doesn't list them. Code is ahead of its own map.
-4. **Trips is uncommitted** — finish and commit it before starting anything new (it's currently a working-tree-only feature, easy to lose).
+3. **Documentation lags the last ~3 weeks of code.** 5 shipping modules still have no Overview doc (Dashboard, Chores, Focus, AI Usage, Recycle Bin). Code is ahead of its own map.
+4. ~~**Trips is uncommitted**~~ ✅ Committed `e058192`. Cascade verify still needed (activate → complete RPC) — **deferred by choice this week**, not closed.
 
 → The plan to address the top items is in [4 · This Week](<4 - This Week (Action Plan).md>). The growth opportunities per module are in [3 · Future Vision](<3 - Future Vision & Roadmap.md>).

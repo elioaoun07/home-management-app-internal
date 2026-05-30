@@ -12,44 +12,45 @@ tags: []
 
 # Focus
 
-> TODO: one-sentence description.
+> Daily focus surface — flexible (untimed) routines pool and AI-generated insights briefing.
 
 ## Files
 
 - **Page**: `src/app/focus/page.tsx`
-- **Main component**: _(self-contained in page file)_
-- **Sub-components**: TODO
+- **Layout**: `src/app/focus/layout.tsx`
+- **Main component**: `src/components/focus/FocusPage.tsx`
+- **Sub-components**:
+  - `src/components/focus/FlexibleRoutinesPool.tsx`
+  - `src/components/focus/ScheduleRoutineSheet.tsx`
 
 ## Hooks
 
-- TODO
+- `src/features/items/useFlexibleRoutines` — flexible routine items
+- `src/features/items/useFocusInsights` — AI-generated daily insight
 
 ## API routes
 
-- TODO
+- `GET /api/focus-insights` → `src/app/api/focus-insights/`
+- Items API for routine mutations → `src/app/api/items/`
 
 ## DB tables
 
-- TODO
+- `items` (flexible flag)
+- `focus_insights`
 
 ## How to get here
 
-- TODO (which button/icon/deep-link navigates here)
-- Direct URL: `/focus`
+- ERA nav menu or direct URL: `/focus`
 
 ## What it links to
 
-- TODO
+- `ScheduleRoutineSheet` promotes a routine into a full scheduled item (stays on page)
 
 ## Related vault doc
 
-- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)
-
-## Screenshots
-
-- `focus-mobile.png`
-- `focus-desktop.png`
+- `ERA Notes/02 - Standalone Modules/Focus/`
 
 ## Notes
 
-- TODO
+- Focus Insights are AI-generated and cached per `week_start_date` — not re-generated on every load.
+- Flexible routines share the `items` table; filter carefully.

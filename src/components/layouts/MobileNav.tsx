@@ -30,7 +30,7 @@ import { useTab } from "@/contexts/TabContext";
 import {
   prefetchAllTabs,
   prefetchExpenseData,
-} from "@/features/navigation/prefetchTabs";
+} from "@/lib/prefetch/prefetchTabs";
 import { useAddTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";

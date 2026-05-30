@@ -34,7 +34,7 @@ You have **a genuinely impressive solo build** — ~767 TS/TSX files, ~40 module
 | Hard-rules discipline (RLS, RPC bundles, safeFetch, themes) | **A−** | Excellent _intent_; enforcement is manual, so drift creeps in.                    |
 | AI guidance (CLAUDE.md)                                     | **B+** | Strong & well-scoped; Feature Index table is stale.                               |
 | AI mirror sync (AGENTS / CODEX / Copilot)                   | **D**  | Three files, three dates, three sizes. Drifted. Fixed this pass.                  |
-| Test coverage                                               | **D-** | Vitest baseline exists for money/date core; coverage is still intentionally thin. |
+| Test coverage                                               | **D+** | 26 unit tests: balance-utils, date, recurring, split-bill. API/cron/UI still uncovered. |
 | Code hygiene (console/any/dead code)                        | **C−** | Rules exist but nothing mechanically enforces them.                               |
 | Continuity (session log, backlog)                           | **C**  | Templates exist; almost nothing is written into them.                             |
 | Skills & hooks tooling                                      | **B**  | Good foundation; 3 high-value additions recommended.                              |
@@ -84,7 +84,7 @@ You have **a genuinely impressive solo build** — ~767 TS/TSX files, ~40 module
 
 - **Finding:** `ERA Notes/08 - Sessions/` has **0 files** despite four templates. `07 - Backlog & Ideas/Ideas.md`, `Feature Optimizations.md` headers, and `Dashboard V2` are mostly empty stubs (only `Feature Optimizations.md` has real content). **Nothing writes session notes**, so the expectation silently fails — exactly what you noticed.
 - **Why it matters:** no continuity between sessions → every session re-derives context → wasted tokens and lost decisions.
-- **Fix:** stop pretending the Sessions folder fills itself. Either (a) add a lightweight `/session-log` skill you invoke at the end of a work block, or (b) drop the folder and rely on git + this PM set. Recommend (a) — see §5.
+- **Decision (2026-05-30): cancelled.** The session-note habit and the `/session-log` skill idea are **dropped** — not deferred. Continuity comes from git history + this PM set. Don't reintroduce the `08 - Sessions/` expectation.
 
 ### 🟡 P2 — Type-safety erosion: 522 `any` / `as any` / `@ts-ignore`
 
@@ -139,7 +139,7 @@ Ranked by value-for-effort for _your_ workflow (solo, high-velocity, AI-assisted
 | #   | Add                                            | Type          | Why it pays off                                                                                                              | Effort |
 | --- | ---------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 1   | **`no-console` ESLint rule** (after the sweep) | ESLint config | Mechanically enforces Hard Rule 22 forever; pre-commit already runs ESLint                                                   | S      |
-| 2   | **`/session-log` skill** `[CANCELLED]`         | Skill         | Writes a dated note into `08 - Sessions/` so the folder you noticed is actually filled; preserves decisions between sessions | M      |
+| 2   | ~~**`/session-log` skill**~~ `[CANCELLED]`     | Skill         | **Rejected** — session-note habit dropped (2026-05-30); rely on git + this PM set, not an `08 - Sessions/` folder.        | —      |
 | 3   | **`/new-module` scaffold skill** `[DONE]`      | Skill         | You add ~1 module/2 weeks; auto-create `features/[x]/`, Overview doc, Atlas entry, Feature Map row — so docs never lag code  | M      |
 | 4   | **Vitest + thin money/date suite** `[DONE]`    | Tooling       | The P0 fix; unblocks confident refactoring                                                                                   | M      |
 | 5   | **`schema-drift` check**                       | Hook/script   | Warn when a migration touches a table not reflected in `schema.sql`                                                          | S      |

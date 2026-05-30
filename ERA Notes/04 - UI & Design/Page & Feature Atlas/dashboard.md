@@ -12,45 +12,55 @@ tags: []
 
 # Dashboard
 
-> TODO: one-sentence description.
+> Default landing surface after login — KPI cards, recent transactions, mini-charts, user-configurable section order.
 
 ## Files
 
 - **Page**: `src/app/dashboard/page.tsx`
-- **Main component**: `src/app/dashboard/DashboardClientPage.tsx`
-- **Sub-components**: TODO
+- **Client root**: `src/app/dashboard/DashboardClientPage.tsx`
+- **Wrapper**: `src/app/dashboard/DashboardClientWrapper.tsx`
+- **Layout**: `src/app/dashboard/layout.tsx`
+- **Sub-components**:
+  - `src/components/dashboard/EnhancedMobileDashboard.tsx`
+  - `src/components/dashboard/TransactionsTable.tsx`
+  - `src/components/dashboard/CategoryDetailView.tsx`
+  - `src/components/dashboard/SwipeableTransactionItem.tsx`
+  - `src/components/dashboard/TransactionDetailModal.tsx`
+  - `src/components/web/WebDashboard.tsx`
+  - `src/components/web/WebTabletMissionControl.tsx`
+  - `src/components/expense/EditableWidgetGrid.tsx`
 
 ## Hooks
 
-- `src/features/preferences/useUserPreferences`
-- `src/features/transactions/useDashboardTransactions`
+- `src/features/preferences/useSectionOrder` — section order
+- `src/features/transactions/useDashboardTransactions` — current-cycle transactions
 
 ## API routes
 
-- TODO
+- Aggregates over multiple endpoints — no dedicated dashboard API. See individual feature routes.
 
 ## DB tables
 
-- TODO
+- No owned tables. Reads `transactions`, `accounts`, `account_balances`, `user_preferences`.
 
 ## How to get here
 
-- TODO (which button/icon/deep-link navigates here)
+- Default redirect after login
+- Tap **Home/Dashboard** icon in bottom nav (mobile)
 - Direct URL: `/dashboard`
 
 ## What it links to
 
-- TODO
+- `/expense` — expense entry
+- Transaction detail modal (in-place, no route change)
+- Category drill-down (in-place)
 
 ## Related vault doc
 
-- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)
-
-## Screenshots
-
-- `dashboard-mobile.png`
-- `dashboard-desktop.png`
+- `ERA Notes/02 - Standalone Modules/Dashboard/`
 
 ## Notes
 
-- TODO
+- Prefetch on startup via `src/components/EagerDataPrefetch.tsx` and on hover via `src/lib/prefetch/prefetchDashboard.ts`.
+- Theme changes invalidate all queries — full refetch on theme switch.
+- Section order is drag-configurable via `EditableWidgetGrid`.
