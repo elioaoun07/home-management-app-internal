@@ -17,7 +17,7 @@ import {
   type ActionType,
   type ItemOccurrenceAction,
 } from "@/features/items/useItemActions";
-import { useItems, useUpdateRecurrenceRule } from "@/features/items/useItems";
+import { useItems, useUpdateItem, useUpdateRecurrenceRule } from "@/features/items/useItems";
 import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import {
@@ -49,6 +49,7 @@ import {
   MoreHorizontal,
   Plus,
   RefreshCw,
+  Send,
   SkipForward,
   Sun,
   Sunrise,
@@ -56,6 +57,7 @@ import {
   Target,
   TimerOff,
   Trash2,
+  UserCheck,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -153,7 +155,7 @@ const typeIcons: Record<ItemType, typeof Calendar> = {
 };
 
 // Section types
-type Section = "overdue" | "today" | "upcoming" | "later";
+type Section = "overdue" | "today" | "upcoming" | "later" | "assignedToMe" | "assignedOut";
 
 // Time-of-day grouping
 type TimeOfDay = "all-day" | "morning" | "afternoon" | "evening" | "night";
@@ -612,6 +614,34 @@ export default function StandaloneRemindersPage({
   const { data: partnerUserId = null } = usePartnerId();
   const itemActions = useItemActionsWithToast();
   const updateRecurrence = useUpdateRecurrenceRule();
+  const updateItem = useUpdateItem();
+
+  const handleReassign = useCallback(
+    (item: ItemWithDetails, toUserId: string) => {
+      const previousResponsibleId = item.responsible_user_id;
+      const toMe = toUserId === currentUserId;
+      updateItem.mutate(
+        { id: item.id, responsible_user_id: toUserId },
+        {
+          onSuccess: () => {
+            toast.success(toMe ? "Taken back" : "Passed to partner", {
+              duration: 4000,
+              icon: ToastIcons.update,
+              action: {
+                label: "Undo",
+                onClick: () =>
+                  updateItem.mutate({
+                    id: item.id,
+                    responsible_user_id: previousResponsibleId,
+                  }),
+              },
+            });
+          },
+        },
+      );
+    },
+    [updateItem, currentUserId],
+  );
 
   const handleReverseRecurrence = (item: ItemWithDetails) => {
     if (!item.recurrence_rule?.start_anchor || !item.recurrence_rule.rrule)
@@ -832,6 +862,34 @@ export default function StandaloneRemindersPage({
       };
     }, [activeItems, occurrenceActions]);
 
+  // Items handed off to the partner (I'm the creator, partner is responsible)
+  const assignedOutItems = useMemo(() => {
+    if (!currentUserId || !partnerUserId) return [];
+    return allItems.filter(
+      (item) =>
+        item.user_id === currentUserId &&
+        item.responsible_user_id === partnerUserId &&
+        !item.archived_at &&
+        item.status !== "archived" &&
+        item.status !== "cancelled" &&
+        item.status !== "completed",
+    );
+  }, [allItems, currentUserId, partnerUserId]);
+
+  // Items the partner created and assigned to me
+  const assignedToMeItems = useMemo(() => {
+    if (!currentUserId || !partnerUserId) return [];
+    return allItems.filter(
+      (item) =>
+        item.responsible_user_id === currentUserId &&
+        item.user_id === partnerUserId &&
+        !item.archived_at &&
+        item.status !== "archived" &&
+        item.status !== "cancelled" &&
+        item.status !== "completed",
+    );
+  }, [allItems, currentUserId, partnerUserId]);
+
   // Handle item completion toggle (delegated to optimistic handler)
   const handleToggleComplete = handleOptimisticComplete;
 
@@ -988,6 +1046,57 @@ export default function StandaloneRemindersPage({
     );
   };
 
+  // Render a single item in an assignment bucket (flat, no occurrence expansion)
+  const renderAssignmentItem = (
+    item: ItemWithDetails,
+    actionLabel: string,
+    onAction: () => void,
+  ) => {
+    const Icon = typeIcons[item.type];
+    const dateStr =
+      item.type === "event"
+        ? item.event_details?.start_at
+        : item.reminder_details?.due_at;
+    const dateLabel = dateStr ? format(parseISO(dateStr), "MMM d") : null;
+
+    return (
+      <div
+        key={item.id}
+        className="flex items-center gap-3 p-3 rounded-xl bg-white/5"
+      >
+        <div
+          className={cn(
+            "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+            item.type === "event" && "bg-pink-500/20 text-pink-400",
+            item.type === "reminder" && "bg-cyan-500/20 text-cyan-400",
+            item.type === "task" && "bg-purple-500/20 text-purple-400",
+          )}
+        >
+          <Icon className="w-4 h-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-white truncate">{item.title}</p>
+          {dateLabel && (
+            <p className="text-xs text-white/40 flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {dateLabel}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAction();
+          }}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0 bg-violet-500/20 hover:bg-violet-500/30 text-violet-300"
+        >
+          {actionLabel}
+        </button>
+      </div>
+    );
+  };
+
   // Render a section header
   const renderSectionHeader = (
     title: string,
@@ -1017,6 +1126,8 @@ export default function StandaloneRemindersPage({
           {section === "today" && <Target className="w-4 h-4" />}
           {section === "upcoming" && <Calendar className="w-4 h-4" />}
           {section === "later" && <CalendarDays className="w-4 h-4" />}
+          {section === "assignedToMe" && <UserCheck className="w-4 h-4" />}
+          {section === "assignedOut" && <Send className="w-4 h-4" />}
         </div>
         <span className="font-medium text-white">{title}</span>
       </div>
@@ -1441,6 +1552,51 @@ export default function StandaloneRemindersPage({
             )}
           </div>
         )}
+        {/* Assigned to me — partner created, I'm responsible */}
+        {assignedToMeItems.length > 0 && (
+          <div className="space-y-2">
+            {renderSectionHeader(
+              "Assigned to me",
+              assignedToMeItems.length,
+              "assignedToMe",
+              "bg-indigo-500/20 text-indigo-400",
+            )}
+            {selectedSection === "assignedToMe" && (
+              <div className="space-y-2 pl-2">
+                {assignedToMeItems.map((item) =>
+                  renderAssignmentItem(item, "Return →", () =>
+                    partnerUserId
+                      ? handleReassign(item, partnerUserId)
+                      : undefined,
+                  ),
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Assigned out — I created, partner is responsible */}
+        {assignedOutItems.length > 0 && (
+          <div className="space-y-2">
+            {renderSectionHeader(
+              "Assigned out",
+              assignedOutItems.length,
+              "assignedOut",
+              "bg-amber-500/20 text-amber-400",
+            )}
+            {selectedSection === "assignedOut" && (
+              <div className="space-y-2 pl-2">
+                {assignedOutItems.map((item) =>
+                  renderAssignmentItem(item, "← Reclaim", () =>
+                    currentUserId
+                      ? handleReassign(item, currentUserId)
+                      : undefined,
+                  ),
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Add New Reminder FAB */}
@@ -1515,6 +1671,10 @@ export default function StandaloneRemindersPage({
           }}
           onDelete={() => {
             itemActions.handleDelete(actionsState.item);
+            setActionsState(null);
+          }}
+          onReassign={(toUserId) => {
+            handleReassign(actionsState.item, toUserId);
             setActionsState(null);
           }}
           onReverseRecurrence={() => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTheme } from "@/contexts/ThemeContext";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import type { ItemWithDetails } from "@/types/items";
@@ -158,6 +159,34 @@ const PencilIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const PassToPartnerIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <circle cx="8" cy="7" r="4" />
+    <path d="M2 21v-2a4 4 0 0 1 4-4h5" />
+    <path d="M15 17h6m-3-3 3 3-3 3" />
+  </svg>
+);
+
+const TakeBackIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <circle cx="16" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-4-4h-5" />
+    <path d="M9 17H3m3-3-3 3 3 3" />
+  </svg>
+);
+
 type PostponeOption = {
   id: "next_occurrence" | "tomorrow" | "custom" | "ai_slot";
   label: string;
@@ -186,6 +215,8 @@ type Props = {
    * Only shown when the item is recurring.
    */
   onEditOccurrence?: () => void;
+  /** Reassign responsible_user_id to the given user. Sheet provides the target user ID. */
+  onReassign?: (toUserId: string) => void;
 };
 
 export default function ItemActionsSheet({
@@ -200,10 +231,16 @@ export default function ItemActionsSheet({
   onReverseRecurrence,
   onEdit,
   onEditOccurrence,
+  onReassign,
 }: Props) {
   const { theme } = useTheme();
   const themeClasses = useThemeClasses();
   const isPink = theme === "pink";
+  const { data: householdData } = useHouseholdMembers();
+  const currentUserId = householdData?.currentUserId;
+  const partner = householdData?.members.find((m) => !m.isCurrentUser) ?? null;
+  const isMyResponsibility = !!currentUserId && item.responsible_user_id === currentUserId;
+  const isPartnerResponsibility = !!partner && item.responsible_user_id === partner.id;
   const [isClosing, setIsClosing] = useState(false);
   const [showPostponeOptions, setShowPostponeOptions] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -835,6 +872,66 @@ export default function ItemActionsSheet({
                   <p className="text-sm text-white/50">
                     Switch which weeks this appears
                   </p>
+                </div>
+              </button>
+            )}
+
+            {/* Pass to partner — shown when I'm responsible and a partner exists */}
+            {onReassign && partner && isMyResponsibility && (
+              <button
+                type="button"
+                onClick={() => {
+                  onReassign(partner.id);
+                  handleClose();
+                }}
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
+                  "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
+                )}
+              >
+                <div
+                  className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center",
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                  )}
+                >
+                  <PassToPartnerIcon
+                    className={cn(
+                      "w-5 h-5",
+                      isPink ? "text-pink-400" : "text-cyan-400",
+                    )}
+                  />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-white font-medium">
+                    Pass to {partner.displayName}
+                  </p>
+                  <p className="text-sm text-white/50">
+                    Make them responsible
+                  </p>
+                </div>
+              </button>
+            )}
+
+            {/* Take it back — shown when partner is responsible */}
+            {onReassign && partner && isPartnerResponsibility && currentUserId && (
+              <button
+                type="button"
+                onClick={() => {
+                  onReassign(currentUserId);
+                  handleClose();
+                }}
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
+                  "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
+                )}
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-violet-500/20">
+                  <TakeBackIcon className="w-5 h-5 text-violet-400" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-white font-medium">Take it back</p>
+                  <p className="text-sm text-white/50">Make it mine again</p>
                 </div>
               </button>
             )}
