@@ -71,6 +71,7 @@ Never use graphify as a substitute for ERA Notes — it cannot infer hard rules,
 21. **Hot read paths that fetch a parent + N child tables must use a single SECURITY DEFINER RPC** — each PostgREST call costs ~170–200 ms of network overhead. Fetching `items` + `reminder_details` + `event_details` + `item_subtasks` + `item_alerts` + `item_recurrence_rules` + `recurrence_pauses` as 7 separate queries adds ~1.3 s of floor latency before any RLS or query cost. Collapse them into one `get_*_bundle()` RPC returning JSON aggregates. See `get_schedule_bundle` as the canonical example.
 22. **No `console.log` / `console.warn` / `console.error` in committed code** — debug logging must be removed before committing. Use the Error Logs module (`src/app/error-logs/`) for persistent structured logging and `src/lib/logger.ts` (if present) for guarded dev-only logs. Stray `console.*` calls slow down React DevTools overlay and leak internal state in production.
 23. **Atlas must be kept in sync** — every new page (`src/app/.../page.tsx`), new route, new feature module (`src/features/[name]/`), or significant navigation/tab change MUST add/update an entry in `ERA Notes/04 - UI & Design/Page & Feature Atlas/` (copy `_Template.md`, fill all sections, add a row to `_Index.md`). Renaming a feature/route is a breaking change — update or delete the corresponding MD file in the same commit. Stub generator: `node scripts/seed-atlas.mjs` (idempotent). **`public/atlas/atlas.json` is regenerated automatically** via the PostToolUse hook in `.claude/hooks/update-atlas.sh` — no need to run `pnpm atlas` manually after editing `src/app/`, `src/features/`, or `src/components/`.
+24. **DB changes require a migration file** — whenever a DB change is needed (CREATE TABLE, ALTER TABLE, ADD COLUMN, CREATE INDEX, CREATE POLICY, DROP, etc.), you MUST: (1) **first** create `migrations/YYYY-MM-DD_short-description.sql` with the exact SQL to run manually in Supabase SQL Editor, (2) **then** update `migrations/schema.sql` to reflect the final schema state. The migration file is the manual runbook; `schema.sql` is the authoritative end-state snapshot. Never update `schema.sql` without a corresponding migration file in the same session. If multiple unrelated DB changes occur in one session, use a single migration file for all of them. Enforced by `.claude/hooks/check-migration.sh`.
 
 ---
 
@@ -159,7 +160,7 @@ Located in `src/contexts/`. Always use the `Safe` variant in components that may
 
 > **`migrations/schema.sql` is the single source of truth.** Read it before writing any SQL. Never assume a column exists.
 
-DB changes = SQL run manually in Supabase SQL Editor. New tables must include RLS policies. Update `schema.sql` and document in the feature doc.
+DB changes = SQL run manually in Supabase SQL Editor. New tables must include RLS policies. **Always create a migration file first** (`migrations/YYYY-MM-DD_description.sql`), then update `schema.sql`. See Hard Rule #24.
 
 Unique constraint violations: Supabase returns `error.code === "23505"` → respond with `409 Conflict`.
 
@@ -218,7 +219,6 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | NFC Tags                 | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`     | `ERA Notes/02 - Standalone Modules/NFC Tags/`           | Standalone |
 | Prerequisites            | `src/lib/prerequisites/`, `src/app/api/items/[id]/prerequisites/` | `ERA Notes/03 - Junction Modules/Prerequisites/`        | Junction   |
 | Chores                   | `src/app/chores/`, `src/features/chores/`                        | `ERA Notes/02 - Standalone Modules/Chores/`                         | Standalone |
-| Focus                    | `src/app/focus/`, `src/components/focus/`                        | `ERA Notes/02 - Standalone Modules/Focus/`                          | Standalone |
 | Trips                    | `src/app/trips/`, `src/features/trips/`, `src/components/trips/`  | `ERA Notes/03 - Junction Modules/Trips/`                            | Junction   |
 | Dashboard                | `src/app/dashboard/`, `src/components/web/WebDashboard.tsx`       | `ERA Notes/02 - Standalone Modules/Dashboard/`                      | Standalone |
 | Recycle Bin              | `src/app/recycle-bin/`, `src/features/recycle-bin/`              | `ERA Notes/02 - Standalone Modules/Recycle Bin/`                    | Standalone |

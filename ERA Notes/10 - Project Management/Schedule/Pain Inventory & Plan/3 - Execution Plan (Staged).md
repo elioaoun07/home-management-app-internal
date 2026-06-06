@@ -31,13 +31,13 @@ If energy says otherwise, the capture decision (Cluster 3) is the higher *habit*
 
 | # | Work item | From | Sev | Effort | Bounded? | Foundational? |
 |---|---|---|---|---|---|---|
-| W1 | Align PATCH/DELETE auth with household-aware check | C1 | 🔴 | S | ✅ yes | — |
-| W2 | "Pass to partner" / "take it back" reassign actions | C1 | 🔴 | M | ✅ yes | — |
-| W3 | "Assigned out" / "assigned to me" buckets in `/reminders` | C1 | 🟠 | S–M | ✅ yes | — |
-| W4 | Confirm RLS-off + `get_schedule_bundle` returns partner items | C1/C4 | 🟠 | S | ✅ yes | ✅ unblocks W1–W3 |
-| W5 | Re-export live schema (RPC + RLS) into `schema.sql` | C4 | 🟠 | S | ✅ yes | ✅ stops repo lying |
+| ~~W1~~ ✅ | ~~Align PATCH/DELETE auth with household-aware check~~ | C1 | 🔴 | S | ✅ yes | — |
+| ~~W2~~ ✅ | ~~"Pass to partner" / "take it back" reassign actions~~ | C1 | 🔴 | M | ✅ yes | — |
+| ~~W3~~ ✅ | ~~"Assigned out" / "assigned to me" buckets in `/reminders`~~ | C1 | 🟠 | S–M | ✅ yes | — |
+| ~~W4~~ ✅ | ~~Confirm RLS-off + `get_schedule_bundle` returns partner items~~ | C1/C4 | 🟠 | S | ✅ yes | ✅ unblocks W1–W3 |
+| ~~W5~~ ✅ | ~~Re-export live schema (RPC + RLS) into `schema.sql`~~ | C4 | 🟠 | S | ✅ yes | ✅ stops repo lying |
 | W6 | Decide capture path (A Hub / B form / both) → build it | C3 | 🟠 | M | partly | — |
-| W7 | Focus → per-item mode; retire `/focus`; fold into Week view | C2 | 🟠 | M–H | partly | — |
+| ~~W7~~ ✅ | ~~Focus → per-item mode; retire `/focus`; fold into Week view~~ | C2 | 🟠 | M–H | partly | — |
 | W8 | Reassignment history / audit | C1 | 🟡 | M | ✅ yes | — |
 | W9 | Surface consolidation (`/reminders` role; clarify each job) | C2 | 🟠 | M | partly | — |
 | — | Recurrence/placement tests, prerequisites, `useItems` split | C4 | — | — | — | see parent [file 3](<../3 - Current — Action Plan.md>) |
@@ -52,21 +52,18 @@ If energy says otherwise, the capture decision (Cluster 3) is the higher *habit*
 
 **This is the step-by-step guide. Each step ends with a check.**
 
-- [ ] **Step 1 — Verify the ground truth (W4).** In Supabase: (a) confirm no RLS is enabled on `items` + child tables (matches the repo read); (b) open `get_schedule_bundle` and confirm whether it returns items where the *partner* is creator/responsible, or only the caller's. **This decides whether W1 alone is enough or whether the RPC also needs widening.**
-  *Check:* you can state, in one sentence, what the RPC returns for a shared item.
-- [ ] **Step 2 — Align write auth (W1).** In [src/app/api/items/[id]/route.ts](<../../../../src/app/api/items/[id]/route.ts>), replace the creator-only guard at line 36 (and the delete branch) with the household-aware check copied from [complete/route.ts:84-104](<../../../../src/app/api/items/[id]/complete/route.ts#L84-L104>): allow if **creator OR responsible OR active `household_links` partner**. Use `supabaseAdmin()` for the link lookup as the action route does.
-  *Check:* partner can edit a shared item; a true stranger still gets 403. Toast has Undo (Hard Rule #1).
+- [x] **Step 1 — Verify the ground truth (W4).** *(DONE 2026-06-06)* RPC body captured: returns `user_id = me OR (partner's AND is_public = true)`. W1 alone was enough — RLS policies already grant household co-edit. See Pain Inventory Cluster 1 myth correction.
+- [x] **Step 2 — Align write auth (W1).** *(DONE 2026-05-31)* `canMutateItem()` helper in [src/app/api/items/[id]/route.ts](<../../../../src/app/api/items/[id]/route.ts>) — creator OR responsible OR active partner. Partner can edit/delete shared items; strangers still get 403.
 - [x] **Step 3 — Reassign both ways (W2).** *(DONE 2026-06-06)* Added `onReassign` prop to [ItemActionsSheet.tsx](<../../../../src/components/items/ItemActionsSheet.tsx>). Component fetches household via `useHouseholdMembers`, shows "Pass to partner" when I'm responsible, "Take it back" when partner is responsible. Wired in `StandaloneRemindersPage` using `useUpdateItem` + Undo toast (no dedicated endpoint — RLS already covers it).
   *Check:* assign → it appears under partner; "take it back" → returns to me; both with Undo toasts. ✅
 - [x] **Step 4 — Make handed-off items findable (W3).** *(DONE 2026-06-06)* Added "Assigned to me" and "Assigned out" collapsible sections to [StandaloneRemindersPage.tsx](<../../../../src/components/reminder/StandaloneRemindersPage.tsx>). Each row has one-tap "Return →" / "← Reclaim" buttons calling `handleReassign`. Sections appear only when items exist.
   *Check:* an item assigned out is visible and reclaimable from this view. ✅
-- [ ] **Step 5 — Stop the repo lying (W5).** Export the live schema (incl. `get_schedule_bundle`, any RLS touched/confirmed in Step 1) back into [migrations/schema.sql](<../../../../migrations/schema.sql>).
-  *Check:* `get_schedule_bundle` body is in the repo and matches Supabase.
+- [x] **Step 5 — Stop the repo lying (W5).** *(DONE 2026-06-06)* Table DDL ("Copy as SQL" from Supabase), `get_schedule_bundle` RPC body, and all RLS policies for items + child tables appended to [migrations/schema.sql](<../../../../migrations/schema.sql>).
 
 ### Next — pick ONE
 
 - [ ] **Capture path (W6).** Make the A-vs-B call from [file 2's open question](<2 - Target Design & Decisions.md>) (leaning A = Hub quick-capture, possibly A+B). Then build the chosen fast lane. **Highest habit payoff.**
-- [ ] **Focus → mode (W7).** Build the per-item Focus action, fold flexible assignment into the Week view, retire `/focus`, and do the Atlas + Feature-Index + Routes cleanup ([file 2, Decision 1](<2 - Target Design & Decisions.md>)).
+- [x] **Focus → mode (W7).** *(DONE 2026-06-06)* Retired `/focus` page + `FocusPage.tsx` + `FlexibleRoutinesPool.tsx` + `ScheduleRoutineSheet.tsx`. Added `onFocus` prop + Focus button (crosshair icon) to `ItemActionsSheet` → opens `ItemDetailModal` in `StandaloneRemindersPage` and `ItemsListView`. Week view's "Flexible this week" strip already handles routine assignment. Atlas, Feature Index, Routes doc, vault doc all updated.
 
 ### Later
 
@@ -78,11 +75,11 @@ If energy says otherwise, the capture decision (Cluster 3) is the higher *habit*
 
 ## ✅ Definition of done — the "Now" slice
 
-- [ ] A household partner can **edit and delete** a shared item (no more creator-only 403).
-- [ ] I can **pass an item to my partner** and **take it back**, each in one tap, with Undo.
-- [ ] Items I've assigned out are **visible and reclaimable** from `/reminders`.
-- [ ] `get_schedule_bundle` (and any real RLS) is **captured in `migrations/schema.sql`**.
-- [ ] [File 1, Cluster 1](<1 - Pain Inventory (Every Painful Thing).md>) updated to mark the resolved pains; the "RLS myth" note kept as the corrected record.
+- [x] A household partner can **edit and delete** a shared item (no more creator-only 403). *(2026-05-31)*
+- [x] I can **pass an item to my partner** and **take it back**, each in one tap, with Undo. *(2026-06-06)*
+- [x] Items I've assigned out are **visible and reclaimable** from `/reminders`. *(2026-06-06)*
+- [x] `get_schedule_bundle` RPC body + all RLS policies **captured in `migrations/schema.sql`**. *(2026-06-06)*
+- [x] [File 1, Cluster 1](<1 - Pain Inventory (Every Painful Thing).md>) updated to mark the resolved pains; the "RLS myth" note kept as the corrected record. *(2026-06-06)*
 
 ---
 

@@ -187,6 +187,24 @@ const TakeBackIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const FocusTargetIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <circle cx="12" cy="12" r="6" />
+    <circle cx="12" cy="12" r="2" />
+    <line x1="12" y1="2" x2="12" y2="6" />
+    <line x1="12" y1="18" x2="12" y2="22" />
+    <line x1="2" y1="12" x2="6" y2="12" />
+    <line x1="18" y1="12" x2="22" y2="12" />
+  </svg>
+);
+
 type PostponeOption = {
   id: "next_occurrence" | "tomorrow" | "custom" | "ai_slot";
   label: string;
@@ -217,6 +235,8 @@ type Props = {
   onEditOccurrence?: () => void;
   /** Reassign responsible_user_id to the given user. Sheet provides the target user ID. */
   onReassign?: (toUserId: string) => void;
+  /** Open a focused view of this single item (closes the sheet). */
+  onFocus?: () => void;
 };
 
 export default function ItemActionsSheet({
@@ -232,6 +252,7 @@ export default function ItemActionsSheet({
   onEdit,
   onEditOccurrence,
   onReassign,
+  onFocus,
 }: Props) {
   const { theme } = useTheme();
   const themeClasses = useThemeClasses();
@@ -828,6 +849,39 @@ export default function ItemActionsSheet({
                       ? "Change every occurrence"
                       : "Change details, alerts, time…"}
                   </p>
+                </div>
+              </button>
+            )}
+
+            {/* Focus on this item */}
+            {onFocus && (
+              <button
+                type="button"
+                onClick={() => {
+                  onFocus();
+                  handleClose();
+                }}
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
+                  "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
+                )}
+              >
+                <div
+                  className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center",
+                    isPink ? "bg-pink-500/20" : "bg-cyan-500/20",
+                  )}
+                >
+                  <FocusTargetIcon
+                    className={cn(
+                      "w-5 h-5",
+                      isPink ? "text-pink-400" : "text-cyan-400",
+                    )}
+                  />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-white font-medium">Focus</p>
+                  <p className="text-sm text-white/50">View this item in detail</p>
                 </div>
               </button>
             )}

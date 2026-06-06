@@ -54,7 +54,7 @@ tags:
 | ✅ **~~Can't take an item back / reclaim responsibility~~** *(FIXED 2026-06-06)* | Once I assign to my partner, I can't reassign it to myself — one-way street. | Added "Pass to partner" and "Take it back" one-tap actions to `ItemActionsSheet` (uses `useHouseholdMembers` to derive which button to show, calls `useUpdateItem` with Undo toast). No dedicated endpoint needed — RLS already permits it. | [src/components/items/ItemActionsSheet.tsx](<../../../../src/components/items/ItemActionsSheet.tsx>) — `onReassign` prop + `PassToPartnerIcon` / `TakeBackIcon` buttons | 🔴 |
 | ✅ **~~Handed-off items vanish — no "assigned out / assigned to me" view~~** *(FIXED 2026-06-06)* | After assigning, the item disappears from my view — no list of "things I gave my partner" or "things assigned to me." | Added two collapsible sections to `StandaloneRemindersPage`: **"Assigned to me"** (`responsible=me`, creator=partner) and **"Assigned out"** (creator=me, `responsible=partner`). Each row has a one-tap "Return →" or "← Reclaim" button wired to `handleReassign`. | [src/components/reminder/StandaloneRemindersPage.tsx](<../../../../src/components/reminder/StandaloneRemindersPage.tsx>) — `assignedToMeItems`, `assignedOutItems`, `renderAssignmentItem` | 🟠 |
 | **No reassignment history / audit** | Can't see who *had* responsibility and when it changed. Disputes ("I thought you had it") have no record. | No audit table or log on `responsible_user_id` changes. | — (absence) | 🟡 |
-| **⚠️ Read path may already hide partner items** | Even if we fix *write* auth, the *read* might not return partner-owned shared items, so they'd still be invisible. | Every read goes through the `get_schedule_bundle` SECURITY DEFINER RPC, whose body is **not in the repo** (see Cluster 4 schema-drift). Its partner-visibility can't be confirmed from code. | called at [src/features/items/useItems.ts](<../../../../src/features/items/useItems.ts>); RPC body absent from `migrations/schema.sql`. **⚠️ confirm in Supabase.** | 🟠 |
+| ✅ **~~Read path may already hide partner items~~** *(CONFIRMED 2026-06-06)* | RPC body now captured in `migrations/schema.sql`. Visible items = `user_id = me OR (partner's AND is_public = true)`. Normal flow is safe — the "Pass to partner" action sets `is_public = true`, so assigned items are always visible. **Known edge case (parked):** a private item (`is_public = false`) assigned to me by the partner won't appear in the bundle — but the assignment picker prevents this state today. | | ✅ |
 
 > **Reusable pattern already in the codebase:** the Trips module already reassigns `responsible_user_id` in both directions automatically (`activate_trip()` hands a solo traveler's items to the partner; `complete_trip()` hands them back) — see `migrations/schema.sql`. That's the proven shape to copy for manual "pass / take back." Captured in [2 · Target Design](<2 - Target Design & Decisions.md>).
 
@@ -79,7 +79,7 @@ tags:
 | Pain | Why it hurts | Root cause | Evidence | Sev |
 |---|---|---|---|---|
 | **Seven surfaces for one module** | Cognitive load: no single obvious place to *do the thing*. Overlapping jobs mean I hesitate about where to go. | Organic growth — each view added without retiring or merging an old one. | surface map above | 🟠 |
-| **Focus page is dead weight** | I never use it; it feels redundant. Energy spent maintaining a page I avoid. | It's a flexible-routine assignment dashboard that **duplicates the Week view's** assignment flow. | [src/components/focus/FocusPage.tsx](<../../../../src/components/focus/FocusPage.tsx>) vs. flexible assignment in [src/components/web/WebWeekView.tsx](<../../../../src/components/web/WebWeekView.tsx>) | 🟠 |
+| ✅ **~~Focus page is dead weight~~** *(FIXED 2026-06-06)* | Retired `/focus` page + `FocusPage.tsx` + `FlexibleRoutinesPool.tsx` + `ScheduleRoutineSheet.tsx`. Added "Focus" per-item action to `ItemActionsSheet` → opens `ItemDetailModal`. Week view's "Flexible this week" strip covers routine assignment. | | ✅ |
 | **`/reminders` hook rarely opened** | I don't go check what's still on my plate, so things slip. Is it a habit gap or a system gap? **Both** — the view competes with Today/Calendar and adds little they don't. | Redundancy + no compelling reason to open it over the calendar. Honest open question, not yet a fix. | [src/components/reminder/StandaloneRemindersPage.tsx](<../../../../src/components/reminder/StandaloneRemindersPage.tsx>) | 🟡 |
 | **Stats unused** | Maintenance surface with zero payoff right now. | Built ahead of need. | analytics surface | ⚪ parked |
 
@@ -109,7 +109,7 @@ tags:
 | Universal placement rule enforced by **convention, not a test** — a forgotten skip+inject breaks flexible items across all views. | 🟠 | parent file 1, weak-link #2 |
 | Prerequisites half-built — **4 evaluators inert** (`weather`, `time_window`, `schedule`, `custom_formula`). | 🟡 | parent file 1, weak-link #3 |
 | `useItems.ts` is **~2,621 LOC** — change-risk hotspot. | 🟡 | parent file 1, weak-link #4 |
-| **Schema drift:** `get_schedule_bundle` RPC + the dated migration files CLAUDE.md references are **not in the repo** — the module's authoritative read path is invisible to the codebase and can't be reviewed or re-applied. | 🟠 | this audit (2026-05-30): no RPC body in `migrations/schema.sql`; only `schema.sql` exists in `migrations/`. |
+| ✅ **~~Schema drift~~** *(FIXED 2026-06-06)* | Table DDL, `get_schedule_bundle` RPC body, and all RLS policies now captured in `migrations/schema.sql`. | | [migrations/schema.sql](<../../../../migrations/schema.sql>) |
 
 ---
 
@@ -119,8 +119,8 @@ tags:
 2. ✅ ~~**🔴 Can't take an item back / reassign in both directions.**~~ *(FIXED 2026-06-06)* "Pass to partner" + "Take it back" one-tap actions in `ItemActionsSheet`. *(Cluster 1)*
 3. ✅ ~~**🟠 Handed-off items vanish — no assigned-out/assigned-to-me view.**~~ *(FIXED 2026-06-06)* Two collapsible sections added to `/reminders`. *(Cluster 1)*
 4. **🟠 Capture is too heavy → I don't log everything.** The habit-killer; needs the A-vs-B decision. *(Cluster 3)*
-5. **🟠 Surface sprawl + dead Focus page.** Retire Focus-as-page, fold its job into the Week view; clarify each remaining surface's single job. *(Cluster 2 — decision already made)*
-6. **🟠 Schema drift hides the read path.** Until `get_schedule_bundle` is captured in the repo, every read-side fix is half-blind. *(Cluster 4)*
+5. ✅ ~~**🟠 Surface sprawl + dead Focus page.**~~ *(FIXED 2026-06-06)* Retired `/focus` page; added Focus per-item action to `ItemActionsSheet`; Week view handles routine assignment. *(Cluster 2)*
+6. ✅ ~~**🟠 Schema drift.**~~ *(FIXED 2026-06-06)* Full schema — tables, `get_schedule_bundle` RPC, and all RLS policies — now in `migrations/schema.sql`. *(Cluster 4)*
 
 → Where each pain is *heading* → [2 · Target Design & Decisions](<2 - Target Design & Decisions.md>).
 → What to actually do, and in what order → [3 · Execution Plan (Staged)](<3 - Execution Plan (Staged).md>).

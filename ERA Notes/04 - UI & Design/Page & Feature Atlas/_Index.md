@@ -52,7 +52,6 @@ tags:
 | Slug             | Route             | Detail             |
 | ---------------- | ----------------- | ------------------ |
 | `era`            | `/era`            | [[era]]            |
-| `focus`          | `/focus`          | [[focus]]          |
 | `chores`         | `/chores`         | [[chores]]         |
 | `catalogue`      | `/catalogue`      | [[catalogue]]      |
 | `recipe`         | `/recipe`         | [[recipe]]         |

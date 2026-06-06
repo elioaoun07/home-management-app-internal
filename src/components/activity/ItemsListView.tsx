@@ -1360,6 +1360,10 @@ export default function ItemsListView({
             handleReverseRecurrence(actionsState.item);
             setActionsState(null);
           }}
+          onFocus={() => {
+            setSelectedItem(actionsState.item);
+            setActionsState(null);
+          }}
         />
       )}
     </>

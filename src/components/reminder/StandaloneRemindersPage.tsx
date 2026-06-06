@@ -1677,6 +1677,10 @@ export default function StandaloneRemindersPage({
             handleReassign(actionsState.item, toUserId);
             setActionsState(null);
           }}
+          onFocus={() => {
+            setSelectedItem(actionsState.item);
+            setActionsState(null);
+          }}
           onReverseRecurrence={() => {
             handleReverseRecurrence(actionsState.item);
             setActionsState(null);

@@ -122,7 +122,6 @@ export default function MobileNav() {
     "/chat",
     "/reminders",
     "/dashboard",
-    "/focus",
     "/alerts",
     "/nfc/",
     "/ai-usage",

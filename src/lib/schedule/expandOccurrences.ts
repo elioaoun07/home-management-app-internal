@@ -1,7 +1,7 @@
 // src/lib/schedule/expandOccurrences.ts
 // Single canonical "given a range, return all occurrence views" helper.
 // Replaces inline expansion+merge loops in WebCalendar, WebWeekView,
-// WebTodayView, StandaloneRemindersPage, ItemsListView, FocusPage, etc.
+// WebTodayView, StandaloneRemindersPage, ItemsListView, etc.
 //
 // Concerns handled here, in order:
 //   1. Expand recurrence via getOccurrencesInRange (which already handles
