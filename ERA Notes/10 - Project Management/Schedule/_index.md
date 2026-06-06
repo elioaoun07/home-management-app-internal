@@ -13,7 +13,7 @@ tags:
 
 > Per-module strategic overview for **Schedule** (the *Items & Reminders* module — reminders, events, tasks, recurring & flexible routines, the calendar/today/week views, alerts, prerequisites, subtasks).
 >
-> **Scope:** this folder is **Schedule-only**. The root [10 - Project Management](<../_index.md>) set is **whole-app** scope. Future modules get their own sibling folders in this same 3-doc format.
+> **Scope:** this folder is **Schedule-only**. The root [10 - Project Management](<../_index.md>) set is **whole-app** scope. Sibling per-module folders use this same 4-doc format — see [Budget/](<../Budget/_index.md>), [Kitchen/](<../Kitchen/_index.md>), [Trips/](<../Trips/_index.md>), [Hub & ERA/](<../Hub & ERA/_index.md>) (full list in the root [_index](<../_index.md>)).
 
 | #   | File                                                                    | Read it when...                                                             |
 | --- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |

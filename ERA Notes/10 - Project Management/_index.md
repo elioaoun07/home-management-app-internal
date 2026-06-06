@@ -25,6 +25,10 @@ tags:
 | Module | Folder |
 |---|---|
 | **Schedule** (Items & Reminders) | [Schedule/](<Schedule/_index.md>) |
+| **Budget** (finance cluster) | [Budget/](<Budget/_index.md>) |
+| **Kitchen** (Recipes · Meal · Inventory · Shopping) | [Kitchen/](<Kitchen/_index.md>) |
+| **Trips** (lifecycle travel junction) | [Trips/](<Trips/_index.md>) |
+| **Hub & ERA** (Hub Chat · AI Assistant · Voice) | [Hub & ERA/](<Hub & ERA/_index.md>) |
 
 > Each module folder mirrors this set at module scope: `1 - Feature State`, `2 - Future Vision & Roadmap`, `3 - Current — Action Plan`, `_index`.
 

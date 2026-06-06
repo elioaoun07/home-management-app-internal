@@ -2,8 +2,47 @@
 // API route for updating and deleting items
 // Used by offline sync engine for replay
 
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+
+interface MutableItem {
+  user_id: string;
+  responsible_user_id: string;
+  is_public: boolean;
+}
+
+/**
+ * Whether `userId` may edit/delete the item. Mirrors the `items_update` /
+ * `items_delete` RLS policies exactly: creator OR responsible user OR
+ * (item is public AND caller is an active household partner of the creator).
+ * Private items (is_public=false) stay creator/responsible-only.
+ *
+ * The household-link lookup uses `admin` (service role) because the caller's
+ * own token can't read the partner's `household_links` row — same reason the
+ * complete route does so (see complete/route.ts).
+ */
+async function canMutateItem(
+  item: MutableItem,
+  userId: string,
+  admin: ReturnType<typeof supabaseAdmin>,
+): Promise<boolean> {
+  if (item.user_id === userId || item.responsible_user_id === userId) {
+    return true;
+  }
+  if (!item.is_public) return false;
+
+  const { data: link } = await admin
+    .from("household_links")
+    .select("id")
+    .eq("active", true)
+    .or(
+      `and(owner_user_id.eq.${item.user_id},partner_user_id.eq.${userId}),` +
+        `and(owner_user_id.eq.${userId},partner_user_id.eq.${item.user_id})`,
+    )
+    .maybeSingle();
+  return !!link;
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -22,10 +61,13 @@ export async function PATCH(
     const { id: itemId } = await params;
     const body = await request.json();
 
-    // Verify item exists and caller is the creator (only owner can edit)
+    // Verify item exists and caller may edit it (creator, responsible user, or
+    // active household partner on a public item — mirrors the items_update RLS
+    // policy). Use admin for the lookup since the partner's row isn't readable
+    // under the caller's token.
     const { data: existing, error: fetchError } = await supabase
       .from("items")
-      .select("id, user_id")
+      .select("id, user_id, responsible_user_id, is_public")
       .eq("id", itemId)
       .single();
 
@@ -33,7 +75,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
 
-    if (existing.user_id !== user.id) {
+    if (!(await canMutateItem(existing, user.id, supabaseAdmin()))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -159,10 +201,11 @@ export async function DELETE(
 
     const { id: itemId } = await params;
 
-    // Only the creator can delete or archive
+    // Creator, responsible user, or active household partner on a public item
+    // may delete/archive — mirrors the items_delete RLS policy.
     const { data: existing, error: fetchError } = await supabase
       .from("items")
-      .select("id, user_id")
+      .select("id, user_id, responsible_user_id, is_public")
       .eq("id", itemId)
       .single();
 
@@ -170,7 +213,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
 
-    if (existing.user_id !== user.id) {
+    if (!(await canMutateItem(existing, user.id, supabaseAdmin()))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
