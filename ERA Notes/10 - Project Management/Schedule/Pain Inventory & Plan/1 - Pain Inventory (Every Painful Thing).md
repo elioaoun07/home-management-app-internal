@@ -11,7 +11,7 @@ tags:
 
 # Schedule · 1 — Pain Inventory (Every Painful Thing)
 
-> **Command Center:** [_index](<_index.md>) · [1 · Pain Inventory](<1 - Pain Inventory (Every Painful Thing).md>) · [2 · Target Design](<2 - Target Design & Decisions.md>) · [3 · Execution Plan](<3 - Execution Plan (Staged).md>) · [4 · Type Taxonomy & Form](<4 - Type Taxonomy & Mobile Form Refactor.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Pain Inventory](<1 - Pain Inventory (Every Painful Thing).md>) · [2 · Target Design](<2 - Target Design & Decisions.md>) · [3 · Execution Plan](<3 - Execution Plan (Staged).md>) · [4 · Type Taxonomy & Form](<4 - Type Taxonomy & Mobile Form Refactor.md>) · [5 · My Plan Reconciliation](<5 - My Plan Reconciliation & Harmonized Scope.md>) · [6 · Master Checklist](<6 - Master Build Checklist.md>)
 >
 > **What this file is:** every painful thing about Schedule, written down so the scope is *visible* — not fixed yet. Each pain is `Pain → Why it hurts → Root cause → Evidence → Severity`. **No solutions here** (that's file 2) and **no sequencing** (that's file 3). This is the terrain.
 >
@@ -93,7 +93,7 @@ tags:
 
 | Pain | Why it hurts | Root cause | Evidence | Sev |
 |---|---|---|---|---|
-| **Mobile Form is too heavy for quick capture** | Logging "remind me to call the plumber" shouldn't need a multi-field form. The friction means I skip it. | The form carries the full field set (recurrence, alerts, prerequisites, responsible user, categories, subtasks) for *every* capture, even trivial ones. | [src/components/items/MobileItemForm.tsx](<../../../../src/components/items/MobileItemForm.tsx>) | 🟠 |
+| 🟢 **~~Mobile Form is too heavy for quick capture~~** *(LARGELY ADDRESSED 2026-06-06)* | Logging "remind me to call the plumber" shouldn't need a multi-field form. | **Correction:** the live form is [MobileReminderForm.tsx](<../../../../src/components/reminder/MobileReminderForm.tsx>) (NOT the dead `MobileItemForm.tsx`) — already single-page w/ smart NL input ([smartTextParser.ts](<../../../../src/lib/smartTextParser.ts>)), inferred type, progressive disclosure, voice. **Title-only "someday" save, quick date chips, and At-Home/Place/Map location shipped 2026-06-06.** | [MobileReminderForm.tsx](<../../../../src/components/reminder/MobileReminderForm.tsx>) | 🟢 |
 | **Events are easier to log than reminders/tasks** | The asymmetry means my reminders/tasks are under-captured relative to events — exactly the items I most need surfaced. | Events map cleanly to one start time; reminders/tasks invite optional recurrence/alert/subtask decisions that slow entry. | `event_details.start_at` vs. `reminder_details.due_at` + optional recurrence/alerts | 🟡 |
 | **No agreed low-friction path** | Without one canonical "fast lane," capture stays inconsistent. | Two viable directions, neither chosen: **(A)** route quick capture through Hub Chat (per CLAUDE.md, the Hub is the top-layer primary interface; forms are precision tools) vs. **(B)** strip the Mobile Form down. | open question — trade-offs in [2 · Target Design](<2 - Target Design & Decisions.md>); decided in [3 · Execution Plan](<3 - Execution Plan (Staged).md>) | 🟠 |
 

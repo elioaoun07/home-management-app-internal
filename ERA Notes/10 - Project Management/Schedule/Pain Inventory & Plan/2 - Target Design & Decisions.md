@@ -11,7 +11,7 @@ tags:
 
 # Schedule · 2 — Target Design & Decisions
 
-> **Command Center:** [_index](<_index.md>) · [1 · Pain Inventory](<1 - Pain Inventory (Every Painful Thing).md>) · [2 · Target Design](<2 - Target Design & Decisions.md>) · [3 · Execution Plan](<3 - Execution Plan (Staged).md>) · [4 · Type Taxonomy & Form](<4 - Type Taxonomy & Mobile Form Refactor.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Pain Inventory](<1 - Pain Inventory (Every Painful Thing).md>) · [2 · Target Design](<2 - Target Design & Decisions.md>) · [3 · Execution Plan](<3 - Execution Plan (Staged).md>) · [4 · Type Taxonomy & Form](<4 - Type Taxonomy & Mobile Form Refactor.md>) · [5 · My Plan Reconciliation](<5 - My Plan Reconciliation & Harmonized Scope.md>) · [6 · Master Checklist](<6 - Master Build Checklist.md>)
 >
 > **What this file is:** where each pain in [file 1](<1 - Pain Inventory (Every Painful Thing).md>) is *heading* — the target end-state, plus the calls already made. **Decisions live here; sequencing lives in [file 3](<3 - Execution Plan (Staged).md>).**
 >
@@ -19,7 +19,7 @@ tags:
 
 ---
 
-## ✅ Decision 1 — Focus becomes a per-item *mode*, not a page
+## ✅ Decision 1 — Focus becomes a per-item *mode*, not a page *(IMPLEMENTED 2026-06-06)*
 
 **Call:** Retire the standalone `/focus` page. "Focus" becomes an **action you invoke on any item** that drops you into a focused view of *that* item. Flexible-routine assignment — the only real job the page did — **consolidates into the Week view**, where it already half-lives.
 
@@ -40,7 +40,7 @@ tags:
 
 ---
 
-## ✅ Decision 2 — Household co-ownership model: shared = co-editable, reassign both ways
+## ✅ Decision 2 — Household co-ownership model: shared = co-editable, reassign both ways *(IMPLEMENTED 2026-06-06)*
 
 **Call:** For an item shared across the household, **any active partner can edit and act on it**, and **responsibility (`responsible_user_id`) is reassignable in both directions with a one-tap "take it back."**
 
@@ -50,12 +50,12 @@ tags:
 
 | Capability | Today | Target |
 |---|---|---|
-| Complete / postpone / cancel | Creator OR responsible OR active link ✅ | unchanged |
-| **Edit (PATCH)** | Creator only ❌ | Creator OR responsible OR active link |
-| **Delete** | Creator only ❌ | Creator OR responsible OR active link |
-| **Reassign to partner** | Via edit form only (and edit is locked) | One-tap "pass to partner" |
-| **Reclaim ("take it back")** | Not possible | One-tap "take it back" / "make it mine" |
-| **See assigned-out / assigned-to-me** | Implicit via mine/partner filter | Explicit buckets |
+| Complete / postpone / cancel | Creator OR responsible OR active link ✅ | unchanged ✅ |
+| **Edit (PATCH)** | ~~Creator only~~ → `canMutateItem()` ✅ | Creator OR responsible OR active link ✅ |
+| **Delete** | ~~Creator only~~ → `canMutateItem()` ✅ | Creator OR responsible OR active link ✅ |
+| **Reassign to partner** | ~~Via edit form only~~ → one-tap in `ItemActionsSheet` ✅ | One-tap "pass to partner" ✅ |
+| **Reclaim ("take it back")** | ~~Not possible~~ → one-tap in `ItemActionsSheet` ✅ | One-tap "take it back" / "make it mine" ✅ |
+| **See assigned-out / assigned-to-me** | ~~Implicit~~ → explicit buckets in `/reminders` ✅ | Explicit buckets ✅ |
 
 **Pattern to reuse (don't invent):**
 
@@ -63,11 +63,11 @@ tags:
 - **Reassignment:** the Trips RPCs already flip `responsible_user_id` both ways (`activate_trip` → partner, `complete_trip` → back) in `migrations/schema.sql`. Mirror that for manual pass/reclaim. The picker UI already exists: [ResponsibleUserPicker.tsx](<../../../../src/components/items/ResponsibleUserPicker.tsx>).
 - **Buckets:** the mine/partner filter on `responsible_user_id` in [StandaloneRemindersPage.tsx](<../../../../src/components/reminder/StandaloneRemindersPage.tsx>) is the seam to add "assigned out (creator = me, responsible = partner)" and "assigned to me (responsible = me, creator = partner)".
 
-> **Read-path caveat:** before trusting any of this, confirm the `get_schedule_bundle` RPC actually *returns* partner items (it's not in the repo — [file 1, Cluster 4](<1 - Pain Inventory (Every Painful Thing).md>)). If reads are creator-scoped, write-auth fixes alone won't make shared items visible. This is step 1 in [file 3](<3 - Execution Plan (Staged).md>).
+> **Read-path caveat:** *(RESOLVED 2026-06-06)* `get_schedule_bundle` returns `user_id = me OR (partner's AND is_public = true)`. The "Pass to partner" action sets `is_public = true`, so assigned items are always visible to both parties. RPC body captured in `migrations/schema.sql` (W5). Known edge case (parked): a private item assigned to me while `is_public = false` won't surface — assignment picker prevents this state today.
 
 ---
 
-## ✅ Decision 3 — Capture the schema drift back into the repo
+## ✅ Decision 3 — Capture the schema drift back into the repo *(IMPLEMENTED 2026-06-06)*
 
 **Call:** Re-export the live Supabase schema — including `get_schedule_bundle`, any other Schedule RPCs, and whatever RLS actually exists — back into `migrations/schema.sql` so the repo stops lying about the read path.
 

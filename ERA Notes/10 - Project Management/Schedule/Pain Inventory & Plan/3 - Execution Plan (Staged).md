@@ -11,7 +11,7 @@ tags:
 
 # Schedule · 3 — Execution Plan (Staged)
 
-> **Command Center:** [_index](<_index.md>) · [1 · Pain Inventory](<1 - Pain Inventory (Every Painful Thing).md>) · [2 · Target Design](<2 - Target Design & Decisions.md>) · [3 · Execution Plan](<3 - Execution Plan (Staged).md>) · [4 · Type Taxonomy & Form](<4 - Type Taxonomy & Mobile Form Refactor.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Pain Inventory](<1 - Pain Inventory (Every Painful Thing).md>) · [2 · Target Design](<2 - Target Design & Decisions.md>) · [3 · Execution Plan](<3 - Execution Plan (Staged).md>) · [4 · Type Taxonomy & Form](<4 - Type Taxonomy & Mobile Form Refactor.md>) · [5 · My Plan Reconciliation](<5 - My Plan Reconciliation & Harmonized Scope.md>) · [6 · Master Checklist](<6 - Master Build Checklist.md>)
 >
 > **What this file is:** the **step-by-step guide** I run from. A living queue (Now / Next / Later), **not** a fixed Mon–Fri grid. Re-order as priorities move; promote an item to "Now" when I pick it up.
 
@@ -40,7 +40,12 @@ If energy says otherwise, the capture decision (Cluster 3) is the higher *habit*
 | ~~W7~~ ✅ | ~~Focus → per-item mode; retire `/focus`; fold into Week view~~ | C2 | 🟠 | M–H | partly | — |
 | W8 | Reassignment history / audit | C1 | 🟡 | M | ✅ yes | — |
 | W9 | Surface consolidation (`/reminders` role; clarify each job) | C2 | 🟠 | M | partly | — |
+| W10 | Form NL quick-capture box (rule-based; pre-fills structured fields as chips) | C3 | 🟠 | M | partly | — |
+| W11 | Hub Chat Gemini capture (one line → structured item) | C3 | 🟠 | M | partly | — |
+| W12 | NFC-from-text (Phase 2): "when I get home" → `location_context` + arrive-home prerequisite | C3 | 🟡 | M | partly | — |
 | — | Recurrence/placement tests, prerequisites, `useItems` split | C4 | — | — | — | see parent [file 3](<../3 - Current — Action Plan.md>) |
+
+> **W10–W12 are refinements of W6** (the capture-path decision), scoped in [file 5](<5 - My Plan Reconciliation & Harmonized Scope.md>) after reconciling the external `0 - My Plan.MD` brief. They do not replace W6; the form refactor in [file 4 §4](<4 - Type Taxonomy & Mobile Form Refactor.md>) is the foundation they sit on.
 
 > Foundational test/prerequisite work is **owned by the parent** [Schedule · 3 — Current Action Plan](<../3 - Current — Action Plan.md>) — don't fork it here. This campaign is the overhaul layered on top.
 
@@ -62,7 +67,7 @@ If energy says otherwise, the capture decision (Cluster 3) is the higher *habit*
 
 ### Next — pick ONE
 
-- [ ] **Capture path (W6).** Make the A-vs-B call from [file 2's open question](<2 - Target Design & Decisions.md>) (leaning A = Hub quick-capture, possibly A+B). Then build the chosen fast lane. **Highest habit payoff.**
+- [~] **Capture path (W6).** *(DECIDED 2026-06-06 — both lanes; see [file 5](<5 - My Plan Reconciliation & Harmonized Scope.md>).)* **Phase 1a shipped 2026-06-06** on the LIVE form [MobileReminderForm.tsx](<../../../../src/components/reminder/MobileReminderForm.tsx>) (not the dead `MobileItemForm`): title-only save, quick date chips, At-Home/Place/Map location (+ `location_text` bug fix). Most of the refactor + **W10** (rule-based NL parser, [smartTextParser.ts](<../../../../src/lib/smartTextParser.ts>)) **already existed**. Remaining: **W11** Hub Chat Gemini capture; **Phase 2 (W12)** location/NFC-from-text. See [file 6](<6 - Master Build Checklist.md>).
 - [x] **Focus → mode (W7).** *(DONE 2026-06-06)* Retired `/focus` page + `FocusPage.tsx` + `FlexibleRoutinesPool.tsx` + `ScheduleRoutineSheet.tsx`. Added `onFocus` prop + Focus button (crosshair icon) to `ItemActionsSheet` → opens `ItemDetailModal` in `StandaloneRemindersPage` and `ItemsListView`. Week view's "Flexible this week" strip already handles routine assignment. Atlas, Feature Index, Routes doc, vault doc all updated.
 
 ### Later
@@ -98,4 +103,5 @@ If energy says otherwise, the capture decision (Cluster 3) is the higher *habit*
 - Capture path B as a fallback even if A ships first.
 - `/reminders` → unified assignments + open-items management view.
 - Recurrence + occurrence-action unit tests, placement-rule guard test, `time_window` prerequisite — **see parent** [Schedule · 3](<../3 - Current — Action Plan.md>).
-- Natural-language item entry (one line → full item) — pairs naturally with capture path A.
+- Natural-language item entry (one line → full item) — **now scoped as W10 (form, rule-based) + W11 (Hub, Gemini)** in [file 5](<5 - My Plan Reconciliation & Harmonized Scope.md>).
+- NFC-from-text Phase 2 (W12): "when I get home" → `location_context: home` + arrive-home prerequisite. Confidence/clarification UX (Phase 3). See [file 5 §D/§F](<5 - My Plan Reconciliation & Harmonized Scope.md>).

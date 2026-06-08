@@ -20,8 +20,8 @@ The Schedule module covers everything time-bound: reminders, tasks, events, recu
   - `src/components/reminder/RemindersInsightsPage.tsx`
   - `src/components/reminder/ReminderTagsBar.tsx` / `ReminderTagsBarWrapper.tsx`
 - **Item entry forms (the thing you usually want to edit)**:
-  - `src/components/items/MobileItemForm.tsx` ← **main mobile item/reminder entry form**
-  - `src/components/reminder/MobileReminderForm.tsx`
+  - `src/components/reminder/MobileReminderForm.tsx` ← **THE live mobile entry form** (mounted in `TabContainer` → `reminder` tab; smart NL via `src/lib/smartTextParser.ts`)
+  - `src/components/items/MobileItemForm.tsx` ← ⚠️ **dead code (2026-06-06)** — zero importers, not mounted; superseded by `MobileReminderForm`
   - `src/components/items/EditItemDialog.tsx` ← edit existing item
   - `src/components/items/EditScopeDialog.tsx` ← "edit this one / all future / all" for recurring
   - `src/components/items/RecurringEditChoiceDialog.tsx`

@@ -11,7 +11,7 @@ tags:
 
 # Schedule · 4 — Type Taxonomy & Mobile Form Refactor
 
-> **Command Center:** [_index](<_index.md>) · [1 · Pain Inventory](<1 - Pain Inventory (Every Painful Thing).md>) · [2 · Target Design](<2 - Target Design & Decisions.md>) · [3 · Execution Plan](<3 - Execution Plan (Staged).md>) · [4 · Type Taxonomy & Form](<4 - Type Taxonomy & Mobile Form Refactor.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Pain Inventory](<1 - Pain Inventory (Every Painful Thing).md>) · [2 · Target Design](<2 - Target Design & Decisions.md>) · [3 · Execution Plan](<3 - Execution Plan (Staged).md>) · [4 · Type Taxonomy & Form](<4 - Type Taxonomy & Mobile Form Refactor.md>) · [5 · My Plan Reconciliation](<5 - My Plan Reconciliation & Harmonized Scope.md>) · [6 · Master Checklist](<6 - Master Build Checklist.md>)
 >
 > **What this file is:** the answer to "what *are* Task / Reminder / Event / Chore, and does the split make sense?" — then a concrete refactor of the [Mobile Item Form](<../../../../src/components/items/MobileItemForm.tsx>) (`/expense`) built on that answer. This is **upstream of the capture-friction pain** ([file 1, Cluster 3](<1 - Pain Inventory (Every Painful Thing).md>)): the form can't be simple until the types are crisp.
 
@@ -74,6 +74,8 @@ Since they already share `reminder_details`, merge them in the UI: everything ti
 > **Lean:** **Option A.** It gets ~90% of the simplicity of B with ~10% of the risk (no migration, types stay), and it keeps the vocabulary you think in. B is the fallback if A's inference still feels like too many questions.
 
 ---
+
+> **⚠️ Target correction (2026-06-06):** this section was written against [`MobileItemForm.tsx`](<../../../../src/components/items/MobileItemForm.tsx>), but that file is **dead code** (zero importers). The **live** mobile capture form is [`MobileReminderForm.tsx`](<../../../../src/components/reminder/MobileReminderForm.tsx>) (mounted in `TabContainer`), which was **already** single-page with smart NL input ([`smartTextParser.ts`](<../../../../src/lib/smartTextParser.ts>)), inferred type, progressive disclosure, and voice — so most of this refactor already existed there. The genuine gaps (title-only save, quick date chips, At-Home/location_context/maps-link) shipped on the live form 2026-06-06. See [file 6 Phase 1a](<6 - Master Build Checklist.md>).
 
 ## 4. How I'd refactor the Mobile Item Form (`/expense`)
 

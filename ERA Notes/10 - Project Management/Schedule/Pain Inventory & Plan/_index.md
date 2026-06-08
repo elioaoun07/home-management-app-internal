@@ -21,6 +21,8 @@ tags:
 | 2   | [Target Design & Decisions](<2 - Target Design & Decisions.md>)             | You want to know where Schedule is *heading* and which calls are already made.       |
 | 3   | [Execution Plan (Staged)](<3 - Execution Plan (Staged).md>)                 | You're ready to act. Candidate work + the step-by-step guide. **Pick the slice here.** |
 | 4   | [Type Taxonomy & Mobile Form Refactor](<4 - Type Taxonomy & Mobile Form Refactor.md>) | You want the "what are Task/Reminder/Event/Chore?" answer + the `/expense` form refactor. |
+| 5   | [My Plan Reconciliation & Harmonized Scope](<5 - My Plan Reconciliation & Harmonized Scope.md>) | You want to know how the external `0 - My Plan.MD` brief maps onto app reality — what's in harmony, reshaped, deferred, or won't-do. |
+| 6   | [Master Build Checklist](<6 - Master Build Checklist.md>) | You're ready to build and want the single phased, checkable list of every pending item — point at a line, group, or phase. |
 
 ## How to use this set
 

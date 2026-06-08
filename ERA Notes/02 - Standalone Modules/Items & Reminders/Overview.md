@@ -1,6 +1,6 @@
 ---
 created: 2026-03-23
-updated: 2026-04-25
+updated: 2026-06-06
 type: overview
 module: items
 module-type: standalone
@@ -29,7 +29,7 @@ tags:
 | Task | File |
 |------|------|
 | Create item (mobile quick) | `src/components/reminder/MobileReminderForm.tsx` |
-| Create item (mobile full) | `src/components/items/MobileItemForm.tsx` |
+| Create item (mobile full) | ~~`src/components/items/MobileItemForm.tsx`~~ — **dead code (2026-06-06)**, not mounted anywhere; use `MobileReminderForm` |
 | Create/edit item (desktop) | `src/components/web/WebEventFormDialog.tsx` |
 | Edit existing item | `src/components/items/EditItemDialog.tsx` (opened from detail modal) |
 | View/act on an item | `src/components/items/ItemDetailModal.tsx` |
@@ -55,8 +55,8 @@ tags:
 
 | Component | What it does |
 |-----------|-------------|
-| `src/components/reminder/MobileReminderForm.tsx` | Quick reminder entry with smart text parsing, categories, dates, recurrence, alerts |
-| `src/components/items/MobileItemForm.tsx` | Full drawer form for reminders / events / tasks |
+| `src/components/reminder/MobileReminderForm.tsx` | **The live mobile capture form** (mounted in `TabContainer` → `reminder` tab). Smart NL parsing (`src/lib/smartTextParser.ts`), inferred type, voice, categories, dates, recurrence, alerts, prerequisites. **2026-06-06:** title-only "someday" save; quick date chips (Today / Tomorrow / No date); At-Home / Place / Map-link location (`location_context` + `location_text`, replacing the old `metadata_json` location hack for reminders/tasks). |
+| `src/components/items/MobileItemForm.tsx` | ⚠️ **Dead code (2026-06-06)** — zero importers; the old 5-step drawer wizard, superseded by `MobileReminderForm`. Slated for removal (campaign file 6, item 5.3). |
 
 ### Mobile — View & Act
 

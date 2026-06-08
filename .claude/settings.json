@@ -38,6 +38,10 @@
           {
             "type": "command",
             "command": "bash .claude/hooks/update-atlas.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/check-migration.sh"
           }
         ]
       }

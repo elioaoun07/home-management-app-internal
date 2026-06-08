@@ -9,13 +9,9 @@
  */
 "use client";
 
-import {
-  CustomRecurrencePicker,
-  describeRRule,
-} from "@/components/items/CustomRecurrencePicker";
+import { CustomRecurrencePicker } from "@/components/items/CustomRecurrencePicker";
 import ItemDetailModal from "@/components/items/ItemDetailModal";
 import { PrerequisitePicker } from "@/components/items/PrerequisitePicker";
-import { ResponsibleUserPicker } from "@/components/items/ResponsibleUserPicker";
 import {
   SmartAlertPicker,
   type SmartAlertValue,
@@ -38,11 +34,10 @@ import {
   useCreateTask,
   useItem,
 } from "@/features/items/useItems";
+import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import {
-  getDateDescription,
   getRecurrenceDescription,
-  getTimeDescription,
   parseSmartText,
   type ParsedItem,
 } from "@/lib/smartTextParser";
@@ -54,15 +49,25 @@ import type {
   CreateEventInput,
   CreateRecurrenceInput,
   CreateReminderInput,
-  CreateTaskInput,
   ItemPriority,
   ItemStatus,
   ItemType,
 } from "@/types/items";
 import type { CreatePrerequisiteInput } from "@/types/prerequisites";
-import { parse as dateParse, format } from "date-fns";
+import { format } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckIcon, Circle, MapPin, SparklesIcon, Zap } from "lucide-react";
+import {
+  CheckIcon,
+  Circle,
+  Clock,
+  Home,
+  Link,
+  MapPin,
+  Repeat,
+  SparklesIcon,
+  Users,
+  Zap,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import {
   useCallback,
@@ -105,21 +110,6 @@ const BellIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const RepeatIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path d="M17 2l4 4-4 4" />
-    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
-    <path d="M7 22l-4-4 4-4" />
-    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
-  </svg>
-);
-
 const FlagIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
@@ -130,33 +120,6 @@ const FlagIcon = ({ className }: { className?: string }) => (
   >
     <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
     <line x1="4" x2="4" y1="22" y2="15" />
-  </svg>
-);
-
-const ClipboardCheckIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-    <path d="M9 14l2 2 4-4" />
-  </svg>
-);
-
-const TagIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-    <line x1="7" x2="7.01" y1="7" y2="7" />
   </svg>
 );
 
@@ -269,10 +232,12 @@ const RECURRENCE_PRESETS = [
 
 export default function MobileReminderForm() {
   const themeClasses = useThemeClasses();
+  const { data: householdData } = useHouseholdMembers();
   const createReminder = useCreateReminder();
   const createEvent = useCreateEvent();
   const createTask = useCreateTask();
   const inputRef = useRef<HTMLInputElement>(null);
+  const dueTimeRef = useRef<HTMLInputElement>(null);
 
   // ── Notification deep-link: open quick view for the targeted item ──
   const tabCtx = useTabSafe();
@@ -340,8 +305,7 @@ export default function MobileReminderForm() {
 
   // Core form state
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [isPrivate, setIsPrivate] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(true);
   const [priority, setPriority] = useState<ItemPriority>("normal");
   const [status, setStatus] = useState<ItemStatus>("pending");
   const [itemType, setItemType] = useState<ItemType>("reminder");
@@ -370,6 +334,10 @@ export default function MobileReminderForm() {
   const [customRecurrenceOpen, setCustomRecurrenceOpen] = useState(false);
 
   // Location (all types)
+  const [locationContext, setLocationContext] = useState<"home" | null>(null);
+  const [locationMode, setLocationMode] = useState<"none" | "home" | "map">(
+    "none",
+  );
   const [location, setLocation] = useState("");
   const [showLocation, setShowLocation] = useState(false);
 
@@ -386,18 +354,6 @@ export default function MobileReminderForm() {
   const [showTriggers, setShowTriggers] = useState(false);
 
   // Description section
-  const [showDescription, setShowDescription] = useState(false);
-
-  // Missing fields modal state
-  const [showMissingFieldsModal, setShowMissingFieldsModal] = useState(false);
-  const [missingFieldType, setMissingFieldType] = useState<
-    "event" | "reminder" | "task" | null
-  >(null);
-  const [dateModalIntent, setDateModalIntent] = useState<"set-date" | "submit">(
-    "set-date",
-  );
-  const [editingDateField, setEditingDateField] = useState<string | null>(null);
-  const [showEndDateInModal, setShowEndDateInModal] = useState(false);
 
   // Voice input state
   const [isListening, setIsListening] = useState(false);
@@ -466,26 +422,33 @@ export default function MobileReminderForm() {
     }
   }, [isListening]);
 
-  // Helpers
-  const formatDateDisplay = (dateStr: string) => {
-    if (!dateStr) return "Select date";
+  // Native date/time field styling (filled = themed highlight)
+  const nativeFieldCls = (filled: boolean) =>
+    cn(
+      "px-2.5 py-2 rounded-lg text-xs font-medium border bg-bg-dark/40 [color-scheme:dark] outline-none transition-all active:scale-95",
+      filled
+        ? "border-purple-400/50 text-purple-200"
+        : "border-white/10 text-white/50",
+    );
+
+  // Time-of-day presets (the fuzzy chips). Anything else = an "exact" time.
+  const TIME_PRESETS = ["09:00", "12:00", "15:00", "19:00"];
+  const hasExactTime = !!dueTime && !TIME_PRESETS.includes(dueTime);
+  const formatTimeLabel = (t: string) => {
     try {
-      const date = dateParse(dateStr, "yyyy-MM-dd", new Date());
-      return format(date, "d MMM, yyyy");
+      return format(new Date(`2000-01-01T${t}`), "h:mm a");
     } catch {
-      return dateStr;
+      return t;
     }
   };
-
-  const formatTimeDisplay = (timeStr: string) => {
-    if (!timeStr) return "Select time";
+  // Open the OS time picker from the hidden <input type="time">
+  const openTimePicker = () => {
+    const el = dueTimeRef.current;
+    if (!el) return;
     try {
-      const [hours, minutes] = timeStr.split(":");
-      const date = new Date();
-      date.setHours(parseInt(hours), parseInt(minutes));
-      return format(date, "h:mm a");
+      el.showPicker();
     } catch {
-      return timeStr;
+      el.focus();
     }
   };
 
@@ -504,7 +467,11 @@ export default function MobileReminderForm() {
         setEndDate("");
         setEndTime("");
       }
-      if (!manualOverrides.location) setLocation("");
+      if (!manualOverrides.location) {
+        setLocation("");
+        setLocationContext(null);
+        setLocationMode("none");
+      }
       setTitle("");
       if (!manualOverrides.type) setRecurrenceRule("");
       return;
@@ -515,15 +482,22 @@ export default function MobileReminderForm() {
       setParsedItem(parsed);
       setTitle(parsed.title);
 
-      if (!manualOverrides.type) setItemType(parsed.type);
+      // Task is retired in the UI — only Reminder or Event
+      if (!manualOverrides.type)
+        setItemType(parsed.type === "task" ? "reminder" : parsed.type);
       if (!manualOverrides.priority) setPriority(parsed.priority);
 
+      // Categories apply to events only — reminders have no categories
       if (!manualOverrides.categories) {
-        setSelectedCategoryIds(
-          parsed.categoryIds && parsed.categoryIds.length > 0
-            ? parsed.categoryIds
-            : ["personal"],
-        );
+        if (parsed.type === "event") {
+          setSelectedCategoryIds(
+            parsed.categoryIds && parsed.categoryIds.length > 0
+              ? parsed.categoryIds
+              : ["personal"],
+          );
+        } else {
+          setSelectedCategoryIds([]);
+        }
       }
 
       if (parsed.recurrenceRule && !manualOverrides.type) {
@@ -532,15 +506,33 @@ export default function MobileReminderForm() {
         setRecurrenceRule("");
       }
 
-      // Location parsing: detect "at [place]" but not "at [time]"
+      // Location parsing: "home"/"when I get home" → At Home (only home is auto-detected)
       if (!manualOverrides.location) {
-        const locationMatch = smartInput.match(
-          /\bat\s+(?!(?:\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)?|noon|midnight|morning|evening|night|dawn|dusk|sunset|sunrise)\b)([a-zA-Z][a-zA-Z0-9\s,.'-]{2,30}?)(?:\s+(?:on|at|by|from|tomorrow|today|next|every|daily|weekly)\b|$)/i,
-        );
-        if (locationMatch && parsed.type === "event") {
-          setLocation(locationMatch[1].trim());
+        const homeMatch =
+          /\b(?:get(?:ting)?\s+(?:back\s+)?home|back\s+home|at\s+home|reach(?:ing)?\s+home|arriv(?:e|es|ing)\s+home|head(?:ing)?\s+home|go(?:ing)?\s+home|when\s+i'?m\s+home|home)\b/i.test(
+            smartInput,
+          );
+        if (homeMatch) {
+          setLocationContext("home");
+          setLocationMode("home");
+          setLocation("");
+          // Drop the trailing "when I get home"-style clause from the title
+          setTitle((prev) => {
+            const cleaned = prev
+              .replace(
+                /\b(?:when|once|after|whenever|as\s+soon\s+as)\s+i'?m?\b.*$/i,
+                "",
+              )
+              .replace(/\bat\s+home\b/gi, "")
+              .replace(/\s{2,}/g, " ")
+              .replace(/^[\s,.–-]+|[\s,.–-]+$/g, "")
+              .trim();
+            return cleaned || prev;
+          });
         } else {
           setLocation("");
+          setLocationContext(null);
+          setLocationMode("none");
         }
       }
 
@@ -575,8 +567,7 @@ export default function MobileReminderForm() {
     setSmartInput("");
     setParsedItem(null);
     setTitle("");
-    setDescription("");
-    setIsPrivate(false);
+    setIsPrivate(true);
     setPriority("normal");
     setStatus("pending");
     setItemType("reminder");
@@ -591,11 +582,12 @@ export default function MobileReminderForm() {
     setRecurrenceRule("");
     setCustomRecurrenceOpen(false);
     setLocation("");
+    setLocationContext(null);
+    setLocationMode("none");
     setResponsibleUserId(undefined);
     setNotifyAllHousehold(false);
     setPrerequisites([]);
     setShowTriggers(false);
-    setShowDescription(false);
     setShowLocation(false);
     setManualOverrides({
       type: false,
@@ -605,7 +597,59 @@ export default function MobileReminderForm() {
       location: false,
       responsible: false,
     });
-    setShowEndDateInModal(false);
+  }, []);
+
+  // Quick date chips (Today / Tomorrow) — tapping the active one again clears the date
+  const applyQuickDate = useCallback(
+    (mode: "today" | "tomorrow") => {
+      setManualOverrides((prev) => ({ ...prev, dates: true }));
+      const base = new Date();
+      if (mode === "tomorrow") base.setDate(base.getDate() + 1);
+      const dateStr = format(base, "yyyy-MM-dd");
+      if (itemType === "event") {
+        if (startDate === dateStr) {
+          setStartDate("");
+          setStartTime("");
+          setEndDate("");
+          setEndTime("");
+        } else {
+          setStartDate(dateStr);
+          setStartTime((t) => t || "09:00");
+          setEndDate(dateStr);
+          setEndTime((t) => t || "10:00");
+        }
+      } else {
+        // Reminder: set the day only — time stays optional (time-of-day chips below)
+        if (dueDate === dateStr) {
+          setDueDate("");
+          setDueTime("");
+        } else {
+          setDueDate(dateStr);
+        }
+      }
+    },
+    [itemType, startDate, dueDate],
+  );
+
+  // Time-of-day presets for reminders (tap active again to clear → all-day)
+  const applyTimeOfDay = useCallback((time: string) => {
+    setManualOverrides((prev) => ({ ...prev, dates: true }));
+    setDueTime((prev) => (prev === time ? "" : time));
+  }, []);
+
+  // Location mode selector (At Home / Map link)
+  const selectLocationMode = useCallback((mode: "home" | "map") => {
+    setManualOverrides((prev) => ({ ...prev, location: true }));
+    setLocationMode((prev) => {
+      const next = prev === mode ? "none" : mode;
+      if (next === "home") {
+        setLocationContext("home");
+        setLocation("");
+      } else {
+        setLocationContext(null);
+      }
+      return next;
+    });
   }, []);
 
   // Build alert input from SmartAlertValue
@@ -633,16 +677,14 @@ export default function MobileReminderForm() {
     }
 
     try {
-      const descriptionToSave = description.trim() || undefined;
       const startingStatus: ItemStatus =
         prerequisites.length > 0 ? "dormant" : status;
 
       if (itemType === "event") {
         if (!startDate || !startTime || !endDate || !endTime) {
-          setMissingFieldType("event");
-          setDateModalIntent("submit");
-          setShowEndDateInModal(true);
-          setShowMissingFieldsModal(true);
+          toast.error("Add a start and end date & time for the event", {
+            icon: ToastIcons.error,
+          });
           return;
         }
 
@@ -662,12 +704,12 @@ export default function MobileReminderForm() {
         const input: CreateEventInput = {
           type: "event",
           title: title.trim(),
-          description: descriptionToSave,
           priority,
           status: startingStatus,
           is_public: !isPrivate,
           start_at: startAtIso,
           end_at: endAtIso,
+          location_context: locationContext ?? undefined,
           location_text: location.trim() || undefined,
           alerts: alertInput ? [alertInput] : undefined,
           category_ids:
@@ -683,15 +725,8 @@ export default function MobileReminderForm() {
           icon: ToastIcons.create,
           description: title,
         });
-      } else if (itemType === "task") {
-        if (!dueDate || !dueTime) {
-          setMissingFieldType("task");
-          setDateModalIntent("submit");
-          setShowEndDateInModal(false);
-          setShowMissingFieldsModal(true);
-          return;
-        }
-
+      } else {
+        // Reminder
         let dueAtIso: string | undefined;
         if (dueDate && dueTime) {
           dueAtIso = localToISO(dueDate, dueTime);
@@ -708,76 +743,21 @@ export default function MobileReminderForm() {
         }
 
         const alertInput = buildAlertInput(alertValue);
-
-        const locationTrimmed = location.trim();
-        const input: CreateTaskInput = {
-          type: "task",
-          title: title.trim(),
-          description: descriptionToSave,
-          priority,
-          is_public: !isPrivate,
-          status: startingStatus,
-          due_at: dueAtIso,
-          alerts: alertInput ? [alertInput] : undefined,
-          category_ids:
-            selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
-          recurrence_rule,
-          responsible_user_id: responsibleUserId || undefined,
-          notify_all_household: notifyAllHousehold || undefined,
-          prerequisites: prerequisites.length > 0 ? prerequisites : undefined,
-          metadata_json: locationTrimmed
-            ? { location_text: locationTrimmed }
-            : undefined,
-        };
-
-        await createTask.mutateAsync(input);
-        toast.success("Task created!", {
-          icon: ToastIcons.create,
-          description: title,
-        });
-      } else {
-        // Reminder
-        if (!dueDate || !dueTime) {
-          setMissingFieldType("reminder");
-          setDateModalIntent("submit");
-          setShowEndDateInModal(false);
-          setShowMissingFieldsModal(true);
-          return;
-        }
-
-        let dueAtIso: string | undefined;
-        if (dueDate && dueTime) {
-          dueAtIso = localToISO(dueDate, dueTime);
-        } else if (dueDate) {
-          dueAtIso = localToISO(dueDate, "12:00");
-        }
-
-        let recurrence_rule: CreateRecurrenceInput | undefined;
-        if (recurrenceRule && dueAtIso) {
-          recurrence_rule = {
-            rrule: recurrenceRule,
-            start_anchor: dueAtIso,
-          };
-        }
-
         const locationTrimmed = location.trim();
         const input: CreateReminderInput = {
           type: "reminder",
           title: title.trim(),
-          description: descriptionToSave,
           priority,
           status: startingStatus,
           is_public: !isPrivate,
           due_at: dueAtIso,
-          category_ids:
-            selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
+          alerts: alertInput && dueAtIso ? [alertInput] : undefined,
           recurrence_rule,
           responsible_user_id: responsibleUserId || undefined,
           notify_all_household: notifyAllHousehold || undefined,
           prerequisites: prerequisites.length > 0 ? prerequisites : undefined,
-          metadata_json: locationTrimmed
-            ? { location_text: locationTrimmed }
-            : undefined,
+          location_context: locationContext ?? undefined,
+          location_text: locationTrimmed || undefined,
         };
 
         await createReminder.mutateAsync(input);
@@ -813,78 +793,80 @@ export default function MobileReminderForm() {
   const isPending =
     createReminder.isPending || createEvent.isPending || createTask.isPending;
 
-  // Parsed info chips
-  const getParsedInfoChips = () => {
-    if (!parsedItem) return null;
+  // Live summary chips — SVG-iconed, readable, and clickable to jump to their editor.
+  // They mirror the structured fields that are currently set (not just the raw parse).
+  type SummaryChip = {
+    key: string;
+    Icon: React.FC<{ className?: string }>;
+    iconClass: string;
+    label: string;
+    onClick: () => void;
+  };
+  const buildSummaryChips = (): SummaryChip[] => {
+    const chips: SummaryChip[] = [];
 
-    const chips: { label: string; color: string; confidence: number }[] = [];
-
-    const typeLabel =
-      parsedItem.type === "event"
-        ? "Event"
-        : parsedItem.type === "task"
-          ? "Task"
-          : "Reminder";
-    chips.push({
-      label: typeLabel,
-      color: "from-cyan-500/30 to-blue-500/30",
-      confidence: parsedItem.confidence.type,
-    });
-
-    if (parsedItem.dueDate || parsedItem.startDate) {
-      const dateStr = parsedItem.dueDate || parsedItem.startDate || "";
-      const dateLabel = getDateDescription(dateStr);
-      if (dateLabel) {
-        chips.push({
-          label: `📆 ${dateLabel}`,
-          color: "from-violet-500/30 to-purple-500/30",
-          confidence: parsedItem.confidence.date,
-        });
-      }
-    }
-
-    if (parsedItem.dueTime || parsedItem.startTime) {
-      const timeStr = parsedItem.dueTime || parsedItem.startTime || "";
-      const timeLabel = getTimeDescription(timeStr);
-      if (timeLabel) {
-        chips.push({
-          label: `🕐 ${timeLabel}`,
-          color: "from-amber-500/30 to-orange-500/30",
-          confidence: parsedItem.confidence.time,
-        });
-      }
-    }
-
-    if (parsedItem.recurrenceRule) {
-      const recurrenceLabel = getRecurrenceDescription(
-        parsedItem.recurrenceRule,
-      );
+    if (recurrenceRule) {
       chips.push({
-        label: `🔄 ${recurrenceLabel}`,
-        color: "from-green-500/30 to-emerald-500/30",
-        confidence: parsedItem.confidence.recurrence,
+        key: "repeat",
+        Icon: Repeat,
+        iconClass: "text-green-300",
+        label: getRecurrenceDescription(recurrenceRule) || "Repeats",
+        onClick: () => setCustomRecurrenceOpen(true),
       });
     }
-
-    if (parsedItem.priority !== "normal") {
-      const prioLabel = priorityConfig[parsedItem.priority].label;
+    if (locationContext === "home") {
       chips.push({
-        label: prioLabel,
-        color: "from-red-500/30 to-pink-500/30",
-        confidence: parsedItem.confidence.priority,
+        key: "loc",
+        Icon: Home,
+        iconClass: "text-teal-300",
+        label: "Home",
+        onClick: () => setShowLocation(true),
+      });
+    } else if (locationMode === "map" && location) {
+      chips.push({
+        key: "loc",
+        Icon: MapPin,
+        iconClass: "text-teal-300",
+        label: "Map link",
+        onClick: () => setShowLocation(true),
       });
     }
-
     return chips;
   };
 
-  const parsedChips = getParsedInfoChips();
+  const summaryChips = buildSummaryChips();
 
-  // Recurrence display text
-  const recurrenceDisplayText = recurrenceRule
-    ? RECURRENCE_PRESETS.find((p) => p.value === recurrenceRule)?.label ||
-      describeRRule(recurrenceRule)
-    : "Never";
+  // Quick-date chip active state
+  const activeDateStr = itemType === "event" ? startDate : dueDate;
+  const todayDateStr = format(new Date(), "yyyy-MM-dd");
+  const tomorrowDateStr = format(
+    new Date(Date.now() + 24 * 60 * 60 * 1000),
+    "yyyy-MM-dd",
+  );
+  const quickDateMode: "today" | "tomorrow" | "none" | "custom" = !activeDateStr
+    ? "none"
+    : activeDateStr === todayDateStr
+      ? "today"
+      : activeDateStr === tomorrowDateStr
+        ? "tomorrow"
+        : "custom";
+
+  // ── Privacy / responsibility ──
+  // Colors are person-absolute (Hard Rule #14): the current user wears the active
+  // theme accent, the partner wears the opposite — so "me" follows the theme.
+  const partnerMember = householdData?.members?.find((m) => !m.isCurrentUser);
+  const currentUserId = householdData?.currentUserId;
+  const sharedMode: "me" | "partner" | "both" = notifyAllHousehold
+    ? "both"
+    : responsibleUserId && responsibleUserId === partnerMember?.id
+      ? "partner"
+      : "me";
+  const meSelectedCls = themeClasses.isPink
+    ? "border-pink-400 bg-pink-500/15 text-pink-200"
+    : "border-cyan-400 bg-cyan-500/15 text-cyan-200";
+  const partnerSelectedCls = themeClasses.isPink
+    ? "border-cyan-400 bg-cyan-500/15 text-cyan-200"
+    : "border-pink-400 bg-pink-500/15 text-pink-200";
 
   return (
     <>
@@ -905,456 +887,51 @@ export default function MobileReminderForm() {
                 className="overflow-x-auto scrollbar-none"
               >
                 <div className="flex items-center gap-1.5 px-1 min-w-max pb-1">
-                  {/* 1. Priority Tag — only when non-default */}
-                  {priority !== "normal" && (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          className={`inline-flex items-center px-2 py-1.5 rounded-full ${themeClasses.pillBg} ${themeClasses.pillBgHover} active:scale-95 transition-all duration-150 shrink-0`}
-                        >
-                          <FlagIcon
-                            className={cn(
-                              "w-3.5 h-3.5",
-                              priority === "urgent"
-                                ? "text-red-500"
-                                : priority === "high"
-                                  ? "text-orange-500"
-                                  : "text-blue-400",
-                            )}
-                          />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="start"
-                        sideOffset={6}
-                        className="w-40 p-1 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
-                      >
-                        {(Object.keys(priorityConfig) as ItemPriority[]).map(
-                          (p) => (
-                            <button
-                              key={p}
-                              type="button"
-                              onClick={() => {
-                                setPriority(p);
-                                setManualOverrides((prev) => ({
-                                  ...prev,
-                                  priority: true,
-                                }));
-                              }}
-                              className={cn(
-                                "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all",
-                                priority === p
-                                  ? `bg-gradient-to-r ${priorityConfig[p].gradient} ${themeClasses.text} font-semibold`
-                                  : `${themeClasses.textMuted} hover:bg-white/5`,
-                              )}
-                            >
-                              {priorityConfig[p].icon}
-                              {priorityConfig[p].label}
-                            </button>
-                          ),
-                        )}
-                      </PopoverContent>
-                    </Popover>
-                  )}
-
-                  {/* 2. Type Tag */}
-                  <Popover>
-                    <PopoverTrigger asChild>
+                  {/* Reminder | Event toggle */}
+                  <div className="flex items-center gap-1 p-1 rounded-xl bg-bg-dark/40 border border-white/10">
+                    {(
+                      [
+                        {
+                          type: "reminder" as ItemType,
+                          Icon: BellIcon,
+                          label: "Reminder",
+                          activeCls: "bg-cyan-500/20 text-cyan-300",
+                          iconCls: "text-cyan-400",
+                        },
+                        {
+                          type: "event" as ItemType,
+                          Icon: CalendarIcon,
+                          label: "Event",
+                          activeCls: "bg-pink-500/20 text-pink-300",
+                          iconCls: "text-pink-400",
+                        },
+                      ] as const
+                    ).map((t) => (
                       <button
+                        key={t.type}
+                        type="button"
+                        onClick={() => {
+                          setItemType(t.type);
+                          setManualOverrides((prev) => ({ ...prev, type: true }));
+                        }}
                         className={cn(
-                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-full active:scale-95 transition-all duration-150 shrink-0",
-                          itemType === "reminder"
-                            ? "bg-cyan-500/20 hover:bg-cyan-500/30"
-                            : itemType === "event"
-                              ? "bg-pink-500/20 hover:bg-pink-500/30"
-                              : "bg-purple-500/20 hover:bg-purple-500/30",
+                          "flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-medium transition-all active:scale-95",
+                          itemType === t.type
+                            ? t.activeCls
+                            : "text-white/50 hover:bg-white/5",
                         )}
                       >
-                        {itemType === "reminder" ? (
-                          <BellIcon className="w-3 h-3 text-cyan-400" />
-                        ) : itemType === "event" ? (
-                          <CalendarIcon className="w-3 h-3 text-pink-400" />
-                        ) : (
-                          <ClipboardCheckIcon className="w-3 h-3 text-purple-400" />
-                        )}
-                        <span
+                        <t.Icon
                           className={cn(
-                            "font-semibold text-[11px]",
-                            itemType === "reminder"
-                              ? "text-cyan-300"
-                              : itemType === "event"
-                                ? "text-pink-300"
-                                : "text-purple-300",
+                            "w-4 h-4",
+                            itemType === t.type ? t.iconCls : "text-white/40",
                           )}
-                        >
-                          {itemType === "reminder"
-                            ? "Reminder"
-                            : itemType === "event"
-                              ? "Event"
-                              : "Task"}
-                        </span>
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      align="start"
-                      sideOffset={6}
-                      className="w-36 p-1 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
-                    >
-                      {(
-                        [
-                          {
-                            type: "reminder" as ItemType,
-                            icon: BellIcon,
-                            label: "Reminder",
-                            color: "text-cyan-300",
-                            bg: "from-cyan-500/20 to-cyan-600/20",
-                          },
-                          {
-                            type: "event" as ItemType,
-                            icon: CalendarIcon,
-                            label: "Event",
-                            color: "text-pink-300",
-                            bg: "from-pink-500/20 to-pink-600/20",
-                          },
-                          {
-                            type: "task" as ItemType,
-                            icon: ClipboardCheckIcon,
-                            label: "Task",
-                            color: "text-purple-300",
-                            bg: "from-purple-500/20 to-purple-600/20",
-                          },
-                        ] as const
-                      ).map((item) => (
-                        <button
-                          key={item.type}
-                          type="button"
-                          onClick={() => {
-                            setItemType(item.type);
-                            setManualOverrides((prev) => ({
-                              ...prev,
-                              type: true,
-                            }));
-                          }}
-                          className={cn(
-                            "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all",
-                            itemType === item.type
-                              ? `bg-gradient-to-r ${item.bg} ${item.color} font-semibold`
-                              : `${themeClasses.textMuted} hover:bg-white/5`,
-                          )}
-                        >
-                          <item.icon
-                            className={cn("w-3.5 h-3.5", item.color)}
-                          />
-                          {item.label}
-                        </button>
-                      ))}
-                    </PopoverContent>
-                  </Popover>
-
-                  {/* 3. Date Tag — only when date is set */}
-                  {(itemType === "event" ? startDate : dueDate) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const today = new Date();
-                        const tomorrow = new Date(today);
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        const fmt = (d: Date) => d.toISOString().split("T")[0];
-                        const fmtT = (d: Date) => d.toTimeString().slice(0, 5);
-                        if (itemType === "event") {
-                          if (!startDate) setStartDate(fmt(today));
-                          if (!startTime) setStartTime(fmtT(today));
-                          if (!endDate) setEndDate(fmt(tomorrow));
-                          if (!endTime) setEndTime(fmtT(today));
-                          setMissingFieldType("event");
-                        } else {
-                          if (!dueDate) setDueDate(fmt(today));
-                          if (!dueTime) setDueTime(fmtT(today));
-                          setMissingFieldType(
-                            itemType === "task" ? "task" : "reminder",
-                          );
-                        }
-                        setShowEndDateInModal(itemType === "event");
-                        setDateModalIntent("set-date");
-                        setShowMissingFieldsModal(true);
-                      }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-500/20 hover:bg-purple-500/30 active:scale-95 transition-all duration-150 shrink-0"
-                    >
-                      <CalendarIcon className="w-3 h-3 text-purple-400" />
-                      <span className="font-semibold text-[11px] text-purple-300">
-                        {itemType === "event"
-                          ? startDate
-                            ? format(new Date(startDate + "T00:00:00"), "MMM d")
-                            : "Date"
-                          : dueDate
-                            ? format(new Date(dueDate + "T00:00:00"), "MMM d")
-                            : "Date"}
-                      </span>
-                    </button>
-                  )}
-
-                  {/* 4. Assign Tag (public items only) */}
-                  {!isPrivate && (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          className={cn(
-                            "inline-flex items-center gap-1 px-2.5 py-1 rounded-full active:scale-95 transition-all duration-150 shrink-0",
-                            responsibleUserId || notifyAllHousehold
-                              ? "bg-sky-500/20 hover:bg-sky-500/30"
-                              : `${themeClasses.pillBg} ${themeClasses.pillBgHover}`,
-                          )}
-                        >
-                          <svg
-                            className={cn(
-                              "w-3 h-3",
-                              responsibleUserId || notifyAllHousehold
-                                ? "text-sky-400"
-                                : themeClasses.textMuted,
-                            )}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                            <circle cx="12" cy="7" r="4" />
-                          </svg>
-                          <span
-                            className={cn(
-                              "font-semibold text-[11px]",
-                              responsibleUserId || notifyAllHousehold
-                                ? "text-sky-300"
-                                : themeClasses.textMuted,
-                            )}
-                          >
-                            Assign
-                          </span>
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="start"
-                        sideOffset={6}
-                        className="w-64 p-3 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
-                      >
-                        <Label className="text-xs text-white/60 mb-1.5 block">
-                          Responsible User
-                        </Label>
-                        <ResponsibleUserPicker
-                          value={responsibleUserId}
-                          notifyAllHousehold={notifyAllHousehold}
-                          onChange={(userId, allHousehold) => {
-                            setResponsibleUserId(userId);
-                            setNotifyAllHousehold(allHousehold);
-                            setManualOverrides((prev) => ({
-                              ...prev,
-                              responsible: true,
-                            }));
-                          }}
-                          isPublic={!isPrivate}
-                          variant="compact"
                         />
-                      </PopoverContent>
-                    </Popover>
-                  )}
-
-                  {/* 5. Category Tag */}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        className={cn(
-                          "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full active:scale-95 transition-all duration-150 shrink-0",
-                          selectedCategoryIds.length > 1
-                            ? "bg-gradient-to-r from-violet-500/40 to-pink-500/40 hover:from-violet-500/50 hover:to-pink-500/50 ring-1 ring-violet-400/50"
-                            : "bg-violet-500/20 hover:bg-violet-500/30",
-                        )}
-                      >
-                        <TagIcon className="w-3 h-3 text-violet-400" />
-                        <span className="font-semibold text-[11px] text-violet-300">
-                          {selectedCategoryIds.length > 0
-                            ? (CATEGORIES.find(
-                                (c) => c.id === selectedCategoryIds[0],
-                              )?.name ?? "Category")
-                            : "Category"}
-                        </span>
-                        {selectedCategoryIds.length > 1 && (
-                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-pink-500/60 text-[9px] font-bold text-white shrink-0">
-                            +{selectedCategoryIds.length - 1}
-                          </span>
-                        )}
+                        {t.label}
                       </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      align="start"
-                      sideOffset={6}
-                      className="w-52 p-2 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
-                    >
-                      <div className="grid grid-cols-2 gap-1">
-                        {CATEGORIES.map((cat) => {
-                          const CatIcon = categoryIcons[cat.id];
-                          const isSelected = selectedCategoryIds.includes(
-                            cat.id,
-                          );
-                          return (
-                            <button
-                              key={cat.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedCategoryIds(
-                                  isSelected
-                                    ? selectedCategoryIds.filter(
-                                        (id) => id !== cat.id,
-                                      )
-                                    : [...selectedCategoryIds, cat.id],
-                                );
-                                setManualOverrides((prev) => ({
-                                  ...prev,
-                                  categories: true,
-                                }));
-                              }}
-                              className={cn(
-                                "flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs transition-all",
-                                isSelected
-                                  ? "bg-white/10 font-semibold"
-                                  : `${themeClasses.textMuted} hover:bg-white/5`,
-                              )}
-                              style={
-                                isSelected
-                                  ? { color: cat.color_hex }
-                                  : undefined
-                              }
-                            >
-                              {CatIcon && (
-                                <span style={{ color: cat.color_hex }}>
-                                  <CatIcon className="w-3.5 h-3.5" />
-                                </span>
-                              )}
-                              {cat.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                    ))}
+                  </div>
 
-                  {/* 6. Repeat Tag — only when recurrence is set */}
-                  {recurrenceRule && (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-500/20 hover:bg-green-500/30 active:scale-95 transition-all duration-150 shrink-0">
-                          <RepeatIcon className="w-3 h-3 text-green-400" />
-                          <span className="font-semibold text-[11px] text-green-300">
-                            {recurrenceDisplayText}
-                          </span>
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="start"
-                        sideOffset={6}
-                        className="w-48 p-1 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
-                      >
-                        {RECURRENCE_PRESETS.map((preset) => (
-                          <button
-                            key={preset.label}
-                            type="button"
-                            onClick={() => {
-                              setRecurrenceRule(preset.value);
-                              setManualOverrides((prev) => ({
-                                ...prev,
-                                type: true,
-                              }));
-                            }}
-                            className={cn(
-                              "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all",
-                              recurrenceRule === preset.value
-                                ? "bg-green-500/20 text-green-300 font-semibold"
-                                : `${themeClasses.textMuted} hover:bg-white/5`,
-                            )}
-                          >
-                            <RepeatIcon className="w-3.5 h-3.5" />
-                            {preset.label}
-                          </button>
-                        ))}
-                        <div className="h-px bg-slate-700/40 my-1" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCustomRecurrenceOpen(true);
-                          }}
-                          className={cn(
-                            "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all",
-                            `${themeClasses.textMuted} hover:bg-white/5`,
-                          )}
-                        >
-                          <RepeatIcon className="w-3.5 h-3.5" />
-                          Custom...
-                        </button>
-                      </PopoverContent>
-                    </Popover>
-                  )}
-
-                  {/* Alert Tag — only when alert is configured */}
-                  {(alertValue.offsetMinutes > 0 || alertValue.customTime) && (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          className={cn(
-                            "inline-flex items-center gap-1 px-2.5 py-1 rounded-full active:scale-95 transition-all duration-150 shrink-0",
-                            alertValue.offsetMinutes > 0
-                              ? "bg-amber-500/20 hover:bg-amber-500/30"
-                              : `${themeClasses.pillBg} ${themeClasses.pillBgHover}`,
-                          )}
-                        >
-                          <BellIcon
-                            className={cn(
-                              "w-3 h-3",
-                              alertValue.offsetMinutes > 0
-                                ? "text-amber-400"
-                                : themeClasses.textMuted,
-                            )}
-                          />
-                          <span
-                            className={cn(
-                              "font-semibold text-[11px]",
-                              alertValue.offsetMinutes > 0
-                                ? "text-amber-300"
-                                : themeClasses.textMuted,
-                            )}
-                          >
-                            {alertValue.offsetMinutes > 0
-                              ? alertValue.offsetMinutes >= 60
-                                ? `${Math.floor(alertValue.offsetMinutes / 60)}h`
-                                : `${alertValue.offsetMinutes}m`
-                              : "Alert"}
-                          </span>
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="start"
-                        sideOffset={6}
-                        className="w-64 p-3 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
-                      >
-                        <SmartAlertPicker
-                          value={alertValue}
-                          onChange={(val) => {
-                            setAlertValue(val);
-                            // If setting alert on a reminder, upgrade to task
-                            if (
-                              val.offsetMinutes > 0 &&
-                              itemType === "reminder"
-                            ) {
-                              setItemType("task");
-                              setManualOverrides((prev) => ({
-                                ...prev,
-                                type: true,
-                              }));
-                            }
-                          }}
-                          eventTime={itemType === "event" ? startTime : dueTime}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  )}
                 </div>
               </div>
               {/* Left fade hint */}
@@ -1457,370 +1034,508 @@ export default function MobileReminderForm() {
                 </button>
               </div>
 
-              {/* Parsed Info Chips */}
-              <AnimatePresence>
-                {parsedChips && parsedChips.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="flex flex-wrap gap-1.5 pt-1"
-                  >
-                    {parsedChips.map((chip, idx) => (
-                      <motion.span
-                        key={chip.label}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: idx * 0.05 }}
-                        className={cn(
-                          "px-2.5 py-1 rounded-full text-xs font-medium bg-gradient-to-r",
-                          chip.color,
-                          themeClasses.text,
-                        )}
-                      >
-                        {chip.label}
-                      </motion.span>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {/* Summary chips — tap any to edit it */}
+              {summaryChips.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {summaryChips.map((chip) => (
+                    <button
+                      key={chip.key}
+                      type="button"
+                      onClick={chip.onClick}
+                      className="inline-flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-lg text-xs font-medium border border-white/10 bg-bg-dark/50 text-white/90 active:scale-95 transition-transform"
+                    >
+                      <chip.Icon className={cn("w-3.5 h-3.5", chip.iconClass)} />
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Extracted Title Preview */}
               {parsedItem && title && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className={cn("text-sm px-1", themeClasses.textSecondary)}
-                >
+                <div className={cn("text-sm px-1", themeClasses.textSecondary)}>
                   <span className="font-medium">Title:</span> {title}
-                </motion.div>
+                </div>
               )}
 
-              {/* Date Display Row */}
-              <button
-                type="button"
-                onClick={() => {
-                  const today = new Date();
-                  const tomorrow = new Date(today);
-                  tomorrow.setDate(tomorrow.getDate() + 1);
-                  const formatDateStr = (d: Date) =>
-                    d.toISOString().split("T")[0];
-                  const formatTimeStr = (d: Date) =>
-                    d.toTimeString().slice(0, 5);
+              {itemType === "event" ? (
+                /* ── Event: Starts / Ends, presets + native pickers (no modal) ── */
+                <div className="space-y-2">
+                  {/* Quick day presets — set the start day (end defaults alongside) */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(
+                      [
+                        { key: "today", label: "Today" },
+                        { key: "tomorrow", label: "Tomorrow" },
+                      ] as const
+                    ).map((chip) => (
+                      <button
+                        key={chip.key}
+                        type="button"
+                        onClick={() => applyQuickDate(chip.key)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-medium border transition-transform active:scale-95",
+                          quickDateMode === chip.key
+                            ? "bg-purple-500/25 border-purple-400/50 text-purple-200"
+                            : "bg-bg-dark/40 border-white/10 text-white/50 hover:bg-white/5",
+                        )}
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Starts / Ends — aligned columns (label · date · time) */}
+                  <div className="flex items-center gap-2">
+                    <span className="w-12 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-white/40">
+                      Starts
+                    </span>
+                    <input
+                      type="date"
+                      aria-label="Start date"
+                      value={startDate}
+                      onChange={(e) => {
+                        setStartDate(e.target.value);
+                        setManualOverrides((p) => ({ ...p, dates: true }));
+                      }}
+                      className={cn(nativeFieldCls(!!startDate), "flex-1 min-w-0")}
+                    />
+                    <input
+                      type="time"
+                      aria-label="Start time"
+                      value={startTime}
+                      onChange={(e) => {
+                        setStartTime(e.target.value);
+                        setManualOverrides((p) => ({ ...p, dates: true }));
+                      }}
+                      className={cn(nativeFieldCls(!!startTime), "flex-1 min-w-0")}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-12 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-white/40">
+                      Ends
+                    </span>
+                    <input
+                      type="date"
+                      aria-label="End date"
+                      value={endDate}
+                      onChange={(e) => {
+                        setEndDate(e.target.value);
+                        setManualOverrides((p) => ({ ...p, dates: true }));
+                      }}
+                      className={cn(nativeFieldCls(!!endDate), "flex-1 min-w-0")}
+                    />
+                    <input
+                      type="time"
+                      aria-label="End time"
+                      value={endTime}
+                      onChange={(e) => {
+                        setEndTime(e.target.value);
+                        setManualOverrides((p) => ({ ...p, dates: true }));
+                      }}
+                      className={cn(nativeFieldCls(!!endTime), "flex-1 min-w-0")}
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* ── Reminder: pick a day (presets + native), then a time ── */
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(
+                      [
+                        { key: "today", label: "Today" },
+                        { key: "tomorrow", label: "Tomorrow" },
+                      ] as const
+                    ).map((chip) => (
+                      <button
+                        key={chip.key}
+                        type="button"
+                        onClick={() => applyQuickDate(chip.key)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-medium border transition-transform active:scale-95",
+                          quickDateMode === chip.key
+                            ? "bg-purple-500/25 border-purple-400/50 text-purple-200"
+                            : "bg-bg-dark/40 border-white/10 text-white/50 hover:bg-white/5",
+                        )}
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                    <input
+                      type="date"
+                      aria-label="Pick a date"
+                      value={dueDate}
+                      onChange={(e) => {
+                        setDueDate(e.target.value);
+                        setManualOverrides((p) => ({ ...p, dates: true }));
+                      }}
+                      className={nativeFieldCls(!!dueDate)}
+                    />
+                  </div>
 
-                  if (itemType === "event") {
-                    if (!startDate) setStartDate(formatDateStr(today));
-                    if (!startTime) setStartTime(formatTimeStr(today));
-                    if (!endDate) setEndDate(formatDateStr(tomorrow));
-                    if (!endTime) setEndTime(formatTimeStr(today));
-                    setMissingFieldType("event");
-                  } else if (itemType === "task") {
-                    if (!dueDate) setDueDate(formatDateStr(today));
-                    if (!dueTime) setDueTime(formatTimeStr(today));
-                    setMissingFieldType("task");
-                  } else {
-                    if (!dueDate) setDueDate(formatDateStr(today));
-                    if (!dueTime) setDueTime(formatTimeStr(today));
-                    setMissingFieldType("reminder");
-                  }
-                  setShowEndDateInModal(itemType === "event");
-                  setDateModalIntent("set-date");
-                  setShowMissingFieldsModal(true);
-                }}
-                className={cn(
-                  "w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all hover:scale-[1.01] active:scale-[0.99]",
-                  "bg-bg-dark/40 border",
-                  themeClasses.border,
-                  themeClasses.text,
-                )}
-              >
-                <CalendarIcon className="w-4 h-4 text-purple-400" />
-                <span className={themeClasses.textMuted}>Date:</span>
-                <span className="font-semibold text-purple-300">
-                  {itemType === "event" ? (
-                    startDate && endDate ? (
-                      <>
-                        {formatDateDisplay(startDate)}
-                        {startTime && ` ${formatTimeDisplay(startTime)}`}
-                        <span className={themeClasses.textMuted}> → </span>
-                        {formatDateDisplay(endDate)}
-                        {endTime && ` ${formatTimeDisplay(endTime)}`}
-                      </>
-                    ) : (
-                      "Tap to set date & time"
-                    )
-                  ) : dueDate ? (
-                    <>
-                      {formatDateDisplay(dueDate)}
-                      {dueTime && ` ${formatTimeDisplay(dueTime)}`}
-                    </>
-                  ) : (
-                    "Tap to set date & time"
-                  )}
-                </span>
-              </button>
-
-              {/* Controls Row: Left icons (location, notes, triggers) | Right (priority, privacy) */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  {/* Location toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setShowLocation(!showLocation)}
-                    className={cn(
-                      "h-9 w-9 flex items-center justify-center rounded-xl border transition-colors duration-150 active:scale-90",
-                      showLocation || location
-                        ? "bg-teal-500/15 border-teal-500/30 text-teal-400"
-                        : "bg-bg-dark/40 border-white/10 text-white/30 hover:text-teal-400/50",
-                    )}
-                    title="Location"
-                  >
-                    <MapPin className="w-4 h-4" />
-                  </button>
-
-                  {/* Notes toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setShowDescription(!showDescription)}
-                    className={cn(
-                      "h-9 w-9 flex items-center justify-center rounded-xl border transition-colors duration-150 active:scale-90",
-                      showDescription || description
-                        ? "bg-white/10 border-white/20 text-white/80"
-                        : "bg-bg-dark/40 border-white/10 text-white/30 hover:text-white/50",
-                    )}
-                    title="Notes"
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                    </svg>
-                  </button>
-
-                  {/* Triggers toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setShowTriggers(!showTriggers)}
-                    className={cn(
-                      "h-9 w-9 flex items-center justify-center rounded-xl border transition-colors duration-150 active:scale-90",
-                      showTriggers || prerequisites.length > 0
-                        ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
-                        : "bg-bg-dark/40 border-white/10 text-white/30 hover:text-amber-400/50",
-                    )}
-                    title="Triggers"
-                  >
-                    <Zap className="w-4 h-4" />
-                  </button>
-
-                  {/* Recurrence toggle */}
-                  <Popover>
-                    <PopoverTrigger asChild>
+                  {dueDate && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {(
+                        [
+                          { label: "Morning", time: "09:00" },
+                          { label: "Noon", time: "12:00" },
+                          { label: "Afternoon", time: "15:00" },
+                          { label: "Evening", time: "19:00" },
+                        ] as const
+                      ).map((slot) => (
+                        <button
+                          key={slot.time}
+                          type="button"
+                          onClick={() => applyTimeOfDay(slot.time)}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-medium border transition-transform active:scale-95",
+                            dueTime === slot.time
+                              ? "bg-amber-500/20 border-amber-400/50 text-amber-200"
+                              : "bg-bg-dark/40 border-white/10 text-white/50 hover:bg-white/5",
+                          )}
+                        >
+                          {slot.label}
+                        </button>
+                      ))}
+                      {/* The time itself — shows the picked hour; tap to fine-tune.
+                          Gold only when it holds a hand-picked (non-preset) time,
+                          so a selected preset stays the single highlighted chip. */}
                       <button
                         type="button"
+                        onClick={openTimePicker}
                         className={cn(
-                          "h-9 w-9 flex items-center justify-center rounded-xl border transition-colors duration-150 active:scale-90",
-                          recurrenceRule
-                            ? "bg-green-500/15 border-green-500/30 text-green-400"
-                            : "bg-bg-dark/40 border-white/10 text-white/30 hover:text-green-400/50",
+                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-transform active:scale-95",
+                          hasExactTime
+                            ? "bg-amber-500/20 border-amber-400/50 text-amber-200"
+                            : "bg-bg-dark/40 border-white/10 text-white/50 hover:bg-white/5",
                         )}
-                        title="Recurrence"
                       >
-                        <RepeatIcon className="w-4 h-4" />
+                        <Clock className="w-3.5 h-3.5" />
+                        {dueTime ? formatTimeLabel(dueTime) : "Set time"}
                       </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      align="start"
-                      sideOffset={6}
-                      className="w-48 p-1 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
+                      <input
+                        ref={dueTimeRef}
+                        type="time"
+                        aria-hidden="true"
+                        tabIndex={-1}
+                        value={dueTime}
+                        onChange={(e) => {
+                          setDueTime(e.target.value);
+                          setManualOverrides((p) => ({ ...p, dates: true }));
+                        }}
+                        className="sr-only"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Quick controls — big, thumb-friendly, icon-first */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center gap-2">
+                  {/* Priority — color flag */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      title="Priority"
+                      className="h-11 w-11 flex items-center justify-center rounded-xl bg-bg-dark/40 border border-white/10 active:scale-90 transition-all"
                     >
-                      {RECURRENCE_PRESETS.map((preset) => (
+                      <FlagIcon
+                        className={cn(
+                          "w-5 h-5",
+                          priority === "urgent"
+                            ? "text-red-500"
+                            : priority === "high"
+                              ? "text-orange-500"
+                              : priority === "low"
+                                ? "text-gray-300"
+                                : "text-cyan-400",
+                        )}
+                      />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="center"
+                    sideOffset={8}
+                    className="w-auto p-2 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
+                  >
+                    <div className="flex items-center gap-2">
+                      {(
+                        [
+                          { p: "low" as ItemPriority, color: "text-gray-300" },
+                          { p: "normal" as ItemPriority, color: "text-cyan-400" },
+                          { p: "high" as ItemPriority, color: "text-orange-500" },
+                          { p: "urgent" as ItemPriority, color: "text-red-500" },
+                        ] as const
+                      ).map((it) => (
                         <button
-                          key={preset.label}
+                          key={it.p}
                           type="button"
+                          title={priorityConfig[it.p].label}
                           onClick={() => {
-                            setRecurrenceRule(preset.value);
+                            setPriority(it.p);
                             setManualOverrides((prev) => ({
                               ...prev,
-                              type: true,
+                              priority: true,
                             }));
                           }}
                           className={cn(
-                            "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all",
-                            recurrenceRule === preset.value
-                              ? "bg-green-500/20 text-green-300 font-semibold"
-                              : `${themeClasses.textMuted} hover:bg-white/5`,
+                            "h-10 w-10 flex items-center justify-center rounded-lg transition-all active:scale-90",
+                            priority === it.p
+                              ? "bg-white/10 ring-1 ring-white/20"
+                              : "hover:bg-white/5",
                           )}
                         >
-                          <RepeatIcon className="w-3.5 h-3.5" />
-                          {preset.label}
+                          <FlagIcon className={cn("w-5 h-5", it.color)} />
                         </button>
                       ))}
-                      <div className="h-px bg-slate-700/40 my-1" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCustomRecurrenceOpen(true);
-                        }}
-                        className={cn(
-                          "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all",
-                          `${themeClasses.textMuted} hover:bg-white/5`,
-                        )}
-                      >
-                        <RepeatIcon className="w-3.5 h-3.5" />
-                        Custom...
-                      </button>
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
-                <div className="flex items-center gap-1.5">
-                  {/* Priority Dot Popover */}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className={cn(
-                          "h-9 w-9 flex items-center justify-center rounded-xl border bg-bg-dark/40 transition-colors duration-150 active:scale-90 shrink-0",
-                          themeClasses.border,
-                        )}
-                        title={`Priority: ${priority}`}
-                      >
-                        <div
-                          className={cn(
-                            "w-3 h-3 rounded-full transition-colors duration-200",
-                            priority === "urgent"
-                              ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"
-                              : priority === "high"
-                                ? "bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.5)]"
-                                : priority === "normal"
-                                  ? "bg-cyan-400"
-                                  : "bg-blue-400/50",
-                          )}
-                        />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      align="end"
-                      sideOffset={6}
-                      className="w-auto p-1.5 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200]"
+                {/* Location pin — toggles the At Home / Place / Map panel */}
+                <button
+                  type="button"
+                  title="Location"
+                  onClick={() => setShowLocation((v) => !v)}
+                  className={cn(
+                    "h-11 w-11 flex items-center justify-center rounded-xl border active:scale-90 transition-all",
+                    locationContext || location
+                      ? "bg-teal-500/15 border-teal-400/40"
+                      : "bg-bg-dark/40 border-white/10",
+                  )}
+                >
+                  <MapPin
+                    className={cn(
+                      "w-5 h-5",
+                      locationContext || location
+                        ? "text-teal-300"
+                        : "text-white/60",
+                    )}
+                  />
+                </button>
+
+                {/* More — alert, repeat, triggers */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      title="More options"
+                      className={cn(
+                        "h-11 w-11 flex items-center justify-center rounded-xl border active:scale-90 transition-all",
+                        alertValue.offsetMinutes > 0 ||
+                        alertValue.customTime ||
+                        recurrenceRule ||
+                        prerequisites.length > 0
+                          ? "bg-white/10 border-white/20"
+                          : "bg-bg-dark/40 border-white/10",
+                      )}
                     >
-                      <div className="flex items-center gap-2">
-                        {(
-                          [
-                            {
-                              p: "low" as ItemPriority,
-                              color: "bg-blue-400/50",
-                              label: "Low",
-                            },
-                            {
-                              p: "normal" as ItemPriority,
-                              color: "bg-cyan-400",
-                              label: "Normal",
-                            },
-                            {
-                              p: "high" as ItemPriority,
-                              color:
-                                "bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.5)]",
-                              label: "High",
-                            },
-                            {
-                              p: "urgent" as ItemPriority,
-                              color:
-                                "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]",
-                              label: "Urgent",
-                            },
-                          ] as const
-                        ).map((item) => (
+                      <svg
+                        className="w-5 h-5 text-white/60"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                      >
+                        <circle cx="5" cy="12" r="2" />
+                        <circle cx="12" cy="12" r="2" />
+                        <circle cx="19" cy="12" r="2" />
+                      </svg>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    sideOffset={8}
+                    className="w-72 p-3 bg-bg-card-custom border border-slate-700/60 rounded-xl shadow-2xl z-[200] space-y-3"
+                  >
+                    {/* Alert */}
+                    <div>
+                      <Label className="text-xs text-white/60 mb-1.5 block">
+                        Alert
+                      </Label>
+                      <SmartAlertPicker
+                        value={alertValue}
+                        onChange={setAlertValue}
+                        eventTime={itemType === "event" ? startTime : dueTime}
+                      />
+                    </div>
+                    {/* Repeat */}
+                    <div>
+                      <Label className="text-xs text-white/60 mb-1.5 block">
+                        Repeat
+                      </Label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {RECURRENCE_PRESETS.map((preset) => (
                           <button
-                            key={item.p}
+                            key={preset.label}
                             type="button"
                             onClick={() => {
-                              setPriority(item.p);
+                              setRecurrenceRule(preset.value);
                               setManualOverrides((prev) => ({
                                 ...prev,
-                                priority: true,
+                                type: true,
                               }));
                             }}
                             className={cn(
-                              "h-8 w-8 flex items-center justify-center rounded-lg transition-all active:scale-90",
-                              priority === item.p
-                                ? "bg-white/10 ring-1 ring-white/20"
-                                : "hover:bg-white/5",
+                              "px-2.5 py-1 rounded-lg text-xs font-medium border transition-all",
+                              recurrenceRule === preset.value
+                                ? "bg-green-500/20 border-green-400/50 text-green-300"
+                                : "bg-white/5 border-transparent text-white/60 hover:bg-white/10",
                             )}
-                            title={item.label}
                           >
-                            <div
-                              className={cn(
-                                "w-3.5 h-3.5 rounded-full",
-                                item.color,
-                              )}
-                            />
+                            {preset.label}
                           </button>
                         ))}
+                        <button
+                          type="button"
+                          onClick={() => setCustomRecurrenceOpen(true)}
+                          className="px-2.5 py-1 rounded-lg text-xs font-medium border border-transparent bg-white/5 text-white/60 hover:bg-white/10"
+                        >
+                          Custom…
+                        </button>
                       </div>
-                    </PopoverContent>
-                  </Popover>
-
-                  {/* Private/Public Toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setIsPrivate(!isPrivate)}
-                    className={cn(
-                      "h-9 w-9 flex items-center justify-center rounded-xl border transition-all duration-200 active:scale-90 shrink-0",
-                      isPrivate
-                        ? `${themeClasses.borderActive} bg-gradient-to-br ${themeClasses.activeItemGradient} ${themeClasses.activeItemShadow}`
-                        : `bg-bg-dark/40 ${themeClasses.border}`,
-                    )}
-                  >
-                    <svg
+                    </div>
+                    <div className="h-px bg-slate-700/40" />
+                    {/* Triggers */}
+                    <button
+                      type="button"
+                      onClick={() => setShowTriggers((v) => !v)}
                       className={cn(
-                        "w-4 h-4 transition-colors duration-200",
-                        isPrivate
-                          ? `${themeClasses.textActive} drop-shadow-[0_0_8px_rgba(20,184,166,0.8)]`
-                          : themeClasses.textFaint,
+                        "w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm transition-all",
+                        showTriggers || prerequisites.length > 0
+                          ? "text-amber-300 bg-amber-500/10"
+                          : "text-white/70 hover:bg-white/5",
                       )}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2.5}
                     >
-                      {isPrivate ? (
-                        <>
-                          <rect
-                            x="5"
-                            y="11"
-                            width="14"
-                            height="10"
-                            rx="2"
-                            ry="2"
-                          />
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                        </>
-                      ) : (
-                        <>
-                          <rect
-                            x="5"
-                            y="11"
-                            width="14"
-                            height="10"
-                            rx="2"
-                            ry="2"
-                          />
-                          <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-                        </>
-                      )}
-                    </svg>
-                  </button>
+                      <Zap className="w-4 h-4 text-amber-400" />
+                      Triggers
+                    </button>
+                  </PopoverContent>
+                </Popover>
                 </div>
+
+                {/* Privacy — Private ⇄ Shared, then who's responsible (partner only) */}
+                {householdData?.hasPartner && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Private | Shared segmented toggle */}
+                    <div className="flex items-center gap-1 p-1 rounded-xl bg-bg-dark/40 border border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setIsPrivate(true)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-medium transition-all active:scale-95",
+                          isPrivate
+                            ? "bg-white/10 text-white"
+                            : "text-white/50 hover:bg-white/5",
+                        )}
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <rect x="5" y="11" width="14" height="10" rx="2" ry="2" />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                        Private
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Switching to Shared defaults to "Both" responsible
+                          setIsPrivate(false);
+                          setNotifyAllHousehold(true);
+                          if (currentUserId) setResponsibleUserId(currentUserId);
+                          setManualOverrides((prev) => ({
+                            ...prev,
+                            responsible: true,
+                          }));
+                        }}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-medium transition-all active:scale-95",
+                          !isPrivate
+                            ? "bg-white/10 text-white"
+                            : "text-white/50 hover:bg-white/5",
+                        )}
+                      >
+                        <Users className="w-4 h-4" />
+                        Shared
+                      </button>
+                    </div>
+
+                    {/* Responsible — Me / Partner / Both (only when shared) */}
+                    {!isPrivate && (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotifyAllHousehold(false);
+                            if (currentUserId)
+                              setResponsibleUserId(currentUserId);
+                            setManualOverrides((prev) => ({
+                              ...prev,
+                              responsible: true,
+                            }));
+                          }}
+                          className={cn(
+                            "px-3 h-9 rounded-lg text-sm font-medium border transition-all active:scale-95",
+                            sharedMode === "me"
+                              ? meSelectedCls
+                              : "bg-bg-dark/40 border-white/10 text-white/50 hover:bg-white/5",
+                          )}
+                        >
+                          Me
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotifyAllHousehold(false);
+                            if (partnerMember)
+                              setResponsibleUserId(partnerMember.id);
+                            setManualOverrides((prev) => ({
+                              ...prev,
+                              responsible: true,
+                            }));
+                          }}
+                          className={cn(
+                            "px-3 h-9 rounded-lg text-sm font-medium border transition-all active:scale-95",
+                            sharedMode === "partner"
+                              ? partnerSelectedCls
+                              : "bg-bg-dark/40 border-white/10 text-white/50 hover:bg-white/5",
+                          )}
+                        >
+                          {partnerMember?.displayName || "Partner"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotifyAllHousehold(true);
+                            if (currentUserId)
+                              setResponsibleUserId(currentUserId);
+                            setManualOverrides((prev) => ({
+                              ...prev,
+                              responsible: true,
+                            }));
+                          }}
+                          className={cn(
+                            "px-3 h-9 rounded-lg text-sm font-medium border transition-all active:scale-95",
+                            sharedMode === "both"
+                              ? "border-white/40 bg-white/10 text-white"
+                              : "bg-bg-dark/40 border-white/10 text-white/50 hover:bg-white/5",
+                          )}
+                        >
+                          Both
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* ── List Selector Card ── */}
+            {/* ── List Selector Card — events only (reminders have no categories) ── */}
+            {itemType === "event" && (
             <div className="relative rounded-2xl bg-gradient-to-b from-slate-800/60 via-slate-900/40 to-transparent border border-slate-700/40 p-4 overflow-hidden">
               <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-violet-500/5 to-transparent rounded-bl-full pointer-events-none" />
               <div className="grid grid-cols-3 gap-2">
@@ -1884,6 +1599,7 @@ export default function MobileReminderForm() {
                 })}
               </div>
             </div>
+            )}
 
             {/* ── Collapsible Sections (CSS grid transitions for smooth height) ── */}
             <div
@@ -1893,46 +1609,47 @@ export default function MobileReminderForm() {
               )}
             >
               <div className="overflow-hidden">
-                <div className="rounded-xl bg-slate-800/40 border border-slate-700/30 p-3 mb-3">
-                  <Input
-                    type="text"
-                    placeholder="e.g. Office, Coffee Shop..."
-                    value={location}
-                    onChange={(e) => {
-                      setLocation(e.target.value);
-                      setManualOverrides((prev) => ({
-                        ...prev,
-                        location: true,
-                      }));
-                    }}
-                    className="text-sm bg-bg-dark/60 border-slate-700/60"
-                    autoFocus={showLocation}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div
-              className={cn(
-                "grid transition-[grid-template-rows] duration-200 ease-out",
-                showDescription ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-              )}
-            >
-              <div className="overflow-hidden">
-                <div className="rounded-xl bg-slate-800/40 border border-slate-700/30 p-3 mb-3">
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Add more details..."
-                    rows={3}
-                    className={cn(
-                      "w-full text-sm bg-bg-dark/60 border rounded-lg p-3 resize-none",
-                      themeClasses.border,
-                      themeClasses.text,
-                      "placeholder:text-white/30",
-                    )}
-                    autoFocus={showDescription}
-                  />
+                <div className="rounded-xl bg-slate-800/40 border border-slate-700/30 p-3 mb-3 space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        { key: "home", label: "At Home", Icon: Home },
+                        { key: "map", label: "Map link", Icon: Link },
+                      ] as const
+                    ).map(({ key, label, Icon }) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => selectLocationMode(key)}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all active:scale-95",
+                          locationMode === key
+                            ? "bg-teal-500/20 border-teal-400/50 text-teal-200"
+                            : "bg-bg-dark/40 border-white/10 text-white/50 hover:bg-white/5",
+                        )}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {locationMode === "map" && (
+                    <Input
+                      type="url"
+                      inputMode="url"
+                      placeholder="Paste a maps link"
+                      value={location}
+                      onChange={(e) => {
+                        setLocation(e.target.value);
+                        setManualOverrides((prev) => ({
+                          ...prev,
+                          location: true,
+                        }));
+                      }}
+                      className="text-sm bg-bg-dark/60 border-slate-700/60"
+                      autoFocus
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -2015,281 +1732,6 @@ export default function MobileReminderForm() {
               : new Date()
         }
       />
-
-      {/* Missing Fields Modal */}
-      <AnimatePresence>
-        {showMissingFieldsModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 px-4"
-            onClick={() => setShowMissingFieldsModal(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              onClick={(e) => e.stopPropagation()}
-              className={cn(
-                "w-full max-w-md rounded-2xl p-6 space-y-4 border",
-                "bg-[#0a1628] border-cyan-500/30",
-              )}
-            >
-              {/* Header */}
-              <div className="space-y-1">
-                <h3
-                  className={cn("text-lg font-bold", themeClasses.headerText)}
-                >
-                  📅 Set Up Your{" "}
-                  {itemType === "event"
-                    ? "Event"
-                    : itemType === "task"
-                      ? "Task"
-                      : "Reminder"}
-                </h3>
-                <p className={cn("text-sm", themeClasses.textSecondary)}>
-                  {itemType === "event"
-                    ? "Configure date, alert, and end time"
-                    : itemType === "task"
-                      ? "Configure date and alert"
-                      : "Set the date and time"}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {/* Start / Due Date */}
-                <div className="bg-[#0d1f35] border border-cyan-500/20 p-4 rounded-xl space-y-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CalendarIcon className="w-4 h-4 text-cyan-400" />
-                    <Label className="text-sm font-semibold text-cyan-300">
-                      {itemType === "event"
-                        ? "Start Date & Time"
-                        : "Date & Time"}
-                    </Label>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="relative">
-                      {editingDateField === "startDate_u" ? (
-                        <Input
-                          type="date"
-                          value={itemType === "event" ? startDate : dueDate}
-                          onChange={(e) => {
-                            if (itemType === "event")
-                              setStartDate(e.target.value);
-                            else setDueDate(e.target.value);
-                          }}
-                          onBlur={() => setEditingDateField(null)}
-                          autoFocus
-                          className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setEditingDateField("startDate_u")}
-                          className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
-                        >
-                          {formatDateDisplay(
-                            itemType === "event" ? startDate : dueDate,
-                          )}
-                        </button>
-                      )}
-                    </div>
-                    <div className="relative">
-                      {editingDateField === "startTime_u" ? (
-                        <Input
-                          type="time"
-                          value={itemType === "event" ? startTime : dueTime}
-                          onChange={(e) => {
-                            if (itemType === "event")
-                              setStartTime(e.target.value);
-                            else setDueTime(e.target.value);
-                          }}
-                          onBlur={() => setEditingDateField(null)}
-                          autoFocus
-                          className="py-3 h-11 bg-[#0a1628] border border-cyan-500/30 text-cyan-100 [color-scheme:dark]"
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setEditingDateField("startTime_u")}
-                          className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-cyan-500/20 rounded-md text-left text-cyan-100 hover:border-cyan-500/40 transition-colors text-sm"
-                        >
-                          {formatTimeDisplay(
-                            itemType === "event" ? startTime : dueTime,
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Alert Section — shown for task & event */}
-                {itemType !== "reminder" && (
-                  <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl space-y-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <BellIcon className="w-4 h-4 text-amber-400" />
-                      <Label className="text-sm font-semibold text-amber-300">
-                        Alert
-                      </Label>
-                    </div>
-                    <SmartAlertPicker
-                      value={alertValue}
-                      onChange={(val) => {
-                        setAlertValue(val);
-                      }}
-                      eventTime={itemType === "event" ? startTime : dueTime}
-                    />
-                  </div>
-                )}
-
-                {/* Add Alert button — for reminders, upgrades to task */}
-                {itemType === "reminder" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setItemType("task");
-                      setManualOverrides((prev) => ({
-                        ...prev,
-                        type: true,
-                        dates: true,
-                      }));
-                    }}
-                    className="w-full flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-amber-500/30 text-amber-400/60 hover:border-amber-500/50 hover:text-amber-400 transition-all active:scale-[0.99] text-sm"
-                  >
-                    <BellIcon className="w-4 h-4" />
-                    <span>Add Alert</span>
-                    <span className="text-xs opacity-60 ml-1">
-                      → upgrades to Task
-                    </span>
-                  </button>
-                )}
-
-                {/* End Date (Events) */}
-                {showEndDateInModal && (
-                  <div className="bg-pink-500/10 border border-pink-500/40 p-4 rounded-xl space-y-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CalendarIcon className="w-4 h-4 text-pink-400" />
-                      <Label className="text-sm font-semibold text-pink-300">
-                        End Date & Time
-                      </Label>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="relative">
-                        {editingDateField === "endDate" ? (
-                          <Input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            onBlur={() => setEditingDateField(null)}
-                            autoFocus
-                            className="py-3 h-11 bg-[#0a1628] border border-pink-500/30 text-pink-100 [color-scheme:dark]"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setEditingDateField("endDate")}
-                            className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-pink-500/20 rounded-md text-left text-pink-100 hover:border-pink-500/40 transition-colors text-sm"
-                          >
-                            {endDate
-                              ? formatDateDisplay(endDate)
-                              : "No end date"}
-                          </button>
-                        )}
-                      </div>
-                      <div className="relative">
-                        {editingDateField === "endTime" ? (
-                          <Input
-                            type="time"
-                            value={endTime}
-                            onChange={(e) => setEndTime(e.target.value)}
-                            onBlur={() => setEditingDateField(null)}
-                            autoFocus
-                            className="py-3 h-11 bg-[#0a1628] border border-pink-500/30 text-pink-100 [color-scheme:dark]"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setEditingDateField("endTime")}
-                            className="w-full py-3 h-11 px-3 bg-[#0a1628] border border-pink-500/20 rounded-md text-left text-pink-100 hover:border-pink-500/40 transition-colors text-sm"
-                          >
-                            {endTime
-                              ? formatTimeDisplay(endTime)
-                              : "No end time"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Add End Date button (non-events) */}
-                {!showEndDateInModal && itemType !== "event" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const today = new Date();
-                      const tomorrow = new Date(today);
-                      tomorrow.setDate(tomorrow.getDate() + 1);
-                      const fmt = (d: Date) => d.toISOString().split("T")[0];
-                      const fmtT = (d: Date) => d.toTimeString().slice(0, 5);
-                      if (!startDate) setStartDate(dueDate || fmt(today));
-                      if (!startTime) setStartTime(dueTime || fmtT(today));
-                      if (!endDate) setEndDate(fmt(tomorrow));
-                      if (!endTime) setEndTime(dueTime || fmtT(today));
-                      setShowEndDateInModal(true);
-                      setItemType("event");
-                      setManualOverrides((prev) => ({
-                        ...prev,
-                        type: true,
-                        dates: true,
-                      }));
-                    }}
-                    className="w-full flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-pink-500/30 text-pink-400/60 hover:border-pink-500/50 hover:text-pink-400 transition-all active:scale-[0.99] text-sm"
-                  >
-                    <CalendarIcon className="w-4 h-4" />
-                    <span>Add End Date</span>
-                    <span className="text-xs opacity-60 ml-1">
-                      → upgrades to Event
-                    </span>
-                  </button>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-2">
-                <Button
-                  onClick={() => setShowMissingFieldsModal(false)}
-                  variant="outline"
-                  className="flex-1 h-11"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => {
-                    setShowMissingFieldsModal(false);
-                    setManualOverrides((prev) => ({ ...prev, dates: true }));
-                    if (dateModalIntent === "submit") {
-                      setTimeout(() => handleSubmit(), 100);
-                    }
-                  }}
-                  disabled={
-                    itemType === "event"
-                      ? !startDate || !startTime || !endDate || !endTime
-                      : !dueDate || !dueTime
-                  }
-                  className="flex-1 h-11 neo-gradient text-white border-0 shadow-lg"
-                >
-                  {dateModalIntent === "submit"
-                    ? `Create ${itemType === "event" ? "Event" : itemType === "task" ? "Task" : "Reminder"}`
-                    : "Continue"}
-                </Button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Quick view modal opened from notification deep link */}
       {pendingItem && (
