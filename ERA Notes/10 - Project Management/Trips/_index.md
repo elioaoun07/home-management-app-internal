@@ -20,6 +20,7 @@ tags:
 | 1   | [Feature State — Current Reality](<1 - Feature State — Current Reality.md>) | You want the honest, no-hype status of every Trips sub-feature.    |
 | 2   | [Future Vision & Roadmap](<2 - Future Vision & Roadmap.md>)                 | You want to dream: Trips enhancements + bridges, prioritized.      |
 | 3   | [Current — Action Plan](<3 - Current — Action Plan.md>)                     | Most days. What to actually do next on Trips (this week or later). |
+| F   | [FABLED/](<FABLED/_index.md>)                                               | You want the 10× deep-dive: implementation X-ray (RPCs, side-effect ledger), the G1 verification checklist, optimization plan, future enhancements. |
 
 ## How to use this set
 

@@ -162,7 +162,8 @@ Located in `src/contexts/`. Always use the `Safe` variant in components that may
 
 ## Database
 
-> **`migrations/schema.sql` is the single source of truth.** Read it before writing any SQL. Never assume a column exists.
+> **`migrations/schema.sql` is the single source of truth for tables/columns.** Read it before writing any SQL. Never assume a column exists.
+> **Caveat:** the schema export captures **tables only** — RLS policies and function bodies (e.g. `get_schedule_bundle`) are NOT in the repo. Verified 2026-05-31: items tables DO have RLS even though schema.sql doesn't show it. Before any auth/RLS work, treat the live DB as truth (see `migrations/_verify_schedule_rls.md` for the verification queries).
 
 DB changes = SQL run manually in Supabase SQL Editor. New tables must include RLS policies. **Always create a migration file first** (`migrations/YYYY-MM-DD_description.sql`), then update `schema.sql`. See Hard Rule #24.
 
@@ -199,7 +200,7 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Recurring Payments       | `src/app/recurring/`, `src/features/recurring/`                   | `ERA Notes/02 - Standalone Modules/Recurring Payments/` | Standalone |
 | Recipes                  | `src/features/recipes/`, `src/app/recipe/`                        | `ERA Notes/02 - Standalone Modules/Recipes/`            | Standalone |
 | Meal Planning            | `src/features/meal-planning/`, `src/app/meal-plan/`, `src/components/web/WebMealPlanCalendar.tsx` | `ERA Notes/03 - Junction Modules/Meal Planning/` | Standalone |
-| Inventory                | `src/features/inventory/`, `src/app/inventory/`                   | `ERA Notes/02 - Standalone Modules/Inventory/`          | Standalone |
+| Inventory                | `src/features/inventory/`, `src/components/inventory/` (mounted in Catalogue) | `ERA Notes/02 - Standalone Modules/Inventory/`          | Standalone |
 | Debts                    | `src/features/debts/`                                             | `ERA Notes/02 - Standalone Modules/Debts/`              | Standalone |
 | Catalogue                | `src/app/catalogue/`, `src/features/catalogue/`                   | `ERA Notes/02 - Standalone Modules/Catalogue/`          | Standalone |
 | Future Purchases         | `src/features/future-purchases/`                                  | `ERA Notes/02 - Standalone Modules/Future Purchases/`   | Standalone |
@@ -207,10 +208,10 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Preferences (LBP, theme) | `src/features/preferences/`                                       | `ERA Notes/02 - Standalone Modules/Preferences/`        | Standalone |
 | Statement Import         | `src/features/statement-import/`                                  | `ERA Notes/02 - Standalone Modules/Statement Import/`   | Standalone |
 | Transfers                | `src/features/transfers/`                                         | `ERA Notes/02 - Standalone Modules/Transfers/`          | Standalone |
-| Hub Chat                 | `src/app/hub/`, `src/features/hub/`, `src/components/hub/`        | `ERA Notes/03 - Junction Modules/Hub Chat/`             | Junction   |
+| Hub Chat                 | `src/app/chat/`, `src/app/alerts/`, `src/features/hub/`, `src/components/hub/` | `ERA Notes/03 - Junction Modules/Hub Chat/`             | Junction   |
 | Shopping List            | `src/components/hub/ShoppingListView.tsx`                         | `ERA Notes/03 - Junction Modules/Shopping List/`        | Junction   |
 | Message Actions          | `src/features/hub/messageActions.ts`                              | `ERA Notes/03 - Junction Modules/Message Actions/`      | Junction   |
-| Items / Reminders        | `src/app/items/`, `src/features/items/`                           | `ERA Notes/02 - Standalone Modules/Items & Reminders/`  | Standalone |
+| Items / Reminders        | `src/app/reminders/`, `src/features/items/`, `src/components/reminder/`, `src/components/items/` | `ERA Notes/02 - Standalone Modules/Items & Reminders/`  | Standalone |
 | AI Assistant             | `src/app/api/ai-chat/`, `src/lib/ai/`                             | `ERA Notes/03 - Junction Modules/AI Assistant/`         | Junction   |
 | Notifications            | `src/app/api/notifications/`, `src/app/api/cron/`                 | `ERA Notes/03 - Junction Modules/Notifications/`        | Junction   |
 | Household Sharing        | `src/features/hub/`                                               | `ERA Notes/03 - Junction Modules/Household Sharing/`    | Junction   |
@@ -223,6 +224,7 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | NFC Tags                 | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`     | `ERA Notes/02 - Standalone Modules/NFC Tags/`           | Standalone |
 | Prerequisites            | `src/lib/prerequisites/`, `src/app/api/items/[id]/prerequisites/` | `ERA Notes/03 - Junction Modules/Prerequisites/`        | Junction   |
 | Chores                   | `src/app/chores/`, `src/features/chores/`                        | `ERA Notes/02 - Standalone Modules/Chores/`                         | Standalone |
+| Focus                    | `src/app/focus/`, `src/components/focus/`                        | `ERA Notes/02 - Standalone Modules/Focus/`                          | Standalone |
 | Trips                    | `src/app/trips/`, `src/features/trips/`, `src/components/trips/`  | `ERA Notes/03 - Junction Modules/Trips/`                            | Junction   |
 | Dashboard                | `src/app/dashboard/`, `src/components/web/WebDashboard.tsx`       | `ERA Notes/02 - Standalone Modules/Dashboard/`                      | Standalone |
 | Recycle Bin              | `src/app/recycle-bin/`, `src/features/recycle-bin/`              | `ERA Notes/02 - Standalone Modules/Recycle Bin/`                    | Standalone |

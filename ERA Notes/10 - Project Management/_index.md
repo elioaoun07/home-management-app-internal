@@ -19,6 +19,7 @@ tags:
 | 3 | [Future Vision & Roadmap](<3 - Future Vision & Roadmap.md>) | You want to dream: enhancements and net-new modules, prioritized. |
 | 4 | [This Week (Action Plan)](<4 - This Week (Action Plan).md>) | Most days. The synthesis: exactly what to do next, day by day. |
 | 5 | [P0 Automated Tests Implementation Notes](<5 - P0 Automated Tests Implementation Notes.md>) | You want the record of how the first automated test baseline was added. |
+| 6 | [Optimized Claude Setup Structure](<6 - Optimized Claude Setup Structure.md>) | You want the target blueprint for the AI setup (instructions/knowledge/hooks/skills/memory/permissions) + the ranked gap list. Audited 2026-06-10. |
 
 ## Per-module PM
 
@@ -30,7 +31,7 @@ tags:
 | **Trips** (lifecycle travel junction) | [Trips/](<Trips/_index.md>) |
 | **Hub & ERA** (Hub Chat · AI Assistant · Voice) | [Hub & ERA/](<Hub & ERA/_index.md>) |
 
-> Each module folder mirrors this set at module scope: `1 - Feature State`, `2 - Future Vision & Roadmap`, `3 - Current — Action Plan`, `_index`.
+> Each module folder mirrors this set at module scope: `1 - Feature State`, `2 - Future Vision & Roadmap`, `3 - Current — Action Plan`, `_index` — plus a **`FABLED/`** deep-dive folder (added 2026-06-10): current implementation X-ray, ranked gaps, optimization plan, future enhancements. Files 1–3 stay short and current; FABLED holds the depth and is re-audited per campaign.
 
 ## How to use this set
 

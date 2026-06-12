@@ -20,6 +20,7 @@ tags:
 | 1   | [Feature State — Current Reality](<1 - Feature State — Current Reality.md>) | You want the honest, no-hype status of every Schedule sub-feature.         |
 | 2   | [Future Vision & Roadmap](<2 - Future Vision & Roadmap.md>)             | You want to dream: Schedule enhancements + bridges, prioritized.           |
 | 3   | [Current — Action Plan](<3 - Current — Action Plan.md>)                 | Most days. What to actually do next on Schedule (this week or later).      |
+| F   | [FABLED/](<FABLED/_index.md>)                                           | You want the 10× deep-dive: implementation X-ray (placement strategies, RPC, form traps), ranked gaps, optimization plan, future enhancements. |
 
 ## How to use this set
 

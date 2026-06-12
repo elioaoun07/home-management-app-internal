@@ -37,10 +37,10 @@ tags:
 
 | Sub-feature | Tier | Reality / known gaps | Next step |
 |---|---|---|---|
-| **Accounts & Balance** | 🟢 Core | Multi-account, dynamic balance, balance history, default account, reconcile. The financial core. Account types (expense/income/saving) drive balance direction. **Untested** (`balance-utils`). | Add unit tests for `balance-utils` (global P0). |
+| **Accounts & Balance** | 🟢 Core | Multi-account, dynamic balance, balance history, default account, reconcile. The financial core. Account types (expense/income/saving) drive balance direction. `balance-utils` unit-tested ✅ (2026-06-10); API routes still uncovered. | Route contract tests (FABLED O1). |
 | **Transactions** | 🟢 Core | Full CRUD, drafts, private, split-bill, category grid, voice entry. `MobileExpenseForm` is **2,890 LOC** — a change-risk hotspot. | Split the mega-form when next touched; don't refactor "just because". |
 | **Categories** | 🟢 Core | Hierarchical, icons/colors, DnD reorder, cross-user slug matching (module Hard Rule). Solid. | — (stable) |
-| **Recurring Payments** | 🟢 Core | Schedule, auto next-due, confirm→transaction, exceptions. `recurring/page.tsx` **2,772 LOC**. **Auto-post math untested.** | Unit-test next-due; add monthly "confirm paid" digest (backlog). |
+| **Recurring Payments** | 🟢 Core | Schedule, auto next-due, confirm→transaction, exceptions. `recurring/page.tsx` **2,772 LOC**. Next-due math unit-tested ✅ (2026-06-10); confirm→transaction flow still uncovered. | Test confirm→transaction (FABLED O1); monthly "confirm paid" digest (backlog). |
 | **Budget Allocation** | 🔵 Established | Envelope allocations per category. | Auto-suggest minimums from recurring (gap 2d). |
 | **Transfers** | 🔵 Established | Between-account transfers with correct balance direction. | — (stable) |
 | **Statement Import** | 🔵 Established | CSV/PDF parse, merchant→category mapping. Recently split ("split estatement import", May 28). | Feed merchant map into manual entry (gap 1b). |

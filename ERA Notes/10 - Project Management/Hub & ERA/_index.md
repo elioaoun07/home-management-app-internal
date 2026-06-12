@@ -20,6 +20,7 @@ tags:
 | 1   | [Feature State — Current Reality](<1 - Feature State — Current Reality.md>) | You want the honest, no-hype status of every Hub & ERA sub-feature.  |
 | 2   | [Future Vision & Roadmap](<2 - Future Vision & Roadmap.md>)                 | You want to dream: Hub & ERA enhancements + bridges, prioritized.    |
 | 3   | [Current — Action Plan](<3 - Current — Action Plan.md>)                     | Most days. What to actually do next on Hub & ERA.                    |
+| F   | [FABLED/](<FABLED/_index.md>)                                               | You want the 10× deep-dive: current implementation X-ray, ranked gaps, optimization plan, future enhancements. |
 
 ## How to use this set
 

@@ -48,8 +48,8 @@ This mirrors the global theme ("Stabilize, then Connect") at the cluster level: 
 
 ### Now — Foundation (do first)
 
-- [ ] **`balance-utils` unit tests.** Cover balance direction for expense/income/saving accounts, reconcile, and history. Pure-logic where possible so no Supabase mocks are needed. (global P0)
-- [ ] **Recurring next-due unit tests.** Cover auto next-due computation, confirm→transaction, and exceptions. The auto-post math is the second-highest-stakes path.
+- [x] **`balance-utils` unit tests.** ✅ Done — `src/lib/balance-utils.test.ts`; suite green (28 tests) verified 2026-06-10. (global P0)
+- [x] **Recurring next-due unit tests.** ✅ Done (next-due math) — `src/lib/recurring.test.ts`, verified 2026-06-10. **Still open:** confirm→transaction flow + exceptions (see [FABLED Gaps G1](<FABLED/2 - FABLED — Gaps & Missing.md>)).
 - [ ] **Remove/guard `analytics/debug`.** Quick hygiene — a debug endpoint shouldn't be in the prod surface.
 
 ### Next — First enhancement
