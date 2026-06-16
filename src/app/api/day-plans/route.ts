@@ -55,11 +55,11 @@ export async function GET(req: NextRequest) {
   );
 }
 
-const checkpointSchema = z.object({
+const checklistItemSchema = z.object({
   id: z.string(),
-  time: z.string().regex(/^\d{2}:\d{2}$/),
   label: z.string().min(1).max(200),
   done_at: z.string().nullish(),
+  sort_order: z.number(),
 });
 
 const upsertSchema = z.object({
@@ -67,7 +67,7 @@ const upsertSchema = z.object({
   title: z.string().max(200).nullish(),
   intent: z.enum(["rest", "balanced", "productive"]).nullish(),
   notes: z.string().max(2000).nullish(),
-  checkpoints: z.array(checkpointSchema).optional(),
+  checklist: z.array(checklistItemSchema).optional(),
   is_public: z.boolean().optional(),
 });
 
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
         title: d.title ?? null,
         intent: d.intent ?? null,
         notes: d.notes ?? null,
-        ...(d.checkpoints ? { checkpoints: d.checkpoints } : {}),
+        ...(d.checklist ? { checklist: d.checklist } : {}),
         ...(d.is_public !== undefined ? { is_public: d.is_public } : {}),
         updated_at: new Date().toISOString(),
       },

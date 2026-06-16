@@ -1,7 +1,7 @@
 # Items & Reminders (Schedule)
 
 **Type:** Standalone
-**Routes:** `/reminders`, `/today`, `/alerts`
+**Routes:** `/reminders`, `/alerts` (`/today` is a redirect to `/reminders?plan=1`)
 **Vault doc:** `ERA Notes/02 - Standalone Modules/Items & Reminders/`
 
 ## What it does
@@ -11,12 +11,10 @@ The Schedule module covers everything time-bound: reminders, tasks, events, recu
 ## Files at a glance
 
 - **Page entries**:
-  - `src/app/reminders/page.tsx`, `src/app/reminders/layout.tsx`
-  - `src/app/today/` (today landing)
+  - `src/app/reminders/page.tsx`, `src/app/reminders/layout.tsx` — Focus tab now renders `WebDayPlanner` (merged planner+reminders); Insights tab unchanged
+  - `src/app/today/page.tsx` — redirect only (→ `/reminders?date=…&plan=1`)
   - `src/app/alerts/page.tsx`
-- **Standalone container**:
-  - `src/components/reminder/StandaloneRemindersPage.tsx`
-  - `src/components/reminder/RemindersHeader.tsx`
+- **Standalone container** (Focus tab removed — now `WebDayPlanner`):
   - `src/components/reminder/RemindersInsightsPage.tsx`
   - `src/components/reminder/ReminderTagsBar.tsx` / `ReminderTagsBarWrapper.tsx`
 - **Item entry forms (the thing you usually want to edit)**:

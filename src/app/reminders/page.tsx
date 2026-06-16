@@ -7,12 +7,13 @@ import FilterBar, {
   type TypeFilter,
   type UserFilter,
 } from "@/components/activity/FilterBar";
+import WebDayPlanner from "@/components/planner/WebDayPlanner";
 import RemindersInsightsPage from "@/components/reminder/RemindersInsightsPage";
-import StandaloneRemindersPage from "@/components/reminder/StandaloneRemindersPage";
 import { itemsKeys } from "@/features/items/useItems";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { yyyyMmDd } from "@/lib/utils/date";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type RemindersPage = "focus" | "insights";
@@ -57,6 +58,10 @@ const REMINDERS_SECTIONS: FilterBarSection[] = [
 ];
 
 export default function RemindersStandalonePage() {
+  const searchParams = useSearchParams();
+  const initialDate = useMemo(() => searchParams.get("date") ?? undefined, [searchParams]);
+  const initialPlanning = useMemo(() => searchParams.get("plan") === "1", [searchParams]);
+
   const [mounted, setMounted] = useState(false);
   const [activePage, setActivePage] = useState<RemindersPage>("focus");
   const [userFilter, setUserFilter] = useState<UserFilter>("all");
@@ -89,6 +94,13 @@ export default function RemindersStandalonePage() {
     };
     fetchUser();
   }, []);
+
+  // Clean the URL params after reading them (captured into initialDate/initialPlanning above)
+  useEffect(() => {
+    if (mounted && (initialDate || initialPlanning)) {
+      window.history.replaceState({}, "", "/reminders");
+    }
+  }, [mounted, initialDate, initialPlanning]);
 
   if (!mounted) {
     return (
@@ -148,7 +160,9 @@ export default function RemindersStandalonePage() {
       />
 
       {activePage === "focus" ? (
-        <StandaloneRemindersPage
+        <WebDayPlanner
+          initialDate={initialDate}
+          initialPlanning={initialPlanning}
           userFilter={userFilter}
           currentUserId={currentUserId}
           typeFilter={typeFilter}

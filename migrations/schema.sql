@@ -1605,6 +1605,8 @@ $function$;
 
 -- ============================================
 -- Plan My Day! (added 2026-06-16, see migrations/2026-06-16_plan-my-day.sql)
+-- Merged into /reminders; checkpoints -> checklist (added 2026-06-17, see
+-- migrations/2026-06-17_day-plan-checklist.sql)
 -- ============================================
 CREATE TABLE public.day_plans (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1613,7 +1615,7 @@ CREATE TABLE public.day_plans (
   title text,
   intent text CHECK (intent = ANY (ARRAY['rest'::text, 'balanced'::text, 'productive'::text])),
   notes text,
-  checkpoints jsonb NOT NULL DEFAULT '[]'::jsonb,
+  checklist jsonb NOT NULL DEFAULT '[]'::jsonb,
   is_public boolean NOT NULL DEFAULT false,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),

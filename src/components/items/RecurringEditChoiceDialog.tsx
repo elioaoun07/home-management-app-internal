@@ -33,7 +33,7 @@ interface Props {
  *                the new rule.
  *   - "all"    → Update the whole series.
  *
- * Used by both /reminders (StandaloneRemindersPage) and /calendar (WebEvents)
+ * Used by both /reminders (WebDayPlanner) and /calendar (WebEvents)
  * so the wording and behaviour match.
  */
 export function RecurringEditChoiceDialog({

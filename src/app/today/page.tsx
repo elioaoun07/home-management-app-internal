@@ -1,30 +1,21 @@
 "use client";
 
-import WebDayPlanner from "@/components/planner/WebDayPlanner";
-import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo } from "react";
 
-export default function TodayPage() {
+// Plan My Day was merged into /reminders (see ERA Notes/03 - Junction Modules/Plan My Day).
+// This route survives only to redirect old links / the installed PWA shortcut.
+export default function TodayRedirectPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const dateParam = useMemo(() => searchParams.get("date") ?? undefined, [searchParams]);
-
-  // Prevent hydration mismatch by only rendering WebDayPlanner after mount
-  const [mounted, setMounted] = useState(false);
+  const dateParam = useMemo(() => searchParams.get("date"), [searchParams]);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    const params = new URLSearchParams();
+    if (dateParam) params.set("date", dateParam);
+    params.set("plan", "1");
+    router.replace(`/reminders?${params.toString()}`);
+  }, [router, dateParam]);
 
-  // Clean the URL param after reading it (it's been captured above)
-  useEffect(() => {
-    if (mounted && dateParam) {
-      window.history.replaceState({}, "", "/today");
-    }
-  }, [mounted, dateParam]);
-
-  if (!mounted) {
-    return <div className="min-h-screen" />;
-  }
-
-  return <WebDayPlanner initialDate={dateParam} />;
+  return <div className="min-h-screen" />;
 }

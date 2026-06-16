@@ -1,10 +1,10 @@
 export type DayPlanIntent = "rest" | "balanced" | "productive";
 
-export interface Checkpoint {
+export interface ChecklistItem {
   id: string;
-  time: string; // "HH:MM"
   label: string;
   done_at?: string | null;
+  sort_order: number;
 }
 
 export interface DayPlan {
@@ -14,7 +14,7 @@ export interface DayPlan {
   title: string | null;
   intent: DayPlanIntent | null;
   notes: string | null;
-  checkpoints: Checkpoint[];
+  checklist: ChecklistItem[];
   is_public: boolean;
   created_at: string;
   updated_at: string;

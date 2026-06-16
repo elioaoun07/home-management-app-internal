@@ -14,17 +14,22 @@ related:
 
 # Plan My Day
 
-> **Module:** `src/features/day-plan/` | **API:** `src/app/api/day-plans/` | **Page:** `src/app/today/`
+> **Module:** `src/features/day-plan/` | **API:** `src/app/api/day-plans/` | **Page:** merged into `src/app/reminders/` (Focus tab); `src/app/today/` is a redirect to `/reminders?date=…&plan=1`
 > **Components:** `src/components/planner/WebDayPlanner.tsx`
 > **DB Tables:** `day_plans`
-> **Type:** Junction (bridges the new `day_plans` table with the existing Items/Schedule standalone)
-> **Status:** Active (phase 1 — triage list only)
+> **Type:** Junction (bridges `day_plans` with Items/Schedule; now also owns the /reminders Focus view, replacing the retired `StandaloneRemindersPage`)
+> **Status:** Active *(IMPLEMENTED 2026-06-17: merged with /reminders — see plan `going-back-to-the-linked-deer`)*
 
 ## Overview
 
-The Schedule module's three placement strategies — one-time (`reminder_details.due_at` / `event_details.start_at`), recurring (RRULE via `item_recurrence_rules`), and flexible (`item_flexible_schedules`) — work well for a normal routine but break down on **disrupted days**: a wedding this Saturday, a one-day holiday. "Plan My Day" is the dedicated full-page surface (`/today`) for triaging a specific day: see everything landing on it, push items off, pull ("prepone") flexible items from other days onto it, add ad-hoc tasks, and track timed checkpoints.
+The Schedule module's three placement strategies — one-time (`reminder_details.due_at` / `event_details.start_at`), recurring (RRULE via `item_recurrence_rules`), and flexible (`item_flexible_schedules`) — work well for a normal routine but break down on **disrupted days**: a wedding this Saturday, a one-day holiday. "Plan My Day" is now merged into the `/reminders` page as the **Focus tab** (`WebDayPlanner.tsx`). By default it shows the current day's scheduled items. Clicking **"Plan my day"** reveals the planning editor. The former standalone `/today` route is a redirect; the former `StandaloneRemindersPage` is deleted.
 
-**Interaction model:** triage-list-first. An hour-by-hour timeline and a mood/energy "rest vs. productivity" optimizer are explicitly deferred to a later phase (see Out of scope).
+**Three UI states:**
+- **Browsing** (no plan yet): day nav + "On this day" list + collapsible Overdue/Upcoming (today only) + a prominent "✦ Plan my day" button.
+- **Planning** (button pressed or editing an existing plan): title/intent/notes/Private-Shared header + Prepone pool + Checklist editor (dnd-kit drag-to-reorder, untimed) + ad-hoc task add. Saves in one POST on "Save day plan".
+- **Preview** (plan exists, not editing): plan summary card (title/intent/notes, public badge) with the checklist nested inside (live check-off via PATCH). Edit/Delete buttons.
+
+**Interaction model:** triage-list-first. An hour-by-hour timeline and a mood/energy optimizer are explicitly deferred (see Out of scope).
 
 ## Architecture
 
@@ -42,15 +47,17 @@ The Schedule module's three placement strategies — one-time (`reminder_details
 
 6. **Section defaults** — `WebDayPlanner` opens the "Landing on this day" and "Prepone pool" drawers only when they contain items; empty drawers stay collapsed by default and headers show count badges when there is work to triage.
 
-### The save-gated draft model *(added 2026-06-16)*
+### The save-gated draft model *(added 2026-06-16, updated 2026-06-17)*
 
-The header (title/intent/notes/Private-Shared) and the checkpoint list used to auto-save on every keystroke/click — including a full `POST` on every single Private/Shared toggle. `WebDayPlanner.tsx` now holds these as local draft state (`titleDraft`, `notesDraft`, `intentDraft`, `isPublicDraft`, `checkpointsDraft`) and fires **exactly one `useUpsertDayPlan()` POST**, on explicit **Save**, sending the full draft (including `checkpoints`) in one request.
+The header (title/intent/notes/Private-Shared) and the checklist hold their edits as local draft state (`titleDraft`, `notesDraft`, `intentDraft`, `isPublicDraft`, `checklistDraft`) and fire **exactly one `useUpsertDayPlan()` POST**, on explicit **Save day plan**, sending the full draft in one request.
 
-- **Unplanned day** (`plan === null`) → `mode = "edit"`: a draft form with Save. There is no saved row yet, so there's nothing to cancel back to — Cancel is hidden.
-- **Planned day** (`plan` exists) → `mode = "preview"`: a read-only summary card (title, intent badge, notes, Private/Shared badge, checkpoints) with **Edit** (re-seeds drafts from `plan`, switches to edit) and **Delete** (`useDeleteDayPlan()`).
-- **Checkpoint done/undone stays live** even in preview — `useCheckpointActions().toggleCheckpoint` still does an immediate `PATCH` with its own Undo toast, since marking something done is a real-time action distinct from editing the plan. Adding/removing a checkpoint, by contrast, only mutates `checkpointsDraft` and is committed on the next Save.
-- **Save and Delete always show an Undo toast** (Hard Rule #1) by snapshotting the previous `plan` value before mutating: Save's Undo re-`upsert`s the previous values (or deletes the just-created row if there was no previous plan); Delete's Undo re-`upsert`s the deleted row including its checkpoints.
-- The seeding `useEffect` in `WebDayPlanner.tsx` is keyed on `` `${dateStr}:${plan?.id ?? "new"}` `` so it only re-seeds drafts (and resets `mode`) when the date or the saved-plan identity changes — not on every keystroke, and not when a live checkpoint toggle changes `plan.checkpoints`'s array reference behind the scenes.
+- **Browsing** (`plan === null`, default) → prominent "✦ Plan my day" button. No form visible.
+- **Planning** (`plan` exists or "Plan my day" clicked) → full planning editor with Save/Cancel. Cancel reverts to Preview if a plan exists, or back to Browsing if no plan yet.
+- **Preview** (`plan` exists, not editing) → summary card (title/intent/notes, public badge, checklist) with **Edit** (pencil) and **Delete** (trash) buttons.
+- **Checklist check-off stays live** even in preview — `useChecklistActions().toggleChecklistItem` still does an immediate `PATCH` with its own Undo toast. Adding/removing/reordering checklist items only mutates `checklistDraft` and commits on Save.
+- **URL-driven auto-open-planning** (`?plan=1`): handled by a second `useEffect` declared after the main seeding effect, gated on `dayPlanLoading === false` and consumed exactly once per mount (via `initialPlanningConsumedRef`). This prevents the auto-open from being clobbered by the seeding effect once real plan data arrives.
+- **Save and Delete always show an Undo toast** (Hard Rule #1). Save's Undo re-`upsert`s the previous values (or deletes the just-created row if there was no previous plan); Delete's Undo re-`upsert`s the deleted row including its checklist.
+- The seeding `useEffect` is keyed on `` `${dateStr}:${plan?.id ?? "new"}` `` so it re-seeds only when the date or saved-plan identity changes — not on every keystroke, and not when a live checklist toggle changes `plan.checklist`'s array reference.
 
 `POST /api/day-plans` still unconditionally writes `title`/`intent`/`notes` on every call (unlike `is_public`/`checkpoints`, conditionally included only when present) — any partial mutate omitting one of these three will silently null it out. This is no longer a footgun in practice because the only caller is `handleSave`, which always sends the complete draft; any new caller of `useUpsertDayPlan()` must do the same.
 
@@ -58,31 +65,32 @@ The header (title/intent/notes/Private-Shared) and the checkpoint list used to a
 
 ### `day_plans`
 
-One row per `(user_id, plan_date)` — enforced by a `UNIQUE` constraint, which is what makes the upsert idempotent. `intent` (`'rest' | 'balanced' | 'productive'`) is stored now but unused by any optimizer yet — reserved for the deferred mood/energy phase. `checkpoints jsonb` is `[{id, time, label, done_at}]`. `is_public boolean` mirrors the household-visibility pattern used elsewhere (see Hard Rule #13). Partner visibility is enforced by an `EXISTS`-subquery `SELECT` RLS policy on `household_links` (see `day_plans_select` in the migration) — this is deliberate, not an oversight: Hard Rule #20 forbids `EXISTS`-subquery RLS on **hot child tables** re-evaluated per row in a join (`item_alerts`, `item_subtasks`, etc.); `day_plans` is a low-cardinality parent table (one row per user per day, same shape as `items`), so the rule doesn't apply. `supabaseServer()` calls run as the requesting user, so there is no way for the API route to "merge in app code" around RLS — the policy has to let the partner's public row through, or it's invisible no matter what the route does. Insert/update/delete stay owner-only; a public plan is read-only for the partner.
+One row per `(user_id, plan_date)` — enforced by a `UNIQUE` constraint. `intent` (`'rest' | 'balanced' | 'productive'`) is stored now, reserved for the deferred mood/energy phase. `checklist jsonb` is `[{id, label, done_at, sort_order}]` — no `time` field; items are ordered by `sort_order` (drag-to-reorder in planning mode). `is_public boolean` mirrors household-visibility elsewhere (Hard Rule #13). Partner visibility is enforced by an `EXISTS`-subquery RLS policy on `household_links` (`day_plans_select` in the migration) — deliberate exception to Hard Rule #20, which targets hot _child_ tables, not this low-cardinality parent table.
 
-See `migrations/2026-06-16_plan-my-day.sql` for the exact DDL.
+See `migrations/2026-06-16_plan-my-day.sql` (original DDL) and `migrations/2026-06-17_day-plan-checklist.sql` (rename `checkpoints` → `checklist`, shape transform).
 
 ## Key Files
 
-- `src/app/today/page.tsx` — thin client page; reads `?date=YYYY-MM-DD` (defaults to today), mounted-guard pattern matches `src/app/chat/page.tsx`
-- `src/components/planner/WebDayPlanner.tsx` — the entire UI: day nav, draft form / preview card (title/intent/notes/Private-Shared + checkpoints), landing list, prepone pool, ad-hoc task add. No `layout.tsx` — owns its own `min-h-screen pb-24` / `pt-14`, matching the `/trips` and `/chores` convention (not the `/reminders`/`/chat` `pt-16`-wrapper convention)
-- `src/features/day-plan/useDayPlan.ts` — `useDayPlan(date)`, `useUpsertDayPlan()`, `useDeleteDayPlan()`, `useCheckpointActions()` (now just the live `toggleCheckpoint`)
-- `src/app/api/day-plans/route.ts` — GET (merges partner's public plan) + POST (upsert by `user_id, plan_date`, called once per Save)
-- `src/app/api/day-plans/[id]/route.ts` — PATCH (checkpoint done/undone toggle) + DELETE
-- `src/lib/utils/dayOccurrences.ts` — shared occurrence-expansion util, also used by `WebTodayView.tsx`
+- `src/app/reminders/page.tsx` — Focus tab renders `WebDayPlanner`; reads `?date=` + `?plan=1` from URL (via `useSearchParams`), cleans params via `history.replaceState`
+- `src/app/today/page.tsx` — redirect-only; immediately navigates to `/reminders?date=…&plan=1` to preserve old links / PWA shortcuts
+- `src/components/planner/WebDayPlanner.tsx` — the merged surface: day nav, three-state model (browsing/planning/preview), Overdue/Upcoming/Assigned sections (today only), prepone pool, checklist editor (dnd-kit drag-to-reorder), ad-hoc task add, `ItemDetailModal` + `ItemActionsSheet` wiring
+- `src/features/day-plan/useDayPlan.ts` — `useDayPlan(date)`, `useUpsertDayPlan()`, `useDeleteDayPlan()`, `useChecklistActions()` (live `toggleChecklistItem` PATCH)
+- `src/app/api/day-plans/route.ts` — GET (merges partner's public plan) + POST (upsert by `user_id, plan_date`, once per Save)
+- `src/app/api/day-plans/[id]/route.ts` — PATCH (checklist item done/undone) + DELETE
+- `src/lib/utils/dayOccurrences.ts` — shared occurrence-expansion util; never reimplement locally
 
 ### Entry points
 
-- `src/components/web/WebTodayView.tsx` — "Plan this day" header link
-- `src/components/web/DayExpansionModal.tsx` — "Plan day" header button (web calendar day click)
-- `src/components/items/MobileDayExpansionModal.tsx` — "Plan this day" header button (mobile calendar day click, via new `onPlanDay` prop)
+- `src/components/web/WebTodayView.tsx` — "Plan this day" link → `/reminders?date=…&plan=1`
+- `src/components/web/WebCalendar.tsx` — `onPlanDay` callback → `/reminders?date=…&plan=1` (passes to `DayExpansionModal`)
+- `src/components/items/CalendarView.tsx` — `onPlanDay` callback → `/reminders?date=…&plan=1` (passes to `MobileDayExpansionModal`)
 
 ## Gotchas
 
 1. **Per-item flexible periods, not one shared period** — see Architecture point 2. A bug here would silently compute the wrong "unscheduled this period" set for items on different flexible-period types (weekly vs. monthly, etc.) within the same prepone pool.
 2. **`day_plans` upsert nulls omitted fields** — see "The save-gated draft model" above. Existing API behavior; any new caller of `useUpsertDayPlan()` must resend the full draft (title/intent/notes/is_public/checkpoints), not a partial patch.
 3. **`day_plans` partner visibility lives in RLS, not the API route** — the `day_plans_select` policy embeds the `household_links` `EXISTS` check directly (mirrors `items_select`). This is an intentional exception to Hard Rule #20, which targets hot _child_ tables re-evaluated per row in a join, not a low-cardinality parent table like this one. Don't "fix" this by stripping the subquery — without it, the partner's public plan is invisible no matter what the GET route requests.
-4. **Don't reach for `upsertDayPlan`/`deleteDayPlan` outside `handleSave`/`handleDelete`/the Undo callbacks** — every other interaction (typing, toggling intent/Private-Shared, add/remove checkpoint) must stay in local draft state (`*Draft` / `checkpointsDraft`) until the user hits Save. Re-wiring any of those onChange handlers back to an immediate mutate reintroduces the per-keystroke API-call bug this model fixed.
+4. **Don't reach for `upsertDayPlan`/`deleteDayPlan` outside `handleSave`/`handleDelete`/the Undo callbacks** — every other interaction (typing, toggling intent/Private-Shared, add/remove/reorder checklist item) must stay in local draft state (`*Draft` / `checklistDraft`) until the user hits Save. Re-wiring any of those onChange handlers back to an immediate mutate reintroduces the per-keystroke API-call bug this model fixed.
 
 ## Out of scope (deferred)
 

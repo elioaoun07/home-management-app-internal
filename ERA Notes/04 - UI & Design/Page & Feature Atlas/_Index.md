@@ -53,7 +53,7 @@ tags:
 | ---------------- | ----------------- | ------------------ |
 | `era`            | `/era`            | [[era]]            |
 | `chores`         | `/chores`         | [[chores]]         |
-| `today`          | `/today`          | [[feature-today]]  |
+| `today`          | `/reminders` (merged; `/today` → redirect) | [[feature-today]]  |
 | `catalogue`      | `/catalogue`      | [[catalogue]]      |
 | `recipe`         | `/recipe`         | [[recipe]]         |
 | `meal-plan`      | `/meal-plan`      | [[Meal Planning]]  |

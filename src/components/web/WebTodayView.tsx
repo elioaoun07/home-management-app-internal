@@ -357,7 +357,7 @@ export default function WebTodayView() {
             </div>
           )}
           <Link
-            href={`/today?date=${format(today, "yyyy-MM-dd")}`}
+            href={`/reminders?date=${format(today, "yyyy-MM-dd")}&plan=1`}
             className={cn(
               "flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors",
               isFrost

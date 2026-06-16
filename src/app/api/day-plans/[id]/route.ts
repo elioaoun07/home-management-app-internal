@@ -5,18 +5,18 @@ import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
-const checkpointSchema = z.object({
+const checklistItemSchema = z.object({
   id: z.string(),
-  time: z.string().regex(/^\d{2}:\d{2}$/),
   label: z.string().min(1).max(200),
   done_at: z.string().nullish(),
+  sort_order: z.number(),
 });
 
 const patchSchema = z.object({
   title: z.string().max(200).nullish(),
   intent: z.enum(["rest", "balanced", "productive"]).nullish(),
   notes: z.string().max(2000).nullish(),
-  checkpoints: z.array(checkpointSchema).optional(),
+  checklist: z.array(checklistItemSchema).optional(),
   is_public: z.boolean().optional(),
 });
 

@@ -876,7 +876,7 @@ export function CalendarView({
           anchorRect={modalAnchorRect}
           onItemClick={handleModalItemClick}
           onAddFromCatalogue={handleAddFromCatalogue}
-          onPlanDay={(d) => router.push(`/today?date=${format(d, "yyyy-MM-dd")}`)}
+          onPlanDay={(d) => router.push(`/reminders?date=${format(d, "yyyy-MM-dd")}&plan=1`)}
         />
 
         {/* Catalogue Template Picker */}

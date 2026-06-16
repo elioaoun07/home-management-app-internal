@@ -80,7 +80,7 @@ tags:
 |---|---|---|---|---|
 | **Seven surfaces for one module** | Cognitive load: no single obvious place to *do the thing*. Overlapping jobs mean I hesitate about where to go. | Organic growth — each view added without retiring or merging an old one. | surface map above | 🟠 |
 | ✅ **~~Focus page is dead weight~~** *(FIXED 2026-06-06)* | Retired `/focus` page + `FocusPage.tsx` + `FlexibleRoutinesPool.tsx` + `ScheduleRoutineSheet.tsx`. Added "Focus" per-item action to `ItemActionsSheet` → opens `ItemDetailModal`. Week view's "Flexible this week" strip covers routine assignment. | | ✅ |
-| **`/reminders` hook rarely opened** | I don't go check what's still on my plate, so things slip. Is it a habit gap or a system gap? **Both** — the view competes with Today/Calendar and adds little they don't. | Redundancy + no compelling reason to open it over the calendar. Honest open question, not yet a fix. | [src/components/reminder/StandaloneRemindersPage.tsx](<../../../../src/components/reminder/StandaloneRemindersPage.tsx>) | 🟡 |
+| ✅ **~~`/reminders` hook rarely opened~~** *(IMPLEMENTED 2026-06-17)* | Merged `/reminders` + Plan My Day into one surface (`WebDayPlanner.tsx` at `/reminders` Focus tab). `StandaloneRemindersPage.tsx` deleted; `/today` redirects. Default view = today's items; "Plan my day" button reveals the planning editor. | | ✅ |
 | **Stats unused** | Maintenance surface with zero payoff right now. | Built ahead of need. | analytics surface | ⚪ parked |
 
 > The Focus-page pain is **already decided**: retire the page, make Focus a per-item *mode*. See [2 · Target Design](<2 - Target Design & Decisions.md>).

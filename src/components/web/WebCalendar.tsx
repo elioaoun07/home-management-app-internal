@@ -1846,7 +1846,7 @@ export function WebCalendar({
           onBirthdayClick?.(birthday, date);
         }}
         onAddEvent={onAddEvent}
-        onPlanDay={(d) => router.push(`/today?date=${format(d, "yyyy-MM-dd")}`)}
+        onPlanDay={(d) => router.push(`/reminders?date=${format(d, "yyyy-MM-dd")}&plan=1`)}
         getOccurrenceDateTimeForItem={getOccurrenceDateTimeForItem}
         anchorRect={modalAnchorRect}
       />
