@@ -86,6 +86,16 @@ function extractAmount(text: string): number | null {
     }
   }
 
+  // Fallback: a bare number is good enough in a budget thread — users don't
+  // always type "$" or "dollars" (e.g. "20 fuel today").
+  const bareMatch = text.match(/\b(\d+(?:[.,]\d{1,2})?)\b/);
+  if (bareMatch) {
+    const num = parseFloat(bareMatch[1].replace(",", "."));
+    if (!isNaN(num) && num > 0) {
+      return num;
+    }
+  }
+
   return null;
 }
 

@@ -69,7 +69,7 @@ tags:
 
 | Module | Tier | Has vault doc | Reality / known gaps | Next step |
 |---|---|---|---|---|
-| **Hub Chat** | 🟢 Core | ✅ | The top-layer primary interface. Threads w/ purposes, realtime, voice messages, message actions, shopping mode, full-screen in-thread, edge-swipe-back, bulk convert ("Multi-add") with draft-item review *(IMPLEMENTED 2026-06-16)*. `HubPage.tsx` **5,506+ LOC** — the single largest file, growing. | Decompose `HubPage` before next big change. |
+| **Hub Chat** | 🟢 Core | ✅ | The top-layer primary interface. Threads w/ purposes, realtime, voice messages, message actions, shopping mode, full-screen in-thread, edge-swipe-back, bulk convert ("Multi-add") with draft-item review *(IMPLEMENTED 2026-06-16)*. Bulk-convert completeness rule tightened — a row only auto-confirms with Amount + Category + Subcategory, else draft *(IMPLEMENTED 2026-06-16)*. `HubPage.tsx` **5,506+ LOC** — the single largest file, growing. | Decompose `HubPage` before next big change. |
 | **Household Sharing** | 🟢 Core | ✅ | Partner linking, shared data via `household_links`+`profiles`, private tx. Underpins every module. | — (stable; high blast radius) |
 | **Sync & Offline** | 🟢 Core | ✅ | IndexedDB queue + `OfflineSyncEngine`, connectivity probing, `safeFetch`. | Audit raw-`fetch` mutation paths (file 1 P2). |
 | **Notifications** | 🔵 Established | ✅ | Web Push + in-app, cron sends, snooze/dismiss/actions, subscription health. | Smart timing + weekly digest (gap 7). |

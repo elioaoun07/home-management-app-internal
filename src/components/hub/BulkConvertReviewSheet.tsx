@@ -90,57 +90,9 @@ export default function BulkConvertReviewSheet({
     defaultAccountId || accounts[0]?.id || "",
   );
 
-  const [budgetRows, setBudgetRows] = useState<BudgetRow[]>(() =>
-    purpose === "budget"
-      ? messages.map((msg) => {
-          const parsed = parseMessageForTransaction(
-            msg.content || "",
-            categories as any[],
-          );
-          return {
-            messageId: msg.id,
-            content: msg.content || "",
-            amount: parsed.amount !== null ? String(parsed.amount) : "",
-            description: msg.content || "",
-            categoryId: parsed.categoryId || "",
-            subcategoryId: parsed.subcategoryId || "",
-            date: parsed.date || yyyyMmDd(new Date()),
-            confirmed: parsed.amount !== null,
-          };
-        })
-      : [],
-  );
-
-  const [reminderRows, setReminderRows] = useState<ReminderRow[]>(() =>
-    purpose === "reminder"
-      ? messages.map((msg) => {
-          const parsed = parseSmartText(msg.content || "");
-          return {
-            messageId: msg.id,
-            content: msg.content || "",
-            title: parsed.title || msg.content || "Untitled",
-            dueDate: parsed.dueDate || parsed.startDate || "",
-            dueTime: parsed.dueTime || parsed.startTime || "",
-            categoryIds: parsed.categoryIds || [],
-            confirmed: true,
-          };
-        })
-      : [],
-  );
-
-  const updateBudgetRow = (index: number, patch: Partial<BudgetRow>) => {
-    setBudgetRows((rows) =>
-      rows.map((r, i) => (i === index ? { ...r, ...patch } : r)),
-    );
-  };
-
-  const updateReminderRow = (index: number, patch: Partial<ReminderRow>) => {
-    setReminderRows((rows) =>
-      rows.map((r, i) => (i === index ? { ...r, ...patch } : r)),
-    );
-  };
-
   // Build category dropdown options (handles both DB-flat and nested shapes)
+  // — computed up front since the initial budgetRows state and the
+  // completeness check below both need it.
   const topCategories: Array<{
     id: string;
     name: string;
@@ -176,6 +128,96 @@ export default function BulkConvertReviewSheet({
     }
   }
 
+  // A budget row is "complete" — eligible to be auto-confirmed — only when
+  // it has an amount, a category, and (if that category has subcategories)
+  // a subcategory too. Anything less must be saved as a draft, never
+  // silently treated as a finished transaction.
+  const isBudgetRowComplete = (row: {
+    amount: string;
+    categoryId: string;
+    subcategoryId: string;
+  }): boolean => {
+    const amt = parseFloat(row.amount);
+    if (isNaN(amt) || amt <= 0) return false;
+    if (!row.categoryId) return false;
+    const sel = topCategories.find((c) => c.id === row.categoryId);
+    if (sel && sel.sub.length > 0 && !row.subcategoryId) return false;
+    return true;
+  };
+
+  const [budgetRows, setBudgetRows] = useState<BudgetRow[]>(() =>
+    purpose === "budget"
+      ? messages.map((msg) => {
+          const parsed = parseMessageForTransaction(
+            msg.content || "",
+            categories as any[],
+          );
+          const row = {
+            amount: parsed.amount !== null ? String(parsed.amount) : "",
+            categoryId: parsed.categoryId || "",
+            subcategoryId: parsed.subcategoryId || "",
+          };
+          return {
+            messageId: msg.id,
+            content: msg.content || "",
+            ...row,
+            description: msg.content || "",
+            // Default to the day the message was actually sent in chat, not
+            // today — e.g. converting a 10-day-old message should default
+            // the transaction date to that day, not the conversion day.
+            date: parsed.date || yyyyMmDd(new Date(msg.created_at)),
+            confirmed: isBudgetRowComplete(row),
+          };
+        })
+      : [],
+  );
+
+  const [reminderRows, setReminderRows] = useState<ReminderRow[]>(() =>
+    purpose === "reminder"
+      ? messages.map((msg) => {
+          const parsed = parseSmartText(msg.content || "");
+          return {
+            messageId: msg.id,
+            content: msg.content || "",
+            title: parsed.title || msg.content || "Untitled",
+            dueDate: parsed.dueDate || parsed.startDate || "",
+            dueTime: parsed.dueTime || parsed.startTime || "",
+            categoryIds: parsed.categoryIds || [],
+            confirmed: true,
+          };
+        })
+      : [],
+  );
+
+  const updateBudgetRow = (index: number, patch: Partial<BudgetRow>) => {
+    setBudgetRows((rows) =>
+      rows.map((r, i) => {
+        if (i !== index) return r;
+        const merged = { ...r, ...patch };
+        const wasComplete = isBudgetRowComplete(r);
+        const isComplete = isBudgetRowComplete(merged);
+        // Incomplete rows can never carry "confirmed", regardless of how the
+        // patch got here (field edit or the manual toggle).
+        if (!isComplete) return { ...merged, confirmed: false };
+        // A field edit (not the manual toggle) that just made the row
+        // complete should auto-flip it to Confirmed — the user shouldn't
+        // have to click the toggle a second time after filling in the
+        // missing field.
+        const isManualToggle = Object.keys(patch).length === 1 && "confirmed" in patch;
+        if (!wasComplete && !isManualToggle) {
+          return { ...merged, confirmed: true };
+        }
+        return merged;
+      }),
+    );
+  };
+
+  const updateReminderRow = (index: number, patch: Partial<ReminderRow>) => {
+    setReminderRows((rows) =>
+      rows.map((r, i) => (i === index ? { ...r, ...patch } : r)),
+    );
+  };
+
   const today = yyyyMmDd(new Date());
 
   const handleSaveAll = async () => {
@@ -200,7 +242,7 @@ export default function BulkConvertReviewSheet({
           continue;
         }
         const isFuture = row.date > today;
-        const isDraft = !row.confirmed || isFuture;
+        const isDraft = !row.confirmed || isFuture || !isBudgetRowComplete(row);
 
         try {
           if (isDraft) {
@@ -449,6 +491,14 @@ export default function BulkConvertReviewSheet({
                 const sel = topCategories.find(
                   (tc) => tc.id === row.categoryId,
                 );
+                const isComplete = isBudgetRowComplete(row);
+                const missingReason = !hasAmount
+                  ? null
+                  : !row.categoryId
+                    ? "Missing category — will be saved as draft"
+                    : sel && sel.sub.length > 0 && !row.subcategoryId
+                      ? "Missing subcategory — will be saved as draft"
+                      : null;
                 return (
                   <div
                     key={row.messageId}
@@ -459,22 +509,29 @@ export default function BulkConvertReviewSheet({
                         “{row.content}”
                       </p>
                       <button
-                        onClick={() =>
+                        onClick={() => {
+                          if (!isComplete) return;
                           updateBudgetRow(index, {
                             confirmed: !row.confirmed,
-                          })
-                        }
+                          });
+                        }}
                         className={cn(
                           "shrink-0 px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all",
-                          row.confirmed
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : "bg-amber-500/20 text-amber-300",
+                          !isComplete
+                            ? "bg-amber-500/20 text-amber-300 opacity-60 cursor-not-allowed"
+                            : row.confirmed
+                              ? "bg-emerald-500/20 text-emerald-400"
+                              : "bg-amber-500/20 text-amber-300",
                         )}
                       >
-                        {row.confirmed ? (
+                        {row.confirmed && isComplete ? (
                           <CheckIcon className="w-3 h-3" />
                         ) : null}
-                        {row.confirmed ? "Confirmed" : "Save as draft"}
+                        {!isComplete
+                          ? "Incomplete"
+                          : row.confirmed
+                            ? "Confirmed"
+                            : "Save as draft"}
                       </button>
                     </div>
 
@@ -530,37 +587,29 @@ export default function BulkConvertReviewSheet({
                           </option>
                         ))}
                       </select>
-                      {sel && sel.sub.length > 0 ? (
-                        <select
-                          value={row.subcategoryId}
-                          onChange={(e) =>
-                            updateBudgetRow(index, {
-                              subcategoryId: e.target.value,
-                            })
-                          }
-                          className="w-full bg-white/5 border border-white/10 rounded-lg text-white text-sm px-2 py-2"
-                        >
-                          <option value="">Subcategory</option>
-                          {sel.sub.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <Input
-                          type="text"
-                          value={row.description}
-                          onChange={(e) =>
-                            updateBudgetRow(index, {
-                              description: e.target.value,
-                            })
-                          }
-                          placeholder="Description"
-                          className="bg-white/5 border-white/10 text-white"
-                        />
-                      )}
+                      <select
+                        value={row.subcategoryId}
+                        onChange={(e) =>
+                          updateBudgetRow(index, {
+                            subcategoryId: e.target.value,
+                          })
+                        }
+                        disabled={!sel || sel.sub.length === 0}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg text-white text-sm px-2 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="">Subcategory</option>
+                        {(sel?.sub || []).map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
+                    {missingReason && (
+                      <p className="text-[11px] text-amber-400">
+                        {missingReason}
+                      </p>
+                    )}
                   </div>
                 );
               })

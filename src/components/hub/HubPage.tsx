@@ -2597,8 +2597,9 @@ function ThreadConversation({
     >
       {/* Thread Header - Fixed at top of screen (app header is hidden in full-screen thread mode) */}
       <div
-        className="pt-safe fixed top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 py-3 border-b transition-all duration-300"
+        className="fixed top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 pb-3 border-b transition-all duration-300"
         style={{
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.75rem)",
           borderBottomColor: thread?.color
             ? `${thread.color}40`
             : "rgba(255,255,255,0.1)",
@@ -2936,7 +2937,12 @@ function ThreadConversation({
       </div>
 
       {/* Spacer for fixed header (header height + safe-area inset) */}
-      <div className="pt-safe h-16" />
+      <div
+        className="h-16"
+        style={{
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.75rem)",
+        }}
+      />
 
       {/* Conditional rendering: Shopping List View, Notes View, or Normal Messages */}
       {isShoppingThread ? (
@@ -3373,8 +3379,9 @@ function ThreadConversation({
           {/* Input - Fixed at bottom, above navigation bar (only for non-shopping/non-notes threads) */}
           {!isShoppingThread && !isNotesThread && (
             <div
-              className="pb-safe fixed bottom-0 left-0 right-0 px-4 py-2 border-t backdrop-blur-sm z-20 transition-all duration-300"
+              className="fixed bottom-0 left-0 right-0 px-4 pt-2 border-t backdrop-blur-sm z-20 transition-all duration-300"
               style={{
+                paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)",
                 borderTopColor: thread?.color
                   ? `${thread.color}15`
                   : "rgba(255,255,255,0.05)",
