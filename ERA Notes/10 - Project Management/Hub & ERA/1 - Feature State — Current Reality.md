@@ -37,7 +37,7 @@ tags:
 
 | Sub-feature | Tier | Reality / known gaps | Next step |
 |---|---|---|---|
-| **Hub Chat** | 🟢 Core | The top-layer primary interface. Threads w/ purposes, realtime, voice messages, message actions, shopping mode. `HubPage.tsx` is **5,506 LOC** — the single largest file in the app. | Decompose `HubPage` before the next big change. |
+| **Hub Chat** | 🟢 Core | The top-layer primary interface. Threads w/ purposes, realtime, voice messages, message actions, shopping mode. Full-screen in-thread (global header hidden), edge-swipe-back to thread list, and bulk convert ("Multi-add" → `BulkConvertReviewSheet`) with unconfirmed rows saved as **draft items** (`items.status='draft'`, reviewed via `DraftRemindersDrawer`) ✅ *(IMPLEMENTED 2026-06-16)*. `HubPage.tsx` is **5,506+ LOC** — the single largest file in the app, now larger. | Decompose `HubPage` before the next big change. |
 | **Message Actions** | 🔵 Established | Hub message → transaction / reminder / item. The bridge that makes chat *do* things. | Expense-split from chat (gap 8a). |
 | **AI Assistant (ERA)** | 🟡 New/Thin | **The flagship.** Intent router, faces, widgets, wake listener, budget submit, household context. Big surface (`features/era/`). Heavy recent work May 9–26. **No tests.** | Harden intent routing; expand proactive briefings (file 2). |
 | **Voice Conversation** | 🟡 New/Thin | Azure STT/TTS/wake, conversation engine, intent classifier, greeting cache. Shipped May 2026. **External-dependency heavy → fragile**; wake-word still needs external setup (per memory). | Add graceful-degradation tests; document setup. |

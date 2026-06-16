@@ -65,8 +65,10 @@ async function fetchItems(
   // realistic item counts and avoids re-implementing query DSL in SQL.
   // ────────────────────────────────────────────────────────────────────────
   const includeArchived = filters?.archived === true;
+  const includeDrafts = filters?.includeDrafts === true;
   const { data, error } = await supabase.rpc("get_schedule_bundle", {
     include_archived: includeArchived,
+    include_drafts: includeDrafts,
   });
   if (error) throw error;
 
@@ -278,6 +280,16 @@ export function useTasks() {
   });
 }
 
+/** Fetch draft reminders awaiting review (status='draft') */
+export function useDraftItems() {
+  return useQuery({
+    queryKey: itemsKeys.list({ status: "draft", includeDrafts: true }),
+    queryFn: () => fetchItems({ status: "draft", includeDrafts: true }),
+    staleTime: 1000 * 60, // 1 minute — may be added frequently via bulk convert
+    refetchOnWindowFocus: true,
+  });
+}
+
 /** Fetch a single item by ID */
 export function useItem(id: string | undefined) {
   return useQuery({
@@ -386,8 +398,9 @@ export function useCreateReminder() {
         if (subtasksError) throw subtasksError;
       }
 
-      // Create alerts if provided
-      if (input.alerts?.length) {
+      // Create alerts if provided — skip entirely for drafts, since the item
+      // isn't confirmed yet and shouldn't fire notifications until reviewed.
+      if (input.status !== "draft" && input.alerts?.length) {
         const alerts = input.alerts.map((a) => {
           // For relative alerts, compute the actual trigger_at based on due_at
           let computedTriggerAt = a.trigger_at;
@@ -433,7 +446,7 @@ export function useCreateReminder() {
           .from("item_alerts")
           .insert(alerts);
         if (alertsError) throw alertsError;
-      } else if (input.due_at) {
+      } else if (input.status !== "draft" && input.due_at) {
         // Auto-create a push alert at the due time if no alerts provided
         console.log(
           "[useCreateReminder] Creating auto-alert for due_at:",
@@ -602,8 +615,9 @@ export function useCreateEvent() {
         if (recurrenceError) throw recurrenceError;
       }
 
-      // Create alerts if provided
-      if (input.alerts?.length) {
+      // Create alerts if provided — skip entirely for drafts, since the item
+      // isn't confirmed yet and shouldn't fire notifications until reviewed.
+      if (input.status !== "draft" && input.alerts?.length) {
         const alerts = input.alerts.map((a) => {
           // For relative alerts, compute the actual trigger_at based on start_at or end_at
           let computedTriggerAt = a.trigger_at;
@@ -795,8 +809,10 @@ export function useCreateTask() {
         if (recurrenceError) throw recurrenceError;
       }
 
-      // Create alerts if provided, otherwise auto-create at due time
-      if (input.alerts?.length) {
+      // Create alerts if provided, otherwise auto-create at due time — skip
+      // entirely for drafts, since the item isn't confirmed yet and
+      // shouldn't fire notifications until reviewed.
+      if (input.status !== "draft" && input.alerts?.length) {
         const alerts = input.alerts.map((a) => {
           let computedTriggerAt = a.trigger_at;
           if (a.kind === "relative" && input.due_at) {
@@ -835,7 +851,7 @@ export function useCreateTask() {
         if (alertsError) {
           console.error("Failed to create alerts for task:", alertsError);
         }
-      } else if (input.due_at) {
+      } else if (input.status !== "draft" && input.due_at) {
         // Auto-create a push alert at the due time if no alerts provided
         const { error: alertsError } = await supabase
           .from("item_alerts")

@@ -7,6 +7,7 @@ import { useAppModeSafe } from "@/contexts/AppModeContext";
 import { useTab } from "@/contexts/TabContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { useViewMode } from "@/hooks/useViewMode";
+import { useChatFullscreenStore } from "@/lib/stores/chatFullscreenStore";
 import { ChevronLeft, Home } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -97,6 +98,7 @@ export default function ConditionalHeader({
   const appModeCtx = useAppModeSafe();
   const appMode = appModeCtx?.appMode ?? "budget";
   const currentModule = moduleFromPath(pathname, appMode);
+  const isThreadOpen = useChatFullscreenStore((s) => s.isThreadOpen);
 
   // Defer route-dependent rendering until after hydration to prevent
   // SSR/client mismatch when PWA service worker serves cached HTML
@@ -115,7 +117,8 @@ export default function ConditionalHeader({
       pathname?.startsWith("/nfc/") ||
       pathname?.startsWith("/watch") ||
       viewMode === "watch" ||
-      viewMode === "web");
+      viewMode === "web" ||
+      (pathname?.startsWith("/chat") && isThreadOpen));
 
   if (shouldHide) {
     return null;

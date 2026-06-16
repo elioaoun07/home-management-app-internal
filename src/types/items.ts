@@ -17,7 +17,8 @@ export type ItemStatus =
   | "completed"
   | "cancelled"
   | "archived"
-  | "dormant";
+  | "dormant"
+  | "draft";
 
 export type AlertChannel = "push" | "email" | "sms" | "in_app";
 
@@ -396,6 +397,7 @@ export interface ItemsFilter {
   priority?: ItemPriority | ItemPriority[];
   category_ids?: UUID[];
   archived?: boolean;
+  includeDrafts?: boolean;
   search?: string;
   date_from?: string;
   date_to?: string;
@@ -462,6 +464,7 @@ export const STATUS_COLORS: Record<ItemStatus, { blue: string; pink: string }> =
     cancelled: { blue: "text-gray-400", pink: "text-gray-400" },
     archived: { blue: "text-gray-500", pink: "text-gray-500" },
     dormant: { blue: "text-purple-400", pink: "text-purple-400" },
+    draft: { blue: "text-amber-300", pink: "text-amber-300" },
   };
 
 // ============================================

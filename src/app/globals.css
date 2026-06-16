@@ -899,6 +899,26 @@ body.theme-loaded {
     }
   }
 
+  /* Reconciliation-overdue alert glow — same red across all themes since it's
+     an alert state, not a person-identity color (CLAUDE.md Hard Rule #14). */
+  .glow-pulse-danger {
+    animation: glow-pulse-danger 2s ease-in-out infinite;
+  }
+
+  @keyframes glow-pulse-danger {
+    0%,
+    100% {
+      text-shadow:
+        0 0 6px rgba(239, 68, 68, 0.5),
+        0 0 12px rgba(239, 68, 68, 0.25);
+    }
+    50% {
+      text-shadow:
+        0 0 10px rgba(239, 68, 68, 0.8),
+        0 0 20px rgba(239, 68, 68, 0.5);
+    }
+  }
+
   /* Smooth spring animation */
   .spring-bounce {
     animation: spring-bounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);

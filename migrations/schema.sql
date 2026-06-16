@@ -1500,7 +1500,12 @@ CREATE POLICY reminder_details_via_parent ON public.reminder_details AS PERMISSI
 -- Captured from live Supabase 2026-06-06 via pg_get_functiondef query.
 -- =============================================================================
 
-CREATE OR REPLACE FUNCTION public.get_schedule_bundle(include_archived boolean DEFAULT false)
+-- get_schedule_bundle: include_drafts param added 2026-06-16, see
+-- migrations/2026-06-16_draft-item-status.sql (old 1-arg overload dropped).
+CREATE OR REPLACE FUNCTION public.get_schedule_bundle(
+  include_archived boolean DEFAULT false,
+  include_drafts boolean DEFAULT false
+)
  RETURNS jsonb
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
@@ -1532,6 +1537,7 @@ BEGIN
       FROM public.items i
      WHERE i.deleted_at IS NULL
        AND (include_archived OR i.archived_at IS NULL)
+       AND (include_drafts OR i.status IS DISTINCT FROM 'draft')
        AND (
             i.user_id = uid
          OR (partner_id IS NOT NULL AND i.user_id = partner_id AND i.is_public = true)

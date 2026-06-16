@@ -50,6 +50,7 @@ This mirrors the global theme ("Stabilize, then Connect") at the cluster level: 
 
 - [x] **`balance-utils` unit tests.** ✅ Done — `src/lib/balance-utils.test.ts`; suite green (28 tests) verified 2026-06-10. (global P0)
 - [x] **Recurring next-due unit tests.** ✅ Done (next-due math) — `src/lib/recurring.test.ts`, verified 2026-06-10. **Still open:** confirm→transaction flow + exceptions (see [FABLED Gaps G1](<FABLED/2 - FABLED — Gaps & Missing.md>)).
+- [x] **Reconciliation checkpoint.** ✅ Done 2026-06-16 — root cause: balance drift (reported ~$300 off after losing track) eroded trust in the balance number. Relabeled `balance_set_at` as "last checked," added a 7-day-stale red glow, and a one-tap "Balance matches" / "Doesn't match — correct it" flow in `BalanceHistoryDrawer` (with Undo). No schema change — reused existing `account_balance_history.discrepancy_*` columns. See [Balance System § Reconciliation Checkpoint](<../../02 - Standalone Modules/Accounts & Balance/Balance System.md>).
 - [ ] **Remove/guard `analytics/debug`.** Quick hygiene — a debug endpoint shouldn't be in the prod surface.
 
 ### Next — First enhancement

@@ -10,7 +10,7 @@ tags:
 
 # Hub Chat
 
-> **Source:** `src/app/hub/`, `src/features/hub/`, `src/components/hub/`
+> **Source:** `src/app/chat/`, `src/features/hub/`, `src/components/hub/`
 > **DB Tables:** `hub_chat_threads`, `hub_messages`, `hub_message_actions`
 > **Type:** Junction — connects Budget, Reminders, Shopping List
 
@@ -59,6 +59,9 @@ This makes Hub Chat **both reactive** (responds to what the user types) and **pr
 ## Key Concepts
 
 - Long-press → action menu → NLP parsing → transaction/reminder creation
+- **Multi-add (bulk convert)**: long-press → "Multi-add…" enters a checkbox selection mode; "Select all" auto-checks only numeric rows for budget threads, all eligible rows for reminder threads. A review sheet (`BulkConvertReviewSheet.tsx`) prefills every row and saves each as a full record or a **draft** based on a per-row Confirm toggle — never silently discarded. One account applies to the whole batch for budget rows. See [[Chat to Transaction Quickstart]] and [[Drafts Overview|Drafts]] for the draft-reminder concept (`items.status='draft'`).
+- **Full-screen in-thread**: opening a thread hides the global app header (`chatFullscreenStore` signal read by `ConditionalHeader`/`MobileNav`); the thread list keeps the normal header.
+- **Edge-swipe back**: dragging right from the left ~28px edge inside a thread returns to the thread list (iOS/Android-style back gesture); disabled during selection mode or with a sheet open.
 - WhatsApp-style voice recording with transcription
 - Private threads with `is_private` column
 

@@ -1,12 +1,14 @@
 "use client";
 
 import HubPage from "@/components/hub/HubPage";
+import { useChatFullscreenStore } from "@/lib/stores/chatFullscreenStore";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 export default function ChatStandalonePage() {
   const searchParams = useSearchParams();
   const threadParam = useMemo(() => searchParams.get("thread"), [searchParams]);
+  const isThreadOpen = useChatFullscreenStore((s) => s.isThreadOpen);
 
   // Prevent hydration mismatch by only rendering HubPage after mount
   const [mounted, setMounted] = useState(false);
@@ -46,7 +48,9 @@ export default function ChatStandalonePage() {
   }
 
   return (
-    <main className="h-screen bg-background pt-16 overflow-hidden">
+    <main
+      className={`h-screen bg-background overflow-hidden ${isThreadOpen ? "pt-0" : "pt-16"}`}
+    >
       <HubPage standalone initialThreadId={threadParam || undefined} />
     </main>
   );

@@ -37,7 +37,7 @@ tags:
 
 | Sub-feature | Tier | Reality / known gaps | Next step |
 |---|---|---|---|
-| **Accounts & Balance** | 🟢 Core | Multi-account, dynamic balance, balance history, default account, reconcile. The financial core. Account types (expense/income/saving) drive balance direction. `balance-utils` unit-tested ✅ (2026-06-10); API routes still uncovered. | Route contract tests (FABLED O1). |
+| **Accounts & Balance** | 🟢 Core | Multi-account, dynamic balance, balance history, default account, reconcile. The financial core. Account types (expense/income/saving) drive balance direction. `balance-utils` unit-tested ✅ (2026-06-10); API routes still uncovered. **Reconciliation checkpoint** ✅ (2026-06-16) — "last checked" date (reused `balance_set_at`) glows red past 7 days; one-tap "Balance matches" / "Doesn't match — correct it" in `BalanceHistoryDrawer`, with Undo. | Route contract tests (FABLED O1). |
 | **Transactions** | 🟢 Core | Full CRUD, drafts, private, split-bill, category grid, voice entry. `MobileExpenseForm` is **2,890 LOC** — a change-risk hotspot. | Split the mega-form when next touched; don't refactor "just because". |
 | **Categories** | 🟢 Core | Hierarchical, icons/colors, DnD reorder, cross-user slug matching (module Hard Rule). Solid. | — (stable) |
 | **Recurring Payments** | 🟢 Core | Schedule, auto next-due, confirm→transaction, exceptions. `recurring/page.tsx` **2,772 LOC**. Next-due math unit-tested ✅ (2026-06-10); confirm→transaction flow still uncovered. | Test confirm→transaction (FABLED O1); monthly "confirm paid" digest (backlog). |

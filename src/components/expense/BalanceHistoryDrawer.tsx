@@ -9,6 +9,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { Input } from "@/components/ui/input";
 import {
   clearArchiveBhCache,
   clearDailyBhCache,
@@ -28,7 +29,14 @@ import {
 } from "@/features/balance/hooks";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
-import { format, isToday, isYesterday, parseISO } from "date-fns";
+import {
+  differenceInDays,
+  format,
+  formatDistanceToNow,
+  isToday,
+  isYesterday,
+  parseISO,
+} from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -64,9 +72,17 @@ interface BalanceHistoryDrawerProps {
   accountName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  currentBalance?: number;
+  lastCheckedAt?: string | null;
+  onReconcile?: (actualBalance?: number, note?: string) => void;
+  isReconciling?: boolean;
 }
 
 type TabType = "daily" | "activity" | "archives";
+
+// Beyond this many days since the last manual checkpoint, the date glows red.
+// Mirrors RECONCILE_STALE_DAYS in AccountBalance.tsx.
+const RECONCILE_STALE_DAYS = 7;
 
 // Format date for display
 function formatDateHeader(dateStr: string): string {
@@ -520,10 +536,17 @@ export default function BalanceHistoryDrawer({
   accountName,
   open,
   onOpenChange,
+  currentBalance: liveBalance,
+  lastCheckedAt,
+  onReconcile,
+  isReconciling,
 }: BalanceHistoryDrawerProps) {
   const themeClasses = useThemeClasses();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>("daily");
+  const [showCorrect, setShowCorrect] = useState(false);
+  const [correctAmount, setCorrectAmount] = useState("");
+  const [correctNote, setCorrectNote] = useState("");
 
   // Fetch data
   const {
@@ -539,10 +562,9 @@ export default function BalanceHistoryDrawer({
     data: dailyData,
     isLoading: dailyLoading,
     isFetching: dailyFetching,
-  } = useDailySummaries(
-    open && activeTab === "daily" ? accountId : undefined,
-    { limit: 30 },
-  );
+  } = useDailySummaries(open && activeTab === "daily" ? accountId : undefined, {
+    limit: 30,
+  });
 
   const {
     data: archivesData,
@@ -552,9 +574,31 @@ export default function BalanceHistoryDrawer({
     open && activeTab === "archives" ? accountId : undefined,
   );
 
-  // Get current balance (from daily data if available)
+  // Get current balance — prefer the live balance passed from AccountBalance
+  // (already fetched, freshest), falling back to this drawer's own tab data.
   const currentBalance =
-    dailyData?.current_balance ?? historyData?.current_balance ?? 0;
+    liveBalance ??
+    dailyData?.current_balance ??
+    historyData?.current_balance ??
+    0;
+
+  const isReconciliationOverdue = lastCheckedAt
+    ? differenceInDays(new Date(), parseISO(lastCheckedAt)) >
+      RECONCILE_STALE_DAYS
+    : false;
+
+  const handleConfirmMatches = () => {
+    onReconcile?.();
+  };
+
+  const handleSaveCorrection = () => {
+    const amount = parseFloat(correctAmount);
+    if (isNaN(amount)) return;
+    onReconcile?.(amount, correctNote.trim() || undefined);
+    setShowCorrect(false);
+    setCorrectAmount("");
+    setCorrectNote("");
+  };
 
   // Group activity entries
   const groupedHistory = useMemo(() => {
@@ -680,6 +724,137 @@ export default function BalanceHistoryDrawer({
               {formatCurrency(currentBalance)}
             </p>
           </div>
+
+          {/* Reconciliation checkpoint */}
+          {onReconcile && (
+            <div
+              className={cn(
+                "mt-3 p-3 rounded-xl border",
+                themeClasses.bgSurface,
+                themeClasses.border,
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p
+                    className={cn(
+                      "text-[10px] uppercase tracking-wider",
+                      themeClasses.textFaint,
+                    )}
+                  >
+                    Last checked
+                  </p>
+                  <p
+                    className={cn(
+                      "text-sm font-medium mt-0.5",
+                      isReconciliationOverdue
+                        ? "text-red-400 glow-pulse-danger"
+                        : themeClasses.text,
+                    )}
+                  >
+                    {lastCheckedAt
+                      ? formatDistanceToNow(parseISO(lastCheckedAt), {
+                          addSuffix: true,
+                        })
+                      : "Never"}
+                  </p>
+                  {lastCheckedAt && (
+                    <p
+                      className={cn(
+                        "text-[10px] mt-0.5",
+                        themeClasses.textFaint,
+                      )}
+                    >
+                      {format(parseISO(lastCheckedAt), "MMM d, yyyy")}
+                    </p>
+                  )}
+                </div>
+                {isReconciliationOverdue && (
+                  <span className="flex items-center gap-1 text-[10px] text-red-400">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Reconcile
+                  </span>
+                )}
+              </div>
+
+              {!showCorrect ? (
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400"
+                    onClick={handleConfirmMatches}
+                    disabled={isReconciling}
+                  >
+                    <Check className="w-3.5 h-3.5 mr-1.5" />
+                    Balance matches
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className={cn(
+                      "flex-1 border",
+                      themeClasses.border,
+                      themeClasses.textFaint,
+                    )}
+                    onClick={() => setShowCorrect(true)}
+                    disabled={isReconciling}
+                  >
+                    Doesn&apos;t match
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-3 flex flex-col gap-2">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Actual wallet amount"
+                    value={correctAmount}
+                    onChange={(e) => setCorrectAmount(e.target.value)}
+                    className={cn(
+                      "h-9 text-sm",
+                      themeClasses.inputBg,
+                      themeClasses.border,
+                    )}
+                    autoFocus
+                  />
+                  <Input
+                    type="text"
+                    placeholder="What happened? (optional)"
+                    value={correctNote}
+                    onChange={(e) => setCorrectNote(e.target.value)}
+                    maxLength={200}
+                    className={cn(
+                      "h-9 text-sm",
+                      themeClasses.inputBg,
+                      themeClasses.border,
+                    )}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400"
+                      onClick={handleSaveCorrection}
+                      disabled={isReconciling || !correctAmount.trim()}
+                    >
+                      Save correction
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setShowCorrect(false);
+                        setCorrectAmount("");
+                        setCorrectNote("");
+                      }}
+                      disabled={isReconciling}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="flex gap-1 mt-4 p-1 rounded-lg bg-white/5">

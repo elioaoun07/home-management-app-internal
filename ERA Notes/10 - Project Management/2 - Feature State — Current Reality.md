@@ -38,7 +38,7 @@ tags:
 | **Transactions** | 🟢 Core | ✅ | Full CRUD, drafts, private, split-bill, category grid, voice entry. `MobileExpenseForm` is 2,890 LOC (change-risk). | Split the mega-form when next touched. |
 | **Categories** | 🟢 Core | ✅ | Hierarchical, icons/colors, DnD reorder, cross-user slug matching. Solid. | — (stable) |
 | **Recurring Payments** | 🟢 Core | ✅ | Schedule, auto next-due, confirm→transaction, exceptions. `recurring/page.tsx` 2,772 LOC. **Auto-post math untested.** | Unit-test next-due + add monthly "confirm paid" digest (backlog). |
-| **Items & Reminders** | 🟢 Core | ✅ | Schedule/calendar, RRULE recurrence, subtasks, alerts, household assignment. `useItems.ts` 2,621 LOC. Uses the `get_schedule_bundle` RPC pattern. | — (stable; watch perf) |
+| **Items & Reminders** | 🟢 Core | ✅ | Schedule/calendar, RRULE recurrence, subtasks, alerts, household assignment. `useItems.ts` 2,621 LOC. Uses the `get_schedule_bundle` RPC pattern. Now also supports a draft state (`status='draft'`) for unconfirmed Hub Chat bulk-convert reminders *(added 2026-06-16)*. | — (stable; watch perf) |
 | **Catalogue** | 🟢 Core | ✅ | Modular "UI database" (contacts/tasks/notes/recipes), categories, multi-link product comparison, calendar link. | — (stable) |
 | **Preferences** | 🟢 Core | ✅ | LBP rate (thousands rule), theme, month-start day, section order, onboarding. | — (stable) |
 | **Recipes** | 🔵 Established | ✅ | Recipe book, ingredients, instructions, cooking mode, version compare, page-flip UI. | Connect to Inventory (gap 2b). |
@@ -50,7 +50,7 @@ tags:
 | **Statement Import** | 🔵 Established | ✅ | CSV/PDF parse, merchant→category mapping. Recently split ("split estatement import", May 28). | Feed merchant map into manual entry (gap 1b). |
 | **Transfers** | 🔵 Established | ✅ | Between-account transfers w/ balance direction. | — (stable) |
 | **Analytics** | 🔵 Established | ✅ | Net worth, mini-charts, world spend map. Has a `debug` route (clean up). | Build Dashboard V2 widgets + 50/30/20 (backlog). |
-| **Drafts** | 🔵 Established | ✅ | Drafts drawer/badge/dialog for pending (voice) transactions. | — (stable) |
+| **Drafts** | 🔵 Established | ✅ | Drafts drawer/badge/dialog for pending (voice) transactions. Sibling concept added for schedule items — draft reminders (`items.status='draft'`) from Hub Chat bulk convert, reviewed via `DraftRemindersDrawer` *(added 2026-06-16)*. | — (stable) |
 | **Statement / Receipts** | 🔵 Established | ➖ | `receipts/` route exists. Scope unclear from docs. | Confirm purpose; add Atlas/doc entry. |
 | **Guest Portal** | 🔵 Established | ✅ | Public `/g/[tag]` — WiFi, dos/don'ts, allergies, complaints, chat. `guest-portal-client.tsx` 2,602 LOC; chat is localStorage-based. | Move guest chat to DB if you want host visibility. |
 | **NFC Tags** | 🔵 Established | ✅ | Slug routes, admin, tap/checklist/history APIs, PWA redirect banner. | Expense/inventory shortcuts (gap 6). |
@@ -69,7 +69,7 @@ tags:
 
 | Module | Tier | Has vault doc | Reality / known gaps | Next step |
 |---|---|---|---|---|
-| **Hub Chat** | 🟢 Core | ✅ | The top-layer primary interface. Threads w/ purposes, realtime, voice messages, message actions, shopping mode. `HubPage.tsx` **5,506 LOC** — the single largest file. | Decompose `HubPage` before next big change. |
+| **Hub Chat** | 🟢 Core | ✅ | The top-layer primary interface. Threads w/ purposes, realtime, voice messages, message actions, shopping mode, full-screen in-thread, edge-swipe-back, bulk convert ("Multi-add") with draft-item review *(IMPLEMENTED 2026-06-16)*. `HubPage.tsx` **5,506+ LOC** — the single largest file, growing. | Decompose `HubPage` before next big change. |
 | **Household Sharing** | 🟢 Core | ✅ | Partner linking, shared data via `household_links`+`profiles`, private tx. Underpins every module. | — (stable; high blast radius) |
 | **Sync & Offline** | 🟢 Core | ✅ | IndexedDB queue + `OfflineSyncEngine`, connectivity probing, `safeFetch`. | Audit raw-`fetch` mutation paths (file 1 P2). |
 | **Notifications** | 🔵 Established | ✅ | Web Push + in-app, cron sends, snooze/dismiss/actions, subscription health. | Smart timing + weekly digest (gap 7). |

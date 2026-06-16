@@ -22,8 +22,10 @@ import {
 } from "@/lib/queryConfig";
 import { invalidateAccountData } from "@/lib/queryInvalidation";
 import { useOfflinePendingStore } from "@/lib/stores/offlinePendingStore";
+import { ToastIcons } from "@/lib/toastIcons";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { differenceInDays, formatDistanceToNow, parseISO } from "date-fns";
 import { WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -51,6 +53,17 @@ interface Balance {
   debt_count?: number;
   outstanding_debt?: number;
 }
+
+interface ReconcileResponse {
+  balance: number;
+  balance_set_at: string;
+  previous_balance: number;
+  previous_balance_set_at: string | null;
+  history_id: string | null;
+}
+
+// Beyond this many days since the last manual checkpoint, the date glows red.
+const RECONCILE_STALE_DAYS = 7;
 
 export default function AccountBalance({
   accountId,
@@ -221,6 +234,110 @@ export default function AccountBalance({
     },
   });
 
+  // Restores the balance + checkpoint date from before a reconciliation, and
+  // removes the history row that reconciliation created. See the comment on
+  // updateBalanceMutation above for why this uses fetch() instead of safeFetch().
+  const undoReconcileMutation = useMutation({
+    mutationFn: async (undo: {
+      balance: number;
+      balanceSetAt: string | null;
+      restoreHistoryId: string | null;
+    }) => {
+      if (!accountId) throw new Error("No account selected");
+      const res = await fetch(`/api/accounts/${accountId}/balance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          balance: undo.balance,
+          balanceSetAt: undo.balanceSetAt || undefined,
+          restoreHistoryId: undo.restoreHistoryId || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to undo reconciliation");
+      return res.json();
+    },
+    onSuccess: () => {
+      invalidateAccountData(queryClient, accountId);
+      queryClient.invalidateQueries({
+        queryKey: ["daily-summaries"],
+        refetchType: "none",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["balance-history", accountId],
+        refetchType: "none",
+      });
+      toast.success("Reconciliation undone");
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to undo reconciliation",
+      );
+    },
+  });
+
+  // Reconciliation checkpoint: confirms the balance matches the real wallet
+  // ("Balance matches") or corrects it to the real amount ("Doesn't match"),
+  // either way stamping balance_set_at as the new "last checked" date.
+  const reconcileMutation = useMutation({
+    mutationFn: async ({
+      actualBalance,
+      note,
+    }: {
+      actualBalance?: number;
+      note?: string;
+    }): Promise<ReconcileResponse> => {
+      if (isOffline) throw new Error("You're offline — balance not updated.");
+      if (!accountId) throw new Error("No account selected");
+      const targetBalance = actualBalance ?? balance?.balance ?? 0;
+      const res = await fetch(`/api/accounts/${accountId}/balance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          balance: targetBalance,
+          reason:
+            actualBalance !== undefined
+              ? "Reconciliation correction"
+              : "Reconciliation confirmed",
+          is_reconciliation: true,
+          discrepancy_explanation: note || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to confirm balance");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      invalidateAccountData(queryClient, accountId);
+      queryClient.invalidateQueries({
+        queryKey: ["daily-summaries"],
+        refetchType: "none",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["balance-history", accountId],
+        refetchType: "none",
+      });
+      toast.success("Balance checked", {
+        icon: ToastIcons.update,
+        duration: 4000,
+        action: {
+          label: "Undo",
+          onClick: () =>
+            undoReconcileMutation.mutate({
+              balance: data.previous_balance,
+              balanceSetAt: data.previous_balance_set_at,
+              restoreHistoryId: data.history_id,
+            }),
+        },
+      });
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to confirm balance",
+      );
+    },
+  });
+
   const handleEdit = () => {
     setEditValue(String(balance?.balance || 0));
     setEditReason("");
@@ -288,6 +405,10 @@ export default function AccountBalance({
   const currentBalance = balance?.balance || 0;
   // When offline, hide actions that require network (edit balance, transfer)
   const showActions = !isOffline;
+  const isReconciliationOverdue = balance?.balance_set_at
+    ? differenceInDays(new Date(), parseISO(balance.balance_set_at)) >
+      RECONCILE_STALE_DAYS
+    : false;
 
   return (
     <div
@@ -448,9 +569,21 @@ export default function AccountBalance({
                 )}
               </div>
               {balance?.balance_set_at && (
-                <div className="text-[9px] text-white/25 leading-none mt-0.5">
-                  {new Date(balance.balance_set_at).toLocaleDateString()}
-                </div>
+                <button
+                  onClick={() => setShowHistory(true)}
+                  className={cn(
+                    "text-[9px] leading-none mt-0.5 text-left transition-colors",
+                    isReconciliationOverdue
+                      ? "text-red-400 glow-pulse-danger"
+                      : "text-white/25 hover:text-white/40",
+                  )}
+                  title="Tap to reconcile"
+                >
+                  Checked{" "}
+                  {formatDistanceToNow(parseISO(balance.balance_set_at), {
+                    addSuffix: true,
+                  })}
+                </button>
               )}
               {/* Offline pending transactions — always visible like drafts */}
               {isOffline && (
@@ -551,6 +684,12 @@ export default function AccountBalance({
           accountName={accountName}
           open={showHistory}
           onOpenChange={setShowHistory}
+          currentBalance={balance?.balance}
+          lastCheckedAt={balance?.balance_set_at ?? null}
+          onReconcile={(actualBalance, note) =>
+            reconcileMutation.mutate({ actualBalance, note })
+          }
+          isReconciling={reconcileMutation.isPending}
         />
       )}
 

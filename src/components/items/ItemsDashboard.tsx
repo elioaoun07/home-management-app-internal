@@ -12,6 +12,7 @@ import {
   useCreateReminder,
   useCreateTask,
   useDeleteItem,
+  useDraftItems,
   useItems,
   useUpdateItem,
 } from "@/features/items/useItems";
@@ -29,10 +30,11 @@ import {
   startOfWeek,
 } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Calendar, CheckCircle2, Pin } from "lucide-react";
+import { AlertTriangle, Calendar, CheckCircle2, FileText, Pin } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import DraftRemindersDrawer from "./DraftRemindersDrawer";
 import EditItemDialog from "./EditItemDialog";
 import ItemDetailModal from "./ItemDetailModal";
 import SwipeableItemCard from "./SwipeableItemCard";
@@ -266,6 +268,7 @@ const statusColors: Record<ItemStatus, { bg: string; text: string }> = {
   cancelled: { bg: "bg-gray-500/20", text: "text-gray-400" },
   archived: { bg: "bg-gray-500/20", text: "text-gray-400" },
   dormant: { bg: "bg-purple-500/20", text: "text-purple-400" },
+  draft: { bg: "bg-amber-500/20", text: "text-amber-300" },
 };
 
 // Helper to format relative date
@@ -353,6 +356,10 @@ export default function ItemsDashboard({
     null,
   );
   const [editingItem, setEditingItem] = useState<ItemWithDetails | null>(null);
+
+  // Draft reminders drawer (bulk-convert leftovers awaiting review)
+  const [showDraftReminders, setShowDraftReminders] = useState(false);
+  const { data: draftItems = [] } = useDraftItems();
 
   // Category filter state - All selected by default EXCEPT work
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -843,6 +850,26 @@ export default function ItemsDashboard({
               </span>
             </div>
 
+            {/* Draft reminders pill - amber, only when drafts > 0 */}
+            {draftItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowDraftReminders(true)}
+                className="relative active:scale-95 transition-transform"
+                title="View draft reminders"
+              >
+                <div className="w-7 h-7 rounded-full flex items-center justify-center bg-amber-500/15 border border-amber-500/30">
+                  <FileText
+                    size={13}
+                    className="text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.4)]"
+                  />
+                </div>
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-black leading-none px-0.5">
+                  {draftItems.length}
+                </span>
+              </button>
+            )}
+
             {/* Filter button - minimal */}
             <button
               type="button"
@@ -1170,6 +1197,11 @@ export default function ItemsDashboard({
         onOpenChange={(open) => {
           if (!open) setEditingItem(null);
         }}
+      />
+
+      <DraftRemindersDrawer
+        open={showDraftReminders}
+        onOpenChange={setShowDraftReminders}
       />
     </div>
   );

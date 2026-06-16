@@ -44,7 +44,7 @@ Example: Balance set Nov 21 @ 7PM ($40)
 
 `GET /api/accounts/[id]/balance` — fetches `account_balances` baseline, sums transactions since `balance_set_at::date`, returns calculated balance.
 
-`POST /api/accounts/[id]/balance` — sets new baseline, stamps `balance_set_at = now()`.
+`POST /api/accounts/[id]/balance` — sets new baseline, stamps `balance_set_at = now()`. Also accepts `balanceSetAt` (override the stamped timestamp) and `restoreHistoryId` (undo path — see Reconciliation Checkpoint below) for the Undo flow on the reconciliation toast.
 
 **Important**: Never manually adjust the balance in transaction API routes. Let the balance API recalculate dynamically.
 
@@ -77,6 +77,26 @@ Individual transactions are **not** logged here (too noisy). Instead, they appea
 | **Archives** | Monthly snapshots: opening/closing balance, net change, transfer totals |
 
 The `account_daily_summaries` table stores pre-computed daily summaries. The `account_balance_archives` table stores monthly snapshots.
+
+## Reconciliation Checkpoint *(added 2026-06-16)*
+
+`balance_set_at` doubles as **"last time the user manually checked/verified the balance against their real wallet."** This works because `adjustAccountBalance()` (`src/lib/balance.ts`) — the function every transaction/transfer/split/auto-reconciliation goes through — updates `balance` and `updated_at` but **never** `balance_set_at`. Only the manual `POST /api/accounts/[id]/balance` (Edit-balance pencil, or the reconcile flow below) moves it.
+
+### UI
+
+- **`AccountBalance.tsx`** shows the checkpoint as "Checked _X ago_" (relative time via `date-fns formatDistanceToNow`). If more than `RECONCILE_STALE_DAYS` (7) days have passed, the label turns red and pulses via the `.glow-pulse-danger` CSS class (`src/app/globals.css`) — a theme-independent alert glow, since staleness is not a person-identity color (Hard Rule #14 doesn't apply).
+- Clicking the checkpoint date or the balance opens **`BalanceHistoryDrawer`**, which has a "Reconciliation checkpoint" panel right under the Current Balance header with two actions:
+  - **"Balance matches ✓"** — one-tap confirm. POSTs the *same* balance value with `is_reconciliation: true`, which just re-stamps `balance_set_at` to now (no actual balance change, `change_amount = 0`).
+  - **"Doesn't match — correct it"** — reveals an amount + optional note input. POSTs the real wallet amount as the new balance with `discrepancy_explanation`, so the discrepancy is visible later in the Activity tab (`account_balance_history.discrepancy_amount`/`discrepancy_explanation`, columns that already existed for this purpose).
+
+### Undo
+
+Both reconcile actions show a `toast.success("Balance checked", { action: { label: "Undo", ... } })` (Hard Rule #1). Undo calls the same POST endpoint with:
+- `balance` = the response's `previous_balance`
+- `balanceSetAt` = the response's `previous_balance_set_at` (restores the prior checkpoint date instead of stamping "now")
+- `restoreHistoryId` = the response's `history_id` (the route deletes that history row instead of inserting a new one, and skips the normal history insert)
+
+This fully reverses a reconciliation: the stored balance, the checkpoint date, and the audit trail all return to their pre-reconcile state. (Edge case: undoing a reconciliation on an account that has *never* had a balance set has no `previous_balance_set_at` to restore — the undo falls back to stamping "now" instead. Not a practical concern since reconciliation targets already-tracked accounts.)
 
 ## Database
 

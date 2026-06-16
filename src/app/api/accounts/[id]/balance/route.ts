@@ -1,8 +1,20 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+
+const postBalanceSchema = z.object({
+  balance: z.number(),
+  reason: z.string().max(200).nullish(),
+  is_reconciliation: z.boolean().optional(),
+  discrepancy_explanation: z.string().max(500).nullish(),
+  // Undo support: when restoring a prior reconciliation, the client supplies
+  // the original balance_set_at timestamp and the history row id to remove.
+  balanceSetAt: z.string().datetime().optional(),
+  restoreHistoryId: z.string().uuid().optional(),
+});
 
 // Helper to get partner user ID if linked
 async function getPartnerUserId(
@@ -157,14 +169,21 @@ export async function POST(
 
   const { id: accountId } = await params;
   const body = await req.json();
-  const { balance, reason, is_reconciliation, discrepancy_explanation } = body;
-
-  if (typeof balance !== "number") {
+  const parsed = postBalanceSchema.safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "Balance must be a number" },
+      { error: parsed.error.flatten() },
       { status: 400 },
     );
   }
+  const {
+    balance,
+    reason,
+    is_reconciliation,
+    discrepancy_explanation,
+    balanceSetAt,
+    restoreHistoryId,
+  } = parsed.data;
 
   // Verify account belongs to user and get type
   const { data: account, error: accountError } = await supabase
@@ -178,22 +197,24 @@ export async function POST(
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
 
-  // Get current stored balance for history tracking
+  // Get current stored balance + checkpoint date for history/undo tracking
   const { data: currentRow } = await supabase
     .from("account_balances")
-    .select("balance")
+    .select("balance, balance_set_at")
     .eq("account_id", accountId)
     .maybeSingle();
 
   const previousBalance = currentRow ? Number(currentRow.balance) : 0;
+  const previousBalanceSetAt = currentRow?.balance_set_at ?? null;
 
   const isInitialSet = previousBalance === 0;
   const changeAmount = balance - previousBalance;
 
-  // Upsert balance (insert or update)
-  // Set balance_set_at to now - this resets the anchor point
-  // All future formula calculations start from this new anchor
+  // Set balance_set_at to now (or to a caller-supplied timestamp when
+  // restoring a prior checkpoint via Undo) - this resets the anchor point.
+  // All future formula calculations start from this new anchor.
   const now = new Date().toISOString();
+  const effectiveSetAt = balanceSetAt || now;
   const today = now.split("T")[0];
   const { data, error } = await supabase
     .from("account_balances")
@@ -202,7 +223,7 @@ export async function POST(
         account_id: accountId,
         user_id: user.id,
         balance,
-        balance_set_at: now,
+        balance_set_at: effectiveSetAt,
         updated_at: now,
       },
       {
@@ -223,6 +244,29 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Undo path: remove the history row created by the reconciliation being
+  // undone instead of logging a new one. Scoped to this account + user so a
+  // forged id can't delete unrelated history.
+  if (restoreHistoryId) {
+    const { error: deleteError } = await supabase
+      .from("account_balance_history")
+      .delete()
+      .eq("id", restoreHistoryId)
+      .eq("account_id", accountId)
+      .eq("user_id", user.id);
+
+    if (deleteError) {
+      console.error("Error removing undone balance history:", deleteError);
+    }
+
+    return NextResponse.json({
+      ...data,
+      previous_balance: previousBalance,
+      previous_balance_set_at: previousBalanceSetAt,
+      history_id: null,
+    });
+  }
+
   // Log to balance history
   const historyEntry = {
     account_id: accountId,
@@ -239,14 +283,21 @@ export async function POST(
     effective_date: today,
   };
 
-  const { error: historyError } = await supabase
+  const { data: historyData, error: historyError } = await supabase
     .from("account_balance_history")
-    .insert(historyEntry);
+    .insert(historyEntry)
+    .select("id")
+    .single();
 
   if (historyError) {
     // Log but don't fail - history is supplementary
     console.error("Error logging balance history:", historyError);
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json({
+    ...data,
+    previous_balance: previousBalance,
+    previous_balance_set_at: previousBalanceSetAt,
+    history_id: historyData?.id ?? null,
+  });
 }

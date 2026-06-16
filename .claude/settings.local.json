@@ -44,7 +44,12 @@
       "PowerShell(winget list *)",
       "Bash(winget upgrade *)",
       "PowerShell(winget source *)",
-      "Bash([ -d \"ERA Notes/$m\" ])"
+      "Bash([ -d \"ERA Notes/$m\" ])",
+      "Bash(npx prettier *)",
+      "Bash(pnpm dev *)",
+      "Bash(curl *)",
+      "Bash(pnpm docs:check)",
+      "Bash(pnpm exec *)"
     ]
   }
 }

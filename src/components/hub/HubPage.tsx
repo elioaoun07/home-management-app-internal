@@ -55,6 +55,7 @@ import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { parseMessageForTransaction } from "@/lib/nlp/messageTransactionParser";
 import { useConversationMode } from "@/features/voice-conversation";
 import { safeFetch } from "@/lib/safeFetch";
+import { useChatFullscreenStore } from "@/lib/stores/chatFullscreenStore";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -70,6 +71,7 @@ import {
   FileText,
   Link as LinkIcon,
   Lightbulb,
+  ListChecks,
   Pin,
   RefreshCw,
   Settings,
@@ -94,6 +96,12 @@ const AddTransactionFromMessageModal = dynamic(
 // Lazy load reminder modal to avoid bundle bloat
 const AddReminderFromMessageModal = dynamic(
   () => import("@/components/hub/AddReminderFromMessageModal"),
+  { ssr: false },
+);
+
+// Lazy load bulk-convert review sheet to avoid bundle bloat
+const BulkConvertReviewSheet = dynamic(
+  () => import("@/components/hub/BulkConvertReviewSheet"),
   { ssr: false },
 );
 
@@ -1625,6 +1633,10 @@ function MessageStatus({ status }: { status: "sent" | "delivered" | "read" }) {
   );
 }
 
+// Edge-swipe-back gesture tuning (thread → thread list)
+const SWIPE_BACK_EDGE_ZONE = 28; // px from left edge required to arm the gesture
+const SWIPE_BACK_CONFIRM_RATIO = 0.35; // fraction of screen width to confirm back
+
 // Thread Conversation View
 function ThreadConversation({
   threadId,
@@ -1664,6 +1676,13 @@ function ThreadConversation({
 
   // Subscribe to visibility changes - refetch when user returns to tab after being away
   useVisibilityRefresh(threadId);
+
+  // Hide the global app header for full-screen mode while a thread is open
+  const setThreadOpen = useChatFullscreenStore((s) => s.setThreadOpen);
+  useEffect(() => {
+    setThreadOpen(true);
+    return () => setThreadOpen(false);
+  }, [setThreadOpen]);
 
   // Sync messages to localStorage cache when data loads
   useEffect(() => {
@@ -1719,12 +1738,14 @@ function ThreadConversation({
     false,
   );
 
-  // Multi-select mode for deleting messages
+  // Multi-select mode — used both for bulk-delete (shopping/notes threads)
+  // and bulk-convert to transaction/schedule item (budget/reminder threads)
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<Set<string>>(
     new Set(),
   );
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showBulkConvertSheet, setShowBulkConvertSheet] = useState(false);
 
   // Thread settings modal
   const [showThreadSettings, setShowThreadSettings] = useState(false);
@@ -1913,6 +1934,120 @@ function ThreadConversation({
     queryClient.invalidateQueries({ queryKey: ["hub", "threads"] });
     onBack();
   }, [queryClient, onBack]);
+
+  // Edge-swipe back gesture — drag right from the left edge to return to the
+  // thread list (mirrors iOS/Android system back-swipe and MobileExpenseForm).
+  const [swipeOffsetX, setSwipeOffsetX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const swipeStateRef = useRef<{
+    startX: number;
+    startY: number;
+    direction: "horizontal" | "vertical" | null;
+  } | null>(null);
+  const swipeOffsetRef = useRef(0);
+  const handleBackRef = useRef(handleBack);
+  handleBackRef.current = handleBack;
+  const swipeDisabledRef = useRef(false);
+  swipeDisabledRef.current =
+    isSelectionMode ||
+    isSearchOpen ||
+    isVoiceMode ||
+    !!actionMenuMessage ||
+    !!transactionModalData ||
+    !!reminderModalData ||
+    showDeleteModal ||
+    showThreadSettings;
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (swipeDisabledRef.current) {
+        swipeStateRef.current = null;
+        return;
+      }
+      const touch = e.touches[0];
+      if (touch.clientX > SWIPE_BACK_EDGE_ZONE) {
+        swipeStateRef.current = null;
+        return;
+      }
+      swipeStateRef.current = {
+        startX: touch.clientX,
+        startY: touch.clientY,
+        direction: null,
+      };
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const state = swipeStateRef.current;
+      if (!state || swipeDisabledRef.current) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - state.startX;
+      const dy = touch.clientY - state.startY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+
+      if (!state.direction) {
+        if (absDx < 8 && absDy < 8) return;
+        state.direction = absDx > absDy ? "horizontal" : "vertical";
+        if (state.direction === "horizontal" && dx > 0) {
+          setIsSwiping(true);
+        }
+      }
+
+      if (state.direction === "vertical") return;
+
+      // Only allow dragging right (back gesture); ignore leftward drag
+      if (dx <= 0) {
+        swipeOffsetRef.current = 0;
+        setSwipeOffsetX(0);
+        return;
+      }
+
+      e.preventDefault();
+      const maxDrag = el.clientWidth || 1;
+      const val = Math.min(dx, maxDrag);
+      swipeOffsetRef.current = val;
+      setSwipeOffsetX(val);
+    };
+
+    const finishSwipe = () => {
+      const state = swipeStateRef.current;
+      if (!state) return;
+      const currentOffset = swipeOffsetRef.current;
+      const maxDrag = el.clientWidth || 1;
+      const confirmed =
+        state.direction === "horizontal" &&
+        currentOffset / maxDrag >= SWIPE_BACK_CONFIRM_RATIO;
+
+      swipeStateRef.current = null;
+      setIsSwiping(false);
+
+      if (confirmed) {
+        if (navigator.vibrate) navigator.vibrate(10);
+        swipeOffsetRef.current = maxDrag;
+        setSwipeOffsetX(maxDrag);
+        setTimeout(() => handleBackRef.current(), 200);
+        return;
+      }
+
+      swipeOffsetRef.current = 0;
+      setSwipeOffsetX(0);
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", finishSwipe, { passive: true });
+    el.addEventListener("touchcancel", finishSwipe, { passive: true });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", finishSwipe);
+      el.removeEventListener("touchcancel", finishSwipe);
+    };
+  }, []);
 
   // Store initial unread info as STATE so it triggers re-render
   const [initialUnreadInfo, setInitialUnreadInfo] = useState<{
@@ -2128,6 +2263,35 @@ function ThreadConversation({
 
   // Check if this is a notes thread
   const isNotesThread = thread?.purpose === "notes";
+
+  // Budget/reminder threads use selection mode for bulk-convert; shopping/notes
+  // threads use the same selection mode for bulk-delete (see isSelectionMode header UI)
+  const isConvertSelection =
+    thread?.purpose === "budget" || thread?.purpose === "reminder";
+
+  // "Select all" for bulk-convert only auto-checks rows that are actually
+  // convertible: no existing action, not deleted, and — for budget threads —
+  // contain a detectable amount (per user requirement: only numeric rows).
+  // Reminder threads select all eligible rows since text alone is enough.
+  const getSelectAllEligibleIds = useCallback(() => {
+    return messages
+      .filter((msg: HubMessage) => {
+        if (msg.deleted_at) return false;
+        const hasAction = messageActions.some(
+          (a: any) => a.message_id === msg.id,
+        );
+        if (hasAction) return false;
+        if (thread?.purpose === "budget") {
+          const parsed = parseMessageForTransaction(
+            msg.content || "",
+            categories as any[],
+          );
+          return parsed.amount !== null && parsed.amount !== undefined;
+        }
+        return true;
+      })
+      .map((msg: HubMessage) => msg.id);
+  }, [messages, messageActions, thread?.purpose, categories]);
 
   // Current user's theme determines their bubble color
   // Blue theme user = blue bubbles for "me", pink for partner
@@ -2423,10 +2587,17 @@ function ThreadConversation({
   };
 
   return (
-    <div ref={containerRef} className="h-full flex flex-col overflow-hidden">
-      {/* Thread Header - Fixed below app header with solid background and color accent */}
+    <div
+      ref={containerRef}
+      className="h-full flex flex-col overflow-hidden"
+      style={{
+        transform: swipeOffsetX ? `translateX(${swipeOffsetX}px)` : undefined,
+        transition: isSwiping ? "none" : "transform 0.2s ease-out",
+      }}
+    >
+      {/* Thread Header - Fixed at top of screen (app header is hidden in full-screen thread mode) */}
       <div
-        className="fixed top-14 left-0 right-0 z-30 flex items-center gap-3 px-4 py-3 border-b transition-all duration-300"
+        className="pt-safe fixed top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 py-3 border-b transition-all duration-300"
         style={{
           borderBottomColor: thread?.color
             ? `${thread.color}40`
@@ -2517,19 +2688,6 @@ function ThreadConversation({
                   {thread?.title || "Chat"}
                 </h2>
                 <div className="flex items-center gap-2 mt-0.5">
-                  {thread?.purpose && thread.purpose !== "general" && (
-                    <span
-                      className="px-2 py-0.5 rounded-full text-xs font-medium transition-all duration-300"
-                      style={{
-                        backgroundColor: thread.color
-                          ? `${thread.color}20`
-                          : undefined,
-                        color: thread.color || undefined,
-                      }}
-                    >
-                      {thread.purpose}
-                    </span>
-                  )}
                   {/* Item Links Toggle for Shopping Threads */}
                   {thread?.purpose === "shopping" && (
                     <button
@@ -2568,34 +2726,94 @@ function ThreadConversation({
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 shrink-0">
               {isSelectionMode ? (
-                <>
-                  <span className="text-sm text-white/70">
-                    {selectedMessages.size} selected
-                  </span>
-                  <button
-                    onClick={() => {
-                      setIsSelectionMode(false);
-                      setSelectedMessages(new Set());
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteModal(true)}
-                    disabled={selectedMessages.size === 0}
-                    className={cn(
-                      "p-2 rounded-lg transition-all",
-                      selectedMessages.size > 0
-                        ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                        : "bg-white/5 text-white/30 cursor-not-allowed",
-                    )}
-                  >
-                    <Trash2Icon className="w-5 h-5" />
-                  </button>
-                </>
+                isConvertSelection ? (
+                  (() => {
+                    const eligibleIds = getSelectAllEligibleIds();
+                    const isAllEligibleSelected =
+                      eligibleIds.length > 0 &&
+                      eligibleIds.every((id) => selectedMessages.has(id));
+                    return (
+                      <>
+                        <button
+                          onClick={() =>
+                            setSelectedMessages(
+                              isAllEligibleSelected
+                                ? new Set()
+                                : new Set(eligibleIds),
+                            )
+                          }
+                          disabled={eligibleIds.length === 0}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg transition-all text-sm",
+                            eligibleIds.length === 0
+                              ? "bg-white/5 text-white/30 cursor-not-allowed"
+                              : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
+                          )}
+                        >
+                          {isAllEligibleSelected ? "Deselect all" : "Select all"}
+                        </button>
+                        <span className="text-sm text-white/70">
+                          {selectedMessages.size} selected
+                        </span>
+                        <button
+                          onClick={() => {
+                            setIsSelectionMode(false);
+                            setSelectedMessages(new Set());
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => setShowBulkConvertSheet(true)}
+                          disabled={selectedMessages.size === 0}
+                          className={cn(
+                            "p-2 rounded-lg transition-all",
+                            selectedMessages.size > 0
+                              ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                              : "bg-white/5 text-white/30 cursor-not-allowed",
+                          )}
+                          title={
+                            thread?.purpose === "reminder"
+                              ? "Review & add as schedule items"
+                              : "Review & add as transactions"
+                          }
+                        >
+                          <CheckIcon className="w-5 h-5" />
+                        </button>
+                      </>
+                    );
+                  })()
+                ) : (
+                  <>
+                    <span className="text-sm text-white/70">
+                      {selectedMessages.size} selected
+                    </span>
+                    <button
+                      onClick={() => {
+                        setIsSelectionMode(false);
+                        setSelectedMessages(new Set());
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteModal(true)}
+                      disabled={selectedMessages.size === 0}
+                      className={cn(
+                        "p-2 rounded-lg transition-all",
+                        selectedMessages.size > 0
+                          ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                          : "bg-white/5 text-white/30 cursor-not-allowed",
+                      )}
+                    >
+                      <Trash2Icon className="w-5 h-5" />
+                    </button>
+                  </>
+                )
               ) : (
                 <>
                   {/* Search Button */}
@@ -2717,8 +2935,8 @@ function ThreadConversation({
         )}
       </div>
 
-      {/* Spacer for fixed header */}
-      <div className="h-16" />
+      {/* Spacer for fixed header (header height + safe-area inset) */}
+      <div className="pt-safe h-16" />
 
       {/* Conditional rendering: Shopping List View, Notes View, or Normal Messages */}
       {isShoppingThread ? (
@@ -2783,7 +3001,7 @@ function ThreadConversation({
         <>
           {/* Messages - Scrollable area, messages stick to bottom like WhatsApp */}
           <div
-            className="flex-1 overflow-y-auto px-4 pb-36 flex flex-col transition-all duration-300"
+            className="flex-1 overflow-y-auto px-4 pb-24 flex flex-col transition-all duration-300"
             style={{
               background: thread?.color
                 ? `linear-gradient(to bottom, ${thread.color}03, transparent 200px)`
@@ -2927,9 +3145,13 @@ function ThreadConversation({
                               )}
                               title={
                                 msgActions.length > 0
-                                  ? "Cannot delete: has actions"
+                                  ? isConvertSelection
+                                    ? "Already converted"
+                                    : "Cannot delete: has actions"
                                   : msg.deleted_at
-                                    ? "Cannot delete: already deleted"
+                                    ? isConvertSelection
+                                      ? "Already deleted"
+                                      : "Cannot delete: already deleted"
                                     : ""
                               }
                             >
@@ -3151,7 +3373,7 @@ function ThreadConversation({
           {/* Input - Fixed at bottom, above navigation bar (only for non-shopping/non-notes threads) */}
           {!isShoppingThread && !isNotesThread && (
             <div
-              className="fixed bottom-[72px] left-0 right-0 px-4 py-2 border-t backdrop-blur-sm z-20 transition-all duration-300"
+              className="pb-safe fixed bottom-0 left-0 right-0 px-4 py-2 border-t backdrop-blur-sm z-20 transition-all duration-300"
               style={{
                 borderTopColor: thread?.color
                   ? `${thread.color}15`
@@ -3543,6 +3765,36 @@ function ThreadConversation({
                     </button>
                   )}
 
+                  {/* Multi-add Action - budget/reminder threads only, enters bulk-convert selection */}
+                  {(threadPurpose === "budget" ||
+                    threadPurpose === "reminder") && (
+                    <button
+                      onClick={() => {
+                        setIsSelectionMode(true);
+                        setSelectedMessages(new Set());
+
+                        // Close action menu
+                        setActionMenuMessage(null);
+                        setActionMenuPosition(null);
+                      }}
+                      className="w-full px-4 py-3 flex items-center gap-3 rounded-xl hover:bg-white/10 active:scale-[0.98] transition-all mt-1"
+                    >
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-cyan-500/20 to-blue-500/20 shrink-0">
+                        <ListChecks className="w-5 h-5 text-cyan-400" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-semibold text-white">
+                          Multi-add…
+                        </p>
+                        <p className="text-xs text-white/60 mt-0.5">
+                          {threadPurpose === "reminder"
+                            ? "Select multiple messages to add as schedule items"
+                            : "Select multiple messages to add as transactions"}
+                        </p>
+                      </div>
+                    </button>
+                  )}
+
                   {/* Select Message Action - only if message has no actions */}
                   {!hasTransactionAction &&
                     !hasReminderAction &&
@@ -3710,6 +3962,29 @@ function ThreadConversation({
           }}
         />
       )}
+
+      {/* Bulk Convert Review Sheet */}
+      {showBulkConvertSheet &&
+        (thread?.purpose === "budget" || thread?.purpose === "reminder") && (
+          <BulkConvertReviewSheet
+            messages={messages.filter((m: HubMessage) =>
+              selectedMessages.has(m.id),
+            )}
+            purpose={thread.purpose}
+            categories={categories}
+            accounts={accounts}
+            defaultAccountId={defaultAccount?.id}
+            onClose={() => setShowBulkConvertSheet(false)}
+            onComplete={(messageIds) => {
+              setConvertedMessageIds(
+                (prev) => new Set([...prev, ...messageIds]),
+              );
+              setShowBulkConvertSheet(false);
+              setIsSelectionMode(false);
+              setSelectedMessages(new Set());
+            }}
+          />
+        )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (

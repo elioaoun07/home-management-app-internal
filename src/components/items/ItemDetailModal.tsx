@@ -204,6 +204,7 @@ const statusColors = {
   cancelled: { bg: "bg-gray-500/20", text: "text-gray-400" },
   archived: { bg: "bg-gray-500/20", text: "text-gray-400" },
   dormant: { bg: "bg-purple-500/20", text: "text-purple-400" },
+  draft: { bg: "bg-amber-500/20", text: "text-amber-300" },
 };
 
 type Props = {
