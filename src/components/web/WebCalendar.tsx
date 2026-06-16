@@ -48,6 +48,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DayExpansionModal } from "./DayExpansionModal";
 import { ItemSubtasksList } from "./ItemSubtasks";
@@ -158,6 +159,7 @@ export function WebCalendar({
   const { theme } = useTheme();
   const isPink = theme === "pink";
   const isFrost = theme === "frost";
+  const router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [internalSelectedDate, setInternalSelectedDate] = useState<Date | null>(
     new Date(),
@@ -1844,6 +1846,7 @@ export function WebCalendar({
           onBirthdayClick?.(birthday, date);
         }}
         onAddEvent={onAddEvent}
+        onPlanDay={(d) => router.push(`/today?date=${format(d, "yyyy-MM-dd")}`)}
         getOccurrenceDateTimeForItem={getOccurrenceDateTimeForItem}
         anchorRect={modalAnchorRect}
       />

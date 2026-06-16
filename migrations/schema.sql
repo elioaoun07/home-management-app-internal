@@ -1596,3 +1596,30 @@ BEGIN
   RETURN result;
 END;
 $function$;
+
+-- ============================================
+-- Plan My Day! (added 2026-06-16, see migrations/2026-06-16_plan-my-day.sql)
+-- ============================================
+CREATE TABLE public.day_plans (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  plan_date date NOT NULL,
+  title text,
+  intent text CHECK (intent = ANY (ARRAY['rest'::text, 'balanced'::text, 'productive'::text])),
+  notes text,
+  checkpoints jsonb NOT NULL DEFAULT '[]'::jsonb,
+  is_public boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT day_plans_pkey PRIMARY KEY (id),
+  CONSTRAINT day_plans_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT day_plans_user_id_plan_date_key UNIQUE (user_id, plan_date)
+);
+CREATE INDEX day_plans_user_date_idx ON public.day_plans USING btree (user_id, plan_date);
+
+ALTER TABLE public.day_plans ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY day_plans_select ON public.day_plans AS PERMISSIVE FOR SELECT USING (((user_id = auth.uid()) OR ((is_public = true) AND (EXISTS ( SELECT 1 FROM household_links WHERE ((household_links.active = true) AND (((household_links.owner_user_id = auth.uid()) AND (household_links.partner_user_id = day_plans.user_id)) OR ((household_links.partner_user_id = auth.uid()) AND (household_links.owner_user_id = day_plans.user_id)))))))));
+CREATE POLICY day_plans_insert ON public.day_plans AS PERMISSIVE FOR INSERT WITH CHECK ((user_id = auth.uid()));
+CREATE POLICY day_plans_update ON public.day_plans AS PERMISSIVE FOR UPDATE USING ((user_id = auth.uid()));
+CREATE POLICY day_plans_delete ON public.day_plans AS PERMISSIVE FOR DELETE USING ((user_id = auth.uid()));

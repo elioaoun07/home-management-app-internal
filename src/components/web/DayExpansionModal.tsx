@@ -9,6 +9,7 @@ import { format, parseISO } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Cake,
+  CalendarOff,
   CalendarPlus,
   CheckCircle2,
   Clock,
@@ -127,6 +128,7 @@ interface DayExpansionModalProps {
     date: Date,
   ) => void;
   onAddEvent?: (date: Date) => void;
+  onPlanDay?: (date: Date) => void;
   getOccurrenceDateTimeForItem: (item: ItemWithDetails, date: Date) => Date;
   anchorRect?: DOMRect | null;
 }
@@ -142,6 +144,7 @@ export function DayExpansionModal({
   onItemClick,
   onBirthdayClick,
   onAddEvent,
+  onPlanDay,
   getOccurrenceDateTimeForItem,
   anchorRect,
 }: DayExpansionModalProps) {
@@ -339,6 +342,32 @@ export function DayExpansionModal({
                       >
                         <CalendarPlus className="w-4 h-4" />
                         <span className="hidden sm:inline">Add</span>
+                      </Button>
+                    </motion.div>
+                  )}
+
+                  {onPlanDay && (
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.22, type: "spring" }}
+                    >
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          onPlanDay(date);
+                          onClose();
+                        }}
+                        className={cn(
+                          "gap-1.5",
+                          isFrost
+                            ? "border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                            : "border-white/10 text-white/70 hover:bg-white/10",
+                        )}
+                      >
+                        <CalendarOff className="w-4 h-4" />
+                        <span className="hidden sm:inline">Plan day</span>
                       </Button>
                     </motion.div>
                   )}

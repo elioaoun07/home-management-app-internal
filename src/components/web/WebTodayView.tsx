@@ -1,37 +1,22 @@
 "use client";
 
 import { useTheme } from "@/contexts/ThemeContext";
-import {
-  useFlexibleRoutines,
-  type FlexibleRoutineItem,
-} from "@/features/items/useFlexibleRoutines";
-import {
-  getPostponedOccurrencesForDate,
-  isOccurrenceCompleted,
-  useAllOccurrenceActions,
-  type ItemOccurrenceAction,
-} from "@/features/items/useItemActions";
+import { useFlexibleRoutines } from "@/features/items/useFlexibleRoutines";
+import { useAllOccurrenceActions } from "@/features/items/useItemActions";
 import { useItems } from "@/features/items/useItems";
 import { useBriefingTTS } from "@/hooks/useBriefingTTS";
 import { cn } from "@/lib/utils";
 import {
-  adjustOccurrenceToWallClock,
-  getOccurrencesInRange,
-} from "@/lib/utils/date";
-import type { ItemType, ItemWithDetails } from "@/types/items";
-import {
-  addDays,
-  format,
-  isBefore,
-  isSameDay,
-  isWithinInterval,
-  parseISO,
-  startOfDay,
-} from "date-fns";
+  expandOccurrencesInRange,
+  type ExpandedOccurrence,
+} from "@/lib/utils/dayOccurrences";
+import type { ItemType } from "@/types/items";
+import { addDays, format, isBefore, startOfDay } from "date-fns";
 import {
   AlertCircle,
   Bell,
   Calendar,
+  CalendarOff,
   ListTodo,
   Loader2,
   Moon,
@@ -40,16 +25,9 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-
-interface ExpandedOccurrence {
-  item: ItemWithDetails;
-  occurrenceDate: Date;
-  isCompleted: boolean;
-  isPostponed?: boolean;
-  originalDate?: Date;
-}
 
 interface BriefingBullet {
   text: string;
@@ -88,118 +66,6 @@ function getGreeting(hour: number): { icon: ReactNode; text: string } {
     icon: <Moon className="w-4 h-4 text-indigo-400" />,
     text: "Winding down",
   };
-}
-
-function getItemDate(item: ItemWithDetails): Date | null {
-  const dateStr =
-    item.type === "reminder" || item.type === "task"
-      ? item.reminder_details?.due_at
-      : item.type === "event"
-        ? item.event_details?.start_at
-        : null;
-  return dateStr ? parseISO(dateStr) : null;
-}
-
-function expandRecurringItems(
-  items: ItemWithDetails[],
-  startDate: Date,
-  endDate: Date,
-  actions: ItemOccurrenceAction[],
-  scheduledFlexible: FlexibleRoutineItem[] = [],
-): ExpandedOccurrence[] {
-  const result: ExpandedOccurrence[] = [];
-
-  for (const item of items) {
-    // Flexible items are placed via item_flexible_schedules — handled below
-    if (item.recurrence_rule?.is_flexible) continue;
-
-    const itemDate = getItemDate(item);
-    if (!itemDate) continue;
-
-    if (item.recurrence_rule?.rrule) {
-      try {
-        const occurrences = getOccurrencesInRange(
-          item.recurrence_rule,
-          itemDate,
-          startDate,
-          endDate,
-        );
-        for (const occ of occurrences) {
-          const adjusted = adjustOccurrenceToWallClock(occ, itemDate);
-          const isCompleted = isOccurrenceCompleted(item.id, occ, actions);
-          result.push({ item, occurrenceDate: adjusted, isCompleted });
-        }
-      } catch (error) {
-        console.error("Error parsing RRULE:", error);
-      }
-    } else if (isWithinInterval(itemDate, { start: startDate, end: endDate })) {
-      const isCompleted =
-        item.status === "completed" ||
-        isOccurrenceCompleted(item.id, itemDate, actions);
-      result.push({ item, occurrenceDate: itemDate, isCompleted });
-    }
-  }
-
-  let currentDate = new Date(startDate);
-  while (currentDate <= endDate) {
-    const dayPostponed = getPostponedOccurrencesForDate(
-      items,
-      currentDate,
-      actions,
-    );
-    for (const p of dayPostponed) {
-      const alreadyExists = result.some(
-        (r) =>
-          r.item.id === p.item.id &&
-          isSameDay(r.occurrenceDate, p.occurrenceDate),
-      );
-      if (!alreadyExists) {
-        result.push({
-          item: p.item,
-          occurrenceDate: p.occurrenceDate,
-          isCompleted: false,
-          isPostponed: true,
-          originalDate: p.originalDate,
-        });
-      }
-    }
-    currentDate = addDays(currentDate, 1);
-  }
-
-  // Inject scheduled flexible routines (source of truth: item_flexible_schedules)
-  for (const si of scheduledFlexible) {
-    const sched = si.flexibleSchedule;
-    if (!sched?.scheduled_for_date) continue;
-    let schedDate: Date;
-    try {
-      schedDate = parseISO(sched.scheduled_for_date);
-    } catch {
-      continue;
-    }
-    if (!isWithinInterval(schedDate, { start: startDate, end: endDate }))
-      continue;
-
-    const [hh, mm] = (sched.scheduled_for_time ?? "09:00")
-      .split(":")
-      .map((n) => parseInt(n, 10));
-    const occurrenceDate = new Date(schedDate);
-    occurrenceDate.setHours(hh || 9, mm || 0, 0, 0);
-
-    const isCompleted = si.isCompletedForCurrentPeriod;
-    if (
-      result.some(
-        (r) =>
-          r.item.id === si.id && isSameDay(r.occurrenceDate, occurrenceDate),
-      )
-    ) {
-      continue;
-    }
-    result.push({ item: si, occurrenceDate, isCompleted });
-  }
-
-  return result.sort(
-    (a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime(),
-  );
 }
 
 export default function WebTodayView() {
@@ -242,7 +108,7 @@ export default function WebTodayView() {
   const { todayTasks, overdueTasks } = useMemo(() => {
     const todayEnd = addDays(today, 1);
 
-    const todayOccs = expandRecurringItems(
+    const todayOccs = expandOccurrencesInRange(
       activeItems,
       today,
       todayEnd,
@@ -253,7 +119,7 @@ export default function WebTodayView() {
       .sort((a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime());
 
     const pastStart = addDays(today, -30);
-    const allPastOccs = expandRecurringItems(
+    const allPastOccs = expandOccurrencesInRange(
       activeItems,
       pastStart,
       todayEnd,
@@ -476,19 +342,33 @@ export default function WebTodayView() {
         >
           {format(today, "EEEE, MMMM d")}
         </p>
-        {overdueTasks.length > 0 && (
-          <div
+        <div className="flex items-center gap-2">
+          {overdueTasks.length > 0 && (
+            <div
+              className={cn(
+                "flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium",
+                isFrost
+                  ? "bg-amber-50 text-amber-600"
+                  : "bg-amber-500/10 text-amber-400",
+              )}
+            >
+              <AlertCircle className="w-3 h-3" />
+              {overdueTasks.length} overdue
+            </div>
+          )}
+          <Link
+            href={`/today?date=${format(today, "yyyy-MM-dd")}`}
             className={cn(
-              "flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium",
+              "flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors",
               isFrost
-                ? "bg-amber-50 text-amber-600"
-                : "bg-amber-500/10 text-amber-400",
+                ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                : "bg-white/[0.05] text-white/60 hover:bg-white/[0.1]",
             )}
           >
-            <AlertCircle className="w-3 h-3" />
-            {overdueTasks.length} overdue
-          </div>
-        )}
+            <CalendarOff className="w-3 h-3" />
+            Plan this day
+          </Link>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5">

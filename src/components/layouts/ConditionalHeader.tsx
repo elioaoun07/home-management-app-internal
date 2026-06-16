@@ -21,7 +21,12 @@ function moduleFromPath(
   if (pathname.startsWith("/recipe") || pathname.startsWith("/catalogue"))
     return "recipe";
   if (pathname.startsWith("/chat")) return "chat";
-  if (pathname.startsWith("/reminders") || pathname.startsWith("/alerts") || pathname.startsWith("/chores"))
+  if (
+    pathname.startsWith("/reminders") ||
+    pathname.startsWith("/alerts") ||
+    pathname.startsWith("/chores") ||
+    pathname.startsWith("/today")
+  )
     return "schedule";
   return appMode === "items" ? "schedule" : "financial";
 }
@@ -66,6 +71,11 @@ const STANDALONE_APPS: Record<
     title: "Trips",
     role: "Travel Planner",
     color: "from-cyan-400 to-sky-500",
+  },
+  "/today": {
+    title: "Plan My Day",
+    role: "Disrupted-Day Planner",
+    color: "from-pink-400 to-amber-400",
   },
 };
 

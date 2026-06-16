@@ -25,6 +25,7 @@ import {
 } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 // Icon components
@@ -142,6 +143,7 @@ export function CalendarView({
 }: CalendarViewProps) {
   const { theme } = useTheme();
   const isPink = theme === "pink";
+  const router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [direction, setDirection] = useState(0);
@@ -874,6 +876,7 @@ export function CalendarView({
           anchorRect={modalAnchorRect}
           onItemClick={handleModalItemClick}
           onAddFromCatalogue={handleAddFromCatalogue}
+          onPlanDay={(d) => router.push(`/today?date=${format(d, "yyyy-MM-dd")}`)}
         />
 
         {/* Catalogue Template Picker */}

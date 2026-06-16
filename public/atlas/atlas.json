@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-05-19T19:30:58.584Z",
-  "count": 57,
+  "generatedAt": "2026-06-16T06:16:13.127Z",
+  "count": 58,
   "nodes": [
     {
       "slug": "auth-reset",
@@ -769,32 +769,6 @@
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-statement-import.md"
     },
     {
-      "slug": "feature-today",
-      "title": "Feature · Today",
-      "category": "feature",
-      "route": "n/a",
-      "type": "feature",
-      "parent": null,
-      "children": [],
-      "status": "active",
-      "tags": [
-        "feature-module"
-      ],
-      "sections": {
-        "files": "- **Module dir**: `src/features/today/`",
-        "hooks": "- See files in `src/features/today/` (typically `hooks.ts` or sub-files)",
-        "api_routes": "- TODO (list `/api/today/...` routes used by this feature)",
-        "db_tables": "- TODO",
-        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/today`.",
-        "what_it_links_to": "- TODO (which pages render this feature's UI)",
-        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Today/` _(verify path)_",
-        "screenshots": "- n/a",
-        "notes": "- TODO"
-      },
-      "screenshots": [],
-      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-today.md"
-    },
-    {
       "slug": "feature-transactions",
       "title": "Feature · Transactions",
       "category": "feature",
@@ -878,6 +852,32 @@
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/era.md"
     },
     {
+      "slug": "today",
+      "title": "Plan My Day",
+      "category": "junction-page",
+      "route": "/today",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "junction-module"
+      ],
+      "sections": {
+        "files": "- **Page**: `src/app/today/page.tsx`\n- **Main component**: `src/components/planner/WebDayPlanner.tsx`",
+        "hooks": "- `src/features/day-plan/useDayPlan.ts` — `useDayPlan`, `useUpsertDayPlan`, `useCheckpointActions`\n- `src/features/items/useFlexibleRoutines.ts` — `useFlexibleRoutines`, `useScheduleRoutine`, `useUnscheduleRoutine`\n- `src/features/items/useItemActions.ts` — `useItemActionsWithToast`, `useAllOccurrenceActions`, `useDeleteItemWithUndo`\n- `src/features/items/useItems.ts` — `useItems`, `useCreateReminder`\n- `src/lib/utils/dayOccurrences.ts` — `getOccurrencesForDay` (shared \"what lands on day X\" util, also used by `WebTodayView`)",
+        "api_routes": "- `GET /api/day-plans?date=YYYY-MM-DD` → `src/app/api/day-plans/route.ts`\n- `POST /api/day-plans` → `src/app/api/day-plans/route.ts`",
+        "db_tables": "- `day_plans` (own table — see `migrations/2026-06-16_plan-my-day.sql`)\n- `items`, `item_flexible_schedules`, `item_recurrence_rules`, `item_occurrence_actions` (read via existing Items/Schedule hooks)",
+        "how_to_get_here": "- \"Plan this day\" link in `WebTodayView.tsx` header\n- \"Plan this day\" button in `DayExpansionModal.tsx` (web calendar day click)\n- \"Plan this day\" button in `MobileDayExpansionModal.tsx` (mobile calendar day click)\n- Direct URL: `/today?date=YYYY-MM-DD` (defaults to today)",
+        "what_it_links_to": "- All interactions are in-page (push-off, prepone, checkpoints, ad-hoc tasks) — no child routes.",
+        "related_vault_doc": "- `ERA Notes/03 - Junction Modules/Plan My Day/Overview.md`",
+        "screenshots": "- n/a",
+        "notes": "- Junction module: imports across the Items/Schedule standalone (`useItems`, `useFlexibleRoutines`, `useItemActions`).\n- Reuses the shared flexible-item placement rule from `dayOccurrences.ts` — never reimplement \"what lands on day X\" locally.\n- Phase 1 only (triage list); hourly timeline + mood/energy optimizer are deferred (see vault doc)."
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-today.md"
+    },
+    {
       "slug": "dashboard",
       "title": "Dashboard",
       "category": "main-tab",
@@ -888,15 +888,14 @@
       "status": "active",
       "tags": [],
       "sections": {
-        "files": "- **Page**: `src/app/dashboard/page.tsx`\n- **Main component**: `src/app/dashboard/DashboardClientPage.tsx`\n- **Sub-components**: TODO",
-        "hooks": "- `src/features/preferences/useUserPreferences`\n- `src/features/transactions/useDashboardTransactions`",
-        "api_routes": "- TODO",
-        "db_tables": "- TODO",
-        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/dashboard`",
-        "what_it_links_to": "- TODO",
-        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
-        "screenshots": "- `dashboard-mobile.png`\n- `dashboard-desktop.png`",
-        "notes": "- TODO"
+        "files": "- **Page**: `src/app/dashboard/page.tsx`\n- **Client root**: `src/app/dashboard/DashboardClientPage.tsx`\n- **Wrapper**: `src/app/dashboard/DashboardClientWrapper.tsx`\n- **Layout**: `src/app/dashboard/layout.tsx`\n- **Sub-components**:\n  - `src/components/dashboard/EnhancedMobileDashboard.tsx`\n  - `src/components/dashboard/TransactionsTable.tsx`\n  - `src/components/dashboard/CategoryDetailView.tsx`\n  - `src/components/dashboard/SwipeableTransactionItem.tsx`\n  - `src/components/dashboard/TransactionDetailModal.tsx`\n  - `src/components/web/WebDashboard.tsx`\n  - `src/components/web/WebTabletMissionControl.tsx`\n  - `src/components/expense/EditableWidgetGrid.tsx`",
+        "hooks": "- `src/features/preferences/useSectionOrder` — section order\n- `src/features/transactions/useDashboardTransactions` — current-cycle transactions",
+        "api_routes": "- Aggregates over multiple endpoints — no dedicated dashboard API. See individual feature routes.",
+        "db_tables": "- No owned tables. Reads `transactions`, `accounts`, `account_balances`, `user_preferences`.",
+        "how_to_get_here": "- Default redirect after login\n- Tap **Home/Dashboard** icon in bottom nav (mobile)\n- Direct URL: `/dashboard`",
+        "what_it_links_to": "- `/expense` — expense entry\n- Transaction detail modal (in-place, no route change)\n- Category drill-down (in-place)",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Dashboard/`",
+        "notes": "- Prefetch on startup via `src/components/EagerDataPrefetch.tsx` and on hover via `src/lib/prefetch/prefetchDashboard.ts`.\n- Theme changes invalidate all queries — full refetch on theme switch.\n- Section order is drag-configurable via `EditableWidgetGrid`."
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/dashboard.md"
@@ -1047,6 +1046,29 @@
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/chat.md"
     },
     {
+      "slug": "chores",
+      "title": "Chores",
+      "category": "standalone-page",
+      "route": "/chores",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/chores/page.tsx`\n- **Main component**: `src/components/chores/StandaloneChoresPage.tsx`\n- **Sub-components**:\n  - `src/components/chores/UpNextHero.tsx`\n  - `src/components/chores/ChoreCard.tsx`\n  - `src/components/chores/ChoreGroupList.tsx`\n  - `src/components/chores/ChoreCheckInPanel.tsx`\n  - `src/components/chores/ChoreActionsSheet.tsx`\n  - `src/components/chores/ChorePostponeSheet.tsx`\n  - `src/components/chores/ChoresFilterBar.tsx`\n  - `src/components/web/WebChores.tsx`",
+        "hooks": "- `src/features/chores/useChores.ts` — fetches items where `is_chore = true`\n- `src/features/chores/useChoreActions.ts` — complete, skip, postpone, assign",
+        "api_routes": "- `POST /api/items/[id]/complete` → `src/app/api/items/[id]/complete/route.ts`\n- `POST /api/items/[id]/actions` → `src/app/api/items/[id]/actions/route.ts`",
+        "db_tables": "- `items` (`is_chore = true`)\n- `item_occurrence_actions`\n- `reminder_details`",
+        "how_to_get_here": "- ERA nav or direct URL: `/chores`",
+        "what_it_links_to": "- All interactions are in-page sheets (no child routes).",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Chores/`",
+        "notes": "- Chores are `items` rows — not a separate table. Always scope queries with `is_chore = true`.\n- Trip activation auto-skips chores via `trip_side_effects`.\n- Sunday check-in is collapsed by default; shows prior-week unresolved chores when expanded."
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/chores.md"
+    },
+    {
       "slug": "expense-drafts",
       "title": "Expense Drafts",
       "category": "standalone-page",
@@ -1069,30 +1091,6 @@
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/expense-drafts.md"
-    },
-    {
-      "slug": "focus",
-      "title": "Focus",
-      "category": "standalone-page",
-      "route": "/focus",
-      "type": "page",
-      "parent": null,
-      "children": [],
-      "status": "active",
-      "tags": [],
-      "sections": {
-        "files": "- **Page**: `src/app/focus/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
-        "hooks": "- TODO",
-        "api_routes": "- TODO",
-        "db_tables": "- TODO",
-        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/focus`",
-        "what_it_links_to": "- TODO",
-        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
-        "screenshots": "- `focus-mobile.png`\n- `focus-desktop.png`",
-        "notes": "- TODO"
-      },
-      "screenshots": [],
-      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/focus.md"
     },
     {
       "slug": "g-drinks-admin",
@@ -1267,7 +1265,7 @@
     },
     {
       "slug": "ai-usage",
-      "title": "Ai Usage",
+      "title": "AI Usage",
       "category": "utility",
       "route": "/ai-usage",
       "type": "page",
@@ -1276,15 +1274,14 @@
       "status": "active",
       "tags": [],
       "sections": {
-        "files": "- **Page**: `src/app/ai-usage/page.tsx`\n- **Main component**: _(self-contained in page file)_\n- **Sub-components**: TODO",
-        "hooks": "- TODO",
-        "api_routes": "- TODO",
-        "db_tables": "- TODO",
-        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/ai-usage`",
-        "what_it_links_to": "- TODO",
-        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
-        "screenshots": "- `ai-usage-mobile.png`\n- `ai-usage-desktop.png`",
-        "notes": "- TODO"
+        "files": "- **Page**: `src/app/ai-usage/page.tsx`\n- **Layout**: `src/app/ai-usage/layout.tsx`\n- **Main component**: `src/components/ai-usage/AIUsagePage.tsx`\n- **Sub-components**:\n  - `src/components/ai-usage/ModelCard.tsx`\n  - `src/components/ai-usage/UsageGauge.tsx`\n  - `src/components/ai-usage/AddModelDialog.tsx`\n  - `src/components/ai-usage/AddSessionUsage.tsx`\n  - `src/components/ai-usage/SessionTypesEditor.tsx`\n  - `src/components/ai-usage/UpcomingSessionsList.tsx`",
+        "hooks": "- `src/features/ai-usage/hooks.ts` — models, sessions, session types\n- `src/features/ai-usage/useUpcomingAISessions.ts` — upcoming planned sessions\n- `src/features/ai-usage/calc.ts` — usage percentage logic",
+        "api_routes": "- `GET/POST /api/ai-usage` → `src/app/api/ai-usage/`",
+        "db_tables": "- `ai_usage_models`\n- `ai_session_types`\n- `ai_sessions`\n- `ai_rate_limits`",
+        "how_to_get_here": "- ERA nav or direct URL: `/ai-usage`",
+        "what_it_links_to": "- No child routes — all interactions are in-page dialogs/sheets.",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/AI Usage/`",
+        "notes": "- `current_usage_pct` on the model is a denormalized field updated by session log mutations, not a DB trigger.\n- Adding a new provider: DB enum → Zod schema → `AddModelDialog.tsx`."
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/ai-usage.md"
@@ -1411,6 +1408,29 @@
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/quick-expense.md"
+    },
+    {
+      "slug": "recycle-bin",
+      "title": "Recycle Bin",
+      "category": "utility",
+      "route": "/recycle-bin",
+      "type": "page",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [],
+      "sections": {
+        "files": "- **Page**: `src/app/recycle-bin/page.tsx`\n- **Main component**: `src/components/recycle-bin/RecycleBinList.tsx`\n- **Sub-components**:\n  - `src/components/recycle-bin/SearchBox.tsx`\n  - `src/components/recycle-bin/FiltersPanel.tsx`\n  - `src/components/recycle-bin/SectionNav.tsx`",
+        "hooks": "- `src/features/recycle-bin/hooks.ts` — list, restore, empty mutations",
+        "api_routes": "- `GET /api/recycle-bin` → list soft-deleted records\n- `POST /api/recycle-bin/restore` → restore a record\n- `POST /api/recycle-bin/empty` → permanent bulk delete\n- `GET /api/recycle-bin/counts` → badge counts per section",
+        "db_tables": "- No owned tables. Reads `deleted_at` flags from origin tables across modules.",
+        "how_to_get_here": "- Settings menu or direct URL: `/recycle-bin`",
+        "what_it_links_to": "- No child routes — all interactions are in-page.",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Recycle Bin/`",
+        "notes": "- \"Empty Bin\" is irreversible — use a destructive confirmation dialog, not a standard Undo toast.\n- Adding a new restorable type: add `deleted_at` to origin table → register in `hooks.ts` → add section in `SectionNav.tsx`.\n- Counts endpoint is used for nav badge — keep it fast (COUNT only)."
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/recycle-bin.md"
     },
     {
       "slug": "temp",

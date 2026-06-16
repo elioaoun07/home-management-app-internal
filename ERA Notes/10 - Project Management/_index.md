@@ -33,6 +33,13 @@ tags:
 
 > Each module folder mirrors this set at module scope: `1 - Feature State`, `2 - Future Vision & Roadmap`, `3 - Current — Action Plan`, `_index` — plus a **`FABLED/`** deep-dive folder (added 2026-06-10): current implementation X-ray, ranked gaps, optimization plan, future enhancements. Files 1–3 stay short and current; FABLED holds the depth and is re-audited per campaign.
 
+## Cross-cutting reviews
+
+| Review | Folder | What it is |
+|---|---|---|
+| **Functional Architecture Review** (2026-06-12) | [Functional Architecture Review/](<Functional Architecture Review/_index.md>) | Whole-app review against the Proactive AI Assistant goal: strengths, enhancement map, junction leverage, missed/forgotten features, market lens, ten challenges, and a 90-day path. Start with its file 1 (the maturity verdict) and file 7 (the path). |
+| **FAR Execution Checklist** (2026-06-12) | [FAR Execution Checklist/](<FAR Execution Checklist/_index.md>) | The FAR turned executable: master checklist by priority (P0–P3) + 13-week dated schedule (Jun 15 → Sep 13). **Feeds file 4 every Monday.** When lost on "what next," open this. |
+
 ## How to use this set
 
 - **Daily driver:** file 4. Re-draft it every Monday.

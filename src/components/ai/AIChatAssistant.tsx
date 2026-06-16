@@ -114,6 +114,7 @@ export default function AIChatAssistant() {
     "/nfc/",
     "/watch",
     "/era",
+    "/today",
   ];
   const isStandalonePage =
     mounted && standaloneRoutes.some((r) => pathname?.startsWith(r));

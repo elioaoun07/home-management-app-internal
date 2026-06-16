@@ -38,6 +38,7 @@ Schedule is the household's **time graph** — every dated obligation (reminders
 | **Smarter overdue handling** | Flexible overdue look-back ≤3 periods; fixed items just sit overdue | Roll-forward suggestions ("you missed Tue's workout — slot it Thu?"), and a single overdue triage view | M |
 | **Natural-language item entry** | Quick form has smart text parsing | Full NL: "every other Thursday at 7", "remind me 2 days before rent" — parsed into rrule + alert in one line | M |
 | **Test the placement rule** | Enforced by convention across 6+ views | One guard test so flexible items can never silently land on the activation day | S |
+| **Plan My Day (disrupted-day planner)** | *(IMPLEMENTED 2026-06-16)* `/today` triage page — one-time/recurring/flexible items landing on a day, push off, both-direction prepone for flexible items, ad-hoc tasks, checkpoints, persisted via `day_plans`. *(FIXED 2026-06-16 same day)* save-gated draft model (edit form + Save vs. read-only preview card + Edit/Delete) replaced the original auto-save-per-keystroke header. | Hourly timeline canvas (drag items into time slots) + mood/energy "rest vs productivity" optimizer reading `day_plans.intent` | M (timeline) / M–H (optimizer) |
 
 ---
 

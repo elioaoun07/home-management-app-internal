@@ -33,6 +33,7 @@ If the user says…                                              | Open
 "the dashboard" / "today view" / "main landing"                | [standalone/dashboard.md](standalone/dashboard.md)
 "the recycle bin"                                              | [standalone/recycle-bin.md](standalone/recycle-bin.md)
 ---                                                            | ---
+"plan my day" / "disrupted day" / "wedding this Saturday" / "push off" / "prepone" | [junction/plan-my-day.md](junction/plan-my-day.md)
 "trips" / "travel" / "activate trip" / "packing list"          | [junction/trips.md](junction/trips.md)
 "hub chat" / "message actions" / "chat thread"                 | [junction/hub-chat.md](junction/hub-chat.md)
 "shopping list"                                                | [junction/shopping-list.md](junction/shopping-list.md)
@@ -85,6 +86,7 @@ If the user says…                                              | Open
 
 | Module             | Connects                                                                          | File                                                                              |
 | ------------------ | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Plan My Day        | Items/Schedule (one-time + recurring + flexible) ↔ new `day_plans` table.        | [junction/plan-my-day.md](junction/plan-my-day.md)                                |
 | Trips              | Budget (auto account) ↔ Items/Chores (skip/pause) ↔ Meal Planning ↔ Catalogue.   | [junction/trips.md](junction/trips.md)                                            |
 | Hub Chat           | Transactions ↔ Items ↔ Shopping List (message actions create entries).            | [junction/hub-chat.md](junction/hub-chat.md)                                      |
 | Shopping List      | Hub ↔ Recipes (ingredients) ↔ Inventory.                                          | [junction/shopping-list.md](junction/shopping-list.md)                            |

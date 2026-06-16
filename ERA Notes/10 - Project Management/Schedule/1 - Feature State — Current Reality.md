@@ -48,6 +48,7 @@ tags:
 | **Household assignment** | 🔵 Established | `responsible_user_id` — an item you own but assign to your partner shows under "partner". | — (stable) |
 | **Focus insights (AI briefing)** | 🟡 New/Thin | `useFocusInsights` → AI-generated Focus briefing, cached 24h. Lives partly in the Focus module. | Enrich briefing with cross-module data (see file 2). |
 | **Catalogue templates** | 🔵 Established | Items can be promoted to / created from catalogue templates (`source_catalogue_item_id`); flexible routines originate here. | — (stable) |
+| **Plan My Day (disrupted-day planner)** | 🟡 New/Thin | Shipped 2026-06-16. Dedicated `/today` page — triage list of everything landing on a day (one-time + recurring + flexible via shared `dayOccurrences.ts` util), push-off, both-direction prepone for flexible items, ad-hoc tasks, checkpoints. Persisted via new `day_plans` table (title/intent/notes/checkpoints/is_public). **Fixed 2026-06-16:** the header + checkpoints used to auto-save an API call on every keystroke/click (worst case: a `POST` per Private/Shared toggle); now a save-gated draft model — edit form with one Save for an unplanned day, read-only preview card with Edit/Delete for a planned one. | Mood/energy "rest vs productivity" optimizer is deferred — `intent` is stored but unread by any optimizer yet. |
 
 ---
 

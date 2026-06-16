@@ -7,7 +7,7 @@ import type { ItemWithDetails } from "@/types/items";
 import { format, parseISO } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef } from "react";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, CalendarOff } from "lucide-react";
 
 // Item type colors
 const typeColors: Record<string, { bg: string; border: string; text: string }> =
@@ -139,6 +139,7 @@ interface MobileDayExpansionModalProps {
   onBirthdayClick?: (birthday: { name: string; date: Date }) => void;
   onAddEvent?: (date: Date) => void;
   onAddFromCatalogue?: (date: Date) => void;
+  onPlanDay?: (date: Date) => void;
   showBirthdays?: boolean;
   anchorRect?: { x: number; y: number; width: number; height: number } | null;
 }
@@ -154,6 +155,7 @@ export function MobileDayExpansionModal({
   onBirthdayClick,
   onAddEvent,
   onAddFromCatalogue,
+  onPlanDay,
   showBirthdays = true,
   anchorRect,
 }: MobileDayExpansionModalProps) {
@@ -342,6 +344,24 @@ export function MobileDayExpansionModal({
                         )}
                       >
                         <PlusIcon className="w-5 h-5" />
+                      </motion.button>
+                    )}
+
+                    {/* Plan This Day Button */}
+                    {onPlanDay && (
+                      <motion.button
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.18 }}
+                        type="button"
+                        onClick={() => {
+                          onPlanDay(date);
+                          onClose();
+                        }}
+                        className="p-2.5 rounded-xl transition-all bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                        title="Plan this day"
+                      >
+                        <CalendarOff className="w-5 h-5" />
                       </motion.button>
                     )}
 

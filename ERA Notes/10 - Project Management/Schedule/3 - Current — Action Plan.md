@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-05-30
+updated: 2026-06-16
 type: action-plan
 status: active
 owner: Elio
@@ -25,6 +25,10 @@ tags:
 Schedule is 🟢 Core and stable, so the danger isn't missing features — it's that its **trickiest logic (recurrence + occurrence actions + the flexible placement rule) is untested**, and four prerequisite evaluators are advertised but inert. Before building enhancements that touch views or bridges, lock the foundation. Then ship the one stub with the best value-for-effort, then make ERA read the time graph.
 
 This mirrors the global theme ("Stabilize, then Connect") at the module level: harden the recurrence core, then connect Schedule outward.
+
+> **Shipped ad-hoc, outside this sequence:** "Plan My Day" (`/today`) — a disrupted-day triage planner (push off / both-direction prepone / ad-hoc tasks / checkpoints), shipped 2026-06-16. Phase 1 only — hourly timeline + mood/energy optimizer deferred. See [2 · Future Vision](<2 - Future Vision & Roadmap.md>) Track A and [Plan My Day Overview](<../../03 - Junction Modules/Plan My Day/Overview.md>). Doesn't change the foundation-first call above.
+>
+> - [x] **Fixed 2026-06-16:** the day-plan header (title/intent/notes/Private-Shared) and checkpoints were firing a full API call on every keystroke/click — worst case a `POST` per Private/Shared toggle. Replaced with a save-gated draft model: an unplanned day shows an editable form with one **Save**; a planned day shows a read-only **preview card** with **Edit**/**Delete**. No API calls during editing, only on Save/Delete (checkpoint done/undone toggle stays live by design). See [Plan My Day Overview](<../../03 - Junction Modules/Plan My Day/Overview.md>) "The save-gated draft model."
 
 ---
 

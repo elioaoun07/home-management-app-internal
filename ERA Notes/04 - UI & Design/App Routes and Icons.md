@@ -38,6 +38,7 @@ tags:
 | `/reminders` | Reminders          | `CalendarClockIcon`        | `from-amber-400 to-amber-600`     |
 | `/recurring` | Recurring Payments | `CalendarClockIcon`        | Theme-based                       |
 | `/trips`     | Trips              | `Plane` (lucide)           | `from-cyan-400 to-sky-500`        |
+| `/today`     | Plan My Day        | `CalendarOff` (lucide)     | `from-pink-400 to-amber-400`      |
 
 ---
 
@@ -235,4 +236,4 @@ When adding a new route with an icon:
 
 ---
 
-_Last Updated: February 15, 2026_
+_Last Updated: June 16, 2026_

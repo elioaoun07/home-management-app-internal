@@ -125,6 +125,7 @@ Bridge between Standalone modules. May import from any standalone feature direct
 | Household Sharing | ALL modules — shared data layer via `household_links` + `profiles`                   |
 | Sync & Offline    | ALL modules — IndexedDB queue + `OfflineSyncEngine`                                  |
 | Prerequisites     | NFC Tags + Items (trigger engine for dormant → pending activation)                   |
+| Plan My Day       | Items/Schedule (one-time, recurring, flexible placement) ↔ `day_plans` table         |
 
 ---
 
@@ -228,6 +229,7 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Trips                    | `src/app/trips/`, `src/features/trips/`, `src/components/trips/`  | `ERA Notes/03 - Junction Modules/Trips/`                            | Junction   |
 | Dashboard                | `src/app/dashboard/`, `src/components/web/WebDashboard.tsx`       | `ERA Notes/02 - Standalone Modules/Dashboard/`                      | Standalone |
 | Recycle Bin              | `src/app/recycle-bin/`, `src/features/recycle-bin/`              | `ERA Notes/02 - Standalone Modules/Recycle Bin/`                    | Standalone |
+| Plan My Day              | `src/app/today/`, `src/components/planner/`, `src/features/day-plan/` | `ERA Notes/03 - Junction Modules/Plan My Day/`                 | Junction   |
 
 > **Note:** this table is validated against the **Feature Map** (`ERA Notes/01 - Architecture/Feature Map/_index.md`) by `pnpm docs:check`, which runs during `pnpm sync:ai` and pre-commit. **AI Usage is intentionally excluded** from this Feature Index because it is not part of the application.
 
