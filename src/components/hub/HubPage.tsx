@@ -5442,6 +5442,9 @@ function AlertsView() {
       case "item_overdue":
         setActiveTab("reminder");
         break;
+      case "daily_items_summary":
+        window.location.href = "/reminders";
+        break;
       case "transaction_pending":
       case "daily_reminder":
         setActiveTab("expense");
@@ -5476,6 +5479,7 @@ function AlertsView() {
         "item_overdue",
         "transaction_pending",
         "daily_reminder",
+        "daily_items_summary",
         "budget_warning",
         "budget_exceeded",
         "bill_due",
@@ -5528,6 +5532,8 @@ function AlertsView() {
       case "daily_reminder":
       case "transaction_reminder":
         return <FileText className="w-6 h-6 text-cyan-400" />;
+      case "daily_items_summary":
+        return <ListChecks className="w-6 h-6 text-cyan-400" />;
       case "item_reminder":
       case "item_due":
       case "item_overdue":
@@ -5606,14 +5612,14 @@ function AlertsView() {
                       className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-medium hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50"
                     >
                       <CheckIcon className="w-4 h-4" />
-                      Yes, all done!
+                      All Done
                     </button>
                     <button
                       onClick={handleNotYet}
                       className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/10 text-white/80 text-sm font-medium hover:bg-white/20 transition-all"
                     >
                       <PlusIcon className="w-4 h-4" />
-                      Log Expense
+                      Log Now
                     </button>
                   </div>
 
@@ -5714,14 +5720,18 @@ function AlertsView() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <p className="text-sm font-semibold text-white">
+                <p className="text-sm font-semibold text-white truncate">
                   {alert.title}
                 </p>
                 {navigable && (
-                  <ChevronLeftIcon className="w-4 h-4 text-white/30 rotate-180" />
+                  <ChevronLeftIcon className="w-4 h-4 text-white/30 rotate-180 flex-shrink-0" />
                 )}
               </div>
-              <p className="text-sm text-white/60">{alert.message}</p>
+              {alert.message && (
+                <p className="text-sm text-white/60 truncate">
+                  {alert.message}
+                </p>
+              )}
               <p className="text-xs text-white/30 mt-1">
                 {formatRelativeTime(alert.created_at)}
               </p>

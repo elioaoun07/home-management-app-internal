@@ -122,3 +122,7 @@ Set `NEXT_PUBLIC_ENABLE_SW=true` in `.env.local`, then `pnpm build && pnpm start
 - Old routes (`/api/notifications/daily-reminder`, `/api/notifications/send-due`) redirect to new cron routes for backwards compatibility — do not rely on the old paths
 - `in_app_notifications` table is deprecated — it was merged into `notifications` table
 - Item alerts use the `item_alerts` table (with `trigger_at`, `channel`, `active`) — the cron queries this table to find due alerts
+
+## Implementation Notes
+
+- `NotificationModal.tsx` should open as one Framer Motion drawer transition. Do not gate cached drawer content behind `onAnimationComplete`; show skeleton rows only while the notification query is genuinely loading, otherwise the open reads as a two-step motion.

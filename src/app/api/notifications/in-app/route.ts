@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 // Notification types (maps to notification_type_enum in database)
 export type NotificationType =
   | "daily_reminder"
+  | "daily_items_summary"
   | "weekly_summary"
   | "monthly_summary"
   | "budget_warning"
@@ -153,9 +154,27 @@ export async function GET(request: NextRequest) {
 
   // Get unread count (excluding auto-archived)
   let unreadCount = 0;
+  let hasUrgentUnread = false;
   if (autoArchiveHours > 0) {
     // Count manually since we filtered in memory
-    unreadCount = notifications?.filter((n) => !n.is_read).length || 0;
+    const unread = notifications?.filter((n) => !n.is_read) || [];
+    unreadCount = unread.length;
+    hasUrgentUnread = unread.some((n) => n.priority === "urgent");
+  } else if (limit === 0) {
+    // Lightweight metadata-only call (the bell): fetch just enough columns to
+    // derive both the count and whether any unread notification is urgent,
+    // in one round trip instead of a separate head-count query.
+    const { data: unreadRows } = await supabase
+      .from("notifications")
+      .select("priority")
+      .eq("user_id", user.id)
+      .eq("is_dismissed", false)
+      .eq("is_read", false)
+      .is("action_completed_at", null)
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
+      .or(`snoozed_until.is.null,snoozed_until.lte.${now}`);
+    unreadCount = unreadRows?.length || 0;
+    hasUrgentUnread = unreadRows?.some((n) => n.priority === "urgent") || false;
   } else {
     const { count } = await supabase
       .from("notifications")
@@ -172,6 +191,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     notifications: notifications || [],
     unread_count: unreadCount,
+    has_urgent_unread: hasUrgentUnread,
   });
 }
 

@@ -98,7 +98,9 @@ export function useInAppNotifications(options?: {
 // Alias for backward compatibility
 export const useNotifications = useInAppNotifications;
 
-// Get just the unread count (lightweight query)
+// Get just the unread count (lightweight query). Also reports whether any
+// unread notification is urgent, so the bell can reserve red for genuine
+// urgency instead of using it as the default unread color (calm-by-default).
 export function useUnreadNotificationCount() {
   return useQuery({
     queryKey: notificationKeys.unreadCount(),
@@ -108,7 +110,10 @@ export function useUnreadNotificationCount() {
       );
       if (!res.ok) throw new Error("Failed to fetch notification count");
       const data = await res.json();
-      return data.unread_count as number;
+      return {
+        count: data.unread_count as number,
+        hasUrgent: Boolean(data.has_urgent_unread),
+      };
     },
     staleTime: 15000, // 15 seconds
     refetchInterval: 30000, // Poll every 30 seconds
@@ -517,6 +522,8 @@ export function getActionRoute(notification: Notification): string | null {
 
   // Map notification types to routes
   switch (notification.notification_type) {
+    case "daily_items_summary":
+      return "/reminders"; // Standalone page
     case "daily_reminder":
     case "transaction_pending":
       return "/expense"; // Tab: expense
@@ -613,6 +620,12 @@ export function getQuickActions(notification: Notification): QuickAction[] {
   const t = notification.notification_type;
 
   switch (t) {
+    case "daily_items_summary":
+      return [
+        { id: "open", label: "Open", icon: "eye", variant: "primary" },
+        { id: "dismiss", label: "Dismiss", icon: "x", variant: "muted", closesNotification: true },
+      ];
+
     case "daily_reminder":
       return [
         { id: "log_transaction", label: "Log Now", icon: "send", variant: "primary" },

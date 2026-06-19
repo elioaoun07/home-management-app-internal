@@ -360,7 +360,7 @@ export async function GET(req: NextRequest) {
         .from("notifications")
         .insert({
           user_id: userId,
-          notification_type: "daily_reminder",
+          notification_type: "daily_items_summary",
           title,
           message,
           icon,
@@ -368,7 +368,7 @@ export async function GET(req: NextRequest) {
           source: "system",
           priority: isMorning ? "normal" : "high",
           action_type: "confirm",
-          action_url: "/items",
+          action_url: "/reminders",
           expires_at: new Date(
             now.getTime() + 24 * 60 * 60 * 1000,
           ).toISOString(),
@@ -427,9 +427,9 @@ export async function GET(req: NextRequest) {
           badge: "/appicon-192.png",
           tag: `daily-items-reminder-${todayUTC}-${matchedSlot.replace(/:/g, "")}`,
           data: {
-            type: "daily_reminder",
+            type: "daily_items_summary",
             notification_id: notification.id,
-            action_url: "/items",
+            action_url: "/reminders",
           },
         });
 

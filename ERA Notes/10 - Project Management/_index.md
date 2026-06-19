@@ -30,6 +30,7 @@ tags:
 | **Kitchen** (Recipes · Meal · Inventory · Shopping) | [Kitchen/](<Kitchen/_index.md>) |
 | **Trips** (lifecycle travel junction) | [Trips/](<Trips/_index.md>) |
 | **Hub & ERA** (Hub Chat · AI Assistant · Voice) | [Hub & ERA/](<Hub & ERA/_index.md>) |
+| **Notifications & Alerts** (bell · drawer · alerts page · system notifs) | [Notifications & Alerts/](<Notifications & Alerts/_index.md>) |
 
 > Each module folder mirrors this set at module scope: `1 - Feature State`, `2 - Future Vision & Roadmap`, `3 - Current — Action Plan`, `_index` — plus a **`FABLED/`** deep-dive folder (added 2026-06-10): current implementation X-ray, ranked gaps, optimization plan, future enhancements. Files 1–3 stay short and current; FABLED holds the depth and is re-audited per campaign.
 

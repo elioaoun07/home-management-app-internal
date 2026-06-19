@@ -58,7 +58,16 @@
       "Bash(grep -Hm1 \"^description:\" .claude/skills/*/SKILL.md)",
       "Bash(ls .claude/skills)",
       "Bash(cd \"C:/Users/aoune/WebApp/budget-app\")",
-      "Bash(seq 1 30)"
+      "Bash(seq 1 30)",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"npx playwright\")",
+      "Bash(cd \"C:\\\\Users\\\\aoune\\\\WebApp\\\\budget-app\")",
+      "Bash(grep -q \"Ready in\\\\|started server\" /tmp/dev-server.log)",
+      "Bash(break)",
+      "Bash(sleep 1)",
+      "Bash(cat /tmp/dev-server.log)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(npx playwright *)"
     ]
   }
 }

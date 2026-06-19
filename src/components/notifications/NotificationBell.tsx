@@ -1,10 +1,11 @@
 /**
  * NotificationBell Component
- * Animated notification bell with badge counter
+ * Calm, ambient notification bell with badge counter.
  * Features:
- * - Pulse animation when there are new notifications
+ * - Finite on-arrival ring (plays once when a new notification lands, then rests)
+ * - Honors prefers-reduced-motion (static dot/count, no animation)
  * - Checkmark celebration when all caught up
- * - Badge with unread count
+ * - Calmer themed badge color; red reserved for genuinely urgent unread
  */
 "use client";
 
@@ -13,7 +14,7 @@ import { useUnreadNotificationCount } from "@/hooks/useNotifications";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type NotificationBellProps = {
   onClick?: () => void;
@@ -26,20 +27,45 @@ export default function NotificationBell({
   className,
   size = 22,
 }: NotificationBellProps) {
-  const { data: unreadCount = 0, isLoading } = useUnreadNotificationCount();
+  const { data, isLoading } = useUnreadNotificationCount();
+  const unreadCount = data?.count ?? 0;
+  const hasUrgent = data?.hasUrgent ?? false;
   const [showCelebration, setShowCelebration] = useState(false);
-  const [prevCount, setPrevCount] = useState<number | null>(null);
+  const [justArrived, setJustArrived] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const prevCountRef = useRef<number | null>(null);
   const themeClasses = useThemeClasses();
 
-  // Detect when we go from having notifications to being caught up
   useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // Detect when we go from having notifications to being caught up,
+  // and when a *new* notification arrives (count went up) — the only
+  // moment the bell should animate. Merely staying unread stays at rest.
+  useEffect(() => {
+    const prevCount = prevCountRef.current;
+
     if (prevCount !== null && prevCount > 0 && unreadCount === 0) {
       setShowCelebration(true);
+      prevCountRef.current = unreadCount;
       const timer = setTimeout(() => setShowCelebration(false), 2000);
       return () => clearTimeout(timer);
     }
-    setPrevCount(unreadCount);
-  }, [unreadCount, prevCount]);
+
+    if (prevCount !== null && unreadCount > prevCount && !reducedMotion) {
+      setJustArrived(true);
+      prevCountRef.current = unreadCount;
+      const timer = setTimeout(() => setJustArrived(false), 1000);
+      return () => clearTimeout(timer);
+    }
+
+    prevCountRef.current = unreadCount;
+  }, [unreadCount, reducedMotion]);
 
   const hasNotifications = unreadCount > 0;
 
@@ -57,13 +83,17 @@ export default function NotificationBell({
         themeClasses.bgHover,
         className
       )}
-      aria-label={`Notifications${hasNotifications ? ` (${unreadCount} unread)` : ""}`}
+      aria-label={
+        hasNotifications
+          ? `Notifications, ${unreadCount} unread${hasUrgent ? ", urgent" : ""}`
+          : "Notifications, all caught up"
+      }
     >
-      {/* Bell Icon with animation */}
+      {/* Bell Icon — rings once on arrival, then rests (calm, not an alarm) */}
       <div
         className={cn(
           "relative transition-transform duration-300 flex items-center justify-center",
-          hasNotifications && "animate-notification-ring"
+          justArrived && "animate-notification-ring"
         )}
       >
         {showCelebration ? (
@@ -87,15 +117,16 @@ export default function NotificationBell({
           />
         )}
 
-        {/* Notification dot/badge */}
+        {/* Notification dot/badge — calm themed accent; red only when genuinely urgent */}
         {hasNotifications && !showCelebration && (
           <span
             className={cn(
               "absolute -top-1 -right-1 flex items-center justify-center",
-              "min-w-[16px] h-[16px] px-1 rounded-full",
-              "bg-red-500 text-white text-[9px] font-bold",
-              "shadow-lg shadow-red-500/40",
-              "animate-notification-badge"
+              "min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold",
+              hasUrgent
+                ? "bg-red-500 text-white shadow-lg shadow-red-500/40"
+                : `${themeClasses.badgeBg} ${themeClasses.badgeText} shadow-md shadow-black/20`,
+              !reducedMotion && "animate-notification-badge"
             )}
           >
             {unreadCount > 99 ? "99+" : unreadCount}
@@ -112,11 +143,6 @@ export default function NotificationBell({
           </div>
         )}
       </div>
-
-      {/* Pulse ring effect when there are notifications */}
-      {hasNotifications && (
-        <span className="absolute inset-0 rounded-lg animate-notification-pulse bg-primary/20 pointer-events-none" />
-      )}
 
       {/* Loading indicator */}
       {isLoading && (

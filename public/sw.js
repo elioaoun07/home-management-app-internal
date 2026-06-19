@@ -1,7 +1,7 @@
 // Service Worker for Push Notifications + Offline Caching
 // Handles push events, displays notifications with alarm-like behavior, and caches app shell
 
-const SW_VERSION = "5.2.0";
+const SW_VERSION = "5.3.0";
 
 // Minimal loading shell served immediately when no cached HTML is available.
 // Embedded directly in the SW bundle — never lost even when Cache Storage is cleared by iOS.
@@ -525,6 +525,17 @@ self.addEventListener("push", (event) => {
       },
       { action: "snooze_1h", title: "⏰ Later", icon: "/appicon-192.png" },
     ];
+  } else if (notifType === "daily_items_summary") {
+    // Daily items/reminders summary → gentle vibration, opens /reminders
+    options.vibrate = [200, 100, 200];
+    options.actions = [
+      {
+        action: "open_reminders",
+        title: "👁️ Open",
+        icon: "/appicon-192.png",
+      },
+      { action: "dismiss", title: "✓ Dismiss", icon: "/appicon-192.png" },
+    ];
   } else if (
     notifType === "item_reminder" ||
     notifType === "item_due" ||
@@ -694,6 +705,10 @@ self.addEventListener("notificationclick", (event) => {
     event.waitUntil(handleCompleteItem(data));
     return;
   }
+  if (action === "open_reminders") {
+    event.waitUntil(openApp({ ...data, url: "/reminders" }));
+    return;
+  }
   if (action === "open_item") {
     const itemId = data.item_id;
     event.waitUntil(
@@ -751,6 +766,9 @@ self.addEventListener("notificationclick", (event) => {
   if (notifType === "transaction_reminder" || notifType === "daily_reminder") {
     // Open expense tab (the main entry form)
     event.waitUntil(openApp({ ...data, url: "/expense" }));
+  } else if (notifType === "daily_items_summary") {
+    // Open the standalone Reminders page
+    event.waitUntil(openApp({ ...data, url: "/reminders" }));
   } else if (
     notifType === "item_reminder" ||
     notifType === "item_due" ||
