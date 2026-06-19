@@ -38,7 +38,7 @@ tags:
 | Sub-feature | Tier | Reality / known gaps | Next step |
 |---|---|---|---|
 | **Fixed reminders / events** | 🟢 Core | One-shot `reminder_details.due_at` / `event_details.start_at`. The plain, daily path. Mobile quick + full forms, desktop dialog. | — (stable) |
-| **RRULE recurring** | 🟢 Core | `item_recurrence_rules.rrule` expanded against `start_anchor` (the DTSTART). Wall-clock DST adjustment. Bi-weekly detect + phase-flip. Per-occurrence actions in `item_occurrence_actions`; exceptions in `item_recurrence_exceptions`. Expansion unit-tested ✅ (`lib/schedule/expandOccurrences.test.ts`, verified 2026-06-10); **occurrence-action logic still untested**. | Unit-test occurrence actions + exception/skip ([FABLED O1](<FABLED/3 - FABLED — Optimization Plan.md>)). |
+| **RRULE recurring** | 🟢 Core | `item_recurrence_rules.rrule` expanded against `start_anchor` (the DTSTART). Wall-clock DST adjustment. Bi-weekly detect + phase-flip. Per-occurrence actions in `item_occurrence_actions`; exceptions in `item_recurrence_exceptions`. Expansion unit-tested ✅ (`lib/schedule/expandOccurrences.test.ts`) — but ⚠️ **that tested engine is wired to nothing**; live screens run untested inline / `dayOccurrences.ts` paths that diverge. **🔴 Occurrence "Skip" is mislabelled — it postpones onto the next slot and duplicates the occurrence (found 2026-06-19).** Full audit → [PI&P 7](<Pain Inventory & Plan/7 - Recurrence & Occurrence Actions — Pain & Refactor Plan.md>). | Fix Skip/postpone semantics + unify the 3 engines ([PI&P 7](<Pain Inventory & Plan/7 - Recurrence & Occurrence Actions — Pain & Refactor Plan.md>)); then unit-test occurrence actions. |
 | **Flexible routines** | 🔵 Established | "N times per period" with user-picked days (`item_flexible_schedules`). Universal placement rule: when `is_flexible`, **all views ignore the rrule** and inject schedule rows. Overdue look-back ≤3 periods. | Guard the placement rule with a test; it silently breaks new views. |
 | **Subtasks** | 🔵 Established | Kanban, priority, nested. `ItemSubtasks.tsx` + toggle/add/delete/update hooks. | — (stable) |
 | **Alerts** | 🔵 Established | `SmartAlertPicker` (absolute/relative, repeat, channels) → `item_alerts`; fired by the `item-reminders` cron. Soft-delete/archive must deactivate alerts; cancelled occurrences suppressed via `item_alert_suppressions`. | Watch for missed-suppression edge cases. |
@@ -63,9 +63,9 @@ Do **not** duplicate file-path tables here — they drift. The authoritative cod
 
 ## The honest weak-link summary
 
-_(Updated 2026-05-30)_
+_(Updated 2026-06-19)_
 
-1. **The recurrence + occurrence-action math is untested.** Skip/postpone/complete at the occurrence level and RRULE expansion are the trickiest logic in the module and have no unit coverage. This is the highest-risk gap.
+1. **Recurrence + occurrence-action correctness is the top weak-link — and now has a confirmed 🔴 bug.** "Skip" is mislabelled and actually postpones a recurring occurrence onto its next slot, duplicating it; no true per-occurrence Skip is wired. Underneath sits a structural mess — **three diverging expansion engines** (the unit-tested one is wired to nothing) and **two action UIs** that disagree. This is the highest-risk gap. Full audit + staged fix → [PI&P 7 · Recurrence & Occurrence Actions](<Pain Inventory & Plan/7 - Recurrence & Occurrence Actions — Pain & Refactor Plan.md>).
 2. **The universal placement rule is enforced by convention, not by a test.** Every new date-surfacing view must `continue` on flexible items and inject schedule rows; forget it and flexible items land on the activation day. A single guard test would prevent the whole class of bug.
 3. **Prerequisites is half-built** — 4 evaluators advertised but inert (`weather`, `time_window`, `schedule`, `custom_formula`).
 4. **`useItems.ts` is ~2,621 LOC** — a change-risk hotspot. Don't refactor for its own sake; split when next touched.

@@ -113,7 +113,27 @@ tags:
 
 ---
 
+## Cluster 5 — Recurrence & occurrence-action correctness *(technical — added 2026-06-19)*
+
+> This is what makes "recurring items feel like a mess." The DB model is sound (`item_occurrence_actions` cleanly distinguishes completed/postponed/cancelled/skipped); the damage is entirely in the UI + expansion layers, which are **duplicated and disagree**. Full audit + staged fix in [7 · Recurrence & Occurrence Actions](<7 - Recurrence & Occurrence Actions — Pain & Refactor Plan.md>). This makes Cluster 4 weak-link #1 *concrete*.
+
+| Pain | Why it hurts | Root cause | Evidence | Sev |
+|---|---|---|---|---|
+| **"Skip" is secretly "postpone to next occurrence" → duplicates** | Skipping a missed Sunday "moves" it onto this Sunday, so the week shows the normal occurrence **plus** a "Postponed" copy. Postponing a recurring slot onto its own next slot can never be right — the series already lands there. | A recurring-only button labelled "Skip to next occurrence" calls `handlePostpone("next_occurrence")` → `addWeeks(date,1)` → `postponed` action. No true per-occurrence Skip is wired. | calendar: [WebEvents.tsx:1864-1880](<../../../../src/components/web/WebEvents.tsx>); sheet: [ItemActionsSheet.tsx:380-385](<../../../../src/components/items/ItemActionsSheet.tsx>); handler: [useItemActions.ts:934-993](<../../../../src/features/items/useItemActions.ts>) | 🔴 |
+| **Real "Skip This Time" writes `cancelled`, not `skipped`** | Silently corrupts skip vs cancel analytics **and** breaks flexible-routine overdue accounting, which keys specifically on `skipped`. | `ItemActionsSheet` has no `onSkip` prop; "Skip This Time" calls `onCancel`. The correct `handleSkip`/`useSkipItem` path is dead code. | [ItemActionsSheet.tsx:758-780](<../../../../src/components/items/ItemActionsSheet.tsx>); unused [useItemActions.ts:457-518](<../../../../src/features/items/useItemActions.ts>) | 🟠 |
+| **Three diverging expansion engines** | The same item renders differently per screen. `/reminders` & Today ignore exceptions, pauses, `rescheduled_to`, and per-occurrence overrides — so an edited/paused/moved occurrence is right on the calendar but wrong on `/reminders`. | `WebCalendar` inline (complete) vs `dayOccurrences.ts` (partial) vs `schedule/expandOccurrences.ts` (canonical, tested, **wired to nothing**). | [dayOccurrences.ts](<../../../../src/lib/utils/dayOccurrences.ts>), [expandOccurrences.ts](<../../../../src/lib/schedule/expandOccurrences.ts>), `WebCalendar.tsx:326-569` | 🟠 |
+| **The tested engine isn't the used engine** | False confidence: parent file 1 calls expansion "unit-tested ✅," but the test covers `expandOccurrences.ts`, which no surface imports. The screens run untested paths. | Canonical engine built + tested but never migrated onto. | `expandOccurrences.test.ts` vs zero imports of `expandOccurrencesForRange` | 🟠 |
+| **Two diverging action UIs** | Calendar (inline modal/dialog in `WebEvents`) and planner/detail (`ItemActionsSheet`) offer different labels/actions; both shipped the next-occurrence trap. | Organic growth — no shared occurrence-action component. | `WebEvents.tsx:1238-1398, 1842-2052` vs `ItemActionsSheet.tsx` | 🟠 |
+| **Completed items can't be hidden on `/reminders`** | Completed occurrences pile up dimmed in the day list with no toggle — the page never feels "clean." | `WebDayPlanner` renders completed inline; no `showCompleted` (the calendar has one). | `WebDayPlanner.tsx:1114-1205, 1845-1862`; pattern at `WebCalendar.tsx:167,777-801` | 🟡 |
+| **Two representations of "move one occurrence"** | Recurring moves are modelled as both a `postponed` action and a `rescheduled_to` exception; the canonical engine only understands the exception dialect, the live UI writes the action dialect. | Legacy postpone path never converged onto exceptions. | `item_occurrence_actions.postponed_to` vs `item_recurrence_exceptions.override_payload_json.rescheduled_to` | 🟡 |
+
+> **Decision (2026-06-19):** adopt the **Google/Outlook-standard** model — drop "next occurrence" entirely; recurring occurrence = Complete / Skip this occurrence / Move to a date / Edit this / Edit-or-Delete series; "Cancel" only for one-off items. Staged plan in file 7.
+
+---
+
 ## 🎯 Top 5 pains, ranked *(the at-a-glance scope)*
+
+> **New top live blocker (2026-06-19): 🔴 "Skip" duplicates recurring occurrences.** The action labelled "Skip" actually postpones onto the next slot and creates a second copy; no true per-occurrence Skip is wired anywhere. This is now the #1 correctness issue, ahead of the capture-friction item below. Full audit + staged fix → [7 · Recurrence & Occurrence Actions](<7 - Recurrence & Occurrence Actions — Pain & Refactor Plan.md>). *(Cluster 5)*
 
 1. ✅ ~~**🔴 Partner can't edit shared items (403, creator-only).**~~ *(FIXED 2026-05-31)* Aligned app-level guard via `canMutateItem()`. *(Cluster 1)*
 2. ✅ ~~**🔴 Can't take an item back / reassign in both directions.**~~ *(FIXED 2026-06-06)* "Pass to partner" + "Take it back" one-tap actions in `ItemActionsSheet`. *(Cluster 1)*

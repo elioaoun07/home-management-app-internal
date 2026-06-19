@@ -23,6 +23,7 @@ tags:
 | 4   | [Type Taxonomy & Mobile Form Refactor](<4 - Type Taxonomy & Mobile Form Refactor.md>) | You want the "what are Task/Reminder/Event/Chore?" answer + the `/expense` form refactor. |
 | 5   | [My Plan Reconciliation & Harmonized Scope](<5 - My Plan Reconciliation & Harmonized Scope.md>) | You want to know how the external `0 - My Plan.MD` brief maps onto app reality — what's in harmony, reshaped, deferred, or won't-do. |
 | 6   | [Master Build Checklist](<6 - Master Build Checklist.md>) | You're ready to build and want the single phased, checkable list of every pending item — point at a line, group, or phase. |
+| 7   | [Recurrence & Occurrence Actions — Pain & Refactor Plan](<7 - Recurrence & Occurrence Actions — Pain & Refactor Plan.md>) | You hit the "Skip duplicated my recurring item" / "recurring feels messy" bug — the code-confirmed root cause, the three diverging expansion engines, and the staged fix. |
 
 ## How to use this set
 
