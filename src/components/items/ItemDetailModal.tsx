@@ -273,6 +273,7 @@ export default function ItemDetailModal({
     handleComplete: doComplete,
     handlePostpone: doPostpone,
     handleCancel: doCancel,
+    handleSkip: doSkip,
     handleDelete: doDelete,
   } = useItemActionsWithToast();
 
@@ -411,6 +412,16 @@ export default function ItemDetailModal({
       setTimeout(onClose, 200);
     },
     [doCancel, getOccurrenceDate, item, onClose],
+  );
+
+  const handleSkipAction = useCallback(
+    async (reason?: string) => {
+      setShowActionsSheet(false);
+      setIsClosing(true);
+      await doSkip(item, getOccurrenceDate(), reason);
+      setTimeout(onClose, 200);
+    },
+    [doSkip, getOccurrenceDate, item, onClose],
   );
 
   const handleDeleteWithActions = useCallback(async () => {
@@ -945,10 +956,10 @@ export default function ItemDetailModal({
                   {isRecurring && (
                     <button
                       type="button"
-                      onClick={() => handleQuickPostpone("next_occurrence")}
+                      onClick={() => handleSkipAction()}
                       className="flex-1 py-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
                     >
-                      ⏭ Next Time
+                      ⏭ Skip
                     </button>
                   )}
                 </div>
@@ -970,6 +981,7 @@ export default function ItemDetailModal({
           onComplete={handleCompleteAction}
           onPostpone={handlePostponeAction}
           onCancel={handleCancelAction}
+          onSkip={handleSkipAction}
           onDelete={handleDeleteWithActions}
           onReverseRecurrence={handleReverseRecurrence}
         />

@@ -10,6 +10,8 @@ import FilterBar, {
 import WebDayPlanner, { type PlannerToolbarState } from "@/components/planner/WebDayPlanner";
 import {
   AlertBellIcon,
+  EyeIcon,
+  EyeOffIcon,
   SparklesIcon,
 } from "@/components/icons/FuturisticIcons";
 import RemindersInsightsPage from "@/components/reminder/RemindersInsightsPage";
@@ -83,6 +85,7 @@ export default function RemindersStandalonePage() {
     initialDate ? parseISO(initialDate) : new Date(),
   );
   const [showOverdue, setShowOverdue] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [planningCommandToken, setPlanningCommandToken] = useState(0);
   const [plannerToolbar, setPlannerToolbar] = useState<PlannerToolbarState>(
     DEFAULT_PLANNER_TOOLBAR_STATE,
@@ -108,6 +111,7 @@ export default function RemindersStandalonePage() {
 
   useEffect(() => {
     setMounted(true);
+    setShowCompleted(localStorage.getItem("reminders-show-completed") === "1");
     const fetchUser = async () => {
       const supabase = supabaseBrowser();
       const {
@@ -116,6 +120,14 @@ export default function RemindersStandalonePage() {
       if (user?.id) setCurrentUserId(user.id);
     };
     fetchUser();
+  }, []);
+
+  const toggleShowCompleted = useCallback(() => {
+    setShowCompleted((prev) => {
+      const next = !prev;
+      localStorage.setItem("reminders-show-completed", next ? "1" : "0");
+      return next;
+    });
   }, []);
 
   const handleToolbarStateChange = useCallback((next: PlannerToolbarState) => {
@@ -243,6 +255,29 @@ export default function RemindersStandalonePage() {
                   </span>
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator.vibrate) navigator.vibrate(5);
+                  toggleShowCompleted();
+                }}
+                className={cn(
+                  "relative p-1.5 rounded-lg transition-colors flex-shrink-0",
+                  showCompleted
+                    ? `${themeClasses.bgActive} ${themeClasses.textActive}`
+                    : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                )}
+                title={showCompleted ? "Hide completed" : "Show completed"}
+                aria-label={showCompleted ? "Hide completed" : "Show completed"}
+                aria-pressed={showCompleted}
+              >
+                {showCompleted ? (
+                  <EyeIcon className="w-4 h-4" />
+                ) : (
+                  <EyeOffIcon className="w-4 h-4" />
+                )}
+              </button>
             </>
           ) : null
         }
@@ -255,6 +290,7 @@ export default function RemindersStandalonePage() {
           selectedDate={selectedDate}
           onSelectedDateChange={setSelectedDate}
           showOverdue={showOverdue}
+          showCompleted={showCompleted}
           planningCommandToken={planningCommandToken}
           onToolbarStateChange={handleToolbarStateChange}
           userFilter={userFilter}

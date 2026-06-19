@@ -12,7 +12,7 @@ import {
 } from "@/hooks/useHouseholdMembers";
 import type { ItemWithDetails } from "@/types/items";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addDays, addWeeks, parseISO } from "date-fns";
+import { addDays, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { itemsKeys } from "./useItems";
 
@@ -21,11 +21,7 @@ import { itemsKeys } from "./useItems";
 // ============================================
 
 export type ActionType = "completed" | "postponed" | "cancelled" | "skipped";
-export type PostponeType =
-  | "next_occurrence"
-  | "tomorrow"
-  | "custom"
-  | "ai_slot";
+export type PostponeType = "tomorrow" | "custom" | "ai_slot";
 
 export interface ItemOccurrenceAction {
   id: string;
@@ -86,38 +82,6 @@ export interface ItemStats {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
-/**
- * Calculate the next occurrence date based on recurrence rule
- */
-export function calculateNextOccurrence(
-  currentDate: string,
-  rrule: string,
-): string {
-  const date = parseISO(currentDate);
-
-  if (rrule.includes("FREQ=DAILY")) {
-    return addDays(date, 1).toISOString();
-  }
-  if (rrule.includes("FREQ=WEEKLY")) {
-    const interval = rrule.match(/INTERVAL=(\d+)/)?.[1];
-    const weeks = interval ? parseInt(interval) : 1;
-    return addWeeks(date, weeks).toISOString();
-  }
-  if (rrule.includes("FREQ=MONTHLY")) {
-    const newDate = new Date(date);
-    newDate.setMonth(newDate.getMonth() + 1);
-    return newDate.toISOString();
-  }
-  if (rrule.includes("FREQ=YEARLY")) {
-    const newDate = new Date(date);
-    newDate.setFullYear(newDate.getFullYear() + 1);
-    return newDate.toISOString();
-  }
-
-  // Default: add 1 day
-  return addDays(date, 1).toISOString();
-}
 
 /**
  * Calculate tomorrow at the same time
@@ -945,12 +909,7 @@ export function useItemActionsWithToast() {
     let postponedTo: string | undefined;
 
     // Calculate postponed_to based on type
-    if (postponeType === "next_occurrence" && item.recurrence_rule?.rrule) {
-      postponedTo = calculateNextOccurrence(
-        occurrenceDate,
-        item.recurrence_rule.rrule,
-      );
-    } else if (postponeType === "tomorrow") {
+    if (postponeType === "tomorrow") {
       postponedTo = customDate ?? calculateTomorrowSameTime(occurrenceDate);
     } else if (postponeType === "custom" && customDate) {
       postponedTo = customDate;
@@ -967,13 +926,11 @@ export function useItemActionsWithToast() {
       });
 
       const label =
-        postponeType === "next_occurrence"
-          ? "next occurrence"
-          : postponeType === "tomorrow"
-            ? "tomorrow"
-            : postponeType === "custom" && postponedTo
-              ? new Date(postponedTo).toLocaleDateString()
-              : "later";
+        postponeType === "tomorrow"
+          ? "tomorrow"
+          : postponeType === "custom" && postponedTo
+            ? new Date(postponedTo).toLocaleDateString()
+            : "later";
 
       toast.success(`"${item.title}" postponed to ${label}`, {
         action: {

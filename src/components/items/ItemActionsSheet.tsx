@@ -61,19 +61,6 @@ const Trash2Icon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const FastForwardIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <polygon points="13 19 22 12 13 5 13 19" />
-    <polygon points="2 19 11 12 2 5 2 19" />
-  </svg>
-);
-
 const CalendarIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
@@ -206,7 +193,7 @@ const FocusTargetIcon = ({ className }: { className?: string }) => (
 );
 
 type PostponeOption = {
-  id: "next_occurrence" | "tomorrow" | "custom" | "ai_slot";
+  id: "tomorrow" | "custom" | "ai_slot";
   label: string;
   sublabel?: string;
   icon: React.FC<{ className?: string }>;
@@ -219,11 +206,14 @@ type Props = {
   isOpen: boolean;
   onClose: () => void;
   onComplete: (reason?: string) => void;
-  onPostpone: (
-    type: "next_occurrence" | "tomorrow" | "custom" | "ai_slot",
-    reason?: string,
-  ) => void;
+  onPostpone: (type: "tomorrow" | "custom" | "ai_slot", reason?: string) => void;
   onCancel: (reason?: string) => void;
+  /**
+   * Skip this occurrence — recurring items only. Records `skipped` (not
+   * `cancelled`) and creates no new occurrence. Shown instead of Cancel
+   * when the item is recurring.
+   */
+  onSkip?: (reason?: string) => void;
   onDelete: () => void;
   onReverseRecurrence?: () => void;
   /** Edit the whole item / series. Shown for every item. */
@@ -247,6 +237,7 @@ export default function ItemActionsSheet({
   onComplete,
   onPostpone,
   onCancel,
+  onSkip,
   onDelete,
   onReverseRecurrence,
   onEdit,
@@ -270,10 +261,10 @@ export default function ItemActionsSheet({
   const [customDate, setCustomDate] = useState("");
   const [customTime, setCustomTime] = useState("");
   const [pendingAction, setPendingAction] = useState<
-    "complete" | "cancel" | "postpone" | null
+    "complete" | "cancel" | "skip" | "postpone" | null
   >(null);
   const [pendingPostponeType, setPendingPostponeType] = useState<
-    "next_occurrence" | "tomorrow" | "custom" | "ai_slot" | null
+    "tomorrow" | "custom" | "ai_slot" | null
   >(null);
   const sheetRef = useRef<HTMLDivElement>(null);
 
@@ -323,20 +314,25 @@ export default function ItemActionsSheet({
     setShowReasonInput(true);
   };
 
+  const handleSkipClick = () => {
+    setPendingAction("skip");
+    setShowReasonInput(true);
+  };
+
   const handleReasonSubmit = () => {
     if (pendingAction === "complete") {
       onComplete(reason || undefined);
     } else if (pendingAction === "cancel") {
       onCancel(reason || undefined);
+    } else if (pendingAction === "skip") {
+      onSkip?.(reason || undefined);
     } else if (pendingAction === "postpone" && pendingPostponeType) {
       onPostpone(pendingPostponeType, reason || undefined);
     }
     handleClose();
   };
 
-  const handlePostponeSelect = (
-    type: "next_occurrence" | "tomorrow" | "custom" | "ai_slot",
-  ) => {
+  const handlePostponeSelect = (type: "tomorrow" | "custom" | "ai_slot") => {
     if (type === "custom") {
       // Show date picker instead of reason input
       setShowPostponeOptions(false);
@@ -377,12 +373,6 @@ export default function ItemActionsSheet({
 
   const postponeOptions: PostponeOption[] = isRecurring
     ? [
-        {
-          id: "next_occurrence",
-          label: "Next Occurrence",
-          sublabel: "Skip this time, mark as incomplete",
-          icon: FastForwardIcon,
-        },
         {
           id: "tomorrow",
           label: "Tomorrow Same Time",
@@ -486,7 +476,9 @@ export default function ItemActionsSheet({
                   ? "Add a note (optional)"
                   : pendingAction === "postpone"
                     ? "Why was this postponed? (optional)"
-                    : "Reason for cancelling (optional)"}
+                    : pendingAction === "skip"
+                      ? "Reason for skipping (optional)"
+                      : "Reason for cancelling (optional)"}
               </span>
             </div>
             <textarea
@@ -523,14 +515,18 @@ export default function ItemActionsSheet({
                     ? "bg-amber-500 hover:bg-amber-600"
                     : pendingAction === "cancel"
                       ? "bg-red-500 hover:bg-red-600"
-                      : "bg-green-500 hover:bg-green-600",
+                      : pendingAction === "skip"
+                        ? "bg-orange-500 hover:bg-orange-600"
+                        : "bg-green-500 hover:bg-green-600",
                 )}
               >
                 {pendingAction === "postpone"
                   ? "Postpone"
                   : pendingAction === "cancel"
                     ? "Cancel Item"
-                    : "Complete"}
+                    : pendingAction === "skip"
+                      ? "Skip"
+                      : "Complete"}
               </button>
             </div>
           </div>
@@ -755,29 +751,48 @@ export default function ItemActionsSheet({
               <ChevronDownIcon className="w-5 h-5 text-white/40 -rotate-90" />
             </button>
 
-            {/* Cancel (This Occurrence) Button */}
-            <button
-              type="button"
-              onClick={handleCancelClick}
-              className={cn(
-                "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
-                "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
-              )}
-            >
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-orange-500/20">
-                <XIcon className="w-5 h-5 text-orange-400" />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-white font-medium">
-                  {isRecurring ? "Skip This Time" : "Cancel"}
-                </p>
-                <p className="text-sm text-white/50">
-                  {isRecurring
-                    ? "Mark this occurrence as skipped"
-                    : "Cancel this item"}
-                </p>
-              </div>
-            </button>
+            {/* Skip this occurrence (recurring) / Cancel (one-off) */}
+            {isRecurring ? (
+              onSkip && (
+                <button
+                  type="button"
+                  onClick={handleSkipClick}
+                  className={cn(
+                    "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
+                    "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
+                  )}
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-orange-500/20">
+                    <XIcon className="w-5 h-5 text-orange-400" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-white font-medium">
+                      Skip this occurrence
+                    </p>
+                    <p className="text-sm text-white/50">
+                      Mark as skipped — nothing rescheduled
+                    </p>
+                  </div>
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={handleCancelClick}
+                className={cn(
+                  "w-full flex items-center gap-4 p-4 rounded-xl transition-all",
+                  "bg-white/5 hover:bg-white/10 active:scale-[0.98]",
+                )}
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-orange-500/20">
+                  <XIcon className="w-5 h-5 text-orange-400" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-white font-medium">Cancel</p>
+                  <p className="text-sm text-white/50">Cancel this item</p>
+                </div>
+              </button>
+            )}
 
             {/* Edit (this occurrence — recurring only) */}
             {isRecurring && onEditOccurrence && (

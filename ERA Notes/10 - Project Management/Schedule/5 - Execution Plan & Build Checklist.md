@@ -26,7 +26,7 @@ tags:
 
 **The pain is mapped ([file 1](<1 - Feature State & Pain Inventory.md>)). The directions are set ([file 2](<2 - Vision, Target Design & Decisions.md>)). The design substrate is ready ([file 3](<3 - Type Taxonomy & Capture Design.md>)). Now execute, foundation-first.**
 
-Schedule is 🟢 Core and stable, so the danger isn't missing features — it's that its **trickiest logic (recurrence + occurrence actions + the flexible placement rule) is untested**, and four prerequisite evaluators are advertised but inert. The household-co-edit slice (the original highest-severity pain, two 🔴s) is **done**; the form-capture refactor is largely **shipped**. **The current top priority is the recurrence/occurrence-action correctness bug** — "Skip" duplicates recurring occurrences (a live 🔴, full audit + staged fix in [file 4](<4 - Recurrence & Occurrence Actions.md>)). Lock the foundation (recurrence correctness + the placement-rule/occurrence unit tests), then ship the one stub with the best value-for-effort (`time_window`), then make ERA read the time graph.
+Schedule is 🟢 Core and stable, so the danger isn't missing features — it's that its **trickiest logic (recurrence + occurrence actions + the flexible placement rule)** needed hardening, and four prerequisite evaluators are advertised but inert. The household-co-edit slice (the original highest-severity pain, two 🔴s) is **done**; the form-capture refactor is largely **shipped**. **The recurrence/occurrence-action correctness bug is fixed (2026-06-19)** — "Skip" no longer duplicates recurring occurrences (Stage 1 of [file 4](<4 - Recurrence & Occurrence Actions.md>) shipped). **The current top priority is now the one stub with the best value-for-effort (`time_window`)**, then engine unification (Stage 2), then make ERA read the time graph.
 
 This mirrors the global theme ("Stabilize, then Connect") at the module level: harden the recurrence core, then connect Schedule outward.
 
@@ -54,7 +54,7 @@ This mirrors the global theme ("Stabilize, then Connect") at the module level: h
 | W10 | Form NL quick-capture box (rule-based; pre-fills structured fields as chips) — *mostly already exists* | C3 | 🟠 | M | partly | — |
 | W11 | Hub Chat Gemini capture (one line → structured item) | C3 | 🟠 | M | partly | — |
 | W12 | NFC-from-text (Phase 2): "when I get home" → `location_context` + arrive-home prerequisite | C3 | 🟡 | M | partly | — |
-| W13 | **Recurrence/occurrence-action correctness fix** (Skip-duplicate 🔴) + engine/UI unification | C5 | 🔴 | M–H | partly | ✅ top live foundation |
+| W13 | ~~**Recurrence/occurrence-action correctness fix** (Skip-duplicate 🔴)~~ *(Stage 1 DONE 2026-06-19)* + engine/UI unification (Stage 2–3, open) | C5 | ✅→🟠 | M–H | partly | ✅ top live foundation |
 
 > **W10–W12 are refinements of W6** (the capture-path decision), scoped in [file 3 Part 2](<3 - Type Taxonomy & Capture Design.md>). They do not replace W6; the form refactor in [file 3 Part 1 §4](<3 - Type Taxonomy & Capture Design.md>) is the foundation they sit on. **W13** is the concrete form of the recurrence weak-link — see [file 4](<4 - Recurrence & Occurrence Actions.md>) for the staged plan.
 
@@ -62,7 +62,7 @@ This mirrors the global theme ("Stabilize, then Connect") at the module level: h
 
 | Candidate | Track | Impact | Effort | Foundation? |
 |---|---|---|---|---|
-| Recurrence/occurrence correctness fix (Skip + engine unify) — [file 4](<4 - Recurrence & Occurrence Actions.md>) | A | High | M–H | ✅ yes (top) |
+| ~~Recurrence/occurrence correctness fix (Skip)~~ *(Stage 1 DONE 2026-06-19)* + engine unify (Stage 2, open) — [file 4](<4 - Recurrence & Occurrence Actions.md>) | A | High | M–H | ✅ yes (top) |
 | Placement-rule guard test | A | High | S | ✅ yes |
 | Recurrence / occurrence-action unit tests | A | High | M | ✅ yes |
 | `time_window` prerequisite evaluator | A | High | S–M | — |
@@ -86,11 +86,11 @@ This mirrors the global theme ("Stabilize, then Connect") at the module level: h
 - [x] **Focus → mode (W7).** *(DONE 2026-06-06)* Retired `/focus` + `FocusPage.tsx` + `FlexibleRoutinesPool.tsx` + `ScheduleRoutineSheet.tsx`. Added `onFocus` + Focus button (crosshair) to `ItemActionsSheet` → `ItemDetailModal`. Week view's "Flexible this week" strip handles routine assignment. Atlas, Feature Index, Routes doc, vault doc updated.
 - [x] **Placement-rule guard test.** Asserts a flexible item is *not* placed via rrule and *is* placed from `item_flexible_schedules`. Prevents the "flexible item shows on activation day" class of bug across all 6+ views. → [Schedule Feature](<../../02 - Standalone Modules/Items & Reminders/Schedule Feature.md>) "Adding a New View" checklist.
 
-### 🔴 Now — Recurrence & occurrence-action correctness *(the current top priority — [file 4](<4 - Recurrence & Occurrence Actions.md>) Stage 1)*
+### ✅ Now — Recurrence & occurrence-action correctness *(Stage 1 — [file 4](<4 - Recurrence & Occurrence Actions.md>) — SHIPPED 2026-06-19)*
 
-- [ ] **W13 / Stage 1 — kill the "Skip → next occurrence" trap.** Remove the next-occurrence button on **both** surfaces (`WebEvents.tsx:1864-1880`, `ItemActionsSheet.tsx:380-385`); add a real **Skip this occurrence** (`handleSkip`/`useSkipItem`; `onSkip` on `ItemActionsSheet`; Skip control on the calendar modal); make "Cancel" appear only for one-off items; delete `calculateNextOccurrence` + the `next_occurrence` postpone type.
-- [ ] **`/reminders` show/hide-completed toggle** + collapsible "Completed (n)" section (default hide; persist in `localStorage`) — [file 4 §5](<4 - Recurrence & Occurrence Actions.md>).
-- [ ] **Recurrence + occurrence-action unit tests.** Cover RRULE expansion against `start_anchor`, exception/skip (`item_recurrence_exceptions`), and per-occurrence complete/postpone/cancel/skip (`item_occurrence_actions`). Pure-logic where possible (extract like `lib/recurring.ts` did) so no Supabase mocks. **Gates the recurrence-from-text parser (1b.4).**
+- [x] **W13 / Stage 1 — kill the "Skip → next occurrence" trap.** *(DONE 2026-06-19)* Removed on **all four** surfaces found (`WebEvents.tsx`, `ItemActionsSheet.tsx`, `WebTabletMissionControl.tsx` — found during implementation, `ItemDetailModal.tsx` quick-action row — found during implementation); real **Skip this occurrence** wired (`handleSkip`/`useSkipItem`; `onSkip` on `ItemActionsSheet` + all 4 callers; Skip control on the calendar modal + tablet mission control); "Cancel" now appears only for one-off items; `calculateNextOccurrence` + the `next_occurrence` postpone type deleted from `useItemActions.ts`.
+- [x] **`/reminders` show/hide-completed toggle** *(DONE 2026-06-19)* + collapsible "Completed (n)" section (default hide; persisted in `localStorage`) — [file 4 §5](<4 - Recurrence & Occurrence Actions.md>).
+- [x] **Recurrence + occurrence-action unit tests.** *(DONE 2026-06-19)* [dayOccurrences.test.ts](<../../../src/lib/utils/dayOccurrences.test.ts>) covers the skip/complete/move repro + dedup against the engine `/reminders` & Today actually use, plus `isOccurrenceCompleted` per action type. Pure-logic, no Supabase mocks. Full RRULE-edge-case coverage still gated behind Stage 2 (engine unification). **Gates the recurrence-from-text parser (1b.4)** — unblocked for the cases now covered.
 
 ### ⏭️ Next — Foundation + first enhancement
 
@@ -229,9 +229,10 @@ This mirrors the global theme ("Stabilize, then Connect") at the module level: h
 
 > This *is* the "Now" slice above, listed here for the checklist. **1b.4 depends on 4.1.**
 
-- [ ] **4.1** Recurrence + occurrence-action **unit tests** (highest-risk, untested logic). **Gates 1b.4.** _(M · [file 1 Cluster 5](<1 - Feature State & Pain Inventory.md>) · [file 4 Stage 1](<4 - Recurrence & Occurrence Actions.md>))_
-- [ ] **4.2** Universal placement-rule **guard test** — a forgotten skip+inject breaks flexible items everywhere. _(M)_ *(Note: a first placement-rule test shipped — see "Shipped" above; 4.2 is the broader per-view guard.)*
-- [ ] **4.3** Recurrence/occurrence **correctness + engine/UI unification** (W13) — [file 4](<4 - Recurrence & Occurrence Actions.md>) Stages 1–3. _(M–H)_
+- [x] **4.1** Recurrence + occurrence-action **unit tests** (highest-risk, untested logic). *(DONE 2026-06-19 — [dayOccurrences.test.ts](<../../../src/lib/utils/dayOccurrences.test.ts>); covers skip/complete/move + dedup, not full RRULE edge cases — those wait on Stage 2.)* **Gates 1b.4** (now partially unblocked). _(M · [file 1 Cluster 5](<1 - Feature State & Pain Inventory.md>) · [file 4 Stage 1](<4 - Recurrence & Occurrence Actions.md>))_
+- [ ] **4.2** Universal placement-rule **guard test** — a forgotten skip+inject breaks flexible items everywhere. _(M)_ *(Note: a first placement-rule test shipped — see "Shipped" above; 4.2 is the broader per-view guard. The existing guard test has a known pre-existing gap against `WebTodayView.tsx` — see [file 1 Cluster 5](<1 - Feature State & Pain Inventory.md>).)*
+- [x] **4.3a** Recurrence/occurrence **correctness — Stage 1** (W13) — [file 4](<4 - Recurrence & Occurrence Actions.md>) Stage 1. *(DONE 2026-06-19 — see "Now" above.)*
+- [ ] **4.3b** Engine/UI unification — Stages 2–3 — [file 4](<4 - Recurrence & Occurrence Actions.md>). _(M–H)_
 - [ ] **4.4** `time_window` prerequisite evaluator (one of the 4 inert) — _optional, only if a feature needs it._ _(M)_
 - [ ] **4.5** Split `useItems.ts` (~2,621 LOC) — **only when a feature next forces you in**, not "just because." _(H)_
 
@@ -256,14 +257,14 @@ This mirrors the global theme ("Stabilize, then Connect") at the module level: h
 - [x] `get_schedule_bundle` RPC body + all RLS policies **captured in `migrations/schema.sql`**. *(2026-06-06)*
 - [x] [File 1, Cluster 1](<1 - Feature State & Pain Inventory.md>) updated to mark resolved pains; the "RLS myth" note kept as the corrected record. *(2026-06-06)*
 
-**Recurrence/foundation slice** *(in progress — the current target)*
-- [x] Placement rule is covered by a test that fails if a view forgets the skip+inject pattern.
-- [ ] Skip writes `skipped` (not `cancelled`) and creates **no** duplicate; the "next occurrence" trap is gone on both surfaces ([file 4 acceptance test](<4 - Recurrence & Occurrence Actions.md>)).
-- [ ] Completing an occurrence on `/reminders` moves it into a hideable Completed section.
-- [ ] Recurrence expansion + occurrence actions have unit coverage; `pnpm test` green.
-- [ ] One expansion engine + one occurrence-action sheet across all surfaces.
+**Recurrence/foundation slice** *(Stage 1 done 2026-06-19; Stage 2/3 + time_window still open)*
+- [x] Placement rule is covered by a test that fails if a view forgets the skip+inject pattern. *(Note: this guard test has a known pre-existing gap against `WebTodayView.tsx` — [file 1 Cluster 5](<1 - Feature State & Pain Inventory.md>).)*
+- [x] Skip writes `skipped` (not `cancelled`) and creates **no** duplicate; the "next occurrence" trap is gone on all four surfaces found ([file 4 acceptance test](<4 - Recurrence & Occurrence Actions.md>)). *(DONE 2026-06-19)*
+- [x] Completing an occurrence on `/reminders` moves it into a hideable Completed section. *(DONE 2026-06-19)*
+- [x] Recurrence expansion + occurrence actions have unit coverage for the skip/complete/move repro; `pnpm test` green for the new + touched files (one unrelated pre-existing failure in `expandOccurrences.test.ts` vs `WebTodayView.tsx`, confirmed via `git stash` to predate this session). *(DONE 2026-06-19)*
+- [ ] One expansion engine + one occurrence-action sheet across all surfaces. *(Stage 2/3 — not started)*
 - [ ] `time_window` prerequisite evaluates correctly and is no longer a stub.
-- [ ] [File 1](<1 - Feature State & Pain Inventory.md>) updated to drop the "untested"/stub notes this work closes.
+- [x] [File 1](<1 - Feature State & Pain Inventory.md>) updated to drop the "untested"/stub notes this work closes.
 
 ---
 
@@ -307,6 +308,6 @@ This mirrors the global theme ("Stabilize, then Connect") at the module level: h
 ## How to drive this
 
 - Point at a **line** ("do 1.3"), a **group** ("Phase 1 chips: 1.4 + 1.5"), or a **phase** ("start Phase 1").
-- **The current top priority is the recurrence correctness slice ([file 4](<4 - Recurrence & Occurrence Actions.md>) Stage 1 / Phase 4.1+4.3).**
-- I'll only start **Phase 2+** after **Phase 1** ships and is verified; **1b.4** waits on **4.1**.
+- **Recurrence correctness Stage 1 ([file 4](<4 - Recurrence & Occurrence Actions.md>) / Phase 4.1+4.3a) shipped 2026-06-19. The current top priority is `time_window` (4.4), then Stage 2 engine unification (4.3b).**
+- I'll only start **Phase 2+** after **Phase 1** ships and is verified; **1b.4** is now partially unblocked by **4.1**.
 - As items complete, they get checked here **and** marked in [file 1](<1 - Feature State & Pain Inventory.md>) (Hard Rule #25 — no orphan fixes).

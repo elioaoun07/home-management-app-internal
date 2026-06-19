@@ -361,6 +361,19 @@ export default function WebEvents() {
     itemActions.handleCancel(capturedItem, capturedDate, capturedReason);
   }, [detailItem, itemActions, getOccurrenceDate, actionReason]);
 
+  const handleSkipAction = useCallback(() => {
+    if (!detailItem) return;
+    const capturedItem = detailItem;
+    const capturedDate = getOccurrenceDate(detailItem).toISOString();
+    const capturedReason = actionReason || undefined;
+    setDetailItem(null);
+    setClickedOccurrenceDate(null);
+    setModalPosition(null);
+    setShowActionDialog(false);
+    setActionReason("");
+    itemActions.handleSkip(capturedItem, capturedDate, capturedReason);
+  }, [detailItem, itemActions, getOccurrenceDate, actionReason]);
+
   // Fetch all items
   const { data: allItems = [], isLoading } = useItems();
 
@@ -1333,22 +1346,28 @@ export default function WebEvents() {
                             <FastForward className="w-4 h-4 text-amber-400" />
                           </button>
                         )}
-                      {/* Cancel occurrence button - only show for non-completed occurrences */}
+                      {/* Skip (recurring) / Cancel (one-off) — only show for non-completed occurrences */}
                       {!isCurrentOccurrenceCompleted &&
-                        detailItem.status !== "completed" && (
+                        detailItem.status !== "completed" &&
+                        (isRecurring(detailItem) ? (
+                          <button
+                            type="button"
+                            onClick={handleSkipAction}
+                            className="p-2 rounded-full hover:bg-orange-500/20 transition-colors"
+                            title="Skip this occurrence"
+                          >
+                            <XCircle className="w-4 h-4 text-orange-400" />
+                          </button>
+                        ) : (
                           <button
                             type="button"
                             onClick={handleCancelAction}
                             className="p-2 rounded-full hover:bg-red-500/20 transition-colors"
-                            title={
-                              isRecurring(detailItem)
-                                ? "Cancel this occurrence"
-                                : "Cancel"
-                            }
+                            title="Cancel"
                           >
                             <XCircle className="w-4 h-4 text-red-400" />
                           </button>
-                        )}
+                        ))}
                       <div className="w-px h-4 bg-white/20 mx-1" />
                       <button
                         type="button"
@@ -1861,24 +1880,6 @@ export default function WebEvents() {
             </DialogHeader>
 
             <div className="space-y-3 py-4">
-              {isRecurring(detailItem) && (
-                <button
-                  type="button"
-                  onClick={() => handlePostponeAction("next_occurrence")}
-                  className={cn(
-                    "w-full p-4 rounded-xl border text-left transition-all",
-                    "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
-                  )}
-                >
-                  <div className="font-semibold text-white mb-1">
-                    Skip to next occurrence
-                  </div>
-                  <div className="text-sm text-white/60">
-                    Cancel this time and wait for the next scheduled occurrence
-                  </div>
-                </button>
-              )}
-
               <button
                 type="button"
                 onClick={() => handlePostponeAction("tomorrow")}

@@ -281,6 +281,7 @@ export default function SwipeableItemCard({
     handleToggleComplete: doToggleComplete,
     handlePostpone: doPostpone,
     handleCancel: doCancel,
+    handleSkip: doSkip,
     handleDelete: doDelete,
   } = useItemActionsWithToast();
   const updateRecurrence = useUpdateRecurrenceRule();
@@ -404,6 +405,14 @@ export default function SwipeableItemCard({
       await doCancel(item, getOccurrenceDate(), reason);
     },
     [doCancel, getOccurrenceDate, item],
+  );
+
+  const handleSkipAction = useCallback(
+    async (reason?: string) => {
+      setShowActionsSheet(false);
+      await doSkip(item, getOccurrenceDate(), reason);
+    },
+    [doSkip, getOccurrenceDate, item],
   );
 
   const handleDeleteAction = useCallback(async () => {
@@ -915,6 +924,7 @@ export default function SwipeableItemCard({
         onComplete={handleCompleteAction}
         onPostpone={handlePostponeAction}
         onCancel={handleCancelAction}
+        onSkip={handleSkipAction}
         onDelete={handleDeleteAction}
         onReverseRecurrence={handleReverseRecurrence}
       />

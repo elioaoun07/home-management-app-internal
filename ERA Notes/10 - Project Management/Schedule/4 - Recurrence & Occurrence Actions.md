@@ -151,5 +151,18 @@ Consequences: delete `calculateNextOccurrence` and the `next_occurrence` postpon
 
 ---
 
+## 8. Stage 1 — shipped 2026-06-19
+
+All five Stage 1 bullets done:
+- **Next-occurrence trap removed everywhere.** Audit during implementation found it on **four** surfaces, not the two originally scoped: `WebEvents.tsx` postpone dialog, `ItemActionsSheet.tsx` postpone options, `WebTabletMissionControl.tsx` postpone dialog (its own separate inline implementation, not previously audited here), and `ItemDetailModal.tsx`'s "⏭ Next Time" quick-action button. `calculateNextOccurrence` and the `next_occurrence` member of `PostponeType` are deleted from `useItemActions.ts`.
+- **Real Skip wired on every surface.** `ItemActionsSheet` gained an `onSkip` prop (wired to `handleSkip`/`useSkipItem` in all 4 callers); for recurring items the sheet now shows "Skip this occurrence" instead of "Cancel" (Cancel is one-off-only, per §4's target design). `WebTabletMissionControl`'s `handleSkip` — which actually called `itemActions.handleCancel` despite its name — renamed to `handleCancelOrSkip` and now genuinely branches real skip (recurring) vs cancel (one-off). `WebEvents.tsx`'s calendar action bar does the same branch.
+- **`/reminders` completed toggle.** Eye/EyeOff toggle in the FilterBar (default hide, `localStorage`-persisted), `showCompleted` prop threaded into `WebDayPlanner`, day list split into open items + a collapsible "Completed (n)" section.
+- **Unit tests added** — [dayOccurrences.test.ts](<../../../src/lib/utils/dayOccurrences.test.ts>) covers the exact §0 repro (skip a past occurrence → no duplicate on the next occurrence), complete, move-to-a-date, and the postponed/next-occurrence-collision dedup case, plus `isOccurrenceCompleted` per action type. Pure logic, no Supabase mocks, `pnpm test` green for this file.
+- **Found but explicitly NOT fixed this slice** (logged in [file 1](<1 - Feature State & Pain Inventory.md>) Cluster 5): the placement-rule guard test (`expandOccurrences.test.ts`) has a pre-existing failure against `WebTodayView.tsx` — confirmed via `git stash` to predate this session. Unrelated to recurrence/skip correctness; a source-text-regex guard gap, not a flexible-placement bug.
+
+Stage 2 (engine unification) and Stage 3 (shared action UI) are still open — see §7 above.
+
+---
+
 → Heading/decisions context → [2 · Vision, Target Design & Decisions](<2 - Vision, Target Design & Decisions.md>).
 → Where this slots in the build queue → [5 · Execution Plan & Build Checklist](<5 - Execution Plan & Build Checklist.md>).

@@ -1199,7 +1199,7 @@ function TodayTaskCard({
                     ? "text-red-600 hover:bg-red-100"
                     : "text-red-400 hover:bg-red-500/20",
                 )}
-                title="Cancel"
+                title={isRecurring ? "Skip this occurrence" : "Cancel"}
               >
                 <XCircle className="w-3.5 h-3.5" />
               </button>
@@ -1869,13 +1869,23 @@ export default function WebTabletMissionControl({
     [itemActions],
   );
 
-  const handleSkip = useCallback(
+  // Recurring occurrences get a real Skip (records "skipped", nothing
+  // rescheduled); one-off items get Cancel. Mirrors ItemActionsSheet.
+  const handleCancelOrSkip = useCallback(
     (occurrence: ExpandedOccurrence, notes?: string) => {
-      itemActions.handleCancel(
-        occurrence.item,
-        occurrence.occurrenceDate.toISOString(),
-        notes || "Skipped",
-      );
+      if (occurrence.item.recurrence_rule) {
+        itemActions.handleSkip(
+          occurrence.item,
+          occurrence.occurrenceDate.toISOString(),
+          notes,
+        );
+      } else {
+        itemActions.handleCancel(
+          occurrence.item,
+          occurrence.occurrenceDate.toISOString(),
+          notes,
+        );
+      }
     },
     [itemActions],
   );
@@ -2192,7 +2202,7 @@ export default function WebTabletMissionControl({
                       key={`${occ.item.id}-${idx}`}
                       occurrence={occ}
                       onComplete={(notes) => handleComplete(occ, notes)}
-                      onCancel={(notes) => handleSkip(occ, notes)}
+                      onCancel={(notes) => handleCancelOrSkip(occ, notes)}
                       onPostpone={() => openPostponeDialog(occ)}
                       onUndo={() => handleUndo(occ)}
                       onExpand={() => setFocusOccurrence(occ)}
@@ -2251,7 +2261,7 @@ export default function WebTabletMissionControl({
                     key={`overdue-${occ.item.id}-${idx}`}
                     occurrence={occ}
                     onComplete={(notes) => handleComplete(occ, notes)}
-                    onCancel={(notes) => handleSkip(occ, notes)}
+                    onCancel={(notes) => handleCancelOrSkip(occ, notes)}
                     onPostpone={() => openPostponeDialog(occ)}
                     onUndo={() => handleUndo(occ)}
                     onExpand={() => setFocusOccurrence(occ)}
@@ -2353,25 +2363,6 @@ export default function WebTabletMissionControl({
             </DialogHeader>
 
             <div className="space-y-3 py-4">
-              {/* Skip to next occurrence - only for recurring items */}
-              {postponeOccurrence.item.recurrence_rule && (
-                <button
-                  type="button"
-                  onClick={() => handlePostponeAction("next_occurrence")}
-                  className={cn(
-                    "w-full p-4 rounded-xl border text-left transition-all",
-                    "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20",
-                  )}
-                >
-                  <div className="font-semibold text-white mb-1">
-                    Skip to next occurrence
-                  </div>
-                  <div className="text-sm text-white/60">
-                    Cancel this time and wait for the next scheduled occurrence
-                  </div>
-                </button>
-              )}
-
               {/* Tomorrow */}
               <button
                 type="button"

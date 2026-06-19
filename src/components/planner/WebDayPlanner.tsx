@@ -480,6 +480,7 @@ interface WebDayPlannerProps {
   selectedDate: Date;
   onSelectedDateChange: Dispatch<SetStateAction<Date>>;
   showOverdue?: boolean;
+  showCompleted?: boolean;
   planningCommandToken?: number;
   onToolbarStateChange?: (state: PlannerToolbarState) => void;
   userFilter?: UserFilter;
@@ -503,6 +504,7 @@ export default function WebDayPlanner({
   selectedDate,
   onSelectedDateChange,
   showOverdue = false,
+  showCompleted = false,
   planningCommandToken = 0,
   onToolbarStateChange,
   userFilter = "all",
@@ -520,6 +522,7 @@ export default function WebDayPlanner({
 
   const [preponePoolOpen, setPreponePoolOpen] = useState(false);
   const [upcomingOpen, setUpcomingOpen] = useState(false);
+  const [completedSectionOpen, setCompletedSectionOpen] = useState(false);
   const [assignedToMeOpen, setAssignedToMeOpen] = useState(false);
   const [assignedOutOpen, setAssignedOutOpen] = useState(false);
 
@@ -753,6 +756,14 @@ export default function WebDayPlanner({
   const remainingDayOccurrences = useMemo(
     () => dayOccurrences.filter((_, index) => index !== primaryOccurrenceIndex),
     [dayOccurrences, primaryOccurrenceIndex],
+  );
+  const openRemainingOccurrences = useMemo(
+    () => remainingDayOccurrences.filter((occ) => !occ.isCompleted),
+    [remainingDayOccurrences],
+  );
+  const completedRemainingOccurrences = useMemo(
+    () => remainingDayOccurrences.filter((occ) => occ.isCompleted),
+    [remainingDayOccurrences],
   );
 
   const upcomingOccurrences = useMemo(() => {
@@ -1835,9 +1846,9 @@ export default function WebDayPlanner({
                       : `${dayOccurrences.length} item${dayOccurrences.length === 1 ? "" : "s"}`}
                   </h2>
                 </div>
-                {dayOccurrences.length > 1 && (
+                {openRemainingOccurrences.length > 0 && (
                   <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-medium", mutedBadge)}>
-                    {remainingDayOccurrences.length} more
+                    {openRemainingOccurrences.length} more
                   </span>
                 )}
               </div>
@@ -1845,9 +1856,34 @@ export default function WebDayPlanner({
               {primaryOccurrence ? (
                 <>
                   {renderPrimaryOccurrenceCard(primaryOccurrence)}
-                  {remainingDayOccurrences.length > 0 && (
+                  {openRemainingOccurrences.length > 0 && (
                     <div className="space-y-2">
-                      {remainingDayOccurrences.map((occ) => renderOccurrenceRow(occ))}
+                      {openRemainingOccurrences.map((occ) => renderOccurrenceRow(occ))}
+                    </div>
+                  )}
+                  {showCompleted && completedRemainingOccurrences.length > 0 && (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setCompletedSectionOpen((open) => !open)}
+                        className={cn(
+                          "flex items-center gap-2 text-xs font-bold uppercase tracking-wider w-full",
+                          subtleText,
+                        )}
+                      >
+                        <ChevronDown
+                          className={cn(
+                            "w-3.5 h-3.5 transition-transform",
+                            completedSectionOpen ? "rotate-0" : "-rotate-90",
+                          )}
+                        />
+                        Completed ({completedRemainingOccurrences.length})
+                      </button>
+                      {completedSectionOpen && (
+                        <div className="space-y-2 mt-2">
+                          {completedRemainingOccurrences.map((occ) => renderOccurrenceRow(occ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
@@ -2013,6 +2049,10 @@ export default function WebDayPlanner({
           }}
           onCancel={(reason) => {
             itemActions.handleCancel(actionsState.item, actionsState.occurrenceDate, reason);
+            setActionsState(null);
+          }}
+          onSkip={(reason) => {
+            itemActions.handleSkip(actionsState.item, actionsState.occurrenceDate, reason);
             setActionsState(null);
           }}
           onDelete={() => {

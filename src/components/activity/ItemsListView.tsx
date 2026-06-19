@@ -599,7 +599,7 @@ export default function ItemsListView({
   // are still expanded into per-occurrence rows.
   const { data: allItems = [], isLoading } = useItems();
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
-  const { handleComplete, handlePostpone, handleCancel, handleDelete } =
+  const { handleComplete, handlePostpone, handleCancel, handleSkip, handleDelete } =
     useItemActionsWithToast();
   const updateRecurrence = useUpdateRecurrenceRule();
 
@@ -1346,6 +1346,14 @@ export default function ItemsListView({
           }}
           onCancel={(reason) => {
             handleCancel(
+              actionsState.item,
+              actionsState.occurrenceDate,
+              reason,
+            );
+            setActionsState(null);
+          }}
+          onSkip={(reason) => {
+            handleSkip(
               actionsState.item,
               actionsState.occurrenceDate,
               reason,
