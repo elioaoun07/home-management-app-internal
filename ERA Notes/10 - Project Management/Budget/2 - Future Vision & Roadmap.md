@@ -79,7 +79,7 @@ L  │  (—)                             Statement→Inventory (B)
 If you point the next stretch at Budget:
 
 1. **Bet 1 — Lock the foundation: test `balance-utils` + recurring next-due.** Lowest effort, kills the highest-stakes gap (wrong money is the worst bug). Do this before any enhancement that touches balances.
-2. **Bet 2 — Unify Recurring ↔ Schedule due-dates.** The highest-leverage bridge: money and time stop being recorded twice. Coordinate with [Schedule · 2 · Future Vision](<../Schedule/2 - Future Vision & Roadmap.md>) (same bridge from the other side).
+2. **Bet 2 — Unify Recurring ↔ Schedule due-dates.** The highest-leverage bridge: money and time stop being recorded twice. Coordinate with [Schedule · 2 · Vision & Decisions](<../Schedule/2 - Vision, Target Design & Decisions.md>) (same bridge from the other side).
 3. **Bet 3 — Cashflow forecast → ERA.** The biggest *felt* upgrade: ERA can warn before an overdraft. Higher effort; scope it after the core tests exist.
 
 > Resist building the cashflow forecast before the core tests exist — a silent balance bug would hide exactly there, and a forecast amplifies it.

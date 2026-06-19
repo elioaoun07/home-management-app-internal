@@ -44,7 +44,7 @@ Trips is the household's **context-switch engine** — when you travel, *everyth
 
 Trips is *all* bridges by nature — these make the existing cascades legible from the other side. Each ladders up to the global [3 · Future Vision](<../3 - Future Vision & Roadmap.md>).
 
-- **Trips → Schedule (cascade visibility).** Make it legible from the Schedule side which items a trip paused/cancelled/created. *(global Trips row; mirror of [Schedule · 2](<../Schedule/2 - Future Vision & Roadmap.md>))*
+- **Trips → Schedule (cascade visibility).** Make it legible from the Schedule side which items a trip paused/cancelled/created. *(global Trips row; mirror of [Schedule · 2](<../Schedule/2 - Vision, Target Design & Decisions.md>))*
 - **Trips → Budget.** The trip account + spend feeds the money graph; surface trip cost in Analytics. *(Budget bridge)*
 - **Trips → Meal Planning.** Household trips skip meal plans; make the skip visible and undo-able from the meal calendar.
 - **Trips → Chores.** Skipped chores should be clearly marked "paused: travelling", not silently absent.

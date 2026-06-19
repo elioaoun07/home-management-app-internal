@@ -12,7 +12,7 @@ tags:
 
 > **FABLED:** [_index](<_index.md>) · [1 · Implementation](<1 - FABLED — Current Implementation.md>) · **2 · Gaps** · [3 · Optimization](<3 - FABLED — Optimization Plan.md>) · [4 · Enhancements](<4 - FABLED — Future Enhancements.md>)
 >
-> Ranked. The UX-level pains live in the [Pain Inventory campaign](<../Pain Inventory & Plan/1 - Pain Inventory (Every Painful Thing).md>) — this file is the *technical* absence list; don't duplicate the campaign here.
+> Ranked. The UX-level pains live in the [Pain Inventory campaign](<../Pain Inventory & Plan/1 - Pain Inventory (Every Painful Thing).md>) ⚠️ BROKEN LINK — SCHEDULE PM REORGANIZED 2026-06-19 (see `1 - Feature State & Pain Inventory.md` instead) — this file is the *technical* absence list; don't duplicate the campaign here.
 
 ---
 
@@ -26,7 +26,7 @@ UI says Reminder/Event only; **DB + API + other surfaces still know `task`** (gl
 
 ## 🟠 G3 — Three prerequisite evaluator stubs (+1 deprioritized)
 
-Engine works for NFC; `time_window`, `schedule`, `custom_formula` are inert stubs (`weather` consciously last). `time_window` is the smallest and already the named next step in [file 3](<../3 - Current — Action Plan.md>). Also pending from the form direction: "when I get home" currently stores `location_context: "home"` — the **NFC arrive-home trigger that should consume it is Phase 2** and doesn't exist yet.
+Engine works for NFC; `time_window`, `schedule`, `custom_formula` are inert stubs (`weather` consciously last). `time_window` is the smallest and already the named next step in [file 3](<../3 - Current — Action Plan.md>) ⚠️ BROKEN LINK — SCHEDULE PM REORGANIZED 2026-06-19 (see `5 - Execution Plan & Build Checklist.md` instead). Also pending from the form direction: "when I get home" currently stores `location_context: "home"` — the **NFC arrive-home trigger that should consume it is Phase 2** and doesn't exist yet.
 
 ## 🟠 G4 — Dead code with gravity: `MobileItemForm.tsx`
 

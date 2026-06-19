@@ -67,7 +67,7 @@ You are not short of features — you're short of a _safety net_ and _documentat
 ### Fri — Plan Schedule enhancements + wrap
 
 - `[skipped — deferred]` ~~**Ship Track A bridge #1: Inventory → Shopping List.**~~ Deferred to a later week. _(still on the global roadmap — file 3 / backlog 2a)_
-- [ ] **Plan the Schedule (Items & Reminders) module enhancements.** Stand up the per-module PM set in [Schedule/](<Schedule/_index.md>) — Feature State, Roadmap, Action Plan — and sequence the foundation-first work (placement-rule test → recurrence tests → `time_window` prerequisite). → [Schedule/3 · Current Action Plan](<Schedule/3 - Current — Action Plan.md>)
+- [ ] **Plan the Schedule (Items & Reminders) module enhancements.** Stand up the per-module PM set in [Schedule/](<Schedule/_index.md>) — Feature State, Roadmap, Action Plan — and sequence the foundation-first work (placement-rule test → recurrence tests → `time_window` prerequisite). → [Schedule/5 · Execution Plan & Build Checklist](<Schedule/5 - Execution Plan & Build Checklist.md>)
 - [ ] Re-draft this file for next week (carry-over below).
 - **DoD:** Schedule PM folder exists and its Action Plan has a sequenced "Now/Next/Later" queue.
 
@@ -100,7 +100,7 @@ You are not short of features — you're short of a _safety net_ and _documentat
 ## ⏭️ Carry-over / next week preview
 
 - **Deferred from this week** (still real debt): verify Trips lifecycle; console sweep phase 1 → then flip on `no-console` ESLint rule; Inventory→Shopping bridge (Track A #1).
-- Execute the Schedule module plan — foundation-first: placement-rule test → recurrence/occurrence tests → `time_window` prerequisite. _(see [Schedule/3](<Schedule/3 - Current — Action Plan.md>))_
+- Execute the Schedule module plan — foundation-first: placement-rule test → recurrence/occurrence tests → `time_window` prerequisite. _(see [Schedule/5 · Execution Plan & Build Checklist](<Schedule/5 - Execution Plan & Build Checklist.md>))_
 - Track A bridges #2–#4: Recipe↔Inventory, Recurring→Budget, Debt→Reminder. _(file 3 Track A)_
 - Begin Track B: enrich the Focus/ERA briefing with cross-module data. _(file 3)_
 

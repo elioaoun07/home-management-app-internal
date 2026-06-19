@@ -44,7 +44,7 @@ Hub & ERA is the app's **brain and front door** — the interaction model says t
 
 ERA is *defined* by its reads into other modules. Each ladders up to the global [3 · Future Vision](<../3 - Future Vision & Roadmap.md>) — and most are the *receiving end* of bridges the other module folders propose.
 
-- **ERA ← Schedule (briefing enrichment).** Read the whole week's shape — recurring due, overdue routines, household-assigned items by person. *(global Track B; mirror of [Schedule · 2](<../Schedule/2 - Future Vision & Roadmap.md>))*
+- **ERA ← Schedule (briefing enrichment).** Read the whole week's shape — recurring due, overdue routines, household-assigned items by person. *(global Track B; mirror of [Schedule · 2](<../Schedule/2 - Vision, Target Design & Decisions.md>))*
 - **ERA ← Budget (cashflow awareness).** Warn before a recurring payment overdraws; surface overspend. *(mirror of [Budget · 2](<../Budget/2 - Future Vision & Roadmap.md>))*
 - **ERA ← Kitchen.** "Low on 3 staples, nothing planned Thursday." *(mirror of [Kitchen · 2](<../Kitchen/2 - Future Vision & Roadmap.md>))*
 - **ERA ← Trips.** Re-entry briefing: "you're back tomorrow — N chores/routines resume." *(mirror of [Trips · 2](<../Trips/2 - Future Vision & Roadmap.md>))*

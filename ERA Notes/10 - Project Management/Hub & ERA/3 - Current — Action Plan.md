@@ -52,7 +52,7 @@ This mirrors the global theme ("Stabilize, then Connect") — and ERA is where "
 
 ### Next — Make ERA anticipate
 
-- [ ] **Briefing enrichment ← Schedule.** Feed the whole week's shape into ERA's proactive briefing. Coordinate with [Schedule · 3](<../Schedule/3 - Current — Action Plan.md>) (same bridge, other end). _(global Track B)_
+- [ ] **Briefing enrichment ← Schedule.** Feed the whole week's shape into ERA's proactive briefing. Coordinate with [Schedule · 5](<../Schedule/5 - Execution Plan & Build Checklist.md>) (same bridge, other end). _(global Track B)_
 - [ ] **Briefing enrichment ← Budget (cashflow).** Warn before a recurring payment overdraws. Coordinate with [Budget · 3](<../Budget/3 - Current — Action Plan.md>). _(global Track B)_
 
 ### Later — Pay down structural risk

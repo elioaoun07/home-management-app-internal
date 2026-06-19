@@ -6,7 +6,7 @@
 > NOT in `schema.sql` (the visualizer export captures tables only, not functions),
 > so its partner/privacy scoping can't be reviewed from the repo.
 >
-> Related: `ERA Notes/10 - Project Management/Schedule/Pain Inventory & Plan/` (W4).
+> Related: `ERA Notes/10 - Project Management/Schedule/` (W4 — consolidated set).
 
 ---
 

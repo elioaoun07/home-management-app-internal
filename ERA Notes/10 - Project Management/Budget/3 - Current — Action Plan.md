@@ -59,7 +59,7 @@ This mirrors the global theme ("Stabilize, then Connect") at the cluster level: 
 
 ### Later — Connect outward
 
-- [ ] **Recurring ↔ Schedule due-date unify** — bigger; coordinate with [Schedule · 3](<../Schedule/3 - Current — Action Plan.md>). _(global Track A / Cashflow)_
+- [ ] **Recurring ↔ Schedule due-date unify** — bigger; coordinate with [Schedule · 5](<../Schedule/5 - Execution Plan & Build Checklist.md>). _(global Track A / Cashflow)_
 - [ ] **Cashflow forecast → ERA briefing** — project balances forward; scope after core tests exist. _(global Track B / C)_
 
 ---
