@@ -21,6 +21,8 @@ related:
 
 The default landing surface after login. Renders KPI cards (balance, spend, income), a recent-transactions list, and mini-charts. Section order is user-configurable via Preferences. On web it renders `WebDashboard.tsx`; on mobile `EnhancedMobileDashboard.tsx`. The dashboard is a **renderer, not an owner** — it reads from every standalone module but owns no DB tables of its own.
 
+**2026-06-19:** Mobile Dashboard also owns the `Insights` tab for Schedule/reminder stats, rendered through `src/components/reminder/RemindersInsightsPage.tsx`. This tab moved out of `/reminders` so `/reminders` can focus on day planning and flexible assignment.
+
 ## Architecture
 
 Data is prefetched eagerly via `EagerDataPrefetch.tsx` on first paint so the dashboard feels instant. Prefetch logic lives in `src/lib/prefetch/prefetchDashboard.ts` (moved from `src/features/dashboard/`). Transactions are fetched for the current billing cycle (custom month start from Preferences) via `useDashboardTransactions`. Theme changes trigger a full query invalidation — the dashboard refetches everything.
@@ -36,6 +38,7 @@ No owned tables. Reads from `transactions`, `accounts`, `account_balances`, `use
 - `src/app/dashboard/page.tsx` — RSC entry, passes server data down
 - `src/app/dashboard/DashboardClientPage.tsx` — client root, tab context
 - `src/components/dashboard/EnhancedMobileDashboard.tsx` — mobile layout
+- `src/components/reminder/RemindersInsightsPage.tsx` - mobile Dashboard `Insights` tab (schedule/reminder stats)
 - `src/components/web/WebDashboard.tsx` — desktop layout
 - `src/components/dashboard/TransactionsTable.tsx` — recent transactions list
 - `src/components/dashboard/CategoryDetailView.tsx` — category drill-down

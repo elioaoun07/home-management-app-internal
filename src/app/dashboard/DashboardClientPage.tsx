@@ -4,6 +4,7 @@ import React from "react";
 import EnhancedMobileDashboard from "@/components/dashboard/EnhancedMobileDashboard";
 import ReviewDashboard from "@/components/dashboard-v2/ReviewDashboard";
 import ItemsListView from "@/components/activity/ItemsListView";
+import RemindersInsightsPage from "@/components/reminder/RemindersInsightsPage";
 import FilterBar, {
   type FilterBarSection,
   type GroupMode,
@@ -13,18 +14,18 @@ import FilterBar, {
 } from "@/components/activity/FilterBar";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { usePrivacyBlur } from "@/contexts/PrivacyBlurContext";
+import { itemsKeys } from "@/features/items/useItems";
 import { useUserPreferences } from "@/features/preferences/useUserPreferences";
 import { useDashboardTransactions } from "@/features/transactions/useDashboardTransactions";
 import { useFuturePaymentAlerts } from "@/hooks/useFuturePaymentAlerts";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
 import { getDefaultDateRange, yyyyMmDd } from "@/lib/utils/date";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-type DashMode = "overview" | "list" | "journal" | "review";
+type DashMode = "overview" | "list" | "journal" | "review" | "insights";
 
 // ─── Tab Icons ────────────────────────────────────────────────────────────────
 const OverviewIcon = ({ className }: { className?: string }) => (
@@ -62,9 +63,18 @@ const ReviewIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const InsightsIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M3 3v18h18" />
+    <path d="M7 16l4-6 4 3 5-7" />
+    <circle cx="20" cy="6" r="1.5" fill="currentColor" />
+  </svg>
+);
+
 const DASH_SECTIONS: FilterBarSection[] = [
   { key: "overview", label: "Overview", Icon: OverviewIcon, variant: "neutral" },
   { key: "review", label: "Review", Icon: ReviewIcon, variant: "neutral" },
+  { key: "insights", label: "Insights", Icon: InsightsIcon, variant: "neutral" },
   { key: "list", label: "List", Icon: ListIcon, variant: "neutral" },
   { key: "journal", label: "Journal", Icon: JournalIcon, variant: "journal" },
 ];
@@ -98,7 +108,7 @@ function getThisMonthRange(monthStartDay: number): { start: string; end: string 
   const now = new Date();
   const currentDay = now.getDate();
 
-  let monthStart = new Date(now);
+  const monthStart = new Date(now);
   if (currentDay >= monthStartDay) {
     monthStart.setDate(monthStartDay);
   } else {
@@ -106,7 +116,7 @@ function getThisMonthRange(monthStartDay: number): { start: string; end: string 
     monthStart.setDate(monthStartDay);
   }
 
-  let monthEnd = new Date(monthStart);
+  const monthEnd = new Date(monthStart);
   monthEnd.setMonth(monthEnd.getMonth() + 1);
   monthEnd.setDate(monthStartDay - 1);
 
@@ -136,14 +146,15 @@ export default function DashboardClientPage() {
   const [hasUrlParams, setHasUrlParams] = useState(false);
 
   useFuturePaymentAlerts();
+  const isItemsSection = dashMode === "journal" || dashMode === "insights";
 
   const defaultRange = useMemo(() => getDefaultDateRange(monthStartDay), [monthStartDay]);
   const [dateRange, setDateRange] = useState(defaultRange);
 
   // Sync appMode context so FAB knows the right mode
   useEffect(() => {
-    setAppMode(dashMode === "journal" ? "items" : "budget");
-  }, [dashMode, setAppMode]);
+    setAppMode(isItemsSection ? "items" : "budget");
+  }, [isItemsSection, setAppMode]);
 
   // Change default date range based on dashMode
   useEffect(() => {
@@ -202,10 +213,13 @@ export default function DashboardClientPage() {
     endDate: dateRange.end,
   });
 
-  const isFetchingCount = useIsFetching({
+  const transactionFetchingCount = useIsFetching({
     queryKey: ["transactions", "dashboard", dateRange.start, dateRange.end],
   });
-  const isFetching = isFetchingCount > 0;
+  const itemFetchingCount = useIsFetching({ queryKey: itemsKeys.all });
+  const isFetching = isItemsSection
+    ? itemFetchingCount > 0
+    : transactionFetchingCount > 0;
 
   const availableCategories = useMemo(() => {
     const seen = new Map<string, string>();
@@ -286,16 +300,20 @@ export default function DashboardClientPage() {
         onTypeFilterChange={setTypeFilter}
         recurringFilter={recurringFilter}
         onRecurringFilterChange={setRecurringFilter}
-        showJournalFilters={dashMode === "journal"}
+        showJournalFilters={isItemsSection}
         isBlurred={isBlurred}
         onToggleBlur={toggleBlur}
-        isBudgetSection={dashMode !== "journal"}
+        isBudgetSection={!isItemsSection}
         isFetching={isFetching}
         onRefresh={() => {
           if (navigator.vibrate) navigator.vibrate(5);
-          queryClient.invalidateQueries({
-            queryKey: ["transactions", "dashboard", dateRange.start, dateRange.end],
-          });
+          if (isItemsSection) {
+            queryClient.invalidateQueries({ queryKey: itemsKeys.all });
+          } else {
+            queryClient.invalidateQueries({
+              queryKey: ["transactions", "dashboard", dateRange.start, dateRange.end],
+            });
+          }
         }}
       />
 
@@ -319,6 +337,15 @@ export default function DashboardClientPage() {
             startDate={dateRange.start}
             endDate={dateRange.end}
             ownershipFilter={ownershipFilter}
+          />
+        </div>
+      ) : dashMode === "insights" ? (
+        <div className="pb-24">
+          <RemindersInsightsPage
+            userFilter={ownershipFilter}
+            currentUserId={currentUserId}
+            typeFilter={typeFilter}
+            recurringFilter={recurringFilter}
           />
         </div>
       ) : (

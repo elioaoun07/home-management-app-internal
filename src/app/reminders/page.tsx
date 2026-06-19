@@ -7,6 +7,7 @@ import FilterBar, {
   type TypeFilter,
   type UserFilter,
 } from "@/components/activity/FilterBar";
+import MobileFlexibleAssignmentPage from "@/components/planner/MobileFlexibleAssignmentPage";
 import WebDayPlanner, { type PlannerToolbarState } from "@/components/planner/WebDayPlanner";
 import {
   AlertBellIcon,
@@ -14,7 +15,6 @@ import {
   EyeOffIcon,
   SparklesIcon,
 } from "@/components/icons/FuturisticIcons";
-import RemindersInsightsPage from "@/components/reminder/RemindersInsightsPage";
 import { itemsKeys } from "@/features/items/useItems";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -25,7 +25,7 @@ import { parseISO } from "date-fns";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type RemindersPage = "focus" | "insights";
+type RemindersPage = "focus" | "assign";
 
 // ─── Tab Icons ────────────────────────────────────────────────────────────────
 const FocusIcon = ({ className }: { className?: string }) => (
@@ -42,7 +42,7 @@ const FocusIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const InsightsIcon = ({ className }: { className?: string }) => (
+const AssignIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
     viewBox="0 0 24 24"
@@ -50,18 +50,18 @@ const InsightsIcon = ({ className }: { className?: string }) => (
     stroke="currentColor"
     strokeWidth="2"
   >
-    <path d="M3 3v18h18" />
-    <path d="M7 16l4-6 4 3 5-7" />
-    <circle cx="20" cy="6" r="1.5" fill="currentColor" />
+    <rect x="3" y="4" width="18" height="17" rx="2" />
+    <path d="M8 2v4M16 2v4M3 10h18" />
+    <path d="M9 15l2 2 4-5" />
   </svg>
 );
 
 const REMINDERS_SECTIONS: FilterBarSection[] = [
   { key: "focus", label: "Focus", Icon: FocusIcon, variant: "neutral" },
   {
-    key: "insights",
-    label: "Insights",
-    Icon: InsightsIcon,
+    key: "assign",
+    label: "Assign",
+    Icon: AssignIcon,
     variant: "neutral",
   },
 ];
@@ -299,7 +299,9 @@ export default function RemindersStandalonePage() {
           recurringFilter={recurringFilter}
         />
       ) : (
-        <RemindersInsightsPage
+        <MobileFlexibleAssignmentPage
+          selectedDate={selectedDate}
+          onSelectedDateChange={setSelectedDate}
           userFilter={userFilter}
           currentUserId={currentUserId}
           typeFilter={typeFilter}

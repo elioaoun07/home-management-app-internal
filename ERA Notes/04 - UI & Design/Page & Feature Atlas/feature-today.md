@@ -13,13 +13,14 @@ tags:
 
 # Plan My Day
 
-> Merged into the `/reminders` Focus tab (2026-06-17). The former `/today` route is now a redirect. `WebDayPlanner.tsx` is the single merged surface: default view shows a selected-day panel with a next-item focus and remaining list. The top action row provides Plan my day and Overdue controls; Today is a quick-jump inside the day navigation row. Overdue rows are hidden by default and open as their own section when enabled; Upcoming/Assigned sections appear on today only.
+> Merged into the `/reminders` Focus tab (2026-06-17). The former `/today` route is now a redirect. `WebDayPlanner.tsx` is the single merged surface: default view shows a selected-day panel with a next-item focus and remaining list. The top action row provides Plan my day and Overdue controls; Today is a quick-jump inside the day navigation row. Overdue rows are hidden by default and open as their own section when enabled; Upcoming is collapsed by default; Assigned sections appear on today only. The `/reminders` Assign tab provides mobile flexible routine slot assignment.
 
 ## Files
 
 - **Page** (Focus tab): `src/app/reminders/page.tsx`
 - **Redirect**: `src/app/today/page.tsx` → `/reminders?date=…&plan=1`
 - **Main component**: `src/components/planner/WebDayPlanner.tsx`
+- **Assignment component**: `src/components/planner/MobileFlexibleAssignmentPage.tsx`
 
 ## Hooks
 
@@ -66,3 +67,5 @@ tags:
 - Checklist is `{id, label, done_at, sort_order}` — no time field; drag-to-reorder via dnd-kit.
 - Save-gated draft model: one POST on "Save day plan"; checklist check-off is a separate live PATCH.
 - URL flag `?plan=1` auto-opens planning mode; handled by a second effect after data loads to prevent race with the main seeding effect.
+- Upcoming (+1d to +7d) stays collapsed until opened.
+- The `/reminders` Assign tab is the mobile-friendly flexible slot picker; Schedule Insights moved to `/dashboard`.

@@ -41,6 +41,7 @@ tags:
 | See today's items | `src/components/web/WebTodayView.tsx` |
 | See items as a timeline list | `src/components/activity/ItemsListView.tsx` |
 | See reminders list (standalone) | `src/components/reminder/StandaloneRemindersPage.tsx` |
+| Assign flexible routines on mobile | `src/components/planner/MobileFlexibleAssignmentPage.tsx` (`/reminders` Assign tab) |
 | CRUD mutations (hooks) | `src/features/items/useItems.ts` |
 | Complete/postpone/cancel per-occurrence | `src/features/items/useItemActions.ts` |
 | Flexible routines (bi-weekly/weekly) | `src/features/items/useFlexibleRoutines.ts` |
@@ -133,6 +134,7 @@ Used for items that have a window ("do this sometime this week/bi-week/month") w
 - `item_flexible_schedules` — records the scheduled day within the period once chosen
 - Logic: `src/features/items/useFlexibleRoutines.ts`
 - Period boundaries: `getPeriodBoundaries(date, period)` in the same file
+- Mobile assignment UI: `src/components/planner/MobileFlexibleAssignmentPage.tsx` is the mobile counterpart to the Web Week flexible catalogue flow. It lists task catalogue templates marked `is_flexible_routine`, calculates the remaining slots for the selected weekly/biweekly/monthly period, and adds one slot to the selected day/time with Undo. If a linked active flexible item already exists, it schedules that routine through `item_flexible_schedules`; otherwise it creates a catalogue-derived calendar item for that period.
 
 ---
 
@@ -213,7 +215,9 @@ Helper functions:
 
 ## Reminder list windows (`/reminders`)
 
-`/reminders` Focus is now `WebDayPlanner`. The selected day is the primary top panel: it highlights the next item and lists the rest without a collapsible section wrapper. Today is a quick-jump inside the day navigation row. Overdue items are hidden by default and open as their own section from the top Overdue icon; Upcoming (+1d → +7d) and assignment buckets remain today-only. The "mine"/"partner" filter operates on `responsible_user_id`, not `user_id` — so an item I own and assign to my partner appears under "partner".
+**2026-06-19 correction:** the Assign tab is catalogue-first. It shows flexible task templates from `catalogue_items` that are not yet planned for the selected period, then adds one selected day/time slot. Linked active flexible routines are scheduled through `item_flexible_schedules`; otherwise the tab creates a catalogue-derived reminder/task item for that period.
+
+`/reminders` now has `Focus` and `Assign` tabs. Focus is `WebDayPlanner`; the selected day is the primary top panel: it highlights the next item and lists the rest without a collapsible section wrapper. Today is a quick-jump inside the day navigation row. Overdue items are hidden by default and open as their own section from the top Overdue icon; Upcoming (+1d → +7d) is collapsed by default and assignment buckets remain today-only. The Assign tab is `MobileFlexibleAssignmentPage`, a date/time slot picker for flexible routines. The "mine"/"partner" filter operates on `responsible_user_id`, not `user_id` — so an item I own and assign to my partner appears under "partner". Schedule Insights moved to `/dashboard`.
 
 ---
 

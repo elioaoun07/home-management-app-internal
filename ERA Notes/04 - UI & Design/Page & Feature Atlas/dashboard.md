@@ -22,6 +22,7 @@ tags: []
 - **Layout**: `src/app/dashboard/layout.tsx`
 - **Sub-components**:
   - `src/components/dashboard/EnhancedMobileDashboard.tsx`
+  - `src/components/reminder/RemindersInsightsPage.tsx`
   - `src/components/dashboard/TransactionsTable.tsx`
   - `src/components/dashboard/CategoryDetailView.tsx`
   - `src/components/dashboard/SwipeableTransactionItem.tsx`
@@ -61,6 +62,7 @@ tags: []
 
 ## Notes
 
+- Mobile `Insights` tab renders Schedule/reminder stats moved from `/reminders` on 2026-06-19.
 - Prefetch on startup via `src/components/EagerDataPrefetch.tsx` and on hover via `src/lib/prefetch/prefetchDashboard.ts`.
 - Theme changes invalidate all queries — full refetch on theme switch.
 - Section order is drag-configurable via `EditableWidgetGrid`.

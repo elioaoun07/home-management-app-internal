@@ -45,7 +45,11 @@ The Schedule module's three placement strategies — one-time (`reminder_details
 4. **Push off** — one-time/recurring items use `useItemActionsWithToast().handlePostpone` (already has its own toast+Undo, see `useItemActions.ts`). Flexible items use `useUnscheduleRoutine()`, which simply returns the item to its period's "unscheduled" pool — the actual re-placement decision is deferred to whichever day's prepone pool the user visits next, rather than forcing an immediate re-pick.
 5. **Checkpoints** — stored as a `jsonb` array directly on the `day_plans` row (no child table), to avoid the hot-child-table RLS concerns in Hard Rule #20 and keep phase 1 simple.
 
-6. **Section defaults** — `WebDayPlanner` keeps the selected-day panel always visible; it is not a collapsible section. The Prepone pool opens only when it contains items. Overdue is a separate today-only section controlled by `/reminders/page.tsx` through the top Overdue icon.
+6. **Section defaults** — `WebDayPlanner` keeps the selected-day panel always visible; it is not a collapsible section. Upcoming (+1d → +7d) is collapsed by default. The Prepone pool opens only when it contains items. Overdue is a separate today-only section controlled by `/reminders/page.tsx` through the top Overdue icon.
+
+7. **Mobile flexible assignment** — `/reminders` also has an `Assign` tab (`MobileFlexibleAssignmentPage.tsx`). It reuses `useFlexibleRoutines`, `useScheduleRoutine`, and `useUnscheduleRoutine` to provide a simpler mobile slot picker: choose a day/time once, then assign or move flexible routines into that calendar slot with Undo.
+
+**2026-06-19 correction:** mobile Assign is catalogue-first. It lists task catalogue templates marked `is_flexible_routine`, computes remaining slots for the selected period, and adds a selected day/time slot. It uses `useScheduleRoutine` only when a linked active flexible routine already exists; otherwise it creates a catalogue-derived reminder/task item for the period.
 
 ### The save-gated draft model *(added 2026-06-16, updated 2026-06-17)*
 
@@ -74,6 +78,7 @@ See `migrations/2026-06-16_plan-my-day.sql` (original DDL) and `migrations/2026-
 - `src/app/reminders/page.tsx` — Focus tab renders `WebDayPlanner`; reads `?date=` + `?plan=1` from URL (via `useSearchParams`), cleans params via `history.replaceState`
 - `src/app/today/page.tsx` — redirect-only; immediately navigates to `/reminders?date=…&plan=1` to preserve old links / PWA shortcuts
 - `src/components/planner/WebDayPlanner.tsx` — the merged surface: day nav, three-state model (browsing/planning/preview), selected-day panel with next-item focus, separate Overdue/Upcoming/Assigned sections (today only), prepone pool, checklist editor (dnd-kit drag-to-reorder), ad-hoc task add, `ItemDetailModal` + `ItemActionsSheet` wiring
+- `src/components/planner/MobileFlexibleAssignmentPage.tsx` — `/reminders` Assign tab for mobile-friendly flexible catalogue routine assignment
 - `src/features/day-plan/useDayPlan.ts` — `useDayPlan(date)`, `useUpsertDayPlan()`, `useDeleteDayPlan()`, `useChecklistActions()` (live `toggleChecklistItem` PATCH)
 - `src/app/api/day-plans/route.ts` — GET (merges partner's public plan) + POST (upsert by `user_id, plan_date`, once per Save)
 - `src/app/api/day-plans/[id]/route.ts` — PATCH (checklist item done/undone) + DELETE

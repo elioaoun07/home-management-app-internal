@@ -16,6 +16,7 @@ The default landing surface after login. Shows KPI cards, recent transactions, m
   - `src/app/dashboard/layout.tsx`
 - **Components**:
   - `src/components/dashboard/EnhancedMobileDashboard.tsx`
+  - `src/components/reminder/RemindersInsightsPage.tsx`
   - `src/components/dashboard/SwipeableTransactionItem.tsx`
   - `src/components/dashboard/TransactionDetailModal.tsx`
   - `src/components/dashboard/CategoryDetailView.tsx`
@@ -32,6 +33,8 @@ The default landing surface after login. Shows KPI cards, recent transactions, m
 - **"Edit the dashboard sections / order"** → `EnhancedMobileDashboard.tsx` + section order in `src/features/preferences/useSectionOrder.ts`.
 - **"Change the recent transactions list on dashboard"** → `TransactionsTable.tsx` + `useDashboardTransactions.ts` in transactions feature.
 - **"Edit category drill-down view"** → `CategoryDetailView.tsx`.
+
+- **"Edit the Dashboard Insights tab"** -> `src/app/dashboard/DashboardClientPage.tsx` + `src/components/reminder/RemindersInsightsPage.tsx`.
 
 ## Gotchas
 

@@ -57,6 +57,8 @@ tags:
 
 ## Related code (single source of truth)
 
+**2026-06-19 surface update:** `/reminders` now has a clear two-tab mobile role: `Focus` (`WebDayPlanner`) for the selected-day list/Plan My Day, and `Assign` (`MobileFlexibleAssignmentPage`) for flexible catalogue routine assignment. Assign lists task catalogue templates marked flexible and not yet planned for the selected period, matching the Web Week calendar flow in a mobile list. Schedule Insights moved to `/dashboard`; Upcoming is collapsed by default in Focus.
+
 Do **not** duplicate file-path tables here — they drift. The authoritative code map lives in:
 
 - [Items & Reminders / Overview](<../../02 - Standalone Modules/Items & Reminders/Overview.md>) — UI entry points, mutation hooks, occurrence-action hooks, API routes, module Hard Rules.

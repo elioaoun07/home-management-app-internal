@@ -8,6 +8,7 @@
 | `/reminders` Focus tab (merged surface) | `src/app/reminders/page.tsx` |
 | `/today` redirect | `src/app/today/page.tsx` |
 | Main planner view (merged with Reminders) | `src/components/planner/WebDayPlanner.tsx` |
+| Mobile flexible catalogue slot assignment (`/reminders` Assign tab) | `src/components/planner/MobileFlexibleAssignmentPage.tsx` |
 
 ### Feature layer
 | Intent | File |

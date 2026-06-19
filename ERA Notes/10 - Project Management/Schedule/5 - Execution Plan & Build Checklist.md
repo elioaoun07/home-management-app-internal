@@ -240,7 +240,8 @@ This mirrors the global theme ("Stabilize, then Connect") at the module level: h
 
 > The "seven doors for one module" cleanup. Mostly decisions before code — don't delete pages ad hoc.
 
-- [ ] **5.1** Settle the **`/reminders` role** (open question): management view ("assignments + everything still open") **or** fold into Today. *(Largely answered by the Plan My Day merge; confirm the residual long-term role.)* _(M · [file 2 Direction](<2 - Vision, Target Design & Decisions.md>))_
+- [x] **5.1** Settle the **`/reminders` role** *(IMPLEMENTED 2026-06-19)*: `Focus` is selected-day planning/open work; `Assign` is mobile flexible catalogue routine assignment; Schedule Insights moved to `/dashboard`. _(M · [file 2 Direction](<2 - Vision, Target Design & Decisions.md>))_
+- [x] **5.1a** Correct mobile Assign scope *(IMPLEMENTED 2026-06-19)*: Assign is catalogue-first, listing flexible task templates not yet planned for the selected period and adding one selected day/time slot, matching the Web Week calendar flow. _(S · [file 2 Direction](<2 - Vision, Target Design & Decisions.md>))_
 - [ ] **5.2** Give each surface **one job** per the [surface map](<1 - Feature State & Pain Inventory.md>) (Month / Week / Today / Form). _(M)_
 - [ ] **5.3** Investigate the [MobileReminderForm.tsx](<../../../src/components/reminder/MobileReminderForm.tsx>) vs [MobileItemForm.tsx](<../../../src/components/items/MobileItemForm.tsx>) **duplication** — decide keep/merge/retire. **No deletion without a decision.** _(S · [file 3 §E](<3 - Type Taxonomy & Capture Design.md>))_
 - [ ] **5.4** Reassignment **history / audit** trail — "who had it when" (W8). _(M · [file 1 Cluster 1](<1 - Feature State & Pain Inventory.md>))_

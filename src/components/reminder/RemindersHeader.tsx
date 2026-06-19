@@ -8,7 +8,7 @@ import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type UserFilter = "all" | "mine" | "partner";
-export type RemindersPage = "focus" | "insights";
+export type RemindersPage = "focus" | "assign";
 
 interface RemindersHeaderProps {
   userFilter: UserFilter;
@@ -78,7 +78,7 @@ const FocusIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const InsightsIcon = ({ className }: { className?: string }) => (
+const AssignIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
     viewBox="0 0 24 24"
@@ -86,9 +86,9 @@ const InsightsIcon = ({ className }: { className?: string }) => (
     stroke="currentColor"
     strokeWidth="2"
   >
-    <path d="M3 3v18h18" />
-    <path d="M7 16l4-6 4 3 5-7" />
-    <circle cx="20" cy="6" r="1.5" fill="currentColor" />
+    <rect x="3" y="4" width="18" height="17" rx="2" />
+    <path d="M8 2v4M16 2v4M3 10h18" />
+    <path d="M9 15l2 2 4-5" />
   </svg>
 );
 
@@ -133,7 +133,7 @@ export default function RemindersHeader({
     Icon: React.FC<{ className?: string }>;
   }[] = [
     { key: "focus", label: "Focus", Icon: FocusIcon },
-    { key: "insights", label: "Insights", Icon: InsightsIcon },
+    { key: "assign", label: "Assign", Icon: AssignIcon },
   ];
 
   return (

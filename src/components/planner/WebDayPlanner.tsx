@@ -820,7 +820,6 @@ export default function WebDayPlanner({
     if (itemsLoading) return;
     setPreponePoolOpen(preponeCandidates.length > 0);
     if (selectedIsToday) {
-      setUpcomingOpen(upcomingOccurrences.length > 0);
       setAssignedToMeOpen(assignedToMeItems.length > 0);
       setAssignedOutOpen(assignedOutItems.length > 0);
     }
@@ -829,7 +828,6 @@ export default function WebDayPlanner({
     itemsLoading,
     preponeCandidates.length,
     selectedIsToday,
-    upcomingOccurrences.length,
     assignedToMeItems.length,
     assignedOutItems.length,
   ]);

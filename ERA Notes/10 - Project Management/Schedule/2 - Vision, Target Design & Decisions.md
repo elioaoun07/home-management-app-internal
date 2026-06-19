@@ -166,6 +166,8 @@ Not a hard commit yet (sequenced in [file 5](<5 - Execution Plan & Build Checkli
 | **Focus page** | ❌ Retired (Decision 1). |
 | **Stats** | ⚪ Parked — untouched this campaign. |
 
+**2026-06-19 decision:** `/reminders` keeps a focused mobile job instead of being folded away: `Focus` = selected-day planning/open work, `Assign` = mobile assignment for flexible task catalogue templates that still need a slot in the selected period. Schedule Insights moves to `/dashboard`, where it fits the app-wide review/metrics habit.
+
 ---
 
 ## ❓→✅ Open question (now decided) — the low-friction capture path

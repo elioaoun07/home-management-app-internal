@@ -12,38 +12,49 @@ tags: []
 
 # Reminders
 
-> TODO: one-sentence description.
+> Mobile Schedule surface for day focus, planning, and flexible catalogue routine assignment.
 
 ## Files
 
 - **Page**: `src/app/reminders/page.tsx`
-- **Main component**: _(self-contained in page file)_
-- **Sub-components**: TODO
+- **Main components**:
+  - `src/components/planner/WebDayPlanner.tsx` - Focus tab
+  - `src/components/planner/MobileFlexibleAssignmentPage.tsx` - Assign tab
 
 ## Hooks
 
 - `src/features/items/useItems`
+- `src/features/items/useFlexibleRoutines`
+- `src/features/items/useItemActions`
+- `src/features/catalogue/useCatalogueItems`
+- `src/features/catalogue/useCatalogueModules`
+- `src/features/day-plan/useDayPlan`
 
 ## API routes
 
-- TODO
+- `GET/POST /api/day-plans`
+- `PATCH/DELETE /api/day-plans/[id]`
+- `src/app/api/items/` routes via item action hooks
 
 ## DB tables
 
-- TODO
+- `items`, `catalogue_items`, `item_flexible_schedules`, `item_recurrence_rules`, `item_occurrence_actions`, `day_plans`
 
 ## How to get here
 
-- TODO (which button/icon/deep-link navigates here)
+- Tap **Reminders/Schedule** in mobile navigation
+- `/today` redirects here with `?date=YYYY-MM-DD&plan=1`
 - Direct URL: `/reminders`
 
 ## What it links to
 
-- TODO
+- In-page item detail/actions modals
+- `/expense` via the add-item FAB
 
 ## Related vault doc
 
-- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)
+- `ERA Notes/02 - Standalone Modules/Items & Reminders/Overview.md`
+- `ERA Notes/03 - Junction Modules/Plan My Day/Overview.md`
 
 ## Screenshots
 
@@ -52,4 +63,6 @@ tags: []
 
 ## Notes
 
-- TODO
+- Tabs are `Focus` and `Assign`. Schedule Insights moved to `/dashboard`.
+- Upcoming (+1d to +7d) is collapsed by default in Focus.
+- Assign lists flexible task catalogue templates not yet planned for the selected period, then adds one slot to the selected day/time.
