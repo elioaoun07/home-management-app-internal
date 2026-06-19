@@ -224,7 +224,7 @@ Account types (`expense`/`income`/`saving`) affect balance direction — see `mi
 | Error Logs               | `src/app/error-logs/`, `src/app/api/error-logs/`                  | `ERA Notes/02 - Standalone Modules/Error Logs/`         | Standalone |
 | NFC Tags                 | `src/features/nfc/`, `src/app/nfc/[tag]/`, `src/app/api/nfc/`     | `ERA Notes/02 - Standalone Modules/NFC Tags/`           | Standalone |
 | Prerequisites            | `src/lib/prerequisites/`, `src/app/api/items/[id]/prerequisites/` | `ERA Notes/03 - Junction Modules/Prerequisites/`        | Junction   |
-| Chores                   | `src/app/chores/`, `src/features/chores/`                        | `ERA Notes/02 - Standalone Modules/Chores/`                         | Standalone |
+| Chores                   | `src/app/reminders/` (Chores tab), `src/app/chores/` (redirect), `src/components/chores/`, `src/features/chores/` | `ERA Notes/02 - Standalone Modules/Chores/` | Standalone |
 | Focus                    | `src/app/focus/`, `src/components/focus/`                        | `ERA Notes/02 - Standalone Modules/Focus/`                          | Standalone |
 | Trips                    | `src/app/trips/`, `src/features/trips/`, `src/components/trips/`  | `ERA Notes/03 - Junction Modules/Trips/`                            | Junction   |
 | Dashboard                | `src/app/dashboard/`, `src/components/web/WebDashboard.tsx`       | `ERA Notes/02 - Standalone Modules/Dashboard/`                      | Standalone |

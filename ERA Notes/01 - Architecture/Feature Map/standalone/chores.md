@@ -1,25 +1,27 @@
 # Chores
 
 **Type:** Standalone
-**Route:** `/chores`
+**Route:** `/reminders` (Chores tab) — `/chores` is a redirect to `/reminders?tab=chores`
 
 ## What it does
 
 Household chores list with grouped views, an "up next" hero, simple completion, and a Sunday check-in for unresolved chores. Chores are stored as Items with `is_chore = true`, but the UX intentionally stays simpler than Schedule tasks/reminders.
 
+The mobile chores UI was merged into `/reminders` as a tab (between Focus and Assign) on 2026-06-19 — it is no longer a standalone route. `/chores` survives only as a redirect for old links / the installed PWA shortcut.
+
 ## Files at a glance
 
-- **Page entry**: `src/app/chores/page.tsx`
+- **Page entry**: `src/app/reminders/page.tsx` (Chores tab) — renders `ChoresTabContent`
+- **Redirect**: `src/app/chores/page.tsx` → `/reminders?tab=chores`
 - **Components**:
-  - `src/components/chores/StandaloneChoresPage.tsx`
+  - `src/components/chores/ChoresTabContent.tsx` — content (no longer owns its own filter bar; driven by the shared Reminders `FilterBar` userFilter/showCompleted)
   - `src/components/chores/ChoreCheckInPanel.tsx`
   - `src/components/chores/UpNextHero.tsx`
   - `src/components/chores/ChoreGroupList.tsx`
   - `src/components/chores/ChoreCard.tsx`
   - `src/components/chores/ChoreActionsSheet.tsx`
   - `src/components/chores/ChorePostponeSheet.tsx`
-  - `src/components/chores/ChoresFilterBar.tsx`
-  - `src/components/web/WebChores.tsx`
+  - `src/components/web/WebChores.tsx` (separate desktop SPA view inside `WebViewContainer`, untouched by this merge)
 - **Hooks**:
   - `src/features/chores/useChores.ts`
   - `src/features/chores/useChoreActions.ts`
@@ -45,6 +47,7 @@ Household chores list with grouped views, an "up next" hero, simple completion, 
 - **"Edit chore card layout"** -> `ChoreCard.tsx`.
 - **"Change up-next hero"** -> `UpNextHero.tsx`.
 - **"Edit check-in behavior"** -> `ChoreCheckInPanel.tsx` + `useChoreActions.ts`.
+- **"Add a chores nav entry / filter"** -> `src/app/reminders/page.tsx` (it owns the tab + shared `FilterBar`, not `ChoresTabContent.tsx`).
 
 ## Connected modules
 

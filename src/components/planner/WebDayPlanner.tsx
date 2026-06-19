@@ -552,7 +552,13 @@ export default function WebDayPlanner({
     | null;
   const [editFlow, setEditFlow] = useState<EditFlow>(null);
 
-  const { data: allItems = [], isLoading: itemsLoading } = useItems();
+  const { data: fetchedItems = [], isLoading: itemsLoading } = useItems();
+  // Chores have their own tab (/reminders Chores tab) — never surface them here,
+  // regardless of overdue/today/upcoming/postponed/assigned status.
+  const allItems = useMemo(
+    () => fetchedItems.filter((item) => !item.is_chore),
+    [fetchedItems],
+  );
   const { data: occurrenceActions = [] } = useAllOccurrenceActions();
   const { data: householdData } = useHouseholdMembers();
   const members = householdData?.members ?? [];

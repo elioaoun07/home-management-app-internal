@@ -7,6 +7,7 @@ import FilterBar, {
   type TypeFilter,
   type UserFilter,
 } from "@/components/activity/FilterBar";
+import ChoresTabContent from "@/components/chores/ChoresTabContent";
 import MobileFlexibleAssignmentPage from "@/components/planner/MobileFlexibleAssignmentPage";
 import WebDayPlanner, { type PlannerToolbarState } from "@/components/planner/WebDayPlanner";
 import {
@@ -25,7 +26,7 @@ import { parseISO } from "date-fns";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type RemindersPage = "focus" | "assign";
+type RemindersPage = "focus" | "chores" | "assign";
 
 // ─── Tab Icons ────────────────────────────────────────────────────────────────
 const FocusIcon = ({ className }: { className?: string }) => (
@@ -39,6 +40,20 @@ const FocusIcon = ({ className }: { className?: string }) => (
     <circle cx="12" cy="12" r="3" />
     <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
     <circle cx="12" cy="12" r="8" strokeDasharray="4 4" />
+  </svg>
+);
+
+const ChoresIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M3 12l2-2 2 2 4-4" />
+    <path d="M3 19l2-2 2 2 4-4" />
+    <path d="M13 7h8M13 17h8" />
   </svg>
 );
 
@@ -58,6 +73,7 @@ const AssignIcon = ({ className }: { className?: string }) => (
 
 const REMINDERS_SECTIONS: FilterBarSection[] = [
   { key: "focus", label: "Focus", Icon: FocusIcon, variant: "neutral" },
+  { key: "chores", label: "Chores", Icon: ChoresIcon, variant: "neutral" },
   {
     key: "assign",
     label: "Assign",
@@ -77,10 +93,16 @@ export default function RemindersStandalonePage() {
   const searchParams = useSearchParams();
   const initialDate = useMemo(() => searchParams.get("date") ?? undefined, [searchParams]);
   const initialPlanning = useMemo(() => searchParams.get("plan") === "1", [searchParams]);
+  const initialTab = useMemo(() => {
+    const tab = searchParams.get("tab");
+    return tab === "chores" || tab === "assign" ? tab : undefined;
+  }, [searchParams]);
   const themeClasses = useThemeClasses();
 
   const [mounted, setMounted] = useState(false);
-  const [activePage, setActivePage] = useState<RemindersPage>("focus");
+  const [activePage, setActivePage] = useState<RemindersPage>(
+    initialTab ?? "focus",
+  );
   const [selectedDate, setSelectedDate] = useState<Date>(() =>
     initialDate ? parseISO(initialDate) : new Date(),
   );
@@ -147,12 +169,12 @@ export default function RemindersStandalonePage() {
     }
   }, [plannerToolbar.overdueCount, plannerToolbar.selectedIsToday]);
 
-  // Clean the URL params after reading them (captured into initialDate/initialPlanning above)
+  // Clean the URL params after reading them (captured into initialDate/initialPlanning/initialTab above)
   useEffect(() => {
-    if (mounted && (initialDate || initialPlanning)) {
+    if (mounted && (initialDate || initialPlanning || initialTab)) {
       window.history.replaceState({}, "", "/reminders");
     }
-  }, [mounted, initialDate, initialPlanning]);
+  }, [mounted, initialDate, initialPlanning, initialTab]);
 
   if (!mounted) {
     return (
@@ -210,51 +232,55 @@ export default function RemindersStandalonePage() {
           queryClient.invalidateQueries({ queryKey: itemsKeys.all });
         }}
         extraActions={
-          activePage === "focus" ? (
+          activePage === "focus" || activePage === "chores" ? (
             <>
-              <button
-                type="button"
-                disabled={plannerToolbar.dayPlanLoading}
-                onClick={() => {
-                  if (plannerToolbar.mode === "planning") return;
-                  if (navigator.vibrate) navigator.vibrate(5);
-                  setPlanningCommandToken((token) => token + 1);
-                }}
-                className={cn(
-                  "relative p-1.5 rounded-lg transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed",
-                  plannerToolbar.mode === "planning"
-                    ? `${themeClasses.bgActive} ${themeClasses.textActive}`
-                    : `neo-card ${themeClasses.text} hover:bg-white/5`,
-                )}
-                title="Plan my day"
-                aria-label="Plan my day"
-              >
-                <SparklesIcon className="w-4 h-4" />
-              </button>
-
-              {plannerToolbar.selectedIsToday && plannerToolbar.overdueCount > 0 && (
+              {activePage === "focus" && (
                 <button
                   type="button"
+                  disabled={plannerToolbar.dayPlanLoading}
                   onClick={() => {
+                    if (plannerToolbar.mode === "planning") return;
                     if (navigator.vibrate) navigator.vibrate(5);
-                    setShowOverdue((visible) => !visible);
+                    setPlanningCommandToken((token) => token + 1);
                   }}
                   className={cn(
-                    "relative p-1.5 rounded-lg transition-colors flex-shrink-0",
-                    showOverdue
+                    "relative p-1.5 rounded-lg transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed",
+                    plannerToolbar.mode === "planning"
                       ? `${themeClasses.bgActive} ${themeClasses.textActive}`
                       : `neo-card ${themeClasses.text} hover:bg-white/5`,
                   )}
-                  title={showOverdue ? "Hide overdue items" : "Show overdue items"}
-                  aria-label={showOverdue ? "Hide overdue items" : "Show overdue items"}
-                  aria-pressed={showOverdue}
+                  title="Plan my day"
+                  aria-label="Plan my day"
                 >
-                  <AlertBellIcon className="w-4 h-4" />
-                  <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full neo-gradient text-[9px] leading-4 text-white font-bold text-center">
-                    {plannerToolbar.overdueCount}
-                  </span>
+                  <SparklesIcon className="w-4 h-4" />
                 </button>
               )}
+
+              {activePage === "focus" &&
+                plannerToolbar.selectedIsToday &&
+                plannerToolbar.overdueCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator.vibrate) navigator.vibrate(5);
+                      setShowOverdue((visible) => !visible);
+                    }}
+                    className={cn(
+                      "relative p-1.5 rounded-lg transition-colors flex-shrink-0",
+                      showOverdue
+                        ? `${themeClasses.bgActive} ${themeClasses.textActive}`
+                        : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                    )}
+                    title={showOverdue ? "Hide overdue items" : "Show overdue items"}
+                    aria-label={showOverdue ? "Hide overdue items" : "Show overdue items"}
+                    aria-pressed={showOverdue}
+                  >
+                    <AlertBellIcon className="w-4 h-4" />
+                    <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full neo-gradient text-[9px] leading-4 text-white font-bold text-center">
+                      {plannerToolbar.overdueCount}
+                    </span>
+                  </button>
+                )}
 
               <button
                 type="button"
@@ -297,6 +323,12 @@ export default function RemindersStandalonePage() {
           currentUserId={currentUserId}
           typeFilter={typeFilter}
           recurringFilter={recurringFilter}
+        />
+      ) : activePage === "chores" ? (
+        <ChoresTabContent
+          userFilter={userFilter}
+          currentUserId={currentUserId}
+          showCompleted={showCompleted}
         />
       ) : (
         <MobileFlexibleAssignmentPage

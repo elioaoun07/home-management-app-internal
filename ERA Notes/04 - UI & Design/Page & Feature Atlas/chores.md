@@ -1,8 +1,8 @@
 ---
 slug: chores
-title: Chores
+title: Chores (merged → /reminders)
 category: standalone-page
-route: /chores
+route: /reminders
 type: page
 parent: null
 children: []
@@ -12,12 +12,13 @@ tags: []
 
 # Chores
 
-> Household chore management — Up Next hero, grouped list, quick completion, Sunday check-in for unresolved chores.
+> Merged into the `/reminders` Chores tab (2026-06-19, between Focus and Assign). The former `/chores` route is now a redirect. Household chore management — Up Next hero, grouped list, quick completion, Sunday check-in for unresolved chores.
 
 ## Files
 
-- **Page**: `src/app/chores/page.tsx`
-- **Main component**: `src/components/chores/StandaloneChoresPage.tsx`
+- **Page** (Chores tab): `src/app/reminders/page.tsx`
+- **Redirect**: `src/app/chores/page.tsx` → `/reminders?tab=chores`
+- **Main component**: `src/components/chores/ChoresTabContent.tsx` (props-driven: `userFilter`, `currentUserId`, `showCompleted` come from the shared Reminders `FilterBar`, not an internal filter bar)
 - **Sub-components**:
   - `src/components/chores/UpNextHero.tsx`
   - `src/components/chores/ChoreCard.tsx`
@@ -25,8 +26,7 @@ tags: []
   - `src/components/chores/ChoreCheckInPanel.tsx`
   - `src/components/chores/ChoreActionsSheet.tsx`
   - `src/components/chores/ChorePostponeSheet.tsx`
-  - `src/components/chores/ChoresFilterBar.tsx`
-  - `src/components/web/WebChores.tsx`
+  - `src/components/web/WebChores.tsx` (separate desktop SPA view inside `WebViewContainer` — untouched by this merge)
 
 ## Hooks
 
@@ -46,7 +46,9 @@ tags: []
 
 ## How to get here
 
-- ERA nav or direct URL: `/chores`
+- Default: navigate to `/reminders`, select the Chores tab
+- Direct URL: `/reminders?tab=chores`
+- Legacy: `/chores` → redirects above
 
 ## What it links to
 
@@ -61,3 +63,4 @@ tags: []
 - Chores are `items` rows — not a separate table. Always scope queries with `is_chore = true`.
 - Trip activation auto-skips chores via `trip_side_effects`.
 - Sunday check-in is collapsed by default; shows prior-week unresolved chores when expanded.
+- The Reminders page's "show completed" eye toggle in the toolbar now also drives the Chores tab's "Done this period" section.
