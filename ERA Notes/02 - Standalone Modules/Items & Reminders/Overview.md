@@ -209,10 +209,11 @@ Helper functions:
 5. **No red on item rows** — use theme colors (pink/cyan). Container headers can use red/amber. Overdue labels → `text-white/40`
 6. **Soft-delete and archive must deactivate `item_alerts`** — FK cascade only fires on hard delete. Both `useArchiveItem` (browser) and `DELETE /api/items/[id]` set `active=false` on pending alerts so the cron stops firing. Cancelling a single occurrence inserts to `item_alert_suppressions` so the cron can suppress that specific occurrence's push.
 7. **Alert cron must filter `archived_at IS NULL` AND `deleted_at IS NULL`** — and check `item_occurrence_actions` (cancelled/skipped/completed) and `item_alert_suppressions` before firing. See `src/app/api/cron/item-reminders/route.ts`.
+8. **Completing a non-recurring item auto-archives it only if its occurrence date is more than 1 month old** (`ARCHIVE_COMPLETED_OLDER_THAN_MONTHS` in both `[id]/complete/route.ts` and `[id]/actions/route.ts` — keep the constant in sync across both files). Completions within the last month leave `archived_at` untouched so the item still renders with its green strikethrough in `WebCalendar`/`DayExpansionModal`. `useItems()` defaults to `include_archived: false`, so an archived item disappears from every list/calendar entirely — not just from "active" views. Recurring items are unaffected (their completions live in `item_occurrence_actions`, not `archived_at`).
 
 ## Reminder list windows (`/reminders`)
 
-`StandaloneRemindersPage` renders four occurrence buckets — Overdue (-90d → now), Today, This Week (+1d → +7d), Later (+7d → +90d). The Later window is required so monthly recurring items remain visible mid-period; without it they disappear between weekly views. The "mine"/"partner" filter operates on `responsible_user_id`, not `user_id` — so an item I own and assign to my partner appears under "partner".
+`/reminders` Focus is now `WebDayPlanner`. The selected day is the primary top panel: it highlights the next item and lists the rest without a collapsible section wrapper. Today is a quick-jump inside the day navigation row. Overdue items are hidden by default and open as their own section from the top Overdue icon; Upcoming (+1d → +7d) and assignment buckets remain today-only. The "mine"/"partner" filter operates on `responsible_user_id`, not `user_id` — so an item I own and assign to my partner appears under "partner".
 
 ---
 

@@ -73,7 +73,7 @@ If energy says otherwise, the capture decision (Cluster 3) is the higher *habit*
 ### Later
 
 - [ ] Reassignment history/audit (W8).
-- [x] **Surface consolidation — `/reminders` merged with Plan My Day (W9).** *(IMPLEMENTED 2026-06-17)* `WebDayPlanner.tsx` now hosts `/reminders` Focus tab; `StandaloneRemindersPage.tsx` deleted; `/today` → redirect. Three-state model (browsing/planning/preview); checklist replaces timed checkpoints; Overdue/Upcoming/Assigned sections brought in from retired page.
+- [x] **Surface consolidation — `/reminders` merged with Plan My Day (W9).** *(IMPLEMENTED 2026-06-17; toolbar tuned 2026-06-19)* `WebDayPlanner.tsx` now hosts `/reminders` Focus tab; `StandaloneRemindersPage.tsx` deleted; `/today` → redirect. Three-state model (browsing/planning/preview); checklist replaces timed checkpoints; selected-day work is a primary panel with next-item focus, Today lives in the day navigator, Plan stays in the top action row, and Overdue opens as its own opt-in section.
 - [ ] Carry the recurrence/placement tests + prerequisites from the parent [file 3](<../3 - Current — Action Plan.md>) (foundational; not duplicated here).
 
 ---

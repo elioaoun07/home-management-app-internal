@@ -3,7 +3,14 @@
 import { resetCompletedPrerequisiteItem } from "@/lib/prerequisites/engine";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
+import { subMonths } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
+
+// Completed items older than this are archived immediately so the active
+// item list doesn't accumulate stale completions. Anything more recent stays
+// visible (with its strikethrough) until the user archives/deletes it
+// explicitly. See ERA Notes/02 - Standalone Modules/Items & Reminders/Overview.md.
+const ARCHIVE_COMPLETED_OLDER_THAN_MONTHS = 1;
 
 interface CompleteRequestBody {
   occurrence_date: string;
@@ -128,22 +135,16 @@ export async function POST(
         type: "occurrence",
       });
     } else {
-      // For non-recurring: determine if should be archived
-      const occurrenceDateObj = new Date(occurrence_date);
-      const now = new Date();
-      const weekStart = new Date(now);
-      const dayOfWeek = now.getDay();
-      const daysFromMonday = (dayOfWeek + 6) % 7;
-      weekStart.setDate(now.getDate() - daysFromMonday);
-      weekStart.setHours(0, 0, 0, 0);
-
-      const shouldArchive = occurrenceDateObj < weekStart;
+      // Auto-archive only kicks in for occurrences more than a month old —
+      // completing something due this week or last week keeps it visible.
+      const shouldArchive =
+        new Date(occurrence_date) <
+        subMonths(new Date(), ARCHIVE_COMPLETED_OLDER_THAN_MONTHS);
 
       const updatePayload: Record<string, string> = {
         status: "completed",
         updated_at: new Date().toISOString(),
       };
-
       if (shouldArchive) {
         updatePayload.archived_at = new Date().toISOString();
       }

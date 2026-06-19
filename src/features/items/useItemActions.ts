@@ -268,7 +268,9 @@ export function getPostponedOccurrencesForDate<T extends { id: string }>(
       action.action_type === "completed" ||
       action.action_type === "cancelled"
     ) {
-      const actionDateStr = parseDbDateToLocalString(action.occurrence_date);
+      const actionDateStr = parseDbDateToLocalString(
+        getActionPlannedFor(action) ?? action.occurrence_date,
+      );
       completedOrCancelledKeys.add(`${action.item_id}:${actionDateStr}`);
     }
   }
@@ -327,8 +329,12 @@ export function getCompletedOccurrencesForDate<T extends { id: string }>(
   for (const action of actions) {
     if (action.action_type !== "completed") continue;
 
-    // Parse the action's occurrence_date to local date string
-    const actionDateStr = parseDbDateToLocalString(action.occurrence_date);
+    // For chores/flexible routines, planned_for links a late completion back
+    // to the calendar slot it resolved, while occurrence_date stays the
+    // actual completion timestamp (for analytics). Match isOccurrenceCompleted.
+    const actionDateStr = parseDbDateToLocalString(
+      getActionPlannedFor(action) ?? action.occurrence_date,
+    );
 
     if (actionDateStr === targetDateStr) {
       const item = items.find((i) => i.id === action.item_id);

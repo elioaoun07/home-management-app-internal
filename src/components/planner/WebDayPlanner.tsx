@@ -108,7 +108,16 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 import { toast } from "sonner";
 
 const typeIcons: Record<ItemType, typeof Calendar> = {
@@ -468,17 +477,34 @@ function ChecklistSortableRow({
 interface WebDayPlannerProps {
   initialDate?: string;
   initialPlanning?: boolean;
+  selectedDate: Date;
+  onSelectedDateChange: Dispatch<SetStateAction<Date>>;
+  showOverdue?: boolean;
+  planningCommandToken?: number;
+  onToolbarStateChange?: (state: PlannerToolbarState) => void;
   userFilter?: UserFilter;
   currentUserId?: string;
   typeFilter?: TypeFilter;
   recurringFilter?: RecurringFilter;
 }
 
-type PlannerMode = "browsing" | "planning" | "preview";
+export type PlannerMode = "browsing" | "planning" | "preview";
+
+export interface PlannerToolbarState {
+  mode: PlannerMode;
+  dayPlanLoading: boolean;
+  overdueCount: number;
+  selectedIsToday: boolean;
+}
 
 export default function WebDayPlanner({
   initialDate,
   initialPlanning,
+  selectedDate,
+  onSelectedDateChange,
+  showOverdue = false,
+  planningCommandToken = 0,
+  onToolbarStateChange,
   userFilter = "all",
   currentUserId,
   typeFilter = "all",
@@ -489,15 +515,10 @@ export default function WebDayPlanner({
   const isFrost = theme === "frost";
   const partnerAccent = isPink ? "text-blue-400" : "text-pink-400";
 
-  const [selectedDate, setSelectedDate] = useState<Date>(() =>
-    initialDate ? parseISO(initialDate) : new Date(),
-  );
   const dateStr = format(selectedDate, "yyyy-MM-dd");
   const selectedIsToday = isDateToday(selectedDate);
 
-  const [dayItemsOpen, setDayItemsOpen] = useState(false);
   const [preponePoolOpen, setPreponePoolOpen] = useState(false);
-  const [overdueOpen, setOverdueOpen] = useState(false);
   const [upcomingOpen, setUpcomingOpen] = useState(false);
   const [assignedToMeOpen, setAssignedToMeOpen] = useState(false);
   const [assignedOutOpen, setAssignedOutOpen] = useState(false);
@@ -513,7 +534,8 @@ export default function WebDayPlanner({
   const [taskTime, setTaskTime] = useState("");
   const draftPlanKeyRef = useRef<string | null>(null);
   const initialPlanningConsumedRef = useRef(false);
-  const initialDateStrRef = useRef(initialDate ?? format(new Date(), "yyyy-MM-dd"));
+  const initialDateStrRef = useRef(initialDate ?? format(selectedDate, "yyyy-MM-dd"));
+  const lastPlanningCommandRef = useRef(planningCommandToken);
 
   const [actionsState, setActionsState] = useState<{
     item: ItemWithDetails;
@@ -540,13 +562,13 @@ export default function WebDayPlanner({
     ? getMemberDisplayName(members, partnerPlan.user_id)
     : null;
 
-  const seedDraftsFrom = (source: DayPlan | null) => {
+  const seedDraftsFrom = useCallback((source: DayPlan | null) => {
     setTitleDraft(source?.title ?? "");
     setNotesDraft(source?.notes ?? "");
     setIntentDraft(source?.intent ?? null);
     setIsPublicDraft(source?.is_public ?? false);
     setChecklistDraft(source?.checklist ?? []);
-  };
+  }, []);
 
   // Re-seed drafts only when the date or the saved plan identity changes — not on every
   // keystroke, and not on the live checklist-toggle refetch (same plan.id, new array ref).
@@ -556,7 +578,7 @@ export default function WebDayPlanner({
     draftPlanKeyRef.current = planKey;
     seedDraftsFrom(plan);
     setMode(plan?.id ? "preview" : "browsing");
-  }, [dateStr, plan]);
+  }, [dateStr, plan, seedDraftsFrom]);
 
   // URL-driven "jump straight into planning" (?plan=1) — fires once, after the
   // real plan data has settled, so it doesn't get clobbered by the effect above.
@@ -567,16 +589,24 @@ export default function WebDayPlanner({
     initialPlanningConsumedRef.current = true;
     seedDraftsFrom(plan);
     setMode("planning");
-  }, [initialPlanning, dayPlanLoading, dateStr, plan]);
+  }, [initialPlanning, dayPlanLoading, dateStr, plan, seedDraftsFrom]);
 
   const upsertDayPlan = useUpsertDayPlan();
   const deleteDayPlan = useDeleteDayPlan();
   const { toggleChecklistItem } = useChecklistActions(plan, dateStr);
 
-  const handleOpenPlanning = () => {
+  const handleOpenPlanning = useCallback(() => {
     seedDraftsFrom(plan);
     setMode("planning");
-  };
+  }, [plan, seedDraftsFrom]);
+
+  useEffect(() => {
+    if (!planningCommandToken) return;
+    if (lastPlanningCommandRef.current === planningCommandToken) return;
+    lastPlanningCommandRef.current = planningCommandToken;
+    if (mode === "planning") return;
+    handleOpenPlanning();
+  }, [handleOpenPlanning, mode, planningCommandToken]);
 
   const handleCancelEdit = () => {
     seedDraftsFrom(plan);
@@ -712,6 +742,18 @@ export default function WebDayPlanner({
       .filter((occ) => isBefore(occ.occurrenceDate, now) && !occ.isCompleted)
       .sort((a, b) => a.occurrenceDate.getTime() - b.occurrenceDate.getTime());
   }, [activeItems, occurrenceActions, scheduledFlexible, selectedIsToday]);
+  const overdueSectionVisible = showOverdue && selectedIsToday && overdueOccurrences.length > 0;
+  const primaryOccurrenceIndex = useMemo(() => {
+    if (dayOccurrences.length === 0) return -1;
+    const nextOpenIndex = dayOccurrences.findIndex((occ) => !occ.isCompleted);
+    return nextOpenIndex >= 0 ? nextOpenIndex : 0;
+  }, [dayOccurrences]);
+  const primaryOccurrence =
+    primaryOccurrenceIndex >= 0 ? dayOccurrences[primaryOccurrenceIndex] : null;
+  const remainingDayOccurrences = useMemo(
+    () => dayOccurrences.filter((_, index) => index !== primaryOccurrenceIndex),
+    [dayOccurrences, primaryOccurrenceIndex],
+  );
 
   const upcomingOccurrences = useMemo(() => {
     if (!selectedIsToday) return [];
@@ -765,10 +807,8 @@ export default function WebDayPlanner({
 
   useEffect(() => {
     if (itemsLoading) return;
-    setDayItemsOpen(dayOccurrences.length > 0);
     setPreponePoolOpen(preponeCandidates.length > 0);
     if (selectedIsToday) {
-      setOverdueOpen(overdueOccurrences.length > 0);
       setUpcomingOpen(upcomingOccurrences.length > 0);
       setAssignedToMeOpen(assignedToMeItems.length > 0);
       setAssignedOutOpen(assignedOutItems.length > 0);
@@ -776,14 +816,21 @@ export default function WebDayPlanner({
   }, [
     dateStr,
     itemsLoading,
-    dayOccurrences.length,
     preponeCandidates.length,
     selectedIsToday,
-    overdueOccurrences.length,
     upcomingOccurrences.length,
     assignedToMeItems.length,
     assignedOutItems.length,
   ]);
+
+  useEffect(() => {
+    onToolbarStateChange?.({
+      mode,
+      dayPlanLoading,
+      overdueCount: overdueOccurrences.length,
+      selectedIsToday,
+    });
+  }, [dayPlanLoading, mode, onToolbarStateChange, overdueOccurrences.length, selectedIsToday]);
 
   const itemActions = useItemActionsWithToast();
   const scheduleRoutine = useScheduleRoutine();
@@ -1157,6 +1204,102 @@ export default function WebDayPlanner({
     );
   };
 
+  const renderPrimaryOccurrenceCard = (occ: ExpandedOccurrence) => {
+    const { item, occurrenceDate } = occ;
+    const Icon = typeIcons[item.type];
+    const colors = typeColor[item.type];
+    const { schedule } = asFlexInfo(item);
+    const isFlexible = !!schedule || !!item.recurrence_rule?.is_flexible;
+    const isRecurring = !!item.recurrence_rule?.rrule;
+    const key = occKey(occ);
+    const isOptimistic = optimisticCompleted.has(key);
+    const isVisuallyCompleted = occ.isCompleted || isOptimistic;
+    const isSparkle = justCompleted.has(key);
+
+    return (
+      <SwipeableItem
+        key={`primary-${key}`}
+        onComplete={() => {
+          if (!isVisuallyCompleted) handleOptimisticComplete(occ);
+        }}
+        onOptions={() => openActions(occ)}
+        onClick={() => setSelectedItem(item)}
+      >
+        <div className={cn("rounded-2xl border p-4", cardBg)}>
+          <div className="flex items-start gap-3">
+            <SparkleCheckbox
+              checked={isVisuallyCompleted}
+              justCompleted={isSparkle}
+              onToggle={() => handleOptimisticComplete(occ)}
+            />
+            <div
+              className={cn(
+                "w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0",
+                colors.bg,
+                colors.text,
+              )}
+            >
+              <Icon className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={cn("text-[10px] font-bold uppercase tracking-wider mb-1", subtleText)}>
+                Next item
+              </p>
+              <div className="flex items-center gap-1.5">
+                <h2
+                  className={cn(
+                    "text-base font-semibold truncate",
+                    isVisuallyCompleted ? cn(subtleText, "line-through") : mainText,
+                  )}
+                >
+                  {item.title}
+                </h2>
+                {isRecurring && (
+                  <RefreshCw className={cn("w-3.5 h-3.5 flex-shrink-0", subtleText)} />
+                )}
+              </div>
+              <div className={cn("mt-1.5 flex flex-wrap items-center gap-2 text-xs", subtleText)}>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {format(occurrenceDate, "h:mm a")}
+                </span>
+                {isFlexible && <span>Flexible</span>}
+                {occ.isPostponed && <span className="text-blue-400">Postponed</span>}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openActions(occ);
+              }}
+              aria-label="More actions"
+              className="p-1.5 rounded-lg flex-shrink-0"
+            >
+              <MoreHorizontal className={cn("w-4 h-4", subtleText)} />
+            </button>
+          </div>
+          {isFlexible && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                pushOffFlexible(item);
+              }}
+              className={cn(
+                "mt-3 w-full py-2 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5",
+                isFrost ? "bg-amber-50 text-amber-500" : "bg-amber-500/10 text-amber-400",
+              )}
+            >
+              <CalendarOff className="w-3.5 h-3.5" />
+              Push off
+            </button>
+          )}
+        </div>
+      </SwipeableItem>
+    );
+  };
+
   const renderAssignmentItem = (
     item: ItemWithDetails,
     actionLabel: string,
@@ -1245,26 +1388,41 @@ export default function WebDayPlanner({
         <div className="flex items-center justify-between mb-3">
           <button
             type="button"
-            onClick={() => setSelectedDate((d) => subDays(d, 1))}
+            onClick={() => onSelectedDateChange((d) => subDays(d, 1))}
             className={cn("w-9 h-9 rounded-xl flex items-center justify-center", ghostButton)}
             aria-label="Previous day"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <div className="text-center">
+          <div className="text-center min-w-0">
             <p className={cn("text-lg font-semibold", mainText)}>
               {format(selectedDate, "EEEE")}
             </p>
-            <input
-              type="date"
-              value={dateStr}
-              onChange={(e) => e.target.value && setSelectedDate(parseISO(e.target.value))}
-              className={cn("text-xs bg-transparent text-center", subtleText)}
-            />
+            <div className="mt-0.5 flex items-center justify-center gap-2">
+              <input
+                type="date"
+                value={dateStr}
+                onChange={(e) => e.target.value && onSelectedDateChange(parseISO(e.target.value))}
+                className={cn("text-xs bg-transparent text-center", subtleText)}
+              />
+              {!selectedIsToday && (
+                <button
+                  type="button"
+                  onClick={() => onSelectedDateChange(new Date())}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                    activeBadge,
+                  )}
+                >
+                  <Calendar className="w-3 h-3" />
+                  Today
+                </button>
+              )}
+            </div>
           </div>
           <button
             type="button"
-            onClick={() => setSelectedDate((d) => addDays(d, 1))}
+            onClick={() => onSelectedDateChange((d) => addDays(d, 1))}
             className={cn("w-9 h-9 rounded-xl flex items-center justify-center", ghostButton)}
             aria-label="Next day"
           >
@@ -1281,20 +1439,6 @@ export default function WebDayPlanner({
               )}
             />
           </div>
-        ) : mode === "browsing" ? (
-          <button
-            type="button"
-            onClick={handleOpenPlanning}
-            className={cn(
-              "w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold border",
-              isPink
-                ? "bg-pink-500/15 border-pink-500/25 text-pink-300"
-                : "bg-cyan-500/15 border-cyan-500/25 text-cyan-300",
-            )}
-          >
-            <Sparkles className="w-4 h-4" />
-            Plan my day
-          </button>
         ) : mode === "planning" ? (
           <>
             <label className="block mb-3">
@@ -1678,45 +1822,71 @@ export default function WebDayPlanner({
           </div>
         ) : (
           <>
-            {/* Overdue (today only) */}
-            {selectedIsToday && overdueOccurrences.length > 0 && (
-              <div>
-                {renderSectionToggle(
-                  "Overdue",
-                  null,
-                  overdueOccurrences.length,
-                  overdueOpen,
-                  () => setOverdueOpen((v) => !v),
-                )}
-                {overdueOpen && (
-                  <div className="space-y-2">
-                    {overdueOccurrences.map((occ) => renderOccurrenceRow(occ, true))}
-                  </div>
+            {/* Selected day */}
+            <section className="space-y-3">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className={cn("text-[10px] font-bold uppercase tracking-wider", subtleText)}>
+                    {selectedIsToday ? "Today" : format(selectedDate, "EEE, MMM d")}
+                  </p>
+                  <h2 className={cn("text-lg font-semibold", mainText)}>
+                    {dayOccurrences.length === 0
+                      ? "Nothing scheduled"
+                      : `${dayOccurrences.length} item${dayOccurrences.length === 1 ? "" : "s"}`}
+                  </h2>
+                </div>
+                {dayOccurrences.length > 1 && (
+                  <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-medium", mutedBadge)}>
+                    {remainingDayOccurrences.length} more
+                  </span>
                 )}
               </div>
-            )}
 
-            {/* On this day */}
-            <div>
-              {renderSectionToggle(
-                "On this day",
-                null,
-                dayOccurrences.length,
-                dayItemsOpen,
-                () => setDayItemsOpen((v) => !v),
+              {primaryOccurrence ? (
+                <>
+                  {renderPrimaryOccurrenceCard(primaryOccurrence)}
+                  {remainingDayOccurrences.length > 0 && (
+                    <div className="space-y-2">
+                      {remainingDayOccurrences.map((occ) => renderOccurrenceRow(occ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className={cn("text-center py-10 rounded-2xl border", cardBg)}>
+                  <Calendar className={cn("w-7 h-7 mx-auto mb-2", subtleText)} />
+                  <p className={cn("text-sm font-medium", subtleText)}>
+                    Nothing scheduled for this day
+                  </p>
+                </div>
               )}
-              {dayItemsOpen &&
-                (dayOccurrences.length === 0 ? (
-                  <div className={cn("text-center py-10 rounded-xl border", cardBg)}>
-                    <Calendar className={cn("w-7 h-7 mx-auto mb-2", subtleText)} />
-                    <p className={cn("text-sm font-medium", subtleText)}>Nothing scheduled</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {dayOccurrences.map((occ) => renderOccurrenceRow(occ))}
-                  </div>
-                ))}
-            </div>
+            </section>
+
+            {/* Overdue (today only, top-icon controlled) */}
+            {overdueSectionVisible && (
+              <section>
+                <div className="flex items-center justify-between w-full mb-3">
+                  <span
+                    className={cn(
+                      "flex items-center gap-2 text-xs font-bold uppercase tracking-wider",
+                      subtleText,
+                    )}
+                  >
+                    Overdue
+                  </span>
+                  <span
+                    className={cn(
+                      "min-w-5 h-5 px-1.5 rounded-full text-[10px] font-bold flex items-center justify-center",
+                      activeBadge,
+                    )}
+                  >
+                    {overdueOccurrences.length}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {overdueOccurrences.map((occ) => renderOccurrenceRow(occ, true))}
+                </div>
+              </section>
+            )}
 
             {/* Upcoming (today only) */}
             {selectedIsToday && (

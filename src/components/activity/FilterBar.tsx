@@ -19,7 +19,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
 import { yyyyMmDd } from "@/lib/utils/date";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type UserFilter = "all" | "mine" | "partner";
@@ -66,6 +66,7 @@ export interface FilterBarProps {
 
   isFetching: boolean;
   onRefresh: () => void;
+  extraActions?: ReactNode;
 }
 
 // ─── Inline Icons ─────────────────────────────────────────────────────────────
@@ -260,6 +261,7 @@ export default function FilterBar({
   isBudgetSection,
   isFetching,
   onRefresh,
+  extraActions,
 }: FilterBarProps) {
   const themeClasses = useThemeClasses();
   const { theme: currentUserTheme } = useTheme();
@@ -464,6 +466,8 @@ export default function FilterBar({
             />
           )}
         </button>
+
+        {extraActions}
 
         {/* Eye — budget sections only */}
         {isBudgetSection && (

@@ -22,10 +22,10 @@ related:
 
 ## Overview
 
-The Schedule module's three placement strategies — one-time (`reminder_details.due_at` / `event_details.start_at`), recurring (RRULE via `item_recurrence_rules`), and flexible (`item_flexible_schedules`) — work well for a normal routine but break down on **disrupted days**: a wedding this Saturday, a one-day holiday. "Plan My Day" is now merged into the `/reminders` page as the **Focus tab** (`WebDayPlanner.tsx`). By default it shows the current day's scheduled items. Clicking **"Plan my day"** reveals the planning editor. The former standalone `/today` route is a redirect; the former `StandaloneRemindersPage` is deleted.
+The Schedule module's three placement strategies — one-time (`reminder_details.due_at` / `event_details.start_at`), recurring (RRULE via `item_recurrence_rules`), and flexible (`item_flexible_schedules`) — work well for a normal routine but break down on **disrupted days**: a wedding this Saturday, a one-day holiday. "Plan My Day" is now merged into the `/reminders` page as the **Focus tab** (`WebDayPlanner.tsx`). By default it shows the selected day's scheduled items. The sticky top action row exposes **Plan my day** as an icon beside filters/refresh; Today lives inside the day navigation controls. The former standalone `/today` route is a redirect and `StandaloneRemindersPage` is deleted.
 
 **Three UI states:**
-- **Browsing** (no plan yet): day nav + "On this day" list + collapsible Overdue/Upcoming (today only) + a prominent "✦ Plan my day" button.
+- **Browsing** (no plan yet): day nav + a primary selected-day panel that highlights the next item and lists the rest. Upcoming/assignment drawers remain today-only. Overdue is hidden by default and opens as its own section when the top Overdue icon is enabled.
 - **Planning** (button pressed or editing an existing plan): title/intent/notes/Private-Shared header + Prepone pool + Checklist editor (dnd-kit drag-to-reorder, untimed) + ad-hoc task add. Saves in one POST on "Save day plan".
 - **Preview** (plan exists, not editing): plan summary card (title/intent/notes, public badge) with the checklist nested inside (live check-off via PATCH). Edit/Delete buttons.
 
@@ -45,14 +45,14 @@ The Schedule module's three placement strategies — one-time (`reminder_details
 4. **Push off** — one-time/recurring items use `useItemActionsWithToast().handlePostpone` (already has its own toast+Undo, see `useItemActions.ts`). Flexible items use `useUnscheduleRoutine()`, which simply returns the item to its period's "unscheduled" pool — the actual re-placement decision is deferred to whichever day's prepone pool the user visits next, rather than forcing an immediate re-pick.
 5. **Checkpoints** — stored as a `jsonb` array directly on the `day_plans` row (no child table), to avoid the hot-child-table RLS concerns in Hard Rule #20 and keep phase 1 simple.
 
-6. **Section defaults** — `WebDayPlanner` opens the "Landing on this day" and "Prepone pool" drawers only when they contain items; empty drawers stay collapsed by default and headers show count badges when there is work to triage.
+6. **Section defaults** — `WebDayPlanner` keeps the selected-day panel always visible; it is not a collapsible section. The Prepone pool opens only when it contains items. Overdue is a separate today-only section controlled by `/reminders/page.tsx` through the top Overdue icon.
 
 ### The save-gated draft model *(added 2026-06-16, updated 2026-06-17)*
 
 The header (title/intent/notes/Private-Shared) and the checklist hold their edits as local draft state (`titleDraft`, `notesDraft`, `intentDraft`, `isPublicDraft`, `checklistDraft`) and fire **exactly one `useUpsertDayPlan()` POST**, on explicit **Save day plan**, sending the full draft in one request.
 
-- **Browsing** (`plan === null`, default) → prominent "✦ Plan my day" button. No form visible.
-- **Planning** (`plan` exists or "Plan my day" clicked) → full planning editor with Save/Cancel. Cancel reverts to Preview if a plan exists, or back to Browsing if no plan yet.
+- **Browsing** (`plan === null`, default) → no plan form visible; the top Plan icon enters planning.
+- **Planning** (`plan` exists or the top Plan icon is clicked) → full planning editor with Save/Cancel. Cancel reverts to Preview if a plan exists, or back to Browsing if no plan yet.
 - **Preview** (`plan` exists, not editing) → summary card (title/intent/notes, public badge, checklist) with **Edit** (pencil) and **Delete** (trash) buttons.
 - **Checklist check-off stays live** even in preview — `useChecklistActions().toggleChecklistItem` still does an immediate `PATCH` with its own Undo toast. Adding/removing/reordering checklist items only mutates `checklistDraft` and commits on Save.
 - **URL-driven auto-open-planning** (`?plan=1`): handled by a second `useEffect` declared after the main seeding effect, gated on `dayPlanLoading === false` and consumed exactly once per mount (via `initialPlanningConsumedRef`). This prevents the auto-open from being clobbered by the seeding effect once real plan data arrives.
@@ -73,7 +73,7 @@ See `migrations/2026-06-16_plan-my-day.sql` (original DDL) and `migrations/2026-
 
 - `src/app/reminders/page.tsx` — Focus tab renders `WebDayPlanner`; reads `?date=` + `?plan=1` from URL (via `useSearchParams`), cleans params via `history.replaceState`
 - `src/app/today/page.tsx` — redirect-only; immediately navigates to `/reminders?date=…&plan=1` to preserve old links / PWA shortcuts
-- `src/components/planner/WebDayPlanner.tsx` — the merged surface: day nav, three-state model (browsing/planning/preview), Overdue/Upcoming/Assigned sections (today only), prepone pool, checklist editor (dnd-kit drag-to-reorder), ad-hoc task add, `ItemDetailModal` + `ItemActionsSheet` wiring
+- `src/components/planner/WebDayPlanner.tsx` — the merged surface: day nav, three-state model (browsing/planning/preview), selected-day panel with next-item focus, separate Overdue/Upcoming/Assigned sections (today only), prepone pool, checklist editor (dnd-kit drag-to-reorder), ad-hoc task add, `ItemDetailModal` + `ItemActionsSheet` wiring
 - `src/features/day-plan/useDayPlan.ts` — `useDayPlan(date)`, `useUpsertDayPlan()`, `useDeleteDayPlan()`, `useChecklistActions()` (live `toggleChecklistItem` PATCH)
 - `src/app/api/day-plans/route.ts` — GET (merges partner's public plan) + POST (upsert by `user_id, plan_date`, once per Save)
 - `src/app/api/day-plans/[id]/route.ts` — PATCH (checklist item done/undone) + DELETE

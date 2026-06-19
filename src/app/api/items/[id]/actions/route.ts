@@ -4,7 +4,13 @@
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { supabaseServer } from "@/lib/supabase/server";
+import { subMonths } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
+
+// Keep in sync with src/app/api/items/[id]/complete/route.ts — completed
+// occurrences older than this are archived immediately; anything more
+// recent stays visible until explicitly archived/deleted.
+const ARCHIVE_COMPLETED_OLDER_THAN_MONTHS = 1;
 
 export async function POST(
   request: NextRequest,
@@ -117,16 +123,11 @@ export async function POST(
           type: "occurrence",
         });
       } else {
-        // Non-recurring: determine if should archive
-        const occurrenceDateObj = new Date(occurrence_date);
-        const now = new Date();
-        const weekStart = new Date(now);
-        const dayOfWeek = now.getDay();
-        const daysFromMonday = (dayOfWeek + 6) % 7;
-        weekStart.setDate(now.getDate() - daysFromMonday);
-        weekStart.setHours(0, 0, 0, 0);
+        // Auto-archive only kicks in for occurrences more than a month old.
+        const shouldArchive =
+          new Date(occurrence_date) <
+          subMonths(new Date(), ARCHIVE_COMPLETED_OLDER_THAN_MONTHS);
 
-        const shouldArchive = occurrenceDateObj < weekStart;
         const updatePayload: Record<string, unknown> = {
           status: "completed",
           updated_at: new Date().toISOString(),

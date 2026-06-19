@@ -7,14 +7,21 @@ import FilterBar, {
   type TypeFilter,
   type UserFilter,
 } from "@/components/activity/FilterBar";
-import WebDayPlanner from "@/components/planner/WebDayPlanner";
+import WebDayPlanner, { type PlannerToolbarState } from "@/components/planner/WebDayPlanner";
+import {
+  AlertBellIcon,
+  SparklesIcon,
+} from "@/components/icons/FuturisticIcons";
 import RemindersInsightsPage from "@/components/reminder/RemindersInsightsPage";
 import { itemsKeys } from "@/features/items/useItems";
+import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import { yyyyMmDd } from "@/lib/utils/date";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
+import { parseISO } from "date-fns";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type RemindersPage = "focus" | "insights";
 
@@ -57,13 +64,29 @@ const REMINDERS_SECTIONS: FilterBarSection[] = [
   },
 ];
 
+const DEFAULT_PLANNER_TOOLBAR_STATE: PlannerToolbarState = {
+  mode: "browsing",
+  dayPlanLoading: true,
+  overdueCount: 0,
+  selectedIsToday: true,
+};
+
 export default function RemindersStandalonePage() {
   const searchParams = useSearchParams();
   const initialDate = useMemo(() => searchParams.get("date") ?? undefined, [searchParams]);
   const initialPlanning = useMemo(() => searchParams.get("plan") === "1", [searchParams]);
+  const themeClasses = useThemeClasses();
 
   const [mounted, setMounted] = useState(false);
   const [activePage, setActivePage] = useState<RemindersPage>("focus");
+  const [selectedDate, setSelectedDate] = useState<Date>(() =>
+    initialDate ? parseISO(initialDate) : new Date(),
+  );
+  const [showOverdue, setShowOverdue] = useState(false);
+  const [planningCommandToken, setPlanningCommandToken] = useState(0);
+  const [plannerToolbar, setPlannerToolbar] = useState<PlannerToolbarState>(
+    DEFAULT_PLANNER_TOOLBAR_STATE,
+  );
   const [userFilter, setUserFilter] = useState<UserFilter>("all");
   const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -94,6 +117,23 @@ export default function RemindersStandalonePage() {
     };
     fetchUser();
   }, []);
+
+  const handleToolbarStateChange = useCallback((next: PlannerToolbarState) => {
+    setPlannerToolbar((previous) =>
+      previous.mode === next.mode &&
+      previous.dayPlanLoading === next.dayPlanLoading &&
+      previous.overdueCount === next.overdueCount &&
+      previous.selectedIsToday === next.selectedIsToday
+        ? previous
+        : next,
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!plannerToolbar.selectedIsToday || plannerToolbar.overdueCount === 0) {
+      setShowOverdue(false);
+    }
+  }, [plannerToolbar.overdueCount, plannerToolbar.selectedIsToday]);
 
   // Clean the URL params after reading them (captured into initialDate/initialPlanning above)
   useEffect(() => {
@@ -157,12 +197,66 @@ export default function RemindersStandalonePage() {
           if (navigator.vibrate) navigator.vibrate(5);
           queryClient.invalidateQueries({ queryKey: itemsKeys.all });
         }}
+        extraActions={
+          activePage === "focus" ? (
+            <>
+              <button
+                type="button"
+                disabled={plannerToolbar.dayPlanLoading}
+                onClick={() => {
+                  if (plannerToolbar.mode === "planning") return;
+                  if (navigator.vibrate) navigator.vibrate(5);
+                  setPlanningCommandToken((token) => token + 1);
+                }}
+                className={cn(
+                  "relative p-1.5 rounded-lg transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed",
+                  plannerToolbar.mode === "planning"
+                    ? `${themeClasses.bgActive} ${themeClasses.textActive}`
+                    : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                )}
+                title="Plan my day"
+                aria-label="Plan my day"
+              >
+                <SparklesIcon className="w-4 h-4" />
+              </button>
+
+              {plannerToolbar.selectedIsToday && plannerToolbar.overdueCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (navigator.vibrate) navigator.vibrate(5);
+                    setShowOverdue((visible) => !visible);
+                  }}
+                  className={cn(
+                    "relative p-1.5 rounded-lg transition-colors flex-shrink-0",
+                    showOverdue
+                      ? `${themeClasses.bgActive} ${themeClasses.textActive}`
+                      : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                  )}
+                  title={showOverdue ? "Hide overdue items" : "Show overdue items"}
+                  aria-label={showOverdue ? "Hide overdue items" : "Show overdue items"}
+                  aria-pressed={showOverdue}
+                >
+                  <AlertBellIcon className="w-4 h-4" />
+                  <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full neo-gradient text-[9px] leading-4 text-white font-bold text-center">
+                    {plannerToolbar.overdueCount}
+                  </span>
+                </button>
+              )}
+            </>
+          ) : null
+        }
       />
 
       {activePage === "focus" ? (
         <WebDayPlanner
           initialDate={initialDate}
           initialPlanning={initialPlanning}
+          selectedDate={selectedDate}
+          onSelectedDateChange={setSelectedDate}
+          showOverdue={showOverdue}
+          planningCommandToken={planningCommandToken}
+          onToolbarStateChange={handleToolbarStateChange}
           userFilter={userFilter}
           currentUserId={currentUserId}
           typeFilter={typeFilter}

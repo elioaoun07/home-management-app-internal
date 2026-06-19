@@ -13,7 +13,7 @@ tags:
 
 # Plan My Day
 
-> Merged into the `/reminders` Focus tab (2026-06-17). The former `/today` route is now a redirect. `WebDayPlanner.tsx` is the single merged surface: default view shows today's scheduled items; the "✦ Plan my day" button reveals the full planning editor (title/intent/notes, checklist, prepone pool, ad-hoc task add). Overdue/Upcoming/Assigned sections appear on today only.
+> Merged into the `/reminders` Focus tab (2026-06-17). The former `/today` route is now a redirect. `WebDayPlanner.tsx` is the single merged surface: default view shows a selected-day panel with a next-item focus and remaining list. The top action row provides Plan my day and Overdue controls; Today is a quick-jump inside the day navigation row. Overdue rows are hidden by default and open as their own section when enabled; Upcoming/Assigned sections appear on today only.
 
 ## Files
 
