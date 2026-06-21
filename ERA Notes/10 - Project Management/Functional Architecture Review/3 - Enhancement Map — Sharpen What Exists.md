@@ -75,7 +75,7 @@ A LBP amount from January is *meaningless* without January's rate; any multi-mon
 
 ## R8 — Automation transparency ("why did this happen?")
 
-Trips already plans a side-effect transparency panel ([Trips Bet 2](<../Trips/2 - Future Vision & Roadmap.md>)). Generalize the principle *before* automations multiply: every machine-made change (proposal auto-accepted, cascade fired, prerequisite unlocked, briefing sent) carries provenance you can open — *what fired, what rule, what it read, how to undo, how to mute*. The undo-toast culture (Hard Rule 1) at automation scale.
+Trips already plans a side-effect transparency panel ([Trips Bet 2](<../Trips/2 - Vision & Roadmap.md>)). Generalize the principle *before* automations multiply: every machine-made change (proposal auto-accepted, cascade fired, prerequisite unlocked, briefing sent) carries provenance you can open — *what fired, what rule, what it read, how to undo, how to mute*. The undo-toast culture (Hard Rule 1) at automation scale.
 
 **Action:** make provenance a required field of the proposals/signals schema (R2/R3) from day one — retrofitting it is miserable.
 

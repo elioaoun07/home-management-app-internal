@@ -1,3 +1,164 @@
+---
+created: 2026-05-30
+updated: 2026-06-20
+type: action-plan
+status: active
+owner: Elio
+tags:
+  - pm/action
+  - scope/module
+  - module/schedule
+---
+
+# Schedule · 3 — Action Plan
+
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
+>
+> **What this file is:** the *why, and in what order* — the call + the sequenced Now/Next/Later queue + the candidate-work tables. The flat, phased, checkable surface (the Master Build Checklist) is [4 · Checklist](<4 - Checklist.md>). **Tell me a line (e.g. _1.3_), a group, or a phase, and I'll work it.**
+>
+> **Legend:** Sev 🔴 blocker · 🟠 friction · 🟡 annoyance · ⚪ parked. Effort S/M/H.
+>
+> **Decisions already locked** (don't re-litigate — [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>)): three types stay in data, type inferred at save; **both capture lanes** (rule-based in the form, Gemini in Hub); **no geofencing**; Focus → per-item mode; household co-edit + reassign both ways; recurrence action model = Google/Outlook standard.
+
+---
+
+## 📌 The call
+
+**The pain is mapped ([1 · Feature State](<1 - Feature State.md>)). The directions are set ([2 · Vision & Roadmap](<2 - Vision & Roadmap.md>)). The design substrate is ready ([file 3](<2 - Vision & Roadmap.md>)). Now execute, foundation-first.**
+
+Schedule is 🟢 Core and stable, so the danger isn't missing features — it's that its **trickiest logic (recurrence + occurrence actions + the flexible placement rule)** needed hardening, and four prerequisite evaluators are advertised but inert. The household-co-edit slice (the original highest-severity pain, two 🔴s) is **done**; the form-capture refactor is largely **shipped**. **The recurrence/occurrence-action correctness bug is fixed (2026-06-19)** — "Skip" no longer duplicates recurring occurrences (Stage 1 of [file 4](<2 - Vision & Roadmap.md>) shipped). **The current top priority is now the one stub with the best value-for-effort (`time_window`)**, then engine unification (Stage 2), then make ERA read the time graph.
+
+This mirrors the global theme ("Stabilize, then Connect") at the module level: harden the recurrence core, then connect Schedule outward.
+
+> **Shipped ad-hoc, outside the original sequence:** "Plan My Day" (`/today`, now merged into `/reminders`) — a disrupted-day triage planner (push off / both-direction prepone / ad-hoc tasks / checkpoints), shipped 2026-06-16. Phase 1 only — hourly timeline + mood/energy optimizer deferred. See [2 · Vision](<2 - Vision & Roadmap.md>) Track A and [Plan My Day Overview](<../../03 - Junction Modules/Plan My Day/Overview.md>). Doesn't change the foundation-first call.
+>
+> - [x] **Fixed 2026-06-16:** the day-plan header (title/intent/notes/Private-Shared) and checkpoints were firing a full API call on every keystroke/click — worst case a `POST` per Private/Shared toggle. Replaced with a save-gated draft model: an unplanned day shows an editable form with one **Save**; a planned day shows a read-only **preview card** with **Edit**/**Delete**. No API calls during editing, only on Save/Delete (checkpoint done/undone toggle stays live by design). See [Plan My Day Overview](<../../03 - Junction Modules/Plan My Day/Overview.md>) "The save-gated draft model."
+
+---
+
+## 🎯 Candidate work
+
+### Campaign work items *(every pain from [1 · Feature State](<1 - Feature State.md>), as work items)*
+
+| # | Work item | From | Sev | Effort | Bounded? | Foundational? |
+|---|---|---|---|---|---|---|
+| ~~W1~~ ✅ | ~~Align PATCH/DELETE auth with household-aware check~~ | C1 | 🔴 | S | ✅ yes | — |
+| ~~W2~~ ✅ | ~~"Pass to partner" / "take it back" reassign actions~~ | C1 | 🔴 | M | ✅ yes | — |
+| ~~W3~~ ✅ | ~~"Assigned out" / "assigned to me" buckets in `/reminders`~~ | C1 | 🟠 | S–M | ✅ yes | — |
+| ~~W4~~ ✅ | ~~Confirm RLS + `get_schedule_bundle` returns partner items~~ | C1/C4 | 🟠 | S | ✅ yes | ✅ unblocks W1–W3 |
+| ~~W5~~ ✅ | ~~Re-export live schema (RPC + RLS) into `schema.sql`~~ | C4 | 🟠 | S | ✅ yes | ✅ stops repo lying |
+| W6 | Decide capture path (A Hub / B form / both) → build it | C3 | 🟠 | M | partly | — |
+| ~~W7~~ ✅ | ~~Focus → per-item mode; retire `/focus`; fold into Week view~~ | C2 | 🟠 | M–H | partly | — |
+| W8 | Reassignment history / audit | C1 | 🟡 | M | ✅ yes | — |
+| W9 | Surface consolidation (`/reminders` role; clarify each job) — *mostly done via Plan My Day merge; residual role open* | C2 | 🟠 | M | partly | — |
+| W10 | Form NL quick-capture box (rule-based; pre-fills structured fields as chips) — *mostly already exists* | C3 | 🟠 | M | partly | — |
+| W11 | Hub Chat Gemini capture (one line → structured item) | C3 | 🟠 | M | partly | — |
+| W12 | NFC-from-text (Phase 2): "when I get home" → `location_context` + arrive-home prerequisite | C3 | 🟡 | M | partly | — |
+| W13 | ~~**Recurrence/occurrence-action correctness fix** (Skip-duplicate 🔴)~~ *(Stage 1 DONE 2026-06-19)* + engine/UI unification (Stage 2–3, open) | C5 | ✅→🟠 | M–H | partly | ✅ top live foundation |
+
+> **W10–W12 are refinements of W6** (the capture-path decision), scoped in [file 3 Part 2](<2 - Vision & Roadmap.md>). They do not replace W6; the form refactor in [file 3 Part 1 §4](<2 - Vision & Roadmap.md>) is the foundation they sit on. **W13** is the concrete form of the recurrence weak-link — see [file 4](<2 - Vision & Roadmap.md>) for the staged plan.
+
+### Foundational + enhancement candidates *(from [file 2 Track A/B](<2 - Vision & Roadmap.md>))*
+
+| Candidate | Track | Impact | Effort | Foundation? |
+|---|---|---|---|---|
+| ~~Recurrence/occurrence correctness fix (Skip)~~ *(Stage 1 DONE 2026-06-19)* + engine unify (Stage 2, open) — [file 4](<2 - Vision & Roadmap.md>) | A | High | M–H | ✅ yes (top) |
+| Placement-rule guard test | A | High | S | ✅ yes |
+| Recurrence / occurrence-action unit tests | A | High | M | ✅ yes |
+| `time_window` prerequisite evaluator | A | High | S–M | — |
+| Schedule → briefing enrichment | B | High | M | — |
+| Schedule ↔ Budget due-date unify | B | High | H | — |
+| Recurrence edit UX ("this / this-and-future / all") | A | Med | M | — |
+| Bulk occurrence ops | A | Med | M | — |
+| `schedule` / `custom_formula` prerequisites | A | Med | M each | — |
+
+---
+
+## 🗓️ Sequenced plan (Now / Next / Later)
+
+### ✅ Shipped — Household co-edit + reassign *(the original first slice)*
+
+- [x] **Step 1 — Verify the ground truth (W4).** *(DONE 2026-06-06)* RPC body captured: returns `user_id = me OR (partner's AND is_public = true)`. W1 alone was enough — RLS policies already grant household co-edit. See [file 1, Cluster 1 myth correction](<1 - Feature State.md>).
+- [x] **Step 2 — Align write auth (W1).** *(DONE 2026-05-31)* `canMutateItem()` helper in [src/app/api/items/[id]/route.ts](<../../../src/app/api/items/[id]/route.ts>) — creator OR responsible OR active partner. Partner can edit/delete shared items; strangers still get 403.
+- [x] **Step 3 — Reassign both ways (W2).** *(DONE 2026-06-06)* `onReassign` prop on [ItemActionsSheet.tsx](<../../../src/components/items/ItemActionsSheet.tsx>); fetches household via `useHouseholdMembers`, "Pass to partner" when I'm responsible, "Take it back" when partner is. Wired with `useUpdateItem` + Undo toast (no dedicated endpoint — RLS covers it).
+- [x] **Step 4 — Make handed-off items findable (W3).** *(DONE 2026-06-06)* "Assigned to me" / "Assigned out" collapsible sections in [StandaloneRemindersPage.tsx](<../../../src/components/reminder/StandaloneRemindersPage.tsx>) with one-tap "Return →" / "← Reclaim".
+- [x] **Step 5 — Stop the repo lying (W5).** *(DONE 2026-06-06)* Table DDL, `get_schedule_bundle` RPC body, and all RLS policies appended to [migrations/schema.sql](<../../../migrations/schema.sql>).
+- [x] **Focus → mode (W7).** *(DONE 2026-06-06)* Retired `/focus` + `FocusPage.tsx` + `FlexibleRoutinesPool.tsx` + `ScheduleRoutineSheet.tsx`. Added `onFocus` + Focus button (crosshair) to `ItemActionsSheet` → `ItemDetailModal`. Week view's "Flexible this week" strip handles routine assignment. Atlas, Feature Index, Routes doc, vault doc updated.
+- [x] **Placement-rule guard test.** Asserts a flexible item is *not* placed via rrule and *is* placed from `item_flexible_schedules`. Prevents the "flexible item shows on activation day" class of bug across all 6+ views. → [Schedule Feature](<../../02 - Standalone Modules/Items & Reminders/Schedule Feature.md>) "Adding a New View" checklist.
+
+### ✅ Now — Recurrence & occurrence-action correctness *(Stage 1 — [file 4](<2 - Vision & Roadmap.md>) — SHIPPED 2026-06-19)*
+
+- [x] **W13 / Stage 1 — kill the "Skip → next occurrence" trap.** *(DONE 2026-06-19)* Removed on **all four** surfaces found (`WebEvents.tsx`, `ItemActionsSheet.tsx`, `WebTabletMissionControl.tsx` — found during implementation, `ItemDetailModal.tsx` quick-action row — found during implementation); real **Skip this occurrence** wired (`handleSkip`/`useSkipItem`; `onSkip` on `ItemActionsSheet` + all 4 callers; Skip control on the calendar modal + tablet mission control); "Cancel" now appears only for one-off items; `calculateNextOccurrence` + the `next_occurrence` postpone type deleted from `useItemActions.ts`.
+- [x] **`/reminders` show/hide-completed toggle** *(DONE 2026-06-19)* + collapsible "Completed (n)" section (default hide; persisted in `localStorage`) — [file 4 §5](<2 - Vision & Roadmap.md>).
+- [x] **Recurrence + occurrence-action unit tests.** *(DONE 2026-06-19)* [dayOccurrences.test.ts](<../../../src/lib/utils/dayOccurrences.test.ts>) covers the skip/complete/move repro + dedup against the engine `/reminders` & Today actually use, plus `isOccurrenceCompleted` per action type. Pure-logic, no Supabase mocks. Full RRULE-edge-case coverage still gated behind Stage 2 (engine unification). **Gates the recurrence-from-text parser (1b.4)** — unblocked for the cases now covered.
+
+### ⏭️ Next — Foundation + first enhancement
+
+- [ ] **Engine unification (W13 / [file 4](<2 - Vision & Roadmap.md>) Stage 2–3).** Finish `schedule/expandOccurrences.ts` (flexible injection + postponed actions; converge moves onto `rescheduled_to`); migrate every surface onto it; delete `dayOccurrences.ts` + inline loops; one shared occurrence-action sheet (Stage 3). Lock with the expanded `expandOccurrences.test.ts`.
+- [ ] **Capture path remaining (W6 → W11 / W12).** Form half + rule-based NL box already shipped/exist; remaining = **W11** Hub Chat Gemini capture; **Phase 2 (W12)** location/NFC-from-text. See the Master Build Checklist below.
+- [ ] **Ship `time_window` prerequisite.** Smallest stub, highest demo value (meds/morning windows). Proves the conditional-automation engine end-to-end before tackling `schedule` / `custom_formula`.
+
+### 🔜 Later — Connect outward
+
+- [ ] **Schedule → briefing enrichment** (feed the full week's shape into Focus/ERA). _(global Track B)_
+- [ ] **Schedule ↔ Budget due-date unify** — bigger; scope after the foundation/recurrence tests exist. _(global Track A / Cashflow)_
+- [ ] **Reassignment history/audit (W8).**
+- [x] **Surface consolidation — `/reminders` merged with Plan My Day (W9).** *(IMPLEMENTED 2026-06-17; toolbar tuned 2026-06-19)* `WebDayPlanner.tsx` hosts `/reminders` Focus tab; `StandaloneRemindersPage.tsx` deleted; `/today` → redirect. Three-state model (browsing/planning/preview); checklist replaces timed checkpoints; selected-day work is a primary panel with next-item focus, Today in the day navigator, Plan in the top action row, Overdue as its own opt-in section. *(Residual: settle the precise long-term `/reminders` role — 5.1 below.)*
+
+---
+
+> → The flat, phased, checkable build list for everything above (with IDs): **[4 · Checklist](<4 - Checklist.md>)**.
+
+---
+
+## 🚫 Not now
+
+- ❌ **Stats redesign** — parked; zero current payoff.
+- ❌ **Refactor `useItems.ts` (~2,621 LOC) "just because"** — only split when a feature next forces you in.
+- ❌ **`weather` prerequisite** — lowest value-for-effort of the four evaluators.
+- ❌ **Don't redesign the calendar views** — Month/Week/Today are the parts that *work*; touch only what a phase above names.
+- ❌ **Don't open the Schedule↔Budget bridge before the recurrence tests exist** — a silent bridge bug would hide exactly there.
+
+---
+
+## ⏭️ Later / backlog
+
+- Reassignment audit trail + "who had it when" timeline (W8 / 5.4).
+- `/reminders` → unified assignments + open-items management view (5.1).
+- Recurrence edit UX (this / this-and-future / all).
+- Bulk occurrence operations (multi-select complete/postpone/reschedule).
+- Smarter overdue handling (roll-forward suggestions, overdue triage view).
+- Natural-language item entry — now scoped as **W10** (form, rule-based, mostly done) + **W11** (Hub, Gemini).
+- `schedule` and `custom_formula` prerequisite evaluators.
+- Smart alert timing + quiet hours + weekly digest. _(global Track B 7a/7b)_
+- Debt → Schedule auto-reminder on collection date. _(global Track A 2e)_
+- Trips → Schedule cascade visibility.
+- NFC-from-text Phase 2 (W12) + confidence/clarification UX (Phase 3).
+- **Global `task`-type retirement** (DB + all non-form surfaces + `ItemType` union + every Schedule MD naming "Task").
+
+---
+
+## Not now / Parked ⚪ _(deliberately out of the active queue)_
+
+- ⚪ **Stats redesign** — zero current payoff ([file 1 Cluster 2](<1 - Feature State.md>)).
+- ⚪ **`weather` prerequisite** — lowest value-for-effort of the four evaluators.
+- ⚪ **Don't redesign Month / Week / Today** — these work; touch only what a phase above names.
+- ⛔ **Geofencing / fire-on-arrival location triggers** — won't build; doesn't exist, PWA, decided ([file 3 §E](<2 - Vision & Roadmap.md>)).
+- ⛔ **Reuse budget NLP wholesale** / **light up inert evaluators just for NLP coverage** — see [file 3 §E](<2 - Vision & Roadmap.md>).
+
+---
+
+## How to drive this
+
+- Point at a **line** ("do 1.3"), a **group** ("Phase 1 chips: 1.4 + 1.5"), or a **phase** ("start Phase 1").
+- **Recurrence correctness Stage 1 ([file 4](<2 - Vision & Roadmap.md>) / Phase 4.1+4.3a) shipped 2026-06-19. The current top priority is `time_window` (4.4), then Stage 2 engine unification (4.3b).**
+- I'll only start **Phase 2+** after **Phase 1** ships and is verified; **1b.4** is now partially unblocked by **4.1**.
+- As items complete, they get checked here **and** marked in [1 · Feature State](<1 - Feature State.md>) (Hard Rule #25 — no orphan fixes).
+
+---
+
+> **Appendix — Originating brief (verbatim).** The Codex initiative brief that kicked off this overhaul; its proposed type model is reconciled with app reality in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) (Type Taxonomy & Capture Design section).
+
 # Initiative / Story: Simplify Mobile Schedule Entry and Merge Tasks + Reminders UX
 
 ## Context

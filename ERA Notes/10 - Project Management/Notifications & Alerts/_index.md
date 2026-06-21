@@ -20,19 +20,19 @@ tags:
 >
 > **Why this set exists:** the notification surface *works* but **feels wrong** — the bell rings perpetually and reads as an alarm, one system notification opens the wrong screen, the drawer is too wordy to glance at, and the alerts page is a wall of text. The ask was deliberate — *map every painful thing first, decide the target design, then run a focused overhaul.* This folder is that map plus the build queue. **Docs-first: nothing here is built yet** (created 2026-06-19).
 
-| #   | File                                                                      | Read it when...                                                                                                          |
-| --- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 1   | [Feature State & Pain Inventory](<1 - Feature State & Pain Inventory.md>) | You want the honest status of every notification surface **and** the full list of what hurts (pain, root cause, severity). |
-| 2   | [Vision, Target Design & Decisions](<2 - Vision, Target Design & Decisions.md>) | You want where each pain is *heading* — the target design per surface and the calls already locked.                     |
-| 3   | [Best Practices & MoSCoW Backlog](<3 - Best Practices & MoSCoW Backlog.md>) | You want the notification/alert best-practices brief and the Must / Should / Could / Won't prioritization.              |
-| 4   | [Execution Plan & Build Checklist](<4 - Execution Plan & Build Checklist.md>) | **Most days.** What to actually do next — the sequenced queue *and* the single phased, checkable build list.            |
+| #   | File                                          | Read it when...                                                                                                          |
+| --- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 1   | [Feature State](<1 - Feature State.md>)       | You want the honest status of every notification surface **and** the full Pain Inventory (pain, root cause, severity).   |
+| 2   | [Vision & Roadmap](<2 - Vision & Roadmap.md>) | You want where each pain is *heading* — target design + locked decisions + the best-practices brief + the MoSCoW backlog. |
+| 3   | [Action Plan](<3 - Action Plan.md>)           | The call + sequenced Now/Next/Later queue + candidate-work table — the *why, and in what order*.                         |
+| 4   | [Checklist](<4 - Checklist.md>)               | **Most days.** The flat, phased, checkable build list (IDs + severity + effort).                                         |
 
 ## How to use this set
 
 1. **Read 1 first** — the four pain clusters (bell, routing, drawer density, alerts-page clutter) + the missed/optimization backlog. Ends with a ranked Top pains for instant scope.
-2. **Read 2** — the target design per surface + the locked decisions (calm bell, items-summary → `/reminders`, concise drawer, scannable alerts page).
-3. **Read 3** when you want the *why* behind the design — notification UX best practices — and the MoSCoW backlog that orders the work.
-4. **Work from 4** — the daily driver: a Now/Next/Later queue **and** the flattened phased build checklist. Point at a line, a group, or a phase.
+2. **Read 2** — the target design per surface + the locked decisions (calm bell, items-summary → `/reminders`, concise drawer, scannable alerts page), plus the best-practices brief and the MoSCoW backlog that orders the work.
+3. **Read 3** — the call + the Now/Next/Later queue + the candidate-work table (the *why, and in what order*).
+4. **Work from 4** — the daily driver: the flat, phased build checklist. Point at a line, a group, or a phase.
 
 ## Where this fits
 

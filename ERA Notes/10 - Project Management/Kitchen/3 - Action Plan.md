@@ -1,6 +1,6 @@
 ---
 created: 2026-05-30
-updated: 2026-05-30
+updated: 2026-06-20
 type: action-plan
 status: active
 owner: Elio
@@ -10,11 +10,11 @@ tags:
   - module/kitchen
 ---
 
-# Kitchen · 3 — Current — Action Plan
+# Kitchen · 3 — Action Plan
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State — Current Reality.md>) · [2 · Future Vision](<2 - Future Vision & Roadmap.md>) · [3 · Current Action Plan](<3 - Current — Action Plan.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** the living queue of what to actually do next on Kitchen — **might be this week, might be later.** Not a fixed Mon–Fri grid. Re-order as priorities move; promote an item to "Now" when you pick it up.
+> **What this file is:** the *why, and in what order* for Kitchen — the strategic call and the candidate work as narrative. The flat, checkable version of this plan is [4 · Checklist](<4 - Checklist.md>); tick the boxes there.
 
 ---
 
@@ -28,7 +28,7 @@ This mirrors the global theme ("Stabilize, then Connect") — here the pieces ar
 
 ---
 
-## 🎯 Candidate work (from [2 · Future Vision](<2 - Future Vision & Roadmap.md>))
+## 🎯 Candidate work (from [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>))
 
 | Candidate | Track | Impact | Effort | Keystone? |
 |---|---|---|---|---|
@@ -43,28 +43,15 @@ This mirrors the global theme ("Stabilize, then Connect") — here the pieces ar
 
 ---
 
-## 🗓️ Sequenced plan
+## 🗺️ The sequence (narrative)
 
-### Now — The keystone link
+**Now — The keystone link.** Inventory low-stock → Shopping List auto-add (gap 2a): when stock drops below threshold, the item appears on the shopping list. ⚠️ Shopping List rides the **legacy localStorage queue** by design — respect that path (see [Sync & Offline](<../../03 - Junction Modules/Sync & Offline/Overview.md>)); don't migrate it as a side-effect.
 
-- [ ] **Inventory low-stock → Shopping List auto-add (gap 2a).** When stock drops below threshold, the item appears on the shopping list. ⚠️ Shopping List rides the **legacy localStorage queue** by design — respect that path (see [Sync & Offline](<../../03 - Junction Modules/Sync & Offline/Overview.md>)); don't migrate it as a side-effect.
+**Next — Second link.** Recipe → Inventory deduction (gap 2b): cooking a recipe deducts its ingredients, which then feeds the low-stock trigger. Together these make the loop half-automatic.
 
-### Next — Second link
+**Later — Budget- and AI-aware.** Meal plan budget estimate (gap 2c — coordinate with [Budget · 3 · Action Plan](<../Budget/3 - Action Plan.md>)) and Kitchen → ERA nudges ("low on staples, nothing planned Thursday").
 
-- [ ] **Recipe → Inventory deduction (gap 2b).** Cooking a recipe deducts its ingredients from inventory, which then feeds Bet 1's low-stock trigger. Together these make the loop half-automatic.
-
-### Later — Make it budget- and AI-aware
-
-- [ ] **Meal plan budget estimate (gap 2c)** — show estimated grocery cost per plan. Coordinate with [Budget · 3](<../Budget/3 - Current — Action Plan.md>). _(Budget bridge)_
-- [ ] **Kitchen → ERA nudges** — "low on staples, nothing planned Thursday". _(global Track B)_
-
----
-
-## ✅ Definition of done — this period
-
-- [ ] Dropping an inventory item below threshold puts it on the shopping list automatically (without breaking the legacy queue).
-- [ ] Completing a recipe in cooking mode deducts its ingredients from inventory.
-- [ ] File 1 (Feature State) updated to mark gap 2a / 2b closed.
+→ Every item above as a checkable line: [4 · Checklist](<4 - Checklist.md>).
 
 ---
 

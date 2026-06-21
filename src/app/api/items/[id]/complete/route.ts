@@ -112,16 +112,22 @@ export async function POST(
 
     if (is_recurring) {
       // For recurring items: record completion of this occurrence
+      // Upsert (not insert) so a retry/double-tap/offline-replay of a
+      // completion that already succeeded is idempotent instead of hitting
+      // the item_id+occurrence_date+action_type unique constraint as a 500.
       const { data, error } = await adminDb
         .from("item_occurrence_actions")
-        .insert({
-          item_id: itemId,
-          occurrence_date,
-          action_type: "completed",
-          reason: reason || null,
-          created_by: user.id,
-          metadata_json,
-        })
+        .upsert(
+          {
+            item_id: itemId,
+            occurrence_date,
+            action_type: "completed",
+            reason: reason || null,
+            created_by: user.id,
+            metadata_json,
+          },
+          { onConflict: "item_id,occurrence_date,action_type" },
+        )
         .select()
         .single();
 
@@ -152,14 +158,17 @@ export async function POST(
       // Update item status + record action in parallel
       const [itemResult, actionResult] = await Promise.all([
         adminDb.from("items").update(updatePayload).eq("id", itemId),
-        adminDb.from("item_occurrence_actions").insert({
-          item_id: itemId,
-          occurrence_date,
-          action_type: "completed",
-          reason: reason || null,
-          created_by: user.id,
-          metadata_json,
-        }),
+        adminDb.from("item_occurrence_actions").upsert(
+          {
+            item_id: itemId,
+            occurrence_date,
+            action_type: "completed",
+            reason: reason || null,
+            created_by: user.id,
+            metadata_json,
+          },
+          { onConflict: "item_id,occurrence_date,action_type" },
+        ),
       ]);
 
       if (itemResult.error) {

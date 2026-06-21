@@ -286,24 +286,31 @@ export async function GET(req: NextRequest) {
       }
 
       // 3. Determine target users.
-      let targetUserIds: string[] = [];
+      let targetUserIds: string[];
       if (item.notify_all_household) {
-        const { data: householdLink } = await supabase
+        // Notify EVERY member of the creator's household. We deliberately do
+        // NOT use `.maybeSingle()` here: a household can legitimately have more
+        // than one active `household_links` row (re-linking leaves stale-but-
+        // active rows), and `.maybeSingle()` ERRORS on multiple rows. That made
+        // the whole lookup return null and silently fall back to notifying only
+        // the creator — the long-standing "All Household only buzzes one phone"
+        // bug. Collect every owner/partner id across all active links instead,
+        // always including the creator, deduped. See the canonical robust
+        // lookup in `src/app/api/accounts/route.ts`.
+        const { data: householdLinks } = await supabase
           .from("household_links")
           .select("owner_user_id, partner_user_id")
           .or(
             `owner_user_id.eq.${item.user_id},partner_user_id.eq.${item.user_id}`,
           )
-          .eq("active", true)
-          .maybeSingle();
-        if (householdLink) {
-          targetUserIds = [
-            householdLink.owner_user_id,
-            householdLink.partner_user_id,
-          ].filter((id): id is string => !!id);
-        } else {
-          targetUserIds = [item.user_id];
+          .eq("active", true);
+
+        const ids = new Set<string>([item.user_id]);
+        for (const link of householdLinks ?? []) {
+          if (link.owner_user_id) ids.add(link.owner_user_id);
+          if (link.partner_user_id) ids.add(link.partner_user_id);
         }
+        targetUserIds = [...ids];
       } else {
         targetUserIds = [item.responsible_user_id || item.user_id];
       }

@@ -2140,15 +2140,15 @@ export function useAllSubtaskCompletions() {
 
       const subtaskIds = subtasks.map((s) => s.id);
 
-      // Get completions for last 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
+      // No date window — same reasoning as useAllOccurrenceActions: a recurring
+      // occurrence's subtask ticks must still render when you navigate to that
+      // occurrence's date, however old. A "last 30 days" filter made older
+      // occurrences show their subtasks as un-done. Bounded by the user's
+      // subtask count and cached + invalidated on mutation.
       const { data, error } = await supabase
         .from("item_subtask_completions")
         .select("*")
-        .in("subtask_id", subtaskIds)
-        .gte("occurrence_date", thirtyDaysAgo.toISOString());
+        .in("subtask_id", subtaskIds);
 
       if (error) {
         console.error("Error fetching subtask completions:", error);

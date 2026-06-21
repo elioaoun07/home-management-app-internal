@@ -9,11 +9,11 @@ tags:
   - module/budget
 ---
 
-# Budget · 2 — Future Vision & Roadmap
+# Budget · 2 — Vision & Roadmap
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State — Current Reality.md>) · [2 · Future Vision](<2 - Future Vision & Roadmap.md>) · [3 · Current Action Plan](<3 - Current — Action Plan.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** the *ambitious* Budget file — where the money domain could go. Enhancements to what exists **and** richer connections to the rest of the app. This is allowed to dream; [1 · Feature State](<1 - Feature State — Current Reality.md>) is the sober reality. Ladders up to the global [3 · Future Vision](<../3 - Future Vision & Roadmap.md>).
+> **What this file is:** the *ambitious* Budget file — where the money domain could go. Enhancements to what exists **and** richer connections to the rest of the app. This is allowed to dream; [1 · Feature State](<1 - Feature State.md>) is the sober reality. Ladders up to the global [3 · Future Vision](<../3 - Future Vision & Roadmap.md>).
 
 ---
 
@@ -79,9 +79,9 @@ L  │  (—)                             Statement→Inventory (B)
 If you point the next stretch at Budget:
 
 1. **Bet 1 — Lock the foundation: test `balance-utils` + recurring next-due.** Lowest effort, kills the highest-stakes gap (wrong money is the worst bug). Do this before any enhancement that touches balances.
-2. **Bet 2 — Unify Recurring ↔ Schedule due-dates.** The highest-leverage bridge: money and time stop being recorded twice. Coordinate with [Schedule · 2 · Vision & Decisions](<../Schedule/2 - Vision, Target Design & Decisions.md>) (same bridge from the other side).
+2. **Bet 2 — Unify Recurring ↔ Schedule due-dates.** The highest-leverage bridge: money and time stop being recorded twice. Coordinate with [Schedule · 2 · Vision & Roadmap](<../Schedule/2 - Vision & Roadmap.md>) (same bridge from the other side).
 3. **Bet 3 — Cashflow forecast → ERA.** The biggest *felt* upgrade: ERA can warn before an overdraft. Higher effort; scope it after the core tests exist.
 
 > Resist building the cashflow forecast before the core tests exist — a silent balance bug would hide exactly there, and a forecast amplifies it.
 
-→ This period's concrete actions: [3 · Current Action Plan](<3 - Current — Action Plan.md>).
+→ This period's concrete actions: [3 · Action Plan](<3 - Action Plan.md>); the checkable list: [4 · Checklist](<4 - Checklist.md>).

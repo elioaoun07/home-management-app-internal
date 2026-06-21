@@ -9,11 +9,11 @@ tags:
   - module/hub-era
 ---
 
-# Hub & ERA · 2 — Future Vision & Roadmap
+# Hub & ERA · 2 — Vision & Roadmap
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State — Current Reality.md>) · [2 · Future Vision](<2 - Future Vision & Roadmap.md>) · [3 · Current Action Plan](<3 - Current — Action Plan.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** the *ambitious* Hub & ERA file — where the flagship could go. Enhancements to what exists **and** richer connections to the rest of the app. This is allowed to dream; [1 · Feature State](<1 - Feature State — Current Reality.md>) is the sober reality. Ladders up to the global [3 · Future Vision](<../3 - Future Vision & Roadmap.md>).
+> **What this file is:** the *ambitious* Hub & ERA file — where the flagship could go. Enhancements to what exists **and** richer connections to the rest of the app. This is allowed to dream; [1 · Feature State](<1 - Feature State.md>) is the sober reality. Ladders up to the global [3 · Future Vision](<../3 - Future Vision & Roadmap.md>).
 
 ---
 
@@ -44,10 +44,10 @@ Hub & ERA is the app's **brain and front door** — the interaction model says t
 
 ERA is *defined* by its reads into other modules. Each ladders up to the global [3 · Future Vision](<../3 - Future Vision & Roadmap.md>) — and most are the *receiving end* of bridges the other module folders propose.
 
-- **ERA ← Schedule (briefing enrichment).** Read the whole week's shape — recurring due, overdue routines, household-assigned items by person. *(global Track B; mirror of [Schedule · 2](<../Schedule/2 - Vision, Target Design & Decisions.md>))*
-- **ERA ← Budget (cashflow awareness).** Warn before a recurring payment overdraws; surface overspend. *(mirror of [Budget · 2](<../Budget/2 - Future Vision & Roadmap.md>))*
-- **ERA ← Kitchen.** "Low on 3 staples, nothing planned Thursday." *(mirror of [Kitchen · 2](<../Kitchen/2 - Future Vision & Roadmap.md>))*
-- **ERA ← Trips.** Re-entry briefing: "you're back tomorrow — N chores/routines resume." *(mirror of [Trips · 2](<../Trips/2 - Future Vision & Roadmap.md>))*
+- **ERA ← Schedule (briefing enrichment).** Read the whole week's shape — recurring due, overdue routines, household-assigned items by person. *(global Track B; mirror of [Schedule · 2](<../Schedule/2 - Vision & Roadmap.md>))*
+- **ERA ← Budget (cashflow awareness).** Warn before a recurring payment overdraws; surface overspend. *(mirror of [Budget · 2](<../Budget/2 - Vision & Roadmap.md>))*
+- **ERA ← Kitchen.** "Low on 3 staples, nothing planned Thursday." *(mirror of [Kitchen · 2](<../Kitchen/2 - Vision & Roadmap.md>))*
+- **ERA ← Trips.** Re-entry briefing: "you're back tomorrow — N chores/routines resume." *(mirror of [Trips · 2](<../Trips/2 - Vision & Roadmap.md>))*
 - **Smart notification timing.** Quiet hours + weekly digest instead of daily noise, driven from ERA's read of what actually matters. *(global Track B · weekly digest 7a/7b)*
 
 ---
@@ -83,4 +83,4 @@ If you point the next stretch at Hub & ERA:
 
 > Resist piling proactive features onto an untested intent router — a confidently-wrong assistant erodes trust faster than a quiet one. Harden, then anticipate.
 
-→ This period's concrete actions: [3 · Current Action Plan](<3 - Current — Action Plan.md>).
+→ This period's concrete actions: [3 · Action Plan](<3 - Action Plan.md>); the checkable list: [4 · Checklist](<4 - Checklist.md>).

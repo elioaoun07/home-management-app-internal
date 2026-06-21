@@ -144,7 +144,7 @@ export function useItemOccurrenceActions(itemId: string | undefined) {
   });
 }
 
-/** Fetch all occurrence actions for a date range (for filtering completed occurrences) */
+/** Fetch all occurrence actions used to render completed/skipped/postponed state. */
 export function useAllOccurrenceActions() {
   return useQuery({
     queryKey: itemsKeys.allActions(),
@@ -155,14 +155,17 @@ export function useAllOccurrenceActions() {
       } = await supabase.auth.getUser();
       if (!user) return [];
 
-      // Get actions from the last 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
+      // No date window. A completed/skipped occurrence must render with its
+      // strikethrough whenever it is visible — and the calendar can navigate to
+      // ANY month. The previous "last 30 days" filter keyed on occurrence_date
+      // silently dropped the completion state of anything older, so a recurring
+      // occurrence completed 2 months ago re-rendered as an active, un-done
+      // event. The table is one small row per handled occurrence (RLS-scoped to
+      // the user's items) and is cached + invalidated on every action mutation,
+      // so loading the full history is cheap relative to being wrong.
       const { data, error } = await supabase
         .from("item_occurrence_actions")
         .select("*")
-        .gte("occurrence_date", thirtyDaysAgo.toISOString())
         .order("occurrence_date", { ascending: false });
 
       if (error) throw error;

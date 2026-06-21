@@ -15,18 +15,19 @@ tags:
 >
 > **Scope:** this folder is **Kitchen-only**. The root [10 - Project Management](<../_index.md>) set is **whole-app** scope. Recipes / Meal Planning / Inventory are independent standalone modules and Shopping List is a junction between them — here they're treated as sub-features of one food domain (the same way [Schedule/](<../Schedule/_index.md>) treats Items & Reminders).
 
-| #   | File                                                                       | Read it when...                                                        |
-| --- | -------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| 1   | [Feature State — Current Reality](<1 - Feature State — Current Reality.md>) | You want the honest, no-hype status of every Kitchen sub-feature.     |
-| 2   | [Future Vision & Roadmap](<2 - Future Vision & Roadmap.md>)                 | You want to dream: Kitchen enhancements + bridges, prioritized.       |
-| 3   | [Current — Action Plan](<3 - Current — Action Plan.md>)                     | Most days. What to actually do next on Kitchen (this week or later).  |
-| F   | [FABLED/](<FABLED/_index.md>)                                               | You want the 10× deep-dive: current implementation X-ray (incl. the loop-link table), ranked gaps, optimization plan, future enhancements. |
+| #   | File                                          | Read it when...                                                        |
+| --- | --------------------------------------------- | --------------------------------------------------------------------- |
+| 1   | [Feature State](<1 - Feature State.md>)       | You want the honest, no-hype status of every Kitchen sub-feature.     |
+| 2   | [Vision & Roadmap](<2 - Vision & Roadmap.md>) | You want to dream: Kitchen enhancements + bridges, prioritized.       |
+| 3   | [Action Plan](<3 - Action Plan.md>)           | The strategic call + candidate work — the *why, and in what order*.   |
+| 4   | [Checklist](<4 - Checklist.md>)               | **Most days.** The flat, checkable list — every task, Now/Next/Later. |
+| F   | [FABLED/](<FABLED/_index.md>)                 | You want the 10× deep-dive: current implementation X-ray (incl. the loop-link table), ranked gaps, optimization plan, future enhancements. |
 
 ## How to use this set
 
-- **Daily driver:** file 3. It's a living queue ("might be this week, might be later"), not a fixed Mon–Fri grid.
-- **Files 1–2 are living:** update them as the domain moves.
-- **Files 1–2 set the strategy; file 3 turns it into the next concrete steps.**
+- **Daily driver:** file 4 (the checklist). Point at a line, a group, or a phase.
+- **Files 1–3 are living:** update them as the domain moves.
+- **Files 1–2 set the strategy; file 3 frames the call; file 4 is the checkable queue.**
 
 ## Where this fits
 

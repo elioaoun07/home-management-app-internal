@@ -10,7 +10,7 @@ tags:
 
 > Your strategic overview. Start here when you're asking "what do I do next?" Audited against `main` on **2026-05-29**.
 >
-> **Scope:** the numbered files below are **whole-app** (cross-cutting). **Per-module PM lives in subfolders** in the same format — currently [Schedule/](<Schedule/_index.md>) (the Items & Reminders module). Add a sibling folder per module you want to prioritize on its own.
+> **Scope:** the numbered files below are **whole-app** (cross-cutting). **Per-module PM lives in subfolders** in the same uniform format (see the Per-module PM table below — Budget, Schedule, Kitchen, Trips, Hub & ERA, Notifications & Alerts). Add a sibling folder per module you want to prioritize on its own.
 
 | # | File | Read it when... |
 |---|---|---|
@@ -32,7 +32,7 @@ tags:
 | **Hub & ERA** (Hub Chat · AI Assistant · Voice) | [Hub & ERA/](<Hub & ERA/_index.md>) |
 | **Notifications & Alerts** (bell · drawer · alerts page · system notifs) | [Notifications & Alerts/](<Notifications & Alerts/_index.md>) |
 
-> Each module folder mirrors this set at module scope: `1 - Feature State`, `2 - Future Vision & Roadmap`, `3 - Current — Action Plan`, `_index` — plus a **`FABLED/`** deep-dive folder (added 2026-06-10): current implementation X-ray, ranked gaps, optimization plan, future enhancements. Files 1–3 stay short and current; FABLED holds the depth and is re-audited per campaign.
+> Each module folder mirrors the same uniform set at module scope: `_index`, `1 - Feature State`, `2 - Vision & Roadmap`, `3 - Action Plan`, `4 - Checklist` — plus (where present) a **`FABLED/`** deep-dive folder: current implementation X-ray, ranked gaps, optimization plan, future enhancements. Files 1–3 carry the reality + strategy + narrative; **file 4 is the flat, checkable list — the daily driver**; FABLED holds the depth and is re-audited per campaign.
 
 ## Cross-cutting reviews
 

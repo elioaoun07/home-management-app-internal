@@ -154,15 +154,16 @@ An AI-assisted repo is steered by six layers. Each has one job, one source of tr
 
 ## 4 · The FABLED layer (added 2026-06-10)
 
-Each PM module folder now carries a `FABLED/` sub-folder — the 10× deep-dive that the lighter `1/2/3` PM files route into:
+Each PM module folder now carries a `FABLED/` sub-folder — the 10× deep-dive that the lighter `1/2/3/4` PM files route into:
 
 ```
 10 - Project Management/
 ├── 6 - Optimized Claude Setup Structure.md   ← this file
-└── <Module>/                                  (Budget · Hub & ERA · Kitchen · Schedule · Trips)
-    ├── 1 - Feature State — Current Reality.md  (status snapshot)
-    ├── 2 - Future Vision & Roadmap.md          (dreams, prioritized)
-    ├── 3 - Current — Action Plan.md            (this campaign's checklist)
+└── <Module>/                                  (Budget · Schedule · Kitchen · Trips · Hub & ERA · Notifications & Alerts)
+    ├── 1 - Feature State.md                    (status + pain inventory)
+    ├── 2 - Vision & Roadmap.md                 (vision, design & decisions)
+    ├── 3 - Action Plan.md                      (the call + sequenced narrative)
+    ├── 4 - Checklist.md                        (flat, phased, checkable — daily driver)
     └── FABLED/
         ├── _index.md
         ├── 1 - FABLED — Current Implementation.md   (how it actually works: files, data flow, DB, API)

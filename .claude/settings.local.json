@@ -67,7 +67,14 @@
       "Bash(sleep 1)",
       "Bash(cat /tmp/dev-server.log)",
       "Bash(pkill -f \"next dev\")",
-      "Bash(npx playwright *)"
+      "Bash(npx playwright *)",
+      "Bash(node *)",
+      "Read(//c/Users/aoune/WebApp/budget-app/node_modules/**)",
+      "Read(//c/Users/aoune/WebApp/budget-app/scripts/**)",
+      "Bash(rm -f ._verify_dashboard.mjs ._verify_links.mjs ._verify_*.png)",
+      "Bash(rm -rf \"/c/Users/aoune/AppData/Local/Temp/pmdash-chrome-profile\" \"/c/Users/aoune/AppData/Local/Temp/pmdash-chrome-profile2\")",
+      "Bash(grep -n \"atlas\" .gitignore)",
+      "Bash(git check-ignore *)"
     ]
   }
 }

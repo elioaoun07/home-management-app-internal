@@ -10,11 +10,13 @@ tags:
   - module/notifications
 ---
 
-# Notifications & Alerts · 1 — Feature State & Pain Inventory
+# Notifications & Alerts · 1 — Feature State
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State & Pains](<1 - Feature State & Pain Inventory.md>) · [2 · Vision & Decisions](<2 - Vision, Target Design & Decisions.md>) · [3 · Best Practices & MoSCoW](<3 - Best Practices & MoSCoW Backlog.md>) · [4 · Execution & Checklist](<4 - Execution Plan & Build Checklist.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
-> **What this file is:** two halves of the same picture — **(A) the honest, no-hype state of every notification surface** (bell, drawer, alerts page, the two system notifications, the routing layer) and **(B) the full Pain Inventory** (every painful thing, written as `Pain → Why it hurts → Root cause → Evidence → Severity`). No solutions here (that's [file 2](<2 - Vision, Target Design & Decisions.md>)); no sequencing here (that's [file 4](<4 - Execution Plan & Build Checklist.md>)). This is the terrain.
+> **This file = Feature State + the full Pain Inventory** (Part A + Part B below).
+>
+> **What this file is:** two halves of the same picture — **(A) the honest, no-hype state of every notification surface** (bell, drawer, alerts page, the two system notifications, the routing layer) and **(B) the full Pain Inventory** (every painful thing, written as `Pain → Why it hurts → Root cause → Evidence → Severity`). No solutions here (that's [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>)); no sequencing here (that's [3 · Action Plan](<3 - Action Plan.md>)). This is the terrain.
 >
 > **Method & confidence:** claims are traced to real files from a codebase read on **2026-06-19**. The routing bug in Cluster 2 was confirmed end-to-end (cron → service worker → in-app router). The maturity tiers are **structural** ("how battle-tested"), not a line-by-line correctness audit.
 >
@@ -40,7 +42,7 @@ tags:
 
 | Sub-feature | Tier | Reality / known gaps | Next step |
 |---|---|---|---|
-| **Notification bell + badge** | 🔵 Established | Header button with futuristic `AlertBellIcon`; perpetual `.animate-notification-ring` (1s infinite wobble) + red count badge + `.animate-notification-pulse` ring when unread; "clear all" plays a 2s green celebration. Count from `useUnreadNotificationCount()` (polls 30s). | Calm the perpetual animation; add `prefers-reduced-motion`. → [file 2](<2 - Vision, Target Design & Decisions.md>) |
+| **Notification bell + badge** | 🔵 Established | Header button with futuristic `AlertBellIcon`; perpetual `.animate-notification-ring` (1s infinite wobble) + red count badge + `.animate-notification-pulse` ring when unread; "clear all" plays a 2s green celebration. Count from `useUnreadNotificationCount()` (polls 30s). | Calm the perpetual animation; add `prefers-reduced-motion`. → [file 2](<2 - Vision & Roadmap.md>) |
 | **Notification side drawer** | 🔵 Established | Right-side sheet; each row = icon circle + title + 2-line message + relative time + 1–3 **labelled** quick-action buttons (`getQuickActions()`) + dismiss X + unread dot. "Mark all read" + "View All Alerts" footer. | Trim rows to a glanceable density; icon/compact actions. |
 | **View All Alerts page** | 🔵 Established | `/alerts` → renders `HubPage` (alerts + feed tabs). Two row types: a large cyan transaction-reminder card (Yes-all-done / Log Expense / Snooze / Change Time) and compact severity-bordered alert rows. Word-dense. | Scannable card redesign with clear hierarchy + grouping. |
 | **Daily budget reminder** | 🔵 Established | `daily-reminder` cron at user's preferred times; title "Did you log your transactions?"; `notification_type: "daily_reminder"`. Click → opens the mobile expense form. **Works as intended.** | Leave behavior; only rename type if Cluster 2 fix needs it. |
@@ -76,7 +78,7 @@ Do **not** duplicate file-path tables here — they drift. The authoritative cod
 
 # Part B — Pain Inventory (Every Painful Thing)
 
-> Every painful thing about Notifications & Alerts, written down so the scope is *visible*. **No solutions here** (that's [file 2](<2 - Vision, Target Design & Decisions.md>)) and **no sequencing** (that's [file 4](<4 - Execution Plan & Build Checklist.md>)).
+> Every painful thing about Notifications & Alerts, written down so the scope is *visible*. **No solutions here** (that's [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>)) and **no sequencing** (that's [3 · Action Plan](<3 - Action Plan.md>)).
 
 ## Severity scale
 
@@ -174,9 +176,8 @@ Do **not** duplicate file-path tables here — they drift. The authoritative cod
 5. **🟠 `console.*` in notification crons** — Hard Rule #22 hygiene. *(Cluster 5)*
 6. **🟡 Backlog:** quiet hours/DND, grouping by `group_key`, bulk actions, Undo on dismiss/snooze, unify the two visual languages. *(Cluster 5)*
 
-→ Where each pain is *heading* → [2 · Vision, Target Design & Decisions](<2 - Vision, Target Design & Decisions.md>).
-→ The best-practice rationale + MoSCoW ordering → [3 · Best Practices & MoSCoW Backlog](<3 - Best Practices & MoSCoW Backlog.md>).
-→ What to actually do, and in what order → [4 · Execution Plan & Build Checklist](<4 - Execution Plan & Build Checklist.md>).
+→ Where each pain is *heading* + the best-practice rationale + MoSCoW ordering → [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>).
+→ What to actually do, and in what order → [3 · Action Plan](<3 - Action Plan.md>); the checkable list → [4 · Checklist](<4 - Checklist.md>).
 
 ## Implemented fixes log
 

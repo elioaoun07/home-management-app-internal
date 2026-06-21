@@ -9,9 +9,9 @@ tags:
   - module/kitchen
 ---
 
-# Kitchen · 1 — Feature State — Current Reality
+# Kitchen · 1 — Feature State
 
-> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State — Current Reality.md>) · [2 · Future Vision](<2 - Future Vision & Roadmap.md>) · [3 · Current Action Plan](<3 - Current — Action Plan.md>)
+> **Command Center:** [_index](<_index.md>) · [1 · Feature State](<1 - Feature State.md>) · [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>) · [3 · Action Plan](<3 - Action Plan.md>) · [4 · Checklist](<4 - Checklist.md>)
 >
 > **What this file is:** the *honest, no-hype* state of every Kitchen sub-feature — what exists, how mature it is, and the single most useful next step. **No imagination here** (that's file 2).
 >
@@ -65,4 +65,4 @@ _(Updated 2026-05-30)_
 3. **Shopping List rides the legacy localStorage queue by design** — a correctness trap if someone "modernizes" it without knowing it's intentional. Documented, but easy to trip.
 4. **No tests** across the domain (consistent with all 🔵 Established modules).
 
-→ The growth opportunities are in [2 · Future Vision](<2 - Future Vision & Roadmap.md>); the concrete next steps are in [3 · Current Action Plan](<3 - Current — Action Plan.md>).
+→ The growth opportunities are in [2 · Vision & Roadmap](<2 - Vision & Roadmap.md>); the concrete next steps are in [3 · Action Plan](<3 - Action Plan.md>); the checkable list is [4 · Checklist](<4 - Checklist.md>).

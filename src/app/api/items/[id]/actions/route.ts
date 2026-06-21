@@ -101,16 +101,21 @@ export async function POST(
     // === COMPLETE ===
     if (action === "complete") {
       if (is_recurring) {
+        // Upsert so offline-replay/double-submit of an already-completed
+        // occurrence is idempotent instead of a unique-constraint 500.
         const { data, error } = await adminDb
           .from("item_occurrence_actions")
-          .insert({
-            item_id: itemId,
-            occurrence_date,
-            action_type: "completed",
-            reason: reason || null,
-            created_by: user.id,
-            metadata_json: planned_for ? { planned_for } : null,
-          })
+          .upsert(
+            {
+              item_id: itemId,
+              occurrence_date,
+              action_type: "completed",
+              reason: reason || null,
+              created_by: user.id,
+              metadata_json: planned_for ? { planned_for } : null,
+            },
+            { onConflict: "item_id,occurrence_date,action_type" },
+          )
           .select()
           .single();
 
@@ -138,14 +143,17 @@ export async function POST(
 
         const [itemResult] = await Promise.all([
           adminDb.from("items").update(updatePayload).eq("id", itemId),
-          adminDb.from("item_occurrence_actions").insert({
-            item_id: itemId,
-            occurrence_date,
-            action_type: "completed",
-            reason: reason || null,
-            created_by: user.id,
-            metadata_json: planned_for ? { planned_for } : null,
-          }),
+          adminDb.from("item_occurrence_actions").upsert(
+            {
+              item_id: itemId,
+              occurrence_date,
+              action_type: "completed",
+              reason: reason || null,
+              created_by: user.id,
+              metadata_json: planned_for ? { planned_for } : null,
+            },
+            { onConflict: "item_id,occurrence_date,action_type" },
+          ),
         ]);
 
         if (itemResult.error) {
@@ -186,15 +194,18 @@ export async function POST(
 
       const { data, error } = await adminDb
         .from("item_occurrence_actions")
-        .insert({
-          item_id: itemId,
-          occurrence_date,
-          action_type: "postponed",
-          postponed_to,
-          postpone_type: postpone_type || null,
-          reason: reason || null,
-          created_by: user.id,
-        })
+        .upsert(
+          {
+            item_id: itemId,
+            occurrence_date,
+            action_type: "postponed",
+            postponed_to,
+            postpone_type: postpone_type || null,
+            reason: reason || null,
+            created_by: user.id,
+          },
+          { onConflict: "item_id,occurrence_date,action_type" },
+        )
         .select()
         .single();
 
@@ -249,13 +260,16 @@ export async function POST(
       if (is_recurring && occurrence_date) {
         const { data, error } = await adminDb
           .from("item_occurrence_actions")
-          .insert({
-            item_id: itemId,
-            occurrence_date,
-            action_type: "cancelled",
-            reason: reason || null,
-            created_by: user.id,
-          })
+          .upsert(
+            {
+              item_id: itemId,
+              occurrence_date,
+              action_type: "cancelled",
+              reason: reason || null,
+              created_by: user.id,
+            },
+            { onConflict: "item_id,occurrence_date,action_type" },
+          )
           .select()
           .single();
 
@@ -308,14 +322,17 @@ export async function POST(
     if (action === "skip") {
       const { data: actionRow, error: actionError } = await adminDb
         .from("item_occurrence_actions")
-        .insert({
-          item_id: itemId,
-          occurrence_date,
-          action_type: "skipped",
-          reason: reason || null,
-          created_by: user.id,
-          metadata_json: planned_for ? { planned_for } : null,
-        })
+        .upsert(
+          {
+            item_id: itemId,
+            occurrence_date,
+            action_type: "skipped",
+            reason: reason || null,
+            created_by: user.id,
+            metadata_json: planned_for ? { planned_for } : null,
+          },
+          { onConflict: "item_id,occurrence_date,action_type" },
+        )
         .select()
         .single();
 

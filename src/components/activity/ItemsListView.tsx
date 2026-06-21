@@ -991,16 +991,15 @@ export default function ItemsListView({
             </div>
             {/* Responsible indicator — shown when item is not owned by current user */}
             {!isOwner && item.responsible_user_id && (
-              <div className="mt-0.5">
-                {isAllHousehold ? (
+              <div className="mt-0.5 flex items-center gap-1">
+                <ResponsibleUserBadge
+                  userId={item.responsible_user_id}
+                  className="text-[10px]"
+                />
+                {isAllHousehold && (
                   <span className="text-[10px] text-amber-400/70">
-                    All Household
+                    (notifying household)
                   </span>
-                ) : (
-                  <ResponsibleUserBadge
-                    userId={item.responsible_user_id}
-                    className="text-[10px]"
-                  />
                 )}
               </div>
             )}

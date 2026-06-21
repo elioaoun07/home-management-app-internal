@@ -865,12 +865,11 @@ export default function ItemDetailModal({
                 <circle cx="12" cy="7" r="4" />
               </svg>
               <span>Responsible:</span>
-              {item.notify_all_household ? (
+              <ResponsibleUserBadge userId={item.responsible_user_id} />
+              {item.notify_all_household && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-amber-500/20 text-amber-300">
-                  All Household
+                  Notifying household
                 </span>
-              ) : (
-                <ResponsibleUserBadge userId={item.responsible_user_id} />
               )}
             </div>
           )}
