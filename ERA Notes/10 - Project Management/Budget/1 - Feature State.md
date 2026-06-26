@@ -54,6 +54,7 @@ tags:
 ## Implemented Notes
 
 - [x] 2026-06-26 - Public/shared accounts shipped. Accounts remain private by default; public visible accounts can be opened and used by the active household partner for balances, transactions, categories, and transfers.
+- [x] 2026-06-26 - **Bug fix: dashboard showed zero partner income/expense after public-accounts commit.** The `is_public` flag (meant only to gate the expense-form account picker) was incorrectly applied to the dashboard data pipeline in three places: `transaction.service.ts` filtered partner transactions from non-public accounts; `analytics/route.ts` excluded partner's non-public accounts from the income/expense aggregation; and `useAccounts()` omitted non-public partner accounts so `getExpenseTransactions()` couldn't classify those transactions. Fix: removed `is_public` from all read/view paths; added `?household=true` flag to `/api/accounts` and a `useHouseholdAccounts()` hook used by all dashboard components. Expense-form account picker is unchanged (still shows only partner's `is_public` accounts).
 
 ---
 

@@ -24,7 +24,7 @@ import { Card } from "@/components/ui/card";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { usePrivacyBlur } from "@/contexts/PrivacyBlurContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useHouseholdAccounts } from "@/features/accounts/hooks";
 import { useDeleteTransaction } from "@/features/transactions/useDashboardTransactions";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
 import { cn } from "@/lib/utils";
@@ -413,7 +413,7 @@ const WebDashboard = memo(function WebDashboard({
     usePrivacyBlur();
   const queryClient = useQueryClient();
   const deleteMutation = useDeleteTransaction();
-  const { data: accounts } = useAccounts();
+  const { data: accounts } = useHouseholdAccounts();
 
   const [ownershipFilter, setOwnershipFilter] =
     useState<OwnershipFilter>("all");

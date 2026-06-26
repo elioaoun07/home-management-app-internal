@@ -13,7 +13,7 @@ import RecurringVsVariableWidget from "@/components/dashboard-v2/widgets/Recurri
 import SpendingVelocityWidget from "@/components/dashboard-v2/widgets/SpendingVelocityWidget";
 import TopExpensesWidget from "@/components/dashboard-v2/widgets/TopExpensesWidget";
 import TrendChart from "@/components/dashboard-v2/widgets/TrendChart";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useHouseholdAccounts } from "@/features/accounts/hooks";
 import {
   useAnalytics,
   useHealthScore,
@@ -53,7 +53,7 @@ export default function AnalyticsDashboard({
     ownership: ownershipFilter,
   });
 
-  const { data: accounts } = useAccounts();
+  const { data: accounts } = useHouseholdAccounts();
 
   const healthScore = useHealthScore(analytics);
   const netWorthSeries = useNetWorthSeries(

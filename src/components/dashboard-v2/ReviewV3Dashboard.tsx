@@ -6,7 +6,7 @@ import InsightTabContent from "@/components/dashboard-v2/widgets/InsightTabConte
 import MonthlyDistributionTabContent from "@/components/dashboard-v2/widgets/MonthlyDistributionTabContent";
 import CategoryDetailView from "@/components/dashboard/CategoryDetailView";
 import TransactionDetailModal from "@/components/dashboard/TransactionDetailModal";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useHouseholdAccounts } from "@/features/accounts/hooks";
 import { useAnalytics } from "@/features/analytics/useAnalytics";
 import { useBudgetAllocations } from "@/features/budget/hooks";
 import { useRecurringPayments } from "@/features/recurring/useRecurringPayments";
@@ -70,7 +70,7 @@ export default function ReviewV3Dashboard({
     months: 12,
     ownership: ownershipFilter,
   });
-  const { data: accounts } = useAccounts();
+  const { data: accounts } = useHouseholdAccounts();
 
   const budgetMonth = useMemo(() => format(new Date(), "yyyy-MM"), []);
   const { data: budgetAllocations } = useBudgetAllocations(budgetMonth);

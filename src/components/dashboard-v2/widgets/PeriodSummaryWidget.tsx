@@ -2,7 +2,7 @@
 
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import BlurredAmount from "@/components/ui/BlurredAmount";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useHouseholdAccounts } from "@/features/accounts/hooks";
 import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
 import {
   calculateIncomeExpenseSummary,
@@ -67,7 +67,7 @@ export default function PeriodSummaryWidget({
   endDate,
   months,
 }: Props) {
-  const { data: accounts } = useAccounts();
+  const { data: accounts } = useHouseholdAccounts();
 
   const summary = useMemo(
     () => calculateIncomeExpenseSummary(transactions, accounts),

@@ -31,6 +31,7 @@ tags:
 
 - [x] **X0** Salary -> Wallet URL/NFC refill shortcut - `/expense?transfer=salary-wallet` opens the mobile expense form with an amount prompt, resolves current-user Salary/Wallet account IDs by name, and creates a self transfer through `useCreateTransfer()`. Done 2026-06-25; shell-mounted prompt follow-up fixed 2026-06-26. _(friction - S)_
 - [x] **X0b** Public/shared accounts - account creation and edit mode support private/public visibility; public visible accounts are collaborative for active household partners across balances, transactions, categories, and transfers. Done 2026-06-26. _(friction - M)_
+- [x] **X0c** Dashboard household data bug - `is_public` incorrectly blocked partner's non-public account transactions/analytics from the dashboard. Fixed 2026-06-26: `is_public` now only gates the expense-form account picker; dashboard uses new `useHouseholdAccounts()` + `?household=true` endpoint flag. _(blocker - S)_
 - [ ] **X1** Allocation workflow across accounts - make Salary -> Wallet funding, available Wallet balance, recurring commitments, and category envelopes feel like one intentional flow. _(friction - M)_
 - [ ] **X2** Merchant-map -> manual entry - reuse the statement-import merchant -> category map to auto-suggest on manual entry (gap 1b). _(annoyance - S-M)_
 

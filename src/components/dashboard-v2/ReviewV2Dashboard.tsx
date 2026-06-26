@@ -53,7 +53,7 @@ import TransactionFrequencyWidget from "@/components/dashboard-v2/widgets/Transa
 import TransactionSizeDistributionWidget from "@/components/dashboard-v2/widgets/TransactionSizeDistributionWidget";
 import CategoryDetailView from "@/components/dashboard/CategoryDetailView";
 import TransactionDetailModal from "@/components/dashboard/TransactionDetailModal";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useHouseholdAccounts } from "@/features/accounts/hooks";
 import {
   useAnalytics,
   useHealthScore,
@@ -232,7 +232,7 @@ export default function ReviewV2Dashboard({
     },
   );
 
-  const { data: accounts } = useAccounts();
+  const { data: accounts } = useHouseholdAccounts();
 
   const budgetMonth = useMemo(() => format(new Date(), "yyyy-MM"), []);
   const { data: budgetAllocations } = useBudgetAllocations(budgetMonth);

@@ -42,7 +42,7 @@ import TopExpensesWidget from "@/components/dashboard-v2/widgets/TopExpensesWidg
 import TopMoversWidget from "@/components/dashboard-v2/widgets/TopMoversWidget";
 import TransactionFrequencyWidget from "@/components/dashboard-v2/widgets/TransactionFrequencyWidget";
 import TransactionSizeDistributionWidget from "@/components/dashboard-v2/widgets/TransactionSizeDistributionWidget";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useHouseholdAccounts } from "@/features/accounts/hooks";
 import {
   useAnalytics,
   useHealthScore,
@@ -126,7 +126,7 @@ export default function ReviewDashboard({
     ownership: ownershipFilter,
   });
 
-  const { data: accounts } = useAccounts();
+  const { data: accounts } = useHouseholdAccounts();
 
   const budgetMonth = useMemo(() => format(new Date(), "yyyy-MM"), []);
   const { data: budgetAllocations } = useBudgetAllocations(budgetMonth);

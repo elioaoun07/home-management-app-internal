@@ -18,6 +18,16 @@ async function fetchAccounts(): Promise<Account[]> {
   return (await res.json()) as Account[];
 }
 
+// Fetch all household accounts including partner's non-public ones (for dashboard views)
+async function fetchHouseholdAccounts(): Promise<Account[]> {
+  const res = await fetch("/api/accounts?household=true");
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return (await res.json()) as Account[];
+}
+
 // Fetch only current user's accounts (not partner's)
 async function fetchOwnAccounts(): Promise<Account[]> {
   const res = await fetch("/api/accounts?own=true");
@@ -49,6 +59,22 @@ export function useAccounts() {
     queryFn: fetchAccounts,
     staleTime: CACHE_TIMES.ACCOUNTS, // 1 hour - accounts rarely change
     refetchOnMount: false, // Don't refetch on mount
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Fetch ALL household accounts (own + partner's, ignoring is_public).
+ * Use this on dashboard/analytics views where all household data should be visible.
+ * The expense-form account picker uses useAccounts() instead, which only exposes
+ * partner's explicitly-shared (is_public) accounts.
+ */
+export function useHouseholdAccounts() {
+  return useQuery({
+    queryKey: [...qk.accounts(), "household"],
+    queryFn: fetchHouseholdAccounts,
+    staleTime: CACHE_TIMES.ACCOUNTS,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
 }

@@ -180,18 +180,17 @@ export class SupabaseTransactionService implements TransactionService {
       }
     }
 
-    // Filter out private transactions from partner's view
+    // Filter out private transactions from partner's view.
+    // account.is_public controls the expense-form account picker only —
+    // it does NOT restrict visibility of transactions on the dashboard.
     const filteredRows = (rawRows || []).filter((r: any) => {
-      // If it's the user's own transaction, show it (even if private)
       if (r.user_id === userId) return true;
       if (r.collaborator_id === userId && r.split_completed_at) return true;
       if (r.is_private === true) return false;
       const account = accountMap[r.account_id];
       if (!account) return false;
-      if (account.user_id === userId) return account.is_public === true;
-      if (partnerId && account.user_id === partnerId) {
-        return account.is_public === true;
-      }
+      if (account.user_id === userId) return true;
+      if (partnerId && account.user_id === partnerId) return true;
       return false;
     });
 

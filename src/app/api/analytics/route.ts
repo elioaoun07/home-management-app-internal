@@ -65,10 +65,12 @@ export async function GET(req: NextRequest) {
     }
 
     const { data: accounts } = await accountsQuery;
+    // account.is_public controls the expense-form account picker only —
+    // the analytics endpoint is a household-level view and includes all accounts.
     const accountList = (accounts || []).filter((account) => {
       if (account.visible === false) return false;
       if (account.user_id === user.id) return true;
-      return partnerId && account.user_id === partnerId && account.is_public;
+      return !!(partnerId && account.user_id === partnerId);
     });
     const accountIds = accountList.map((a) => a.id);
 

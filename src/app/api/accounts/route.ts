@@ -25,7 +25,7 @@ const createAccountSchema = z.object({
 async function fetchAccountList(
   supabase: any,
   userId: string,
-  options: { ownOnly: boolean; includeHidden: boolean },
+  options: { ownOnly: boolean; includeHidden: boolean; allHousehold?: boolean },
 ) {
   let ownQuery = supabase
     .from("accounts")
@@ -43,12 +43,17 @@ async function fetchAccountList(
   if (!options.ownOnly) {
     const partnerId = await getActiveHouseholdPartnerId(supabase, userId);
     if (partnerId) {
-      const { data, error } = await supabase
+      let partnerQuery = supabase
         .from("accounts")
         .select(ACCOUNT_SELECT)
         .eq("user_id", partnerId)
-        .eq("is_public", true)
         .neq("visible", false);
+      // Without allHousehold, only expose partner's explicitly shared accounts
+      // (used by the expense-form account picker).
+      if (!options.allHousehold) {
+        partnerQuery = partnerQuery.eq("is_public", true);
+      }
+      const { data, error } = await partnerQuery;
       if (error) throw error;
       partnerAccounts = data ?? [];
     }
@@ -80,12 +85,16 @@ export async function GET(req: NextRequest) {
   // Check if we should include hidden accounts (for edit mode)
   const includeHidden =
     req.nextUrl.searchParams.get("includeHidden") === "true";
+  // Dashboard uses ?household=true to get all partner accounts regardless of is_public.
+  // The expense-form account picker omits this flag so only partner's public accounts show.
+  const allHousehold = req.nextUrl.searchParams.get("household") === "true";
 
   let data: any[] = [];
   try {
     data = await fetchAccountList(supabase, user.id, {
       ownOnly,
       includeHidden,
+      allHousehold,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

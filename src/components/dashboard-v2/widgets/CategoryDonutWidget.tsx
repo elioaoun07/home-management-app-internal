@@ -2,7 +2,7 @@
 
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import BlurredAmount from "@/components/ui/BlurredAmount";
-import { useAccounts } from "@/features/accounts/hooks";
+import { useHouseholdAccounts } from "@/features/accounts/hooks";
 import {
   groupExpensesByCategory,
   type TransactionWithAccount,
@@ -40,7 +40,7 @@ export default function CategoryDonutWidget({
   onCategoryClick,
   activeCategories = [],
 }: Props) {
-  const { data: accounts } = useAccounts();
+  const { data: accounts } = useHouseholdAccounts();
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   const { slices, total } = useMemo(() => {
