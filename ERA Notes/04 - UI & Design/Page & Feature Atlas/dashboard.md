@@ -30,6 +30,9 @@ tags: []
   - `src/components/web/WebDashboard.tsx`
   - `src/components/web/WebTabletMissionControl.tsx`
   - `src/components/expense/EditableWidgetGrid.tsx`
+  - `src/components/dashboard-v2/ReviewV2Dashboard.tsx` — "Review v2" web view (6 tabs)
+  - `src/components/dashboard-v2/ReviewV3Dashboard.tsx` — "Review v3" web view (Insight · Monthly · Categories)
+  - `src/components/dashboard-v2/widgets/InsightTabContent.tsx` — v3 Insight tab
 
 ## Hooks
 
@@ -66,3 +69,4 @@ tags: []
 - Prefetch on startup via `src/components/EagerDataPrefetch.tsx` and on hover via `src/lib/prefetch/prefetchDashboard.ts`.
 - Theme changes invalidate all queries — full refetch on theme switch.
 - Section order is drag-configurable via `EditableWidgetGrid`.
+- Web dashboard view toggle (`WebDashboard.tsx`) has: Overview · Analytics · Review · Review v2 · **Review v3** (added 2026-06-26). Review v3 is an experimental simplified view — **Insight** (stacked-by-category monthly spend with a runtime outlier toggle, total-budget reference line, and an Income/Expense/Expected-Savings pie), plus **Monthly** and **Categories** tabs that reuse the v2 `MonthlyDistributionTabContent` / `CategoriesV2TabContent`. Intended to be merged back into v2 once validated.

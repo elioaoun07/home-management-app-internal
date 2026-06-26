@@ -1,0 +1,764 @@
+"use client";
+
+import WidgetCard from "@/components/dashboard-v2/WidgetCard";
+import BlurredAmount from "@/components/ui/BlurredAmount";
+import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
+import { detectTransactionAnomalies } from "@/lib/utils/anomalyDetection";
+import type { TransactionWithAccount } from "@/lib/utils/incomeExpense";
+import { cn } from "@/lib/utils";
+import type { BudgetSummary } from "@/types/budgetAllocation";
+import { format, subMonths } from "date-fns";
+import { Eye, EyeOff } from "lucide-react";
+import { Fragment, useId, useMemo, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Pie,
+  PieChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+// ── Colors ───────────────────────────────────────────────────────────────────
+
+const EXPENSE_COLOR = "#fb7185";
+const EXPECTED_SAVINGS_COLOR = "#22d3ee";
+const INCOME_COLOR = "#34d399";
+const BUDGET_COLOR = "#34d399";
+const OTHER_COLOR = "#64748b";
+
+// Neon-futuristic palette for category fallback colors
+const PALETTE = [
+  "#22d3ee",
+  "#a78bfa",
+  "#34d399",
+  "#f472b6",
+  "#fbbf24",
+  "#60a5fa",
+  "#fb923c",
+  "#e879f9",
+  "#4ade80",
+  "#f87171",
+  "#38bdf8",
+  "#c084fc",
+];
+
+const MAX_STACK_CATEGORIES = 10;
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+type Props = {
+  /** Expense transactions, already debt-filtered, with category + category_color */
+  expenseTransactions: TransactionWithAccount[];
+  /** Analytics months (oldest → newest) for income/expense per month */
+  analyticsMonths: MonthlyAnalytics[] | undefined;
+  /** Current-month budget summary from useBudgetAllocations */
+  budgetSummary: BudgetSummary | undefined;
+};
+
+type MonthBucket = { key: string; label: string };
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtDollar(n: number): string {
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  if (abs >= 10_000) return `${sign}$${(abs / 1000).toFixed(0)}k`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1000).toFixed(1)}k`;
+  return `${sign}$${Math.round(abs)}`;
+}
+
+function fmtFull(n: number): string {
+  return `$${Math.round(n).toLocaleString()}`;
+}
+
+/** Build 12 month buckets ending at the current month */
+function build12Months(): MonthBucket[] {
+  const now = new Date();
+  const buckets: MonthBucket[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = subMonths(now, i);
+    buckets.push({ key: format(d, "yyyy-MM"), label: format(d, "MMM yy") });
+  }
+  return buckets;
+}
+
+const TOOLTIP_STYLE = {
+  background: "rgba(10,12,20,0.96)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: "12px",
+  fontSize: "13px",
+  fontWeight: 500,
+  padding: "12px 16px",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06)",
+  backdropFilter: "blur(12px)",
+} as const;
+
+/** Lighten a hex color by a percentage (toward white) */
+function lightenHex(hex: string, pct: number): string {
+  const c = hex.replace("#", "");
+  const num = parseInt(
+    c.length === 3
+      ? c
+          .split("")
+          .map((ch) => ch + ch)
+          .join("")
+      : c,
+    16,
+  );
+  const r = (num >> 16) & 0xff;
+  const g = (num >> 8) & 0xff;
+  const b = num & 0xff;
+  const mix = (ch: number) => Math.round(ch + (255 - ch) * (pct / 100));
+  return `#${[mix(r), mix(g), mix(b)]
+    .map((v) => v.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+/** SVG defs for outlined bars with luminous glow */
+function ChartDefs({ id, color }: { id: string; color: string }) {
+  const bright = lightenHex(color, 30);
+  return (
+    <defs>
+      <linearGradient id={`${id}-fill`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={bright} stopOpacity={0.45} />
+        <stop offset="50%" stopColor={color} stopOpacity={0.22} />
+        <stop offset="100%" stopColor={color} stopOpacity={0.1} />
+      </linearGradient>
+      <linearGradient id={`${id}-highlight`} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#fff" stopOpacity={0.28} />
+        <stop offset="20%" stopColor="#fff" stopOpacity={0.1} />
+        <stop offset="50%" stopColor="#fff" stopOpacity={0} />
+      </linearGradient>
+      <filter id={`${id}-glow`} x="-40%" y="-15%" width="180%" height="140%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+        <feColorMatrix
+          in="blur"
+          type="matrix"
+          values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.55 0"
+          result="glow"
+        />
+        <feDropShadow
+          dx="0"
+          dy="2"
+          stdDeviation="3"
+          floodColor="#000"
+          floodOpacity="0.35"
+          result="shadow"
+        />
+        <feMerge>
+          <feMergeNode in="shadow" />
+          <feMergeNode in="glow" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+    </defs>
+  );
+}
+
+/** Custom bar shape: outlined rectangle with inner glow fill + top highlight */
+function OutlinedBar({
+  x,
+  y,
+  width,
+  height,
+  fillId,
+  highlightId,
+  filterId,
+  strokeColor,
+}: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fillId: string;
+  highlightId: string;
+  filterId: string;
+  strokeColor: string;
+}) {
+  if (!height || height <= 0) return null;
+  const r = Math.min(5, width / 2, height);
+  const bright = lightenHex(strokeColor, 25);
+  return (
+    <g filter={`url(#${filterId})`}>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        rx={r}
+        ry={r}
+        fill={`url(#${fillId})`}
+      />
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={Math.min(height, height * 0.55)}
+        rx={r}
+        ry={r}
+        fill={`url(#${highlightId})`}
+      />
+      <rect x={x} y={y} width={2} height={height} rx={1} fill={strokeColor} fillOpacity={0.15} />
+      <rect
+        x={x + width - 2}
+        y={y}
+        width={2}
+        height={height}
+        rx={1}
+        fill={strokeColor}
+        fillOpacity={0.08}
+      />
+      <rect
+        x={x + 0.5}
+        y={y + 0.5}
+        width={width - 1}
+        height={height - 1}
+        rx={r}
+        ry={r}
+        fill="none"
+        stroke={bright}
+        strokeWidth={1.3}
+        strokeOpacity={0.7}
+      />
+      <line
+        x1={x + r}
+        y1={y + 0.5}
+        x2={x + width - r}
+        y2={y + 0.5}
+        stroke={bright}
+        strokeWidth={2}
+        strokeOpacity={0.9}
+        strokeLinecap="round"
+      />
+    </g>
+  );
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export default function InsightTabContent({
+  expenseTransactions,
+  analyticsMonths,
+  budgetSummary,
+}: Props) {
+  const [hideOutliers, setHideOutliers] = useState(false);
+  const uid = useId().replace(/:/g, "");
+
+  const months = useMemo(() => build12Months(), []);
+  const currentMonthKey = months[months.length - 1]?.key;
+
+  // ── Outlier detection (runtime, no persistence) ───────────────────────────
+  const { outlierIds, outlierCount, outlierTotal } = useMemo(() => {
+    const anomalies = detectTransactionAnomalies(
+      expenseTransactions.map((t) => ({
+        id: t.id,
+        amount: Math.abs(t.amount),
+        category: t.category ?? "Uncategorized",
+        description: t.description ?? null,
+        date: t.date,
+      })),
+    );
+    const ids = new Set(anomalies.map((a) => a.transactionId));
+    const total = anomalies.reduce((s, a) => s + a.amount, 0);
+    return { outlierIds: ids, outlierCount: ids.size, outlierTotal: total };
+  }, [expenseTransactions]);
+
+  // ── Build stacked-bar data: month × category ──────────────────────────────
+  const { stackData, categoryMeta, totalSpend } = useMemo(() => {
+    const visibleTxs = hideOutliers
+      ? expenseTransactions.filter((t) => !outlierIds.has(t.id))
+      : expenseTransactions;
+
+    // Aggregate amount per category across the 12-month window
+    const monthKeys = new Set(months.map((m) => m.key));
+    const catTotals: Record<string, number> = {};
+    const catColors: Record<string, string> = {};
+    // month → category → amount
+    const byMonthCat: Record<string, Record<string, number>> = {};
+    for (const m of months) byMonthCat[m.key] = {};
+
+    for (const t of visibleTxs) {
+      const monthKey = t.date.slice(0, 7);
+      if (!monthKeys.has(monthKey)) continue;
+      const cat = t.category ?? "Uncategorized";
+      const amt = Math.abs(t.amount);
+      catTotals[cat] = (catTotals[cat] ?? 0) + amt;
+      if (!catColors[cat] && t.category_color) {
+        catColors[cat] = t.category_color;
+      }
+      byMonthCat[monthKey][cat] = (byMonthCat[monthKey][cat] ?? 0) + amt;
+    }
+
+    // Rank categories, keep top N, fold the rest into "Other"
+    const ranked = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+    const topNames = ranked
+      .slice(0, MAX_STACK_CATEGORIES)
+      .map(([name]) => name);
+    const hasOther = ranked.length > MAX_STACK_CATEGORIES;
+
+    const categoryMeta = topNames.map((name, i) => ({
+      name,
+      color: catColors[name] || PALETTE[i % PALETTE.length],
+    }));
+    if (hasOther) categoryMeta.push({ name: "Other", color: OTHER_COLOR });
+
+    const topSet = new Set(topNames);
+    const stackData = months.map((m) => {
+      const row: Record<string, number | string> = {
+        month: m.label,
+        key: m.key,
+      };
+      let monthTotal = 0;
+      let otherTotal = 0;
+      for (const [cat, amt] of Object.entries(byMonthCat[m.key])) {
+        monthTotal += amt;
+        if (topSet.has(cat)) row[cat] = amt;
+        else otherTotal += amt;
+      }
+      if (hasOther) row["Other"] = otherTotal;
+      row.__total = monthTotal;
+      return row;
+    });
+
+    const totalSpend = Object.values(catTotals).reduce((s, v) => s + v, 0);
+    return { stackData, categoryMeta, totalSpend };
+  }, [expenseTransactions, hideOutliers, outlierIds, months]);
+
+  // ── Budget: total monthly budget + per-category map ───────────────────────
+  const { totalBudget, budgetByCategory } = useMemo(() => {
+    const map: Record<string, { budget: number; spent: number }> = {};
+    let total = 0;
+    for (const c of budgetSummary?.categories ?? []) {
+      if (c.total_budget > 0) {
+        total += c.total_budget;
+        map[c.category_name] = {
+          budget: c.total_budget,
+          spent: c.total_spent,
+        };
+      }
+    }
+    return { totalBudget: total, budgetByCategory: map };
+  }, [budgetSummary]);
+
+  // ── Pie: month selector + income / expense / expected savings ─────────────
+  const monthOptions = useMemo(
+    () => (analyticsMonths ?? []).slice().reverse(),
+    [analyticsMonths],
+  );
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const activeMonth = useMemo(() => {
+    const list = analyticsMonths ?? [];
+    if (list.length === 0) return undefined;
+    if (selectedMonth) return list.find((m) => m.month === selectedMonth);
+    return list[list.length - 1];
+  }, [analyticsMonths, selectedMonth]);
+
+  const pie = useMemo(() => {
+    const income = activeMonth?.income ?? 0;
+    const expense = activeMonth?.expense ?? 0;
+    const expectedSavings = Math.max(income - expense, 0);
+    const overspent = expense > income;
+    const slices = overspent
+      ? [{ name: "Expense", value: expense, color: EXPENSE_COLOR }]
+      : [
+          { name: "Expense", value: expense, color: EXPENSE_COLOR },
+          {
+            name: "Expected Savings",
+            value: expectedSavings,
+            color: EXPECTED_SAVINGS_COLOR,
+          },
+        ];
+    return { income, expense, expectedSavings, overspent, slices };
+  }, [activeMonth]);
+
+  const hasData = expenseTransactions.length > 0 || (analyticsMonths?.length ?? 0) > 0;
+  if (!hasData) {
+    return (
+      <WidgetCard title="Insight">
+        <p className="text-white/40 text-xs text-center py-10">
+          No data for this period
+        </p>
+      </WidgetCard>
+    );
+  }
+
+  // ── Stacked bar tooltip ───────────────────────────────────────────────────
+  type TooltipEntry = {
+    dataKey: string;
+    value: number;
+    color: string;
+    payload: Record<string, number | string>;
+  };
+  const StackTooltip = ({
+    active,
+    payload,
+    label,
+  }: {
+    active?: boolean;
+    payload?: TooltipEntry[];
+    label?: string;
+  }) => {
+    if (!active || !payload?.length) return null;
+    const monthKey = payload[0]?.payload?.key as string | undefined;
+    const total = (payload[0]?.payload?.__total as number) ?? 0;
+    const isCurrent = monthKey === currentMonthKey;
+    const rows = payload
+      .filter((p) => p.dataKey !== "__total" && (p.value ?? 0) > 0)
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+    return (
+      <div style={TOOLTIP_STYLE}>
+        <p className="text-white font-semibold mb-1.5">{label}</p>
+        {rows.map((p) => {
+          const cb = isCurrent ? budgetByCategory[p.dataKey] : undefined;
+          return (
+            <div
+              key={p.dataKey}
+              className="flex items-center justify-between gap-4 text-xs"
+            >
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ background: p.color }}
+                />
+                <span className="text-white/70">{p.dataKey}</span>
+              </span>
+              <span className="text-white tabular-nums">
+                {fmtFull(p.value)}
+                {cb && (
+                  <span className="text-white/35">
+                    {" "}
+                    / {fmtDollar(cb.budget)}
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+        <div className="mt-1.5 pt-1.5 border-t border-white/10 flex items-center justify-between gap-4 text-xs">
+          <span className="text-white/50">Total</span>
+          <span className="text-white font-semibold tabular-nums">
+            {fmtFull(total)}
+          </span>
+        </div>
+        {isCurrent && totalBudget > 0 && (
+          <div className="flex items-center justify-between gap-4 text-xs">
+            <span className="text-emerald-400/70">Budget</span>
+            <span
+              className={cn(
+                "tabular-nums font-medium",
+                total > totalBudget ? "text-rose-400" : "text-emerald-400",
+              )}
+            >
+              {total > totalBudget
+                ? `+${fmtFull(total - totalBudget)} over`
+                : `${fmtFull(totalBudget - total)} left`}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* ── Monthly spending — stacked by category ───────────────────────── */}
+      <WidgetCard
+        title="Monthly Spending by Category"
+        subtitle={`Last 12 months · ${categoryMeta.length} categories${
+          totalBudget > 0 ? " · budget line shown" : ""
+        }`}
+        action={
+          <button
+            onClick={() => setHideOutliers((v) => !v)}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors",
+              hideOutliers
+                ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30"
+                : "bg-white/5 text-white/50 hover:text-white/70 hover:bg-white/10",
+            )}
+            title="Hide statistically unusual one-off transactions (>2σ within a category)"
+          >
+            {hideOutliers ? (
+              <EyeOff className="w-3 h-3" />
+            ) : (
+              <Eye className="w-3 h-3" />
+            )}
+            {hideOutliers ? "Outliers hidden" : "Hide outliers"}
+          </button>
+        }
+      >
+        <div className="flex items-baseline justify-between mb-2">
+          <BlurredAmount blurIntensity="sm">
+            <span className="text-lg font-bold text-white tabular-nums">
+              {fmtFull(totalSpend)}
+            </span>
+          </BlurredAmount>
+          <span className="text-[10px] text-white/40">
+            total over period
+          </span>
+        </div>
+
+        <div style={{ height: 320 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={stackData}
+              margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+            >
+              <XAxis
+                dataKey="month"
+                tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tickFormatter={(v) => fmtDollar(v as number)}
+                tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                width={48}
+              />
+              <Tooltip
+                content={<StackTooltip />}
+                cursor={{ fill: "rgba(255,255,255,0.04)" }}
+              />
+              {categoryMeta.map((c, i) => (
+                <ChartDefs key={c.name} id={`${uid}-c${i}`} color={c.color} />
+              ))}
+              {categoryMeta.map((c, i) => (
+                <Bar
+                  key={c.name}
+                  dataKey={c.name}
+                  stackId="spend"
+                  fill="transparent"
+                  maxBarSize={48}
+                  shape={(props: {
+                    x: number;
+                    y: number;
+                    width: number;
+                    height: number;
+                  }) => (
+                    <OutlinedBar
+                      x={props.x}
+                      y={props.y}
+                      width={props.width}
+                      height={props.height}
+                      fillId={`${uid}-c${i}-fill`}
+                      highlightId={`${uid}-c${i}-highlight`}
+                      filterId={`${uid}-c${i}-glow`}
+                      strokeColor={c.color}
+                    />
+                  )}
+                />
+              ))}
+              {totalBudget > 0 && (
+                <ReferenceLine
+                  y={totalBudget}
+                  stroke={BUDGET_COLOR}
+                  strokeDasharray="5 4"
+                  strokeWidth={1.5}
+                  label={{
+                    value: `Budget ${fmtDollar(totalBudget)}`,
+                    position: "insideTopRight",
+                    fill: BUDGET_COLOR,
+                    fontSize: 10,
+                  }}
+                />
+              )}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+          {categoryMeta.map((c) => (
+            <span key={c.name} className="flex items-center gap-1.5 text-[10px]">
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ background: c.color }}
+              />
+              <span className="text-white/55">{c.name}</span>
+            </span>
+          ))}
+        </div>
+
+        {hideOutliers && (
+          <p className="mt-2 text-[11px] text-amber-300/80">
+            {outlierCount} outlier transaction{outlierCount === 1 ? "" : "s"}{" "}
+            hidden (<BlurredAmount blurIntensity="sm">{fmtFull(outlierTotal)}</BlurredAmount>)
+          </p>
+        )}
+      </WidgetCard>
+
+      {/* ── Income / Expense / Expected Savings pie ──────────────────────── */}
+      <WidgetCard
+        title="Income · Expense · Expected Savings"
+        subtitle="Expense and Expected Savings sum to Income"
+        action={
+          monthOptions.length > 0 ? (
+            <select
+              value={activeMonth?.month ?? ""}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-lg text-[11px] text-white/70 px-2 py-1 outline-none focus:border-white/20"
+            >
+              {monthOptions.map((m) => (
+                <option key={m.month} value={m.month} className="bg-slate-900">
+                  {format(new Date(`${m.month}-01`), "MMM yyyy")}
+                </option>
+              ))}
+            </select>
+          ) : undefined
+        }
+      >
+        <div className="flex items-center gap-4">
+          {/* Pie */}
+          <div
+            className="relative flex-shrink-0"
+            style={{ width: 170, height: 170 }}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <defs>
+                  {pie.slices.map((s, i) => {
+                    const bright = lightenHex(s.color, 35);
+                    return (
+                      <Fragment key={s.name}>
+                        <radialGradient
+                          id={`${uid}-pie${i}-fill`}
+                          cx="35%"
+                          cy="30%"
+                          r="75%"
+                        >
+                          <stop offset="0%" stopColor={bright} stopOpacity={0.85} />
+                          <stop offset="55%" stopColor={s.color} stopOpacity={0.65} />
+                          <stop offset="100%" stopColor={s.color} stopOpacity={0.45} />
+                        </radialGradient>
+                        <filter
+                          id={`${uid}-pie${i}-glow`}
+                          x="-50%"
+                          y="-50%"
+                          width="200%"
+                          height="200%"
+                        >
+                          <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur" />
+                          <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                      </Fragment>
+                    );
+                  })}
+                </defs>
+                <Pie
+                  data={pie.slices}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={52}
+                  outerRadius={78}
+                  paddingAngle={2}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {pie.slices.map((s, i) => (
+                    <Cell
+                      key={s.name}
+                      fill={`url(#${uid}-pie${i}-fill)`}
+                      stroke={lightenHex(s.color, 25)}
+                      strokeWidth={1}
+                      strokeOpacity={0.6}
+                      style={{ filter: `url(#${uid}-pie${i}-glow)` }}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(v: number, n: string) => [fmtFull(Number(v)), n]}
+                  contentStyle={TOOLTIP_STYLE}
+                  itemStyle={{ color: "#fff" }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Center: Income total */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <p className="text-[9px] text-white/40 uppercase tracking-wider">
+                Income
+              </p>
+              <BlurredAmount blurIntensity="sm">
+                <p
+                  className="text-base font-bold tabular-nums"
+                  style={{ color: INCOME_COLOR }}
+                >
+                  {fmtFull(pie.income)}
+                </p>
+              </BlurredAmount>
+              {pie.overspent && (
+                <p className="text-[9px] text-rose-400 font-medium">
+                  overspent
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex-1 min-w-0 space-y-2.5">
+            <LegendRow
+              label="Income"
+              value={pie.income}
+              color={INCOME_COLOR}
+            />
+            <LegendRow
+              label="Expense"
+              value={pie.expense}
+              color={EXPENSE_COLOR}
+            />
+            <LegendRow
+              label="Expected Savings"
+              value={pie.overspent ? pie.income - pie.expense : pie.expectedSavings}
+              color={EXPECTED_SAVINGS_COLOR}
+              negative={pie.overspent}
+            />
+          </div>
+        </div>
+      </WidgetCard>
+    </div>
+  );
+}
+
+function LegendRow({
+  label,
+  value,
+  color,
+  negative,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  negative?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="flex items-center gap-2 min-w-0">
+        <span
+          className="w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-white/10"
+          style={{
+            backgroundColor: color,
+            boxShadow: `0 0 6px ${color}60`,
+          }}
+        />
+        <span className="text-xs text-white/60 truncate">{label}</span>
+      </span>
+      <BlurredAmount blurIntensity="sm">
+        <span
+          className="text-sm font-semibold tabular-nums"
+          style={{ color: negative ? "#fb7185" : color }}
+        >
+          {fmtFull(value)}
+        </span>
+      </BlurredAmount>
+    </div>
+  );
+}

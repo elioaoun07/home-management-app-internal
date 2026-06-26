@@ -41,6 +41,7 @@ tags:
 - [ ] **L3** 50/30/20 budgeting templates + Dashboard V2 widgets. _(annoyance - M)_
   - [x] Monthly Savings reads the flat `Our Savings` account balance instead of monthly saving-account transaction totals. Done 2026-06-25.
   - [x] Monthly adds `Expected Savings` (`Income - Expense`) and visibility toggles for Income / Expense / Savings / Expected Savings. Done 2026-06-25.
+  - [x] **Review v3** experimental dashboard view (`ReviewV3Dashboard`) — simplified surface with an **Insight** tab (monthly spend stacked by category + runtime outlier toggle reusing `detectTransactionAnomalies`, total-budget reference line, Income/Expense/Expected-Savings pie) plus reused Monthly/Categories tabs. Web view toggle in `WebDashboard.tsx`; to be merged back into v2 once validated. Done 2026-06-26.
 - [ ] **L4** Allocation auto-suggest from recurring commitments. Fold into X1 if it becomes part of the allocation workflow redesign. _(annoyance - M)_
 - [ ] **L5** Future Purchase -> Transaction auto-complete on linked purchase. _(annoyance - S-M)_
 - [ ] **L6** Debt -> Schedule auto-reminder on collection date. _(annoyance - S-M)_

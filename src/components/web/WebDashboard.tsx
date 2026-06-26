@@ -13,6 +13,7 @@ import {
 import AnalyticsDashboard from "@/components/dashboard-v2/AnalyticsDashboard";
 import ReviewDashboard from "@/components/dashboard-v2/ReviewDashboard";
 import ReviewV2Dashboard from "@/components/dashboard-v2/ReviewV2Dashboard";
+import ReviewV3Dashboard from "@/components/dashboard-v2/ReviewV3Dashboard";
 import CategoryDetailView from "@/components/dashboard/CategoryDetailView";
 import TransactionDetailModal from "@/components/dashboard/TransactionDetailModal";
 import {
@@ -58,6 +59,7 @@ import {
   EyeOff,
   Filter,
   Heart,
+  Layers,
   Leaf,
   LineChart,
   Mail,
@@ -433,7 +435,7 @@ const WebDashboard = memo(function WebDashboard({
     null,
   );
   const [dashboardView, setDashboardView] = useState<
-    "overview" | "analytics" | "review" | "review-v2"
+    "overview" | "analytics" | "review" | "review-v2" | "review-v3"
   >("overview");
 
   // Ref for controlling map zoom from external components
@@ -1212,6 +1214,18 @@ const WebDashboard = memo(function WebDashboard({
                 <Target className="w-3.5 h-3.5" />
                 Review v2
               </button>
+              <button
+                onClick={() => setDashboardView("review-v3")}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  dashboardView === "review-v3"
+                    ? "neo-gradient text-white shadow-sm"
+                    : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
+                )}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Review v3
+              </button>
             </div>
 
             <button
@@ -1389,6 +1403,21 @@ const WebDashboard = memo(function WebDashboard({
               );
               setShowFilters(true);
             }}
+          />
+        </div>
+      )}
+
+      {/* Review v3 View (experimental — Insight · Monthly · Categories) */}
+      {dashboardView === "review-v3" && (
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <ReviewV3Dashboard
+            transactions={ownershipFilteredTransactions}
+            startDate={startDate}
+            endDate={endDate}
+            ownershipFilter={ownershipFilter}
+            currentUserId={currentUserId}
+            onDateRangeChange={onDateRangeChange}
+            filtersOpen={showFilters}
           />
         </div>
       )}
