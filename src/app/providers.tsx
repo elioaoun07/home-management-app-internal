@@ -137,7 +137,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     () => ({
       persister,
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-      buster: "hm-v2",
+      // Bump on cache-shape/visibility changes to discard stale persisted cache
+      // for all clients on next load. Bumped to v3 (2026-06-26): the public-accounts
+      // work changed which accounts the dashboard sees (household vs is_public), so
+      // the persisted partner-less `accounts` list must be invalidated.
+      buster: "hm-v3",
       dehydrateOptions: {
         shouldDehydrateQuery: (q: {
           state: { status: string };
