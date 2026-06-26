@@ -10,6 +10,7 @@ import {
   type TransactionOutlier,
 } from "@/lib/utils/anomalyDetection";
 import type { TransactionWithAccount } from "@/lib/utils/incomeExpense";
+import { usePrivacyBlur } from "@/contexts/PrivacyBlurContext";
 import { cn } from "@/lib/utils";
 import type { BudgetSummary } from "@/types/budgetAllocation";
 import { format, subMonths } from "date-fns";
@@ -65,6 +66,9 @@ type Props = {
   budgetSummary: BudgetSummary | undefined;
   /** Registered recurring payments — exempted from outlier flagging */
   recurringHints?: RecurringHint[];
+  /** Active global date range (header filter) — drives the income/expense pie */
+  startDate: string;
+  endDate: string;
 };
 
 type MonthBucket = { key: string; label: string };
@@ -265,10 +269,13 @@ export default function InsightTabContent({
   analyticsMonths,
   budgetSummary,
   recurringHints,
+  startDate,
+  endDate,
 }: Props) {
   const [hideOutliers, setHideOutliers] = useState(false);
   const [showOutlierList, setShowOutlierList] = useState(false);
   const uid = useId().replace(/:/g, "");
+  const { isBlurred: isAmountBlurred } = usePrivacyBlur();
 
   // ── Focus state: a month and/or a category drive the side insight panel ───
   const [focusedMonth, setFocusedMonth] = useState<string | null>(null);
@@ -455,21 +462,22 @@ export default function InsightTabContent({
     return { totalBudget: total, budgetByCategory: map };
   }, [budgetSummary]);
 
-  // ── Pie: month selector + income / expense / expected savings ─────────────
-  const monthOptions = useMemo(
-    () => (analyticsMonths ?? []).slice().reverse(),
-    [analyticsMonths],
-  );
-  const activeMonth = useMemo(() => {
+  // ── Pie: income / expense / expected savings over the global date range ───
+  // Follows the dashboard's top date filter (no per-widget month picker).
+  // Aggregates the always-12-month `analyticsMonths` to the months that fall
+  // inside [startDate, endDate]; empty bounds (All Time) include every month.
+  const { pie, periodLabel } = useMemo(() => {
     const list = analyticsMonths ?? [];
-    if (list.length === 0) return undefined;
-    if (focusedMonth) return list.find((m) => m.month === focusedMonth);
-    return list[list.length - 1];
-  }, [analyticsMonths, focusedMonth]);
+    const startKey = startDate ? startDate.slice(0, 7) : "";
+    const endKey = endDate ? endDate.slice(0, 7) : "";
+    const inRange = list.filter((m) => {
+      if (startKey && m.month < startKey) return false;
+      if (endKey && m.month > endKey) return false;
+      return true;
+    });
 
-  const pie = useMemo(() => {
-    const income = activeMonth?.income ?? 0;
-    const expense = activeMonth?.expense ?? 0;
+    const income = inRange.reduce((s, m) => s + (m.income ?? 0), 0);
+    const expense = inRange.reduce((s, m) => s + (m.expense ?? 0), 0);
     const expectedSavings = Math.max(income - expense, 0);
     const overspent = expense > income;
     const slices = overspent
@@ -482,8 +490,21 @@ export default function InsightTabContent({
             color: EXPECTED_SAVINGS_COLOR,
           },
         ];
-    return { income, expense, expectedSavings, overspent, slices };
-  }, [activeMonth]);
+
+    // Label the span actually aggregated (months are oldest → newest).
+    const fmtKey = (k: string) => format(new Date(`${k}-01`), "MMM yyyy");
+    const periodLabel =
+      inRange.length === 0
+        ? ""
+        : inRange[0].month === inRange[inRange.length - 1].month
+          ? fmtKey(inRange[0].month)
+          : `${fmtKey(inRange[0].month)} – ${fmtKey(inRange[inRange.length - 1].month)}`;
+
+    return {
+      pie: { income, expense, expectedSavings, overspent, slices },
+      periodLabel,
+    };
+  }, [analyticsMonths, startDate, endDate]);
 
   const hasData = expenseTransactions.length > 0 || (analyticsMonths?.length ?? 0) > 0;
   if (!hasData) {
@@ -634,8 +655,22 @@ export default function InsightTabContent({
                 tickLine={false}
               />
               <YAxis
-                tickFormatter={(v) => fmtDollar(v as number)}
-                tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }}
+                tick={({ x, y, payload }: any) =>
+                  payload ? (
+                    <text
+                      x={x}
+                      y={y}
+                      textAnchor="end"
+                      dominantBaseline="middle"
+                      fill="rgba(255,255,255,0.35)"
+                      fontSize={10}
+                      fontWeight={500}
+                      style={isAmountBlurred ? { filter: "blur(5px)" } : undefined}
+                    >
+                      {fmtDollar(payload.value)}
+                    </text>
+                  ) : null
+                }
                 axisLine={false}
                 tickLine={false}
                 width={48}
@@ -816,20 +851,12 @@ export default function InsightTabContent({
       {/* ── Income / Expense / Expected Savings pie ──────────────────────── */}
       <WidgetCard
         title="Income · Expense · Expected Savings"
-        subtitle="Expense and Expected Savings sum to Income"
+        subtitle="Expense + Expected Savings = Income · follows the date filter above"
         action={
-          monthOptions.length > 0 ? (
-            <select
-              value={activeMonth?.month ?? ""}
-              onChange={(e) => setFocusedMonth(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-lg text-[11px] text-white/70 px-2 py-1 outline-none focus:border-white/20"
-            >
-              {monthOptions.map((m) => (
-                <option key={m.month} value={m.month} className="bg-slate-900">
-                  {format(new Date(`${m.month}-01`), "MMM yyyy")}
-                </option>
-              ))}
-            </select>
+          periodLabel ? (
+            <span className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] tabular-nums text-white/55">
+              {periodLabel}
+            </span>
           ) : undefined
         }
       >

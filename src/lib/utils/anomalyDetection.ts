@@ -72,18 +72,6 @@ function meanAbsDev(values: number[], center: number): number {
   return mean(values.map((v) => Math.abs(v - center)));
 }
 
-function percentileSorted(sortedAsc: number[], p: number): number {
-  const n = sortedAsc.length;
-  if (n === 0) return 0;
-  if (n === 1) return sortedAsc[0];
-  const idx = p * (n - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sortedAsc[lo];
-  const frac = idx - lo;
-  return sortedAsc[lo] + (sortedAsc[hi] - sortedAsc[lo]) * frac;
-}
-
 /** Robust spread estimate: 1.4826×MAD, falling back to mean-abs-deviation when MAD is ~0. */
 function robustScale(values: number[], med: number): number {
   const mad = madFromSorted(values, med);
@@ -387,10 +375,13 @@ export type OutlierOptions = {
   bimodalGapRatio?: number;
   /** Amounts below this (default 1) can't anchor a bimodal split — a near-zero transaction (e.g. a $0.01 refund/rounding artifact) would otherwise produce a spuriously huge ratio and hijack the split point. */
   bimodalMinAnchor?: number;
-  /** Percentile of all amounts used as a "notable size" floor for rare-category transactions (default 0.90). */
-  globalPercentile?: number;
-  /** Robust-sigma multiplier added to the global median for the rare-category floor (default 3.5). */
-  globalMadK?: number;
+  /** A rarely-used/novel category's charge counts as "material" once it reaches
+   * this fraction of the household's typical (median) transaction. Novelty is
+   * the real signal, so the bar sits BELOW typical, not above it (default 0.6). */
+  noveltyMedianFactor?: number;
+  /** Absolute floor (dollars) below which a novel-category charge is treated as
+   * trivial and never flagged, regardless of the median (default 50). */
+  noveltyAbsFloor?: number;
   /** Minimum distinct months in the whole window before rarity is considered meaningful (default 2). */
   minWindowMonths?: number;
   /** Safety cap on returned results (default 50). */
@@ -404,9 +395,12 @@ export type OutlierOptions = {
  *    Categories with a recurring large-amount sub-pattern (e.g. everyday snacks
  *    plus a periodic full grocery run) are split into two modes first, so the
  *    recurring "big" mode isn't mistaken for a spike against the "small" one.
- *  - "rare": a rarely-used or brand-new category whose amount is large relative to
- *    the household's OVERALL spending (e.g. a once-a-year gift or a one-off trip),
- *    which a per-category-only model can never see.
+ *  - "rare": a rarely-used or brand-new category whose charge is material for the
+ *    household (e.g. a once-a-year gift, a one-off trip, or the first time a new
+ *    expense like a gym membership appears). Judged against a typical-transaction
+ *    floor — NOT the top of overall spending — so an unrelated big envelope
+ *    (frequent groceries, a one-off trip) can't raise the bar and bury it. Such a
+ *    charge graduates out of "rare" once it builds its own baseline or cadence.
  */
 export function detectTransactionOutliers(
   transactions: Transaction[],
@@ -419,8 +413,8 @@ export function detectTransactionOutliers(
     modifiedZThreshold = 3.5,
     bimodalGapRatio = 2.5,
     bimodalMinAnchor = 1,
-    globalPercentile = 0.9,
-    globalMadK = 3.5,
+    noveltyMedianFactor = 0.6,
+    noveltyAbsFloor = 50,
     minWindowMonths = 2,
     maxResults = 50,
   } = opts;
@@ -585,10 +579,14 @@ export function detectTransactionOutliers(
     });
   }
 
-  // Global baseline for "rare-category" judgments — excludes established
-  // categories with ~zero spread (fixed bills like rent/subscriptions).
-  // Without this, a large recurring bill repeated every month dominates the
-  // top percentile and masks genuinely rare-but-large transactions elsewhere.
+  // "Typical transaction" baseline for judging novel/rarely-used categories.
+  // Excludes established categories with ~zero spread (fixed bills like rent/
+  // subscriptions) so a big monthly bill can't drag the typical-transaction
+  // median upward. This is the household's *median* everyday transaction, used
+  // only to SCALE the materiality floor — deliberately NOT the top of the
+  // distribution. Anchoring on a high percentile (the old behavior) let one
+  // envelope normalize another: frequent big groceries or a one-off $3000 trip
+  // would raise the bar above a genuinely novel $260 charge and bury it.
   const globalPool: number[] = [];
   for (const info of categoryInfo.values()) {
     if (info.isEstablished && info.scaleC < EPS) continue;
@@ -598,9 +596,13 @@ export function detectTransactionOutliers(
     .slice()
     .sort((a, b) => a - b);
   const medianG = median(poolSorted);
-  const scaleG = robustScale(poolSorted, medianG);
-  const p90 = percentileSorted(poolSorted, globalPercentile);
-  const notableFloor = Math.max(p90, medianG + globalMadK * scaleG);
+  // A novel category is anomalous by virtue of being unbudgeted; the floor only
+  // filters out trivial amounts. It sits a fraction BELOW the typical
+  // transaction (so a real purchase in a new envelope surfaces) yet never below
+  // a small absolute minimum (so pocket-change in a new category stays quiet),
+  // and scales up for big spenders so a $200 charge isn't "novel" to someone
+  // whose typical transaction is already $400.
+  const notableFloor = Math.max(noveltyAbsFloor, medianG * noveltyMedianFactor);
 
   const outliers: TransactionOutlier[] = [];
 
@@ -655,19 +657,22 @@ export function detectTransactionOutliers(
         }
       }
     } else {
-      // Branch 2 — rare/novel category, judged against overall spending
+      // Branch 2 — rarely-used / novel category. A material charge here is
+      // anomalous by default (it has no baseline of its own); it only graduates
+      // to "normal" once it earns a category baseline or a steady cadence, both
+      // handled above. Judged on materiality alone, per-envelope — never sized
+      // against unrelated categories' spending.
       for (const t of info.txs) {
         if (protectedIds.has(t.id)) continue; // recurring/rhythmic — not "rare"
         if (t.amount < notableFloor) continue;
-        const score = scaleG < EPS ? Infinity : (t.amount - medianG) / scaleG;
         outliers.push({
           transactionId: t.id,
           amount: t.amount,
           category: cat,
           date: t.date,
           reason: "rare",
-          score,
-          message: `$${t.amount.toFixed(0)} in ${cat} — unusually large vs your typical spend`,
+          score: t.amount / notableFloor,
+          message: `$${t.amount.toFixed(0)} in ${cat} — sizable charge in a category you rarely use`,
         });
       }
     }

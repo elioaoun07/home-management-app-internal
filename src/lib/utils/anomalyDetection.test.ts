@@ -420,3 +420,54 @@ describe("detectTransactionOutliers — registered recurring_payments hints", ()
     expect(byId.has("gym")).toBe(false);
   });
 });
+
+describe("detectTransactionOutliers — a novel mid-size category isn't buried by big envelopes", () => {
+  /** The reported bug: a single $260 Health charge — the only one all year —
+   *  went unflagged because the floor was the 90th percentile of ALL spending,
+   *  which frequent ~$340 grocery runs and a one-off $3000 trip pushed well
+   *  above $260. Health is its own envelope; unrelated big categories must not
+   *  set its bar. After the fix the floor is a fraction of the MEDIAN
+   *  transaction (~$14 here → floored at $50), so $260 surfaces on its own. */
+  function buildBuriedHealth(): Fixture[] {
+    const months = [
+      "2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06",
+      "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12",
+    ];
+    const fixtures: Fixture[] = [];
+    months.forEach((ym, i) => {
+      // Everyday snacks (low mode) — frequent and tiny.
+      fixtures.push({ id: `snack-a-${ym}`, amount: 6, category: "Food", date: `${ym}-04` });
+      fixtures.push({ id: `snack-b-${ym}`, amount: 11, category: "Food", date: `${ym}-09` });
+      fixtures.push({ id: `snack-c-${ym}`, amount: 14, category: "Food", date: `${ym}-22` });
+      // One big grocery run (high mode) — frequent AND large, so it dominates
+      // the upper tail / old 90th-percentile floor.
+      fixtures.push({ id: `grocery-${ym}`, amount: 320 + (i % 5) * 20, category: "Food", date: `${ym}-15` });
+    });
+    // One-off trips — large sparse charges that also inflate the top percentile.
+    fixtures.push({ id: "trip-aug", amount: 3000, category: "Trip", date: "2025-08-20" });
+    fixtures.push({ id: "trip-dec", amount: 2000, category: "Trip", date: "2025-12-18" });
+    // The whole point: a single mid-size charge in an otherwise-unused category,
+    // SMALLER than the groceries and the trip that used to bury it.
+    fixtures.push({ id: "health-jun", amount: 260, category: "Health", date: "2025-06-12" });
+    return fixtures;
+  }
+
+  const outliers = detectTransactionOutliers(buildBuriedHealth());
+  const byId = new Map(outliers.map((o) => [o.transactionId, o]));
+
+  it("flags the lone Health charge even though groceries and the trip are larger", () => {
+    expect(byId.get("health-jun")?.reason).toBe("rare");
+  });
+
+  it("still flags the one-off trips", () => {
+    expect(byId.get("trip-aug")?.reason).toBe("rare");
+    expect(byId.get("trip-dec")?.reason).toBe("rare");
+  });
+
+  it("does not flag the recurring grocery runs or everyday snacks", () => {
+    for (const ym of ["2025-01", "2025-06", "2025-12"]) {
+      expect(byId.has(`grocery-${ym}`)).toBe(false);
+      expect(byId.has(`snack-a-${ym}`)).toBe(false);
+    }
+  });
+});

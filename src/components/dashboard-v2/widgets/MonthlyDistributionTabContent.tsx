@@ -2,6 +2,7 @@
 
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
 import BlurredAmount from "@/components/ui/BlurredAmount";
+import { usePrivacyBlur } from "@/contexts/PrivacyBlurContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import type {
   AccountBalance,
@@ -9,7 +10,7 @@ import type {
 } from "@/features/analytics/useAnalytics";
 import { cn } from "@/lib/utils";
 import type { Account } from "@/types/domain";
-import { format, subMonths } from "date-fns";
+import { addMonths, format, subMonths } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, LayoutGrid, LayoutList, Users } from "lucide-react";
 import { useCallback, useId, useMemo, useState } from "react";
@@ -41,6 +42,8 @@ type Props = {
   balanceAccounts?: AccountBalance[] | undefined;
   currentUserId?: string;
   hasPartner?: boolean;
+  startDate: string;
+  endDate: string;
 };
 
 type Grouping = "month" | "quarter" | "year";
@@ -115,19 +118,27 @@ function dateToBucketKey(dateStr: string, grouping: Grouping): string {
   return dateStr.slice(0, 4);
 }
 
-function build12Months(): MonthBucket[] {
-  const now = new Date();
-  const buckets: MonthBucket[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = subMonths(now, i);
-    buckets.push({ key: format(d, "yyyy-MM"), label: format(d, "MMM yy") });
-  }
-  return buckets;
-}
+/** Build month buckets for [startDate, endDate]. Falls back to 12 months when either bound is empty (All Time). */
+function buildBuckets(
+  grouping: Grouping,
+  startDate: string,
+  endDate: string,
+): MonthBucket[] {
+  const start = startDate ? new Date(startDate) : subMonths(new Date(), 11);
+  const end = endDate ? new Date(endDate) : new Date();
 
-function buildBuckets(grouping: Grouping): MonthBucket[] {
-  if (grouping === "month") return build12Months();
-  const months = build12Months();
+  // Build the flat month list
+  const months: MonthBucket[] = [];
+  let cur = new Date(start.getFullYear(), start.getMonth(), 1);
+  const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (cur <= endMonth) {
+    months.push({ key: format(cur, "yyyy-MM"), label: format(cur, "MMM yy") });
+    cur = addMonths(cur, 1);
+  }
+
+  if (grouping === "month") return months;
+
+  // Aggregate into quarter / year buckets
   const seen = new Map<string, string>();
   for (const m of months) {
     const key = dateToBucketKey(`${m.key}-01`, grouping);
@@ -300,6 +311,8 @@ export default function MonthlyDistributionTabContent({
   balanceAccounts,
   currentUserId,
   hasPartner,
+  startDate,
+  endDate,
 }: Props) {
   const { theme } = useTheme();
   const myColor = theme === "pink" ? "#ec4899" : "#3b82f6";
@@ -317,7 +330,10 @@ export default function MonthlyDistributionTabContent({
     expectedSavings: true,
   });
 
-  const buckets = useMemo(() => buildBuckets(grouping), [grouping]);
+  const buckets = useMemo(
+    () => buildBuckets(grouping, startDate, endDate),
+    [grouping, startDate, endDate],
+  );
   const bucketKeys = useMemo(
     () => new Set(buckets.map((b) => b.key)),
     [buckets],
@@ -705,6 +721,39 @@ export default function MonthlyDistributionTabContent({
   );
 }
 
+// ── Blurred Y-axis tick (reads privacy context, blurs SVG text) ─────────────
+
+function BlurredYAxisTick({
+  x,
+  y,
+  payload,
+  isBlurred,
+  fontSize = 12,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value: number };
+  isBlurred: boolean;
+  fontSize?: number;
+  [key: string]: unknown;
+}) {
+  if (!payload) return null;
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="end"
+      dominantBaseline="middle"
+      fill="rgba(255,255,255,0.55)"
+      fontSize={fontSize}
+      fontWeight={500}
+      style={isBlurred ? { filter: "blur(5px)" } : undefined}
+    >
+      {fmtDollar(payload.value)}
+    </text>
+  );
+}
+
 // ── MetricWidget (one per Income / Expense / Savings) ────────────────────────
 
 function MetricWidget({
@@ -960,6 +1009,7 @@ function MetricChart({
   onBarClick: (key: string) => void;
 }) {
   const uid = useId().replace(/:/g, "");
+  const { isBlurred } = usePrivacyBlur();
   const axisBase = { tickLine: false as const, axisLine: false as const };
 
   const xAxis = {
@@ -969,9 +1019,8 @@ function MetricChart({
     tickMargin: 8,
   };
   const yAxis = {
-    tick: { fill: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 500 },
+    tick: <BlurredYAxisTick isBlurred={isBlurred} />,
     ...axisBase,
-    tickFormatter: (v: number) => fmtDollar(v),
     width: 52,
     tickMargin: 4,
   };
@@ -1115,7 +1164,7 @@ function MetricChart({
               dataKey={myKey as string}
               name="Me"
               fill="transparent"
-              maxBarSize={zoomedKey ? 70 : undefined}
+              maxBarSize={zoomedKey ? 70 : 48}
               shape={(props: any) => (
                 <OutlinedBar
                   x={props.x}
@@ -1134,7 +1183,7 @@ function MetricChart({
               dataKey={partnerKey as string}
               name="Partner"
               fill="transparent"
-              maxBarSize={zoomedKey ? 70 : undefined}
+              maxBarSize={zoomedKey ? 70 : 48}
               shape={(props: any) => (
                 <OutlinedBar
                   x={props.x}
@@ -1171,7 +1220,7 @@ function MetricChart({
           <Bar
             dataKey={dataKey as string}
             fill="transparent"
-            maxBarSize={zoomedKey ? 90 : undefined}
+            maxBarSize={zoomedKey ? 90 : 64}
             shape={(props: any) => (
               <OutlinedBar
                 x={props.x}
@@ -1210,6 +1259,7 @@ function OverviewWidget({
   partnerColor: string;
 }) {
   const uid = useId().replace(/:/g, "");
+  const { isBlurred } = usePrivacyBlur();
   const axisBase = { tickLine: false as const, axisLine: false as const };
 
   const xAxis = {
@@ -1219,9 +1269,8 @@ function OverviewWidget({
     tickMargin: 8,
   };
   const yAxis = {
-    tick: { fill: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 500 },
+    tick: <BlurredYAxisTick isBlurred={isBlurred} fontSize={11} />,
     ...axisBase,
-    tickFormatter: (v: number) => fmtDollar(v),
     width: 52,
     tickMargin: 4,
   };

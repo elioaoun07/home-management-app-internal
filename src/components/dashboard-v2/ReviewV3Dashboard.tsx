@@ -11,14 +11,13 @@ import { useAnalytics } from "@/features/analytics/useAnalytics";
 import { useBudgetAllocations } from "@/features/budget/hooks";
 import { useRecurringPayments } from "@/features/recurring/useRecurringPayments";
 import type { RecurringHint } from "@/lib/utils/anomalyDetection";
-import { formatDate } from "@/lib/utils/date";
 import {
   getExpenseTransactions,
   type TransactionWithAccount,
 } from "@/lib/utils/incomeExpense";
-import { format, subMonths } from "date-fns";
+import { format } from "date-fns";
 import { X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type V3Tab = "monthly" | "categories" | "insight";
@@ -36,15 +35,19 @@ type Props = {
   currentUserId?: string;
   onDateRangeChange?: (start: string, end: string) => void;
   filtersOpen?: boolean;
+  filterCategories?: string[];
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ReviewV3Dashboard({
   transactions,
+  startDate,
+  endDate,
   ownershipFilter = "all",
   currentUserId,
   onDateRangeChange,
   filtersOpen,
+  filterCategories,
 }: Props) {
   // ── Tab state ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<V3Tab>(() => {
@@ -55,29 +58,11 @@ export default function ReviewV3Dashboard({
     }
   });
 
-  // All three tabs work on a 12-month window (buckets / pie history)
-  const setTwelveMonthRange = useCallback(() => {
-    if (!onDateRangeChange) return;
-    const now = new Date();
-    const twelveMonthsAgo = format(subMonths(now, 11), "yyyy-MM-01");
-    onDateRangeChange(twelveMonthsAgo, formatDate(now));
-  }, [onDateRangeChange]);
-
-  const handleTabChange = useCallback(
-    (tab: V3Tab) => {
-      setActiveTab(tab);
-      try {
-        sessionStorage.setItem("reviewV3Tab", tab);
-      } catch {}
-      setTwelveMonthRange();
-    },
-    [setTwelveMonthRange],
-  );
-
-  // Set 12-month range on mount
-  useEffect(() => {
-    setTwelveMonthRange();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleTabChange = useCallback((tab: V3Tab) => {
+    setActiveTab(tab);
+    try {
+      sessionStorage.setItem("reviewV3Tab", tab);
+    } catch {}
   }, []);
 
   // ── Data ─────────────────────────────────────────────────────────────────
@@ -103,13 +88,13 @@ export default function ReviewV3Dashboard({
     [recurringPayments],
   );
 
-  const expenseTransactions = useMemo(
-    () =>
-      getExpenseTransactions(transactions, accounts).filter(
-        (t) => !t.is_debt_return,
-      ),
-    [transactions, accounts],
-  );
+  const expenseTransactions = useMemo(() => {
+    const base = getExpenseTransactions(transactions, accounts).filter(
+      (t) => !t.is_debt_return,
+    );
+    if (!filterCategories || filterCategories.length === 0) return base;
+    return base.filter((t) => filterCategories.includes(t.category ?? ""));
+  }, [transactions, accounts, filterCategories]);
 
   // ── Category detail modal (Categories tab drill-down) ─────────────────────
   const [categoryDetailName, setCategoryDetailName] = useState<string | null>(
@@ -202,6 +187,8 @@ export default function ReviewV3Dashboard({
           analyticsMonths={analytics?.months}
           budgetSummary={budgetAllocations?.summary}
           recurringHints={recurringHints}
+          startDate={startDate}
+          endDate={endDate}
         />
       )}
 
@@ -214,6 +201,8 @@ export default function ReviewV3Dashboard({
           balanceAccounts={analytics?.accounts}
           currentUserId={currentUserId}
           hasPartner={analytics?.hasPartner}
+          startDate={startDate}
+          endDate={endDate}
         />
       )}
 

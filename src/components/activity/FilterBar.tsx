@@ -142,71 +142,6 @@ const GroupCatIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const TagIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-    <line x1="7" y1="7" x2="7.01" y2="7" />
-  </svg>
-);
-
-// ─── Date Presets ─────────────────────────────────────────────────────────────
-function getDatePresets() {
-  const today = new Date();
-  const todayStr = yyyyMmDd(today);
-
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-
-  const weekStart = new Date(today);
-  const dayOfWeek = weekStart.getDay();
-  const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  weekStart.setDate(weekStart.getDate() - diff);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-
-  const lastWeekStart = new Date(weekStart);
-  lastWeekStart.setDate(lastWeekStart.getDate() - 7);
-  const lastWeekEnd = new Date(lastWeekStart);
-  lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
-
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-
-  const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-
-  return [
-    { label: "Today", start: todayStr, end: todayStr },
-    {
-      label: "Yesterday",
-      start: yyyyMmDd(yesterday),
-      end: yyyyMmDd(yesterday),
-    },
-    { label: "This Week", start: yyyyMmDd(weekStart), end: yyyyMmDd(weekEnd) },
-    {
-      label: "Last Week",
-      start: yyyyMmDd(lastWeekStart),
-      end: yyyyMmDd(lastWeekEnd),
-    },
-    {
-      label: "This Month",
-      start: yyyyMmDd(monthStart),
-      end: yyyyMmDd(monthEnd),
-    },
-    {
-      label: "Last Month",
-      start: yyyyMmDd(lastMonthStart),
-      end: yyyyMmDd(lastMonthEnd),
-    },
-    { label: "All Time", start: "", end: "" },
-  ];
-}
 
 const TYPE_FILTERS: {
   key: TypeFilter;
@@ -266,8 +201,6 @@ export default function FilterBar({
   const themeClasses = useThemeClasses();
   const { theme: currentUserTheme } = useTheme();
   const [showFilters, setShowFilters] = useState(false);
-  const [catSectionOpen, setCatSectionOpen] = useState(false);
-  const [dateRangeOpen, setDateRangeOpen] = useState(false);
   const [customDateOpen, setCustomDateOpen] = useState(false);
   const [customStart, setCustomStart] = useState(dateRange.start);
 
@@ -285,36 +218,47 @@ export default function FilterBar({
   const [customEnd, setCustomEnd] = useState(dateRange.end);
   const filterPanelRef = useRef<HTMLDivElement>(null);
 
-  const presets = useMemo(() => getDatePresets(), []);
+  const dateChips = useMemo(() => {
+    const today = new Date();
+    const dow = today.getDay();
+    const diff = dow === 0 ? 6 : dow - 1;
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - diff);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const lastWeekStart = new Date(weekStart);
+    lastWeekStart.setDate(weekStart.getDate() - 7);
+    const lastWeekEnd = new Date(lastWeekStart);
+    lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+    const yearStart = new Date(today.getFullYear(), 0, 1);
+    const yearEnd = new Date(today.getFullYear(), 11, 31);
+    return [
+      { label: "This Month", start: yyyyMmDd(monthStart), end: yyyyMmDd(monthEnd) },
+      { label: "Last Month", start: yyyyMmDd(lastMonthStart), end: yyyyMmDd(lastMonthEnd) },
+      { label: "This Week", start: yyyyMmDd(weekStart), end: yyyyMmDd(weekEnd) },
+      { label: "Last Week", start: yyyyMmDd(lastWeekStart), end: yyyyMmDd(lastWeekEnd) },
+      { label: "This Year", start: yyyyMmDd(yearStart), end: yyyyMmDd(yearEnd) },
+      { label: "All Time", start: "", end: "" },
+    ];
+  }, []);
 
   const themeColor =
     currentUserTheme === "pink"
       ? { me: "#ec4899", partner: "#3b82f6" }
       : { me: "#3b82f6", partner: "#ec4899" };
 
-  const activeDateLabel = useMemo(() => {
-    const match = presets.find(
-      (p) => p.start === dateRange.start && p.end === dateRange.end,
-    );
-    return match?.label ?? "Custom";
-  }, [presets, dateRange]);
-
-  // Count active non-default filters for badge
+  // Count active non-default filters for badge (date & categories now always visible as chips)
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (activeDateLabel !== "This Month") count++;
     if (showJournalFilters && typeFilter !== "all") count++;
     if (showJournalFilters && recurringFilter !== "all") count++;
-    if (showCategoryFilter && categoryFilters.length > 0) count++;
+    if (showGroupToggle && groupMode !== "time") count++;
     return count;
-  }, [
-    activeDateLabel,
-    showJournalFilters,
-    typeFilter,
-    recurringFilter,
-    showCategoryFilter,
-    categoryFilters,
-  ]);
+  }, [showJournalFilters, typeFilter, recurringFilter, showGroupToggle, groupMode]);
 
   // Close filter panel on outside click
   useEffect(() => {
@@ -493,6 +437,94 @@ export default function FilterBar({
         )}
       </div>
 
+      {/* Row 3: Date chips */}
+      <div className="flex items-center gap-1.5 px-2 pb-2 pt-0.5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+        {dateChips.map((chip) => {
+          const isActive =
+            dateRange.start === chip.start && dateRange.end === chip.end;
+          return (
+            <button
+              key={chip.label}
+              onClick={() =>
+                onDateRangeChange({ start: chip.start, end: chip.end })
+              }
+              className={cn(
+                "flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium transition-colors whitespace-nowrap",
+                isActive
+                  ? "neo-gradient text-white"
+                  : `neo-card ${themeClasses.textMuted} hover:bg-white/5`,
+              )}
+            >
+              {chip.label}
+            </button>
+          );
+        })}
+        {!dateChips.some(
+          (c) => c.start === dateRange.start && c.end === dateRange.end,
+        ) && (
+          <button
+            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium neo-gradient text-white whitespace-nowrap"
+            onClick={() => setShowFilters(true)}
+          >
+            Custom
+          </button>
+        )}
+      </div>
+
+      {/* Row 4: Category chips */}
+      {showCategoryFilter && availableCategories.length > 0 && (
+        <div className="flex items-center gap-1 px-2 pb-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <button
+            onClick={() => onCategoryFiltersChange([])}
+            className={cn(
+              "flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium transition-colors whitespace-nowrap",
+              categoryFilters.length === 0
+                ? "neo-gradient text-white"
+                : `neo-card ${themeClasses.textMuted} hover:bg-white/5`,
+            )}
+          >
+            All
+          </button>
+          {availableCategories.map(({ name, color }) => {
+            const isSelected = categoryFilters.includes(name);
+            return (
+              <button
+                key={name}
+                onClick={() =>
+                  onCategoryFiltersChange(
+                    isSelected
+                      ? categoryFilters.filter((c) => c !== name)
+                      : [...categoryFilters, name],
+                  )
+                }
+                className="flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors whitespace-nowrap"
+                style={
+                  isSelected
+                    ? {
+                        backgroundColor: `${color}20`,
+                        color,
+                        border: `1px solid ${color}45`,
+                      }
+                    : {
+                        backgroundColor: "rgba(255,255,255,0.04)",
+                        color: "rgba(255,255,255,0.35)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                      }
+                }
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{
+                    backgroundColor: isSelected ? color : "rgba(255,255,255,0.2)",
+                  }}
+                />
+                {name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Filter Panel */}
       {showFilters && (
         <div className="animate-in slide-in-from-top-2 duration-150 border-t border-white/5 px-3 pb-2.5 pt-1.5 space-y-2">
@@ -501,26 +533,12 @@ export default function FilterBar({
             {activeFilterCount > 0 ? (
               <button
                 onClick={() => {
-                  const now = new Date();
-                  const monthStart = new Date(
-                    now.getFullYear(),
-                    now.getMonth(),
-                    1,
-                  );
-                  const monthEnd = new Date(
-                    now.getFullYear(),
-                    now.getMonth() + 1,
-                    0,
-                  );
-                  onDateRangeChange({
-                    start: yyyyMmDd(monthStart),
-                    end: yyyyMmDd(monthEnd),
-                  });
-                  if (showCategoryFilter) onCategoryFiltersChange([]);
                   if (showJournalFilters) {
                     onTypeFilterChange("all");
                     onRecurringFilterChange("all");
                   }
+                  if (showGroupToggle) onGroupModeChange("time");
+                  setCustomDateOpen(false);
                 }}
                 className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
                 title="Reset all filters"
@@ -540,264 +558,105 @@ export default function FilterBar({
             </button>
           </div>
 
-          {/* Row: Group by + Date Range (inline) */}
-          <div className="flex items-center gap-2">
-            {showGroupToggle && (
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <p className="text-[9px] font-medium uppercase tracking-wider text-white/30">
-                  Group
-                </p>
-                <div className="flex gap-0.5">
-                  <button
-                    onClick={() => onGroupModeChange("time")}
-                    className={cn(
-                      "p-1.5 rounded-lg transition-colors",
-                      groupMode === "time"
-                        ? "bg-violet-500/25 text-violet-300"
-                        : `neo-card ${themeClasses.text} hover:bg-white/5`,
-                    )}
-                    title="Group by time"
-                  >
-                    <GroupTimeIcon className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => onGroupModeChange("category")}
-                    className={cn(
-                      "p-1.5 rounded-lg transition-colors",
-                      groupMode === "category"
-                        ? "bg-violet-500/25 text-violet-300"
-                        : `neo-card ${themeClasses.text} hover:bg-white/5`,
-                    )}
-                    title="Group by category"
-                  >
-                    <GroupCatIcon className="w-3.5 h-3.5" />
-                  </button>
+          {/* Group toggle */}
+          {showGroupToggle && (
+            <div className="flex items-center gap-2">
+              <p className="text-[9px] font-medium uppercase tracking-wider text-white/30">
+                Group
+              </p>
+              <div className="flex gap-0.5">
+                <button
+                  onClick={() => onGroupModeChange("time")}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-colors",
+                    groupMode === "time"
+                      ? "bg-violet-500/25 text-violet-300"
+                      : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                  )}
+                  title="Group by time"
+                >
+                  <GroupTimeIcon className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => onGroupModeChange("category")}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-colors",
+                    groupMode === "category"
+                      ? "bg-violet-500/25 text-violet-300"
+                      : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                  )}
+                  title="Group by category"
+                >
+                  <GroupCatIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Custom date range */}
+          <div className="neo-card rounded-xl overflow-hidden">
+            <button
+              onClick={() => setCustomDateOpen((v) => !v)}
+              className="w-full px-2.5 py-1.5 flex items-center justify-between"
+            >
+              <span
+                className={cn("text-[10px] font-medium", themeClasses.textMuted)}
+              >
+                Custom Range
+              </span>
+              {customDateOpen ? (
+                <ChevronUpIcon className="w-3 h-3 text-white/20" />
+              ) : (
+                <ChevronDownIcon className="w-3 h-3 text-white/20" />
+              )}
+            </button>
+            {customDateOpen && (
+              <div className="px-2.5 pb-2 pt-1.5 border-t border-white/5 space-y-1.5">
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="text-[9px] text-white/40 block mb-0.5">
+                      Start
+                    </label>
+                    <input
+                      type="date"
+                      value={customStart}
+                      onChange={(e) => setCustomStart(e.target.value)}
+                      className={cn(
+                        "w-full px-2 py-1 rounded-lg text-[10px] bg-white/5 border border-white/10",
+                        "text-white placeholder-white/30 focus:outline-none focus:border-white/20",
+                      )}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[9px] text-white/40 block mb-0.5">
+                      End
+                    </label>
+                    <input
+                      type="date"
+                      value={customEnd}
+                      onChange={(e) => setCustomEnd(e.target.value)}
+                      className={cn(
+                        "w-full px-2 py-1 rounded-lg text-[10px] bg-white/5 border border-white/10",
+                        "text-white placeholder-white/30 focus:outline-none focus:border-white/20",
+                      )}
+                    />
+                  </div>
                 </div>
+                <button
+                  onClick={() => {
+                    if (customStart && customEnd) {
+                      onDateRangeChange({ start: customStart, end: customEnd });
+                      setCustomDateOpen(false);
+                      setShowFilters(false);
+                    }
+                  }}
+                  className="w-full px-2 py-1 rounded-lg text-[10px] font-medium neo-gradient text-white transition-colors"
+                >
+                  Apply
+                </button>
               </div>
             )}
-
-            {/* Date Range — inline collapsed */}
-            <div className="neo-card rounded-xl overflow-hidden flex-1 min-w-0">
-              <button
-                onClick={() => setDateRangeOpen((v) => !v)}
-                className="w-full px-2.5 py-1.5 flex items-center justify-between"
-              >
-                <p className="text-[9px] font-medium uppercase tracking-wider text-white/30">
-                  Date
-                </p>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={cn(
-                      "text-[10px] font-medium",
-                      activeDateLabel !== "This Month"
-                        ? `${themeClasses.textActive}`
-                        : themeClasses.textMuted,
-                    )}
-                  >
-                    {activeDateLabel}
-                  </span>
-                  {dateRangeOpen ? (
-                    <ChevronUpIcon className="w-3 h-3 text-white/20" />
-                  ) : (
-                    <ChevronDownIcon className="w-3 h-3 text-white/20" />
-                  )}
-                </div>
-              </button>
-            </div>
           </div>
-
-          {/* Date Range Expanded Content */}
-          {dateRangeOpen && (
-            <div className="neo-card rounded-xl overflow-hidden">
-              <div className="px-2.5 pb-2.5 pt-2 space-y-2">
-                {/* Quick presets in 3-column grid */}
-                <div className="grid grid-cols-3 gap-1">
-                  {presets.map((preset) => {
-                    const isActive =
-                      dateRange.start === preset.start &&
-                      dateRange.end === preset.end;
-                    return (
-                      <button
-                        key={preset.label}
-                        onClick={() => {
-                          onDateRangeChange({
-                            start: preset.start,
-                            end: preset.end,
-                          });
-                          setCustomDateOpen(false);
-                          setDateRangeOpen(false);
-                        }}
-                        className={cn(
-                          "px-1.5 py-1 rounded-lg text-[10px] font-medium transition-colors",
-                          isActive
-                            ? "neo-gradient text-white"
-                            : `neo-card ${themeClasses.text} hover:bg-white/5`,
-                        )}
-                      >
-                        {preset.label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Custom date range */}
-                <div className="neo-card rounded-xl overflow-hidden">
-                  <button
-                    onClick={() => setCustomDateOpen((v) => !v)}
-                    className="w-full px-2.5 py-1.5 flex items-center justify-between"
-                  >
-                    <span
-                      className={cn(
-                        "text-[10px] font-medium",
-                        themeClasses.textMuted,
-                      )}
-                    >
-                      Custom Range
-                    </span>
-                    {customDateOpen ? (
-                      <ChevronUpIcon className="w-3 h-3 text-white/20" />
-                    ) : (
-                      <ChevronDownIcon className="w-3 h-3 text-white/20" />
-                    )}
-                  </button>
-                  {customDateOpen && (
-                    <div className="px-2.5 pb-2 pt-1.5 border-t border-white/5 space-y-1.5">
-                      <div className="flex gap-2">
-                        <div className="flex-1">
-                          <label className="text-[9px] text-white/40 block mb-0.5">
-                            Start
-                          </label>
-                          <input
-                            type="date"
-                            value={customStart}
-                            onChange={(e) => setCustomStart(e.target.value)}
-                            className={cn(
-                              "w-full px-2 py-1 rounded-lg text-[10px] bg-white/5 border border-white/10",
-                              "text-white placeholder-white/30 focus:outline-none focus:border-white/20",
-                            )}
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <label className="text-[9px] text-white/40 block mb-0.5">
-                            End
-                          </label>
-                          <input
-                            type="date"
-                            value={customEnd}
-                            onChange={(e) => setCustomEnd(e.target.value)}
-                            className={cn(
-                              "w-full px-2 py-1 rounded-lg text-[10px] bg-white/5 border border-white/10",
-                              "text-white placeholder-white/30 focus:outline-none focus:border-white/20",
-                            )}
-                          />
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (customStart && customEnd) {
-                            onDateRangeChange({
-                              start: customStart,
-                              end: customEnd,
-                            });
-                            setCustomDateOpen(false);
-                            setDateRangeOpen(false);
-                          }
-                        }}
-                        className="w-full px-2 py-1 rounded-lg text-[10px] font-medium neo-gradient text-white transition-colors"
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Categories — collapsible, only when showCategoryFilter */}
-          {showCategoryFilter && availableCategories.length > 0 && (
-            <div className="neo-card rounded-xl overflow-hidden">
-              <button
-                onClick={() => setCatSectionOpen((v) => !v)}
-                className="flex items-center gap-2 w-full px-2.5 py-1.5"
-              >
-                <TagIcon className="w-3 h-3 text-white/25 flex-shrink-0" />
-                <span
-                  className={cn(
-                    "text-[10px] font-medium flex-1 text-left",
-                    themeClasses.textMuted,
-                  )}
-                >
-                  Categories
-                </span>
-                {categoryFilters.length > 0 && (
-                  <span className="text-[9px] neo-gradient text-white px-1.5 py-0.5 rounded-full font-medium leading-none">
-                    {categoryFilters.length}
-                  </span>
-                )}
-                {catSectionOpen ? (
-                  <ChevronUpIcon className="w-3 h-3 text-white/20" size={12} />
-                ) : (
-                  <ChevronDownIcon
-                    className="w-3 h-3 text-white/20"
-                    size={12}
-                  />
-                )}
-              </button>
-              {catSectionOpen && (
-                <div className="px-2.5 pb-2.5 border-t border-white/5 pt-1.5 flex flex-wrap gap-1">
-                  {availableCategories.map(({ name, color }) => {
-                    const isSelected = categoryFilters.includes(name);
-                    return (
-                      <button
-                        key={name}
-                        onClick={() =>
-                          onCategoryFiltersChange(
-                            isSelected
-                              ? categoryFilters.filter((c) => c !== name)
-                              : [...categoryFilters, name],
-                          )
-                        }
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors"
-                        style={
-                          isSelected
-                            ? {
-                                backgroundColor: `${color}20`,
-                                color: color,
-                                border: `1px solid ${color}45`,
-                              }
-                            : {
-                                backgroundColor: "rgba(255,255,255,0.04)",
-                                color: "rgba(255,255,255,0.35)",
-                                border: "1px solid rgba(255,255,255,0.08)",
-                              }
-                        }
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{
-                            backgroundColor: isSelected
-                              ? color
-                              : "rgba(255,255,255,0.2)",
-                          }}
-                        />
-                        {name}
-                      </button>
-                    );
-                  })}
-                  {categoryFilters.length > 0 && (
-                    <button
-                      onClick={() => onCategoryFiltersChange([])}
-                      className="flex items-center px-1.5 py-0.5 rounded-full text-[9px] text-white/30 hover:text-white/50 transition-colors"
-                      style={{ border: "1px solid rgba(255,255,255,0.08)" }}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Journal filters: Type + Recurrence on same row */}
           {showJournalFilters && (

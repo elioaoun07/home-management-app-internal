@@ -509,6 +509,48 @@ const WebDashboard = memo(function WebDashboard({
     );
   }, [typeFilteredTransactions]);
 
+  const categoriesWithColors = useMemo(() => {
+    const seen = new Map<string, string>();
+    typeFilteredTransactions.forEach((t) => {
+      if (t.category && !seen.has(t.category)) {
+        seen.set(t.category, t.category_color || "#94a3b8");
+      }
+    });
+    return Array.from(seen.entries())
+      .map(([name, color]) => ({ name, color }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [typeFilteredTransactions]);
+
+  const dateChips = useMemo(() => {
+    const today = new Date();
+    const dow = today.getDay();
+    const diff = dow === 0 ? 6 : dow - 1;
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - diff);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const lastWeekStart = new Date(weekStart);
+    lastWeekStart.setDate(weekStart.getDate() - 7);
+    const lastWeekEnd = new Date(lastWeekStart);
+    lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+    const yearStart = new Date(today.getFullYear(), 0, 1);
+    const yearEnd = new Date(today.getFullYear(), 11, 31);
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return [
+      { label: "This Month", start: fmt(monthStart), end: fmt(monthEnd) },
+      { label: "Last Month", start: fmt(lastMonthStart), end: fmt(lastMonthEnd) },
+      { label: "This Week", start: fmt(weekStart), end: fmt(weekEnd) },
+      { label: "Last Week", start: fmt(lastWeekStart), end: fmt(lastWeekEnd) },
+      { label: "This Year", start: fmt(yearStart), end: fmt(yearEnd) },
+      { label: "All Time", start: "", end: "" },
+    ];
+  }, []);
+
   const accountsList = useMemo(() => {
     return Array.from(
       new Set(
@@ -1232,7 +1274,7 @@ const WebDashboard = memo(function WebDashboard({
               onClick={() => setShowFilters(!showFilters)}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                showFilters || hasActiveFilters
+                showFilters || filterMinAmount > 0 || filterMaxAmount > 0 || !!filterDescription || !!filterAccount
                   ? `${themeClasses.bgActive} ${themeClasses.textActive}`
                   : `neo-card ${themeClasses.text} hover:bg-white/5`,
               )}
@@ -1241,9 +1283,93 @@ const WebDashboard = memo(function WebDashboard({
               Filters
             </button>
           </div>
+
+          {/* Date chips — always visible */}
+          <div className="flex items-center gap-1.5 px-4 pb-2.5 pt-1 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+            {dateChips.map((chip) => {
+              const isActive = startDate === chip.start && endDate === chip.end;
+              return (
+                <button
+                  key={chip.label}
+                  onClick={() => onDateRangeChange?.(chip.start, chip.end)}
+                  className={cn(
+                    "flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
+                    isActive
+                      ? "neo-gradient text-white"
+                      : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                  )}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+            {!dateChips.some((c) => c.start === startDate && c.end === endDate) && (
+              <button
+                className="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium neo-gradient text-white whitespace-nowrap"
+                onClick={() => setShowFilters(true)}
+              >
+                Custom
+              </button>
+            )}
+          </div>
+
+          {/* Category chips — always visible */}
+          {categoriesWithColors.length > 0 && (
+            <div className="flex items-center gap-1.5 px-4 pb-3 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+              <button
+                onClick={() => setFilterCategories([])}
+                className={cn(
+                  "flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
+                  filterCategories.length === 0
+                    ? "neo-gradient text-white"
+                    : `neo-card ${themeClasses.text} hover:bg-white/5`,
+                )}
+              >
+                All
+              </button>
+              {categoriesWithColors.map(({ name, color }) => {
+                const isSelected = filterCategories.includes(name);
+                return (
+                  <button
+                    key={name}
+                    onClick={() =>
+                      setFilterCategories(
+                        isSelected
+                          ? filterCategories.filter((c) => c !== name)
+                          : [...filterCategories, name],
+                      )
+                    }
+                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap"
+                    style={
+                      isSelected
+                        ? {
+                            backgroundColor: `${color}20`,
+                            color,
+                            border: `1px solid ${color}45`,
+                          }
+                        : {
+                            backgroundColor: "rgba(255,255,255,0.04)",
+                            color: "rgba(255,255,255,0.45)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                          }
+                    }
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{
+                        backgroundColor: isSelected ? color : "rgba(255,255,255,0.25)",
+                      }}
+                    />
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {showFilters && (
             <div className="px-4 pb-3 space-y-3 animate-in slide-in-from-top-2 duration-200 border-t border-white/5">
-              {/* Date Range Picker */}
+              {/* Custom date range */}
               <div className="pt-3">
                 <DateRangePicker
                   startDate={startDate}
@@ -1254,12 +1380,6 @@ const WebDashboard = memo(function WebDashboard({
                 />
               </div>
               <div className="flex gap-2">
-                <MultiFilterDropdown
-                  values={filterCategories}
-                  onChange={setFilterCategories}
-                  options={categories as string[]}
-                  placeholder="All Categories"
-                />
                 <SingleFilterDropdown
                   value={filterAccount}
                   onChange={setFilterAccount}
@@ -1331,12 +1451,17 @@ const WebDashboard = memo(function WebDashboard({
                 )}
               </div>
               {/* Clear all */}
-              {hasActiveFilters && (
+              {(filterMinAmount > 0 || filterMaxAmount > 0 || !!filterDescription || !!filterAccount) && (
                 <button
-                  onClick={clearFilters}
+                  onClick={() => {
+                    setFilterMinAmount(0);
+                    setFilterMaxAmount(0);
+                    setFilterDescription("");
+                    setFilterAccount("");
+                  }}
                   className="w-full text-center text-[10px] text-white/30 hover:text-white/60 transition-colors py-1 uppercase tracking-wider"
                 >
-                  Clear All Filters
+                  Clear All
                 </button>
               )}
             </div>
@@ -1418,6 +1543,7 @@ const WebDashboard = memo(function WebDashboard({
             currentUserId={currentUserId}
             onDateRangeChange={onDateRangeChange}
             filtersOpen={showFilters}
+            filterCategories={filterCategories}
           />
         </div>
       )}
