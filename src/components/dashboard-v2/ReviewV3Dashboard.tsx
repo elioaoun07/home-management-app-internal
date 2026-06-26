@@ -9,6 +9,8 @@ import TransactionDetailModal from "@/components/dashboard/TransactionDetailModa
 import { useAccounts } from "@/features/accounts/hooks";
 import { useAnalytics } from "@/features/analytics/useAnalytics";
 import { useBudgetAllocations } from "@/features/budget/hooks";
+import { useRecurringPayments } from "@/features/recurring/useRecurringPayments";
+import type { RecurringHint } from "@/lib/utils/anomalyDetection";
 import { formatDate } from "@/lib/utils/date";
 import {
   getExpenseTransactions,
@@ -87,6 +89,19 @@ export default function ReviewV3Dashboard({
 
   const budgetMonth = useMemo(() => format(new Date(), "yyyy-MM"), []);
   const { data: budgetAllocations } = useBudgetAllocations(budgetMonth);
+
+  // Registered recurring payments — handed to the outlier detector so a
+  // user-confirmed recurring charge is never surfaced as an anomaly.
+  const { data: recurringPayments } = useRecurringPayments();
+  const recurringHints = useMemo<RecurringHint[]>(
+    () =>
+      (recurringPayments ?? []).map((r) => ({
+        category: r.category?.name ?? null,
+        name: r.name,
+        amount: r.amount,
+      })),
+    [recurringPayments],
+  );
 
   const expenseTransactions = useMemo(
     () =>
@@ -186,6 +201,7 @@ export default function ReviewV3Dashboard({
           expenseTransactions={expenseTransactions}
           analyticsMonths={analytics?.months}
           budgetSummary={budgetAllocations?.summary}
+          recurringHints={recurringHints}
         />
       )}
 

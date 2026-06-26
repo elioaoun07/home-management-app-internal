@@ -1,14 +1,19 @@
 "use client";
 
 import WidgetCard from "@/components/dashboard-v2/WidgetCard";
+import InsightFocusPanel from "@/components/dashboard-v2/widgets/InsightFocusPanel";
 import BlurredAmount from "@/components/ui/BlurredAmount";
 import type { MonthlyAnalytics } from "@/features/analytics/useAnalytics";
-import { detectTransactionAnomalies } from "@/lib/utils/anomalyDetection";
+import {
+  detectTransactionOutliers,
+  type RecurringHint,
+  type TransactionOutlier,
+} from "@/lib/utils/anomalyDetection";
 import type { TransactionWithAccount } from "@/lib/utils/incomeExpense";
 import { cn } from "@/lib/utils";
 import type { BudgetSummary } from "@/types/budgetAllocation";
 import { format, subMonths } from "date-fns";
-import { Eye, EyeOff } from "lucide-react";
+import { ChevronDown, Eye, EyeOff } from "lucide-react";
 import { Fragment, useId, useMemo, useState } from "react";
 import {
   Bar,
@@ -58,6 +63,8 @@ type Props = {
   analyticsMonths: MonthlyAnalytics[] | undefined;
   /** Current-month budget summary from useBudgetAllocations */
   budgetSummary: BudgetSummary | undefined;
+  /** Registered recurring payments — exempted from outlier flagging */
+  recurringHints?: RecurringHint[];
 };
 
 type MonthBucket = { key: string; label: string };
@@ -170,6 +177,8 @@ function OutlinedBar({
   highlightId,
   filterId,
   strokeColor,
+  dim,
+  onClick,
 }: {
   x: number;
   y: number;
@@ -179,12 +188,22 @@ function OutlinedBar({
   highlightId: string;
   filterId: string;
   strokeColor: string;
+  dim?: boolean;
+  onClick?: () => void;
 }) {
   if (!height || height <= 0) return null;
   const r = Math.min(5, width / 2, height);
   const bright = lightenHex(strokeColor, 25);
   return (
-    <g filter={`url(#${filterId})`}>
+    <g
+      filter={`url(#${filterId})`}
+      onClick={onClick}
+      style={{
+        cursor: onClick ? "pointer" : undefined,
+        opacity: dim ? 0.16 : 1,
+        transition: "opacity 0.18s ease",
+      }}
+    >
       <rect
         x={x}
         y={y}
@@ -245,28 +264,112 @@ export default function InsightTabContent({
   expenseTransactions,
   analyticsMonths,
   budgetSummary,
+  recurringHints,
 }: Props) {
   const [hideOutliers, setHideOutliers] = useState(false);
+  const [showOutlierList, setShowOutlierList] = useState(false);
   const uid = useId().replace(/:/g, "");
+
+  // ── Focus state: a month and/or a category drive the side insight panel ───
+  const [focusedMonth, setFocusedMonth] = useState<string | null>(null);
+  const [focusedCategory, setFocusedCategory] = useState<string | null>(null);
+  const isFocused = focusedMonth !== null || focusedCategory !== null;
+  const clearFocus = () => {
+    setFocusedMonth(null);
+    setFocusedCategory(null);
+  };
 
   const months = useMemo(() => build12Months(), []);
   const currentMonthKey = months[months.length - 1]?.key;
 
+  /** Click a stacked segment — two-step zoom:
+   *  1. First click on any segment → zoom to that month (no category yet)
+   *  2. Second click on a segment in the focused month → filter by category
+   *  3. Clicking the same segment again → zoom all the way out */
+  const handleSegmentClick = (cat: string, monthKey: string | undefined) => {
+    if (!monthKey) return;
+    const nextCat = cat === "Other" ? null : cat;
+
+    if (focusedMonth === null) {
+      // Step 1: zoom to month
+      setFocusedMonth(monthKey);
+      setFocusedCategory(null);
+    } else if (focusedMonth !== monthKey) {
+      // Different month clicked → switch month, clear category
+      setFocusedMonth(monthKey);
+      setFocusedCategory(null);
+    } else if (focusedCategory === null) {
+      // Step 2: month already focused → zoom into category
+      setFocusedCategory(nextCat);
+    } else if (focusedCategory === nextCat) {
+      // Same segment clicked again → zoom out to full period
+      clearFocus();
+    } else {
+      // Different segment in same month → switch category
+      setFocusedCategory(nextCat);
+    }
+  };
+
+  /** Legend chip → toggle a category across all months. */
+  const handleCategoryToggle = (cat: string) => {
+    if (cat === "Other") return; // aggregate bucket — not focusable
+    setFocusedCategory((prev) => (prev === cat ? null : cat));
+  };
+
   // ── Outlier detection (runtime, no persistence) ───────────────────────────
-  const { outlierIds, outlierCount, outlierTotal } = useMemo(() => {
-    const anomalies = detectTransactionAnomalies(
-      expenseTransactions.map((t) => ({
-        id: t.id,
-        amount: Math.abs(t.amount),
-        category: t.category ?? "Uncategorized",
-        description: t.description ?? null,
-        date: t.date,
-      })),
-    );
-    const ids = new Set(anomalies.map((a) => a.transactionId));
-    const total = anomalies.reduce((s, a) => s + a.amount, 0);
-    return { outlierIds: ids, outlierCount: ids.size, outlierTotal: total };
+  const outliers = useMemo(
+    () =>
+      detectTransactionOutliers(
+        expenseTransactions.map((t) => ({
+          id: t.id,
+          amount: Math.abs(t.amount),
+          category: t.category ?? "Uncategorized",
+          description: t.description ?? null,
+          date: t.date,
+        })),
+        { recurringHints },
+      ),
+    [expenseTransactions, recurringHints],
+  );
+
+  const txById = useMemo(() => {
+    const map = new Map<string, TransactionWithAccount>();
+    for (const t of expenseTransactions) map.set(t.id, t);
+    return map;
   }, [expenseTransactions]);
+
+  const outlierIds = useMemo(
+    () => new Set(outliers.map((o) => o.transactionId)),
+    [outliers],
+  );
+  const outlierCount = outlierIds.size;
+  const outlierTotal = useMemo(
+    () => outliers.reduce((s, o) => s + o.amount, 0),
+    [outliers],
+  );
+
+  // Group flagged outliers by month (newest first) for the reviewable list
+  const outliersByMonth = useMemo(() => {
+    const groups = new Map<string, TransactionOutlier[]>();
+    for (const o of outliers) {
+      const key = o.date.slice(0, 7);
+      const list = groups.get(key);
+      if (list) list.push(o);
+      else groups.set(key, [o]);
+    }
+    return Array.from(groups.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([key, items]) => ({
+        key,
+        label: format(new Date(`${key}-01`), "MMM yyyy"),
+        items: items
+          .slice()
+          .sort(
+            (a, b) =>
+              b.date.localeCompare(a.date) || a.category.localeCompare(b.category),
+          ),
+      }));
+  }, [outliers]);
 
   // ── Build stacked-bar data: month × category ──────────────────────────────
   const { stackData, categoryMeta, totalSpend } = useMemo(() => {
@@ -329,6 +432,13 @@ export default function InsightTabContent({
     return { stackData, categoryMeta, totalSpend };
   }, [expenseTransactions, hideOutliers, outlierIds, months]);
 
+  // Stable name → color lookup shared by the chart legend and the focus panel.
+  const categoryColors = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of categoryMeta) map[c.name] = c.color;
+    return map;
+  }, [categoryMeta]);
+
   // ── Budget: total monthly budget + per-category map ───────────────────────
   const { totalBudget, budgetByCategory } = useMemo(() => {
     const map: Record<string, { budget: number; spent: number }> = {};
@@ -350,13 +460,12 @@ export default function InsightTabContent({
     () => (analyticsMonths ?? []).slice().reverse(),
     [analyticsMonths],
   );
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const activeMonth = useMemo(() => {
     const list = analyticsMonths ?? [];
     if (list.length === 0) return undefined;
-    if (selectedMonth) return list.find((m) => m.month === selectedMonth);
+    if (focusedMonth) return list.find((m) => m.month === focusedMonth);
     return list[list.length - 1];
-  }, [analyticsMonths, selectedMonth]);
+  }, [analyticsMonths, focusedMonth]);
 
   const pie = useMemo(() => {
     const income = activeMonth?.income ?? 0;
@@ -465,13 +574,22 @@ export default function InsightTabContent({
   };
 
   return (
-    <div className="space-y-4">
+    <div
+      className={cn(
+        "grid gap-4",
+        isFocused && "xl:grid-cols-[minmax(0,1fr)_360px]",
+      )}
+    >
+      <div className="space-y-4 min-w-0">
       {/* ── Monthly spending — stacked by category ───────────────────────── */}
       <WidgetCard
         title="Monthly Spending by Category"
         subtitle={`Last 12 months · ${categoryMeta.length} categories${
           totalBudget > 0 ? " · budget line shown" : ""
-        }`}
+        } · tap a bar to zoom in · tap a stack to filter`}
+        interactive
+        filterActive={isFocused}
+        onFilterReset={clearFocus}
         action={
           <button
             onClick={() => setHideOutliers((v) => !v)}
@@ -481,7 +599,7 @@ export default function InsightTabContent({
                 ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30"
                 : "bg-white/5 text-white/50 hover:text-white/70 hover:bg-white/10",
             )}
-            title="Hide statistically unusual one-off transactions (>2σ within a category)"
+            title="Hide unusually large one-off or out-of-pattern transactions"
           >
             {hideOutliers ? (
               <EyeOff className="w-3 h-3" />
@@ -541,18 +659,28 @@ export default function InsightTabContent({
                     y: number;
                     width: number;
                     height: number;
-                  }) => (
-                    <OutlinedBar
-                      x={props.x}
-                      y={props.y}
-                      width={props.width}
-                      height={props.height}
-                      fillId={`${uid}-c${i}-fill`}
-                      highlightId={`${uid}-c${i}-highlight`}
-                      filterId={`${uid}-c${i}-glow`}
-                      strokeColor={c.color}
-                    />
-                  )}
+                    payload?: { key?: string };
+                  }) => {
+                    const monthKey = props.payload?.key;
+                    const monthDim =
+                      focusedMonth !== null && monthKey !== focusedMonth;
+                    const catDim =
+                      focusedCategory !== null && c.name !== focusedCategory;
+                    return (
+                      <OutlinedBar
+                        x={props.x}
+                        y={props.y}
+                        width={props.width}
+                        height={props.height}
+                        fillId={`${uid}-c${i}-fill`}
+                        highlightId={`${uid}-c${i}-highlight`}
+                        filterId={`${uid}-c${i}-glow`}
+                        strokeColor={c.color}
+                        dim={monthDim || catDim}
+                        onClick={() => handleSegmentClick(c.name, monthKey)}
+                      />
+                    );
+                  }}
                 />
               ))}
               {totalBudget > 0 && (
@@ -573,24 +701,115 @@ export default function InsightTabContent({
           </ResponsiveContainer>
         </div>
 
-        {/* Legend */}
-        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-          {categoryMeta.map((c) => (
-            <span key={c.name} className="flex items-center gap-1.5 text-[10px]">
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ background: c.color }}
-              />
-              <span className="text-white/55">{c.name}</span>
-            </span>
-          ))}
+        {/* Legend — tap a category to focus it across all months */}
+        <div className="flex flex-wrap gap-x-2 gap-y-1 mt-2">
+          {categoryMeta.map((c) => {
+            const isOther = c.name === "Other";
+            const active = focusedCategory === c.name;
+            return (
+              <button
+                key={c.name}
+                onClick={() => handleCategoryToggle(c.name)}
+                disabled={isOther}
+                className={cn(
+                  "flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded-full transition-colors",
+                  isOther
+                    ? "cursor-default"
+                    : "hover:bg-white/10 cursor-pointer",
+                  active && "bg-white/15 ring-1 ring-white/15",
+                  focusedCategory !== null && !active && !isOther && "opacity-40",
+                )}
+              >
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ background: c.color }}
+                />
+                <span className="text-white/55">{c.name}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {hideOutliers && (
-          <p className="mt-2 text-[11px] text-amber-300/80">
-            {outlierCount} outlier transaction{outlierCount === 1 ? "" : "s"}{" "}
-            hidden (<BlurredAmount blurIntensity="sm">{fmtFull(outlierTotal)}</BlurredAmount>)
-          </p>
+        {outlierCount > 0 && (
+          <div className="mt-2">
+            {hideOutliers && (
+              <p className="text-[11px] text-amber-300/80">
+                {outlierCount} outlier transaction{outlierCount === 1 ? "" : "s"}{" "}
+                hidden (
+                <BlurredAmount blurIntensity="sm">{fmtFull(outlierTotal)}</BlurredAmount>)
+              </p>
+            )}
+            <button
+              onClick={() => setShowOutlierList((v) => !v)}
+              className="mt-1 flex items-center gap-1 text-[11px] text-white/40 hover:text-white/60 transition-colors"
+            >
+              <ChevronDown
+                className={cn(
+                  "w-3 h-3 transition-transform",
+                  showOutlierList && "rotate-180",
+                )}
+              />
+              {showOutlierList ? "Hide" : "View"} {outlierCount} outlier
+              {outlierCount === 1 ? "" : "s"}
+            </button>
+
+            {showOutlierList && (
+              <div className="mt-2 space-y-3 rounded-xl bg-white/5 border border-white/10 p-3">
+                {outliersByMonth.map((group) => (
+                  <div key={group.key}>
+                    <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-1.5">
+                      {group.label}
+                    </p>
+                    <div className="space-y-1.5">
+                      {group.items.map((o) => {
+                        const tx = txById.get(o.transactionId);
+                        return (
+                          <div
+                            key={o.transactionId}
+                            className="flex items-center justify-between gap-2 text-xs"
+                          >
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <span
+                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                style={{
+                                  background: tx?.category_color || OTHER_COLOR,
+                                }}
+                              />
+                              <span className="text-white/70 truncate">
+                                {o.category}
+                              </span>
+                              {tx?.description && (
+                                <span className="text-white/35 truncate">
+                                  · {tx.description}
+                                </span>
+                              )}
+                            </span>
+                            <span className="flex items-center gap-1.5 flex-shrink-0">
+                              <BlurredAmount blurIntensity="sm">
+                                <span className="text-white tabular-nums font-medium">
+                                  {fmtFull(o.amount)}
+                                </span>
+                              </BlurredAmount>
+                              <span
+                                className={cn(
+                                  "text-[9px] px-1.5 py-0.5 rounded-full font-medium",
+                                  o.reason === "rare"
+                                    ? "bg-violet-500/15 text-violet-300"
+                                    : "bg-amber-500/15 text-amber-300",
+                                )}
+                              >
+                                {o.reason}
+                              </span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </WidgetCard>
 
@@ -602,7 +821,7 @@ export default function InsightTabContent({
           monthOptions.length > 0 ? (
             <select
               value={activeMonth?.month ?? ""}
-              onChange={(e) => setSelectedMonth(e.target.value)}
+              onChange={(e) => setFocusedMonth(e.target.value)}
               className="bg-white/5 border border-white/10 rounded-lg text-[11px] text-white/70 px-2 py-1 outline-none focus:border-white/20"
             >
               {monthOptions.map((m) => (
@@ -676,7 +895,7 @@ export default function InsightTabContent({
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(v: number, n: string) => [fmtFull(Number(v)), n]}
+                  formatter={(value, name) => [fmtFull(Number(value)), name as string]}
                   contentStyle={TOOLTIP_STYLE}
                   itemStyle={{ color: "#fff" }}
                 />
@@ -724,6 +943,26 @@ export default function InsightTabContent({
           </div>
         </div>
       </WidgetCard>
+      </div>
+
+      {/* ── Focus insight panel — appears on the right (below on mobile) ──── */}
+      {isFocused && (
+        <InsightFocusPanel
+          expenseTransactions={expenseTransactions}
+          months={months}
+          analyticsMonths={analyticsMonths}
+          budgetByCategory={budgetByCategory}
+          totalBudget={totalBudget}
+          currentMonthKey={currentMonthKey}
+          categoryColors={categoryColors}
+          outliers={outliers}
+          focusedMonth={focusedMonth}
+          focusedCategory={focusedCategory}
+          onFocusMonth={setFocusedMonth}
+          onFocusCategory={setFocusedCategory}
+          onClear={clearFocus}
+        />
+      )}
     </div>
   );
 }
