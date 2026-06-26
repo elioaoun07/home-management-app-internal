@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-19T17:11:37.294Z",
+  "generatedAt": "2026-06-26T18:15:44.817Z",
   "count": 58,
   "nodes": [
     {
@@ -169,6 +169,32 @@
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/welcome.md"
+    },
+    {
+      "slug": "feature-transfers",
+      "title": "Feature - Transfers",
+      "category": "feature",
+      "route": "n/a",
+      "type": "feature",
+      "parent": null,
+      "children": [],
+      "status": "active",
+      "tags": [
+        "feature-module"
+      ],
+      "sections": {
+        "files": "- **Module dir**: `src/features/transfers/`",
+        "hooks": "- `src/features/transfers/hooks.ts`\n  - `useTransfers()`\n  - `useCreateTransfer()`\n  - `useUpdateTransfer()`\n  - `useDeleteTransfer()`",
+        "api_routes": "- `GET /api/transfers`\n- `POST /api/transfers`\n- `PATCH /api/transfers/[id]`\n- `DELETE /api/transfers/[id]`",
+        "db_tables": "- `transfers`\n- `accounts`\n- `account_balances`",
+        "how_to_get_here": "- Expense balance card transfer button.\n- Direct wallet refill shortcut: `/expense?transfer=salary-wallet`.",
+        "what_it_links_to": "- `/expense`\n- `src/components/expense/TransferDialog.tsx`\n- `src/components/expense/NfcWalletTransferPrompt.tsx`",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Transfers/`",
+        "screenshots": "- n/a",
+        "notes": "- 2026-06-25: Salary -> Wallet shortcut resolves account names for the current\n  signed-in user and reuses `useCreateTransfer()`; the URL does not contain\n  account UUIDs."
+      },
+      "screenshots": [],
+      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-transfers.md"
     },
     {
       "slug": "feature-accounts",
@@ -795,32 +821,6 @@
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-transactions.md"
     },
     {
-      "slug": "feature-transfers",
-      "title": "Feature · Transfers",
-      "category": "feature",
-      "route": "n/a",
-      "type": "feature",
-      "parent": null,
-      "children": [],
-      "status": "active",
-      "tags": [
-        "feature-module"
-      ],
-      "sections": {
-        "files": "- **Module dir**: `src/features/transfers/`",
-        "hooks": "- See files in `src/features/transfers/` (typically `hooks.ts` or sub-files)",
-        "api_routes": "- TODO (list `/api/transfers/...` routes used by this feature)",
-        "db_tables": "- TODO",
-        "how_to_get_here": "- Used by pages — see \"What it links to\" or grep imports of `@/features/transfers`.",
-        "what_it_links_to": "- TODO (which pages render this feature's UI)",
-        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Transfers/` _(verify path)_",
-        "screenshots": "- n/a",
-        "notes": "- TODO"
-      },
-      "screenshots": [],
-      "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/feature-transfers.md"
-    },
-    {
       "slug": "era",
       "title": "ERA — Omnipotent Assistant",
       "category": "junction-page",
@@ -887,14 +887,14 @@
       "status": "active",
       "tags": [],
       "sections": {
-        "files": "- **Page**: `src/app/dashboard/page.tsx`\n- **Client root**: `src/app/dashboard/DashboardClientPage.tsx`\n- **Wrapper**: `src/app/dashboard/DashboardClientWrapper.tsx`\n- **Layout**: `src/app/dashboard/layout.tsx`\n- **Sub-components**:\n  - `src/components/dashboard/EnhancedMobileDashboard.tsx`\n  - `src/components/reminder/RemindersInsightsPage.tsx`\n  - `src/components/dashboard/TransactionsTable.tsx`\n  - `src/components/dashboard/CategoryDetailView.tsx`\n  - `src/components/dashboard/SwipeableTransactionItem.tsx`\n  - `src/components/dashboard/TransactionDetailModal.tsx`\n  - `src/components/web/WebDashboard.tsx`\n  - `src/components/web/WebTabletMissionControl.tsx`\n  - `src/components/expense/EditableWidgetGrid.tsx`",
+        "files": "- **Page**: `src/app/dashboard/page.tsx`\n- **Client root**: `src/app/dashboard/DashboardClientPage.tsx`\n- **Wrapper**: `src/app/dashboard/DashboardClientWrapper.tsx`\n- **Layout**: `src/app/dashboard/layout.tsx`\n- **Sub-components**:\n  - `src/components/dashboard/EnhancedMobileDashboard.tsx`\n  - `src/components/reminder/RemindersInsightsPage.tsx`\n  - `src/components/dashboard/TransactionsTable.tsx`\n  - `src/components/dashboard/CategoryDetailView.tsx`\n  - `src/components/dashboard/SwipeableTransactionItem.tsx`\n  - `src/components/dashboard/TransactionDetailModal.tsx`\n  - `src/components/web/WebDashboard.tsx`\n  - `src/components/web/WebTabletMissionControl.tsx`\n  - `src/components/expense/EditableWidgetGrid.tsx`\n  - `src/components/dashboard-v2/ReviewV2Dashboard.tsx` — \"Review v2\" web view (6 tabs)\n  - `src/components/dashboard-v2/ReviewV3Dashboard.tsx` — \"Review v3\" web view (Insight · Monthly · Categories)\n  - `src/components/dashboard-v2/widgets/InsightTabContent.tsx` — v3 Insight tab\n  - `src/components/dashboard-v2/widgets/InsightFocusPanel.tsx` — v3 Insight drill-down / focus panel",
         "hooks": "- `src/features/preferences/useSectionOrder` — section order\n- `src/features/transactions/useDashboardTransactions` — current-cycle transactions",
         "api_routes": "- Aggregates over multiple endpoints — no dedicated dashboard API. See individual feature routes.",
         "db_tables": "- No owned tables. Reads `transactions`, `accounts`, `account_balances`, `user_preferences`.",
         "how_to_get_here": "- Default redirect after login\n- Tap **Home/Dashboard** icon in bottom nav (mobile)\n- Direct URL: `/dashboard`",
         "what_it_links_to": "- `/expense` — expense entry\n- Transaction detail modal (in-place, no route change)\n- Category drill-down (in-place)",
         "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Dashboard/`",
-        "notes": "- Mobile `Insights` tab renders Schedule/reminder stats moved from `/reminders` on 2026-06-19.\n- Prefetch on startup via `src/components/EagerDataPrefetch.tsx` and on hover via `src/lib/prefetch/prefetchDashboard.ts`.\n- Theme changes invalidate all queries — full refetch on theme switch.\n- Section order is drag-configurable via `EditableWidgetGrid`."
+        "notes": "- Mobile `Insights` tab renders Schedule/reminder stats moved from `/reminders` on 2026-06-19.\n- Prefetch on startup via `src/components/EagerDataPrefetch.tsx` and on hover via `src/lib/prefetch/prefetchDashboard.ts`.\n- Theme changes invalidate all queries — full refetch on theme switch.\n- Section order is drag-configurable via `EditableWidgetGrid`.\n- Web dashboard view toggle (`WebDashboard.tsx`) has: Overview · Analytics · Review · Review v2 · **Review v3** (added 2026-06-26). Review v3 is an experimental simplified view — **Insight** (stacked-by-category monthly spend with a runtime outlier toggle, total-budget reference line, and an Income/Expense/Expected-Savings pie), plus **Monthly** and **Categories** tabs that reuse the v2 `MonthlyDistributionTabContent` / `CategoriesV2TabContent`. Intended to be merged back into v2 once validated.\n- Insight tab outlier detection (`detectTransactionOutliers` in `src/lib/utils/anomalyDetection.ts`, 2026-06-26) flags two kinds of transactions: in-category **spikes** (median/MAD-based, immune to the outlier skewing its own baseline) and **rare** transactions in intermittent/novel categories judged against overall spending (e.g. a once-a-year gift or a one-off trip) — fixed recurring bills are excluded from that global baseline so they can't mask genuinely rare large expenses. Results back both the existing hide-toggle and a reviewable list (grouped by month, spike/rare badges).\n- Categories with two legitimate spending modes (e.g. Groceries: everyday snacks + a periodic full shopping run) are handled via `splitByLargestGap` — the category splits at its single largest proportional gap once the \"high\" side itself recurs enough to be trusted as normal, so the recurring big-ticket mode scores against its own median/MAD instead of being flagged as a spike against the everyday mode. Near-zero transactions (e.g. a $0.01 rounding/refund row) are excluded from anchoring that split (`bimodalMinAnchor`, default $1) — otherwise their proximity to zero produces a spuriously huge ratio gap that hijacks the split point and merges the real high mode back in with everything below it.\n- Some categories have more than two natural price tiers with no single clean amount gap (e.g. Food: snacks + casual dining + grocery runs all blending together) — the amount-based split alone can fail to find any boundary. A second, independent signal covers this: any transaction description that recurs ≥4 times across ≥3 distinct months within an established category is treated as a recognized recurring merchant/pattern and never flagged as a spike, regardless of where its amount falls in the distribution.\n- Insight tab is **interactive** (`InsightFocusPanel.tsx`, 2026-06-26). Tapping a stacked bar segment focuses that **month + category**; tapping a legend chip focuses a **category** across all 12 months; the pie month dropdown focuses a **month**. Focus dims non-selected bars (reusing the `WidgetCard` filter badge + reset to clear) and the pie follows the focused month. While focused, a right-hand panel (stacks below on mobile) shows one of four adaptive views with removable [month]/[category] chips: **month** (total, rank-of-12, vs prev / 12-mo avg, income + expected savings, budget-left, top categories with tap-to-drill, that month's outliers), **category** (12-mo total + % share, avg/active month, latest-vs-avg trend, peak month, category budget, clickable 12-mo sparkline, flagged outliers, largest transactions), and **month×category** (amount vs the category's own average, share-of-month / -of-year, full transaction list with outlier badges)."
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/dashboard.md"
@@ -910,15 +910,15 @@
       "status": "active",
       "tags": [],
       "sections": {
-        "files": "- **Page**: `src/app/expense/page.tsx`\n- **Main component**: `src/app/expense/ExpenseClientWrapper.tsx`\n- **Sub-components**: TODO",
-        "hooks": "- TODO",
-        "api_routes": "- TODO",
-        "db_tables": "- TODO",
-        "how_to_get_here": "- TODO (which button/icon/deep-link navigates here)\n- Direct URL: `/expense`",
-        "what_it_links_to": "- TODO",
-        "related_vault_doc": "- TODO (link to `ERA Notes/02 - Standalone Modules/...` or `03 - Junction Modules/...`)",
+        "files": "- **Page**: `src/app/expense/page.tsx`\n- **Main component**: `src/app/expense/ExpenseClientWrapper.tsx`\n- **Sub-components**:\n  - `src/components/expense/MobileExpenseForm.tsx`\n  - `src/components/expense/NfcWalletTransferPrompt.tsx`",
+        "hooks": "- `useMyAccounts()` resolves user-owned accounts for form/account shortcuts.\n- `useCreateTransfer()` powers the Salary -> Wallet URL/NFC transfer prompt.",
+        "api_routes": "- `/api/accounts`\n- `/api/transfers`",
+        "db_tables": "- `accounts`\n- `account_balances`\n- `transfers`\n- `transactions`",
+        "how_to_get_here": "- Direct URL: `/expense`\n- Direct wallet refill shortcut: `/expense?transfer=salary-wallet`\n- Optional shortcut params: `from`, `to`, `amount`",
+        "what_it_links_to": "- Transfer activity/history through the transfers feature.\n- Login redirects preserve `/expense` shortcut query params.",
+        "related_vault_doc": "- `ERA Notes/02 - Standalone Modules/Transactions/`\n- `ERA Notes/02 - Standalone Modules/Accounts & Balance/Account Transfers.md`",
         "screenshots": "- `expense-mobile.png`\n- `expense-desktop.png`",
-        "notes": "- TODO"
+        "notes": "- `/expense?transfer=salary-wallet` opens the mobile expense form with a small\n  Salary -> Wallet transfer prompt. Account IDs are resolved from the signed-in\n  user's own account names instead of being encoded in the URL."
       },
       "screenshots": [],
       "sourceFile": "ERA Notes/04 - UI & Design/Page & Feature Atlas/expense.md"

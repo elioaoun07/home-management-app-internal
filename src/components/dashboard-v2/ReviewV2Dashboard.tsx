@@ -983,6 +983,8 @@ export default function ReviewV2Dashboard({
             balanceAccounts={analytics?.accounts}
             currentUserId={currentUserId}
             hasPartner={analytics?.hasPartner}
+            startDate={startDate}
+            endDate={endDate}
           />
         </div>
       )}
