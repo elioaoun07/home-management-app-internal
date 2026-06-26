@@ -156,6 +156,12 @@ export interface AiBudgetSuggestion {
   wallet_balance_used: number;
   total_suggested: number;
   created_at: string;
+  /** Short human-readable strategy summary. */
+  summary?: string | null;
+  /** How the suggestion was produced: 'ai' (LLM) or 'estimate' (statistical fallback). */
+  generation_method?: "ai" | "estimate" | null;
+  /** Count of one-off outlier transactions filtered out of the spend history. */
+  excluded_outlier_count?: number | null;
 }
 
 // Assignment display helpers

@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   useAiBudgetSuggestion,
+  useApplyAllAiBudget,
   useBudgetAllocations,
   useGenerateAiBudgetSuggestion,
   useSaveBudgetAllocation,
@@ -17,9 +18,11 @@ import type {
   BudgetOwnershipFilter,
   BudgetSummary,
   BudgetWeek,
+  CreateBudgetAllocationInput,
 } from "@/types/budgetAllocation";
 import { BUDGET_WEEK_LABELS } from "@/types/budgetAllocation";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -408,6 +411,25 @@ const CategoryBudgetCard = memo(function CategoryBudgetCard({
   const spentPct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
   const maxAvailable = incomeBalance - totalAllocated + budget;
 
+  const aiStatus = useMemo(() => {
+    if (!aiSuggestion) return null;
+    const suggested = aiSuggestion.suggested_budget;
+    if (budget <= 0)
+      return { label: "Not set", cls: "bg-amber-500/15 text-amber-300" };
+    const diff = budget - suggested;
+    if (Math.abs(diff) < 0.5)
+      return { label: "Matches AI", cls: "bg-emerald-500/15 text-emerald-300" };
+    if (diff > 0)
+      return {
+        label: `+$${Math.abs(diff).toLocaleString()} vs AI`,
+        cls: "bg-amber-500/15 text-amber-300",
+      };
+    return {
+      label: `-$${Math.abs(diff).toLocaleString()} vs AI`,
+      cls: "bg-cyan-500/15 text-cyan-300",
+    };
+  }, [aiSuggestion, budget]);
+
   const hasSubcategories =
     category.subcategories && category.subcategories.length > 0;
 
@@ -612,31 +634,48 @@ const CategoryBudgetCard = memo(function CategoryBudgetCard({
             )}
           </div>
 
-          {/* AI suggestion hint */}
+          {/* AI suggestion — inline proposal beside your editable value */}
           {aiSuggestion && (
-            <div className="mt-2 flex items-center gap-2 px-2 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <Sparkles className="w-3 h-3 text-amber-400 flex-shrink-0" />
-              <span className="text-[10px] text-amber-300">
-                AI suggests:{" "}
-                <span className="font-semibold">
-                  ${aiSuggestion.suggested_budget.toLocaleString()}
+            <div className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2 py-1.5">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-3 h-3 text-amber-400 flex-shrink-0" />
+                <span className="text-[10px] text-amber-300">
+                  AI suggests{" "}
+                  <span className="font-semibold">
+                    ${aiSuggestion.suggested_budget.toLocaleString()}
+                  </span>
                 </span>
-              </span>
-              {onApplyAiSuggestion &&
-                aiSuggestion.suggested_budget !== budget && (
-                  <button
-                    onClick={() =>
-                      onApplyAiSuggestion(
-                        category.category_id,
-                        category.account_id,
-                        aiSuggestion.suggested_budget,
-                      )
-                    }
-                    className="ml-auto px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors"
+                {aiStatus && (
+                  <span
+                    className={cn(
+                      "text-[9px] px-1.5 py-0.5 rounded-full font-medium",
+                      aiStatus.cls,
+                    )}
                   >
-                    Apply
-                  </button>
+                    {aiStatus.label}
+                  </span>
                 )}
+                {onApplyAiSuggestion &&
+                  aiSuggestion.suggested_budget !== budget && (
+                    <button
+                      onClick={() =>
+                        onApplyAiSuggestion(
+                          category.category_id,
+                          category.account_id,
+                          aiSuggestion.suggested_budget,
+                        )
+                      }
+                      className="ml-auto px-2 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors"
+                    >
+                      Apply
+                    </button>
+                  )}
+              </div>
+              {aiSuggestion.reasoning && (
+                <p className="mt-1 text-[10px] text-slate-400 italic leading-snug">
+                  {aiSuggestion.reasoning}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -737,12 +776,18 @@ const AiSuggestionView = memo(function AiSuggestionView({
   walletBalance,
   categories,
   ownershipFilter,
+  generationMethod,
+  excludedCount = 0,
+  aiSummary,
 }: {
   suggestions: AiCategorySuggestion[];
   totalSuggested: number;
   walletBalance: number;
   categories: BudgetCategoryView[];
   ownershipFilter: BudgetOwnershipFilter;
+  generationMethod?: "ai" | "estimate";
+  excludedCount?: number;
+  aiSummary?: string;
 }) {
   const remaining = walletBalance - totalSuggested;
 
@@ -750,13 +795,34 @@ const AiSuggestionView = memo(function AiSuggestionView({
     <div className="space-y-4">
       {/* AI Summary */}
       <Card className="neo-card p-4 border-l-2 border-l-amber-500/50">
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <Sparkles className="w-4 h-4 text-amber-400" />
           <h3 className="text-sm font-semibold text-amber-300">
-            AI Budget Suggestion
+            AI Budget Plan
           </h3>
+          <span
+            className={cn(
+              "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+              generationMethod === "estimate"
+                ? "bg-slate-500/20 text-slate-300"
+                : "bg-amber-500/20 text-amber-300",
+            )}
+          >
+            {generationMethod === "estimate" ? "Estimate" : "AI"}
+          </span>
+          {excludedCount > 0 && (
+            <span className="text-[10px] text-slate-500">
+              {excludedCount} one-off{" "}
+              {excludedCount === 1 ? "charge" : "charges"} excluded
+            </span>
+          )}
           <span className="ml-auto text-xs text-slate-500">Read-only</span>
         </div>
+        {aiSummary && (
+          <p className="text-[11px] text-slate-400 italic leading-relaxed mb-3">
+            {aiSummary}
+          </p>
+        )}
         <div className="grid grid-cols-3 gap-3">
           <div className="text-center">
             <p className="text-xs text-slate-500">Wallet</p>
@@ -1168,7 +1234,7 @@ const WebBudget = memo(function WebBudget() {
     if (dayOfMonth <= 28) return "w3";
     return "w4";
   });
-  const [view, setView] = useState<"edit" | "ai" | "dashboard">("edit");
+  const [view, setView] = useState<"allocate" | "review">("allocate");
   const [showAiConfirm, setShowAiConfirm] = useState(false);
 
   // Current week index for highlighting
@@ -1194,6 +1260,7 @@ const WebBudget = memo(function WebBudget() {
     activeWeek,
   );
   const generateAi = useGenerateAiBudgetSuggestion();
+  const applyAll = useApplyAllAiBudget();
 
   const aiSuggestion = aiData?.suggestion ?? null;
   const weeksWithAi = aiData?.weeksWithSuggestions ?? [];
@@ -1274,15 +1341,50 @@ const WebBudget = memo(function WebBudget() {
           onSuccess: (data) => {
             if (data.exists && !force) {
               setShowAiConfirm(true);
-            } else {
-              setView("ai");
             }
+            // On success the suggestion appears inline on the Allocate surface.
           },
         },
       );
     },
     [generateAi, currentMonth, activeWeek],
   );
+
+  // Apply every AI category suggestion at once (manual values are overwritten,
+  // but the action is reversible via the toast's Undo).
+  const handleApplyAll = useCallback(() => {
+    if (!aiSuggestion || !summary) return;
+    const items: CreateBudgetAllocationInput[] = [];
+    const previous: CreateBudgetAllocationInput[] = [];
+    for (const cat of summary.categories) {
+      const s =
+        aiSuggestionMap.get(cat.category_id) ??
+        aiSuggestionMap.get(cat.category_name);
+      if (!s) continue;
+      if (s.suggested_budget === cat.total_budget) continue;
+      items.push({
+        category_id: cat.category_id,
+        subcategory_id: null,
+        account_id: cat.account_id,
+        assigned_to: "both",
+        monthly_budget: s.suggested_budget,
+        budget_month: null,
+      });
+      previous.push({
+        category_id: cat.category_id,
+        subcategory_id: null,
+        account_id: cat.account_id,
+        assigned_to: "both",
+        monthly_budget: cat.total_budget,
+        budget_month: null,
+      });
+    }
+    if (items.length === 0) {
+      toast.info("Your budget already matches the AI plan");
+      return;
+    }
+    applyAll.mutate({ items, previous });
+  }, [aiSuggestion, summary, aiSuggestionMap, applyAll]);
 
   return (
     <div className={`min-h-screen ${tc.pageBg} pb-24`}>
@@ -1386,13 +1488,13 @@ const WebBudget = memo(function WebBudget() {
             />
           </div>
 
-          {/* View toggle: Allocate / AI / Dashboard */}
+          {/* View toggle: Allocate (input) / Review (viewing) */}
           <div className="flex items-center gap-1 mt-3 p-1 rounded-xl bg-white/5 w-fit">
             <button
-              onClick={() => setView("edit")}
+              onClick={() => setView("allocate")}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                view === "edit"
+                view === "allocate"
                   ? "bg-violet-500/20 text-violet-300"
                   : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
               )}
@@ -1401,30 +1503,16 @@ const WebBudget = memo(function WebBudget() {
               Allocate
             </button>
             <button
-              onClick={() => setView("ai")}
+              onClick={() => setView("review")}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                view === "ai"
-                  ? "bg-amber-500/20 text-amber-300"
-                  : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
-                !aiSuggestion && "opacity-50",
-              )}
-              disabled={!aiSuggestion && !aiLoading}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              AI View
-            </button>
-            <button
-              onClick={() => setView("dashboard")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                view === "dashboard"
+                view === "review"
                   ? "bg-violet-500/20 text-violet-300"
                   : "text-slate-400 hover:text-slate-300 hover:bg-white/5",
               )}
             >
               <BarChart3 className="w-3.5 h-3.5" />
-              Dashboard
+              Review
             </button>
           </div>
         </div>
@@ -1486,9 +1574,65 @@ const WebBudget = memo(function WebBudget() {
               ownershipFilter={ownershipFilter}
             />
 
-            {/* Edit View: Category allocation */}
-            {view === "edit" && (
+            {/* Allocate View: input — category envelopes with inline AI */}
+            {view === "allocate" && (
               <>
+                {aiSuggestion && (
+                  <Card className="neo-card p-3 mb-4 border-l-2 border-l-amber-500/50">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                      <span className="text-xs text-slate-300">
+                        AI proposes{" "}
+                        <span className="font-semibold text-amber-300">
+                          ${aiSuggestion.total_suggested.toLocaleString()}
+                        </span>{" "}
+                        across {aiSuggestion.suggestions.length}{" "}
+                        {aiSuggestion.suggestions.length === 1
+                          ? "category"
+                          : "categories"}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                          aiSuggestion.generation_method === "estimate"
+                            ? "bg-slate-500/20 text-slate-300"
+                            : "bg-amber-500/20 text-amber-300",
+                        )}
+                      >
+                        {aiSuggestion.generation_method === "estimate"
+                          ? "Estimate"
+                          : "AI"}
+                      </span>
+                      {!!aiSuggestion.excluded_outlier_count &&
+                        aiSuggestion.excluded_outlier_count > 0 && (
+                          <span className="text-[10px] text-slate-500">
+                            {aiSuggestion.excluded_outlier_count} one-off{" "}
+                            {aiSuggestion.excluded_outlier_count === 1
+                              ? "charge"
+                              : "charges"}{" "}
+                            excluded
+                          </span>
+                        )}
+                      <button
+                        onClick={handleApplyAll}
+                        disabled={applyAll.isPending}
+                        className={cn(
+                          "ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                          applyAll.isPending
+                            ? "bg-amber-500/10 text-amber-400/50 cursor-wait"
+                            : "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30",
+                        )}
+                      >
+                        {applyAll.isPending ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        )}
+                        Apply all
+                      </button>
+                    </div>
+                  </Card>
+                )}
                 {summary.categories.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <AnimatePresence>
@@ -1545,63 +1689,34 @@ const WebBudget = memo(function WebBudget() {
               </>
             )}
 
-            {/* AI View */}
-            {view === "ai" && (
-              <>
+            {/* Review View: read-only budget health + AI plan */}
+            {view === "review" && (
+              <div className="space-y-4">
+                <BudgetDashboardView
+                  summary={summary}
+                  ownershipFilter={ownershipFilter}
+                />
                 {aiLoading && (
-                  <div className="text-center py-12">
-                    <Loader2 className="w-8 h-8 text-amber-400 animate-spin mx-auto mb-4" />
-                    <p className="text-slate-400 text-sm">
-                      Loading AI suggestion...
-                    </p>
+                  <div className="text-center py-8">
+                    <Loader2 className="w-7 h-7 text-amber-400 animate-spin mx-auto mb-3" />
+                    <p className="text-slate-400 text-sm">Loading AI plan...</p>
                   </div>
                 )}
-                {!aiLoading && aiSuggestion && (
+                {aiSuggestion && (
                   <AiSuggestionView
                     suggestions={aiSuggestion.suggestions}
                     totalSuggested={aiSuggestion.total_suggested}
                     walletBalance={aiSuggestion.wallet_balance_used}
                     categories={summary.categories}
                     ownershipFilter={ownershipFilter}
+                    generationMethod={
+                      aiSuggestion.generation_method ?? undefined
+                    }
+                    excludedCount={aiSuggestion.excluded_outlier_count ?? 0}
+                    aiSummary={aiSuggestion.summary ?? undefined}
                   />
                 )}
-                {!aiLoading && !aiSuggestion && (
-                  <Card className="neo-card p-10 text-center">
-                    <Sparkles className="w-14 h-14 text-amber-400/30 mx-auto mb-3" />
-                    <h3 className="text-base font-semibold text-white mb-1">
-                      No AI Suggestion Yet
-                    </h3>
-                    <p className="text-sm text-slate-400 mb-4">
-                      Click &ldquo;AI Suggest&rdquo; to generate a budget
-                      recommendation for{" "}
-                      <span className="text-violet-300">
-                        {BUDGET_WEEK_LABELS[activeWeek]}
-                      </span>
-                      .
-                    </p>
-                    <button
-                      onClick={() => handleAiGenerate(false)}
-                      disabled={generateAi.isPending}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 hover:from-amber-500/30 hover:to-orange-500/30 transition-all"
-                    >
-                      {generateAi.isPending ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-4 h-4" />
-                      )}
-                      Generate AI Suggestion
-                    </button>
-                  </Card>
-                )}
-              </>
-            )}
-
-            {/* Dashboard View */}
-            {view === "dashboard" && (
-              <BudgetDashboardView
-                summary={summary}
-                ownershipFilter={ownershipFilter}
-              />
+              </div>
             )}
           </>
         )}

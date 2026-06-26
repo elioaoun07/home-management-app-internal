@@ -208,7 +208,7 @@ export function useDeleteBudgetAllocation() {
 
   return useMutation({
     mutationFn: deleteBudgetAllocation,
-    onSuccess: (_, id) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [BUDGET_KEY] });
       toast.success("Budget allocation removed", {
         icon: ToastIcons.delete,
@@ -339,6 +339,64 @@ export function useGenerateAiBudgetSuggestion() {
       toast.error("Failed to generate AI suggestion", {
         icon: ToastIcons.error,
       });
+    },
+  });
+}
+
+// ===== Apply-All AI Budget =====
+
+interface ApplyAllAiInput {
+  /** New allocations to write (one per category). */
+  items: CreateBudgetAllocationInput[];
+  /** Prior allocations, used to revert on Undo. */
+  previous: CreateBudgetAllocationInput[];
+}
+
+/**
+ * Apply every AI-suggested category budget in one action.
+ * Reuses the same POST endpoint as single saves, then invalidates once and
+ * shows a single toast whose Undo re-writes the previous values.
+ */
+export function useApplyAllAiBudget() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: ApplyAllAiInput) => {
+      for (const item of input.items) {
+        await saveBudgetAllocation(item);
+      }
+      return input;
+    },
+    onSuccess: (input) => {
+      queryClient.invalidateQueries({ queryKey: [BUDGET_KEY] });
+      toast.success(
+        `Applied AI budget to ${input.items.length} ${
+          input.items.length === 1 ? "category" : "categories"
+        }`,
+        {
+          icon: ToastIcons.create,
+          duration: 4000,
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                for (const prev of input.previous) {
+                  await saveBudgetAllocation(prev);
+                }
+                queryClient.invalidateQueries({ queryKey: [BUDGET_KEY] });
+                toast.success("Reverted budget changes", {
+                  icon: ToastIcons.delete,
+                });
+              } catch {
+                toast.error("Failed to undo");
+              }
+            },
+          },
+        },
+      );
+    },
+    onError: () => {
+      toast.error("Failed to apply AI budget", { icon: ToastIcons.error });
     },
   });
 }

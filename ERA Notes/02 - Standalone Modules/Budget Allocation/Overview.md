@@ -17,9 +17,11 @@ tags:
 
 | File                                      | Purpose                                       |
 | ----------------------------------------- | --------------------------------------------- |
-| `src/features/budget/hooks.ts`            | Query + mutation hooks (optimistic updates)   |
-| `src/components/web/WebBudget.tsx`        | Full-page budget allocation UI                |
+| `src/features/budget/hooks.ts`            | Query + mutation hooks (optimistic updates, Apply-All) |
+| `src/components/web/WebBudget.tsx`        | Full-page UI — **Allocate** (input) / **Review** (viewing) |
 | `src/app/api/budget-allocations/route.ts` | GET/POST/DELETE API (upsert by composite key) |
+| `src/app/api/budget-allocations/ai-suggest/route.ts` | AI suggestion: outlier-clean history → Gemini → fallback |
+| `src/lib/budget/budgetForecast.ts`        | Outlier-clean aggregation + statistical fallback + clamp (unit-tested) |
 | `src/types/budgetAllocation.ts`           | All budget-related TypeScript types           |
 
 ## Query & Cache Architecture
@@ -52,6 +54,28 @@ Without it, budget edits appear to "not save" due to three interacting cache lay
 3. **localStorage red herring** — `localStorage.removeItem('hm-rq-cache-v3')` has zero effect because budget allocations aren't in `STABLE_KEYS` and are never persisted. The stale data lives purely in React Query's in-memory cache.
 
 **Fix applied (2026-04-06):** Added `cancelQueries` → optimistic `setQueriesData` → `onSettled` invalidation pattern, plus `refetchOnMount: "always"` on the query itself.
+
+## AI Budget Suggestions (outlier-aware, always-on)
+
+> **Source:** `src/app/api/budget-allocations/ai-suggest/route.ts` + `src/lib/budget/budgetForecast.ts`
+
+The Allocate surface shows AI proposals **inline** per category (suggested value
++ reasoning + a status chip: _Matches AI / +$ vs AI / -$ vs AI / Not set_), with
+a per-row **Apply** and a top-bar **Apply all**. Manual values always win — AI is
+a non-destructive suggestion layer. Read-only health + the AI plan summary live
+on the **Review** surface (the old standalone "AI View" tab was removed).
+
+**Generation pipeline (POST):**
+
+1. Pull 12 months of expense transactions (`id, amount, category_id, subcategory_id, date, description`) + active `recurring_payments`.
+2. `aggregateCleanMonthlyByCategory` runs `detectTransactionOutliers` (with the recurring payments as `recurringHints`) and **excludes** flagged one-off spikes / rare charges from the per-category monthly history — so a single large purchase can't inflate a category's baseline.
+3. If `GEMINI_API_KEY` is set, the cleaned history is sent to Gemini; the parsed result is then **soft-clamped** (`softClampSuggestions`) to no more than 2.5x each category's typical (median) monthly spend — novel categories with no history are left untouched.
+4. If Gemini is missing / errors / returns unparseable JSON, `buildStatisticalSuggestion` produces a deterministic median-based plan instead — **a suggestion is always returned** (never a 5xx for "AI not configured").
+5. The plan total is clamped to the wallet balance, then stored in `ai_budget_suggestions` with `summary`, `generation_method` (`'ai' | 'estimate'`), and `excluded_outlier_count`. The UI shows an **AI / Estimate** badge + excluded-count.
+
+**Hard rules honored here:** no `console.*` in the route; `safeFetch` with `timeoutMs: 60_000` on the client mutation; `409` on `23505`; the reasoning text renders inline (no glass floating panel).
+
+**DB:** `migrations/2026-06-26_budget_ai_suggestion_meta.sql` adds `summary` / `generation_method` / `excluded_outlier_count` to `ai_budget_suggestions`.
 
 ## Gotchas
 

@@ -1,4 +1,12 @@
-import { geminiModel, generateContentWithFallback } from "@/lib/ai/gemini";
+import { generateContentWithFallback } from "@/lib/ai/gemini";
+import {
+  aggregateCleanMonthlyByCategory,
+  buildStatisticalSuggestion,
+  computeCategoryBaselines,
+  softClampSuggestions,
+  type ForecastTransaction,
+} from "@/lib/budget/budgetForecast";
+import type { RecurringHint } from "@/lib/utils/anomalyDetection";
 import { supabaseServer } from "@/lib/supabase/server";
 import type {
   AiBudgetSuggestion,
@@ -208,27 +216,46 @@ export async function POST(req: NextRequest) {
 
   const { data: transactions } = await supabase
     .from("transactions")
-    .select("amount, category_id, subcategory_id, user_id, date")
+    .select("id, amount, category_id, subcategory_id, user_id, date, description")
     .in("account_id", expenseAccountIds)
     .gte("date", historyStart)
     .order("date", { ascending: false });
 
-  // Aggregate spending per category/subcategory per month
-  type MonthlySpend = Record<string, number>; // categoryName -> amount
-  const monthlyData: Record<string, MonthlySpend> = {}; // 'YYYY-MM' -> spend map
+  // Recurring payments (fixed-obligation context + hints so legitimate
+  // recurring charges are never mistaken for spending outliers).
+  const { data: recurring } = await supabase
+    .from("recurring_payments")
+    .select("name, amount, recurrence_type, next_due_date")
+    .in("account_id", expenseAccountIds)
+    .eq("is_active", true);
 
+  const recurringHints: RecurringHint[] = (recurring || []).map((r) => ({
+    name: r.name,
+    amount: Number(r.amount),
+  }));
+
+  // Resolve each transaction to its leaf spend bucket, then aggregate into
+  // monthly per-category spend with statistical one-off outliers stripped out
+  // so a single large purchase can't inflate a category's baseline.
+  const forecastTxs: ForecastTransaction[] = [];
   for (const tx of transactions || []) {
-    const txMonth = tx.date.slice(0, 7);
     const catId = tx.subcategory_id || tx.category_id;
     const catName = catId ? catIdToName[catId] : null;
     if (!catName) continue;
-
-    if (!monthlyData[txMonth]) monthlyData[txMonth] = {};
-    monthlyData[txMonth][catName] =
-      (monthlyData[txMonth][catName] || 0) + tx.amount;
+    forecastTxs.push({
+      id: tx.id,
+      amount: tx.amount,
+      category: catName,
+      description: tx.description,
+      date: tx.date,
+    });
   }
 
-  // Current month spending
+  const cleaned = aggregateCleanMonthlyByCategory(forecastTxs, recurringHints);
+  const monthlyData = cleaned.monthly;
+  const excludedOutlierCount = cleaned.excludedCount;
+
+  // Current month spending (raw — this is "spent so far", not the baseline)
   const currentMonthSpending: Record<string, number> = {};
   for (const tx of transactions || []) {
     if (tx.date.slice(0, 7) !== month) continue;
@@ -238,13 +265,6 @@ export async function POST(req: NextRequest) {
     currentMonthSpending[catName] =
       (currentMonthSpending[catName] || 0) + tx.amount;
   }
-
-  // Recurring payments
-  const { data: recurring } = await supabase
-    .from("recurring_payments")
-    .select("name, amount, recurrence_type, next_due_date")
-    .in("account_id", expenseAccountIds)
-    .eq("is_active", true);
 
   // Current manual budget allocations
   const { data: manualAllocations } = await supabase
@@ -375,7 +395,7 @@ RECURRING PAYMENTS (fixed obligations):
 ${recurringText}
 
 ${prevSuggestionText ? `PREVIOUS WEEK'S AI SUGGESTION:\n${prevSuggestionText}\n` : ""}
-HISTORICAL SPENDING (last 12 months):
+HISTORICAL SPENDING (last 12 months, one-off outliers excluded):
 ${monthlyBreakdown}
 
 RESPOND WITH ONLY valid JSON — no markdown, no explanation outside the JSON. Use this exact format:
@@ -395,157 +415,130 @@ RESPOND WITH ONLY valid JSON — no markdown, no explanation outside the JSON. U
   "summary": "Brief overall strategy summary"
 }`;
 
-  // --- Call Gemini ---
-  if (!process.env.GEMINI_API_KEY) {
-    return NextResponse.json({ error: "AI not configured" }, { status: 503 });
+  // --- Generate suggestion: AI when available, statistical fallback otherwise ---
+  // `categoryList` already matches the ForecastCategory shape.
+  const baselines = computeCategoryBaselines(categoryList, monthlyData);
+
+  let aiResult: {
+    suggestions: AiCategorySuggestion[];
+    total_suggested?: number;
+    summary?: string;
+  } | null = null;
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const response = await generateContentWithFallback({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: "Generate the budget suggestion based on the analysis above.",
+              },
+            ],
+          },
+        ],
+        systemInstruction: systemPrompt,
+        config: {
+          temperature: 0.3,
+          topP: 0.8,
+          maxOutputTokens: 16384,
+          responseMimeType: "application/json",
+        },
+      });
+
+      const text = response.text;
+      if (text) {
+        try {
+          aiResult = JSON.parse(text);
+        } catch {
+          const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (jsonMatch) aiResult = JSON.parse(jsonMatch[1].trim());
+        }
+      }
+    } catch {
+      // Swallow and fall back to the deterministic estimate below.
+      aiResult = null;
+    }
   }
 
-  try {
-    console.log("[AI-Budget] Calling Gemini...", {
-      model: geminiModel,
-      month,
-      week,
+  let finalSuggestions: AiCategorySuggestion[];
+  let summary: string;
+  let generationMethod: "ai" | "estimate";
+
+  if (
+    aiResult &&
+    Array.isArray(aiResult.suggestions) &&
+    aiResult.suggestions.length > 0
+  ) {
+    // Anchor the AI's numbers to each category's typical (outlier-free) spend.
+    finalSuggestions = softClampSuggestions(aiResult.suggestions, baselines);
+    summary =
+      aiResult.summary?.trim() ||
+      "AI-generated allocation based on your spending history.";
+    generationMethod = "ai";
+  } else {
+    const fallback = buildStatisticalSuggestion(
+      categoryList,
+      monthlyData,
       walletBalance,
-      categoryCount: categoryList.length,
-    });
-    const response = await generateContentWithFallback({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: "Generate the budget suggestion based on the analysis above.",
-            },
-          ],
-        },
-      ],
-      systemInstruction: systemPrompt,
-      config: {
-        temperature: 0.3,
-        topP: 0.8,
-        maxOutputTokens: 16384,
-        responseMimeType: "application/json",
-      },
-    });
-
-    console.log(
-      "[AI-Budget] Gemini responded, candidates:",
-      response.candidates?.length ?? 0,
     );
-    const text = response.text;
-    console.log(
-      "[AI-Budget] Response text length:",
-      text?.length ?? 0,
-      "preview:",
-      text?.slice(0, 200),
-    );
-    if (!text) {
-      return NextResponse.json(
-        { error: "No response from AI" },
-        { status: 502 },
-      );
-    }
+    finalSuggestions = fallback.suggestions;
+    summary = fallback.summary;
+    generationMethod = "estimate";
+  }
 
-    // Parse JSON response
-    let aiResult: {
-      suggestions: AiCategorySuggestion[];
-      total_suggested: number;
-      summary?: string;
-    };
-
-    console.log("[AI-Budget] Last 200 chars of response:", text.slice(-200));
-
-    try {
-      aiResult = JSON.parse(text);
-      console.log(
-        "[AI-Budget] JSON parsed OK, suggestions:",
-        aiResult.suggestions?.length,
-      );
-    } catch (parseErr) {
-      console.error("[AI-Budget] JSON.parse failed:", parseErr);
-      // Try extracting JSON from markdown code blocks
-      const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        aiResult = JSON.parse(jsonMatch[1].trim());
-      } else {
-        return NextResponse.json(
-          { error: "Failed to parse AI response", raw: text.slice(0, 500) },
-          { status: 502 },
-        );
-      }
-    }
-
-    // Validate total doesn't exceed wallet balance (clamp if needed)
-    const totalSuggested = aiResult.suggestions.reduce(
-      (s, c) => s + c.suggested_budget,
-      0,
-    );
-    if (totalSuggested > walletBalance && walletBalance > 0) {
-      const ratio = walletBalance / totalSuggested;
-      for (const s of aiResult.suggestions) {
-        s.suggested_budget = Math.round(s.suggested_budget * ratio * 100) / 100;
-        if (s.subcategories) {
-          for (const sc of s.subcategories) {
-            sc.suggested_amount =
-              Math.round((sc.percentage / 100) * s.suggested_budget * 100) /
-              100;
-          }
+  // Clamp the plan total to the wallet balance (scale down proportionally).
+  const totalSuggested = finalSuggestions.reduce(
+    (s, c) => s + c.suggested_budget,
+    0,
+  );
+  if (totalSuggested > walletBalance && walletBalance > 0) {
+    const ratio = walletBalance / totalSuggested;
+    for (const s of finalSuggestions) {
+      s.suggested_budget = Math.round(s.suggested_budget * ratio * 100) / 100;
+      if (s.subcategories) {
+        for (const sc of s.subcategories) {
+          sc.suggested_amount =
+            Math.round((sc.percentage / 100) * s.suggested_budget * 100) / 100;
         }
       }
     }
-
-    const finalTotal = aiResult.suggestions.reduce(
-      (s, c) => s + c.suggested_budget,
-      0,
-    );
-
-    console.log("[AI-Budget] Saving to DB, finalTotal:", finalTotal);
-
-    // Save to DB
-    const { data: saved, error: saveError } = await supabase
-      .from("ai_budget_suggestions")
-      .insert({
-        user_id: user.id,
-        budget_month: month,
-        week,
-        suggestions: aiResult.suggestions,
-        wallet_balance_used: walletBalance,
-        total_suggested: Math.round(finalTotal * 100) / 100,
-      })
-      .select()
-      .single();
-
-    console.log(
-      "[AI-Budget] DB result:",
-      saveError
-        ? `ERROR: ${saveError.message} (code: ${(saveError as any).code})`
-        : "OK",
-    );
-
-    if (saveError) {
-      if ((saveError as any).code === "23505") {
-        return NextResponse.json(
-          { error: "Suggestion already exists for this week" },
-          { status: 409 },
-        );
-      }
-      return NextResponse.json({ error: saveError.message }, { status: 500 });
-    }
-
-    return NextResponse.json(
-      { suggestion: saved as AiBudgetSuggestion, generated: true },
-      { status: 201 },
-    );
-  } catch (error) {
-    console.error("AI budget suggestion error:", error);
-    console.error(
-      "Error details:",
-      error instanceof Error
-        ? { message: error.message, stack: error.stack }
-        : String(error),
-    );
-    const message =
-      error instanceof Error ? error.message : "AI generation failed";
-    return NextResponse.json({ error: message }, { status: 502 });
   }
+
+  const finalTotal = finalSuggestions.reduce(
+    (s, c) => s + c.suggested_budget,
+    0,
+  );
+
+  const { data: saved, error: saveError } = await supabase
+    .from("ai_budget_suggestions")
+    .insert({
+      user_id: user.id,
+      budget_month: month,
+      week,
+      suggestions: finalSuggestions,
+      wallet_balance_used: walletBalance,
+      total_suggested: Math.round(finalTotal * 100) / 100,
+      summary,
+      generation_method: generationMethod,
+      excluded_outlier_count: excludedOutlierCount,
+    })
+    .select()
+    .single();
+
+  if (saveError) {
+    if ((saveError as { code?: string }).code === "23505") {
+      return NextResponse.json(
+        { error: "Suggestion already exists for this week" },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ error: saveError.message }, { status: 500 });
+  }
+
+  return NextResponse.json(
+    { suggestion: saved as AiBudgetSuggestion, generated: true },
+    { status: 201 },
+  );
 }

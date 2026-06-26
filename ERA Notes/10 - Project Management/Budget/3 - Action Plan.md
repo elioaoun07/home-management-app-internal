@@ -68,6 +68,13 @@ owners can mark visible accounts public so the active household partner can open
 them, post transactions, adjust balances, use categories, and transfer to/from
 them.
 
+**Just shipped - AI allocation redesign.** `WebBudget` splits Allocate (input)
+from Review (viewing); AI proposes a per-category allocation from
+outlier-cleaned history (with a deterministic estimate fallback so it always
+works), shown inline with per-row Apply and Apply-All, and manual edits always
+win. Backend strips one-off outliers before forecasting and soft-clamps the AI's
+numbers to each category's typical spend.
+
 **Next - First enhancement.** Tighten money allocation across accounts: make
 Salary -> Wallet funding, available Wallet balance, recurring commitments, and
 category envelopes feel like one intentional flow. Merchant-map -> manual entry

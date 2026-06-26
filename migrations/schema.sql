@@ -1313,6 +1313,9 @@ CREATE TABLE public.ai_budget_suggestions (
   suggestions jsonb NOT NULL DEFAULT '[]'::jsonb,
   wallet_balance_used numeric NOT NULL DEFAULT 0,
   total_suggested numeric NOT NULL DEFAULT 0,
+  summary text,
+  generation_method text CHECK (generation_method IS NULL OR generation_method = ANY (ARRAY['ai'::text, 'estimate'::text])),
+  excluded_outlier_count integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT ai_budget_suggestions_pkey PRIMARY KEY (id),
   CONSTRAINT ai_budget_suggestions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
